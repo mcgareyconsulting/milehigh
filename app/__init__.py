@@ -5,6 +5,10 @@ from .config import Config
 def create_app():
     app = Flask(__name__)
 
+    @app.route("/")
+    def index():
+        return "Welcome to the Trello SharePoint Integration!"
+
     @app.route("/trello/webhook", methods=["HEAD", "POST"])
     def trello_webhook():
         if request.method == "HEAD":
