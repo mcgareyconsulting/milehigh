@@ -1,6 +1,6 @@
 from flask import Flask, request
 from .config import Config as cfg
-from trello import trello_bp
+from app.trello import trello_bp
 
 
 def create_app():
