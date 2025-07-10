@@ -3,6 +3,7 @@ cachetools==5.5.2
 certifi==2025.6.15
 charset-normalizer==3.4.2
 click==8.1.8
+et_xmlfile==2.0.0
 Flask==3.1.1
 google-api-core==2.25.1
 google-api-python-client==2.172.0
@@ -19,6 +20,7 @@ Jinja2==3.1.6
 MarkupSafe==3.0.2
 numpy==2.0.2
 oauthlib==3.3.0
+openpyxl==3.1.5
 packaging==25.0
 pandas==2.3.0
 proto-plus==1.26.1
