@@ -1,5 +1,5 @@
 from flask import Flask, request
-from .config import Config
+from .config import Config as cfg
 
 
 def create_app():
@@ -7,7 +7,9 @@ def create_app():
 
     @app.route("/")
     def index():
-        return "Welcome to the Trello SharePoint Integration!"
+        message = f"Welcome to TSI {cfg.TRELLO_BOARD_ID} {cfg.TRELLO_API_KEY} {cfg.TRELLO_TOKEN} {cfg.AZURE_CLIENT_ID} {cfg.AZURE_CLIENT_SECRET} {cfg.AZURE_TENANT_ID} {cfg.WEBHOOK_URL}"
+
+        return message
 
     @app.route("/trello/webhook", methods=["HEAD", "POST"])
     def trello_webhook():

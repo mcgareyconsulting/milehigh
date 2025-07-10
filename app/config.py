@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Config:
@@ -8,3 +11,4 @@ class Config:
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
+    WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
