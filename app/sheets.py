@@ -3,17 +3,15 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 from io import BytesIO
-
-# Load environment variables from .env file
-load_dotenv()
+from app.config import Config as cfg
 
 
-def get_access_token(client_id, client_secret, tenant_id):
-    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+def get_access_token():
+    url = f"https://login.microsoftonline.com/{cfg.AZURE_TENANT_ID}/oauth2/v2.0/token"
     data = {
         "grant_type": "client_credentials",
-        "client_id": client_id,
-        "client_secret": client_secret,
+        "client_id": cfg.AZURE_CLIENT_ID,
+        "client_secret": cfg.AZURE_CLIENT_SECRET,
         "scope": "https://graph.microsoft.com/.default",
     }
     r = requests.post(url, data=data)
@@ -52,13 +50,10 @@ def build_unique_identifiers(df):
 
 
 def get_onedrive_identifiers():
-    client_id = os.getenv("AZURE_CLIENT_ID")
-    client_secret = os.getenv("AZURE_CLIENT_SECRET")
-    tenant_id = os.getenv("AZURE_TENANT_ID")
     user_email = "mmcgarey@communityinspectionservicesteam.onmicrosoft.com"
     file_path = "Job Log 2.4 DM play toy (1).xlsm"
 
-    token = get_access_token(client_id, client_secret, tenant_id)
+    token = get_access_token()
     file_bytes = read_file_from_user_onedrive(token, user_email, file_path)
     df = pd.read_excel(BytesIO(file_bytes), header=2)
     return build_unique_identifiers(df)

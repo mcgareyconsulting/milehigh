@@ -1,8 +1,10 @@
 from flask import Blueprint, request
 
+# setup for the Trello webhook blueprint
 trello_bp = Blueprint("trello", __name__)
 
 
+# Trello webhook route
 @trello_bp.route("/webhook", methods=["HEAD", "POST"])
 def trello_webhook():
     if request.method == "HEAD":

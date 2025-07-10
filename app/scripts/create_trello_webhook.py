@@ -2,6 +2,7 @@ import requests
 import os
 from app.config import Config as cfg
 
+# Webhook creation for Trello
 response = requests.post(
     "https://api.trello.com/1/webhooks",
     params={
