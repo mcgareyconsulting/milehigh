@@ -50,10 +50,48 @@ def build_unique_identifiers(df):
 
 
 def get_onedrive_identifiers():
-    user_email = "mmcgarey@communityinspectionservicesteam.onmicrosoft.com"
-    file_path = "Job Log 2.4 DM play toy (1).xlsm"
+    # collect email and path from config
+    user_email = cfg.ONEDRIVE_USER_EMAIL
+    file_path = cfg.ONEDRIVE_FILE_PATH
 
     token = get_access_token()
     file_bytes = read_file_from_user_onedrive(token, user_email, file_path)
     df = pd.read_excel(BytesIO(file_bytes), header=2)
     return build_unique_identifiers(df)
+
+
+##############################################
+## Helper function to get drive and user id ##
+##############################################
+def get_drive_and_item_id():
+    """
+    Fetches driveId and itemId for a file path in user's OneDrive.
+    Useful for setting up Microsoft Graph webhook subscriptions.
+    """
+    access_token = get_access_token()
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # Encode file path for URL
+    url = f"https://graph.microsoft.com/v1.0/users/{cfg.ONEDRIVE_USER_EMAIL}/drive/root:/{cfg.ONEDRIVE_FILE_NAME}"
+
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print("Failed to retrieve drive/item info:")
+        print(response.status_code, response.text)
+        return None, None
+
+    data = response.json()
+    drive_id = data["parentReference"]["driveId"]
+    item_id = data["id"]
+
+    print(f"✅ driveId: {drive_id}")
+    print(f"✅ itemId: {item_id}")
+    return drive_id, item_id
+
+
+if __name__ == "__main__":
+
+    drive_id, item_id = get_drive_and_item_id()
+    if drive_id and item_id:
+        print("\nUse this in your webhook subscription:")
+        print(f"resource: /drives/{drive_id}/items/{item_id}")
