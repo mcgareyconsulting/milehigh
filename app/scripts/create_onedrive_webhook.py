@@ -26,13 +26,13 @@ def create_webhook_subscription():
 
     payload = {
         "changeType": "updated",
-        "notificationUrl": cfg.WEBHOOK_URL,
+        "notificationUrl": cfg.ONEDRIVE_WEBHOOK_URL,
         "resource": resource_path,
         "expirationDateTime": expiration,
         "clientState": "secretClientValue",
     }
 
-    print(f"📤 Webhook URL: {cfg.WEBHOOK_URL}")
+    print(f"📤 Webhook URL: {cfg.ONEDRIVE_WEBHOOK_URL}")
     print(f"📤 Resource path: {resource_path}")
 
     response = requests.post(
