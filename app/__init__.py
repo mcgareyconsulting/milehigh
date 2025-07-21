@@ -21,6 +21,6 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
-    app.register_blueprint(cfg.onedrive_bp, url_prefix="/onedrive")
+    app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
 
     return app
