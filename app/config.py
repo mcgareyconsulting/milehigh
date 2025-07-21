@@ -14,3 +14,4 @@ class Config:
     WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
     ONEDRIVE_USER_EMAIL = os.environ.get("ONEDRIVE_USER_EMAIL")
     ONEDRIVE_FILE_PATH = os.environ.get("ONEDRIVE_FILE_PATH")
+    TRELLO_WEBHOOK_URL = os.environ.get("TRELLO_WEBHOOK_URL")

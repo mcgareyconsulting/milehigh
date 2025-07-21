@@ -11,7 +11,7 @@ response = requests.post(
     },
     json={
         "description": "Track card moves",
-        "callbackURL": cfg.CALLBACK_URL,
+        "callbackURL": cfg.TRELLO_WEBHOOK_URL,
         "idModel": cfg.BOARD_ID,
     },
 )
