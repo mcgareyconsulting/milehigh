@@ -13,4 +13,4 @@ class Config:
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
     WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
     ONEDRIVE_USER_EMAIL = os.environ.get("ONEDRIVE_USER_EMAIL")
-    ONEDRIVE_FILE_NAME = os.environ.get("ONEDRIVE_FILE_NAME")
+    ONEDRIVE_FILE_PATH = os.environ.get("ONEDRIVE_FILE_PATH")

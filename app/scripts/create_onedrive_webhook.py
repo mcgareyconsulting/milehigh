@@ -2,26 +2,21 @@ import requests
 import os
 import json
 from datetime import datetime, timedelta
-
-# Replace with your actual access token logic
-from app.sheets import get_access_token, get_drive_and_item_id
 from app.config import Config as cfg
+from app.sheets import get_access_token, get_drive_and_folder_id
 
 
 def create_webhook_subscription():
-    """Create the webhook subscription with drive_id and item_id"""
+    """Create a webhook subscription on the folder containing the Excel file."""
     print("🔍 Step 1: Getting access token...")
     access_token = get_access_token()
 
-    print("🔍 Step 2: Finding file and getting drive_id + item_id...")
-    drive_id, item_id = get_drive_and_item_id()
+    print("🔍 Step 2: Getting drive_id and folder_id...")
+    drive_id, folder_id = get_drive_and_folder_id()
 
     print("🔍 Step 3: Creating webhook subscription...")
 
-    # Build the resource path using drive_id and item_id
-    resource_path = f"/drives/{drive_id}/items/{item_id}"
-
-    # Webhook expires in 23 hours (max for OneDrive)
+    resource_path = f"/drives/{drive_id}/root"
     expiration = (datetime.utcnow() + timedelta(hours=23)).isoformat() + "Z"
 
     headers = {
@@ -47,12 +42,11 @@ def create_webhook_subscription():
     )
 
     if response.status_code == 201:
-        subscription_data = response.json()
+        sub = response.json()
         print("\n✅ SUCCESS! Webhook subscription created!")
-        print(f"📝 Subscription ID: {subscription_data['id']}")
-        print(f"⏰ Expires: {subscription_data['expirationDateTime']}")
-        print(f"🎯 Monitoring file: {cfg.ONEDRIVE_FILE_NAME}")
-        return subscription_data
+        print(f"📝 Subscription ID: {sub['id']}")
+        print(f"⏰ Expires: {sub['expirationDateTime']}")
+        return sub
     else:
         print(f"\n❌ FAILED to create subscription!")
         print(f"Status Code: {response.status_code}")
@@ -61,7 +55,4 @@ def create_webhook_subscription():
 
 
 if __name__ == "__main__":
-    try:
-        create_webhook_subscription()
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
+    create_webhook_subscription()
