@@ -1,13 +1,13 @@
 import requests
 import re
 import os
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-TRELLO_API_KEY = os.getenv("TRELLO_API_KEY")
-TRELLO_TOKEN = os.getenv("TRELLO_TOKEN")
-TRELLO_BOARD_ID = os.getenv("TRELLO_BOARD_ID")
+
+def extract_card_text(data):
+    try:
+        return data["action"]["display"]["entities"]["card"]["text"]
+    except (KeyError, TypeError):
+        return None
 
 
 def get_all_card_names(board_id):
