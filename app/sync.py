@@ -1,4 +1,4 @@
-from app.trello import extract_card_text
+from app.trello.utils import extract_card_text
 
 
 def sync_from_trello(data):
