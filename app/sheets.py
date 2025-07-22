@@ -19,6 +19,15 @@ def get_access_token():
     return r.json()["access_token"]
 
 
+def get_excel_dataframe():
+    token = get_access_token()
+    file_bytes = read_file_from_user_onedrive(
+        token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
+    )
+    df = pd.read_excel(BytesIO(file_bytes), header=2)
+    return df
+
+
 def read_file_from_user_onedrive(access_token, user_email, file_path):
     url = f"https://graph.microsoft.com/v1.0/users/{user_email}/drive/root:/{file_path}:/content"
     headers = {"Authorization": f"Bearer {access_token}"}
