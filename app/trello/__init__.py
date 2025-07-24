@@ -14,10 +14,25 @@ def trello_webhook():
         return "Invalid payload", 400
 
     action = data["action"]
-    if action.get("type") == "updateCard":
-        print(f"Received action: {action['type']}")
-        sync_from_trello(data)
+    action_type = action.get("type")
+    action_data = action.get("data", {})
+
+    print(f"Received Trello action: {action_type}")
+
+    if action_type == "updateCard":
+        # Track/log all updates
+        card_id = action_data.get("card", {}).get("id", "unknown")
+        print(f"Update on card {card_id}")
+
+        # Only sync if the card moved lists
+        if "listBefore" in action_data and "listAfter" in action_data:
+            print(
+                f"Card moved from {action_data['listBefore']['name']} to {action_data['listAfter']['name']}"
+            )
+            sync_from_trello(data)
+        else:
+            print("Card updated, but not moved lists. Ignoring.")
     else:
-        print(f"Unhandled action type: {action.get('type')}")
+        print(f"Unhandled action type: {action_type}")
 
     return "", 200
