@@ -17,22 +17,17 @@ def trello_webhook():
     action_type = action.get("type")
     action_data = action.get("data", {})
 
-    print(f"Received Trello action: {action_type}")
+    # Only process card list moves
+    if (
+        action_type == "updateCard"
+        and "listBefore" in action_data
+        and "listAfter" in action_data
+    ):
+        card_id = action_data.get("card", {}).get("id")
+        before = action_data["listBefore"]["name"]
+        after = action_data["listAfter"]["name"]
+        print(f"[Trello] Card {card_id} moved from '{before}' to '{after}'")
+        sync_from_trello(data)
 
-    if action_type == "updateCard":
-        # Track/log all updates
-        card_id = action_data.get("card", {}).get("id", "unknown")
-        print(f"Update on card {card_id}")
-
-        # Only sync if the card moved lists
-        if "listBefore" in action_data and "listAfter" in action_data:
-            print(
-                f"Card moved from {action_data['listBefore']['name']} to {action_data['listAfter']['name']}"
-            )
-            sync_from_trello(data)
-        else:
-            print("Card updated, but not moved lists. Ignoring.")
-    else:
-        print(f"Unhandled action type: {action_type}")
-
+    # Quietly ignore all other actions
     return "", 200
