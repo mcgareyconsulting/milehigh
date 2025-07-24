@@ -69,6 +69,55 @@ def get_onedrive_identifiers():
     return build_unique_identifiers(df)
 
 
+def update_excel_cell(cell_address, value, worksheet_name="Job Log"):
+    """
+    Update a specific Excel cell via Microsoft Graph API
+
+    Args:
+        cell_address: Excel cell address (e.g., "O155")
+        value: Value to set in the cell
+        worksheet_name: Name of the worksheet (default: "Sheet1")
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Get access token
+        access_token = get_access_token()
+
+        # Build the URL for updating the cell
+        user_email = cfg.ONEDRIVE_USER_EMAIL
+        file_path = cfg.ONEDRIVE_FILE_PATH
+
+        # URL to update a specific cell range
+        url = f"https://graph.microsoft.com/v1.0/users/{user_email}/drive/root:/{file_path}:/workbook/worksheets/{worksheet_name}/range(address='{cell_address}')"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
+        # Payload with the new value
+        payload = {"values": [[value]]}
+
+        print(f"Updating Excel cell {cell_address} with value: {value}")
+        print(f"URL: {url}")
+
+        # Make the PATCH request
+        response = requests.patch(url, headers=headers, json=payload)
+
+        if response.status_code == 200:
+            print(f"Successfully updated cell {cell_address} with value '{value}'")
+            return True
+        else:
+            print(f"Error updating Excel: {response.status_code} - {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"Exception in update_excel_cell: {e}")
+        return False
+
+
 ##############################################
 ## Helper function to get drive and user id ##
 ##############################################

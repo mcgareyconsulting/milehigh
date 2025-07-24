@@ -1,7 +1,7 @@
 import openpyxl
 from app.trello.utils import extract_card_name, extract_identifier
 from app.onedrive.utils import find_excel_row
-from app.sheets import get_excel_dataframe
+from app.sheets import get_excel_dataframe, update_excel_cell
 
 stage_column_map = {
     "Fit Up Complete.": "Fitup comp",
@@ -114,6 +114,14 @@ def sync_from_trello(data):
             return
 
         print(f"Updating Excel cell {cell_address} for identifier {identifier}")
+
+        # Update via Microsoft Graph API using your existing sheets.py function
+        success = update_excel_cell(cell_address, "X")
+
+        if success:
+            print(f"Excel update completed for {identifier}")
+        else:
+            print(f"Excel update failed for {identifier}")
 
     else:
         print(f"No row found for identifier {identifier}")
