@@ -1,8 +1,9 @@
 import openpyxl
 from app.trello.utils import extract_card_name, extract_identifier
 from app.onedrive.utils import find_excel_row
-from app.sheets import get_excel_dataframe, update_excel_cell
+from app.onedrive.api import get_excel_dataframe, update_excel_cell
 
+# Stage mapping for Trello list names to Excel columns
 stage_column_map = {
     "Fit Up Complete.": "Fitup comp",
     "Paint complete": "Paint Comp",
@@ -10,7 +11,9 @@ stage_column_map = {
 
 
 def extract_stage_info(data):
-    """Extract stage information from Trello webhook data"""
+    """
+    Extract stage information from Trello webhook data
+    """
     movement = data.get("action", {}).get("data", {})
     if "listBefore" in movement and "listAfter" in movement:
         old_stage = movement["listBefore"]["name"]
@@ -48,8 +51,7 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
     print(f"DataFrame row index: {row_index}")
     print(f"Expected Excel row (index + 2): {row_index + 2}")
 
-    # The Excel row should be the DataFrame index + 2 (1 for header, 1 for 0-based to 1-based conversion)
-    # But if your actual row is 152 when we calculate 36, there might be a different offset
+    # adjust based upon header rows in file
     excel_row_num = row_index + 4
 
     # Find target column index
@@ -60,6 +62,7 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
     col_index = df.columns.get_loc(column_name)
     excel_col_letter = openpyxl.utils.get_column_letter(col_index + 1)
 
+    # build cell address
     cell_address = f"{excel_col_letter}{excel_row_num}"
     print(f"DataFrame index: {row_index}, Calculated Excel row: {excel_row_num}")
     print(f"Found cell address: {cell_address} for identifier {identifier}")
@@ -68,9 +71,9 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
 
 
 def sync_from_trello(data):
-    """Sync data from Trello to OneDrive based on the webhook payload."""
-    # print(data)
-
+    """
+    Sync data from Trello to OneDrive based on the webhook payload
+    """
     # Extract stage information from webhook
     old_stage, new_stage = extract_stage_info(data)
 
@@ -96,6 +99,7 @@ def sync_from_trello(data):
         else:
             print("No stage change detected or not a list movement")
 
+        # Get correct column name from mapping
         column = stage_column_map.get(new_stage)
         if not column:
             print(
@@ -115,6 +119,7 @@ def sync_from_trello(data):
 
         print(f"Updating Excel cell {cell_address} for identifier {identifier}")
 
+        # TODO: Dynamically allocate state
         # Update via Microsoft Graph API using your existing sheets.py function
         success = update_excel_cell(cell_address, "X")
 

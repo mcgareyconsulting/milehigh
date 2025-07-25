@@ -29,3 +29,17 @@ def find_excel_row(df, identifier):
     if not match.empty:
         return match.iloc[0][relevant_columns]
     return None
+
+
+def build_unique_identifiers(df):
+    """
+    Combines 'Job #' and 'Release #' columns into unique identifiers in the format 'Job #-Release #'.
+    Returns a list of these identifiers.
+    """
+    # Drop rows where either value is missing
+    filtered = df.dropna(subset=["Job #", "Release #"])
+    # Convert to string and combine
+    identifiers = (
+        filtered["Job #"].astype(str) + "-" + filtered["Release #"].astype(str)
+    )
+    return identifiers.tolist()
