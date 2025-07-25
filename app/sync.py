@@ -7,6 +7,7 @@ from app.onedrive.api import get_excel_dataframe, update_excel_cell
 stage_column_map = {
     "Fit Up Complete.": "Fitup comp",
     "Paint complete": "Paint Comp",
+    "Shipping completed": "Ship",
 }
 
 
