@@ -21,7 +21,6 @@ def find_excel_row(df, identifier):
         "Start install",
         "Comp. ETA",
         "Job Comp",
-        "Invoiced",
         "Notes",
     ]
     combined = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)

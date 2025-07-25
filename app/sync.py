@@ -131,3 +131,30 @@ def sync_from_trello(data):
 
     else:
         print(f"No row found for identifier {identifier}")
+
+
+def sync_from_onedrive(data):
+    """
+    Sync data from OneDrive to Trello based on the webhook payload
+    """
+    if data is None:
+        print("No data received from OneDrive webhook")
+        return
+
+    if "resource" not in data or "changeType" not in data:
+        print("Invalid OneDrive webhook data format")
+        return
+
+    resource = data["resource"]
+    change_type = data["changeType"]
+
+    print(f"Received OneDrive webhook: Resource={resource}, ChangeType={change_type}")
+
+    # if change type is 'updated', we can assume a file was modified
+    if change_type == "updated":
+        # download file from OneDrive
+        df = get_excel_dataframe()
+
+        print(df.head())
+        # load cached (previously synced) data
+        # cached =

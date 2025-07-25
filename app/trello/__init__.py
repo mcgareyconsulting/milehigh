@@ -1,5 +1,4 @@
 from flask import Blueprint, request
-from app.sync import sync_from_trello
 
 trello_bp = Blueprint("trello", __name__)
 
@@ -34,6 +33,9 @@ def trello_webhook():
         before = action_data["listBefore"]["name"]
         after = action_data["listAfter"]["name"]
         print(f"[Trello] Card {card_id} moved from '{before}' to '{after}'")
+
+        from app.sync import sync_from_trello
+
         sync_from_trello(data)  # pass collected data to sync function
 
     # Quietly ignore all other actions

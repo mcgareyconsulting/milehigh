@@ -44,7 +44,9 @@ def onedrive_webhook():
                     print(f"[OneDrive] File/folder deleted: {resource}")
 
                 # Add your custom processing logic here
-                # process_onedrive_change(notification)
+                from app.sync import sync_from_onedrive
+
+                sync_from_onedrive(notification)
 
             return "", 202  # Accepted - webhook processed successfully
 

@@ -24,14 +24,25 @@ def get_access_token():
 
 def get_excel_dataframe():
     """
-    Get the latest Excel data from OneDrive and return it as a DataFrame.
+    Get the latest Excel data from OneDrive and return it as a DataFrame
+    using optimized column loading.
     """
     token = get_access_token()
     file_bytes = read_file_from_user_onedrive(
         token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
     )
-    df = pd.read_excel(BytesIO(file_bytes), header=2)
-    return df
+
+    # Define the columns to read: A-S and AC
+    # A-S are columns 0-18, AC is column 28
+    usecols = list(range(19)) + [28]
+
+    # Read only the specified columns
+    df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)
+
+    # Select rows 4-200 (indices 3-199)
+    df_final = df.iloc[3:200]
+
+    return df_final
 
 
 def read_file_from_user_onedrive(access_token, user_email, file_path):
