@@ -6,6 +6,12 @@ trello_bp = Blueprint("trello", __name__)
 
 @trello_bp.route("/webhook", methods=["HEAD", "POST"])
 def trello_webhook():
+    """
+    Webhook route to collect Trello card movements
+    This route handles both the initial validation request from Trello
+    and the actual card movement notifications.
+    The HEAD request is used for Trello's webhook validation ping.
+    """
     if request.method == "HEAD":
         return "", 200  # Trello webhook validation ping
 
@@ -13,6 +19,7 @@ def trello_webhook():
     if not data or "action" not in data:
         return "Invalid payload", 400
 
+    # Filtering down to card movement only for now
     action = data["action"]
     action_type = action.get("type")
     action_data = action.get("data", {})
@@ -27,7 +34,7 @@ def trello_webhook():
         before = action_data["listBefore"]["name"]
         after = action_data["listAfter"]["name"]
         print(f"[Trello] Card {card_id} moved from '{before}' to '{after}'")
-        sync_from_trello(data)
+        sync_from_trello(data)  # pass collected data to sync function
 
     # Quietly ignore all other actions
     return "", 200

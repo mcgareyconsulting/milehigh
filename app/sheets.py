@@ -7,6 +7,9 @@ from app.config import Config as cfg
 
 
 def get_access_token():
+    """
+    Get an access token for Microsoft Graph API using client credentials.
+    """
     url = f"https://login.microsoftonline.com/{cfg.AZURE_TENANT_ID}/oauth2/v2.0/token"
     data = {
         "grant_type": "client_credentials",
@@ -20,6 +23,9 @@ def get_access_token():
 
 
 def get_excel_dataframe():
+    """
+    Get the latest Excel data from OneDrive and return it as a DataFrame.
+    """
     token = get_access_token()
     file_bytes = read_file_from_user_onedrive(
         token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
@@ -56,17 +62,6 @@ def build_unique_identifiers(df):
         filtered["Job #"].astype(str) + "-" + filtered["Release #"].astype(str)
     )
     return identifiers.tolist()
-
-
-def get_onedrive_identifiers():
-    # collect email and path from config
-    user_email = cfg.ONEDRIVE_USER_EMAIL
-    file_path = cfg.ONEDRIVE_FILE_PATH
-
-    token = get_access_token()
-    file_bytes = read_file_from_user_onedrive(token, user_email, file_path)
-    df = pd.read_excel(BytesIO(file_bytes), header=2)
-    return build_unique_identifiers(df)
 
 
 def update_excel_cell(cell_address, value, worksheet_name="Job Log"):
