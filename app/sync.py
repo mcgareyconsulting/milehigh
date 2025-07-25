@@ -1,7 +1,7 @@
 import openpyxl
 from app.trello.utils import extract_card_name, extract_identifier
 from app.onedrive.utils import find_excel_row
-from app.sheets import get_excel_dataframe, update_excel_cell
+from app.onedrive.api import get_excel_dataframe, update_excel_cell
 
 # Stage mapping for Trello list names to Excel columns
 stage_column_map = {
