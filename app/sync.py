@@ -72,6 +72,34 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
     return cell_address
 
 
+def compare_excel_snapshots(df1, df2):
+    """
+    Compare two DataFrames and return a list of (identifier, column, old_val, new_val) tuples where values differ.
+    Assumes both DataFrames have 'Job #' and 'Release #' columns.
+    """
+    differences = []
+    # Set index for easy comparison
+    df1 = df1.set_index(["Job #", "Release #"])
+    df2 = df2.set_index(["Job #", "Release #"])
+    # Find common indices
+    common_idx = df1.index.intersection(df2.index)
+    for idx in common_idx:
+        row1 = df1.loc[idx]
+        row2 = df2.loc[idx]
+        for col in df1.columns:
+            val1 = row1[col]
+            val2 = row2[col]
+            # Only compare scalar values
+            if pd.isnull(val1) and pd.isnull(val2):
+                continue
+            if isinstance(val1, pd.Series) or isinstance(val2, pd.Series):
+                continue
+            if val1 != val2:
+                identifier = f"{idx[0]}-{idx[1]}"  # Job # - Release #
+                differences.append((identifier, col, val1, val2))
+    return differences
+
+
 def sync_from_trello(data):
     """
     Sync data from Trello to OneDrive based on the webhook payload
@@ -163,12 +191,15 @@ def sync_from_onedrive(data):
             print("No cached snapshot found, will save current state.")
             cached_df = None
 
-        # Compare current df with cached_df
-        if cached_df is not None and df.equals(cached_df):
-            print("No meaningful change detected, skipping sync.")
-            return
+        # Comparison
+        if cached_df is not None:
+            changes = compare_excel_snapshots(df, cached_df)
+            for identifier, column, old_val, new_val in changes:
+                print(
+                    f"Changed: {identifier} column '{column}' from '{old_val}' to '{new_val}'"
+                )
         else:
-            print("Changes detected, proceeding with sync.")
+            print("No cached snapshot found, will save current state.")
 
-        # load cached (previously synced) data
+        # Save the current state for future comparisons
         save_excel_snapshot(df, filename="excel_snapshot.xlsx")
