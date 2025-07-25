@@ -1,4 +1,5 @@
 import openpyxl
+import pandas as pd
 from app.trello.utils import extract_card_name, extract_identifier
 from app.onedrive.utils import find_excel_row, save_excel_snapshot
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
@@ -155,6 +156,19 @@ def sync_from_onedrive(data):
         # download file from OneDrive
         df = get_excel_dataframe()
 
-        print(df.head())
+        # load cached (previously synced) data
+        try:
+            cached_df = pd.read_excel("excel_snapshot.xlsx")
+        except FileNotFoundError:
+            print("No cached snapshot found, will save current state.")
+            cached_df = None
+
+        # Compare current df with cached_df
+        if cached_df is not None and df.equals(cached_df):
+            print("No meaningful change detected, skipping sync.")
+            return
+        else:
+            print("Changes detected, proceeding with sync.")
+
         # load cached (previously synced) data
         save_excel_snapshot(df, filename="excel_snapshot.xlsx")

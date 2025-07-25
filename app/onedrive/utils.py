@@ -1,6 +1,8 @@
 import pandas as pd
 
 relevant_columns = [
+    "Job #",
+    "Release #",
     "Job",
     "Description",
     "Fab Hrs",
