@@ -50,20 +50,6 @@ def list_root_contents(access_token, user_email):
     return r.json()
 
 
-def build_unique_identifiers(df):
-    """
-    Combines 'Job #' and 'Release #' columns into unique identifiers in the format 'Job #-Release #'.
-    Returns a list of these identifiers.
-    """
-    # Drop rows where either value is missing
-    filtered = df.dropna(subset=["Job #", "Release #"])
-    # Convert to string and combine
-    identifiers = (
-        filtered["Job #"].astype(str) + "-" + filtered["Release #"].astype(str)
-    )
-    return identifiers.tolist()
-
-
 def update_excel_cell(cell_address, value, worksheet_name="Job Log"):
     """
     Update a specific Excel cell via Microsoft Graph API
