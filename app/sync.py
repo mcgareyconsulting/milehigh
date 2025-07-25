@@ -1,6 +1,6 @@
 import openpyxl
 from app.trello.utils import extract_card_name, extract_identifier
-from app.onedrive.utils import find_excel_row
+from app.onedrive.utils import find_excel_row, save_excel_snapshot
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 
 # Stage mapping for Trello list names to Excel columns
@@ -157,4 +157,4 @@ def sync_from_onedrive(data):
 
         print(df.head())
         # load cached (previously synced) data
-        # cached =
+        save_excel_snapshot(df, filename="excel_snapshot.xlsx")
