@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
+from app.onedrive.utils import relevant_columns
 
 
 def get_access_token():
@@ -25,7 +26,7 @@ def get_access_token():
 def get_excel_dataframe():
     """
     Get the latest Excel data from OneDrive and return it as a DataFrame
-    using optimized column loading.
+    with only relevant rows and columns.
     """
     token = get_access_token()
     file_bytes = read_file_from_user_onedrive(
@@ -33,14 +34,16 @@ def get_excel_dataframe():
     )
 
     # Define the columns to read: A-S and AC
-    # A-S are columns 0-18, AC is column 28
     usecols = list(range(19)) + [28]
 
     # Read only the specified columns
     df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)
 
-    # Select rows 4-200 (indices 3-199)
-    df_final = df.iloc[3:200]
+    # Filter for rows where Job # and Release # are NOT NaN
+    df_final = df.dropna(subset=["Job #", "Release #"])
+
+    # Only keep relevant columns (in case others are present)
+    df_final = df_final[relevant_columns]
 
     return df_final
 
