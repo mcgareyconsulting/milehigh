@@ -34,7 +34,7 @@ def get_excel_dataframe():
     )
 
     # Define the columns to read: A-S and AC
-    usecols = list(range(19)) + [28]
+    usecols = list(range(20)) + [28]
 
     # Read only the specified columns
     df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)

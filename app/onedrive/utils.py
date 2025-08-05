@@ -20,6 +20,7 @@ relevant_columns = [
     "Start install",
     "Comp. ETA",
     "Job Comp",
+    "Invoiced",
     "Notes",
 ]
 
