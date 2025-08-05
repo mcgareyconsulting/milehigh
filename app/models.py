@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+import pandas as pd
 
 db = SQLAlchemy()
 
@@ -30,3 +31,35 @@ class Job(db.Model):
 
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"
+
+
+def query_job_releases():
+    results = Job.query.all()
+    return pd.DataFrame(
+        [
+            {
+                "Job #": r.job,
+                "Release #": r.release,
+                "Job": r.job_name,
+                "Description": r.description,
+                "Fab Hrs": r.fab_hrs,
+                "Install HRS": r.install_hrs,
+                "Paint color": r.paint_color,
+                "PM": r.pm,
+                "BY": r.by,
+                "Released": r.released,
+                "Fab Order": r.fab_order,
+                "Cut start": r.cut_start,
+                "Fitup comp": r.fitup_comp,
+                "Welded": r.welded,
+                "Paint Comp": r.paint_comp,
+                "Ship Start": r.ship_start,
+                "install": r.install,
+                "Comp. ETA": r.comp_eta,
+                "Job Comp": r.job_comp,
+                "Invoiced": r.invoiced,
+                "Notes": r.notes,
+            }
+            for r in results
+        ]
+    )
