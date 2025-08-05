@@ -5,12 +5,14 @@ charset-normalizer==3.4.2
 click==8.1.8
 et_xmlfile==2.0.0
 Flask==3.1.1
+Flask-SQLAlchemy==3.1.1
 google-api-core==2.25.1
 google-api-python-client==2.172.0
 google-auth==2.40.3
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.2
 googleapis-common-protos==1.70.0
+greenlet==3.2.3
 gunicorn==23.0.0
 httplib2==0.22.0
 idna==3.10
@@ -35,6 +37,8 @@ requests==2.32.4
 requests-oauthlib==2.0.0
 rsa==4.9.1
 six==1.17.0
+SQLAlchemy==2.0.42
+typing_extensions==4.14.1
 tzdata==2025.2
 uritemplate==4.2.0
 urllib3==2.5.0

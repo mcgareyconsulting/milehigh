@@ -1,5 +1,4 @@
 # from app.test import get_trello_identifiers
-from app.onedrive.api import get_excel_dataframe
 
 # # Main entry point for the script
 # if __name__ == "__main__":
@@ -22,10 +21,6 @@ from app.onedrive.api import get_excel_dataframe
 #     print(f"Found {len(matching_identifiers)} matching identifiers:")
 #     for identifier in matching_identifiers:
 #         print(f"- {identifier}")
-
-df = get_excel_dataframe()
-
-print(df.columns)
 
 from app import create_app
 
