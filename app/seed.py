@@ -2,12 +2,11 @@ import pandas as pd
 from app.models import db, Job
 
 
-def to_datetime(val):
+def to_date(val):
     if pd.isnull(val):
         return None
-    if isinstance(val, pd.Timestamp):
-        return val.to_pydatetime()
-    return pd.to_datetime(val)
+    dt = pd.to_datetime(val)
+    return dt.date() if not pd.isnull(dt) else None
 
 
 def seed_job_releases_from_df(df):
@@ -22,7 +21,7 @@ def seed_job_releases_from_df(df):
             paint_color=row.get("Paint color"),
             pm=row.get("PM"),
             by=row.get("BY"),
-            released=to_datetime(row.get("Released")),
+            released=to_date(row.get("Released")),
             fab_order=row.get("Fab Order"),
             cut_start=row.get("Cut start"),
             fitup_comp=row.get("Fitup comp"),
@@ -30,7 +29,7 @@ def seed_job_releases_from_df(df):
             paint_comp=row.get("Paint Comp"),
             ship_start=row.get("Ship Start"),
             install=row.get("install"),
-            comp_eta=to_datetime(row.get("Comp. ETA")),
+            comp_eta=to_date(row.get("Comp. ETA")),
             job_comp=row.get("Job Comp"),
             invoiced=row.get("Invoiced"),
             notes=row.get("Notes"),
