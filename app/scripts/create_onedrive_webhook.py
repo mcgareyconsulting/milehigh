@@ -77,5 +77,5 @@ def list_onedrive_webhooks():
 
 
 if __name__ == "__main__":
-    # create_webhook_subscription()
-    list_onedrive_webhooks()
+    create_webhook_subscription()
+    # list_onedrive_webhooks()

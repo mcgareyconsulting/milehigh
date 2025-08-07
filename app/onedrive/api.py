@@ -42,6 +42,15 @@ def get_excel_dataframe():
     # Filter for rows where Job # and Release # are NOT NaN
     df_final = df.dropna(subset=["Job #", "Release #"])
 
+    # # debug print rows with job # 900 and release # 276
+    # filtered_rows = df_final[
+    #     (df_final["Job #"] == 900) & (df_final["Release #"] == 276)
+    # ]
+    # if not filtered_rows.empty:
+    #     print(f"Rows with Job # 900 and Release # 276:\n{filtered_rows}")
+    # else:
+    #     print("No rows found with Job # 900 and Release # 276.")
+
     # Only keep relevant columns (in case others are present)
     df_final = df_final[relevant_columns]
 

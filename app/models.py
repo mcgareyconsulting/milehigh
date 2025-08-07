@@ -5,7 +5,8 @@ db = SQLAlchemy()
 
 
 class Job(db.Model):
-    __tablename__ = "job_releases"
+    __tablename__ = "jobs"
+    __table_args__ = (db.UniqueConstraint("job", "release", name="_job_release_uc"),)
     id = db.Column(db.Integer, primary_key=True)
     job = db.Column(db.Integer, nullable=False)
     release = db.Column(db.Integer, nullable=False)
