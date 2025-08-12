@@ -36,33 +36,66 @@ def get_card_details(card_id):
     return response.json()
 
 
-ids_and_names = get_all_card_ids(cfg.TRELLO_BOARD_ID)
-if ids_and_names:
-    print(f"First card ID: {ids_and_names[0][0]} | Name: {ids_and_names[0][1]}")
-
-id = "6866a00ab050408017e0946c"
-
-card_details = get_card_details(id)
-print(f"Card details: {card_details}")
-
-
-def get_card_stage_name(card_id):
+def get_trello_cards_from_subset():
     """
-    Return the stage (list name) for a Trello card.
+    Fetch all Trello cards from the board and filter them based on a specific subset.
     """
-    # Get card details
-    card = get_card_details(card_id)
-    list_id = card["idList"]
+    # Hardcoded list of stage names
+    target_list_names = [
+        "Fit Up Complete.",
+        "Paint complete",
+        "Store at MHMW for shipping",
+        "Shipping planning",
+        "Shipping completed",
+    ]
 
-    # Get list details
-    url = f"https://api.trello.com/1/lists/{list_id}"
+    # Get all lists on the board
+    url_lists = url_lists = (
+        f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+    )
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-    response = requests.get(url, params=params)
+    response = requests.get(url_lists, params=params)
     response.raise_for_status()
-    list_data = response.json()
-    return list_data["name"]
+    lists = response.json()
+
+    # Get list IDs for your target lists
+    target_list_ids = [lst["id"] for lst in lists if lst["name"] in target_list_names]
+
+    # debug statement
+    # print(f"Target List IDs: {target_list_ids}")
+
+    # Get all cards on the board
+    url_cards = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/cards"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "fields": "id,name,desc,idList,due,labels",
+        "filter": "open",
+    }
+    response = requests.get(url_cards, params=params)
+    response.raise_for_status()
+    cards = response.json()
+
+    # Build a mapping from list ID to list name
+    list_id_to_name = {lst["id"]: lst["name"] for lst in lists}
+
+    # Filter cards by your target list IDs
+    filtered_cards = [card for card in cards if card["idList"] in target_list_ids]
+    relevant_data = [
+        {
+            "id": card["id"],
+            "name": card["name"],
+            "desc": card["desc"],
+            "list_name": list_id_to_name.get(card["idList"], "Unknown"),
+            "due": card.get("due"),
+            "labels": [label["name"] for label in card.get("labels", [])],
+        }
+        for card in filtered_cards
+    ]
+    return relevant_data
 
 
 # Example usage:
-stage_name = get_card_stage_name("6866a00ab050408017e0946c")
-print(f"Stage name: {stage_name}")
+cards = get_trello_cards_from_subset()
+for card in cards:
+    print(card)
