@@ -9,30 +9,63 @@ def to_date(val):
     return dt.date() if not pd.isnull(dt) else None
 
 
-def seed_job_releases_from_df(df):
-    for _, row in df.iterrows():
-        jr = Job(
-            job=row["Job #"],
-            release=row["Release #"],
-            job_name=row["Job"],
-            description=row.get("Description"),
-            fab_hrs=row.get("Fab Hrs"),
-            install_hrs=row.get("Install HRS"),
-            paint_color=row.get("Paint color"),
-            pm=row.get("PM"),
-            by=row.get("BY"),
-            released=to_date(row.get("Released")),
-            fab_order=row.get("Fab Order"),
-            cut_start=row.get("Cut start"),
-            fitup_comp=row.get("Fitup comp"),
-            welded=row.get("Welded"),
-            paint_comp=row.get("Paint Comp"),
-            ship_start=row.get("Ship Start"),
-            install=row.get("install"),
-            comp_eta=to_date(row.get("Comp. ETA")),
-            job_comp=row.get("Job Comp"),
-            invoiced=row.get("Invoiced"),
-            notes=row.get("Notes"),
-        )
-        db.session.add(jr)
+def seed_from_combined_data(combined_data):
+    """
+    Seed database from combined Trello/Excel data - creates new jobs for all items.
+    """
+    created_count = 0
+
+    for item in combined_data:
+        if item["excel"]:  # Only process if Excel data exists
+            excel_data = item["excel"]
+            identifier = item["identifier"]
+
+            print(f"Creating new job for {identifier}...")
+
+            # Create new job
+            jr = Job(
+                job=excel_data["Job #"],
+                release=excel_data["Release #"],
+                job_name=excel_data["Job"],
+                description=excel_data.get("Description"),
+                fab_hrs=excel_data.get("Fab Hrs"),
+                install_hrs=excel_data.get("Install HRS"),
+                paint_color=excel_data.get("Paint color"),
+                pm=excel_data.get("PM"),
+                by=excel_data.get("BY"),
+                released=to_date(excel_data.get("Released")),
+                fab_order=excel_data.get("Fab Order"),
+                cut_start=excel_data.get("Cut start"),
+                fitup_comp=excel_data.get("Fitup comp"),
+                welded=excel_data.get("Welded"),
+                paint_comp=excel_data.get("Paint Comp"),
+                ship=excel_data.get("Ship"),
+                start_install=to_date(excel_data.get("Start install")),
+                comp_eta=to_date(excel_data.get("Comp. ETA")),
+                job_comp=excel_data.get("Job Comp"),
+                invoiced=excel_data.get("Invoiced"),
+                notes=excel_data.get("Notes"),
+            )
+
+            # Add Trello data if available
+            if item["trello"]:
+                trello_data = item["trello"]
+                jr.trello_card_id = trello_data.get("id")
+                jr.trello_card_name = trello_data.get("name")
+                jr.trello_list_name = trello_data.get("list_name")
+                jr.trello_card_description = trello_data.get("desc")
+
+                if trello_data.get("due"):
+                    jr.trello_card_date = to_date(trello_data["due"])
+
+                if trello_data.get("labels"):
+                    jr.trello_card_labels = ",".join(trello_data["labels"])
+
+                print(f"  Added Trello data - Card ID: {jr.trello_card_id}")
+
+            db.session.add(jr)
+            created_count += 1
+
+    print(f"Committing {created_count} new jobs...")
     db.session.commit()
+    print(f"Success! Created {created_count} jobs in the database.")

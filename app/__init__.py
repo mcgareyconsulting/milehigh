@@ -3,10 +3,11 @@ from .config import Config as cfg
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.onedrive.api import get_excel_dataframe
+from app.combine import combine_trello_excel_data
 
 # database imports
 from app.models import db, query_job_releases, Job
-from app.seed import seed_job_releases_from_df
+from app.seed import seed_from_combined_data
 import pandas as pd
 
 
@@ -16,11 +17,11 @@ def create_app():
     db.init_app(app)
 
     # # Initialize the database
-    # with app.app_context():
-    #     df = get_excel_dataframe()
-    #     db.drop_all()
-    #     db.create_all()
-    #     seed_job_releases_from_df(df)
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        combined_data = combine_trello_excel_data()
+        seed_from_combined_data(combined_data)
 
     # index route
     @app.route("/")

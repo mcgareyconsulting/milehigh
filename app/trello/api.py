@@ -44,8 +44,6 @@ def get_trello_cards_from_subset():
     target_list_names = [
         "Fit Up Complete.",
         "Paint complete",
-        "Store at MHMW for shipping",
-        "Shipping planning",
         "Shipping completed",
     ]
 
@@ -62,7 +60,7 @@ def get_trello_cards_from_subset():
     target_list_ids = [lst["id"] for lst in lists if lst["name"] in target_list_names]
 
     # debug statement
-    # print(f"Target List IDs: {target_list_ids}")
+    print(f"Target List IDs: {target_list_ids}")
 
     # Get all cards on the board
     url_cards = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/cards"
@@ -95,7 +93,16 @@ def get_trello_cards_from_subset():
     return relevant_data
 
 
-# Example usage:
-cards = get_trello_cards_from_subset()
-for card in cards:
-    print(card)
+# # Example usage:
+# cards = get_trello_cards_from_subset()
+# identifiers = extract_identifiers_from_cards(cards)
+
+# for card_id, identifier in identifiers:
+#     if identifier:
+#         print(f"Card ID: {card_id}, Identifier: {identifier}")
+#     else:
+#         # Find the card name from cards list
+#         card_name = next(
+#             (card["name"] for card in cards if card["id"] == card_id), "Unknown"
+#         )
+#         print(f"Card ID: {card_id} has no valid identifier. Card name: {card_name}")
