@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime, timedelta
 from app.config import Config as cfg
-from app.sheets import get_access_token, get_drive_and_folder_id
+from app.onedrive.api import get_access_token, get_drive_and_folder_id
 
 
 def create_webhook_subscription():
@@ -54,5 +54,28 @@ def create_webhook_subscription():
         return None
 
 
+def list_onedrive_webhooks():
+    access_token = get_access_token()
+    url = "https://graph.microsoft.com/v1.0/subscriptions"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        print("✅ Subscriptions found:")
+        for sub in response.json().get("value", []):
+            print(
+                f"- ID: {sub['id']}, Resource: {sub['resource']}, Expires: {sub['expirationDateTime']}"
+            )
+        return response.json().get("value", [])
+    else:
+        print(
+            f"❌ Failed to list subscriptions: {response.status_code} {response.text}"
+        )
+        return None
+
+
 if __name__ == "__main__":
     create_webhook_subscription()
+    # list_onedrive_webhooks()

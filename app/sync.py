@@ -1,6 +1,7 @@
 import openpyxl
+import pandas as pd
 from app.trello.utils import extract_card_name, extract_identifier
-from app.onedrive.utils import find_excel_row
+from app.onedrive.utils import find_excel_row, save_excel_snapshot
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 
 # Stage mapping for Trello list names to Excel columns
@@ -131,3 +132,255 @@ def sync_from_trello(data):
 
     else:
         print(f"No row found for identifier {identifier}")
+
+
+def sync_from_onedrive(data):
+    """
+    Sync data from OneDrive to Trello based on the webhook payload
+    """
+    if data is None:
+        print("No data received from OneDrive webhook")
+        return
+
+    if "resource" not in data or "changeType" not in data:
+        print("Invalid OneDrive webhook data format")
+        return
+
+    resource = data["resource"]
+    change_type = data["changeType"]
+
+    print(f"Received OneDrive webhook: Resource={resource}, ChangeType={change_type}")
+
+    # if change type is 'updated', we can assume a file was modified
+    if change_type == "updated":
+        # download file from OneDrive
+        df = get_excel_dataframe()
+
+        # load cached (previously synced) data
+        try:
+            cached_df = pd.read_excel("excel_snapshot.xlsx")
+        except FileNotFoundError:
+            print("No cached snapshot found, will save current state.")
+            cached_df = None
+
+        # Comparison
+        if cached_df is not None:
+            changes = compare_excel_snapshots(df, cached_df)
+            for identifier, column, old_val, new_val in changes:
+                print(
+                    f"Changed: {identifier} column '{column}' from '{old_val}' to '{new_val}'"
+                )
+        else:
+            print("No cached snapshot found, will save current state.")
+
+        # Save the current state for future comparisons
+        save_excel_snapshot(df, filename="excel_snapshot.xlsx")
+
+
+"""
+Comparison service for comparing database and Excel data
+"""
+from app.models import query_job_releases
+from app.onedrive.api import get_excel_dataframe
+import pandas as pd
+
+
+def normalize_percentage_field(value):
+    """
+    Normalize percentage fields to handle different formats:
+    - 0.9 -> 0.9
+    - 90% -> 0.9
+    - "90%" -> 0.9
+    - Empty/None -> None
+    """
+    if pd.isna(value) or value == "" or value is None:
+        return None
+
+    # Convert to string for processing
+    str_value = str(value).strip()
+
+    # Handle empty strings
+    if not str_value:
+        return None
+
+    # If it ends with %, remove % and divide by 100
+    if str_value.endswith("%"):
+        try:
+            return float(str_value[:-1]) / 100
+        except ValueError:
+            return None
+
+    # Try to convert to float directly
+    try:
+        return float(str_value)
+    except ValueError:
+        return None
+
+
+def normalize_dataframe_percentages(df, percentage_columns):
+    """
+    Normalize percentage columns in a dataframe
+    """
+    df_normalized = df.copy()
+
+    for col in percentage_columns:
+        if col in df_normalized.columns:
+            df_normalized[col] = df_normalized[col].apply(normalize_percentage_field)
+
+    return df_normalized
+
+
+def debug_percentage_comparison(df_db, df_excel, percentage_cols):
+    """
+    Helper function to debug percentage field comparisons
+    """
+    debug_info = {}
+
+    for col in percentage_cols:
+        if col in df_db.columns and col in df_excel.columns:
+            debug_info[col] = {
+                "db_original": df_db[col].tolist(),
+                "excel_original": df_excel[col].tolist(),
+                "db_normalized": [
+                    normalize_percentage_field(val) for val in df_db[col]
+                ],
+                "excel_normalized": [
+                    normalize_percentage_field(val) for val in df_excel[col]
+                ],
+            }
+
+    return debug_info
+
+
+def run_comparison():
+    """
+    Compare database data with Excel data and return differences
+    Returns: List of differences found
+    """
+    print("Running comparison...")
+    print("Collecting from db...")
+    df_db = query_job_releases()
+    print("Collecting from Excel...")
+    df_excel = get_excel_dataframe()
+
+    # Normalize columns/types
+    common_cols = [col for col in df_db.columns if col in df_excel.columns]
+    df_db = df_db[common_cols].fillna("")
+    df_excel = df_excel[common_cols].fillna("")
+
+    # Define percentage columns that need normalization
+    percentage_cols = [
+        col
+        for col in common_cols
+        if col.lower() in ["invoiced", "job comp", "jobcomp", "job_comp"]
+    ]
+
+    # Normalize percentage fields
+    if percentage_cols:
+        df_db = normalize_dataframe_percentages(df_db, percentage_cols)
+        df_excel = normalize_dataframe_percentages(df_excel, percentage_cols)
+
+        # Fill NaN values in percentage columns with empty string for comparison
+        for col in percentage_cols:
+            if col in df_db.columns:
+                df_db[col] = df_db[col].fillna("")
+            if col in df_excel.columns:
+                df_excel[col] = df_excel[col].fillna("")
+
+    # Handle date columns
+    date_cols = [
+        col
+        for col in common_cols
+        if "date" in col.lower() or col.lower() in ["released", "comp. eta"]
+    ]
+    for col in date_cols:
+        if col in df_db.columns:
+            df_db[col] = df_db[col].astype(str)
+        if col in df_excel.columns:
+            df_excel[col] = df_excel[col].astype(str)
+
+    # Add source column for tracking
+    df_db["source"] = "db"
+    df_excel["source"] = "excel"
+
+    # Concatenate and find differences
+    combined = pd.concat([df_db, df_excel], ignore_index=True)
+
+    # Find duplicates based on all columns except 'source'
+    subset_cols = [col for col in common_cols if col != "source"]
+    diff = combined.drop_duplicates(subset=subset_cols, keep=False)
+
+    # For each differing row, show which columns differ
+    differences = []
+    processed_identifiers = set()
+
+    for _, row in diff.iterrows():
+        identifier = {col: row[col] for col in ["Job #", "Release #"] if col in row}
+        identifier_key = tuple(sorted(identifier.items()))
+
+        # Skip if we've already processed this identifier
+        if identifier_key in processed_identifiers:
+            continue
+        processed_identifiers.add(identifier_key)
+
+        source = row["source"]
+
+        # Find matching row in the other source
+        other_source = "excel" if source == "db" else "db"
+        other_row = combined[
+            (combined["source"] == other_source)
+            & (combined["Job #"] == row.get("Job #"))
+            & (combined["Release #"] == row.get("Release #"))
+        ]
+
+        diff_cols = []
+        column_differences = {}
+
+        if not other_row.empty:
+            for col in subset_cols:
+                current_val = row[col]
+                other_val = other_row.iloc[0][col]
+
+                # Determine which is db and which is excel
+                if source == "db":
+                    db_val, excel_val = current_val, other_val
+                else:
+                    db_val, excel_val = other_val, current_val
+
+                # Special handling for percentage columns
+                if col in percentage_cols:
+                    # Both values should already be normalized
+                    if pd.isna(current_val) and pd.isna(other_val):
+                        continue  # Both are NaN, consider equal
+                    elif pd.isna(current_val) or pd.isna(other_val):
+                        diff_cols.append(col)  # One is NaN, other isn't
+                        column_differences[col] = {"db": db_val, "excel": excel_val}
+                    elif abs(float(current_val or 0) - float(other_val or 0)) > 0.001:
+                        diff_cols.append(col)  # Different values (with tolerance)
+                        column_differences[col] = {"db": db_val, "excel": excel_val}
+                else:
+                    # Regular comparison for non-percentage columns
+                    if current_val != other_val:
+                        diff_cols.append(col)
+                        column_differences[col] = {"db": db_val, "excel": excel_val}
+        else:
+            diff_cols = subset_cols  # All columns differ if no match found
+            # Set values appropriately when no match found
+            if source == "db":
+                for col in subset_cols:
+                    column_differences[col] = {"db": row[col], "excel": None}
+            else:
+                for col in subset_cols:
+                    column_differences[col] = {"db": None, "excel": row[col]}
+
+        if diff_cols:  # Only add if there are actual differences
+            differences.append(
+                {
+                    "identifier": identifier,
+                    "diff_columns": diff_cols,
+                    "column_differences": column_differences,
+                }
+            )
+
+    print(f"Comparison complete. Found {len(differences)} differences.")
+    return differences

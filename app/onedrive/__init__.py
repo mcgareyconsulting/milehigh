@@ -38,13 +38,50 @@ def onedrive_webhook():
                 # Process specific change types
                 if change_type == "updated":
                     print(f"[OneDrive] File/folder updated: {resource}")
+
+                    # Run comparison when file is updated
+                    try:
+                        from app.sync import run_comparison
+
+                        differences = run_comparison()
+
+                        if differences:
+                            print(
+                                f"[OneDrive] Found {len(differences)} differences after file update"
+                            )
+                            # You can add additional logic here, such as:
+                            # - Send notifications
+                            # - Update database
+                            # - Log to a file
+                            # - Trigger other workflows
+
+                            # Example: Log some details about the differences
+                            for diff in differences[:5]:  # Log first 5 differences
+                                print(
+                                    f"  Difference in {diff['identifier']}: {diff['diff_columns']}"
+                                )
+                                for col in diff["diff_columns"][
+                                    :3
+                                ]:  # Show first 3 different columns
+                                    col_diff = diff["column_differences"][col]
+                                    print(
+                                        f"    {col}: DB='{col_diff['db']}' vs Excel='{col_diff['excel']}'"
+                                    )
+                        else:
+                            print("[OneDrive] No differences found after file update")
+
+                    except Exception as e:
+                        print(f"[OneDrive] Error running comparison: {str(e)}")
+
                 elif change_type == "created":
                     print(f"[OneDrive] File/folder created: {resource}")
                 elif change_type == "deleted":
                     print(f"[OneDrive] File/folder deleted: {resource}")
 
-                # Add your custom processing logic here
-                # process_onedrive_change(notification)
+                # # Add your custom processing logic here
+                # from app.sync import sync_from_onedrive
+
+                # sync_from_onedrive(notification)
 
             return "", 202  # Accepted - webhook processed successfully
 

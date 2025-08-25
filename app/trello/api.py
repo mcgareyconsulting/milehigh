@@ -14,3 +14,95 @@ def get_all_card_names(board_id):
     response.raise_for_status()
     cards = response.json()
     return [card["name"] for card in cards]
+
+
+def get_all_card_ids(board_id):
+    url = f"https://api.trello.com/1/boards/{board_id}/cards"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    cards = response.json()
+    return [(card["id"], card["name"]) for card in cards]
+
+
+def get_card_details(card_id):
+    """
+    Return all data for a specific Trello card by card_id.
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_trello_cards_from_subset():
+    """
+    Fetch all Trello cards from the board and filter them based on a specific subset.
+    """
+    # Hardcoded list of stage names
+    target_list_names = [
+        "Fit Up Complete.",
+        "Paint complete",
+        "Shipping completed",
+    ]
+
+    # Get all lists on the board
+    url_lists = url_lists = (
+        f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+    )
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url_lists, params=params)
+    response.raise_for_status()
+    lists = response.json()
+
+    # Get list IDs for your target lists
+    target_list_ids = [lst["id"] for lst in lists if lst["name"] in target_list_names]
+
+    # debug statement
+    # print(f"Target List IDs: {target_list_ids}")
+
+    # Get all cards on the board
+    url_cards = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/cards"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "fields": "id,name,desc,idList,due,labels",
+        "filter": "open",
+    }
+    response = requests.get(url_cards, params=params)
+    response.raise_for_status()
+    cards = response.json()
+
+    # Build a mapping from list ID to list name
+    list_id_to_name = {lst["id"]: lst["name"] for lst in lists}
+
+    # Filter cards by your target list IDs
+    filtered_cards = [card for card in cards if card["idList"] in target_list_ids]
+    relevant_data = [
+        {
+            "id": card["id"],
+            "name": card["name"],
+            "desc": card["desc"],
+            "list_name": list_id_to_name.get(card["idList"], "Unknown"),
+            "due": card.get("due"),
+            "labels": [label["name"] for label in card.get("labels", [])],
+        }
+        for card in filtered_cards
+    ]
+    return relevant_data
+
+
+# # Example usage:
+# cards = get_trello_cards_from_subset()
+# identifiers = extract_identifiers_from_cards(cards)
+
+# for card_id, identifier in identifiers:
+#     if identifier:
+#         print(f"Card ID: {card_id}, Identifier: {identifier}")
+#     else:
+#         # Find the card name from cards list
+#         card_name = next(
+#             (card["name"] for card in cards if card["id"] == card_id), "Unknown"
+#         )
+#         print(f"Card ID: {card_id} has no valid identifier. Card name: {card_name}")

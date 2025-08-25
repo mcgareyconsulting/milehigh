@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
+from app.onedrive.utils import relevant_columns
 
 
 def get_access_token():
@@ -24,14 +25,36 @@ def get_access_token():
 
 def get_excel_dataframe():
     """
-    Get the latest Excel data from OneDrive and return it as a DataFrame.
+    Get the latest Excel data from OneDrive and return it as a DataFrame
+    with only relevant rows and columns.
     """
     token = get_access_token()
     file_bytes = read_file_from_user_onedrive(
         token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
     )
-    df = pd.read_excel(BytesIO(file_bytes), header=2)
-    return df
+
+    # Define the columns to read: A-S and AC
+    usecols = list(range(20)) + [28]
+
+    # Read only the specified columns
+    df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)
+
+    # Filter for rows where Job # and Release # are NOT NaN
+    df_final = df.dropna(subset=["Job #", "Release #"])
+
+    # # debug print rows with job # 900 and release # 276
+    # filtered_rows = df_final[
+    #     (df_final["Job #"] == 900) & (df_final["Release #"] == 276)
+    # ]
+    # if not filtered_rows.empty:
+    #     print(f"Rows with Job # 900 and Release # 276:\n{filtered_rows}")
+    # else:
+    #     print("No rows found with Job # 900 and Release # 276.")
+
+    # Only keep relevant columns (in case others are present)
+    df_final = df_final[relevant_columns]
+
+    return df_final
 
 
 def read_file_from_user_onedrive(access_token, user_email, file_path):

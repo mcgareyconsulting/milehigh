@@ -14,10 +14,11 @@ def extract_card_name(data):
 
 def extract_identifier(card_name):
     """
-    Extracts the 6- or 7-digit identifier from the front of a card name.
+    Extracts a 6- or 7-digit identifier (e.g., 123-456 or 123-V456) only if it appears at the beginning of the card name.
     Returns the identifier as a string, or None if not found.
     """
+    pattern = re.compile(r"^(?:\d{3}-\d{3}|\d{3}-V\d{3})", re.IGNORECASE)
     if not card_name:
         return None
-    match = re.match(r"(\d{3}-(?:\d{3}|V\d{3}))", card_name.strip(), re.IGNORECASE)
-    return match.group(1) if match else None
+    match = pattern.match(card_name.strip())
+    return match.group(0) if match else None

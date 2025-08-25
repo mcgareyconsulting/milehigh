@@ -1,5 +1,4 @@
 # from app.test import get_trello_identifiers
-# from app.sheets import get_onedrive_identifiers
 
 # # Main entry point for the script
 # if __name__ == "__main__":
