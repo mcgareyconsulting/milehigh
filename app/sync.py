@@ -1,6 +1,7 @@
 import openpyxl
 import pandas as pd
 from app.trello.utils import extract_card_name, extract_identifier
+from app.trello.api import get_trello_card_by_id, get_list_name_by_id
 from app.onedrive.utils import find_excel_row, save_excel_snapshot
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job
@@ -73,30 +74,102 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
     return cell_address
 
 
-def sync_from_trello(data):
-    print(data)
+def sync_from_trello(event_info):
+    """
+    Sync data from Trello to OneDrive based on the webhook payload
+    """
+    if event_info is None or not event_info.get("handled"):
+        print("No actionable event info received from Trello webhook")
+        return
 
-    # parsing data
-    action = data["action"]
-    action_type = action.get("type")
-    action_data = action.get("data", {})
-    card_info = action_data.get("card", {})
-    card_id = card_info.get("id")
+    card_id = event_info["card_id"]
+    card_data = get_trello_card_by_id(card_id)
+    if not card_data:
+        print(f"[SYNC] Card {card_id} not found in Trello API")
+        return
+    print(card_data)
 
     rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
-    if not rec:
-        # Optionally create a new row, or skip if unknown
-        print(f"No DB record found for card {card_id}")
-        return "", 200
 
-    new_desc = action_data["card"].get("desc")  # from webhook
-    db_desc = rec.trello_card_description  # your DB field
+    # Prepare debug comparison before upsert/update
+    debug_fields = [
+        (
+            "Trello name",
+            card_data.get("name"),
+            "DB name",
+            getattr(rec, "trello_card_name", None),
+        ),
+        (
+            "Trello desc",
+            card_data.get("desc"),
+            "DB desc",
+            getattr(rec, "trello_card_description", None),
+        ),
+        (
+            "Trello list id",
+            card_data.get("idList"),
+            "DB list id",
+            getattr(rec, "trello_list_id", None),
+        ),
+        (
+            "Trello list name",
+            get_list_name_by_id(card_data.get("idList")),
+            "DB list name",
+            getattr(rec, "trello_list_name", None),
+        ),
+        (
+            "Trello due",
+            card_data.get("due"),
+            "DB due",
+            getattr(rec, "trello_card_date", None),
+        ),
+        (
+            "Trello labels",
+            card_data.get("labels"),
+            "DB labels",
+            getattr(rec, "trello_card_labels", None),
+        ),
+    ]
 
-    if new_desc != db_desc:
-        print(f"Description mismatch! Trello: {new_desc} | DB: {db_desc}")
-        # Decide: update DB, update Trello, log for review, etc.
+    if rec:
+        print(
+            f"[SYNC] Comparing Trello card ({card_id}) to DB record (Job id: {rec.id})"
+        )
+        for t_label, t_value, db_label, db_value in debug_fields:
+            if t_value != db_value:
+                print(
+                    f"  DIFF: {db_label} != {t_label}: Trello={t_value!r} | DB={db_value!r}"
+                )
+            else:
+                print(f"  MATCH: {db_label} == {t_label}: {t_value!r}")
     else:
-        print("Description matches.")
+        print(f"[SYNC] No DB record found for card {card_id}. Trello card:")
+        for t_label, t_value, _, _ in debug_fields:
+            print(f"  {t_label}: {t_value!r}")
+
+    # After debugging, you can upsert/update as needed
+    # ...
+    # # parsing data
+    # action = data["action"]
+    # action_type = action.get("type")
+    # action_data = action.get("data", {})
+    # card_info = action_data.get("card", {})
+    # card_id = card_info.get("id")
+
+    # rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
+    # if not rec:
+    #     # Optionally create a new row, or skip if unknown
+    #     print(f"No DB record found for card {card_id}")
+    #     return "", 200
+
+    # new_desc = action_data["card"].get("desc")  # from webhook
+    # db_desc = rec.trello_card_description  # your DB field
+
+    # if new_desc != db_desc:
+    #     print(f"Description mismatch! Trello: {new_desc} | DB: {db_desc}")
+    #     # Decide: update DB, update Trello, log for review, etc.
+    # else:
+    #     print("Description matches.")
 
 
 # def sync_from_trello(data):

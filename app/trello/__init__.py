@@ -19,7 +19,7 @@ def trello_webhook():
         event_info = parse_webhook_data(data)
         print(f"Received Trello webhook event: {event_info}")
 
-        # # Trigger sync process
-        # sync_from_trello(event_info)
+        # Trigger sync process
+        sync_from_trello(event_info)
 
     return "", 200

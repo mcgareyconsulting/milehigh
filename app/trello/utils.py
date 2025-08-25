@@ -48,6 +48,10 @@ def parse_webhook_data(data):
                     "changed_fields": changed_fields,
                 }
 
+        # Other actions can be added here
+
+        # If nothing above matched, it's unhandled
+        return {"event": "unhandled", "handled": False, "details": data}
     except Exception as e:
         print(f"Error parsing webhook data: {e}")
         return {"event": "error", "handled": False, "error": str(e)}

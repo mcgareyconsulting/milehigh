@@ -4,6 +4,35 @@ import os
 from app.config import Config as cfg
 
 
+def get_list_name_by_id(list_id):
+    """
+    Fetches the list name from Trello API by list ID.
+    """
+    url = f"https://api.trello.com/1/lists/{list_id}"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("name")
+    else:
+        print(f"Trello API error: {response.status_code} {response.text}")
+        return None
+
+
+def get_trello_card_by_id(card_id):
+    """
+    Fetches the full card data from Trello API by card ID.
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Trello API error: {response.status_code} {response.text}")
+        return None
+
+
 def get_all_card_names(board_id):
     """
     Return a list of all card names on the board
@@ -84,6 +113,7 @@ def get_trello_cards_from_subset():
             "id": card["id"],
             "name": card["name"],
             "desc": card["desc"],
+            "list_id": card["idList"],
             "list_name": list_id_to_name.get(card["idList"], "Unknown"),
             "due": card.get("due"),
             "labels": [label["name"] for label in card.get("labels", [])],
