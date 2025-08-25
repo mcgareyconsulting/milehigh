@@ -3,6 +3,7 @@ import pandas as pd
 from app.trello.utils import extract_card_name, extract_identifier
 from app.onedrive.utils import find_excel_row, save_excel_snapshot
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
+from app.models import Job
 
 # Stage mapping for Trello list names to Excel columns
 stage_column_map = {
@@ -73,65 +74,84 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
 
 
 def sync_from_trello(data):
-    """
-    Sync data from Trello to OneDrive based on the webhook payload
-    """
-    # Extract stage information from webhook
-    old_stage, new_stage = extract_stage_info(data)
+    print(data)
 
-    # card name
-    card_name = extract_card_name(data)
-    print(f"Syncing card: {card_name}")
+    # parsing data
+    action = data["action"]
+    action_type = action.get("type")
+    action_data = action.get("data", {})
+    card_info = action_data.get("card", {})
+    card_id = card_info.get("id")
 
-    # Get unique id
-    identifier = extract_identifier(card_name)
-    print(f"Extracted identifier: {identifier}")
-
-    # get the latest Excel data
-    df = get_excel_dataframe()
-
-    # return the row where the identifier matches
-    row = find_excel_row(df, identifier)
-    if row is not None:
-        print(f"Row found for identifier {identifier}: {row}")
-
-        # Update Excel if this is a stage transition we care about
-        if old_stage and new_stage and old_stage != new_stage:
-            print(f"Processing stage change: {old_stage} → {new_stage}")
-        else:
-            print("No stage change detected or not a list movement")
-
-        # Get correct column name from mapping
-        column = stage_column_map.get(new_stage)
-        if not column:
-            print(
-                f"Stage '{new_stage}' not found in stage_column_map. Skipping update."
-            )
-            return
-
-        if column not in df.columns:
-            print(f"Column '{column}' not found in Excel row. Skipping update.")
-            return
-
-        # Get Excel cell address
-        cell_address = get_excel_cell_address_by_identifier(df, identifier, column)
-        if not cell_address:
-            print(f"Could not determine Excel cell address for identifier {identifier}")
-            return
-
-        print(f"Updating Excel cell {cell_address} for identifier {identifier}")
-
-        # TODO: Dynamically allocate state
-        # Update via Microsoft Graph API using your existing sheets.py function
-        success = update_excel_cell(cell_address, "X")
-
-        if success:
-            print(f"Excel update completed for {identifier}")
-        else:
-            print(f"Excel update failed for {identifier}")
-
+    rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
+    if not rec:
+        # Optionally create a new row, or skip if unknown
+        print(f"No DB record found for card {card_id}")
+        return "", 200
     else:
-        print(f"No row found for identifier {identifier}")
+        print(rec)
+
+
+# def sync_from_trello(data):
+#     """
+#     Sync data from Trello to OneDrive based on the webhook payload
+#     """
+#     # Extract stage information from webhook
+#     old_stage, new_stage = extract_stage_info(data)
+
+#     # card name
+#     card_name = extract_card_name(data)
+#     print(f"Syncing card: {card_name}")
+
+#     # Get unique id
+#     identifier = extract_identifier(card_name)
+#     print(f"Extracted identifier: {identifier}")
+
+#     # get the latest Excel data
+#     df = get_excel_dataframe()
+
+#     # return the row where the identifier matches
+#     row = find_excel_row(df, identifier)
+#     if row is not None:
+#         print(f"Row found for identifier {identifier}: {row}")
+
+#         # Update Excel if this is a stage transition we care about
+#         if old_stage and new_stage and old_stage != new_stage:
+#             print(f"Processing stage change: {old_stage} → {new_stage}")
+#         else:
+#             print("No stage change detected or not a list movement")
+
+#         # Get correct column name from mapping
+#         column = stage_column_map.get(new_stage)
+#         if not column:
+#             print(
+#                 f"Stage '{new_stage}' not found in stage_column_map. Skipping update."
+#             )
+#             return
+
+#         if column not in df.columns:
+#             print(f"Column '{column}' not found in Excel row. Skipping update.")
+#             return
+
+#         # Get Excel cell address
+#         cell_address = get_excel_cell_address_by_identifier(df, identifier, column)
+#         if not cell_address:
+#             print(f"Could not determine Excel cell address for identifier {identifier}")
+#             return
+
+#         print(f"Updating Excel cell {cell_address} for identifier {identifier}")
+
+#         # TODO: Dynamically allocate state
+#         # Update via Microsoft Graph API using your existing sheets.py function
+#         success = update_excel_cell(cell_address, "X")
+
+#         if success:
+#             print(f"Excel update completed for {identifier}")
+#         else:
+#             print(f"Excel update failed for {identifier}")
+
+#     else:
+#         print(f"No row found for identifier {identifier}")
 
 
 def sync_from_onedrive(data):
