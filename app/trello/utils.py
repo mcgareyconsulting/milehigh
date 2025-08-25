@@ -1,6 +1,58 @@
 import re
 
 
+def parse_webhook_data(data):
+    """
+    Parses Trello webhook data to extract relevant Trello events.
+    Returns a dict describing the event type and data.
+    """
+    try:
+        action = data.get("action", {})
+        action_type = action.get("type")
+        action_data = action.get("data", {})
+        card_info = action_data.get("card", {})
+        card_id = card_info.get("id")
+        card_name = card_info.get("name")
+
+        # Card moved between lists
+        if (
+            action_type == "updateCard"
+            and "listBefore" in action_data
+            and "listAfter" in action_data
+        ):
+            return {
+                "event": "card_moved",
+                "handled": True,
+                "card_id": card_id,
+                "card_name": card_name,
+                "from": action_data["listBefore"]["name"],
+                "to": action_data["listAfter"]["name"],
+            }
+
+        # Card field changes (name, desc, due, labels, etc.)
+        elif action_type == "updateCard":
+            changed_fields = [
+                field
+                for field in ["name", "desc", "due"]
+                if "old" in action_data and field in action_data["old"]
+            ]
+            if "label" in action_data or "labels" in action_data:
+                changed_fields.append("labels")
+            # Skip events that are only 'pos' changes
+            if changed_fields and changed_fields != ["pos"]:
+                return {
+                    "event": "card_updated",
+                    "handled": True,
+                    "card_id": card_id,
+                    "card_name": card_name,
+                    "changed_fields": changed_fields,
+                }
+
+    except Exception as e:
+        print(f"Error parsing webhook data: {e}")
+        return {"event": "error", "handled": False, "error": str(e)}
+
+
 def extract_card_name(data):
     """
     Safely extracts the card name from a Trello webhook payload.

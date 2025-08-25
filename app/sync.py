@@ -88,8 +88,15 @@ def sync_from_trello(data):
         # Optionally create a new row, or skip if unknown
         print(f"No DB record found for card {card_id}")
         return "", 200
+
+    new_desc = action_data["card"].get("desc")  # from webhook
+    db_desc = rec.trello_card_description  # your DB field
+
+    if new_desc != db_desc:
+        print(f"Description mismatch! Trello: {new_desc} | DB: {db_desc}")
+        # Decide: update DB, update Trello, log for review, etc.
     else:
-        print(rec)
+        print("Description matches.")
 
 
 # def sync_from_trello(data):
