@@ -87,7 +87,6 @@ def sync_from_trello(event_info):
     if not card_data:
         print(f"[SYNC] Card {card_id} not found in Trello API")
         return
-    print(card_data)
 
     rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
 
@@ -122,12 +121,6 @@ def sync_from_trello(event_info):
             card_data.get("due"),
             "DB due",
             getattr(rec, "trello_card_date", None),
-        ),
-        (
-            "Trello labels",
-            card_data.get("labels"),
-            "DB labels",
-            getattr(rec, "trello_card_labels", None),
         ),
     ]
 
