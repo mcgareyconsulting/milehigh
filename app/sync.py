@@ -1,10 +1,15 @@
 import openpyxl
 import pandas as pd
-from app.trello.utils import extract_card_name, extract_identifier
+from app.trello.utils import (
+    extract_card_name,
+    extract_identifier,
+    parse_trello_datetime,
+)
 from app.trello.api import get_trello_card_by_id, get_list_name_by_id
 from app.onedrive.utils import find_excel_row, save_excel_snapshot
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
-from app.models import Job
+from app.models import Job, db
+from datetime import timezone, datetime
 
 # Stage mapping for Trello list names to Excel columns
 stage_column_map = {
@@ -74,6 +79,23 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
     return cell_address
 
 
+def compare_timestamps(event_time, source_time):
+    """
+    Compare Trello event timestamp with database record timestamp
+    """
+    print(event_time)
+    if not event_time or not source_time:
+        print(f"Invalid time event {event_time} or source {source_time}")
+        return None
+
+    if event_time > source_time:
+        print("Trello event is newer than DB record.")
+        return "newer"
+    else:
+        print("Trello event is older than DB record.")
+        return "older"
+
+
 def sync_from_trello(event_info):
     """
     Sync data from Trello to OneDrive based on the webhook payload
@@ -83,6 +105,8 @@ def sync_from_trello(event_info):
         return
 
     card_id = event_info["card_id"]
+    event_time = parse_trello_datetime(event_info.get("time"))
+    print(f"[SYNC] Processing Trello card ID: {card_id} at {event_time}")
     card_data = get_trello_card_by_id(card_id)
     if not card_data:
         print(f"[SYNC] Card {card_id} not found in Trello API")
@@ -122,6 +146,12 @@ def sync_from_trello(event_info):
             "DB due",
             getattr(rec, "trello_card_date", None),
         ),
+        (
+            "Trello event time",
+            event_time,
+            "DB last updated",
+            getattr(rec, "last_updated_at", None),
+        ),
     ]
 
     if rec:
@@ -139,6 +169,40 @@ def sync_from_trello(event_info):
         print(f"[SYNC] No DB record found for card {card_id}. Trello card:")
         for t_label, t_value, _, _ in debug_fields:
             print(f"  {t_label}: {t_value!r}")
+
+    # if newer, update DB
+    diff = compare_timestamps(event_time, rec.last_updated_at if rec else None)
+    if diff == "newer":
+        print(f"[SYNC] Updating DB record for card {card_id} from Trello data...")
+        if not rec:
+            print(f"[SYNC] No existing DB record for card {card_id}, creating new one.")
+            rec = Job(
+                job=0,  # Placeholder, should be set properly
+                release=0,  # Placeholder, should be set properly
+                job_name=card_data.get("name", "Unnamed Job"),
+                source_of_update="Trello",
+                last_updated_at=event_time,
+            )
+            # Note: You should ideally link this to an existing Job based on your logic
+            # For now, we create a new record with placeholders
+
+        rec.trello_card_name = card_data.get("name")
+        rec.trello_card_description = card_data.get("desc")
+        rec.trello_list_id = card_data.get("idList")
+        rec.trello_list_name = get_list_name_by_id(card_data.get("idList"))
+        if card_data.get("due"):
+            rec.trello_card_date = parse_trello_datetime(card_data["due"])
+        else:
+            rec.trello_card_date = None
+
+        rec.last_updated_at = event_time
+        rec.source_of_update = "Trello"
+
+        db.session.add(rec)
+        db.session.commit()
+        print(f"[SYNC] DB record for card {card_id} updated.")
+    else:
+        print(f"[SYNC] No update needed for card {card_id}.")
 
     # After debugging, you can upsert/update as needed
     # ...

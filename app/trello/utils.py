@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 
 
 def parse_webhook_data(data):
@@ -13,6 +14,7 @@ def parse_webhook_data(data):
         card_info = action_data.get("card", {})
         card_id = card_info.get("id")
         card_name = card_info.get("name")
+        event_time = action.get("date")
 
         # Card moved between lists
         if (
@@ -27,6 +29,7 @@ def parse_webhook_data(data):
                 "card_name": card_name,
                 "from": action_data["listBefore"]["name"],
                 "to": action_data["listAfter"]["name"],
+                "time": event_time,
             }
 
         # Card field changes (name, desc, due, labels, etc.)
@@ -46,6 +49,7 @@ def parse_webhook_data(data):
                     "card_id": card_id,
                     "card_name": card_name,
                     "changed_fields": changed_fields,
+                    "time": event_time,
                 }
 
         # Other actions can be added here
@@ -55,6 +59,21 @@ def parse_webhook_data(data):
     except Exception as e:
         print(f"Error parsing webhook data: {e}")
         return {"event": "error", "handled": False, "error": str(e)}
+
+
+def parse_trello_datetime(dt_str):
+    # Trello gives ISO8601 string with trailing Z for UTC or with offset
+    if not dt_str:
+        return None
+    if dt_str.endswith("Z"):
+        dt_str = dt_str[:-1]  # Remove the 'Z'
+        dt = datetime.fromisoformat(dt_str)
+        dt = dt.replace(tzinfo=None)  # Remove timezone info, make naive
+        return dt
+    else:
+        dt = datetime.fromisoformat(dt_str)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)  # Remove timezone info, make naive
 
 
 def extract_card_name(data):

@@ -45,6 +45,8 @@ def seed_from_combined_data(combined_data):
                 job_comp=excel_data.get("Job Comp"),
                 invoiced=excel_data.get("Invoiced"),
                 notes=excel_data.get("Notes"),
+                last_updated_at=pd.Timestamp.now(),
+                source_of_update="System",
             )
 
             # Add Trello data if available

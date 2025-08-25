@@ -17,7 +17,6 @@ def trello_webhook():
     if request.method == "POST":
         data = request.json
         event_info = parse_webhook_data(data)
-        print(f"Received Trello webhook event: {event_info}")
 
         # Trigger sync process
         sync_from_trello(event_info)

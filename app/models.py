@@ -43,6 +43,12 @@ class Job(db.Model):
     trello_card_description = db.Column(db.String(512), nullable=True)
     trello_card_date = db.Column(db.Date, nullable=True)
 
+    # Changelog tracking
+    last_updated_at = db.Column(db.DateTime, nullable=True)
+    source_of_update = db.Column(
+        db.String(16), nullable=True
+    )  # 'Trello' or 'Excel' or 'System'
+
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"
 
