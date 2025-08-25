@@ -60,7 +60,7 @@ def get_trello_cards_from_subset():
     target_list_ids = [lst["id"] for lst in lists if lst["name"] in target_list_names]
 
     # debug statement
-    print(f"Target List IDs: {target_list_ids}")
+    # print(f"Target List IDs: {target_list_ids}")
 
     # Get all cards on the board
     url_cards = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/cards"

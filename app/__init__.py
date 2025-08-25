@@ -16,7 +16,7 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
     db.init_app(app)
 
-    # # Initialize the database
+    # Initialize the database
     with app.app_context():
         db.drop_all()
         db.create_all()
