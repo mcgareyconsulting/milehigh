@@ -6,7 +6,7 @@ from app.trello.utils import (
     parse_trello_datetime,
 )
 from app.trello.api import get_trello_card_by_id, get_list_name_by_id
-from app.onedrive.utils import find_excel_row, save_excel_snapshot
+from app.onedrive.utils import get_excel_row_by_identifiers
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job, db
 from datetime import timezone, datetime
@@ -77,6 +77,26 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
     print(f"Found cell address: {cell_address} for identifier {identifier}")
 
     return cell_address
+
+
+def rectify_db_on_trello_move(job, new_trello_list):
+    print(new_trello_list)
+    if new_trello_list == "Paint complete":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"
+        job.ship = "O"
+    elif new_trello_list == "Fit Up Complete.":
+        job.fitup_comp = "X"
+        job.welded = "O"
+        job.paint_comp = "O"
+        job.ship = "O"
+    elif new_trello_list == "Shipping completed":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"
+        job.ship = "X"
+    # update last_updated_at, source_of_update, etc.
 
 
 def compare_timestamps(event_time, source_time):
@@ -186,6 +206,7 @@ def sync_from_trello(event_info):
             # Note: You should ideally link this to an existing Job based on your logic
             # For now, we create a new record with placeholders
 
+        # Update trello information
         rec.trello_card_name = card_data.get("name")
         rec.trello_card_description = card_data.get("desc")
         rec.trello_list_id = card_data.get("idList")
@@ -198,11 +219,35 @@ def sync_from_trello(event_info):
         rec.last_updated_at = event_time
         rec.source_of_update = "Trello"
 
+        # Use mapping to update excel side of db row
+        if event_info["event"] == "card_moved":
+            print(
+                f"[SYNC] Card move detected, updating DB fields accordingly. {rec.fitup_comp}, {rec.paint_comp}, {rec.ship}"
+            )
+            rectify_db_on_trello_move(rec, get_list_name_by_id(card_data.get("idList")))
+            print(
+                f"[SYNC] DB fields {rec.fitup_comp}, {rec.paint_comp}, {rec.ship} updated for card {card_id}."
+            )
+
         db.session.add(rec)
         db.session.commit()
         print(f"[SYNC] DB record for card {card_id} updated.")
     else:
         print(f"[SYNC] No update needed for card {card_id}.")
+
+    # Pass changes to excel
+    if rec and event_info["event"] == "card_moved":
+        # lookup on job and release #
+        row = get_excel_row_by_identifiers(rec.job, rec.release)
+        print(f"[SYNC] Found Excel row for Job {rec.job}, Release {rec.release}: {row}")
+        # Set staging based upon db updates
+        row["Fitup comp"] = rec.fitup_comp
+        row["Paint Comp"] = rec.paint_comp
+        row["Welded"] = rec.welded
+        row["Ship"] = rec.ship
+        print(row)
+
+        # push to excel
 
     # After debugging, you can upsert/update as needed
     # ...

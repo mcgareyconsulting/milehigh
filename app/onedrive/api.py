@@ -4,7 +4,31 @@ from dotenv import load_dotenv
 import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
-from app.onedrive.utils import relevant_columns
+
+
+relevant_columns = [
+    "Job #",
+    "Release #",
+    "Job",
+    "Description",
+    "Fab Hrs",
+    "Install HRS",
+    "Paint color",
+    "PM",
+    "BY",
+    "Released",
+    "Fab Order",
+    "Cut start",
+    "Fitup comp",
+    "Welded",
+    "Paint Comp",
+    "Ship",
+    "Start install",
+    "Comp. ETA",
+    "Job Comp",
+    "Invoiced",
+    "Notes",
+]
 
 
 def get_access_token():
