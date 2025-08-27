@@ -6,7 +6,7 @@ from app.trello.utils import (
     parse_trello_datetime,
 )
 from app.trello.api import get_trello_card_by_id, get_list_name_by_id
-from app.onedrive.utils import get_excel_row_by_identifiers
+from app.onedrive.utils import get_excel_row_and_index_by_identifiers
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job, db
 from datetime import timezone, datetime
@@ -89,8 +89,8 @@ def rectify_db_on_trello_move(job, new_trello_list):
     elif new_trello_list == "Fit Up Complete.":
         job.fitup_comp = "X"
         job.welded = "O"
-        job.paint_comp = "O"
-        job.ship = "O"
+        job.paint_comp = ""
+        job.ship = ""
     elif new_trello_list == "Shipping completed":
         job.fitup_comp = "X"
         job.welded = "X"
@@ -237,17 +237,23 @@ def sync_from_trello(event_info):
 
     # Pass changes to excel
     if rec and event_info["event"] == "card_moved":
-        # lookup on job and release #
-        row = get_excel_row_by_identifiers(rec.job, rec.release)
-        print(f"[SYNC] Found Excel row for Job {rec.job}, Release {rec.release}: {row}")
-        # Set staging based upon db updates
-        row["Fitup comp"] = rec.fitup_comp
-        row["Paint Comp"] = rec.paint_comp
-        row["Welded"] = rec.welded
-        row["Ship"] = rec.ship
-        print(row)
+        # filter down known excel column letters
+        column_updates = {
+            "M": rec.fitup_comp,
+            "N": rec.welded,
+            "O": rec.paint_comp,
+            "P": rec.ship,
+        }  # fitup, welded, paint, ship
 
+        # lookup on job and release #
+        index, row = get_excel_row_and_index_by_identifiers(rec.job, rec.release)
+        print(
+            f"[SYNC] Found Excel row for Job {rec.job}, Release {rec.release}: {index} {row}"
+        )
         # push to excel
+        for col, val in column_updates.items():
+            cell_address = col + str(index)
+            update_excel_cell(cell_address, val)
 
     # After debugging, you can upsert/update as needed
     # ...

@@ -1,5 +1,6 @@
 import pandas as pd
 from app.onedrive.api import get_excel_dataframe
+from app.config import Config as cfg
 
 
 def find_excel_row(df, identifier):
@@ -14,7 +15,7 @@ def find_excel_row(df, identifier):
     return None
 
 
-def get_excel_row_by_identifiers(job, release):
+def get_excel_row_and_index_by_identifiers(job, release):
     """
     Fetch a row from the Excel file using Job # and Release # as unique identifiers.
 
@@ -23,20 +24,23 @@ def get_excel_row_by_identifiers(job, release):
         release (int or str): The Release # identifier.
 
     Returns:
-        pandas.Series or None: The matching row as a Series, or None if not found.
+        tuple: (index, pandas.Series) where index is the DataFrame index (int),
+               and pandas.Series is the matching row.
+               Returns (None, None) if not found.
     """
     df = get_excel_dataframe()
     # Ensure identifiers are the correct type
     job = int(job)
     release = int(release)
 
-    row = df[(df["Job #"] == job) & (df["Release #"] == release)]
-    if not row.empty:
-        # Return the first matching row as a Series
-        return row.iloc[0]
+    match = df[(df["Job #"] == job) & (df["Release #"] == release)]
+    if not match.empty:
+        idx = match.index[0] + cfg.EXCEL_INDEX_ADJ
+        row = match.iloc[0]
+        return idx, row
     else:
         print(f"No row found for Job # {job} and Release # {release}.")
-        return None
+        return None, None
 
 
 def build_unique_identifiers(df):
