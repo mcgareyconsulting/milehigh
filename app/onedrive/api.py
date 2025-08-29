@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
+from flask import jsonify
 
 
 relevant_columns = [
@@ -79,6 +80,33 @@ def get_excel_dataframe():
     df_final = df_final[relevant_columns]
 
     return df_final
+
+
+import requests
+from urllib.parse import quote
+
+
+def get_last_modified_time():
+    access_token = get_access_token()
+    file_path = cfg.ONEDRIVE_FILE_PATH  # e.g. "/Job Log 2.4 DM play toy (1).xlsm"
+    user_email = cfg.ONEDRIVE_USER_EMAIL
+
+    url = (
+        f"https://graph.microsoft.com/v1.0/users/{user_email}/drive/root:/{file_path}:"
+    )
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    r = requests.get(url, headers=headers)
+    r.raise_for_status()
+    data = r.json()
+
+    return {
+        "name": data.get("name"),
+        "id": data.get("id"),
+        "lastModifiedDateTime": data.get("lastModifiedDateTime"),
+        "size": data.get("size"),
+    }
 
 
 def read_file_from_user_onedrive(access_token, user_email, file_path):
