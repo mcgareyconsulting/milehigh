@@ -82,10 +82,6 @@ def get_excel_dataframe():
     return df_final
 
 
-import requests
-from urllib.parse import quote
-
-
 def get_last_modified_time():
     access_token = get_access_token()
     file_path = cfg.ONEDRIVE_FILE_PATH  # e.g. "/Job Log 2.4 DM play toy (1).xlsm"
@@ -106,6 +102,20 @@ def get_last_modified_time():
         "id": data.get("id"),
         "lastModifiedDateTime": data.get("lastModifiedDateTime"),
         "size": data.get("size"),
+    }
+
+
+def get_excel_data_with_timestamp():
+    """
+    Get the latest Excel data from OneDrive along with the last modified time.
+    Returns a dict: {"last_modified": ..., "data": DataFrame}
+    """
+    last_modified_info = get_last_modified_time()
+    df = get_excel_dataframe()
+    return {
+        "name": last_modified_info.get("name"),
+        "last_modified_time": last_modified_info.get("lastModifiedDateTime"),
+        "data": df,
     }
 
 
