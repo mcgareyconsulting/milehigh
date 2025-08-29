@@ -196,6 +196,36 @@ def sync_from_trello(event_info):
             update_excel_cell(cell_address, val)
 
 
+def sync_from_onedrive(data):
+    """
+    Sync data from OneDrive to Trello based on the polling payload
+    """
+    if data is None:
+        print("No data received from OneDrive polling")
+        return
+
+    if "last_modified_time" not in data or "data" not in data:
+        print("Invalid OneDrive polling data format")
+        return
+
+    last_modified_time = data["last_modified_time"]
+    df = data["data"]
+
+    print(f"[SYNC] Processing OneDrive data last modified at {last_modified_time}")
+    print(f"[SYNC] DataFrame {df.shape[0]} rows, {df.shape[1]} columns")
+
+    # lookup all jobs with job-release identifiers in the df
+    identifiers = (df["Job #"].astype(str) + "-" + df["Release #"].astype(str)).tolist()
+    jobs = Job.query.filter(
+        (Job.job.isnot(None)),
+        (Job.release.isnot(None)),
+        (Job.job != 0),
+        (Job.release != 0),
+    ).all()
+    job_map = {f"{job.job}-{job.release}": job for job in jobs}
+    print(f"[SYNC] Found {len(job_map)} jobs in DB with valid identifiers.")
+
+
 # def sync_from_onedrive(data):
 #     """
 #     Sync data from OneDrive to Trello based on the webhook payload

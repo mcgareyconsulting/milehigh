@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, make_response
 import json
-from app.onedrive.api import get_excel_data_with_timestamp
+from app.onedrive.utils import parse_polling_data
 
 onedrive_bp = Blueprint("onedrive", __name__)
 
@@ -10,25 +10,18 @@ def onedrive_poll():
     """
     Manual poll endpoint to check lastModifiedDateTime of Excel file.
     """
+    from app.sync import sync_from_onedrive
+
     # Handle polling requests
     print("[OneDrive] Polling request received")
-    data = get_excel_data_with_timestamp()
 
     # Process the data as needed
-    df = data.get("data")
-    data_json = df.to_dict(orient="records")
+    event_info = parse_polling_data()
 
-    last_modified = data.get("last_modified_time")
-    return (
-        jsonify(
-            {
-                "name": data.get("name"),
-                "last_modified_time": last_modified,
-                "data": data_json,
-            }
-        ),
-        200,
-    )
+    # Trigger sync process
+    sync_from_onedrive(event_info)
+
+    return "Successfully passed data to sync", 200
 
 
 # @onedrive_bp.route("/webhook", methods=["GET", "POST"])
