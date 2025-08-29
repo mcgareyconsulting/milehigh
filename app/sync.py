@@ -214,16 +214,80 @@ def sync_from_onedrive(data):
     print(f"[SYNC] Processing OneDrive data last modified at {last_modified_time}")
     print(f"[SYNC] DataFrame {df.shape[0]} rows, {df.shape[1]} columns")
 
-    # lookup all jobs with job-release identifiers in the df
-    identifiers = (df["Job #"].astype(str) + "-" + df["Release #"].astype(str)).tolist()
-    jobs = Job.query.filter(
-        (Job.job.isnot(None)),
-        (Job.release.isnot(None)),
-        (Job.job != 0),
-        (Job.release != 0),
-    ).all()
-    job_map = {f"{job.job}-{job.release}": job for job in jobs}
-    print(f"[SYNC] Found {len(job_map)} jobs in DB with valid identifiers.")
+    # compare df against db on identifiers
+    for _, row in df.iterrows():
+        job = row.get("Job #")
+        release = row.get("Release #")
+        if pd.isna(job) or pd.isna(release):
+            print(f"[SYNC] Skipping row with missing Job # or Release #: {row}")
+            continue
+
+        identifier = f"{job}-{release}"
+        print(f"[SYNC] Processing Excel row for identifier {identifier}")
+
+        rec = Job.query.filter_by(job=job, release=release).one_or_none()
+        if not rec:
+            print(
+                f"[SYNC] No DB record found for Job {job}, Release {release}, skipping."
+            )
+            continue
+
+        # Prepare debug comparison before upsert/update
+        debug_fields = [
+            (
+                "Excel Job #",
+                job,
+                "DB Job #",
+                getattr(rec, "job", None),
+            ),
+            (
+                "Excel Release #",
+                release,
+                "DB Release #",
+                getattr(rec, "release", None),
+            ),
+            (
+                "Excel Fitup comp",
+                row.get("Fitup comp"),
+                "DB Fitup comp",
+                getattr(rec, "fitup_comp", None),
+            ),
+            (
+                "Excel Welded",
+                row.get("Welded"),
+                "DB Welded",
+                getattr(rec, "welded", None),
+            ),
+            (
+                "Excel Paint Comp",
+                row.get("Paint Comp"),
+                "DB Paint Comp",
+                getattr(rec, "paint_comp", None),
+            ),
+            (
+                "Excel Ship",
+                row.get("Ship"),
+                "DB Ship",
+                getattr(rec, "ship", None),
+            ),
+            (
+                "Excel Last Updated",
+                last_modified_time,
+                "DB Last Updated",
+                getattr(rec, "last_updated_at", None),
+            ),
+        ]
+
+        print(
+            f"[SYNC] Comparing Excel row (Job {job}, Release {release}) to DB record (Job id: {rec.id})"
+        )
+        for x_label, x_value, db_label, db_value in debug_fields:
+            if x_value != db_value:
+                print(
+                    f"  DIFF: {db_label} != {x_label}: Excel={x_value!r} | DB={db_value!r}"
+                )
+
+        #
 
 
 # def sync_from_onedrive(data):

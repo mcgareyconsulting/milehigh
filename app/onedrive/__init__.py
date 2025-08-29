@@ -18,10 +18,12 @@ def onedrive_poll():
     # Process the data as needed
     event_info = parse_polling_data()
 
+    data = event_info["data"].to_dict(orient="records")
+
     # Trigger sync process
     sync_from_onedrive(event_info)
 
-    return "Successfully passed data to sync", 200
+    return data, 200
 
 
 # @onedrive_bp.route("/webhook", methods=["GET", "POST"])
