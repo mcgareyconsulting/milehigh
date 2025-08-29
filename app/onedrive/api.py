@@ -58,8 +58,10 @@ def get_excel_dataframe():
         token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
     )
 
-    # Define the columns to read: A-S and AC
-    usecols = list(range(20)) + [28]
+    # Parred down to only necessary columns (1-2, 13-17)
+    # TODO: Add back other columns as necessary
+    usecols = [*range(2)]  # Columns A and B (0-indexed)
+    usecols += [*range(12, 17)]  # Columns M to R (0-indexed)
 
     # Read only the specified columns
     df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)
@@ -76,8 +78,8 @@ def get_excel_dataframe():
     # else:
     #     print("No rows found with Job # 900 and Release # 276.")
 
-    # Only keep relevant columns (in case others are present)
-    df_final = df_final[relevant_columns]
+    # # Only keep relevant columns (in case others are present)
+    # df_final = df_final[relevant_columns]
 
     return df_final
 
