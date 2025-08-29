@@ -28,12 +28,12 @@ def create_app():
     def index():
         return "Welcome to the Trello OneDrive Sync App!"
 
-    @app.route("/compare", methods=["GET"])
-    def compare():
-        from app.sync import run_comparison
+    # @app.route("/compare", methods=["GET"])
+    # def compare():
+    #     from app.sync import run_comparison
 
-        differences = run_comparison()
-        return jsonify(differences)
+    #     differences = run_comparison()
+    #     return jsonify(differences)
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
