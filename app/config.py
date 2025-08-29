@@ -15,3 +15,6 @@ class Config:
     ONEDRIVE_FILE_PATH = os.environ.get("ONEDRIVE_FILE_PATH")
     TRELLO_WEBHOOK_URL = os.environ.get("TRELLO_WEBHOOK_URL")
     ONEDRIVE_WEBHOOK_URL = os.environ.get("ONEDRIVE_WEBHOOK_URL")
+    EXCEL_INDEX_ADJ = (
+        4  # Adjust for header rows in Excel (e.g., if data starts on row 5, this is 4)
+    )

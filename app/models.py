@@ -38,10 +38,16 @@ class Job(db.Model):
     # Trello fields
     trello_card_id = db.Column(db.String(64), unique=True, nullable=True)
     trello_card_name = db.Column(db.String(256), nullable=True)
+    trello_list_id = db.Column(db.String(64), nullable=True)
     trello_list_name = db.Column(db.String(128), nullable=True)
     trello_card_description = db.Column(db.String(512), nullable=True)
     trello_card_date = db.Column(db.Date, nullable=True)
-    trello_card_labels = db.Column(db.String(256), nullable=True)
+
+    # Changelog tracking
+    last_updated_at = db.Column(db.DateTime, nullable=True)
+    source_of_update = db.Column(
+        db.String(16), nullable=True
+    )  # 'Trello' or 'Excel' or 'System'
 
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"

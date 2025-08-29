@@ -45,6 +45,8 @@ def seed_from_combined_data(combined_data):
                 job_comp=excel_data.get("Job Comp"),
                 invoiced=excel_data.get("Invoiced"),
                 notes=excel_data.get("Notes"),
+                last_updated_at=pd.Timestamp.now(),
+                source_of_update="System",
             )
 
             # Add Trello data if available
@@ -52,14 +54,12 @@ def seed_from_combined_data(combined_data):
                 trello_data = item["trello"]
                 jr.trello_card_id = trello_data.get("id")
                 jr.trello_card_name = trello_data.get("name")
+                jr.trello_list_id = trello_data.get("list_id")
                 jr.trello_list_name = trello_data.get("list_name")
                 jr.trello_card_description = trello_data.get("desc")
 
                 if trello_data.get("due"):
                     jr.trello_card_date = to_date(trello_data["due"])
-
-                if trello_data.get("labels"):
-                    jr.trello_card_labels = ",".join(trello_data["labels"])
 
                 print(f"  Added Trello data - Card ID: {jr.trello_card_id}")
 

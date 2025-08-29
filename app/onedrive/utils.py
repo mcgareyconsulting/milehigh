@@ -1,28 +1,6 @@
 import pandas as pd
-
-relevant_columns = [
-    "Job #",
-    "Release #",
-    "Job",
-    "Description",
-    "Fab Hrs",
-    "Install HRS",
-    "Paint color",
-    "PM",
-    "BY",
-    "Released",
-    "Fab Order",
-    "Cut start",
-    "Fitup comp",
-    "Welded",
-    "Paint Comp",
-    "Ship",
-    "Start install",
-    "Comp. ETA",
-    "Job Comp",
-    "Invoiced",
-    "Notes",
-]
+from app.onedrive.api import get_excel_dataframe
+from app.config import Config as cfg
 
 
 def find_excel_row(df, identifier):
@@ -37,6 +15,34 @@ def find_excel_row(df, identifier):
     return None
 
 
+def get_excel_row_and_index_by_identifiers(job, release):
+    """
+    Fetch a row from the Excel file using Job # and Release # as unique identifiers.
+
+    Args:
+        job (int or str): The Job # identifier.
+        release (int or str): The Release # identifier.
+
+    Returns:
+        tuple: (index, pandas.Series) where index is the DataFrame index (int),
+               and pandas.Series is the matching row.
+               Returns (None, None) if not found.
+    """
+    df = get_excel_dataframe()
+    # Ensure identifiers are the correct type
+    job = int(job)
+    release = int(release)
+
+    match = df[(df["Job #"] == job) & (df["Release #"] == release)]
+    if not match.empty:
+        idx = match.index[0] + cfg.EXCEL_INDEX_ADJ
+        row = match.iloc[0]
+        return idx, row
+    else:
+        print(f"No row found for Job # {job} and Release # {release}.")
+        return None, None
+
+
 def build_unique_identifiers(df):
     """
     Combines 'Job #' and 'Release #' columns into unique identifiers in the format 'Job #-Release #'.
@@ -49,20 +55,3 @@ def build_unique_identifiers(df):
         filtered["Job #"].astype(str) + "-" + filtered["Release #"].astype(str)
     )
     return identifiers.tolist()
-
-
-def save_excel_snapshot(
-    df, filename="excel_snapshot.xlsx", rows=None, columns=relevant_columns
-):
-    """
-    Save a slice of the DataFrame to a local Excel file for later comparison.
-    - rows: list of row indices to save (optional)
-    - columns: list of column names to save (optional)
-    """
-    snapshot = df
-    if rows is not None:
-        snapshot = snapshot.loc[rows]
-    if columns is not None:
-        snapshot = snapshot[columns]
-    snapshot.to_excel(filename, index=False)
-    print(f"Snapshot saved to {filename}")

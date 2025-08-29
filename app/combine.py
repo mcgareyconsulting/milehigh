@@ -74,6 +74,7 @@ def combine_trello_excel_data():
     Returns a list of dicts with combined data.
     """
     trello_map, identifiers = get_identifier_to_trello_card_map_and_list()
+    # print(trello_map)
     df = get_excel_dataframe()
     excel_map = get_excel_data_by_identifier(df, identifiers)
 

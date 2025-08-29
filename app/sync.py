@@ -1,8 +1,15 @@
 import openpyxl
 import pandas as pd
-from app.trello.utils import extract_card_name, extract_identifier
-from app.onedrive.utils import find_excel_row, save_excel_snapshot
+from app.trello.utils import (
+    extract_card_name,
+    extract_identifier,
+    parse_trello_datetime,
+)
+from app.trello.api import get_trello_card_by_id, get_list_name_by_id
+from app.onedrive.utils import get_excel_row_and_index_by_identifiers
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
+from app.models import Job, db
+from datetime import timezone, datetime
 
 # Stage mapping for Trello list names to Excel columns
 stage_column_map = {
@@ -72,66 +79,267 @@ def get_excel_cell_address_by_identifier(df, identifier, column_name):
     return cell_address
 
 
-def sync_from_trello(data):
+def rectify_db_on_trello_move(job, new_trello_list):
+    print(new_trello_list)
+    if new_trello_list == "Paint complete":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"
+        job.ship = "O"
+    elif new_trello_list == "Fit Up Complete.":
+        job.fitup_comp = "X"
+        job.welded = "O"
+        job.paint_comp = ""
+        job.ship = ""
+    elif new_trello_list == "Shipping completed":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"
+        job.ship = "X"
+    # update last_updated_at, source_of_update, etc.
+
+
+def compare_timestamps(event_time, source_time):
+    """
+    Compare Trello event timestamp with database record timestamp
+    """
+    print(event_time)
+    if not event_time or not source_time:
+        print(f"Invalid time event {event_time} or source {source_time}")
+        return None
+
+    if event_time > source_time:
+        print("Trello event is newer than DB record.")
+        return "newer"
+    else:
+        print("Trello event is older than DB record.")
+        return "older"
+
+
+def sync_from_trello(event_info):
     """
     Sync data from Trello to OneDrive based on the webhook payload
     """
-    # Extract stage information from webhook
-    old_stage, new_stage = extract_stage_info(data)
+    if event_info is None or not event_info.get("handled"):
+        print("No actionable event info received from Trello webhook")
+        return
 
-    # card name
-    card_name = extract_card_name(data)
-    print(f"Syncing card: {card_name}")
+    card_id = event_info["card_id"]
+    event_time = parse_trello_datetime(event_info.get("time"))
+    print(f"[SYNC] Processing Trello card ID: {card_id} at {event_time}")
+    card_data = get_trello_card_by_id(card_id)
+    if not card_data:
+        print(f"[SYNC] Card {card_id} not found in Trello API")
+        return
 
-    # Get unique id
-    identifier = extract_identifier(card_name)
-    print(f"Extracted identifier: {identifier}")
+    rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
 
-    # get the latest Excel data
-    df = get_excel_dataframe()
+    # Prepare debug comparison before upsert/update
+    debug_fields = [
+        (
+            "Trello name",
+            card_data.get("name"),
+            "DB name",
+            getattr(rec, "trello_card_name", None),
+        ),
+        (
+            "Trello desc",
+            card_data.get("desc"),
+            "DB desc",
+            getattr(rec, "trello_card_description", None),
+        ),
+        (
+            "Trello list id",
+            card_data.get("idList"),
+            "DB list id",
+            getattr(rec, "trello_list_id", None),
+        ),
+        (
+            "Trello list name",
+            get_list_name_by_id(card_data.get("idList")),
+            "DB list name",
+            getattr(rec, "trello_list_name", None),
+        ),
+        (
+            "Trello due",
+            card_data.get("due"),
+            "DB due",
+            getattr(rec, "trello_card_date", None),
+        ),
+        (
+            "Trello event time",
+            event_time,
+            "DB last updated",
+            getattr(rec, "last_updated_at", None),
+        ),
+    ]
 
-    # return the row where the identifier matches
-    row = find_excel_row(df, identifier)
-    if row is not None:
-        print(f"Row found for identifier {identifier}: {row}")
-
-        # Update Excel if this is a stage transition we care about
-        if old_stage and new_stage and old_stage != new_stage:
-            print(f"Processing stage change: {old_stage} → {new_stage}")
-        else:
-            print("No stage change detected or not a list movement")
-
-        # Get correct column name from mapping
-        column = stage_column_map.get(new_stage)
-        if not column:
-            print(
-                f"Stage '{new_stage}' not found in stage_column_map. Skipping update."
-            )
-            return
-
-        if column not in df.columns:
-            print(f"Column '{column}' not found in Excel row. Skipping update.")
-            return
-
-        # Get Excel cell address
-        cell_address = get_excel_cell_address_by_identifier(df, identifier, column)
-        if not cell_address:
-            print(f"Could not determine Excel cell address for identifier {identifier}")
-            return
-
-        print(f"Updating Excel cell {cell_address} for identifier {identifier}")
-
-        # TODO: Dynamically allocate state
-        # Update via Microsoft Graph API using your existing sheets.py function
-        success = update_excel_cell(cell_address, "X")
-
-        if success:
-            print(f"Excel update completed for {identifier}")
-        else:
-            print(f"Excel update failed for {identifier}")
-
+    if rec:
+        print(
+            f"[SYNC] Comparing Trello card ({card_id}) to DB record (Job id: {rec.id})"
+        )
+        for t_label, t_value, db_label, db_value in debug_fields:
+            if t_value != db_value:
+                print(
+                    f"  DIFF: {db_label} != {t_label}: Trello={t_value!r} | DB={db_value!r}"
+                )
+            else:
+                print(f"  MATCH: {db_label} == {t_label}: {t_value!r}")
     else:
-        print(f"No row found for identifier {identifier}")
+        print(f"[SYNC] No DB record found for card {card_id}. Trello card:")
+        for t_label, t_value, _, _ in debug_fields:
+            print(f"  {t_label}: {t_value!r}")
+
+    # if newer, update DB
+    diff = compare_timestamps(event_time, rec.last_updated_at if rec else None)
+    if diff == "newer":
+        print(f"[SYNC] Updating DB record for card {card_id} from Trello data...")
+        if not rec:
+            print(f"[SYNC] No existing DB record for card {card_id}, creating new one.")
+            rec = Job(
+                job=0,  # Placeholder, should be set properly
+                release=0,  # Placeholder, should be set properly
+                job_name=card_data.get("name", "Unnamed Job"),
+                source_of_update="Trello",
+                last_updated_at=event_time,
+            )
+            # Note: You should ideally link this to an existing Job based on your logic
+            # For now, we create a new record with placeholders
+
+        # Update trello information
+        rec.trello_card_name = card_data.get("name")
+        rec.trello_card_description = card_data.get("desc")
+        rec.trello_list_id = card_data.get("idList")
+        rec.trello_list_name = get_list_name_by_id(card_data.get("idList"))
+        if card_data.get("due"):
+            rec.trello_card_date = parse_trello_datetime(card_data["due"])
+        else:
+            rec.trello_card_date = None
+
+        rec.last_updated_at = event_time
+        rec.source_of_update = "Trello"
+
+        # Use mapping to update excel side of db row
+        if event_info["event"] == "card_moved":
+            print(
+                f"[SYNC] Card move detected, updating DB fields accordingly. {rec.fitup_comp}, {rec.paint_comp}, {rec.ship}"
+            )
+            rectify_db_on_trello_move(rec, get_list_name_by_id(card_data.get("idList")))
+            print(
+                f"[SYNC] DB fields {rec.fitup_comp}, {rec.paint_comp}, {rec.ship} updated for card {card_id}."
+            )
+
+        db.session.add(rec)
+        db.session.commit()
+        print(f"[SYNC] DB record for card {card_id} updated.")
+    else:
+        print(f"[SYNC] No update needed for card {card_id}.")
+
+    # Pass changes to excel
+    if rec and event_info["event"] == "card_moved":
+        # filter down known excel column letters
+        column_updates = {
+            "M": rec.fitup_comp,
+            "N": rec.welded,
+            "O": rec.paint_comp,
+            "P": rec.ship,
+        }  # fitup, welded, paint, ship
+
+        # lookup on job and release #
+        index, row = get_excel_row_and_index_by_identifiers(rec.job, rec.release)
+        print(
+            f"[SYNC] Found Excel row for Job {rec.job}, Release {rec.release}: {index} {row}"
+        )
+        # push to excel
+        for col, val in column_updates.items():
+            cell_address = col + str(index)
+            update_excel_cell(cell_address, val)
+
+    # After debugging, you can upsert/update as needed
+    # ...
+    # # parsing data
+    # action = data["action"]
+    # action_type = action.get("type")
+    # action_data = action.get("data", {})
+    # card_info = action_data.get("card", {})
+    # card_id = card_info.get("id")
+
+    # rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
+    # if not rec:
+    #     # Optionally create a new row, or skip if unknown
+    #     print(f"No DB record found for card {card_id}")
+    #     return "", 200
+
+    # new_desc = action_data["card"].get("desc")  # from webhook
+    # db_desc = rec.trello_card_description  # your DB field
+
+    # if new_desc != db_desc:
+    #     print(f"Description mismatch! Trello: {new_desc} | DB: {db_desc}")
+    #     # Decide: update DB, update Trello, log for review, etc.
+    # else:
+    #     print("Description matches.")
+
+
+# def sync_from_trello(data):
+#     """
+#     Sync data from Trello to OneDrive based on the webhook payload
+#     """
+#     # Extract stage information from webhook
+#     old_stage, new_stage = extract_stage_info(data)
+
+#     # card name
+#     card_name = extract_card_name(data)
+#     print(f"Syncing card: {card_name}")
+
+#     # Get unique id
+#     identifier = extract_identifier(card_name)
+#     print(f"Extracted identifier: {identifier}")
+
+#     # get the latest Excel data
+#     df = get_excel_dataframe()
+
+#     # return the row where the identifier matches
+#     row = find_excel_row(df, identifier)
+#     if row is not None:
+#         print(f"Row found for identifier {identifier}: {row}")
+
+#         # Update Excel if this is a stage transition we care about
+#         if old_stage and new_stage and old_stage != new_stage:
+#             print(f"Processing stage change: {old_stage} → {new_stage}")
+#         else:
+#             print("No stage change detected or not a list movement")
+
+#         # Get correct column name from mapping
+#         column = stage_column_map.get(new_stage)
+#         if not column:
+#             print(
+#                 f"Stage '{new_stage}' not found in stage_column_map. Skipping update."
+#             )
+#             return
+
+#         if column not in df.columns:
+#             print(f"Column '{column}' not found in Excel row. Skipping update.")
+#             return
+
+#         # Get Excel cell address
+#         cell_address = get_excel_cell_address_by_identifier(df, identifier, column)
+#         if not cell_address:
+#             print(f"Could not determine Excel cell address for identifier {identifier}")
+#             return
+
+#         print(f"Updating Excel cell {cell_address} for identifier {identifier}")
+
+#         # TODO: Dynamically allocate state
+#         # Update via Microsoft Graph API using your existing sheets.py function
+#         success = update_excel_cell(cell_address, "X")
+
+#         if success:
+#             print(f"Excel update completed for {identifier}")
+#         else:
+#             print(f"Excel update failed for {identifier}")
+
+#     else:
+#         print(f"No row found for identifier {identifier}")
 
 
 def sync_from_onedrive(data):
