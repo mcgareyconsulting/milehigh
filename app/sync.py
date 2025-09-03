@@ -19,13 +19,6 @@ from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job, db
 from datetime import timezone, datetime
 
-# # Stage mapping for Trello list names to Excel columns
-# stage_column_map = {
-#     "Fit Up Complete.": "Fitup comp",
-#     "Paint complete": "Paint Comp",
-#     "Shipping completed": "Ship",
-# }
-
 
 def rectify_db_on_trello_move(job, new_trello_list):
     print(new_trello_list)
@@ -284,6 +277,7 @@ def sync_from_onedrive(data):
             ("Welded", "welded"),
             ("Paint Comp", "paint_comp"),
             ("Ship", "ship"),
+            ("Start install", "start_install"),
         ]
 
         updated = False
@@ -295,6 +289,20 @@ def sync_from_onedrive(data):
             # Skip if both empty
             if (pd.isna(excel_val) or excel_val is None) and db_val is None:
                 continue
+
+            # # For 'start_install', check if it's an explicit value (formula is None)
+            # if db_field == "start_install":
+            #     formula_val = row.get(
+            #         f"{excel_field}_formula"
+            #     )  # make sure your data includes formulas
+            #     if formula_val is not None:
+            #         print(
+            #             f"[SYNC] Skipping Trello update for {db_field} because it is formula-driven"
+            #         )
+            #         # Optionally still update DB value if needed
+            #         if excel_val != db_val:
+            #             setattr(rec, db_field, excel_val)
+            #         continue
 
             if excel_val != db_val:
                 diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
@@ -324,71 +332,29 @@ def sync_from_onedrive(data):
         # Move Trello cards for updated records
         for rec in updated_records:
             if hasattr(rec, "trello_card_id") and rec.trello_card_id:
-                try:
-                    current_list_id = rec.trello_list_id
-                    new_list_name = determine_trello_list_from_db(rec)
-                    if new_list_name:
-                        new_list = get_list_by_name(new_list_name)
-                        if new_list and new_list["id"] != current_list_id:
-                            print(
-                                f"[SYNC] Moving Trello card {rec.trello_card_id} to list '{new_list_name}'"
-                            )
-                            move_card_to_list(rec.trello_card_id, new_list["id"])
-                            # Update DB record with new list info
-                            rec.trello_list_id = new_list["id"]
-                            rec.trello_list_name = new_list_name
-                            rec.last_updated_at = datetime.now(timezone.utc).replace(
-                                tzinfo=None
-                            )
-                            rec.source_of_update = "Excel"
-                            db.session.add(rec)
-                            db.session.commit()
-                except Exception as e:
-                    print(f"[SYNC] Error moving Trello card {rec.trello_card_id}: {e}")
+                print("lol")
+                # try:
+                #     current_list_id = rec.trello_list_id
+                #     new_list_name = determine_trello_list_from_db(rec)
+                #     if new_list_name:
+                #         new_list = get_list_by_name(new_list_name)
+                #         if new_list and new_list["id"] != current_list_id:
+                #             print(
+                #                 f"[SYNC] Moving Trello card {rec.trello_card_id} to list '{new_list_name}'"
+                #             )
+                #             move_card_to_list(rec.trello_card_id, new_list["id"])
+                #             # Update DB record with new list info
+                #             rec.trello_list_id = new_list["id"]
+                #             rec.trello_list_name = new_list_name
+                #             rec.last_updated_at = datetime.now(timezone.utc).replace(
+                #                 tzinfo=None
+                #             )
+                #             rec.source_of_update = "Excel"
+                #             db.session.add(rec)
+                #             db.session.commit()
+                # except Exception as e:
+                #     print(f"[SYNC] Error moving Trello card {rec.trello_card_id}: {e}")
     else:
         print("[SYNC] No records needed updating.")
 
     print("[SYNC] OneDrive sync complete.")
-
-
-# def sync_from_onedrive(data):
-#     """
-#     Sync data from OneDrive to Trello based on the webhook payload
-#     """
-#     if data is None:
-#         print("No data received from OneDrive webhook")
-#         return
-
-#     if "resource" not in data or "changeType" not in data:
-#         print("Invalid OneDrive webhook data format")
-#         return
-
-#     resource = data["resource"]
-#     change_type = data["changeType"]
-
-#     print(f"Received OneDrive webhook: Resource={resource}, ChangeType={change_type}")
-
-#     # if change type is 'updated', we can assume a file was modified
-#     if change_type == "updated":
-#         # download file from OneDrive
-#         df = get_excel_dataframe()
-
-#         # load cached (previously synced) data
-#         try:
-#             cached_df = pd.read_excel("excel_snapshot.xlsx")
-#         except FileNotFoundError:
-#             print("No cached snapshot found, will save current state.")
-#             cached_df = None
-
-#         # Comparison
-#         if cached_df is not None:
-#             changes = compare_excel_snapshots(df, cached_df)
-#             for identifier, column, old_val, new_val in changes:
-#                 print(
-#                     f"Changed: {identifier} column '{column}' from '{old_val}' to '{new_val}'"
-#                 )
-#         else:
-#             print("No cached snapshot found, will save current state.")
-
-#         # Save the current state for future comparisons
-#         save_excel_snapshot(df, filename="excel_snapshot.xlsx")
