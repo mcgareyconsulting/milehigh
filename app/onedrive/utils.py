@@ -57,6 +57,16 @@ def build_unique_identifiers(df):
     return identifiers.tolist()
 
 
+def parse_excel_datetime(dt_str):
+    """
+    Parse OneDrive/Excel lastModifiedDateTime into naive UTC datetime.
+    """
+    if not dt_str:
+        return None
+    dt = pd.to_datetime(dt_str, utc=True)  # ensure UTC
+    return dt.tz_convert(None)  # drop tzinfo, make naive
+
+
 def parse_polling_data():
     """
     Pull excel data from api and process for passing to sync function.

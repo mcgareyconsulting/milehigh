@@ -5,8 +5,16 @@ from app.trello.utils import (
     extract_identifier,
     parse_trello_datetime,
 )
-from app.trello.api import get_trello_card_by_id, get_list_name_by_id
-from app.onedrive.utils import get_excel_row_and_index_by_identifiers
+from app.trello.api import (
+    get_trello_card_by_id,
+    get_list_name_by_id,
+    get_list_by_name,
+    move_card_to_list,
+)
+from app.onedrive.utils import (
+    get_excel_row_and_index_by_identifiers,
+    parse_excel_datetime,
+)
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job, db
 from datetime import timezone, datetime
@@ -41,18 +49,22 @@ def rectify_db_on_trello_move(job, new_trello_list):
 
 def compare_timestamps(event_time, source_time):
     """
-    Compare Trello event timestamp with database record timestamp
+    Compare external event timestamp with database record timestamp.
+    Returns "newer", "older", or None.
     """
-    print(event_time)
-    if not event_time or not source_time:
-        print(f"Invalid time event {event_time} or source {source_time}")
+    if not event_time:
+        print("Invalid event_time (None)")
         return None
 
+    if not source_time:
+        print("No DB timestamp — treating event as newer.")
+        return "newer"
+
     if event_time > source_time:
-        print("Trello event is newer than DB record.")
+        print("Event is newer than DB record.")
         return "newer"
     else:
-        print("Trello event is older than DB record.")
+        print("Event is older than DB record.")
         return "older"
 
 
@@ -196,6 +208,33 @@ def sync_from_trello(event_info):
             update_excel_cell(cell_address, val)
 
 
+# Determine Trello list based on Excel/DB status
+def determine_trello_list_from_db(rec):
+    if (
+        rec.fitup_comp == "X"
+        and rec.welded == "X"
+        and rec.paint_comp == "X"
+        and rec.ship == "O"
+    ):
+        return "Paint complete"
+    elif (
+        rec.fitup_comp == "X"
+        and rec.welded == "O"
+        and rec.paint_comp == ""
+        and rec.ship == ""
+    ):
+        return "Fit Up Complete."
+    elif (
+        rec.fitup_comp == "X"
+        and rec.welded == "X"
+        and rec.paint_comp == "X"
+        and rec.ship == "X"
+    ):
+        return "Shipping completed"
+    else:
+        return None  # no matching list
+
+
 def sync_from_onedrive(data):
     """
     Sync data from OneDrive to Trello based on the polling payload
@@ -208,13 +247,15 @@ def sync_from_onedrive(data):
         print("Invalid OneDrive polling data format")
         return
 
-    last_modified_time = data["last_modified_time"]
+    # Convert Excel last_modified_time (string) → datetime
+    excel_last_updated = parse_excel_datetime(data["last_modified_time"])
     df = data["data"]
 
-    print(f"[SYNC] Processing OneDrive data last modified at {last_modified_time}")
+    print(f"[SYNC] Processing OneDrive data last modified at {excel_last_updated}")
     print(f"[SYNC] DataFrame {df.shape[0]} rows, {df.shape[1]} columns")
 
-    # compare df against db on identifiers
+    updated_records = []
+
     for _, row in df.iterrows():
         job = row.get("Job #")
         release = row.get("Release #")
@@ -223,71 +264,91 @@ def sync_from_onedrive(data):
             continue
 
         identifier = f"{job}-{release}"
-        print(f"[SYNC] Processing Excel row for identifier {identifier}")
+        # print(f"[SYNC] Processing Excel row for identifier {identifier}")
 
         rec = Job.query.filter_by(job=job, release=release).one_or_none()
         if not rec:
-            print(
-                f"[SYNC] No DB record found for Job {job}, Release {release}, skipping."
-            )
+            # print(
+            #     f"[SYNC] No DB record found for Job {job}, Release {release}, skipping."
+            # )
             continue
 
-        # Prepare debug comparison before upsert/update
-        debug_fields = [
-            (
-                "Excel Job #",
-                job,
-                "DB Job #",
-                getattr(rec, "job", None),
-            ),
-            (
-                "Excel Release #",
-                release,
-                "DB Release #",
-                getattr(rec, "release", None),
-            ),
-            (
-                "Excel Fitup comp",
-                row.get("Fitup comp"),
-                "DB Fitup comp",
-                getattr(rec, "fitup_comp", None),
-            ),
-            (
-                "Excel Welded",
-                row.get("Welded"),
-                "DB Welded",
-                getattr(rec, "welded", None),
-            ),
-            (
-                "Excel Paint Comp",
-                row.get("Paint Comp"),
-                "DB Paint Comp",
-                getattr(rec, "paint_comp", None),
-            ),
-            (
-                "Excel Ship",
-                row.get("Ship"),
-                "DB Ship",
-                getattr(rec, "ship", None),
-            ),
-            (
-                "Excel Last Updated",
-                last_modified_time,
-                "DB Last Updated",
-                getattr(rec, "last_updated_at", None),
-            ),
+        print(
+            f"[SYNC] Comparing Excel row (Job {job}, Release {release}) "
+            f"to DB record (Job id: {rec.id})"
+        )
+
+        # Fields to check for diffs
+        fields_to_check = [
+            ("Fitup comp", "fitup_comp"),
+            ("Welded", "welded"),
+            ("Paint Comp", "paint_comp"),
+            ("Ship", "ship"),
         ]
 
-        print(
-            f"[SYNC] Comparing Excel row (Job {job}, Release {release}) to DB record (Job id: {rec.id})"
-        )
-        for x_label, x_value, db_label, db_value in debug_fields:
-            if x_value != db_value:
-                print(
-                    f"  DIFF: {db_label} != {x_label}: Excel={x_value!r} | DB={db_value!r}"
-                )
+        updated = False
 
-        #
+        for excel_field, db_field in fields_to_check:
+            excel_val = row.get(excel_field)
+            db_val = getattr(rec, db_field, None)
+
+            # Skip if both empty
+            if (pd.isna(excel_val) or excel_val is None) and db_val is None:
+                continue
+
+            if excel_val != db_val:
+                diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
+                if diff == "newer":
+                    print(
+                        f"[SYNC] Updating {db_field} from Excel: {db_val!r} -> {excel_val!r}"
+                    )
+                    setattr(rec, db_field, excel_val)
+                    updated = True
+                else:
+                    print(
+                        f"[SYNC] SKIP {db_field} (Excel older than DB): Excel={excel_val!r} | DB={db_val!r}"
+                    )
+
+        if updated:
+            # Update DB timestamp
+            rec.last_updated_at = excel_last_updated
+            updated_records.append(rec)
+
+    # Commit all updates at once
+    if updated_records:
+        for rec in updated_records:
+            db.session.add(rec)
+        db.session.commit()
+        print(f"[SYNC] Committed {len(updated_records)} updated records to DB.")
+
+        # Move Trello cards for updated records
+        for rec in updated_records:
+            if hasattr(rec, "trello_card_id") and rec.trello_card_id:
+                try:
+                    current_list_id = rec.trello_list_id
+                    new_list_name = determine_trello_list_from_db(rec)
+                    if new_list_name:
+                        new_list = get_list_by_name(new_list_name)
+                        if new_list and new_list["id"] != current_list_id:
+                            print(
+                                f"[SYNC] Moving Trello card {rec.trello_card_id} to list '{new_list_name}'"
+                            )
+                            move_card_to_list(rec.trello_card_id, new_list["id"])
+                            # Update DB record with new list info
+                            rec.trello_list_id = new_list["id"]
+                            rec.trello_list_name = new_list_name
+                            rec.last_updated_at = datetime.now(timezone.utc).replace(
+                                tzinfo=None
+                            )
+                            rec.source_of_update = "Excel"
+                            db.session.add(rec)
+                            db.session.commit()
+                except Exception as e:
+                    print(f"[SYNC] Error moving Trello card {rec.trello_card_id}: {e}")
+    else:
+        print("[SYNC] No records needed updating.")
+
+    print("[SYNC] OneDrive sync complete.")
 
 
 # def sync_from_onedrive(data):

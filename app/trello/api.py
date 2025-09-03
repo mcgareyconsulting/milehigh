@@ -19,6 +19,23 @@ def get_list_name_by_id(list_id):
         return None
 
 
+def get_list_by_name(list_name):
+    """
+    Fetches the list details from Trello API by list name.
+    """
+    url = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        lists = response.json()
+        for lst in lists:
+            if lst["name"] == list_name:
+                return {"name": lst["name"], "id": lst["id"]}
+    else:
+        print(f"Trello API error: {response.status_code} {response.text}")
+        return None
+
+
 def get_trello_card_by_id(card_id):
     """
     Fetches the full card data from Trello API by card ID.
@@ -121,6 +138,24 @@ def get_trello_cards_from_subset():
         for card in filtered_cards
     ]
     return relevant_data
+
+
+def move_card_to_list(card_id, list_id):
+    """
+    Move a Trello card to a different list.
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "idList": list_id,
+    }
+    response = requests.put(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Trello API error: {response.status_code} {response.text}")
+        return None
 
 
 # # Example usage:
