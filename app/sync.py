@@ -290,44 +290,44 @@ def sync_from_onedrive(data):
             if (pd.isna(excel_val) or excel_val is None) and db_val is None:
                 continue
 
-            # # For 'start_install', check if it's an explicit value (formula is None)
-            # if db_field == "start_install":
-            #     formula_val = row.get(
-            #         f"{excel_field}_formula"
-            #     )  # make sure your data includes formulas
-            #     if formula_val is not None:
+            # For 'start_install', check if it's an explicit value (formula is None)
+            if db_field == "start_install":
+                formula_val = row.get(
+                    f"{excel_field}_formula"
+                )  # make sure your data includes formulas
+                if formula_val is not None:
+                    print(
+                        f"[SYNC] Skipping Trello update for {db_field} because it is formula-driven"
+                    )
+                    # Optionally still update DB value if needed
+                    if excel_val != db_val:
+                        setattr(rec, db_field, excel_val)
+                    continue
+
+            # if excel_val != db_val:
+            #     diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
+            #     if diff == "newer":
             #         print(
-            #             f"[SYNC] Skipping Trello update for {db_field} because it is formula-driven"
+            #             f"[SYNC] Updating {db_field} from Excel: {db_val!r} -> {excel_val!r}"
             #         )
-            #         # Optionally still update DB value if needed
-            #         if excel_val != db_val:
-            #             setattr(rec, db_field, excel_val)
-            #         continue
+            #         setattr(rec, db_field, excel_val)
+            #         updated = True
+            #     else:
+            #         print(
+            #             f"[SYNC] SKIP {db_field} (Excel older than DB): Excel={excel_val!r} | DB={db_val!r}"
+            #         )
 
-            if excel_val != db_val:
-                diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
-                if diff == "newer":
-                    print(
-                        f"[SYNC] Updating {db_field} from Excel: {db_val!r} -> {excel_val!r}"
-                    )
-                    setattr(rec, db_field, excel_val)
-                    updated = True
-                else:
-                    print(
-                        f"[SYNC] SKIP {db_field} (Excel older than DB): Excel={excel_val!r} | DB={db_val!r}"
-                    )
-
-        if updated:
-            # Update DB timestamp
-            rec.last_updated_at = excel_last_updated
-            updated_records.append(rec)
+        # if updated:
+        #     # Update DB timestamp
+        #     rec.last_updated_at = excel_last_updated
+        #     updated_records.append(rec)
 
     # Commit all updates at once
     if updated_records:
-        for rec in updated_records:
-            db.session.add(rec)
-        db.session.commit()
-        print(f"[SYNC] Committed {len(updated_records)} updated records to DB.")
+        # for rec in updated_records:
+        #     db.session.add(rec)
+        # db.session.commit()
+        # print(f"[SYNC] Committed {len(updated_records)} updated records to DB.")
 
         # Move Trello cards for updated records
         for rec in updated_records:

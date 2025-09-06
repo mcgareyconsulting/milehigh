@@ -5,6 +5,7 @@ import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
 from flask import jsonify
+from openpyxl import load_workbook
 
 
 relevant_columns = [
@@ -60,8 +61,8 @@ def get_excel_dataframe():
 
     # Parred down to only necessary columns (1-2, 13-17)
     # TODO: Add back other columns as necessary
-    usecols = [*range(2)]  # Columns A and B (0-indexed)
-    usecols += [*range(12, 17)]  # Columns M to R (0-indexed)
+    usecols = [*range(0, 17)]  # Columns A and B (0-indexed)
+    # usecols += [*range(12, 17)]  # Columns M to R (0-indexed)
 
     # Read only the specified columns
     df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)
@@ -69,17 +70,25 @@ def get_excel_dataframe():
     # Filter for rows where Job # and Release # are NOT NaN
     df_final = df.dropna(subset=["Job #", "Release #"])
 
-    # # debug print rows with job # 900 and release # 276
-    # filtered_rows = df_final[
-    #     (df_final["Job #"] == 900) & (df_final["Release #"] == 276)
-    # ]
-    # if not filtered_rows.empty:
-    #     print(f"Rows with Job # 900 and Release # 276:\n{filtered_rows}")
-    # else:
-    #     print("No rows found with Job # 900 and Release # 276.")
+    # Extract formula info for column Q (index 16)
+    wb = load_workbook(BytesIO(file_bytes), data_only=False)
+    ws = wb.active  # Change if you need a specific sheet
 
-    # # Only keep relevant columns (in case others are present)
-    # df_final = df_final[relevant_columns]
+    formula_col_idx = 16  # Column Q, 0-indexed in openpyxl
+    start_row = 3  # header=2 in pandas means row 3 is first data row (1-based)
+    formula_list = []
+    formulaTF_list = []
+
+    for i in range(start_row, start_row + len(df_final)):
+        cell = ws.cell(row=i, column=formula_col_idx + 1)  # openpyxl is 1-based
+        formula = cell.value if cell.data_type == "f" else ""
+        formulaTF = bool(formula and str(formula).startswith("="))
+        formula_list.append(formula)
+        formulaTF_list.append(formulaTF)
+
+    df_final = df_final.reset_index(drop=True)
+    df_final["start_install_formula"] = formula_list
+    df_final["start_install_formulaTF"] = formulaTF_list
 
     return df_final
 

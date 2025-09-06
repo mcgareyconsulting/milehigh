@@ -41,6 +41,8 @@ def seed_from_combined_data(combined_data):
                 paint_comp=excel_data.get("Paint Comp"),
                 ship=excel_data.get("Ship"),
                 start_install=to_date(excel_data.get("Start install")),
+                start_install_formula=excel_data.get("start_install_formula"),
+                start_install_formulaTF=excel_data.get("start_install_formulaTF"),
                 comp_eta=to_date(excel_data.get("Comp. ETA")),
                 job_comp=excel_data.get("Job Comp"),
                 invoiced=excel_data.get("Invoiced"),

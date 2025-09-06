@@ -30,6 +30,8 @@ class Job(db.Model):
     start_install = db.Column(
         db.Date
     )  # Changed from install to start_install and Date type
+    start_install_formula = db.Column(db.String(256))  # New field for formula
+    start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
