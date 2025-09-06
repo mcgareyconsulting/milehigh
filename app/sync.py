@@ -11,6 +11,7 @@ from app.trello.api import (
     get_list_name_by_id,
     get_list_by_name,
     move_card_to_list,
+    set_card_due_date,
 )
 from app.onedrive.utils import (
     get_excel_row_and_index_by_identifiers,
@@ -341,19 +342,19 @@ def sync_from_onedrive(data):
                 # If you want to trigger Trello update, do so here (outside this loop)
                 continue
 
-            # For all other fields
-            if excel_val != db_val:
-                # diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
-                # if diff == "newer":
-                print(
-                    f"[SYNC] Updating {db_field} from Excel: {db_val!r} -> {excel_val!r}"
-                )
-                setattr(rec, db_field, excel_val)
-                updated = True
-                # else:
-                #     print(
-                #         f"[SYNC] SKIP {db_field} (Excel older than DB): Excel={excel_val!r} | DB={db_val!r}"
-                #     )
+            # # For all other fields
+            # if excel_val != db_val:
+            #     # diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
+            #     # if diff == "newer":
+            #     print(
+            #         f"[SYNC] Updating {db_field} from Excel: {db_val!r} -> {excel_val!r}"
+            #     )
+            #     setattr(rec, db_field, excel_val)
+            #     updated = True
+            #     # else:
+            #     #     print(
+            #     #         f"[SYNC] SKIP {db_field} (Excel older than DB): Excel={excel_val!r} | DB={db_val!r}"
+            #     #     )
 
         if updated:
             # Update DB timestamp
@@ -370,8 +371,22 @@ def sync_from_onedrive(data):
         # Move Trello cards for updated records
         for rec in updated_records:
             if hasattr(rec, "trello_card_id") and rec.trello_card_id:
-                print()
-                # try:
+                print(rec)
+                try:
+                    set_card_due_date(rec.trello_card_id, rec.start_install)
+
+                    # Update db with new info
+                    rec.trello_card_date = rec.start_install
+                    rec.last_updated_at = datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
+                    rec.source_of_update = "Excel"
+                    db.session.add(rec)
+                    db.session.commit()
+                except Exception as e:
+                    print(
+                        f"[SYNC] Error setting due date for Trello card {rec.trello_card_id}: {e}"
+                    )
                 #     current_list_id = rec.trello_list_id
                 #     new_list_name = determine_trello_list_from_db(rec)
                 #     if new_list_name:

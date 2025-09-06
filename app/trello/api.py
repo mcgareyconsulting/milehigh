@@ -36,6 +36,40 @@ def get_list_by_name(list_name):
         return None
 
 
+def set_card_due_date(card_id, due_date):
+    """
+    Sets the due date of a Trello card.
+    - card_id: Trello card ID
+    - due_date: Python date or datetime object (will be formatted as ISO8601)
+    """
+    # Support both date and datetime input
+    if due_date is None:
+        print(f"[TRELLO] No due date supplied for card {card_id}; skipping update.")
+        return False
+
+    # Convert to ISO8601 string required by Trello API
+    if hasattr(due_date, "isoformat"):
+        # For date, Trello expects midnight UTC if time not present
+        due_str = due_date.isoformat()
+        if len(due_str) == 10:  # YYYY-MM-DD, so add time
+            due_str += "T00:00:00.000Z"
+        elif due_str[-1] != "Z":
+            due_str += "Z"
+    else:
+        print(f"[TRELLO] Unable to interpret due_date: {due_date!r}")
+        return False
+
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN, "due": due_str}
+    response = requests.put(url, params=params)
+    if response.status_code == 200:
+        print(f"[TRELLO] Set due date for card {card_id} to {due_str}")
+        return True
+    else:
+        print(f"[TRELLO] API error ({response.status_code}): {response.text}")
+        return False
+
+
 def get_trello_card_by_id(card_id):
     """
     Fetches the full card data from Trello API by card ID.
