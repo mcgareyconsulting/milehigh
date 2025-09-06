@@ -1,5 +1,6 @@
 import openpyxl
 import pandas as pd
+from pandas import Timestamp
 from app.trello.utils import (
     extract_card_name,
     extract_identifier,
@@ -17,7 +18,7 @@ from app.onedrive.utils import (
 )
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job, db
-from datetime import timezone, datetime
+from datetime import datetime, date, timezone
 
 
 def rectify_db_on_trello_move(job, new_trello_list):
@@ -59,6 +60,16 @@ def compare_timestamps(event_time, source_time):
     else:
         print("Event is older than DB record.")
         return "older"
+
+
+def as_date(val):
+    if pd.isna(val):
+        return None
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return val
+    if isinstance(val, (datetime, pd.Timestamp)):
+        return val.date()
+    return val
 
 
 def sync_from_trello(event_info):
@@ -290,49 +301,76 @@ def sync_from_onedrive(data):
             if (pd.isna(excel_val) or excel_val is None) and db_val is None:
                 continue
 
-            # For 'start_install', check if it's an explicit value (formula is None)
+            # For 'start_install', check the formula flag
             if db_field == "start_install":
-                formula_val = row.get(
-                    f"{excel_field}_formula"
-                )  # make sure your data includes formulas
-                if formula_val is not None:
+                formula_val = row.get(f"start_install_formula")
+                formulaTF_val = row.get(f"start_install_formulaTF")
+                is_formula = (
+                    formula_val is not None and str(formula_val).startswith("=")
+                ) or bool(formulaTF_val)
+
+                # force to date
+                excel_date = as_date(excel_val)
+                db_date = as_date(db_val)
+
+                if is_formula:
                     print(
-                        f"[SYNC] Skipping Trello update for {db_field} because it is formula-driven"
+                        f"[SYNC] Skipping Trello update for {db_field} because it is formula-driven (formula: {formula_val!r})"
                     )
-                    # Optionally still update DB value if needed
-                    if excel_val != db_val:
-                        setattr(rec, db_field, excel_val)
-                    continue
+                    # Optionally update DB with current value only if you want to keep it in sync
+                    if excel_date != db_date:
+                        print(
+                            f"[SYNC] Updating DB {db_field} from Excel (formula-driven): {db_date!r} -> {excel_date!r}"
+                        )
+                        setattr(rec, db_field, excel_date)
+                        updated = True
+                    continue  # Don't update Trello for formula-driven cells
 
-            # if excel_val != db_val:
-            #     diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
-            #     if diff == "newer":
-            #         print(
-            #             f"[SYNC] Updating {db_field} from Excel: {db_val!r} -> {excel_val!r}"
-            #         )
-            #         setattr(rec, db_field, excel_val)
-            #         updated = True
-            #     else:
-            #         print(
-            #             f"[SYNC] SKIP {db_field} (Excel older than DB): Excel={excel_val!r} | DB={db_val!r}"
-            #         )
+                # If not formula-driven, treat as explicit/hard-coded
+                print(f"[SYNC] {db_field} is hard-coded (not formula-driven).")
+                if excel_date != db_date:
+                    print(
+                        f"[SYNC] Updating {db_field} from Excel: {db_date!r} -> {excel_date!r}"
+                    )
+                    setattr(rec, db_field, excel_date)
+                    setattr(rec, "start_install_formula", "")  # clear formula flag
+                    setattr(
+                        rec, "start_install_formulaTF", False
+                    )  # clear formulaTF flag
+                    updated = True
+                # If you want to trigger Trello update, do so here (outside this loop)
+                continue
 
-        # if updated:
-        #     # Update DB timestamp
-        #     rec.last_updated_at = excel_last_updated
-        #     updated_records.append(rec)
+            # For all other fields
+            if excel_val != db_val:
+                # diff = compare_timestamps(excel_last_updated, rec.last_updated_at)
+                # if diff == "newer":
+                print(
+                    f"[SYNC] Updating {db_field} from Excel: {db_val!r} -> {excel_val!r}"
+                )
+                setattr(rec, db_field, excel_val)
+                updated = True
+                # else:
+                #     print(
+                #         f"[SYNC] SKIP {db_field} (Excel older than DB): Excel={excel_val!r} | DB={db_val!r}"
+                #     )
+
+        if updated:
+            # Update DB timestamp
+            rec.last_updated_at = excel_last_updated
+            updated_records.append(rec)
 
     # Commit all updates at once
     if updated_records:
-        # for rec in updated_records:
-        #     db.session.add(rec)
-        # db.session.commit()
-        # print(f"[SYNC] Committed {len(updated_records)} updated records to DB.")
+        for rec in updated_records:
+            db.session.add(rec)
+        db.session.commit()
+        print(f"[SYNC] Committed {len(updated_records)} updated records to DB.")
 
         # Move Trello cards for updated records
         for rec in updated_records:
             if hasattr(rec, "trello_card_id") and rec.trello_card_id:
-                print("lol")
+                print()
                 # try:
                 #     current_list_id = rec.trello_list_id
                 #     new_list_name = determine_trello_list_from_db(rec)
