@@ -1,5 +1,6 @@
 import re
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone, time
+from zoneinfo import ZoneInfo
 
 
 def parse_webhook_data(data):
@@ -97,3 +98,23 @@ def extract_identifier(card_name):
         return None
     match = pattern.match(card_name.strip())
     return match.group(0) if match else None
+
+
+def mountain_due_datetime(local_date):
+    """
+    Given a date or datetime, return ISO8601 string for 6pm Mountain time, converted to UTC.
+    """
+    # If it's already a datetime, just use the date part
+    if isinstance(local_date, datetime):
+        d = local_date.date()
+    else:
+        d = local_date
+
+    # Combine with 6pm time
+    dt_mountain = datetime.combine(d, time(6, 0))
+    dt_mountain = dt_mountain.replace(tzinfo=ZoneInfo("America/Denver"))
+
+    # Convert to UTC
+    dt_utc = dt_mountain.astimezone(ZoneInfo("UTC"))
+    # Format as Trello expects (ISO with Z)
+    return dt_utc.isoformat().replace("+00:00", "Z")

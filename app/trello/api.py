@@ -2,6 +2,7 @@ import requests
 import re
 import os
 from app.config import Config as cfg
+from app.trello.utils import mountain_due_datetime
 
 
 def get_list_name_by_id(list_id):
@@ -47,17 +48,7 @@ def set_card_due_date(card_id, due_date):
         print(f"[TRELLO] No due date supplied for card {card_id}; skipping update.")
         return False
 
-    # Convert to ISO8601 string required by Trello API
-    if hasattr(due_date, "isoformat"):
-        # For date, Trello expects midnight UTC if time not present
-        due_str = due_date.isoformat()
-        if len(due_str) == 10:  # YYYY-MM-DD, so add time
-            due_str += "T00:00:00.000Z"
-        elif due_str[-1] != "Z":
-            due_str += "Z"
-    else:
-        print(f"[TRELLO] Unable to interpret due_date: {due_date!r}")
-        return False
+    due_str = mountain_due_datetime(due_date)
 
     url = f"https://api.trello.com/1/cards/{card_id}"
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN, "due": due_str}
