@@ -39,22 +39,27 @@ def get_list_by_name(list_name):
 
 def set_card_due_date(card_id, due_date):
     """
-    Sets the due date of a Trello card.
-    - card_id: Trello card ID
-    - due_date: Python date or datetime object (will be formatted as ISO8601)
+    Sets or removes the due date of a Trello card.
+    - If due_date is a date or datetime: sets due date to 6pm Mountain time, DST-aware.
+    - If due_date is None: removes the due date from the card.
     """
-    # Support both date and datetime input
-    if due_date is None:
-        print(f"[TRELLO] No due date supplied for card {card_id}; skipping update.")
-        return False
-
-    due_str = mountain_due_datetime(due_date)
-
     url = f"https://api.trello.com/1/cards/{card_id}"
-    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN, "due": due_str}
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+    }
+
+    if due_date is None:
+        params["due"] = ""  # Remove due date
+        action = "Removed"
+    else:
+        due_str = mountain_due_datetime(due_date)
+        params["due"] = due_str
+        action = f"Set to {due_str}"
+
     response = requests.put(url, params=params)
     if response.status_code == 200:
-        print(f"[TRELLO] Set due date for card {card_id} to {due_str}")
+        print(f"[TRELLO] {action} due date for card {card_id}")
         return True
     else:
         print(f"[TRELLO] API error ({response.status_code}): {response.text}")
