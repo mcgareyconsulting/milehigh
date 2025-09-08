@@ -50,46 +50,42 @@ def get_access_token():
 
 
 def get_excel_dataframe():
-    """
-    Get the latest Excel data from OneDrive and return it as a DataFrame
-    with only relevant rows and columns.
-    """
     token = get_access_token()
     file_bytes = read_file_from_user_onedrive(
         token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
     )
 
-    # Parred down to only necessary columns (1-2, 13-17)
-    # TODO: Add back other columns as necessary
-    usecols = [*range(0, 17)]  # Columns A and B (0-indexed)
-    # usecols += [*range(12, 17)]  # Columns M to R (0-indexed)
+    usecols = list(range(0, 17))
+    sheet_name = 0  # or the exact sheet name you expect
 
-    # Read only the specified columns
-    df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)
+    df_all = pd.read_excel(
+        BytesIO(file_bytes), header=2, usecols=usecols, sheet_name=sheet_name
+    )
 
-    # Filter for rows where Job # and Release # are NOT NaN
-    df_final = df.dropna(subset=["Job #", "Release #"])
+    # First data row is Excel row 4; store it before filtering
+    df_all = df_all.reset_index(drop=False).rename(columns={"index": "_row0"})
+    df_all["_excel_row"] = df_all["_row0"] + 4
 
-    # Extract formula info for column Q (index 16)
+    df_final = df_all.dropna(subset=["Job #", "Release #"]).copy()
+
     wb = load_workbook(BytesIO(file_bytes), data_only=False)
-    ws = wb.active  # Change if you need a specific sheet
+    ws = wb[wb.sheetnames[sheet_name]]
 
-    formula_col_idx = 16  # Column Q, 0-indexed in openpyxl
-    start_row = 3  # header=2 in pandas means row 3 is first data row (1-based)
-    formula_list = []
-    formulaTF_list = []
+    formula_col = 17  # Q
+    formulas, has_formula = [], []
 
-    for i in range(start_row, start_row + len(df_final)):
-        cell = ws.cell(row=i, column=formula_col_idx + 1)  # openpyxl is 1-based
-        formula = cell.value if cell.data_type == "f" else ""
-        formulaTF = bool(formula and str(formula).startswith("="))
-        formula_list.append(formula)
-        formulaTF_list.append(formulaTF)
+    for r in df_final["_excel_row"]:
+        cell = ws.cell(row=int(r), column=formula_col)
+        val = cell.value
+        is_formula = isinstance(val, str) and val.startswith("=")
+        formulas.append(val if is_formula else "")
+        has_formula.append(is_formula)
 
-    df_final = df_final.reset_index(drop=True)
-    df_final["start_install_formula"] = formula_list
-    df_final["start_install_formulaTF"] = formulaTF_list
+    df_final["start_install_formula"] = formulas
+    df_final["start_install_formulaTF"] = has_formula
 
+    # Tidy up helper cols
+    df_final = df_final.drop(columns=["_row0", "_excel_row"]).reset_index(drop=True)
     return df_final
 
 

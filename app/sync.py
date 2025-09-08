@@ -260,6 +260,7 @@ def is_formula_cell(row):
 def sync_from_onedrive(data):
     """
     Sync data from OneDrive to Trello based on the polling payload
+    TODO: List movement mapping errors, duplicate db records being passed on one change
     """
     if data is None:
         print("No data received from OneDrive polling")
@@ -338,6 +339,7 @@ def sync_from_onedrive(data):
                 if is_formula:
                     # If formula-driven, update DB if value differs, but do not update Trello
                     if excel_val != db_val:
+                        print(is_formula, row)
                         print(
                             f"[SYNC] {job}-{release} Updating DB {db_field} (formula-driven): {db_val!r} -> {excel_val!r}"
                         )
@@ -373,15 +375,15 @@ def sync_from_onedrive(data):
                 setattr(rec, db_field, excel_val)
                 record_updated = True
 
-            if record_updated:
-                rec.last_updated_at = excel_last_updated
-                rec.source_of_update = "Excel"
-                updated_records.append((rec, formula_status_for_trello))
+        if record_updated:
+            rec.last_updated_at = excel_last_updated
+            rec.source_of_update = "Excel"
+            updated_records.append((rec, formula_status_for_trello))
 
     # Commit all DB updates at once
     if updated_records:
+        print(updated_records)
         for rec, _ in updated_records:
-            print(rec)
             db.session.add(rec)
         db.session.commit()
         print(f"[SYNC] Committed {len(updated_records)} updated records to DB.")
