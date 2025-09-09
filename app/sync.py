@@ -227,7 +227,7 @@ def determine_trello_list_from_db(rec):
         rec.fitup_comp == "X"
         and rec.welded == "X"
         and rec.paint_comp == "X"
-        and rec.ship == "O"
+        and (rec.ship == "O" or rec.ship == "T")
     ):
         return "Paint complete"
     elif (
