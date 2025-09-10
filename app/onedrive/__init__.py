@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, make_response
 import json
-from app.onedrive.utils import parse_polling_data
+from app.onedrive.utils import run_onedrive_poll
 
 onedrive_bp = Blueprint("onedrive", __name__)
 
@@ -16,14 +16,10 @@ def onedrive_poll():
     print("[OneDrive] Polling request received")
 
     # Process the data as needed
-    event_info = parse_polling_data()
+    event_info = run_onedrive_poll()
 
-    data = event_info["data"].to_dict(orient="records")
-
-    # Trigger sync process
-    sync_from_onedrive(event_info)
-
-    return data, 200
+    # Return a JSON response
+    return event_info["data"].to_dict(orient="records"), 200
 
 
 # @onedrive_bp.route("/webhook", methods=["GET", "POST"])

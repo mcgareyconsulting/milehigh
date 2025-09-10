@@ -1,3 +1,4 @@
+APScheduler==3.11.0
 blinker==1.9.0
 cachetools==5.5.2
 certifi==2025.6.15
@@ -40,6 +41,7 @@ six==1.17.0
 SQLAlchemy==2.0.42
 typing_extensions==4.14.1
 tzdata==2025.2
+tzlocal==5.3.1
 uritemplate==4.2.0
 urllib3==2.5.0
 Werkzeug==3.1.3

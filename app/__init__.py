@@ -10,11 +10,27 @@ from app.models import db, query_job_releases, Job
 from app.seed import seed_from_combined_data
 import pandas as pd
 
+# scheduler imports
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.onedrive.utils import run_onedrive_poll
+
+
+def init_scheduler(app):
+    scheduler = BackgroundScheduler()
+
+    def scheduled_run():
+        with app.app_context():
+            run_onedrive_poll()  # now has access to Flask app & db
+
+    scheduler.add_job(func=scheduled_run, trigger="interval", minutes=2)
+    scheduler.start()
+
 
 def create_app():
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
     db.init_app(app)
+    init_scheduler(app)  # start the poller
 
     # Initialize the database
     # with app.app_context():
