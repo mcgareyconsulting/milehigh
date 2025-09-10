@@ -2,6 +2,7 @@ import requests
 import re
 import os
 from app.config import Config as cfg
+from app.trello.utils import mountain_due_datetime
 
 
 def get_list_name_by_id(list_id):
@@ -17,6 +18,52 @@ def get_list_name_by_id(list_id):
     else:
         print(f"Trello API error: {response.status_code} {response.text}")
         return None
+
+
+def get_list_by_name(list_name):
+    """
+    Fetches the list details from Trello API by list name.
+    """
+    url = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        lists = response.json()
+        for lst in lists:
+            if lst["name"] == list_name:
+                return {"name": lst["name"], "id": lst["id"]}
+    else:
+        print(f"Trello API error: {response.status_code} {response.text}")
+        return None
+
+
+def set_card_due_date(card_id, due_date):
+    """
+    Sets or removes the due date of a Trello card.
+    - If due_date is a date or datetime: sets due date to 6pm Mountain time, DST-aware.
+    - If due_date is None: removes the due date from the card.
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+    }
+
+    if due_date is None:
+        params["due"] = ""  # Remove due date
+        action = "Removed"
+    else:
+        due_str = mountain_due_datetime(due_date)
+        params["due"] = due_str
+        action = f"Set to {due_str}"
+
+    response = requests.put(url, params=params)
+    if response.status_code == 200:
+        print(f"[TRELLO] {action} due date for card {card_id}")
+        return True
+    else:
+        print(f"[TRELLO] API error ({response.status_code}): {response.text}")
+        return False
 
 
 def get_trello_card_by_id(card_id):
@@ -121,6 +168,24 @@ def get_trello_cards_from_subset():
         for card in filtered_cards
     ]
     return relevant_data
+
+
+def move_card_to_list(card_id, list_id):
+    """
+    Move a Trello card to a different list.
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "idList": list_id,
+    }
+    response = requests.put(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Trello API error: {response.status_code} {response.text}")
+        return None
 
 
 # # Example usage:

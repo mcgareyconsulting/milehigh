@@ -5,6 +5,7 @@ import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
 from flask import jsonify
+from openpyxl import load_workbook
 
 
 relevant_columns = [
@@ -49,41 +50,43 @@ def get_access_token():
 
 
 def get_excel_dataframe():
-    """
-    Get the latest Excel data from OneDrive and return it as a DataFrame
-    with only relevant rows and columns.
-    """
     token = get_access_token()
     file_bytes = read_file_from_user_onedrive(
         token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
     )
 
-    # Define the columns to read: A-S and AC
-    usecols = list(range(20)) + [28]
+    usecols = list(range(0, 17))
+    sheet_name = 0  # or the exact sheet name you expect
 
-    # Read only the specified columns
-    df = pd.read_excel(BytesIO(file_bytes), header=2, usecols=usecols)
+    df_all = pd.read_excel(
+        BytesIO(file_bytes), header=2, usecols=usecols, sheet_name=sheet_name
+    )
 
-    # Filter for rows where Job # and Release # are NOT NaN
-    df_final = df.dropna(subset=["Job #", "Release #"])
+    # First data row is Excel row 4; store it before filtering
+    df_all = df_all.reset_index(drop=False).rename(columns={"index": "_row0"})
+    df_all["_excel_row"] = df_all["_row0"] + 4
 
-    # # debug print rows with job # 900 and release # 276
-    # filtered_rows = df_final[
-    #     (df_final["Job #"] == 900) & (df_final["Release #"] == 276)
-    # ]
-    # if not filtered_rows.empty:
-    #     print(f"Rows with Job # 900 and Release # 276:\n{filtered_rows}")
-    # else:
-    #     print("No rows found with Job # 900 and Release # 276.")
+    df_final = df_all.dropna(subset=["Job #", "Release #"]).copy()
 
-    # Only keep relevant columns (in case others are present)
-    df_final = df_final[relevant_columns]
+    wb = load_workbook(BytesIO(file_bytes), data_only=False)
+    ws = wb[wb.sheetnames[sheet_name]]
 
+    formula_col = 17  # Q
+    formulas, has_formula = [], []
+
+    for r in df_final["_excel_row"]:
+        cell = ws.cell(row=int(r), column=formula_col)
+        val = cell.value
+        is_formula = isinstance(val, str) and val.startswith("=")
+        formulas.append(val if is_formula else "")
+        has_formula.append(is_formula)
+
+    df_final["start_install_formula"] = formulas
+    df_final["start_install_formulaTF"] = has_formula
+
+    # Tidy up helper cols
+    df_final = df_final.drop(columns=["_row0", "_excel_row"]).reset_index(drop=True)
     return df_final
-
-
-import requests
-from urllib.parse import quote
 
 
 def get_last_modified_time():
@@ -106,6 +109,20 @@ def get_last_modified_time():
         "id": data.get("id"),
         "lastModifiedDateTime": data.get("lastModifiedDateTime"),
         "size": data.get("size"),
+    }
+
+
+def get_excel_data_with_timestamp():
+    """
+    Get the latest Excel data from OneDrive along with the last modified time.
+    Returns a dict: {"last_modified": ..., "data": DataFrame}
+    """
+    last_modified_info = get_last_modified_time()
+    df = get_excel_dataframe()
+    return {
+        "name": last_modified_info.get("name"),
+        "last_modified_time": last_modified_info.get("lastModifiedDateTime"),
+        "data": df,
     }
 
 

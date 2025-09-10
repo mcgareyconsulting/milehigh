@@ -1,5 +1,5 @@
 import pandas as pd
-from app.onedrive.api import get_excel_dataframe
+from app.onedrive.api import get_excel_dataframe, get_excel_data_with_timestamp
 from app.config import Config as cfg
 
 
@@ -55,3 +55,32 @@ def build_unique_identifiers(df):
         filtered["Job #"].astype(str) + "-" + filtered["Release #"].astype(str)
     )
     return identifiers.tolist()
+
+
+def parse_excel_datetime(dt_str):
+    """
+    Parse OneDrive/Excel lastModifiedDateTime into naive UTC datetime.
+    """
+    if not dt_str:
+        return None
+    dt = pd.to_datetime(dt_str, utc=True)  # ensure UTC
+    return dt.tz_convert(None)  # drop tzinfo, make naive
+
+
+def parse_polling_data():
+    """
+    Pull excel data from api and process for passing to sync function.
+    """
+    data = get_excel_data_with_timestamp()
+
+    if data is None:
+        print("No data received from OneDrive polling")
+        return None
+
+    if "last_modified_time" not in data or "data" not in data:
+        print("Invalid OneDrive polling data format")
+        return None
+
+    last_modified_time = data["last_modified_time"]
+    df = data["data"]
+    return {"last_modified_time": last_modified_time, "data": df}
