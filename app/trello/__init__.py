@@ -1,6 +1,7 @@
-from flask import Blueprint, request
+from flask import Blueprint, request, current_app
 from app.sync import sync_from_trello
 from app.trello.utils import parse_webhook_data
+import threading
 
 trello_bp = Blueprint("trello", __name__)
 
@@ -13,12 +14,19 @@ def trello_webhook():
     if request.method == "HEAD":
         return "", 200  # Trello webhook validation
 
-    # Pass to data handler
     if request.method == "POST":
         data = request.json
         event_info = parse_webhook_data(data)
 
-        # Trigger sync process
-        sync_from_trello(event_info)
+        # Grab a reference to the app
+        app = current_app._get_current_object()
 
+        # Run sync in a background thread, but with app context
+        def run_sync():
+            with app.app_context():
+                sync_from_trello(event_info)
+
+        threading.Thread(target=run_sync).start()
+
+    # Immediate ACK to Trello
     return "", 200
