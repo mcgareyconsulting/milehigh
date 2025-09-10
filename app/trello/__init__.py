@@ -24,7 +24,11 @@ def trello_webhook():
         # Run sync in a background thread, but with app context
         def run_sync():
             with app.app_context():
-                sync_from_trello(event_info)
+                try:
+                    sync_from_trello(event_info)
+                except Exception as e:
+                    # Log the error - sync failures will be silent otherwise
+                    app.logger.error(f"Sync failed: {e}")
 
         threading.Thread(target=run_sync).start()
 
