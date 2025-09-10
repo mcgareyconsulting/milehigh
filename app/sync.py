@@ -339,7 +339,6 @@ def sync_from_onedrive(data):
                 if is_formula:
                     # If formula-driven, update DB if value differs, but do not update Trello
                     if excel_val != db_val:
-                        print(is_formula, row)
                         print(
                             f"[SYNC] {job}-{release} Updating DB {db_field} (formula-driven): {db_val!r} -> {excel_val!r}"
                         )
@@ -395,9 +394,9 @@ def sync_from_onedrive(data):
                 try:
                     # Due date update (as before)
                     if is_formula or is_formula is None:
-                        print(
-                            f"[SYNC] Clearing due date for Trello card {rec.trello_card_id} (formula-driven)."
-                        )
+                        # print(
+                        #     f"[SYNC] Clearing due date for Trello card {rec.trello_card_id} (formula-driven)."
+                        # )
                         set_card_due_date(rec.trello_card_id, None)
                     else:
                         print(
