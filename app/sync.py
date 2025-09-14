@@ -404,7 +404,6 @@ def sync_from_onedrive(data):
         # Trello update: due dates and list movement ONLY if the last update was NOT from Trello
         for rec, is_formula in updated_records:
             if rec.source_of_update != "Trello":
-                print(is_formula)
                 if hasattr(rec, "trello_card_id") and rec.trello_card_id:
                     try:
                         # Due date update (as before)
