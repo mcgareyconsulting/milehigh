@@ -20,10 +20,14 @@ def create_webhook_subscription():
         },
     )
 
-    print(response.status_code)
-    print(response.json())
+    return response.json(), response.status_code
 
 
 if __name__ == "__main__":
-    create_webhook_subscription()
-    print("Webhook subscription created successfully.")
+    response, code = create_webhook_subscription()
+    if code == 200:
+        print("Webhook subscription created successfully.")
+    else:
+        print(
+            f"Failed to create webhook subscription: {response.get('error', 'Unknown error')}"
+        )

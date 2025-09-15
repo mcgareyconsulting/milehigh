@@ -5,6 +5,43 @@ from app.config import Config as cfg
 from app.trello.utils import mountain_due_datetime
 
 
+def update_trello_card(card_id, new_list_id=None, new_due_date=None):
+    """
+    Updates a Trello card\'s list and/or due date in a single API call.
+    new_due_date should be a datetime object or None.
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+
+    payload = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+    }
+
+    if new_list_id:
+        payload["idList"] = new_list_id
+
+    if new_due_date:
+        # Set due date to 6pm Mountain time, DST-aware
+        payload["due"] = mountain_due_datetime(new_due_date)
+    else:
+        payload["due"] = None  # Clear the due date
+
+    try:
+        response = requests.put(url, params=payload)
+        response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+
+        print(f"[TRELLO API] Card {card_id} updated successfully: {payload}")
+        return response.json()
+
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error updating card {card_id}: {http_err}")
+        print("[TRELLO API] Response content:", response.text)
+        raise
+    except Exception as err:
+        print(f"[TRELLO API] Other error updating card {card_id}: {err}")
+        raise
+
+
 def get_list_name_by_id(list_id):
     """
     Fetches the list name from Trello API by list ID.
