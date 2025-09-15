@@ -3,6 +3,18 @@ from app.onedrive.api import get_excel_dataframe, get_excel_data_with_timestamp
 from app.config import Config as cfg
 
 
+def run_onedrive_poll():
+    """
+    Core logic for polling OneDrive and syncing.
+    Used by both the manual route and the scheduler.
+    """
+    from app.sync import sync_from_onedrive
+
+    event_info = parse_polling_data()
+    sync_from_onedrive(event_info)
+    return event_info
+
+
 def find_excel_row(df, identifier):
     """
     Finds and returns the row in the DataFrame where 'Job # - Release #' matches the identifier.
