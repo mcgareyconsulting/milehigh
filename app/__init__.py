@@ -1,14 +1,11 @@
-from flask import Flask, request, make_response, jsonify
-from .config import Config as cfg
+from flask import Flask
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
-from app.onedrive.api import get_excel_dataframe
-from app.combine import combine_trello_excel_data
 
 # database imports
-from app.models import db, query_job_releases, Job
+from app.models import db
 from app.seed import seed_from_combined_data
-import pandas as pd
+from app.combine import combine_trello_excel_data
 
 # scheduler imports
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,6 +13,9 @@ from app.onedrive.utils import run_onedrive_poll
 
 
 def init_scheduler(app):
+    """
+    Initialize the scheduler to run the OneDrive poll every 2 minutes.
+    """
     scheduler = BackgroundScheduler()
 
     def scheduled_run():
@@ -43,13 +43,6 @@ def create_app():
     @app.route("/")
     def index():
         return "Welcome to the Trello OneDrive Sync App!"
-
-    # @app.route("/compare", methods=["GET"])
-    # def compare():
-    #     from app.sync import run_comparison
-
-    #     differences = run_comparison()
-    #     return jsonify(differences)
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
