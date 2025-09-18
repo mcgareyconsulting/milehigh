@@ -2,12 +2,7 @@ from flask import Blueprint, request, current_app
 from app.sync import sync_from_trello
 from app.trello.utils import parse_webhook_data
 import threading
-
-trello_bp = Blueprint("trello", __name__)
-
-
 from concurrent.futures import ThreadPoolExecutor
-import threading
 from collections import defaultdict
 import time
 
@@ -52,6 +47,9 @@ class ThreadTracker:
 # Global tracker
 thread_tracker = ThreadTracker()
 executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="sync-")
+
+# Blueprint for Trello routes
+trello_bp = Blueprint("trello", __name__)
 
 
 @trello_bp.route("/webhook", methods=["HEAD", "POST"])

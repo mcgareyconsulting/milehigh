@@ -3,6 +3,7 @@ from app.models import db, Job
 
 
 def to_date(val):
+    """Convert a value to a date, returning None if conversion fails or value is null."""
     if pd.isnull(val):
         return None
     dt = pd.to_datetime(val)
