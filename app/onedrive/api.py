@@ -1,10 +1,7 @@
 import requests
-import os
-from dotenv import load_dotenv
 import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
-from flask import jsonify
 from openpyxl import load_workbook
 
 
@@ -189,35 +186,3 @@ def update_excel_cell(cell_address, value, worksheet_name="Job Log"):
     except Exception as e:
         print(f"Exception in update_excel_cell: {e}")
         return False
-
-
-##############################################
-## Helper function to get drive and user id ##
-##############################################
-def get_drive_and_folder_id():
-    access_token = get_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-    }
-
-    file_path = cfg.ONEDRIVE_FILE_PATH
-    user_email = (
-        cfg.ONEDRIVE_USER_EMAIL
-    )  # e.g., "mmcgarey@communityinspectionservicesteam.onmicrosoft.com"
-
-    url = f"https://graph.microsoft.com/v1.0/users/{user_email}/drive/root:/{file_path}:/parentReference"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    r = requests.get(url, headers=headers)
-    r.raise_for_status()
-    parent = r.json()
-    drive_id = parent["driveId"]
-    folder_id = parent["id"]
-    return drive_id, folder_id
-
-
-if __name__ == "__main__":
-
-    drive_id, folder_id = get_drive_and_folder_id()
-    if drive_id and folder_id:
-        print("\nUse this in your webhook subscription:")
-        print(f"resource: /drives/{drive_id}/items/{folder_id}")
