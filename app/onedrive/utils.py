@@ -43,20 +43,6 @@ def get_excel_row_and_index_by_identifiers(job, release):
         return None, None
 
 
-def build_unique_identifiers(df):
-    """
-    Combines 'Job #' and 'Release #' columns into unique identifiers in the format 'Job #-Release #'.
-    Returns a list of these identifiers.
-    """
-    # Drop rows where either value is missing
-    filtered = df.dropna(subset=["Job #", "Release #"])
-    # Convert to string and combine
-    identifiers = (
-        filtered["Job #"].astype(str) + "-" + filtered["Release #"].astype(str)
-    )
-    return identifiers.tolist()
-
-
 def parse_excel_datetime(dt_str):
     """
     Parse OneDrive/Excel lastModifiedDateTime into naive UTC datetime.
