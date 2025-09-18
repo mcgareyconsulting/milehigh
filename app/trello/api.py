@@ -5,6 +5,7 @@ from app.config import Config as cfg
 from app.trello.utils import mountain_due_datetime
 
 
+# Main function for updating trello card information
 def update_trello_card(card_id, new_list_id=None, new_due_date=None):
     """
     Updates a Trello card\'s list and/or due date in a single API call.
@@ -42,6 +43,7 @@ def update_trello_card(card_id, new_list_id=None, new_due_date=None):
         raise
 
 
+## Helper functions for combining Trello and Excel data
 def get_list_name_by_id(list_id):
     """
     Fetches the list name from Trello API by list ID.
