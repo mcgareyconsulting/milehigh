@@ -68,6 +68,11 @@ def trello_webhook():
         event_info = parse_webhook_data(data)
         app = current_app._get_current_object()
 
+        # Skip unhandled webhooks
+        if not event_info.get("handled"):
+            app.logger.info(f"Skipping unhandled webhook: {event_info}")
+            return "", 200
+
         # Check if sync is locked BEFORE submitting to thread pool
         if sync_lock_manager.is_locked():
             current_op = sync_lock_manager.get_current_operation()
