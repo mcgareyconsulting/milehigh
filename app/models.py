@@ -42,7 +42,7 @@ class SyncOperation(db.Model):
     error_details = db.Column(db.JSON, nullable=True)
     
     # Additional metadata
-    metadata = db.Column(db.JSON, nullable=True)
+    context = db.Column(db.JSON, nullable=True)
     
     def __repr__(self):
         return f"<SyncOperation {self.operation_id} - {self.operation_type} - {self.status}>"
@@ -64,7 +64,7 @@ class SyncOperation(db.Model):
             'records_failed': self.records_failed,
             'error_type': self.error_type,
             'error_message': self.error_message,
-            'metadata': self.metadata
+            'metadata': self.context
         }
 
 class SyncLog(db.Model):

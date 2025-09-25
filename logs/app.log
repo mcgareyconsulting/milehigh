@@ -1,0 +1,47 @@
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-09-25T17:45:21.482812Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"interval_minutes\": 2, \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:45:21.623137Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-09-25T17:46:36.602088Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-09-25T17:46:57.750438Z\"}"}
+{"event": "127.0.0.1 - - [25/Sep/2025 11:46:58] \"HEAD /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-09-25 11:49:21 MDT)\" (scheduled at 2025-09-25 11:47:21.622206-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:21.635956Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "Trello webhook rejected - sync locked by: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [25/Sep/2025 11:47:25] \"\u001b[31m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 423 -"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-09-18 18:50:13\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:41.639539Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:41.640461Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:41.830532Z\"}"}
+{"event": "{\"event\": \"[SYNC] OneDrive sync complete.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:41.830947Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:41.832145Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-09-25 11:49:21 MDT)\" executed successfully"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [25/Sep/2025 11:47:56] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"1c65d3d8\", \"start_time\": \"2025-09-25T17:47:56.157950\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:56.158005Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"card_id\": \"6866a00ab050408017e095dc\", \"event_time\": \"2025-09-25T17:47:25.635000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:56.171777Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"card_id\": \"6866a00ab050408017e095dc\", \"job_id\": 3, \"trello_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"db_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"trello_list\": \"Fit Up Complete.\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:56.778499Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:56.779280Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"Updating DB record from Trello data\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:56.779745Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"event\": \"Card move detected, updating DB fields\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:57.018120Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"job_id\": 3, \"new_list\": \"Fit Up Complete.\", \"current_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"O\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:57.259842Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"job_id\": 3, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"O\", \"paint_comp\": \"\", \"ship\": \"\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:57.260550Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"DB record updated successfully\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:57.276698Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"event\": \"Updating Excel from Trello changes\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:47:57.283262Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"job\": 900, \"release\": 276, \"excel_row\": \"np.int64(153)\", \"event\": \"Found Excel row for update\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:48:15.675969Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"cell\": \"M153\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:48:23.678162Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"cell\": \"N153\", \"value\": \"O\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:48:39.856569Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"cell\": \"O153\", \"value\": \"\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:48:44.002263Z\"}"}
+{"event": "{\"operation_id\": \"1c65d3d8\", \"cell\": \"P153\", \"value\": \"\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:48:46.484269Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"1c65d3d8\", \"duration_seconds\": 50.335762, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-09-25T17:48:46.493864Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 50.35s"}
