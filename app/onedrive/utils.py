@@ -1,17 +1,25 @@
 import pandas as pd
 from app.onedrive.api import get_excel_dataframe, get_excel_data_with_timestamp
 from app.config import Config as cfg
+from app.sync_lock import synchronized_sync
+import logging
+
+logger = logging.getLogger(__name__)
 
 
+@synchronized_sync("OneDrive-Poll")
 def run_onedrive_poll():
     """
     Core logic for polling OneDrive and syncing.
     Used by both the manual route and the scheduler.
+    Now with automatic locking protection.
     """
     from app.sync import sync_from_onedrive
 
+    logger.info("OneDrive poll starting with sync lock acquired")
     event_info = parse_polling_data()
     sync_from_onedrive(event_info)
+    logger.info("OneDrive poll completed")
     return event_info
 
 

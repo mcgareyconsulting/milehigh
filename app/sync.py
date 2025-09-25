@@ -20,6 +20,10 @@ from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job, db
 from datetime import datetime, date, timezone, time
 from zoneinfo import ZoneInfo
+from app.sync_lock import synchronized_sync, sync_lock_manager
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def rectify_db_on_trello_move(job, new_trello_list):
