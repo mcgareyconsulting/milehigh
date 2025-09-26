@@ -1227,3 +1227,13 @@
 {"event": "127.0.0.1 - - [26/Sep/2025 08:55:35] \"\u001b[33mGET /sync/operations/ HTTP/1.1\u001b[0m\" 404 -"}
 {"event": "127.0.0.1 - - [26/Sep/2025 08:55:35] \"GET /sync/operations HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [26/Sep/2025 08:55:50] \"GET /sync/operations/f7c75877/logs HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-09-26T15:13:37.221297Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"interval_minutes\": 2, \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-09-26T15:13:37.273014Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [26/Sep/2025 09:13:51] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [26/Sep/2025 09:14:00] \"GET /sync/operations/447d0976/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [26/Sep/2025 09:14:12] \"GET /sync/operations/view HTTP/1.1\" 200 -"}

@@ -11,6 +11,7 @@ from app.combine import combine_trello_excel_data
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.logging_config import configure_logging, get_logger
 from datetime import datetime, timedelta
+from sqlalchemy import func
 
 # Configure logging
 logger = configure_logging(log_level="INFO", log_file="logs/app.log")
@@ -112,38 +113,34 @@ def create_app():
     # Sync operations digest
     @app.route("/sync/operations")
     def sync_operations():
-        """Get recent sync operations with optional filtering."""
+        """Get sync operations filtered by date range only (start/end)."""
         try:
             # Query parameters
             limit = request.args.get('limit', 50, type=int)
-            status = request.args.get('status')
-            operation_type = request.args.get('type')
-            hours = request.args.get('hours', 24, type=int)
-            
-            # Build query
+            start_date = request.args.get('start')  # YYYY-MM-DD
+            end_date = request.args.get('end')      # YYYY-MM-DD
+
             query = SyncOperation.query
-            if status:
-                query = query.filter(SyncOperation.status == status)
-            if operation_type:
-                query = query.filter(SyncOperation.operation_type == operation_type)
-            if hours:
-                since = datetime.utcnow() - timedelta(hours=hours)
-                query = query.filter(SyncOperation.started_at >= since)
-            
-            # Get results
+
+            # Apply date range on started_at (inclusive)
+            if start_date:
+                start_dt = datetime.fromisoformat(start_date + "T00:00:00")
+                query = query.filter(SyncOperation.started_at >= start_dt)
+            if end_date:
+                end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
+                query = query.filter(SyncOperation.started_at <= end_dt)
+
             operations = query.order_by(SyncOperation.started_at.desc()).limit(limit).all()
-            
+
             return jsonify({
                 'operations': [op.to_dict() for op in operations],
                 'total': len(operations),
                 'filters': {
                     'limit': limit,
-                    'status': status,
-                    'type': operation_type,
-                    'hours': hours
+                    'start': start_date,
+                    'end': end_date,
                 }
             }), 200
-            
         except Exception as e:
             logger.error("Error getting sync operations", error=str(e))
             return jsonify({"error": str(e)}), 500
@@ -210,6 +207,144 @@ def create_app():
         except Exception as e:
             logger.error("Error getting sync stats", error=str(e))
             return jsonify({"error": str(e)}), 500
+
+    # Lightweight HTML dashboard for operations and logs
+    @app.route('/sync/operations/view')
+    def sync_operations_view():
+        try:
+            limit = request.args.get('limit', 50, type=int)
+            selected_date = request.args.get('date')  # YYYY-MM-DD
+
+            # Build list of distinct operation dates (YYYY-MM-DD), newest first
+            date_rows = (
+                db.session.query(func.date(SyncOperation.started_at))
+                .distinct()
+                .order_by(func.date(SyncOperation.started_at).desc())
+                .all()
+            )
+            available_dates = [str(r[0]) for r in date_rows if r[0] is not None]
+            # Default to most recent available date if none selected
+            if not selected_date and available_dates:
+                selected_date = available_dates[0]
+
+            # Reuse the JSON endpoint logic by calling it internally
+            with app.test_request_context(
+                f"/sync/operations?limit={limit}"
+                + (f"&start={selected_date}&end={selected_date}" if selected_date else "")
+            ):
+                resp, code = sync_operations()
+            data = resp.get_json()
+
+            from flask import render_template_string
+            html = render_template_string(
+                """
+                <html>
+                  <head>
+                    <title>Sync Operations</title>
+                    <style>
+                      body { font-family: Arial, sans-serif; margin: 16px; }
+                      table { border-collapse: collapse; width: 100%; }
+                      th, td { border: 1px solid #ddd; padding: 8px; }
+                      th { background: #f4f4f4; text-align: left; }
+                      .filters { margin-bottom: 12px; }
+                      .muted { color: #666; font-size: 12px; }
+                    </style>
+                  </head>
+                  <body>
+                    <h2>Sync Operations</h2>
+                    <form class=\"filters\" method=\"get\"> 
+                      <label>Date: 
+                        <select name=\"date\"> 
+                          {% for d in available_dates %}
+                            <option value=\"{{ d }}\" {% if selected_date==d %}selected{% endif %}>{{ d }}</option>
+                          {% endfor %}
+                        </select>
+                      </label>
+                      <input type=\"number\" name=\"limit\" min=\"1\" max=\"200\" value=\"{{ limit }}\" />
+                      <button type=\"submit\">Apply</button>
+                      <a href=\"/sync/operations/view\">Reset</a>
+                    </form>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Started</th>
+                          <th>Operation ID</th>
+                          <th>Type</th>
+                          <th>Status</th>
+                          <th>Source</th>
+                          <th>Duration (s)</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for op in data.operations %}
+                          <tr>
+                            <td>{{ op.started_at }}</td>
+                            <td>{{ op.operation_id }}</td>
+                            <td>{{ op.operation_type }}</td>
+                            <td>{{ op.status }}</td>
+                            <td class=\"muted\">{{ op.source_system }} {{ op.source_id or '' }}</td>
+                            <td>{{ '%.2f'|format(op.duration_seconds or 0) }}</td>
+                            <td><a href=\"/sync/operations/{{ op.operation_id }}/logs/view\">logs</a></td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                    <p class=\"muted\">Total: {{ data.total }}</p>
+                  </body>
+                </html>
+                """,
+                data=data,
+                available_dates=available_dates,
+                selected_date=selected_date,
+                limit=limit,
+            )
+            return html
+        except Exception as e:
+            logger.error("Error rendering operations view", error=str(e))
+            return "Error", 500
+
+    @app.route('/sync/operations/<operation_id>/logs/view')
+    def sync_operation_logs_view(operation_id):
+        try:
+            # Fetch logs using existing JSON endpoint
+            logs_resp, code = sync_operation_logs(operation_id)
+            data = logs_resp.get_json()
+            from flask import render_template_string
+            html = render_template_string(
+                """
+                <html>
+                  <head>
+                    <title>Logs - {{ operation_id }}</title>
+                    <style>
+                      body { font-family: Arial, sans-serif; margin: 16px; }
+                      pre { white-space: pre-wrap; word-wrap: break-word; }
+                      .muted { color: #666; font-size: 12px; }
+                      .log { border-bottom: 1px solid #eee; padding: 6px 0; }
+                    </style>
+                  </head>
+                  <body>
+                    <h3>Logs for operation {{ operation_id }}</h3>
+                    <p class="muted"><a href="/sync/operations/view">Back to operations</a></p>
+                    {% for log in data.logs %}
+                      <div class="log">
+                        <div class="muted">{{ log.timestamp }} - {{ log.level }}</div>
+                        <div><strong>{{ log.message }}</strong></div>
+                        {% if log.data %}
+                          <pre>{{ log.data | tojson(indent=2) }}</pre>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </body>
+                </html>
+                """,
+                operation_id=operation_id,
+                data=data,
+            )
+            return html
+        except Exception as e:
+            logger.error("Error rendering logs view", operation_id=operation_id, error=str(e))
+            return "Error", 500
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
