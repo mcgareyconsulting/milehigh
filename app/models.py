@@ -95,7 +95,7 @@ class Job(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     # Job # and Release # for identifiers
     job = db.Column(db.Integer, nullable=False)
-    release = db.Column(db.Integer, nullable=False)
+    release = db.Column(db.String(16), nullable=False)
 
     # Excel columns
     job_name = db.Column(db.String(128), nullable=False)

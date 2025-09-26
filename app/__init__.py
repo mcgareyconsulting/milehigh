@@ -46,13 +46,13 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="interval",
-        minutes=10,
+        minutes=2,
         id="onedrive_poll",
         name="OneDrive Polling Job",
     )
 
     scheduler.start()
-    logger.info("OneDrive polling scheduler started", interval_minutes=10)
+    logger.info("OneDrive polling scheduler started", interval_minutes=2)
     return scheduler
 
 def create_app():
@@ -61,8 +61,11 @@ def create_app():
     db.init_app(app)
 
     # Initialize the database
-    with app.app_context():
-        db.create_all()
+    # with app.app_context():
+    #     db.drop_all()
+    #     db.create_all()
+    #     combined_data = combine_trello_excel_data()
+    #     seed_from_combined_data(combined_data)
 
     # Index route
     @app.route("/")
