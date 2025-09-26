@@ -46,13 +46,13 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="interval",
-        minutes=2,
+        minutes=10,
         id="onedrive_poll",
         name="OneDrive Polling Job",
     )
 
     scheduler.start()
-    logger.info("OneDrive polling scheduler started", interval_minutes=2)
+    logger.info("OneDrive polling scheduler started", interval_minutes=10)
     return scheduler
 
 def create_app():
