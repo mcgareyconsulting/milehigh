@@ -26,19 +26,87 @@ import uuid
 
 logger = get_logger(__name__)
 
-def log_sync_event(operation_id: str, level: str, message: str, **kwargs):
-    """Log a sync event to the database."""
+def safe_safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
+    """Safely log a sync event, converting problematic types."""
     try:
+        # Convert problematic types to safe JSON-serializable types
+        def make_json_safe(obj):
+            import numpy as np
+            import pandas as pd
+            
+            if isinstance(obj, (np.integer, np.int64, np.int32)):
+                return int(obj)
+            elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif isinstance(obj, pd.NaType):
+                return None
+            elif hasattr(obj, 'item'):  # other numpy scalars
+                return obj.item()
+            elif isinstance(obj, dict):
+                return {k: make_json_safe(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [make_json_safe(item) for item in obj]
+            else:
+                return obj
+        
+        safe_data = make_json_safe(kwargs)
+        
         sync_log = SyncLog(
             operation_id=operation_id,
             level=level,
             message=message,
-            data=kwargs
+            data=safe_data
         )
         db.session.add(sync_log)
         db.session.commit()
     except Exception as e:
-        logger.error("Failed to log sync event", error=str(e), operation_id=operation_id)
+        # Don't let logging failures break the sync
+        logger.warning("Failed to log sync event", error=str(e), operation_id=operation_id, message=message)
+
+def safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
+    """Safely log a sync event, converting problematic types."""
+    try:
+        # Convert problematic types to safe JSON-serializable types
+        def make_json_safe(obj):
+            import numpy as np
+            import pandas as pd
+            
+            if isinstance(obj, (np.integer, np.int64, np.int32)):
+                return int(obj)
+            elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif isinstance(obj, pd.NaType):
+                return None
+            elif hasattr(obj, 'item'):  # other numpy scalars
+                return obj.item()
+            elif isinstance(obj, dict):
+                return {k: make_json_safe(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [make_json_safe(item) for item in obj]
+            else:
+                return obj
+        
+        safe_data = make_json_safe(kwargs)
+        
+        sync_log = SyncLog(
+            operation_id=operation_id,
+            level=level,
+            message=message,
+            data=safe_data
+        )
+        db.session.add(sync_log)
+        db.session.commit()
+    except Exception as e:
+        # Don't let logging failures break the sync
+        logger.warning("Failed to log sync event", error=str(e), operation_id=operation_id, message=message)
 
 def create_sync_operation(operation_type: str, source_system: str = None, source_id: str = None) -> SyncOperation:
     """Create a new sync operation record."""
@@ -155,11 +223,13 @@ def sync_from_trello(event_info):
         source_system="trello",
         source_id=card_id
     )
+    safe_safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created", card_id=card_id, event=event_info.get("event"))
     
     with SyncContext("trello_webhook", sync_op.operation_id):
         try:
             # Update operation status
             update_sync_operation(sync_op.operation_id, status=SyncStatus.IN_PROGRESS)
+            safe_safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation in_progress")
             
             logger.info(
                 "Processing Trello card",
@@ -172,6 +242,7 @@ def sync_from_trello(event_info):
             card_data = get_trello_card_by_id(card_id)
             if not card_data:
                 logger.warning("Card not found in Trello API", operation_id=sync_op.operation_id, card_id=card_id)
+                safe_log_sync_event(sync_op.operation_id, "WARNING", "Card not found in Trello API", card_id=card_id)
                 update_sync_operation(sync_op.operation_id, status=SyncStatus.FAILED, error_type="CardNotFound")
                 return
 
@@ -189,6 +260,8 @@ def sync_from_trello(event_info):
                     trello_list=get_list_name_by_id(card_data.get("idList")),
                     db_list=rec.trello_list_name
                 )
+                safe_log_sync_event(sync_op.operation_id, "INFO", "Comparing Trello card to DB record", 
+                              card_id=card_id, job_id=rec.id, trello_name=card_data.get("name"), db_name=rec.trello_card_name)
             else:
                 logger.info(
                     "No DB record found for card",
@@ -196,6 +269,8 @@ def sync_from_trello(event_info):
                     card_id=card_id,
                     trello_name=card_data.get("name")
                 )
+                safe_log_sync_event(sync_op.operation_id, "INFO", "No DB record found for card", 
+                              card_id=card_id, trello_name=card_data.get("name"))
 
             # Check for duplicate updates
             if rec and rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
@@ -206,6 +281,8 @@ def sync_from_trello(event_info):
                     event_time=event_time.isoformat() if event_time else None,
                     db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None
                 )
+                safe_log_sync_event(sync_op.operation_id, "INFO", "Duplicate Trello event skipped",
+                              card_id=card_id, event_time=str(event_time), db_last_updated=str(rec.last_updated_at))
                 update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED)
                 return
 
@@ -213,9 +290,11 @@ def sync_from_trello(event_info):
             diff = compare_timestamps(event_time, rec.last_updated_at if rec else None, sync_op.operation_id)
             if diff == "newer":
                 logger.info("Updating DB record from Trello data", operation_id=sync_op.operation_id, card_id=card_id)
+                safe_log_sync_event(sync_op.operation_id, "INFO", "Updating DB from Trello", card_id=card_id)
                 
                 if not rec:
                     logger.info("Creating new DB record", operation_id=sync_op.operation_id, card_id=card_id)
+                    safe_log_sync_event(sync_op.operation_id, "INFO", "Creating new DB record", card_id=card_id)
                     rec = Job(
                         job=0,  # Placeholder
                         release=0,  # Placeholder
@@ -241,6 +320,8 @@ def sync_from_trello(event_info):
                 # Handle list movement
                 if event_info["event"] == "card_moved":
                     logger.info("Card move detected, updating DB fields", operation_id=sync_op.operation_id)
+                    safe_log_sync_event(sync_op.operation_id, "INFO", "Card moved - updating DB fields",
+                                  to=get_list_name_by_id(card_data.get("idList")))
                     rectify_db_on_trello_move(rec, get_list_name_by_id(card_data.get("idList")), sync_op.operation_id)
 
                 db.session.add(rec)
@@ -248,10 +329,12 @@ def sync_from_trello(event_info):
                 update_sync_operation(sync_op.operation_id, records_updated=1)
                 
                 logger.info("DB record updated successfully", operation_id=sync_op.operation_id, card_id=card_id)
+                safe_log_sync_event(sync_op.operation_id, "INFO", "DB record updated", card_id=card_id, job_id=rec.id)
 
                 # Update Excel if needed
                 if rec.source_of_update != "Excel":
                     logger.info("Updating Excel from Trello changes", operation_id=sync_op.operation_id)
+                    safe_log_sync_event(sync_op.operation_id, "INFO", "Updating Excel from Trello", job=rec.job, release=rec.release)
                     column_updates = {
                         "M": rec.fitup_comp,
                         "N": rec.welded,
@@ -268,18 +351,26 @@ def sync_from_trello(event_info):
                             release=rec.release,
                             excel_row=index
                         )
+                        try:
+                            safe_log_sync_event(sync_op.operation_id, "INFO", "Found Excel row", excel_row=index, job=rec.job, release=rec.release)
+                        except Exception as log_err:
+                            logger.warning("Failed to log Excel row info", error=str(log_err))
                         
                         for col, val in column_updates.items():
                             cell_address = col + str(index)
                             success = update_excel_cell(cell_address, val)
                             if success:
                                 logger.info("Excel cell updated", operation_id=sync_op.operation_id, cell=cell_address, value=val)
+                                safe_log_sync_event(sync_op.operation_id, "INFO", "Excel cell updated", cell=cell_address, value=val)
                             else:
                                 logger.error("Failed to update Excel cell", operation_id=sync_op.operation_id, cell=cell_address, value=val)
+                                safe_log_sync_event(sync_op.operation_id, "ERROR", "Failed to update Excel cell", cell=cell_address, value=val)
                     else:
                         logger.warning("Excel row not found for update", operation_id=sync_op.operation_id, job=rec.job, release=rec.release)
+                        safe_log_sync_event(sync_op.operation_id, "WARNING", "Excel row not found", job=rec.job, release=rec.release)
             else:
                 logger.info("No update needed for card", operation_id=sync_op.operation_id, card_id=card_id)
+                safe_log_sync_event(sync_op.operation_id, "INFO", "No update needed for card", card_id=card_id)
                 update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED)
                 return
 
@@ -290,8 +381,15 @@ def sync_from_trello(event_info):
                 completed_at=datetime.utcnow(),
                 duration_seconds=(datetime.utcnow() - sync_op.started_at).total_seconds()
             )
+            safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation completed")
             
         except Exception as e:
+            # Rollback any pending database changes
+            try:
+                db.session.rollback()
+            except:
+                pass
+                
             logger.error(
                 "Trello sync failed",
                 operation_id=sync_op.operation_id,
@@ -299,6 +397,7 @@ def sync_from_trello(event_info):
                 error=str(e),
                 error_type=type(e).__name__
             )
+            safe_log_sync_event(sync_op.operation_id, "ERROR", "Trello sync failed", card_id=card_id, error=str(e), error_type=type(e).__name__)
             update_sync_operation(
                 sync_op.operation_id,
                 status=SyncStatus.FAILED,
@@ -385,13 +484,9 @@ def sync_from_onedrive(data):
             continue
 
         identifier = f"{job}-{release}"
-        # print(f"[SYNC] Processing Excel row for identifier {identifier}")
 
         rec = Job.query.filter_by(job=job, release=release).one_or_none()
         if not rec:
-            # print(
-            #     f"[SYNC] No DB record found for Job {job}, Release {release}, skipping."
-            # )
             continue
 
         db_last_updated = rec.last_updated_at
@@ -535,21 +630,3 @@ def sync_from_onedrive(data):
         logger.info("[SYNC] No records needed updating.")
 
     logger.info("[SYNC] OneDrive sync complete.")
-
-    #     updated = False
-
-    #     for excel_field, db_field in fields_to_check:
-    #         excel_val = row.get(excel_field)
-    #         db_val = getattr(rec, db_field, None)
-
-    #         # Skip if both empty
-    #         if (pd.isna(excel_val) or excel_val is None) and db_val is None:
-    #             continue
-
-    #         # For 'start_install', check the formula flag
-    #         if db_field == "start_install":
-    #             formula_val = row.get(f"start_install_formula")
-    #             formulaTF_val = row.get(f"start_install_formulaTF")
-    #             is_formula = (
-    #                 formula_val is not None and str(formula_val).startswith("=")
-    #             ) or bool(f
