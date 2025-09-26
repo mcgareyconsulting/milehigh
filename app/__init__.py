@@ -30,11 +30,37 @@ def init_scheduler(app):
                     "Skipping scheduled OneDrive poll - sync locked",
                     current_operation=current_op
                 )
+                # If OneDrive poll is skipped, try draining Trello queue lightly
+                try:
+                    from app.trello import drain_trello_queue
+                    drained = drain_trello_queue(max_items=3)
+                    if drained:
+                        logger.info("Drained Trello queue while OneDrive locked", drained=drained)
+                except Exception as e:
+                    logger.warning("Trello queue drain failed during skip", error=str(e))
                 return
 
             try:
                 logger.info("Starting scheduled OneDrive poll")
+                # Before starting OneDrive poll, opportunistically drain a few Trello events if free
+                try:
+                    from app.trello import drain_trello_queue
+                    drained_pre = drain_trello_queue(max_items=2)
+                    if drained_pre:
+                        logger.info("Pre-drain Trello queue", drained=drained_pre)
+                except Exception:
+                    pass
+
                 run_onedrive_poll()
+
+                # After poll, drain a few more Trello events
+                try:
+                    from app.trello import drain_trello_queue
+                    drained_post = drain_trello_queue(max_items=5)
+                    if drained_post:
+                        logger.info("Post-drain Trello queue", drained=drained_post)
+                except Exception:
+                    pass
                 logger.info("Scheduled OneDrive poll completed successfully")
 
             except RuntimeError as e:
