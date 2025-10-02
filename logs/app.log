@@ -1237,3 +1237,44 @@
 {"event": "127.0.0.1 - - [26/Sep/2025 09:13:51] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [26/Sep/2025 09:14:00] \"GET /sync/operations/447d0976/logs/view HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [26/Sep/2025 09:14:12] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-02T15:37:19.465091Z\"}"}
+{"event": "Sync lock acquired for operation: test_operation"}
+{"event": "Sync lock released for operation: test_operation"}
+{"event": "Sync lock acquired for operation: first_op"}
+{"event": "Sync lock already held by 'first_op'. Cannot acquire for 'second_op'"}
+{"event": "Sync lock released for operation: first_op"}
+{"event": "Sync lock acquired for operation: outer_op"}
+{"event": "Re-entrant sync lock for operation: inner_op"}
+{"event": "Sync lock acquired for operation: inner_op"}
+{"event": "Sync lock released for operation: inner_op"}
+{"event": "Sync lock released for operation: outer_op"}
+{"event": "Sync lock acquired for operation: holding_op"}
+{"event": "Sync lock already held by 'holding_op'. Cannot acquire for 'timeout_op'"}
+{"event": "Sync lock acquired for operation: status_test_op"}
+{"event": "Sync lock released for operation: status_test_op"}
+{"event": "Sync lock acquired for operation: error_op"}
+{"event": "Sync lock released for operation: error_op"}
+{"event": "Sync lock acquired for operation: decorated_op"}
+{"event": "Sync lock released for operation: decorated_op"}
+{"event": "Sync lock acquired for operation: concurrent_test"}
+{"event": "Sync lock already held by 'concurrent_test'. Cannot acquire for 'concurrent_test'"}
+{"event": "Cannot execute concurrent_test: Sync already in progress: concurrent_test"}
+{"event": "Sync lock released for operation: concurrent_test"}
+{"event": "Sync lock acquired for operation: exception_test"}
+{"event": "Sync lock released for operation: exception_test"}
+{"event": "Sync lock released for operation: holding_op"}
+{"event": "Sync lock acquired for operation: args_test"}
+{"event": "Sync lock released for operation: args_test"}
+{"event": "{\"operation_id\": \"test_op\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.038623Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.040311Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.041799Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"event\": \"No DB timestamp \\u2014 treating event as newer\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.043442Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"event\": \"Invalid event_time (None)\", \"logger\": \"app.sync\", \"level\": \"warning\", \"timestamp\": \"2025-10-02T15:37:24.045416Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_list\": \"Paint complete\", \"current_status\": {\"fitup_comp\": \"O\", \"welded\": \"\", \"paint_comp\": \"\", \"ship\": \"\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.095427Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"O\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.095821Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_list\": \"Fit Up Complete.\", \"current_status\": {\"fitup_comp\": \"O\", \"welded\": \"\", \"paint_comp\": \"\", \"ship\": \"\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.098173Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"O\", \"paint_comp\": \"\", \"ship\": \"\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.098519Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_list\": \"Shipping completed\", \"current_status\": {\"fitup_comp\": \"O\", \"welded\": \"\", \"paint_comp\": \"\", \"ship\": \"\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.102755Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"X\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.103738Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_list\": \"Unknown List\", \"current_status\": {\"fitup_comp\": \"O\", \"welded\": \"\", \"paint_comp\": \"\", \"ship\": \"\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.109389Z\"}"}
+{"event": "{\"operation_id\": \"test_op\", \"job_id\": null, \"new_status\": {\"fitup_comp\": \"O\", \"welded\": \"\", \"paint_comp\": \"\", \"ship\": \"\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-02T15:37:24.110267Z\"}"}
