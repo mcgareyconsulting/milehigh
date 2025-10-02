@@ -21,8 +21,15 @@ def app():
     # Create a temporary database for testing
     db_fd, db_path = tempfile.mkstemp(suffix='.db')
     
-    # Create test app with test config
-    test_app = Flask(__name__)
+    # Use the actual create_app function but with test config
+    os.environ['FLASK_ENV'] = 'testing'
+    os.environ['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    
+    # Import here to avoid circular imports
+    from app import create_app
+    
+    # Create the app with test configuration
+    test_app = create_app()
     test_app.config.update({
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
@@ -33,9 +40,6 @@ def app():
             'pool_recycle': 300,
         }
     })
-    
-    # Initialize database
-    db.init_app(test_app)
     
     with test_app.app_context():
         db.create_all()
