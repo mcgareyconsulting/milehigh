@@ -88,11 +88,11 @@ def create_app():
     db.init_app(app)
 
     # Initialize the database
-    # with app.app_context():
-    #     db.drop_all()
-    #     db.create_all()
-    #     combined_data = combine_trello_excel_data()
-    #     seed_from_combined_data(combined_data)
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        combined_data = combine_trello_excel_data()
+        seed_from_combined_data(combined_data)
 
     # Index route
     @app.route("/")

@@ -1237,3 +1237,415 @@
 {"event": "127.0.0.1 - - [26/Sep/2025 09:13:51] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [26/Sep/2025 09:14:00] \"GET /sync/operations/447d0976/logs/view HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [26/Sep/2025 09:14:12] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-07T18:16:11.580185Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"interval_minutes\": 2, \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:16:11.619739Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-07T18:17:28.033033Z\"}"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:17:28] \"HEAD /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:18:11 MDT)\" (scheduled at 2025-10-07 12:18:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:18:11.624024Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-09-26 15:19:41\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:18:30.546340Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:18:30.547240Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:18:30.753630Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:18:30.768498Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:20:11 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:22:11 MDT)\" (scheduled at 2025-10-07 12:20:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:20:11.629619Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-09-26 15:19:41\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:20:29.548654Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:20:29.549814Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:20:29.734539Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:20:29.747680Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:22:11 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:24:11 MDT)\" (scheduled at 2025-10-07 12:22:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:11.633239Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "Trello webhook queued due to active lock"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:22:12] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-09-26 15:19:41\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:31.633892Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:31.634218Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:32.271130Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "Sync lock acquired for operation: Trello-Queue"}
+{"event": "{\"drained\": 1, \"event\": \"Post-drain Trello queue\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:32.311210Z\"}"}
+{"event": "Drained Trello event started with lock acquired"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:32.312250Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:24:11 MDT)\" executed successfully"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"ba04ea1c\", \"start_time\": \"2025-10-07T18:22:32.357926\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:32.358002Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"card_id\": \"6866a00ab050408017e095dc\", \"event_time\": \"2025-10-07T18:22:12.706000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:32.396208Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"card_id\": \"6866a00ab050408017e095dc\", \"job_id\": 1, \"trello_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"db_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"trello_list\": \"Paint complete\", \"db_list\": \"Fit Up Complete.\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:33.311596Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:33.347213Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"Updating DB record from Trello data\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:33.349553Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"event\": \"Card move detected, updating DB fields\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:33.835343Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"job_id\": 1, \"new_list\": \"Paint complete\", \"current_status\": {\"fitup_comp\": \"X\", \"welded\": \"O\", \"paint_comp\": null, \"ship\": null}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:34.553575Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"job_id\": 1, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"O\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:34.554506Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"DB record updated successfully\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:34.562417Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"event\": \"Updating Excel from Trello changes\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:34.566462Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"job\": 900, \"release\": \"276\", \"excel_row\": \"np.int64(153)\", \"event\": \"Found Excel row for update\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:22:53.008479Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"cell\": \"M153\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:23:02.590989Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"cell\": \"N153\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:23:07.091006Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"cell\": \"O153\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:23:11.944205Z\"}"}
+{"event": "{\"operation_id\": \"ba04ea1c\", \"cell\": \"P153\", \"value\": \"O\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:23:16.878598Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"ba04ea1c\", \"duration_seconds\": 44.53786, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:23:16.895905Z\"}"}
+{"event": "Drained Trello event completed successfully"}
+{"event": "Sync lock released for operation: Trello-Queue"}
+{"event": "Drained sync completed in 44.59s"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:26:11 MDT)\" (scheduled at 2025-10-07 12:24:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:11.625543Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-07 18:23:23\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.397963Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.398812Z\"}"}
+{"event": "{\"event\": \"200-150 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.405642Z\"}"}
+{"event": "{\"event\": \"200-125 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.417453Z\"}"}
+{"event": "{\"event\": \"200-403 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.427318Z\"}"}
+{"event": "{\"event\": \"200-879 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.434269Z\"}"}
+{"event": "{\"event\": \"340-419 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.445725Z\"}"}
+{"event": "{\"event\": \"130-271 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.458504Z\"}"}
+{"event": "{\"event\": \"130-421 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.467118Z\"}"}
+{"event": "{\"event\": \"130-430 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.477006Z\"}"}
+{"event": "{\"event\": \"130-279 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.491553Z\"}"}
+{"event": "{\"event\": \"130-323 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.499648Z\"}"}
+{"event": "{\"event\": \"130-358 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.510103Z\"}"}
+{"event": "{\"event\": \"130-359 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.517195Z\"}"}
+{"event": "{\"event\": \"130-417 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.523296Z\"}"}
+{"event": "{\"event\": \"130-416 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.528825Z\"}"}
+{"event": "{\"event\": \"190-892 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.536524Z\"}"}
+{"event": "{\"event\": \"190-278 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.542174Z\"}"}
+{"event": "{\"event\": \"190-222 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.547412Z\"}"}
+{"event": "{\"event\": \"190-863 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.554555Z\"}"}
+{"event": "{\"event\": \"190-861 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.559736Z\"}"}
+{"event": "{\"event\": \"190-337 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.566791Z\"}"}
+{"event": "{\"event\": \"190-320 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.573386Z\"}"}
+{"event": "{\"event\": \"190-335 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.578986Z\"}"}
+{"event": "{\"event\": \"190-334 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.586802Z\"}"}
+{"event": "{\"event\": \"190-176 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.591592Z\"}"}
+{"event": "{\"event\": \"190-167 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.597898Z\"}"}
+{"event": "{\"event\": \"190-848 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.606169Z\"}"}
+{"event": "{\"event\": \"190-862 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.611004Z\"}"}
+{"event": "{\"event\": \"190-847 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.619126Z\"}"}
+{"event": "{\"event\": \"170-131 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.626007Z\"}"}
+{"event": "{\"event\": \"170-130 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.632939Z\"}"}
+{"event": "{\"event\": \"170-147 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.640336Z\"}"}
+{"event": "{\"event\": \"170-132 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.645814Z\"}"}
+{"event": "{\"event\": \"170-141 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.653731Z\"}"}
+{"event": "{\"event\": \"170-146 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.658751Z\"}"}
+{"event": "{\"event\": \"170-128 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.667750Z\"}"}
+{"event": "{\"event\": \"170-129 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.673597Z\"}"}
+{"event": "{\"event\": \"900-210 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.690761Z\"}"}
+{"event": "{\"event\": \"900-408 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.697660Z\"}"}
+{"event": "{\"event\": \"900-979 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.703100Z\"}"}
+{"event": "{\"event\": \"900-217 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.708699Z\"}"}
+{"event": "{\"event\": \"900-799 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.714113Z\"}"}
+{"event": "{\"event\": \"900-800 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.720514Z\"}"}
+{"event": "{\"event\": \"900-790 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.730446Z\"}"}
+{"event": "{\"event\": \"900-791 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.743520Z\"}"}
+{"event": "{\"event\": \"900-796 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.756410Z\"}"}
+{"event": "{\"event\": \"900-797 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.763294Z\"}"}
+{"event": "{\"event\": \"340-415 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.771414Z\"}"}
+{"event": "{\"event\": \"370-512 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.776816Z\"}"}
+{"event": "{\"event\": \"370-521 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.783649Z\"}"}
+{"event": "{\"event\": \"170-449 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.791395Z\"}"}
+{"event": "{\"event\": \"200-261 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.802209Z\"}"}
+{"event": "{\"event\": \"320-353 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.812637Z\"}"}
+{"event": "{\"event\": \"320-399 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.821059Z\"}"}
+{"event": "{\"event\": \"190-442 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.838250Z\"}"}
+{"event": "{\"event\": \"300-771 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.850142Z\"}"}
+{"event": "{\"event\": \"380-376 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.858626Z\"}"}
+{"event": "{\"event\": \"330-443 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.883587Z\"}"}
+{"event": "{\"event\": \"370-523 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.930877Z\"}"}
+{"event": "{\"event\": \"370-525 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.936256Z\"}"}
+{"event": "{\"event\": \"370-530 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.944341Z\"}"}
+{"event": "{\"event\": \"370-527 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.952673Z\"}"}
+{"event": "{\"event\": \"170-183 Updating DB start_install (formula-driven): datetime.date(2025, 10, 1) -> datetime.date(2025, 10, 10)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.959547Z\"}"}
+{"event": "{\"event\": \"190-248 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.967270Z\"}"}
+{"event": "{\"event\": \"380-414 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.976778Z\"}"}
+{"event": "{\"event\": \"330-430 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.985113Z\"}"}
+{"event": "{\"event\": \"190-168 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:34.993268Z\"}"}
+{"event": "{\"event\": \"260-483 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.001324Z\"}"}
+{"event": "{\"event\": \"370-455 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.008397Z\"}"}
+{"event": "{\"event\": \"370-458 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.017269Z\"}"}
+{"event": "{\"event\": \"370-459 Updating DB start_install (formula-driven): datetime.date(2025, 10, 3) -> datetime.date(2025, 10, 13)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.024321Z\"}"}
+{"event": "{\"event\": \"370-479 Updating DB start_install (formula-driven): datetime.date(2025, 10, 6) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.053749Z\"}"}
+{"event": "{\"event\": \"370-480 Updating DB start_install (formula-driven): datetime.date(2025, 10, 6) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.067430Z\"}"}
+{"event": "{\"event\": \"380-487 Updating DB start_install (formula-driven): datetime.date(2025, 10, 7) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.083834Z\"}"}
+{"event": "{\"event\": \"260-110 Updating DB start_install (formula-driven): datetime.date(2025, 10, 7) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.097080Z\"}"}
+{"event": "{\"event\": \"260-511 Updating DB start_install (formula-driven): datetime.date(2025, 10, 7) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.105049Z\"}"}
+{"event": "{\"event\": \"200-516 Updating DB start_install (formula-driven): datetime.date(2025, 10, 7) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.110986Z\"}"}
+{"event": "{\"event\": \"900-517 Updating DB start_install (formula-driven): datetime.date(2025, 10, 7) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.119600Z\"}"}
+{"event": "{\"event\": \"200-152 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.150428Z\"}"}
+{"event": "{\"event\": \"260-351 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.155708Z\"}"}
+{"event": "{\"event\": \"170-453 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.171268Z\"}"}
+{"event": "{\"event\": \"160-946 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.179155Z\"}"}
+{"event": "{\"event\": \"160-272 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.184645Z\"}"}
+{"event": "{\"event\": \"200-416 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.190508Z\"}"}
+{"event": "{\"event\": \"200-339 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.198654Z\"}"}
+{"event": "{\"event\": \"200-362 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.207377Z\"}"}
+{"event": "{\"event\": \"200-729 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.216767Z\"}"}
+{"event": "{\"event\": \"200-724 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.224745Z\"}"}
+{"event": "{\"event\": \"130-396 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.239878Z\"}"}
+{"event": "{\"event\": \"130-321 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.248319Z\"}"}
+{"event": "{\"event\": \"190-332 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.257883Z\"}"}
+{"event": "{\"event\": \"190-357 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.266595Z\"}"}
+{"event": "{\"event\": \"190-240 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.274783Z\"}"}
+{"event": "{\"event\": \"190-883 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.284097Z\"}"}
+{"event": "{\"event\": \"190-213 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.293088Z\"}"}
+{"event": "{\"event\": \"260-348 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.308762Z\"}"}
+{"event": "{\"event\": \"260-365 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.317590Z\"}"}
+{"event": "{\"event\": \"300-299 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.325507Z\"}"}
+{"event": "{\"event\": \"305-448 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.335423Z\"}"}
+{"event": "{\"event\": \"370-454 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.355629Z\"}"}
+{"event": "{\"event\": \"380-380 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.363676Z\"}"}
+{"event": "{\"event\": \"380-375 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.370560Z\"}"}
+{"event": "{\"event\": \"170-311 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.378205Z\"}"}
+{"event": "{\"event\": \"385-354 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.387640Z\"}"}
+{"event": "{\"event\": \"385-326 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.393597Z\"}"}
+{"event": "{\"event\": \"385-186 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.402037Z\"}"}
+{"event": "{\"event\": \"900-262 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.415926Z\"}"}
+{"event": "{\"event\": \"900-924 Updating DB start_install (formula-driven): datetime.date(2025, 10, 14) -> datetime.date(2025, 10, 23)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.427715Z\"}"}
+{"event": "{\"event\": \"Committing 107 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.432033Z\"}"}
+{"event": "{\"event\": \"Committed 107 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:35.444514Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098e4: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:56.152590Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098c8: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:24:56.754657Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:25:05.306821Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:26:11 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:28:11 MDT)\" (scheduled at 2025-10-07 12:26:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:11.632519Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-07 18:23:23\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:31.939482Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:31.940257Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-150: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:31.947238Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-125: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:31.955503Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-403: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:31.969494Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-879: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:31.985382Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 340-419: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.006685Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-271: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.019496Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-421: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.031078Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-430: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.050469Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-279: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.060606Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-323: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.066530Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-358: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.071062Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-359: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.078639Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-417: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.083604Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-416: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.088043Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-892: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.096976Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-278: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.100966Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-222: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.105458Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-863: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.114489Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-861: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.119447Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-337: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.125945Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-320: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.131776Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-335: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.136092Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-334: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.144047Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-176: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.148123Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-167: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.152693Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-848: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.163310Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-862: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.167571Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-847: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.171537Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-131: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.181245Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-130: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.185117Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-147: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.189124Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-132: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.195088Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-141: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.199934Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-146: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.203469Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-128: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.216844Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-129: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.221578Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-210: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.237035Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-408: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.242382Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-979: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.247544Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-217: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.252263Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-799: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.256500Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-800: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.262876Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-790: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.269234Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-791: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.274605Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-796: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.281884Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-797: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.286195Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 340-415: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.292370Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-512: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.297600Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-521: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.301819Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-449: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.309628Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-261: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.318538Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 320-353: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.332767Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 320-399: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.337249Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-442: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.350673Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 300-771: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.356027Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-376: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.362216Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 330-443: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.378715Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-523: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.407554Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-525: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.412372Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-530: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.415754Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-527: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.419775Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-183: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.429800Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-248: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.434550Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-414: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.442636Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 330-430: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.448291Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-168: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.454469Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-483: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.460794Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-455: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.465452Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-458: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.469485Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-459: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.473714Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-479: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.483142Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-480: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.486939Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-487: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.491280Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-110: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.497215Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-511: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.501159Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-516: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.504913Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-517: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.509492Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-152: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.553619Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-351: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.591559Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-453: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.697868Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 160-946: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.782924Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 160-272: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.803367Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-416: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.812080Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-339: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.818286Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-362: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.824369Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-729: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.832175Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-724: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.837164Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-396: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.848908Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-321: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.856166Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-332: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.864138Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-357: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.870699Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-240: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.876318Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-883: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.882981Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-213: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.887147Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-348: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.893205Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-365: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.899716Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 300-299: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.904664Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 305-448: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.909249Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-454: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.915822Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-380: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.920857Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-375: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.930848Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-311: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.981381Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 385-354: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.985950Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 385-326: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.991565Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 385-186: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:32.999220Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-262: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:33.010061Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-924: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:33.015334Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:33.018610Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:26:33.030963Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:28:11 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:30:11 MDT)\" (scheduled at 2025-10-07 12:28:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:11.634732Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-07 18:27:15\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:29.833879Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:29.834797Z\"}"}
+{"event": "{\"event\": \"370-479 Updating DB welded: 'O' -> 'X'\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:29.965604Z\"}"}
+{"event": "{\"event\": \"370-479 Updating DB paint_comp: None -> 'X'\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:29.974736Z\"}"}
+{"event": "{\"event\": \"370-479 Updating DB ship: None -> 'O'\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:29.981221Z\"}"}
+{"event": "{\"event\": \"370-479 Updating DB start_install (hard-coded): datetime.date(2025, 10, 15) -> datetime.date(2025, 5, 9)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:29.988574Z\"}"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:30.066368Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:30.068636Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098c0: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:30.392038Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:30.992455Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:30:11 MDT)\" executed successfully"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:28:31] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"aceb681f\", \"start_time\": \"2025-10-07T18:28:31.121262\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:31.121326Z\"}"}
+{"event": "{\"operation_id\": \"aceb681f\", \"card_id\": \"6866a00ab050408017e098c0\", \"event_time\": \"2025-10-07T18:28:30.968000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:31.128024Z\"}"}
+{"event": "Trello webhook queued due to active lock"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:28:31] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"operation_id\": \"aceb681f\", \"card_id\": \"6866a00ab050408017e098c0\", \"job_id\": 5, \"trello_name\": \"370-479 Fairfield Development - Vista Highlands Bld 14 Stair 1 Rails\", \"db_name\": \"370-479 Fairfield Development - Vista Highlands Bld 14 Stair 1 Rails\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:31.725460Z\"}"}
+{"event": "{\"operation_id\": \"aceb681f\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:31.733913Z\"}"}
+{"event": "{\"operation_id\": \"aceb681f\", \"card_id\": \"6866a00ab050408017e098c0\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:31.734340Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"aceb681f\", \"duration_seconds\": 0.6217, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:28:31.743003Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.63s"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:32:11 MDT)\" (scheduled at 2025-10-07 12:30:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:11.653174Z\"}"}
+{"event": "{\"drained\": 1, \"event\": \"Pre-drain Trello queue\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:11.654261Z\"}"}
+{"event": "Sync lock acquired for operation: Trello-Queue"}
+{"event": "Drained Trello event started with lock acquired"}
+{"event": "Sync lock already held by 'Trello-Queue'. Cannot acquire for 'OneDrive-Poll'"}
+{"event": "Cannot execute OneDrive-Poll: Sync already in progress: Trello-Queue"}
+{"event": "{\"error\": \"Sync already in progress: Trello-Queue\", \"event\": \"Scheduled OneDrive poll skipped due to lock\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:11.656946Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:32:11 MDT)\" executed successfully"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"52087d31\", \"start_time\": \"2025-10-07T18:30:11.675625\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:11.675698Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"card_id\": \"6866a00ab050408017e098c0\", \"event_time\": \"2025-10-07T18:28:31.064000\", \"event_type\": \"card_updated\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:11.686081Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"card_id\": \"6866a00ab050408017e098c0\", \"job_id\": 5, \"trello_name\": \"370-479 Fairfield Development - Vista Highlands Bld 14 Stair 1 Rails\", \"db_name\": \"370-479 Fairfield Development - Vista Highlands Bld 14 Stair 1 Rails\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:12.314529Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:12.321052Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"card_id\": \"6866a00ab050408017e098c0\", \"event\": \"Updating DB record from Trello data\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:12.321494Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"card_id\": \"6866a00ab050408017e098c0\", \"event\": \"DB record updated successfully\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:12.596303Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"event\": \"Updating Excel from Trello changes\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:12.601143Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"job\": 370, \"release\": \"479\", \"excel_row\": \"np.int64(174)\", \"event\": \"Found Excel row for update\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:30.220118Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"cell\": \"M174\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:38.083768Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"cell\": \"N174\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:41.151311Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"cell\": \"O174\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:45.867559Z\"}"}
+{"event": "{\"operation_id\": \"52087d31\", \"cell\": \"P174\", \"value\": \"O\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:51.479014Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"52087d31\", \"duration_seconds\": 39.818175, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:30:51.493849Z\"}"}
+{"event": "Drained Trello event completed successfully"}
+{"event": "Sync lock released for operation: Trello-Queue"}
+{"event": "Drained sync completed in 39.84s"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:31:13] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:31:14] \"\u001b[33mGET /favicon.ico HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:31:33] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:34:11 MDT)\" (scheduled at 2025-10-07 12:32:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:32:11.633714Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-07 18:30:58\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:32:30.495538Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:32:30.496370Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:32:30.699456Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:32:30.714854Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:34:11 MDT)\" executed successfully"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:32:40] \"GET /sync/operations/91b5f1c6/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:33:32] \"GET /sync/operations/86e7a97d/logs HTTP/1.1\" 200 -"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:36:11 MDT)\" (scheduled at 2025-10-07 12:34:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:34:11.621210Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:34:11] \"\u001b[33mGET /sync/operations/vieiws HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:34:14] \"\u001b[33mGET /sync/operations/views HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:34:33] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-07 18:30:58\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:34:33.581348Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:34:33.581669Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:34:33.783545Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:34:33.793366Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:36:11 MDT)\" executed successfully"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:34:38] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:34:39] \"\u001b[33mGET /favicon.ico HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:34:52] \"GET /sync/operations/28025141/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:35:26] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:35:31] \"GET /sync/operations/view?date=2025-09-26&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:35:35] \"GET /sync/operations/9ad2545d/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:35:52] \"GET /sync/operations/view?date=2025-10-07&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:36:07] \"GET /sync/operations/e12e014c/logs/view HTTP/1.1\" 200 -"}
+{"event": "Running job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:38:11 MDT)\" (scheduled at 2025-10-07 12:36:11.618165-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:36:11.620807Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-07 18:30:58\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:36:28.863100Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:36:28.863489Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:36:29.025978Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-07T18:36:29.039680Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: interval[0:02:00], next run at: 2025-10-07 12:38:11 MDT)\" executed successfully"}
+{"event": "127.0.0.1 - - [07/Oct/2025 12:36:33] \"GET /sync/operations/52087d31/logs/view HTTP/1.1\" 200 -"}
