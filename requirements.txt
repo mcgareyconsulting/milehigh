@@ -17,28 +17,22 @@ google-auth==2.40.3
 google-auth-oauthlib==1.2.2
 google-auth-httplib2==0.2.0
 
-# Data processing
-pandas==2.3.0
-openpyxl==3.1.5
-numpy==2.0.2
+# Data processing (using older, more stable versions)
+pandas==2.1.4
+openpyxl==3.1.2
+numpy==1.24.4
 
 # Utilities
-python-dotenv==1.1.1
-python-dateutil==2.9.0.post0
-structlog==23.2.0
-pytz==2025.2
+python-dotenv==1.0.0
+python-dateutil==2.8.2
+structlog==23.1.0
+pytz==2023.3
 
-# Additional dependencies found in code
-certifi==2025.6.15
-charset-normalizer==3.4.2
-idna==3.10
-urllib3==2.5.0
-
-# Core dependencies (auto-installed but specified for clarity)
-blinker==1.9.0
-click==8.1.8
-itsdangerous==2.2.0
-Jinja2==3.1.6
-MarkupSafe==3.0.2
-Werkzeug==3.1.3
-SQLAlchemy==2.0.42
+# Core dependencies
+blinker==1.7.0
+click==8.1.7
+itsdangerous==2.1.2
+Jinja2==3.1.2
+MarkupSafe==2.1.3
+Werkzeug==3.0.1
+SQLAlchemy==2.0.23
