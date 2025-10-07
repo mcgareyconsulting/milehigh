@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify, request
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
@@ -84,7 +85,16 @@ def init_scheduler(app):
 
 def create_app():
     app = Flask(__name__)
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
+    
+    # Database configuration - use environment variable for production
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        # For production databases (PostgreSQL, MySQL, etc.)
+        app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    else:
+        # Fallback to SQLite for local development
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
+    
     db.init_app(app)
 
     # Initialize the database
