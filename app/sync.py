@@ -669,10 +669,11 @@ def sync_from_onedrive(data):
                 continue
 
             job_num = normalize_int_like(job)
-            release_num = normalize_int_like(release)
+            # Don't normalize release - keep original format for string field
+            release_str = str(release) if not pd.isna(release) else None
             identifier = f"{job}-{release}"
 
-            rec = Job.query.filter_by(job=job_num, release=release_num).one_or_none()
+            rec = Job.query.filter_by(job=job_num, release=release_str).one_or_none()
             if not rec:
                 continue
 

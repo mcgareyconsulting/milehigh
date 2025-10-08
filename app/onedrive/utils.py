@@ -37,9 +37,10 @@ def get_excel_row_and_index_by_identifiers(job, release):
                Returns (None, None) if not found.
     """
     df = get_excel_dataframe()
-    # Ensure identifiers are the correct type
+    # Ensure job is int, but keep release as string to preserve format like "v862"
     job = int(job)
-    release = int(release)
+    # Convert release to string to handle cases like "v862"
+    release = str(release)
 
     match = df[(df["Job #"] == job) & (df["Release #"] == release)]
     if not match.empty:
