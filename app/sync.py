@@ -680,6 +680,7 @@ def sync_from_onedrive(data):
 
             rec = Job.query.filter_by(job=job_num, release=release_str).one_or_none()
             if not rec:
+                print(f"No record found for {identifier}")
                 continue
 
             db_last_updated = rec.last_updated_at
