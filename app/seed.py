@@ -1,6 +1,7 @@
 import pandas as pd
 from app.models import db, Job
 import logging
+import gc  # For garbage collection
 
 def to_date(val):
     """Convert a value to a date, returning None if conversion fails or value is null."""
@@ -103,6 +104,9 @@ def seed_from_combined_data(combined_data, batch_size=50):
                 db.session.commit()
                 total_created += batch_created
                 print(f"  ✓ Batch {batch_count} committed successfully. Total created so far: {total_created}")
+                
+                # Force garbage collection to free memory after each batch
+                gc.collect()
             else:
                 print(f"  No jobs to commit in batch {batch_count}")
                 
