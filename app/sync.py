@@ -27,68 +27,6 @@ import re
 
 logger = get_logger(__name__)
 
-def safe_safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
-    """Safely log a sync event, converting problematic types."""
-    try:
-        # Convert problematic types to safe JSON-serializable types
-        def make_json_safe(obj):
-            import numpy as np
-            import pandas as pd
-            from datetime import datetime, date
-            from decimal import Decimal
-            
-            if obj is pd.NA:
-                return None
-            if isinstance(obj, (np.integer, np.int64, np.int32)):
-                return int(obj)
-            elif isinstance(obj, (np.floating, np.float64, np.float32)):
-                return float(obj)
-            elif isinstance(obj, (np.bool_,)):
-                return bool(obj)
-            elif isinstance(obj, np.ndarray):
-                return obj.tolist()
-            elif isinstance(obj, pd.Timestamp):
-                return obj.isoformat()
-            elif isinstance(obj, (datetime, date)):
-                return obj.isoformat()
-            elif isinstance(obj, Decimal):
-                return float(obj)
-            elif hasattr(obj, 'item'):  # other numpy scalars
-                return obj.item()
-            elif isinstance(obj, dict):
-                return {k: make_json_safe(v) for k, v in obj.items()}
-            elif isinstance(obj, (list, tuple)):
-                return [make_json_safe(item) for item in obj]
-            elif isinstance(obj, set):
-                return [make_json_safe(item) for item in obj]
-            else:
-                return obj
-        
-        # Extract well-known identifiers for first-class columns
-        job_id = kwargs.pop("job_id", None)
-        trello_card_id = kwargs.pop("trello_card_id", None) or kwargs.pop("card_id", None)
-        excel_identifier = kwargs.pop("excel_identifier", None)
-
-        safe_data = make_json_safe(kwargs)
-        
-        sync_log = SyncLog(
-            operation_id=operation_id,
-            level=level,
-            message=message,
-            job_id=job_id,
-            trello_card_id=trello_card_id,
-            excel_identifier=excel_identifier,
-            data=safe_data
-        )
-        db.session.add(sync_log)
-        db.session.commit()
-    except Exception as e:
-        # Don't let logging failures break the sync
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        logger.warning("Failed to log sync event", error=str(e), operation_id=operation_id, message=message)
 
 def safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
     """Safely log a sync event, converting problematic types."""
@@ -153,10 +91,23 @@ def safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
             pass
         logger.warning("Failed to log sync event", error=str(e), operation_id=operation_id, message=message)
 
+def safe_sync_op_call(sync_op, func, *args, **kwargs):
+    """Safely call a function with sync operation context."""
+    if sync_op:
+        try:
+            return func(sync_op.operation_id, *args, **kwargs)
+        except Exception as e:
+            logger.warning("Failed to execute sync operation call", 
+                         error=str(e), 
+                         operation_id=sync_op.operation_id,
+                         function_name=func.__name__ if hasattr(func, '__name__') else str(func))
+    return None
+
 def check_database_connection():
     """Check if database connection is working."""
     try:
-        db.session.execute("SELECT 1")
+        from sqlalchemy import text
+        db.session.execute(text("SELECT 1"))
         return True
     except Exception as e:
         logger.warning("Database connection check failed", error=str(e))
@@ -277,7 +228,7 @@ def sync_from_trello(event_info):
         source_system="trello",
         source_id=card_id
     )
-    safe_safe_log_sync_event(
+    safe_log_sync_event(
         sync_op.operation_id,
         "INFO",
         "SyncOperation created",
@@ -289,7 +240,7 @@ def sync_from_trello(event_info):
         try:
             # Update operation status
             update_sync_operation(sync_op.operation_id, status=SyncStatus.IN_PROGRESS)
-            safe_safe_log_sync_event(
+            safe_log_sync_event(
                 sync_op.operation_id, "INFO", "SyncOperation in_progress", trello_card_id=card_id
             )
             
@@ -530,32 +481,46 @@ def sync_from_trello(event_info):
             # Rollback any pending database changes
             try:
                 db.session.rollback()
-            except:
-                pass
+            except Exception as rollback_error:
+                logger.warning("Failed to rollback database changes", 
+                             error=str(rollback_error), 
+                             operation_id=sync_op.operation_id)
                 
-            logger.error(
-                "Trello sync failed",
-                operation_id=sync_op.operation_id,
-                card_id=card_id,
-                error=str(e),
-                error_type=type(e).__name__
-            )
-            safe_log_sync_event(
-                sync_op.operation_id,
-                "ERROR",
-                "Trello sync failed",
-                trello_card_id=card_id,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
-            update_sync_operation(
-                sync_op.operation_id,
-                status=SyncStatus.FAILED,
-                error_type=type(e).__name__,
-                error_message=str(e),
-                completed_at=datetime.utcnow(),
-                duration_seconds=(datetime.utcnow() - sync_op.started_at).total_seconds()
-            )
+            error_context = {
+                "operation_id": sync_op.operation_id,
+                "card_id": card_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "event_type": event_info.get("event") if event_info else None
+            }
+            
+            logger.error("Trello sync failed", **error_context)
+            
+            try:
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "ERROR",
+                    "Trello sync failed",
+                    trello_card_id=card_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    event_type=event_info.get("event") if event_info else None
+                )
+            except Exception as log_error:
+                logger.warning("Failed to log sync error", error=str(log_error))
+            
+            try:
+                update_sync_operation(
+                    sync_op.operation_id,
+                    status=SyncStatus.FAILED,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    completed_at=datetime.utcnow(),
+                    duration_seconds=(datetime.utcnow() - sync_op.started_at).total_seconds()
+                )
+            except Exception as update_error:
+                logger.warning("Failed to update sync operation status", error=str(update_error))
+            
             raise
 
 # Determine Trello list based on Excel/DB status
@@ -601,46 +566,62 @@ def sync_from_onedrive(data):
     """
     # Check database connection before creating sync operation
     sync_op = None
-    if check_database_connection():
-        sync_op = create_sync_operation(
-            operation_type="onedrive_poll",
-            source_system="onedrive",
-            source_id=None,
-        )
-        safe_safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created")
-        logger.info("OneDrive poll sync operation logged to database", operation_id=sync_op.operation_id)
-    else:
-        logger.warning("Database connection unavailable - proceeding without sync operation logging")
+    try:
+        if check_database_connection():
+            sync_op = create_sync_operation(
+                operation_type="onedrive_poll",
+                source_system="onedrive",
+                source_id=None,
+            )
+            safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created")
+            logger.info("OneDrive poll sync operation logged to database", operation_id=sync_op.operation_id)
+        else:
+            logger.warning("Database connection unavailable - proceeding without sync operation logging")
+    except Exception as e:
+        logger.warning("Failed to create sync operation - proceeding without database logging", error=str(e))
 
     try:
-        # Helper function to safely handle sync operations
-        def safe_sync_op_call(func, *args, **kwargs):
-            if sync_op:
-                try:
-                    return func(sync_op.operation_id, *args, **kwargs)
-                except Exception as e:
-                    logger.warning("Failed to update sync operation", error=str(e))
-            return None
         
         # Only update sync operation if it was successfully created
-        safe_sync_op_call(update_sync_operation, status=SyncStatus.IN_PROGRESS)
-        safe_sync_op_call(safe_safe_log_sync_event, "INFO", "SyncOperation in_progress")
+        safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.IN_PROGRESS)
+        safe_sync_op_call(sync_op, safe_log_sync_event, "INFO", "SyncOperation in_progress")
 
         if data is None:
             logger.info("No data received from OneDrive polling")
-            safe_sync_op_call(safe_log_sync_event, "INFO", "No data received from OneDrive polling")
-            safe_sync_op_call(update_sync_operation, status=SyncStatus.SKIPPED)
+            safe_log_sync_event(sync_op.operation_id, "INFO", "No data received from OneDrive polling")
+            safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.SKIPPED)
             return
 
         if "last_modified_time" not in data or "data" not in data:
             logger.warning("Invalid OneDrive polling data format")
-            safe_sync_op_call(safe_log_sync_event, "WARNING", "Invalid OneDrive polling data format")
-            safe_sync_op_call(update_sync_operation, status=SyncStatus.FAILED, error_type="InvalidPayload")
+            safe_log_sync_event(sync_op.operation_id, "WARNING", "Invalid OneDrive polling data format")
+            safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.FAILED, error_type="InvalidPayload")
             return
 
         # Convert Excel last_modified_time (string) → datetime
-        excel_last_updated = parse_excel_datetime(data["last_modified_time"])
+        try:
+            excel_last_updated = parse_excel_datetime(data["last_modified_time"])
+        except Exception as e:
+            logger.error("Failed to parse Excel last modified time", 
+                        error=str(e), 
+                        last_modified_time=data.get("last_modified_time"))
+            safe_log_sync_event(sync_op.operation_id, "ERROR", 
+                              "Failed to parse Excel last modified time",
+                              error=str(e),
+                              last_modified_time=data.get("last_modified_time"))
+            safe_sync_op_call(sync_op, update_sync_operation, 
+                            status=SyncStatus.FAILED, 
+                            error_type="InvalidTimestamp")
+            return
+            
         df = data["data"]
+        
+        # Validate DataFrame
+        if df is None or df.empty:
+            logger.warning("Empty DataFrame received from OneDrive")
+            safe_log_sync_event(sync_op.operation_id, "WARNING", "Empty DataFrame received")
+            safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.SKIPPED)
+            return
 
         logger.info(f"Processing OneDrive data last modified at {excel_last_updated}")
         logger.info(f"DataFrame {df.shape[0]} rows, {df.shape[1]} columns")
@@ -838,16 +819,30 @@ def sync_from_onedrive(data):
         # Commit all DB updates at once
         if updated_records:
             logger.info(f"Committing {len(updated_records)} updated records to DB.")
-            for rec, _ in updated_records:
-                db.session.add(rec)
-            db.session.commit()
-            logger.info(f"Committed {len(updated_records)} updated records to DB.")
-            safe_log_sync_event(
-                sync_op.operation_id,
-                "INFO",
-                "DB commit completed",
-                updated_records=len(updated_records),
-            )
+            try:
+                for rec, _ in updated_records:
+                    db.session.add(rec)
+                db.session.commit()
+                logger.info(f"Committed {len(updated_records)} updated records to DB.")
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "INFO",
+                    "DB commit completed",
+                    updated_records=len(updated_records),
+                )
+            except Exception as commit_error:
+                logger.error("Failed to commit database changes", 
+                           error=str(commit_error),
+                           updated_records=len(updated_records))
+                safe_log_sync_event(sync_op.operation_id, "ERROR", 
+                                  "Failed to commit database changes",
+                                  error=str(commit_error),
+                                  updated_records=len(updated_records))
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                raise
 
             # Trello update: due dates and list movement ONLY if the last update was NOT from Trello
             for rec, is_formula in updated_records:
@@ -920,49 +915,65 @@ def sync_from_onedrive(data):
                             )
         else:
             logger.info("[SYNC] No records needed updating.")
-            safe_sync_op_call(safe_log_sync_event, "INFO", "No records needed updating")
+            safe_log_sync_event(sync_op.operation_id, "INFO", "No records needed updating")
 
         # Mark operation as completed
         if sync_op:
             try:
                 duration = (datetime.utcnow() - sync_op.started_at).total_seconds()
-                safe_sync_op_call(update_sync_operation, 
+                safe_sync_op_call(sync_op, update_sync_operation, 
                     status=SyncStatus.COMPLETED,
                     completed_at=datetime.utcnow(),
                     duration_seconds=duration
                 )
-                safe_sync_op_call(safe_log_sync_event, "INFO", "SyncOperation completed")
+                safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation completed")
             except Exception as e:
                 logger.warning("Failed to mark sync operation as completed", error=str(e))
         else:
             logger.info("OneDrive sync completed successfully (no database logging available)")
 
     except Exception as e:
+        # Rollback any pending database changes
         try:
             db.session.rollback()
-        except Exception:
-            pass
-        logger.error("OneDrive sync failed", error=str(e), error_type=type(e).__name__)
+        except Exception as rollback_error:
+            logger.warning("Failed to rollback database changes", 
+                         error=str(rollback_error),
+                         operation_id=sync_op.operation_id if sync_op else None)
+        
+        error_context = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "operation_id": sync_op.operation_id if sync_op else None,
+            "data_shape": data.get("data").shape if data and "data" in data else None
+        }
+        
+        logger.error("OneDrive sync failed", **error_context)
         
         # Try to log the error to database if possible
         if sync_op:
             try:
                 duration = (datetime.utcnow() - sync_op.started_at).total_seconds()
-                safe_sync_op_call(update_sync_operation,
+                safe_sync_op_call(sync_op, update_sync_operation,
                     status=SyncStatus.FAILED,
                     error_type=type(e).__name__,
                     error_message=str(e),
                     completed_at=datetime.utcnow(),
                     duration_seconds=duration
                 )
-                safe_sync_op_call(safe_log_sync_event,
+                safe_log_sync_event(sync_op.operation_id,
                     "ERROR",
                     "OneDrive sync failed",
                     error=str(e),
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__,
+                    data_shape=data.get("data").shape if data and "data" in data else None
                 )
             except Exception as db_error:
-                logger.warning("Failed to log sync error to database", db_error=str(db_error))
+                logger.warning("Failed to log sync error to database", 
+                             db_error=str(db_error),
+                             operation_id=sync_op.operation_id)
         else:
-            logger.info("OneDrive sync failed (no database logging available)", error=str(e))
+            logger.info("OneDrive sync failed (no database logging available)", 
+                       error=str(e), 
+                       error_type=type(e).__name__)
         raise
