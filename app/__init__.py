@@ -18,7 +18,7 @@ from sqlalchemy import func
 logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 def init_scheduler(app):
-    """Initialize the scheduler to run the OneDrive poll every 6 hours."""
+    """Initialize the scheduler to run the OneDrive poll every hour on the hour."""
     from app.onedrive.utils import run_onedrive_poll
     from app.sync_lock import sync_lock_manager
 
@@ -73,14 +73,14 @@ def init_scheduler(app):
 
     scheduler.add_job(
         func=scheduled_run,
-        trigger="interval",
-        minutes=360,  # 6 hours
+        trigger="cron",
+        minute=0,  # Run at minute 0 of every hour (top of the hour)
         id="onedrive_poll",
         name="OneDrive Polling Job",
     )
 
     scheduler.start()
-    logger.info("OneDrive polling scheduler started", interval_hours=6)
+    logger.info("OneDrive polling scheduler started", schedule="every hour on the hour")
     return scheduler
 
 def create_app():
