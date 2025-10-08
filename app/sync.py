@@ -286,7 +286,7 @@ def sync_from_trello(event_info):
                 )
             else:
                 logger.info(
-                    "No DB record found for card",
+                    "No DB record found for card - ignoring webhook",
                     operation_id=sync_op.operation_id,
                     card_id=card_id,
                     trello_name=card_data.get("name")
@@ -294,10 +294,12 @@ def sync_from_trello(event_info):
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "INFO",
-                    "No DB record found for card",
+                    "No DB record found for card - ignoring webhook",
                     trello_card_id=card_id,
                     trello_name=card_data.get("name"),
                 )
+                update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="NoDbRecord")
+                return
 
             # Check for duplicate updates
             if rec and rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
