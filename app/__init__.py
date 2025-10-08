@@ -18,7 +18,7 @@ from sqlalchemy import func
 logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 def init_scheduler(app):
-    """Initialize the scheduler to run the OneDrive poll every 2 minutes."""
+    """Initialize the scheduler to run the OneDrive poll every 6 hours."""
     from app.onedrive.utils import run_onedrive_poll
     from app.sync_lock import sync_lock_manager
 
@@ -74,13 +74,13 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="interval",
-        minutes=180,
+        minutes=360,  # 6 hours
         id="onedrive_poll",
         name="OneDrive Polling Job",
     )
 
     scheduler.start()
-    logger.info("OneDrive polling scheduler started", interval_minutes=2)
+    logger.info("OneDrive polling scheduler started", interval_hours=6)
     return scheduler
 
 def create_app():
@@ -97,17 +97,59 @@ def create_app():
     
     db.init_app(app)
 
-    # Initialize the database
+    # Initialize the database - only create tables, don't drop and reseed
     with app.app_context():
-        db.drop_all()
+        # Only create tables if they don't exist
         db.create_all()
-        combined_data = combine_trello_excel_data()
-        seed_from_combined_data(combined_data)
+        
+        # Check if we need to seed the database (only if empty)
+        from app.models import Job
+        job_count = Job.query.count()
+        if job_count == 0:
+            print(f"No jobs found in database, seeding with fresh data...")
+            combined_data = combine_trello_excel_data()
+            seed_from_combined_data(combined_data)
+        else:
+            print(f"Database already contains {job_count} jobs, skipping seed.")
 
     # Index route
     @app.route("/")
     def index():
         return "Welcome to the Trello OneDrive Sync App!"
+
+    # Jobs route - display all jobs in database
+    @app.route("/jobs")
+    def list_jobs():
+        from app.models import Job
+        try:
+            jobs = Job.query.all()
+            job_list = []
+            for job in jobs:
+                job_data = {
+                    'id': job.id,
+                    'job': job.job,
+                    'release': job.release,
+                    'job_name': job.job_name,
+                    'description': job.description,
+                    'pm': job.pm,
+                    'by': job.by,
+                    'released': job.released.isoformat() if job.released else None,
+                    'fab_hrs': job.fab_hrs,
+                    'install_hrs': job.install_hrs,
+                    'paint_color': job.paint_color,
+                    'trello_card_name': job.trello_card_name,
+                    'trello_list_name': job.trello_list_name,
+                    'last_updated_at': job.last_updated_at.isoformat() if job.last_updated_at else None,
+                    'source_of_update': job.source_of_update
+                }
+                job_list.append(job_data)
+            
+            return jsonify({
+                'total_jobs': len(job_list),
+                'jobs': job_list
+            }), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     # Sync status route
     @app.route("/sync/status")
