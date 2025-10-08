@@ -66,7 +66,7 @@ def get_excel_dataframe():
     df_final = df_all.dropna(subset=["Job #", "Release #"]).copy()
 
     wb = load_workbook(BytesIO(file_bytes), data_only=False)
-    ws = wb[wb.sheetnames[sheet_name]]
+    ws = wb[sheet_name]
 
     formula_col = 17  # Q
     formulas, has_formula = [], []
