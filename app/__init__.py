@@ -74,7 +74,11 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute=0,  # Run at minute 0 of every hour (top of the hour)
+        minute=10,  # Run at minute 0 of every hour
+        hour="*",  # Every hour (0-23)
+        day="*",   # Every day
+        month="*", # Every month
+        day_of_week="*",  # Every day of the week
         id="onedrive_poll",
         name="OneDrive Polling Job",
     )
