@@ -153,6 +153,15 @@ def safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
             pass
         logger.warning("Failed to log sync event", error=str(e), operation_id=operation_id, message=message)
 
+def check_database_connection():
+    """Check if database connection is working."""
+    try:
+        db.session.execute("SELECT 1")
+        return True
+    except Exception as e:
+        logger.warning("Database connection check failed", error=str(e))
+        return False
+
 def create_sync_operation(operation_type: str, source_system: str = None, source_id: str = None) -> SyncOperation:
     """Create a new sync operation record."""
     operation_id = str(uuid.uuid4())[:8]
@@ -590,28 +599,43 @@ def sync_from_onedrive(data):
     Sync data from OneDrive to Trello based on the polling payload
     TODO: List movement mapping errors, duplicate db records being passed on one change
     """
-    # Create SyncOperation for OneDrive polling
-    sync_op = create_sync_operation(
-        operation_type="onedrive_poll",
-        source_system="onedrive",
-        source_id=None,
-    )
-    safe_safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created")
+    # Check database connection before creating sync operation
+    sync_op = None
+    if check_database_connection():
+        sync_op = create_sync_operation(
+            operation_type="onedrive_poll",
+            source_system="onedrive",
+            source_id=None,
+        )
+        safe_safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created")
+        logger.info("OneDrive poll sync operation logged to database", operation_id=sync_op.operation_id)
+    else:
+        logger.warning("Database connection unavailable - proceeding without sync operation logging")
 
     try:
-        update_sync_operation(sync_op.operation_id, status=SyncStatus.IN_PROGRESS)
-        safe_safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation in_progress")
+        # Helper function to safely handle sync operations
+        def safe_sync_op_call(func, *args, **kwargs):
+            if sync_op:
+                try:
+                    return func(sync_op.operation_id, *args, **kwargs)
+                except Exception as e:
+                    logger.warning("Failed to update sync operation", error=str(e))
+            return None
+        
+        # Only update sync operation if it was successfully created
+        safe_sync_op_call(update_sync_operation, status=SyncStatus.IN_PROGRESS)
+        safe_sync_op_call(safe_safe_log_sync_event, "INFO", "SyncOperation in_progress")
 
         if data is None:
             logger.info("No data received from OneDrive polling")
-            safe_log_sync_event(sync_op.operation_id, "INFO", "No data received from OneDrive polling")
-            update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED)
+            safe_sync_op_call(safe_log_sync_event, "INFO", "No data received from OneDrive polling")
+            safe_sync_op_call(update_sync_operation, status=SyncStatus.SKIPPED)
             return
 
         if "last_modified_time" not in data or "data" not in data:
             logger.warning("Invalid OneDrive polling data format")
-            safe_log_sync_event(sync_op.operation_id, "WARNING", "Invalid OneDrive polling data format")
-            update_sync_operation(sync_op.operation_id, status=SyncStatus.FAILED, error_type="InvalidPayload")
+            safe_sync_op_call(safe_log_sync_event, "WARNING", "Invalid OneDrive polling data format")
+            safe_sync_op_call(update_sync_operation, status=SyncStatus.FAILED, error_type="InvalidPayload")
             return
 
         # Convert Excel last_modified_time (string) → datetime
@@ -896,16 +920,22 @@ def sync_from_onedrive(data):
                             )
         else:
             logger.info("[SYNC] No records needed updating.")
-            safe_log_sync_event(sync_op.operation_id, "INFO", "No records needed updating")
+            safe_sync_op_call(safe_log_sync_event, "INFO", "No records needed updating")
 
         # Mark operation as completed
-        update_sync_operation(
-            sync_op.operation_id,
-            status=SyncStatus.COMPLETED,
-            completed_at=datetime.utcnow(),
-            duration_seconds=(datetime.utcnow() - sync_op.started_at).total_seconds(),
-        )
-        safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation completed")
+        if sync_op:
+            try:
+                duration = (datetime.utcnow() - sync_op.started_at).total_seconds()
+                safe_sync_op_call(update_sync_operation, 
+                    status=SyncStatus.COMPLETED,
+                    completed_at=datetime.utcnow(),
+                    duration_seconds=duration
+                )
+                safe_sync_op_call(safe_log_sync_event, "INFO", "SyncOperation completed")
+            except Exception as e:
+                logger.warning("Failed to mark sync operation as completed", error=str(e))
+        else:
+            logger.info("OneDrive sync completed successfully (no database logging available)")
 
     except Exception as e:
         try:
@@ -913,19 +943,26 @@ def sync_from_onedrive(data):
         except Exception:
             pass
         logger.error("OneDrive sync failed", error=str(e), error_type=type(e).__name__)
-        safe_log_sync_event(
-            sync_op.operation_id,
-            "ERROR",
-            "OneDrive sync failed",
-            error=str(e),
-            error_type=type(e).__name__,
-        )
-        update_sync_operation(
-            sync_op.operation_id,
-            status=SyncStatus.FAILED,
-            error_type=type(e).__name__,
-            error_message=str(e),
-            completed_at=datetime.utcnow(),
-            duration_seconds=(datetime.utcnow() - sync_op.started_at).total_seconds(),
-        )
+        
+        # Try to log the error to database if possible
+        if sync_op:
+            try:
+                duration = (datetime.utcnow() - sync_op.started_at).total_seconds()
+                safe_sync_op_call(update_sync_operation,
+                    status=SyncStatus.FAILED,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    completed_at=datetime.utcnow(),
+                    duration_seconds=duration
+                )
+                safe_sync_op_call(safe_log_sync_event,
+                    "ERROR",
+                    "OneDrive sync failed",
+                    error=str(e),
+                    error_type=type(e).__name__
+                )
+            except Exception as db_error:
+                logger.warning("Failed to log sync error to database", db_error=str(db_error))
+        else:
+            logger.info("OneDrive sync failed (no database logging available)", error=str(e))
         raise

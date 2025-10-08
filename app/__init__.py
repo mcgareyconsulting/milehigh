@@ -95,6 +95,17 @@ def create_app():
     if database_url:
         # For production databases (PostgreSQL, MySQL, etc.)
         app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+        
+        # Add SSL configuration for PostgreSQL connections
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True,  # Verify connections before use
+            "pool_recycle": 300,    # Recycle connections every 5 minutes
+            "connect_args": {
+                "sslmode": "prefer",  # Try SSL but fallback to non-SSL if needed
+                "connect_timeout": 10,
+                "application_name": "trello_sharepoint_app"
+            }
+        }
     else:
         # Fallback to SQLite for local development
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
