@@ -37,6 +37,10 @@ def get_excel_row_and_index_by_identifiers(job, release):
                Returns (None, None) if not found.
     """
     df = get_excel_dataframe()
+
+    # Release # should be string (handle mixed types)
+    df["Release #"] = df["Release #"].astype(str)
+
     # Ensure job is int, but keep release as string to preserve format like "v862"
     job = int(job)
     # Convert release to string to handle cases like "v862"
@@ -49,13 +53,7 @@ def get_excel_row_and_index_by_identifiers(job, release):
     if "Job #" not in df.columns or "Release #" not in df.columns:
         logger.error(f"Required columns not found. Available columns: {list(df.columns)}")
         return None, None
-    
-    # Debug: Show some sample values
-    if not df.empty:
-        logger.info(f"Sample Job # values: {df['Job #'].head().tolist()}")
-        logger.info(f"Sample Release # values: {df['Release #'].head().tolist()}")
-        logger.info(f"Job # column dtype: {df['Job #'].dtype}")
-        logger.info(f"Release # column dtype: {df['Release #'].dtype}")
+
 
     match = df[(df["Job #"] == job) & (df["Release #"] == release)]
     if not match.empty:
@@ -65,12 +63,6 @@ def get_excel_row_and_index_by_identifiers(job, release):
         return idx, row
     else:
         logger.warning(f"No row found for Job # {job} and Release # {release}.")
-        # Additional debugging: check if any rows match just the job number
-        job_matches = df[df["Job #"] == job]
-        if not job_matches.empty:
-            logger.info(f"Found {len(job_matches)} rows with Job # {job}, but different Release # values: {job_matches['Release #'].tolist()}")
-        else:
-            logger.info(f"No rows found with Job # {job} at all")
         return None, None
 
 
