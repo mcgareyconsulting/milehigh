@@ -65,6 +65,9 @@ def get_excel_dataframe():
 
     df_final = df_all.dropna(subset=["Job #", "Release #"]).copy()
 
+    # Release # should be string (handle mixed types)
+    df_final["Release #"] = df_final["Release #"].astype(str)
+
     wb = load_workbook(BytesIO(file_bytes), data_only=False)
     ws = wb[sheet_name]
 

@@ -220,6 +220,9 @@ def sync_from_trello(event_info):
         return
 
     card_id = event_info["card_id"]
+    # print type of card id
+    print(type(card_id))
+    
     event_time = parse_trello_datetime(event_info.get("time"))
     
     # Create sync operation record
@@ -262,7 +265,6 @@ def sync_from_trello(event_info):
                 return
 
             rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
-            print(rec)
             
             # Log comparison data
             if rec:
