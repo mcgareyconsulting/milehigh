@@ -2309,3 +2309,5 @@
 {"event": "Drained Trello event completed successfully"}
 {"event": "Sync lock released for operation: Trello-Queue"}
 {"event": "Drained sync completed in 2.88s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:33:07.082533Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:33:26.833978Z\"}"}
