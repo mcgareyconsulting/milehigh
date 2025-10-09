@@ -2224,3 +2224,88 @@
 {"event": "Trello sync completed successfully"}
 {"event": "Sync lock released for operation: Trello-Hook"}
 {"event": "Sync completed in 57.25s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:03:40.387143Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:03:42.234805Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:03:43.497526Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:03:45.185608Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": " * Detected change in '/Users/danielmcgarey/Desktop/Mile High Metal Works/trello_sharepoint/app/sync.py', reloading"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:09:25.799563Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:09:27.491255Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": " * Detected change in '/Users/danielmcgarey/Desktop/Mile High Metal Works/trello_sharepoint/app/sync.py', reloading"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:09:34.311501Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:09:36.066063Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": " * Detected change in '/Users/danielmcgarey/Desktop/Mile High Metal Works/trello_sharepoint/app/sync.py', reloading"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:09:44.778449Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:09:46.427961Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='10'], next run at: 2025-10-09 11:10:00 MDT)\" (scheduled at 2025-10-09 11:10:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:00.004217Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='10'], next run at: 2025-10-09 11:10:00 MDT)\" (scheduled at 2025-10-09 11:10:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:00.100155Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"33150b9a\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:26.168375Z\"}"}
+{"event": "{\"operation_id\": \"aedef56e\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:26.283250Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-09 17:04:06\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:26.667534Z\"}"}
+{"event": "{\"event\": \"DataFrame 290 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:26.667942Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-09 17:04:06\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:26.774719Z\"}"}
+{"event": "{\"event\": \"DataFrame 290 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:26.775063Z\"}"}
+{"event": "{\"event\": \"390-751 Updating DB ship: 'X' -> 'O'\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:33.921422Z\"}"}
+{"event": "{\"event\": \"390-751 Updating DB ship: 'X' -> 'O'\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:34.048020Z\"}"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:45.942951Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:46.003411Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 68d2b9067277d719773bebab: Due Date={new_due_date} (was 2025-10-06), List={new_list_name} (was Shipping completed)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:46.790471Z\"}"}
+{"event": "Trello webhook queued due to active lock"}
+{"event": "127.0.0.1 - - [09/Oct/2025 11:10:47] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:57.660459Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:57.720673Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "Sync lock acquired for operation: Trello-Queue"}
+{"event": "Drained Trello event started with lock acquired"}
+{"event": "{\"drained\": 1, \"event\": \"Post-drain Trello queue\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:58.880864Z\"}"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:58.882116Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='10'], next run at: 2025-10-09 12:10:00 MDT)\" executed successfully"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:59.041039Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='10'], next run at: 2025-10-09 12:10:00 MDT)\" executed successfully"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"1e77bc80\", \"start_time\": \"2025-10-09T17:10:59.587627\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:10:59.587884Z\"}"}
+{"event": "{\"operation_id\": \"1e77bc80\", \"card_id\": \"68d2b9067277d719773bebab\", \"event_time\": \"2025-10-09T17:10:47.513000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:11:00.283856Z\"}"}
+{"event": "{\"operation_id\": \"1e77bc80\", \"card_id\": \"68d2b9067277d719773bebab\", \"job_id\": 26, \"trello_name\": \"390-751 Thompson Thrift - Heritage on Hover Interior Window Frame\", \"db_name\": \"390-751 Thompson Thrift - Heritage on Hover Interior Window Frame\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:11:00.901567Z\"}"}
+{"event": "{\"operation_id\": \"1e77bc80\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:11:01.276530Z\"}"}
+{"event": "{\"operation_id\": \"1e77bc80\", \"card_id\": \"68d2b9067277d719773bebab\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:11:01.277404Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"1e77bc80\", \"duration_seconds\": 2.170429, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-09T17:11:01.758139Z\"}"}
+{"event": "Drained Trello event completed successfully"}
+{"event": "Sync lock released for operation: Trello-Queue"}
+{"event": "Drained sync completed in 2.88s"}
