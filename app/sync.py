@@ -262,6 +262,7 @@ def sync_from_trello(event_info):
                 return
 
             rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
+            print(rec)
             
             # Log comparison data
             if rec:
@@ -401,6 +402,16 @@ def sync_from_trello(event_info):
                         "P": rec.ship,
                     }
 
+                    # Debug the lookup values
+                    logger.info(
+                        "Looking up Excel row",
+                        operation_id=sync_op.operation_id,
+                        job=rec.job,
+                        release=rec.release,
+                        job_type=type(rec.job).__name__,
+                        release_type=type(rec.release).__name__
+                    )
+                    
                     index, row = get_excel_row_and_index_by_identifiers(rec.job, rec.release)
                     if index and row is not None:
                         logger.info(
@@ -453,7 +464,15 @@ def sync_from_trello(event_info):
                                     value=val,
                                 )
                     else:
-                        logger.warning("Excel row not found for update", operation_id=sync_op.operation_id, job=rec.job, release=rec.release)
+                        logger.warning(
+                            "Excel row not found for update", 
+                            operation_id=sync_op.operation_id, 
+                            job=rec.job, 
+                            release=rec.release,
+                            job_type=type(rec.job).__name__,
+                            release_type=type(rec.release).__name__,
+                            excel_identifier=f"{rec.job}-{rec.release}"
+                        )
                         safe_log_sync_event(
                             sync_op.operation_id,
                             "WARNING",
@@ -463,6 +482,8 @@ def sync_from_trello(event_info):
                             excel_identifier=f"{rec.job}-{rec.release}",
                             job=rec.job,
                             release=rec.release,
+                            job_type=type(rec.job).__name__,
+                            release_type=type(rec.release).__name__
                         )
             else:
                 logger.info("No update needed for card", operation_id=sync_op.operation_id, card_id=card_id)
