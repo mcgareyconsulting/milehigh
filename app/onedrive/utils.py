@@ -38,9 +38,6 @@ def get_excel_row_and_index_by_identifiers(job, release):
     """
     df = get_excel_dataframe()
 
-    # Release # should be string (handle mixed types)
-    df["Release #"] = df["Release #"].astype(str)
-
     # Ensure job is int, but keep release as string to preserve format like "v862"
     job = int(job)
     # Convert release to string to handle cases like "v862"
@@ -48,6 +45,9 @@ def get_excel_row_and_index_by_identifiers(job, release):
 
     # Debug: Log what we're looking for and what's available
     logger.info(f"Looking for Job # {job} (type: {type(job)}) and Release # {release} (type: {type(release)})")
+    
+    print("Dataframe shit:", df["Job #"].values)
+    print("Dataframe shit:", df["Release #"].values)
     
     # Check if the columns exist
     if "Job #" not in df.columns or "Release #" not in df.columns:
