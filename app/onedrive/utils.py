@@ -46,9 +46,7 @@ def get_excel_row_and_index_by_identifiers(job, release):
     # Debug: Log what we're looking for and what's available
     logger.info(f"Looking for Job # {job} (type: {type(job)}) and Release # {release} (type: {type(release)})")
     
-    print("Dataframe shit:", df["Job #"].values)
-    print("Dataframe shit:", df["Release #"].values)
-    
+
     # Check if the columns exist
     if "Job #" not in df.columns or "Release #" not in df.columns:
         logger.error(f"Required columns not found. Available columns: {list(df.columns)}")
