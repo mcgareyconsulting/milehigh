@@ -34,33 +34,43 @@ def get_excel_row_and_index_by_identifiers(job, release):
     Returns:
         tuple: (index, pandas.Series) where index is the DataFrame index (int),
                and pandas.Series is the matching row.
-               Returns (None, None) if not found.
+               Returns (None, None) if not found or if Excel reading fails.
     """
-    df = get_excel_dataframe()
+    try:
+        df = get_excel_dataframe()
+    except Exception as e:
+        logger.error(f"Failed to read Excel file: {str(e)}")
+        return None, None
 
     # Ensure job is int, but keep release as string to preserve format like "v862"
-    job = int(job)
-    # Convert release to string to handle cases like "v862"
-    release = str(release)
+    try:
+        job = int(job)
+        # Convert release to string to handle cases like "v862"
+        release = str(release)
+    except (ValueError, TypeError) as e:
+        logger.error(f"Invalid job or release identifiers: job={job}, release={release}, error={str(e)}")
+        return None, None
 
     # Debug: Log what we're looking for and what's available
     logger.info(f"Looking for Job # {job} (type: {type(job)}) and Release # {release} (type: {type(release)})")
     
-
     # Check if the columns exist
     if "Job #" not in df.columns or "Release #" not in df.columns:
         logger.error(f"Required columns not found. Available columns: {list(df.columns)}")
         return None, None
 
-
-    match = df[(df["Job #"] == job) & (df["Release #"] == release)]
-    if not match.empty:
-        idx = match.index[0] + cfg.EXCEL_INDEX_ADJ
-        row = match.iloc[0]
-        logger.info(f"Found match at DataFrame index {match.index[0]}, Excel row {idx}")
-        return idx, row
-    else:
-        logger.warning(f"No row found for Job # {job} and Release # {release}.")
+    try:
+        match = df[(df["Job #"] == job) & (df["Release #"] == release)]
+        if not match.empty:
+            idx = match.index[0] + cfg.EXCEL_INDEX_ADJ
+            row = match.iloc[0]
+            logger.info(f"Found match at DataFrame index {match.index[0]}, Excel row {idx}")
+            return idx, row
+        else:
+            logger.warning(f"No row found for Job # {job} and Release # {release}.")
+            return None, None
+    except Exception as e:
+        logger.error(f"Error searching for Excel row: {str(e)}")
         return None, None
 
 

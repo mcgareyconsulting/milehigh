@@ -156,7 +156,7 @@ def rectify_db_on_trello_move(job, new_trello_list, operation_id: str):
         job.fitup_comp = "X"
         job.welded = "X"
         job.paint_comp = "X"
-        job.ship = "O"
+        job.ship = "T"
     elif new_trello_list == "Fit Up Complete.":
         job.fitup_comp = "X"
         job.welded = "O"
@@ -569,7 +569,7 @@ def determine_trello_list_from_db(rec):
         rec.fitup_comp == "X"
         and rec.welded == "O"
         and rec.paint_comp == None
-        and rec.ship == None
+        and rec.ship == "T"
     ):
         return "Fit Up Complete."
     elif (
