@@ -2857,3 +2857,92 @@
 {"event": "127.0.0.1 - - [11/Oct/2025 15:11:06] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [11/Oct/2025 15:11:08] \"\u001b[33mGET /sync/operations/ HTTP/1.1\u001b[0m\" 404 -"}
 {"event": "127.0.0.1 - - [11/Oct/2025 15:11:10] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:16:56.913132Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:16:56.981817Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:17:04.907335Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:04.975107Z\"}"}
+{"event": "{\"event\": \"Manual poll attempted with incorrect password\", \"logger\": \"app\", \"level\": \"warning\", \"timestamp\": \"2025-10-11T21:17:04.984036Z\"}"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:04.987450Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"error\": \"_log() got an unexpected keyword argument 'trigger_source'\", \"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll failed\", \"logger\": \"app\", \"level\": \"error\", \"timestamp\": \"2025-10-11T21:17:04.988038Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:17:27.071177Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:27.132006Z\"}"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:27.140654Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"2f8cc651\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:46.030261Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 20:57:53\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:46.055256Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:46.055573Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:46.184222Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:46.280609Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:17:46.291076Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:19:58.198990Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:19:58.284881Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:20:28] \"GET /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:20:33] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:38.023147Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"c7f70f9e\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:55.669826Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:55.700041Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:55.700609Z\"}"}
+{"event": "{\"event\": \"900-276 Updating DB start_install (formula-driven): datetime.date(2025, 5, 9) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:55.935502Z\"}"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:56.093354Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:56.094832Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e095dc: Due Date={new_due_date} (was 2025-05-09), List={new_list_name} (was Paint complete)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:56.385023Z\"}"}
+{"event": "{\"operation_id\": \"c7f70f9e\", \"trello_card_id\": \"6866a00ab050408017e095dc\", \"current_due_date\": \"2025-05-09\", \"event\": \"Clearing due date for Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:56.393518Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:56.807832Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:20:56] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:20:57] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"2646eb79\", \"start_time\": \"2025-10-11T21:20:57.048247\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:57.048508Z\"}"}
+{"event": "{\"operation_id\": \"2646eb79\", \"card_id\": \"6866a00ab050408017e095dc\", \"event_time\": \"2025-10-11T21:20:56.714000\", \"event_type\": \"card_updated\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:57.099944Z\"}"}
+{"event": "{\"operation_id\": \"2646eb79\", \"card_id\": \"6866a00ab050408017e095dc\", \"job_id\": 10, \"trello_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"db_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:57.600321Z\"}"}
+{"event": "{\"operation_id\": \"2646eb79\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:57.606862Z\"}"}
+{"event": "{\"operation_id\": \"2646eb79\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:57.607286Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"2646eb79\", \"duration_seconds\": 0.566541, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:20:57.614830Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.59s"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:21:05] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:21:17] \"GET /sync/operations/c7f70f9e/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:21:24] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:21:26] \"GET /sync/operations/2f8cc651/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:21:32] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:21:41] \"GET /sync/operations/2f8cc651/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:21:46] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:22:07] \"GET /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:11.654323Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"6ef2eac0\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:30.783238Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:30.790415Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:30.790841Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:31.072245Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:31.209793Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:31.221072Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:22:31] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:22:36] \"GET /sync/operations/view HTTP/1.1\" 200 -"}

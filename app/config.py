@@ -18,3 +18,4 @@ class Config:
     EXCEL_INDEX_ADJ = (
         4  # Adjust for header rows in Excel (e.g., if data starts on row 5, this is 4)
     )
+    MANUAL_POLL_PASSWORD = os.environ.get("MANUAL_POLL_PASSWORD")  # Password for manual polling endpoint

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 @synchronized_sync("OneDrive-Poll")
-def run_onedrive_poll():
+def run_onedrive_poll(trigger_source="scheduled"):
     """
     Core logic for polling OneDrive and syncing.
     Used by both the manual route and the scheduler.
@@ -16,10 +16,10 @@ def run_onedrive_poll():
     """
     from app.sync import sync_from_onedrive
 
-    logger.info("OneDrive poll starting with sync lock acquired")
+    logger.info(f"OneDrive poll starting with sync lock acquired (trigger: {trigger_source})")
     event_info = parse_polling_data()
-    sync_from_onedrive(event_info)
-    logger.info("OneDrive poll completed")
+    sync_from_onedrive(event_info, trigger_source=trigger_source)
+    logger.info(f"OneDrive poll completed (trigger: {trigger_source})")
     return event_info
 
 
