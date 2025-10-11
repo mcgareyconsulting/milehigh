@@ -1,5 +1,8 @@
 import os
-from flask import Flask, jsonify, request, render_template_string
+import gc
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from flask import Flask, jsonify, request, render_template
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.config import Config
@@ -20,6 +23,9 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
+
+# Thread pool for manual polls
+manual_poll_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="manual-poll")
 
 def init_scheduler(app):
     """Initialize the scheduler to run the OneDrive poll every hour on the hour."""
@@ -92,7 +98,7 @@ def init_scheduler(app):
     return scheduler
 
 def create_app():
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder='../templates')
     
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
@@ -427,114 +433,8 @@ def create_app():
     def manual_onedrive_poll():
         """Manual OneDrive polling endpoint with password protection."""
         if request.method == "GET":
-            # Show password form
-            html = render_template_string(
-                """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Manual OneDrive Poll</title>
-                    <style>
-                        body { 
-                            font-family: Arial, sans-serif; 
-                            max-width: 500px; 
-                            margin: 50px auto; 
-                            padding: 20px;
-                            background-color: #f5f5f5;
-                        }
-                        .form-container {
-                            background: white;
-                            padding: 30px;
-                            border-radius: 8px;
-                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                        }
-                        h2 { color: #333; margin-bottom: 20px; }
-                        .form-group { margin-bottom: 20px; }
-                        label { display: block; margin-bottom: 5px; font-weight: bold; }
-                        input[type="password"] { 
-                            width: 100%; 
-                            padding: 10px; 
-                            border: 1px solid #ddd; 
-                            border-radius: 4px; 
-                            font-size: 16px;
-                        }
-                        button { 
-                            background-color: #007cba; 
-                            color: white; 
-                            padding: 12px 24px; 
-                            border: none; 
-                            border-radius: 4px; 
-                            cursor: pointer; 
-                            font-size: 16px;
-                            width: 100%;
-                        }
-                        button:hover { background-color: #005a87; }
-                        .warning { 
-                            background-color: #fff3cd; 
-                            border: 1px solid #ffeaa7; 
-                            color: #856404; 
-                            padding: 15px; 
-                            border-radius: 4px; 
-                            margin-bottom: 20px;
-                        }
-                        .error { 
-                            background-color: #f8d7da; 
-                            border: 1px solid #f5c6cb; 
-                            color: #721c24; 
-                            padding: 15px; 
-                            border-radius: 4px; 
-                            margin-bottom: 20px;
-                        }
-                        .success { 
-                            background-color: #d4edda; 
-                            border: 1px solid #c3e6cb; 
-                            color: #155724; 
-                            padding: 15px; 
-                            border-radius: 4px; 
-                            margin-bottom: 20px;
-                        }
-                        a { color: #007cba; text-decoration: none; }
-                        a:hover { text-decoration: underline; }
-                    </style>
-                </head>
-                <body>
-                    <div class="form-container">
-                        <h2>Manual OneDrive Poll</h2>
-                        <div class="warning">
-                            <strong>⚠️ Warning:</strong> This will manually trigger the OneDrive polling system. 
-                            Use only when necessary and ensure no scheduled sync is currently running.
-                        </div>
-                        <form method="post" id="manual-poll-form">
-                            <div class="form-group">
-                                <label for="password">Enter password to continue:</label>
-                                <input type="password" id="password" name="password" required>
-                            </div>
-                            <button type="submit" id="submit-btn" onclick="disableSubmit()">Run Manual OneDrive Poll</button>
-                        </form>
-                        
-                        <script>
-                        function disableSubmit() {
-                            var btn = document.getElementById('submit-btn');
-                            var form = document.getElementById('manual-poll-form');
-                            btn.disabled = true;
-                            btn.innerHTML = 'Running... Please Wait';
-                            btn.style.backgroundColor = '#6c757d';
-                            // Prevent double submission
-                            setTimeout(function() {
-                                form.submit();
-                            }, 100);
-                        }
-                        </script>
-                        <p style="margin-top: 20px; text-align: center;">
-                            <a href="/sync/status">Check Sync Status</a> | 
-                            <a href="/sync/operations/view">View Operations</a>
-                        </p>
-                    </div>
-                </body>
-                </html>
-                """
-            )
-            return html
+            # Show password form using template
+            return render_template("manual_poll.html")
         
         elif request.method == "POST":
             # Verify password and run manual poll
@@ -542,120 +442,90 @@ def create_app():
             
             if password != Config.MANUAL_POLL_PASSWORD:
                 logger.warning("Manual poll attempted with incorrect password")
-                html = render_template_string(
-                    """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Access Denied</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; }
-                            .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; }
-                            a { color: #007cba; text-decoration: none; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="error">
-                            <strong>Access Denied:</strong> Incorrect password provided.
-                        </div>
-                        <p><a href="/sync/manual-poll">Try Again</a></p>
-                    </body>
-                    </html>
-                    """
-                )
-                return html
+                return render_template("manual_poll_result.html",
+                                     title="Access Denied",
+                                     message="Incorrect password provided.",
+                                     message_type="error")
             
             # Check if sync is already running
             from app.sync_lock import sync_lock_manager
             if sync_lock_manager.is_locked():
                 current_op = sync_lock_manager.get_current_operation()
                 logger.warning("Manual poll blocked - sync already running", current_operation=current_op)
-                html = render_template_string(
-                    """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Sync Already Running</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; }
-                            .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 4px; }
-                            a { color: #007cba; text-decoration: none; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="warning">
-                            <strong>Cannot Run Manual Poll:</strong> A sync operation is already running.
-                            Current operation: {{ current_op }}
-                        </div>
-                        <p><a href="/sync/status">Check Sync Status</a> | <a href="/sync/manual-poll">Try Again</a></p>
-                    </body>
-                    </html>
-                    """,
-                    current_op=current_op
-                )
-                return html
+                return render_template("manual_poll_result.html",
+                                     title="Cannot Run Manual Poll",
+                                     message="A sync operation is already running.",
+                                     message_type="warning",
+                                     current_op=current_op)
             
             try:
                 # Log the manual poll start
                 logger.info("Starting manual OneDrive poll", source="manual_trigger")
                 
-                # Import and run the OneDrive poll function with proper app context
-                from app.onedrive.utils import run_onedrive_poll
+                # Force garbage collection before starting
+                gc.collect()
+                logger.info("Garbage collection completed before manual poll", source="manual_trigger")
                 
-                # Run the poll with Flask app context (same as scheduled poll)
-                with app.app_context():
-                    result = run_onedrive_poll(trigger_source="manual")
+                def run_manual_poll():
+                    """Run manual poll in subprocess with proper app context."""
+                    thread_id = threading.current_thread().ident
+                    logger.info(f"Manual poll thread started", thread_id=thread_id, source="manual_trigger")
+                    
+                    try:
+                        with app.app_context():
+                            # Import and run the OneDrive poll function
+                            from app.onedrive.utils import run_onedrive_poll
+                            result = run_onedrive_poll(trigger_source="manual")
+                            
+                        logger.info("Manual OneDrive poll completed successfully in subprocess", 
+                                  thread_id=thread_id, source="manual_trigger")
+                        
+                        # Force garbage collection after completion
+                        gc.collect()
+                        logger.info("Garbage collection completed after manual poll", 
+                                  thread_id=thread_id, source="manual_trigger")
+                        
+                        return True, None
+                        
+                    except Exception as e:
+                        logger.error("Manual OneDrive poll failed in subprocess", 
+                                   error=str(e), thread_id=thread_id, source="manual_trigger")
+                        return False, str(e)
                 
-                logger.info("Manual OneDrive poll completed successfully", source="manual_trigger")
+                # Submit to thread pool (like the scheduler does)
+                future = manual_poll_executor.submit(run_manual_poll)
                 
-                html = render_template_string(
-                    """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Manual Poll Completed</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; }
-                            .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 4px; }
-                            a { color: #007cba; text-decoration: none; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="success">
-                            <strong>Success:</strong> Manual OneDrive poll completed successfully.
-                        </div>
-                        <p><a href="/sync/operations/view">View Recent Operations</a> | <a href="/sync/status">Check Sync Status</a></p>
-                    </body>
-                    </html>
-                    """
-                )
-                return html
+                # Wait for completion with timeout
+                try:
+                    success, error = future.result(timeout=300)  # 5 minute timeout
+                    
+                    if success:
+                        return render_template("manual_poll_result.html",
+                                             title="Success",
+                                             message="Manual OneDrive poll completed successfully.",
+                                             message_type="success")
+                    else:
+                        return render_template("manual_poll_result.html",
+                                             title="Error",
+                                             message="Manual OneDrive poll failed.",
+                                             message_type="error",
+                                             error=error)
+                        
+                except Exception as timeout_error:
+                    logger.error("Manual poll timed out or failed", error=str(timeout_error), source="manual_trigger")
+                    return render_template("manual_poll_result.html",
+                                         title="Error",
+                                         message="Manual OneDrive poll timed out or failed.",
+                                         message_type="error",
+                                         error=str(timeout_error))
                 
             except Exception as e:
                 logger.error("Manual OneDrive poll failed", error=str(e), source="manual_trigger")
-                html = render_template_string(
-                    """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Manual Poll Failed</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; }
-                            .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; }
-                            a { color: #007cba; text-decoration: none; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="error">
-                            <strong>Error:</strong> Manual OneDrive poll failed: {{ error }}
-                        </div>
-                        <p><a href="/sync/operations/view">View Recent Operations</a> | <a href="/sync/manual-poll">Try Again</a></p>
-                    </body>
-                    </html>
-                    """,
-                    error=str(e)
-                )
-                return html
+                return render_template("manual_poll_result.html",
+                                     title="Error",
+                                     message="Manual OneDrive poll failed.",
+                                     message_type="error",
+                                     error=str(e))
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")

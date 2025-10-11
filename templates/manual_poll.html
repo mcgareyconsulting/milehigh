@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Manual OneDrive Poll</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .form-container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button {
+            background-color: #007cba;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #005a87;
+        }
+
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        a {
+            color: #007cba;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="form-container">
+        <h2>Manual OneDrive Poll</h2>
+        <div class="warning">
+            <strong>⚠️ Warning:</strong> This will manually trigger the OneDrive polling system.
+            Use only when necessary and ensure no scheduled sync is currently running.
+        </div>
+        <form method="post" id="manual-poll-form">
+            <div class="form-group">
+                <label for="password">Enter password to continue:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" id="submit-btn" onclick="disableSubmit()">Run Manual OneDrive Poll</button>
+        </form>
+
+        <script>
+            function disableSubmit() {
+                var btn = document.getElementById('submit-btn');
+                var form = document.getElementById('manual-poll-form');
+                btn.disabled = true;
+                btn.innerHTML = 'Running... Please Wait';
+                btn.style.backgroundColor = '#6c757d';
+                // Prevent double submission
+                setTimeout(function () {
+                    form.submit();
+                }, 100);
+            }
+        </script>
+
+        <p style="margin-top: 20px; text-align: center;">
+            <a href="/sync/status">Check Sync Status</a> |
+            <a href="/sync/operations/view">View Operations</a>
+        </p>
+    </div>
+</body>
+
+</html>

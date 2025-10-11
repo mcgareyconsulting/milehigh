@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ title }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        a {
+            color: #007cba;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="{{ message_type }}">
+        <strong>{{ title }}:</strong> {{ message }}
+        {% if error %}
+        <br><br>Error: {{ error }}
+        {% endif %}
+        {% if current_op %}
+        <br><br>Current operation: {{ current_op }}
+        {% endif %}
+    </div>
+    <p style="margin-top: 20px; text-align: center;">
+        {% if message_type == "error" %}
+        <a href="/sync/operations/view">View Recent Operations</a> |
+        {% endif %}
+        <a href="/sync/status">Check Sync Status</a> |
+        <a href="/sync/manual-poll">Try Again</a>
+    </p>
+</body>
+
+</html>
