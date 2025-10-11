@@ -920,8 +920,17 @@ def sync_from_onedrive(data):
                                     new_list_name=new_list_name,
                                     new_due_date=str(new_due_date) if new_due_date else None,
                                 )
+                                # Determine if we need to clear the due date
+                                clear_due_date = (new_due_date is None and rec.trello_card_date is not None)
+                                if clear_due_date:
+                                    logger.info(
+                                        "Clearing due date for Trello card",
+                                        operation_id=sync_op.operation_id,
+                                        trello_card_id=rec.trello_card_id,
+                                        current_due_date=str(rec.trello_card_date)
+                                    )
                                 update_trello_card(
-                                    rec.trello_card_id, new_list_id, new_due_date
+                                    rec.trello_card_id, new_list_id, new_due_date, clear_due_date
                                 )
 
                                 # Update DB record with new Trello info after successful API call

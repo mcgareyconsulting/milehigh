@@ -2311,3 +2311,549 @@
 {"event": "Drained sync completed in 2.88s"}
 {"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:33:07.082533Z\"}"}
 {"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-09T17:33:26.833978Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:42:27.564139Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:42:29.956801Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:42:31.896286Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:42:33.607679Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:43:06.377118Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:43:06] \"HEAD /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:43:31.214078Z\"}"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:44:37] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '6866a00ab050408017e08c64', 'name': '**TESTER** Field Schedule', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '684cd8a7367266dee5cc21a8', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/QWmDWwPg/tester-field-schedule', 'shortUrl': 'https://trello.com/b/QWmDWwPg', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': False}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '67b5cdb81d33cbf2bc35f99b', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/original/dc7a5632858085acaa3b2b2d18f6426d/photo-1739643247007-044e2623ca98', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 140, 'height': 88, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/140x88/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 256, 'height': 160, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/256x160/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 480, 'height': 300, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/480x300/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 960, 'height': 600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/960x600/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 1024, 'height': 640, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/1024x640/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 1280, 'height': 800, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/1280x800/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 1920, 'height': 1200, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/1920x1200/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 2048, 'height': 1280, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/2048x1280/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 2560, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/2560x1600/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': 'https://images.unsplash.com/photo-1739643247007-044e2623ca98?ixid=M3w3MDY2fDB8MXxjb2xsZWN0aW9ufDN8MzE3MDk5fHx8fHwyfHwxNzM5OTY3ODcwfA&ixlib=rb-4.0.3&w=2560&h=2048&q=90', 'backgroundBottomColor': '#242b4a', 'backgroundTopColor': '#b0b2d8', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68eac1b5325d084b844902f7', 'idMemberCreator': '684cd886ca5d05b148d76349', 'data': {'old': {'pos': 110747.54430379748}, 'card': {'pos': 455.1111111111111, 'id': '6866a00ab050408017e0958e', 'name': '190-248 Hinton - Metro Center Bld 2 Stoop Landing Guardrails', 'idShort': 1064, 'shortLink': 'hseEH2GG'}, 'board': {'id': '6866a00ab050408017e08c64', 'name': '**TESTER** Field Schedule', 'shortLink': 'QWmDWwPg'}, 'list': {'id': '6866a00ab050408017e08c54', 'name': 'Paint complete'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-11T20:44:37.141Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_lower', 'entities': {'card': {'type': 'card', 'id': '6866a00ab050408017e0958e', 'pos': 455.1111111111111, 'shortLink': 'hseEH2GG', 'text': '190-248 Hinton - Metro Center Bld 2 Stoop Landing Guardrails'}, 'memberCreator': {'type': 'member', 'id': '684cd886ca5d05b148d76349', 'username': 'danielmcgarey', 'text': 'Daniel McGarey'}}}, 'memberCreator': {'id': '684cd886ca5d05b148d76349', 'activityBlocked': False, 'avatarHash': '78b42ff453ea5e59da96309cb282a70d', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/684cd886ca5d05b148d76349/78b42ff453ea5e59da96309cb282a70d', 'fullName': 'Daniel McGarey', 'idMemberReferrer': None, 'initials': 'DM', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'danielmcgarey'}}, 'webhook': {'id': '68eac15add077c20e65f29e9', 'description': 'Track card moves', 'idModel': '6866a00ab050408017e08c64', 'callbackURL': 'https://cb1382cd5ed8.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:44:37] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"9e01aae3\", \"start_time\": \"2025-10-11T20:44:38.370515\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:44:38.370854Z\"}"}
+{"event": "{\"operation_id\": \"9e01aae3\", \"card_id\": \"6866a00ab050408017e0958e\", \"event_time\": \"2025-10-11T20:44:37.029000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:44:39.043395Z\"}"}
+{"event": "{\"operation_id\": \"9e01aae3\", \"card_id\": \"6866a00ab050408017e0958e\", \"event\": \"Card not found in Trello API\", \"logger\": \"app.sync\", \"level\": \"warning\", \"timestamp\": \"2025-10-11T20:44:39.355451Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"9e01aae3\", \"duration_seconds\": 1.452835, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:44:39.823459Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 2.39s"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:45:19] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '6866a00ab050408017e08c64', 'name': '**TESTER** Field Schedule', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '684cd8a7367266dee5cc21a8', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/QWmDWwPg/tester-field-schedule', 'shortUrl': 'https://trello.com/b/QWmDWwPg', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': False}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '67b5cdb81d33cbf2bc35f99b', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/original/dc7a5632858085acaa3b2b2d18f6426d/photo-1739643247007-044e2623ca98', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 140, 'height': 88, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/140x88/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 256, 'height': 160, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/256x160/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 480, 'height': 300, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/480x300/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 960, 'height': 600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/960x600/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 1024, 'height': 640, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/1024x640/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 1280, 'height': 800, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/1280x800/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 1920, 'height': 1200, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/1920x1200/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 2048, 'height': 1280, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/2048x1280/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}, {'width': 2560, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/SharedBackground/2560x1600/9417f0f9add673e316eec22f05c584a9/photo-1739643247007-044e2623ca98.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': 'https://images.unsplash.com/photo-1739643247007-044e2623ca98?ixid=M3w3MDY2fDB8MXxjb2xsZWN0aW9ufDN8MzE3MDk5fHx8fHwyfHwxNzM5OTY3ODcwfA&ixlib=rb-4.0.3&w=2560&h=2048&q=90', 'backgroundBottomColor': '#242b4a', 'backgroundTopColor': '#b0b2d8', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68eac1dfe33893cbb5408555', 'idMemberCreator': '684cd886ca5d05b148d76349', 'data': {'old': {'pos': 455.1111111111111}, 'card': {'pos': 116891.54430379748, 'id': '6866a00ab050408017e0958e', 'name': '190-248 Hinton - Metro Center Bld 2 Stoop Landing Guardrails', 'idShort': 1064, 'shortLink': 'hseEH2GG'}, 'board': {'id': '6866a00ab050408017e08c64', 'name': '**TESTER** Field Schedule', 'shortLink': 'QWmDWwPg'}, 'list': {'id': '6866a00ab050408017e08c57', 'name': 'Fit Up Complete.'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-11T20:45:19.302Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_higher', 'entities': {'card': {'type': 'card', 'id': '6866a00ab050408017e0958e', 'pos': 116891.54430379748, 'shortLink': 'hseEH2GG', 'text': '190-248 Hinton - Metro Center Bld 2 Stoop Landing Guardrails'}, 'memberCreator': {'type': 'member', 'id': '684cd886ca5d05b148d76349', 'username': 'danielmcgarey', 'text': 'Daniel McGarey'}}}, 'memberCreator': {'id': '684cd886ca5d05b148d76349', 'activityBlocked': False, 'avatarHash': '78b42ff453ea5e59da96309cb282a70d', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/684cd886ca5d05b148d76349/78b42ff453ea5e59da96309cb282a70d', 'fullName': 'Daniel McGarey', 'idMemberReferrer': None, 'initials': 'DM', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'danielmcgarey'}}, 'webhook': {'id': '68eac15add077c20e65f29e9', 'description': 'Track card moves', 'idModel': '6866a00ab050408017e08c64', 'callbackURL': 'https://cb1382cd5ed8.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:45:20] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"212d64e7\", \"start_time\": \"2025-10-11T20:45:20.420748\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:45:20.420826Z\"}"}
+{"event": "{\"operation_id\": \"212d64e7\", \"card_id\": \"6866a00ab050408017e0958e\", \"event_time\": \"2025-10-11T20:45:19.215000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:45:21.411213Z\"}"}
+{"event": "{\"operation_id\": \"212d64e7\", \"card_id\": \"6866a00ab050408017e0958e\", \"event\": \"Card not found in Trello API\", \"logger\": \"app.sync\", \"level\": \"warning\", \"timestamp\": \"2025-10-11T20:45:21.694883Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"212d64e7\", \"duration_seconds\": 1.756921, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:45:22.177753Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 2.49s"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:46:30] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"348792db\", \"start_time\": \"2025-10-11T20:46:30.778338\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:46:30.779266Z\"}"}
+{"event": "{\"operation_id\": \"348792db\", \"card_id\": \"6866a00ab050408017e095dc\", \"event_time\": \"2025-10-11T20:46:29.760000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:46:31.520616Z\"}"}
+{"event": "{\"operation_id\": \"348792db\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"Card not found in Trello API\", \"logger\": \"app.sync\", \"level\": \"warning\", \"timestamp\": \"2025-10-11T20:46:31.808738Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"348792db\", \"duration_seconds\": 1.50967, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:46:32.288081Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 2.26s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:47:10.410811Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:10.530305Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:47:11.739534Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:11.787866Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:47:24] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"af7d41ae\", \"start_time\": \"2025-10-11T20:47:24.497793\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:24.497947Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"card_id\": \"6866a00ab050408017e095dc\", \"event_time\": \"2025-10-11T20:47:24.216000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:24.541623Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"card_id\": \"6866a00ab050408017e095dc\", \"job_id\": 10, \"trello_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"db_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:25.359567Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:25.370118Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"Updating DB record from Trello data\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:25.371577Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"event\": \"Card move detected, updating DB fields\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:25.650525Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"job_id\": 10, \"new_list\": \"Paint complete\", \"current_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"O\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:26.123137Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"job_id\": 10, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"T\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:26.123688Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"DB record updated successfully\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:26.135541Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"event\": \"Updating Excel from Trello changes\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:26.144945Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"job\": 900, \"release\": \"276\", \"job_type\": \"int\", \"release_type\": \"str\", \"event\": \"Looking up Excel row\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:26.152842Z\"}"}
+{"event": "Looking for Job # 900 (type: <class 'int'>) and Release # 276 (type: <class 'str'>)"}
+{"event": "Found match at DataFrame index 149, Excel row 153"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"job\": 900, \"release\": \"276\", \"excel_row\": \"153\", \"event\": \"Found Excel row for update\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:43.943268Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"cell\": \"M153\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:49.832811Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"cell\": \"N153\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:52.904898Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"cell\": \"O153\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:54.959863Z\"}"}
+{"event": "{\"operation_id\": \"af7d41ae\", \"cell\": \"P153\", \"value\": \"T\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:57.105129Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"af7d41ae\", \"duration_seconds\": 32.626114, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:47:57.123957Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 32.67s"}
+{"event": " * Detected change in '/Users/danielmcgarey/Desktop/Mile High Metal Works/trello_sharepoint/app/trello/api.py', reloading"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:49:45.518047Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:49:45.575588Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": " * Detected change in '/Users/danielmcgarey/Desktop/Mile High Metal Works/trello_sharepoint/app/trello/api.py', reloading"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:49:50.495995Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:49:50.543010Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": " * Detected change in '/Users/danielmcgarey/Desktop/Mile High Metal Works/trello_sharepoint/app/trello/api.py', reloading"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:50:05.814702Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:50:05.894560Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": " * Detected change in '/Users/danielmcgarey/Desktop/Mile High Metal Works/trello_sharepoint/app/sync.py', reloading"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:50:10.301102Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:50:10.349075Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:52:46.530543Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:52:46.624678Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:52:48.488072Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:52:48.617053Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='54'], next run at: 2025-10-11 15:54:00 MDT)\" (scheduled at 2025-10-11 14:54:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:00.003621Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='54'], next run at: 2025-10-11 14:54:00 MDT)\" (scheduled at 2025-10-11 14:54:00-06:00)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:00.005810Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"3cd6551b\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.414841Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 20:52:49\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.443132Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.443746Z\"}"}
+{"event": "{\"operation_id\": \"07276aaf\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.453091Z\"}"}
+{"event": "{\"event\": \"200-150 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.454439Z\"}"}
+{"event": "{\"event\": \"200-125 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.466874Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 20:52:49\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.468592Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.469000Z\"}"}
+{"event": "{\"event\": \"200-403 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.477450Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-150: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.481132Z\"}"}
+{"event": "{\"event\": \"200-879 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.486746Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-125: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.486729Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-403: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.493582Z\"}"}
+{"event": "{\"event\": \"340-419 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.496612Z\"}"}
+{"event": "{\"event\": \"130-271 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.503491Z\"}"}
+{"event": "{\"event\": \"130-421 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.512289Z\"}"}
+{"event": "{\"event\": \"130-430 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.519471Z\"}"}
+{"event": "{\"event\": \"130-279 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.528977Z\"}"}
+{"event": "{\"event\": \"130-323 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.541273Z\"}"}
+{"event": "{\"event\": \"130-358 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.551984Z\"}"}
+{"event": "{\"event\": \"130-359 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.561197Z\"}"}
+{"event": "{\"event\": \"130-417 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.568710Z\"}"}
+{"event": "{\"event\": \"130-416 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.577992Z\"}"}
+{"event": "{\"event\": \"190-892 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.586433Z\"}"}
+{"event": "{\"event\": \"190-278 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.593887Z\"}"}
+{"event": "{\"event\": \"190-222 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.600744Z\"}"}
+{"event": "{\"event\": \"190-863 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.606221Z\"}"}
+{"event": "{\"event\": \"190-861 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.613238Z\"}"}
+{"event": "{\"event\": \"190-337 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.619489Z\"}"}
+{"event": "{\"event\": \"190-320 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.625850Z\"}"}
+{"event": "{\"event\": \"190-335 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.631829Z\"}"}
+{"event": "{\"event\": \"190-334 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.637653Z\"}"}
+{"event": "{\"event\": \"190-176 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.643675Z\"}"}
+{"event": "{\"event\": \"190-167 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.650184Z\"}"}
+{"event": "{\"event\": \"190-848 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.658507Z\"}"}
+{"event": "{\"event\": \"190-862 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.664608Z\"}"}
+{"event": "{\"event\": \"190-847 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.670222Z\"}"}
+{"event": "{\"event\": \"170-131 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.678097Z\"}"}
+{"event": "{\"event\": \"170-130 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.684733Z\"}"}
+{"event": "{\"event\": \"170-147 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.692146Z\"}"}
+{"event": "{\"event\": \"170-132 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.698234Z\"}"}
+{"event": "{\"event\": \"170-141 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.703601Z\"}"}
+{"event": "{\"event\": \"170-146 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.709830Z\"}"}
+{"event": "{\"event\": \"170-128 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.718147Z\"}"}
+{"event": "{\"event\": \"170-129 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.725613Z\"}"}
+{"event": "{\"event\": \"900-210 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.742230Z\"}"}
+{"event": "{\"event\": \"900-408 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.749179Z\"}"}
+{"event": "{\"event\": \"900-979 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.755649Z\"}"}
+{"event": "{\"event\": \"900-217 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.763655Z\"}"}
+{"event": "{\"event\": \"900-799 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.770585Z\"}"}
+{"event": "{\"event\": \"900-800 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.776748Z\"}"}
+{"event": "{\"event\": \"900-790 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.786463Z\"}"}
+{"event": "{\"event\": \"900-791 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.793768Z\"}"}
+{"event": "{\"event\": \"900-796 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.803141Z\"}"}
+{"event": "{\"event\": \"900-797 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.812224Z\"}"}
+{"event": "{\"event\": \"340-415 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.818907Z\"}"}
+{"event": "{\"event\": \"370-512 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.825805Z\"}"}
+{"event": "{\"event\": \"370-521 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.833965Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-879: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.843646Z\"}"}
+{"event": "{\"event\": \"170-449 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.845835Z\"}"}
+{"event": "{\"event\": \"200-261 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.854358Z\"}"}
+{"event": "{\"event\": \"320-353 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.868063Z\"}"}
+{"event": "{\"event\": \"320-399 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.874094Z\"}"}
+{"event": "{\"event\": \"190-442 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.886982Z\"}"}
+{"event": "{\"event\": \"300-771 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.896003Z\"}"}
+{"event": "{\"event\": \"380-376 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.902352Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 340-419: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.911041Z\"}"}
+{"event": "{\"event\": \"330-443 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.919298Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-271: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.925680Z\"}"}
+{"event": "{\"event\": \"370-523 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.952391Z\"}"}
+{"event": "{\"event\": \"370-525 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.959389Z\"}"}
+{"event": "{\"event\": \"370-530 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.965773Z\"}"}
+{"event": "{\"event\": \"370-527 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.971593Z\"}"}
+{"event": "{\"event\": \"170-183 Updating DB start_install (formula-driven): datetime.date(2025, 10, 10) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.981730Z\"}"}
+{"event": "{\"event\": \"190-248 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.988894Z\"}"}
+{"event": "{\"event\": \"900-V862 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:18.995510Z\"}"}
+{"event": "{\"event\": \"380-414 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.005061Z\"}"}
+{"event": "{\"event\": \"330-430 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.011550Z\"}"}
+{"event": "{\"event\": \"190-168 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.020917Z\"}"}
+{"event": "{\"event\": \"260-483 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.028083Z\"}"}
+{"event": "{\"event\": \"370-455 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.034255Z\"}"}
+{"event": "{\"event\": \"370-458 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.041076Z\"}"}
+{"event": "{\"event\": \"370-459 Updating DB start_install (formula-driven): datetime.date(2025, 10, 13) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.048653Z\"}"}
+{"event": "{\"event\": \"370-479 Updating DB start_install (formula-driven): datetime.date(2025, 5, 9) -> datetime.date(2025, 10, 20)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.060889Z\"}"}
+{"event": "{\"event\": \"370-480 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 20)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.067548Z\"}"}
+{"event": "{\"event\": \"380-487 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 20)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.074175Z\"}"}
+{"event": "{\"event\": \"260-110 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 20)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.082060Z\"}"}
+{"event": "{\"event\": \"260-511 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 21)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.088022Z\"}"}
+{"event": "{\"event\": \"200-516 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 21)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.094388Z\"}"}
+{"event": "{\"event\": \"900-517 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 21)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.101414Z\"}"}
+{"event": "{\"event\": \"200-152 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.123232Z\"}"}
+{"event": "{\"event\": \"260-351 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.130419Z\"}"}
+{"event": "{\"event\": \"170-453 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.140733Z\"}"}
+{"event": "{\"event\": \"160-946 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.148746Z\"}"}
+{"event": "{\"event\": \"160-272 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.154127Z\"}"}
+{"event": "{\"event\": \"200-416 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.160772Z\"}"}
+{"event": "{\"event\": \"200-339 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.167729Z\"}"}
+{"event": "{\"event\": \"200-V460 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.173791Z\"}"}
+{"event": "{\"event\": \"200-362 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.181040Z\"}"}
+{"event": "{\"event\": \"200-729 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.187860Z\"}"}
+{"event": "{\"event\": \"200-724 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.194200Z\"}"}
+{"event": "{\"event\": \"130-396 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.203826Z\"}"}
+{"event": "{\"event\": \"130-321 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.210280Z\"}"}
+{"event": "{\"event\": \"190-332 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.217762Z\"}"}
+{"event": "{\"event\": \"190-357 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.223488Z\"}"}
+{"event": "{\"event\": \"190-240 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.230638Z\"}"}
+{"event": "{\"event\": \"190-883 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.237066Z\"}"}
+{"event": "{\"event\": \"190-213 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.243178Z\"}"}
+{"event": "{\"event\": \"260-348 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.250289Z\"}"}
+{"event": "{\"event\": \"260-365 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.256784Z\"}"}
+{"event": "{\"event\": \"300-299 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.265014Z\"}"}
+{"event": "{\"event\": \"305-448 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.271067Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-421: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.279261Z\"}"}
+{"event": "{\"event\": \"370-454 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.283758Z\"}"}
+{"event": "{\"event\": \"380-380 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.292617Z\"}"}
+{"event": "{\"event\": \"380-375 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.301336Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-430: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.308438Z\"}"}
+{"event": "{\"event\": \"170-311 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.309640Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-279: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.317606Z\"}"}
+{"event": "{\"event\": \"385-354 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.317652Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-323: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.326750Z\"}"}
+{"event": "{\"event\": \"385-326 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.327885Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-358: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.336007Z\"}"}
+{"event": "{\"event\": \"385-V862 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.336250Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-359: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.345754Z\"}"}
+{"event": "{\"event\": \"385-186 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.346934Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-417: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.355556Z\"}"}
+{"event": "{\"event\": \"900-262 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.361535Z\"}"}
+{"event": "{\"event\": \"900-924 Updating DB start_install (formula-driven): datetime.date(2025, 10, 23) -> datetime.date(2025, 10, 28)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.368575Z\"}"}
+{"event": "{\"event\": \"Committing 110 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.372222Z\"}"}
+{"event": "{\"event\": \"Committed 110 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.378951Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-416: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.386670Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-892: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.394833Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-278: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.400057Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-222: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.404189Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-863: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.408750Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-861: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.413639Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-337: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.418564Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-320: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.423088Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-335: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.428681Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-334: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.435264Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-176: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.439094Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-167: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.444735Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-848: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.451505Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-862: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.455571Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-847: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.461508Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-131: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.468424Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-130: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.472436Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-147: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.478568Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-132: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.483912Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-141: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.488072Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-146: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.493081Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-128: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.500510Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-129: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.504348Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-210: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.519262Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-408: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.523921Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-979: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.529590Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-217: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.535281Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-799: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.539621Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-800: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.545659Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-790: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.554905Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-791: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.562116Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-796: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.569620Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-797: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.574202Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 340-415: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.579779Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-512: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.584528Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-521: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.588188Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-449: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.595275Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-261: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.603161Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 320-353: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.616068Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 320-399: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.620106Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-442: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.632462Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 300-771: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.637777Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-376: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.643571Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 330-443: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.655680Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-523: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.686434Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-525: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.690803Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-530: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.695166Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-527: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.700131Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-183: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.707348Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-248: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.713620Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-V862: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.718359Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-414: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.725921Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 330-430: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.730384Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-168: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.738096Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-483: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.743555Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-455: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.748500Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-458: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.752948Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-459: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.757527Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-479: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.769150Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-480: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.772995Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-487: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.778379Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-110: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.784599Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-511: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.788414Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-516: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.794189Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-517: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.799600Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-152: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.820717Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-351: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.825441Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-453: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.836717Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 160-946: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.842914Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 160-272: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.846900Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-416: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.852091Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-339: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.856643Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-V460: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.861851Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-362: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.866739Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-729: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.872958Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 200-724: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.878440Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-396: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.886966Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 130-321: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.891288Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-332: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.898217Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-357: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.902456Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-240: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.906412Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-883: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.910973Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 190-213: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.915743Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-348: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.919882Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 260-365: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.924156Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 300-299: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.929972Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 305-448: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.935035Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 370-454: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.944013Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-380: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.951367Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 380-375: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.957413Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 170-311: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.963652Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 385-354: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.968930Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 385-326: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.973320Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 385-V862: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.977629Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 385-186: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.981745Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-262: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.987687Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-924: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.992112Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:19.995010Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:20.005526Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='54'], next run at: 2025-10-11 15:54:00 MDT)\" executed successfully"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0958e: Due Date={new_due_date} (was 2025-05-30), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:34.889424Z\"}"}
+{"event": "{\"operation_id\": \"3cd6551b\", \"trello_card_id\": \"6866a00ab050408017e0958e\", \"current_due_date\": \"2025-05-30\", \"event\": \"Clearing due date for Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:34.968372Z\"}"}
+{"event": "Trello webhook queued due to active lock"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:54:35] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e09894: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:35.851156Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098cc: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:36.829186Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098d0: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:37.081995Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098c0: Due Date={new_due_date} (was 2025-05-09), List={new_list_name} (was Paint complete)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:37.577594Z\"}"}
+{"event": "{\"operation_id\": \"3cd6551b\", \"trello_card_id\": \"6866a00ab050408017e098c0\", \"current_due_date\": \"2025-05-09\", \"event\": \"Clearing due date for Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:37.592138Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098c4: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:37.971702Z\"}"}
+{"event": "Trello webhook queued due to active lock"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:54:38] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0985c: Due Date={new_due_date} (was None), List={new_list_name} (was Shipping completed)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:38.235003Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098e4: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:38.796999Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098c8: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:39.309552Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "Sync lock acquired for operation: Trello-Queue"}
+{"event": "Drained Trello event started with lock acquired"}
+{"event": "Sync lock already held by 'Trello-Queue'. Cannot acquire for 'Trello-Queue'"}
+{"event": "{\"drained\": 2, \"event\": \"Post-drain Trello queue\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:47.548963Z\"}"}
+{"event": "Queue drain lock contention: Sync already in progress: Trello-Queue"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:47.550223Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='54'], next run at: 2025-10-11 15:54:00 MDT)\" executed successfully"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"053183a6\", \"start_time\": \"2025-10-11T20:54:47.556308\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:47.556362Z\"}"}
+{"event": "{\"operation_id\": \"053183a6\", \"card_id\": \"6866a00ab050408017e0958e\", \"event_time\": \"2025-10-11T20:54:35.314000\", \"event_type\": \"card_updated\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:47.567869Z\"}"}
+{"event": "{\"operation_id\": \"053183a6\", \"card_id\": \"6866a00ab050408017e0958e\", \"job_id\": 1, \"trello_name\": \"190-248 Hinton - Metro Center Bld 2 Stoop Landing Guardrails\", \"db_name\": \"190-248 Hinton - Metro Center Bld 2 Stoop Landing Guardrails\", \"trello_list\": \"Fit Up Complete.\", \"db_list\": null, \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:48.051683Z\"}"}
+{"event": "{\"operation_id\": \"053183a6\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:48.059153Z\"}"}
+{"event": "{\"operation_id\": \"053183a6\", \"card_id\": \"6866a00ab050408017e0958e\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:48.059705Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"053183a6\", \"duration_seconds\": 0.512602, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:54:48.069039Z\"}"}
+{"event": "Drained Trello event completed successfully"}
+{"event": "Sync lock released for operation: Trello-Queue"}
+{"event": "Drained sync completed in 0.53s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:56:43.655730Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:56:43.731060Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": " * Restarting with stat"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:56:45.006574Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:56:45.071674Z\"}"}
+{"event": " * Debugger is active!"}
+{"event": " * Debugger PIN: 871-667-060"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='57'], next run at: 2025-10-11 15:57:00 MDT)\" (scheduled at 2025-10-11 14:57:00-06:00)"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='57'], next run at: 2025-10-11 15:57:00 MDT)\" (scheduled at 2025-10-11 14:57:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:00.005759Z\"}"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:00.006108Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"f94630c2\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.619819Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 20:56:28\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.645225Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.645870Z\"}"}
+{"event": "{\"operation_id\": \"00ad7628\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.685556Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 20:56:28\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.696375Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.696665Z\"}"}
+{"event": "{\"event\": \"900-276 Updating DB start_install (formula-driven): datetime.date(2025, 5, 30) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.821239Z\"}"}
+{"event": "{\"event\": \"900-276 Updating DB start_install (formula-driven): datetime.date(2025, 5, 30) -> datetime.date(2025, 10, 15)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.853403Z\"}"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.913643Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:17.915053Z\"}"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.033333Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.033953Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e095dc: Due Date={new_due_date} (was 2025-05-30), List={new_list_name} (was Paint complete)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.178957Z\"}"}
+{"event": "{\"operation_id\": \"f94630c2\", \"trello_card_id\": \"6866a00ab050408017e095dc\", \"current_due_date\": \"2025-05-30\", \"event\": \"Clearing due date for Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.187187Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e095dc: Due Date={new_due_date} (was 2025-05-30), List={new_list_name} (was Paint complete)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.271202Z\"}"}
+{"event": "{\"operation_id\": \"00ad7628\", \"trello_card_id\": \"6866a00ab050408017e095dc\", \"current_due_date\": \"2025-05-30\", \"event\": \"Clearing due date for Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.275668Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.550624Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='57'], next run at: 2025-10-11 15:57:00 MDT)\" executed successfully"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.570247Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='57'], next run at: 2025-10-11 15:57:00 MDT)\" executed successfully"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:57:18] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"7af0c55f\", \"start_time\": \"2025-10-11T20:57:18.701410\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.701460Z\"}"}
+{"event": "{\"operation_id\": \"7af0c55f\", \"card_id\": \"6866a00ab050408017e095dc\", \"event_time\": \"2025-10-11T20:57:18.513000\", \"event_type\": \"card_updated\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:18.713675Z\"}"}
+{"event": "{\"operation_id\": \"7af0c55f\", \"card_id\": \"6866a00ab050408017e095dc\", \"job_id\": 10, \"trello_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"db_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:19.190089Z\"}"}
+{"event": "{\"operation_id\": \"7af0c55f\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:19.194706Z\"}"}
+{"event": "{\"operation_id\": \"7af0c55f\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:19.195013Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"7af0c55f\", \"duration_seconds\": 0.501884, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:57:19.203412Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.52s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T20:58:11.053938Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:58:11.120126Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='59'], next run at: 2025-10-11 14:59:00 MDT)\" (scheduled at 2025-10-11 14:59:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:00.014933Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"75524194\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:16.027094Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 20:57:53\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:16.064422Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:16.067185Z\"}"}
+{"event": "{\"event\": \"900-276 Updating DB start_install (hard-coded): datetime.date(2025, 10, 15) -> datetime.date(2025, 5, 9)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:16.249169Z\"}"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:16.391301Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:16.393753Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e095dc: Due Date={new_due_date} (was None), List={new_list_name} (was Paint complete)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:16.689004Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:17.072619Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='59'], next run at: 2025-10-11 15:59:00 MDT)\" executed successfully"}
+{"event": "Sync lock acquired for operation: Trello-Hook"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [11/Oct/2025 14:59:17] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"efad4bbb\", \"start_time\": \"2025-10-11T20:59:17.218074\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:17.218129Z\"}"}
+{"event": "{\"operation_id\": \"efad4bbb\", \"card_id\": \"6866a00ab050408017e095dc\", \"event_time\": \"2025-10-11T20:59:17.044000\", \"event_type\": \"card_updated\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:17.229596Z\"}"}
+{"event": "{\"operation_id\": \"efad4bbb\", \"card_id\": \"6866a00ab050408017e095dc\", \"job_id\": 10, \"trello_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"db_name\": \"900-276 Arlington - Velo Interlocken Bld 6 Balconies\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:17.715499Z\"}"}
+{"event": "{\"operation_id\": \"efad4bbb\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:17.723730Z\"}"}
+{"event": "{\"operation_id\": \"efad4bbb\", \"card_id\": \"6866a00ab050408017e095dc\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:17.724380Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"efad4bbb\", \"duration_seconds\": 0.517942, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T20:59:17.736063Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.53s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:00:34.400863Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:00:34.474091Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:00:43] \"GET / HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:00:48] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:00:51] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:23] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:25] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:28] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:31] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:35] \"GET /sync/operations/efad4bbb/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:41] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:42] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:45] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:10:32.895529Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:10:33.011033Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:10:52] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:01] \"GET /sync/operations/efad4bbb/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:06] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:08] \"\u001b[33mGET /sync/operations/ HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:10] \"GET /sync/operations HTTP/1.1\" 200 -"}

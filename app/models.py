@@ -48,13 +48,14 @@ class SyncOperation(db.Model):
         return f"<SyncOperation {self.operation_id} - {self.operation_type} - {self.status}>"
     
     def to_dict(self):
+        from app.datetime_utils import format_datetime_mountain
         return {
             'id': self.id,
             'operation_id': self.operation_id,
             'operation_type': self.operation_type,
             'status': self.status.value,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'started_at': format_datetime_mountain(self.started_at),
+            'completed_at': format_datetime_mountain(self.completed_at),
             'duration_seconds': self.duration_seconds,
             'source_system': self.source_system,
             'source_id': self.source_id,
