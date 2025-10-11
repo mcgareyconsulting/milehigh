@@ -499,13 +499,27 @@ def create_app():
                             <strong>⚠️ Warning:</strong> This will manually trigger the OneDrive polling system. 
                             Use only when necessary and ensure no scheduled sync is currently running.
                         </div>
-                        <form method="post">
+                        <form method="post" id="manual-poll-form">
                             <div class="form-group">
                                 <label for="password">Enter password to continue:</label>
                                 <input type="password" id="password" name="password" required>
                             </div>
-                            <button type="submit">Run Manual OneDrive Poll</button>
+                            <button type="submit" id="submit-btn" onclick="disableSubmit()">Run Manual OneDrive Poll</button>
                         </form>
+                        
+                        <script>
+                        function disableSubmit() {
+                            var btn = document.getElementById('submit-btn');
+                            var form = document.getElementById('manual-poll-form');
+                            btn.disabled = true;
+                            btn.innerHTML = 'Running... Please Wait';
+                            btn.style.backgroundColor = '#6c757d';
+                            // Prevent double submission
+                            setTimeout(function() {
+                                form.submit();
+                            }, 100);
+                        }
+                        </script>
                         <p style="margin-top: 20px; text-align: center;">
                             <a href="/sync/status">Check Sync Status</a> | 
                             <a href="/sync/operations/view">View Operations</a>

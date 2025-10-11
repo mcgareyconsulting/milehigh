@@ -2946,3 +2946,167 @@
 {"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:22:31.221072Z\"}"}
 {"event": "127.0.0.1 - - [11/Oct/2025 15:22:31] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [11/Oct/2025 15:22:36] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:34:42.683364Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:34:42.751777Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: scheduled)"}
+{"event": "{\"operation_id\": \"d7146a0a\", \"event\": \"OneDrive poll sync operation logged to database (trigger: scheduled)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:01.820543Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:01.857262Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:01.857778Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:02.243336Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:02.406726Z\"}"}
+{"event": "OneDrive poll completed (trigger: scheduled)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:35:19.088138Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:19.147419Z\"}"}
+{"event": "{\"event\": \"Manual poll attempted with incorrect password\", \"logger\": \"app\", \"level\": \"warning\", \"timestamp\": \"2025-10-11T21:35:19.156884Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:35:37.412272Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:37.470424Z\"}"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:37.475987Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"4d7f2dc1\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:56.644264Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:56.657510Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:56.657998Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:56.803511Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:56.901193Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:35:56.912553Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:36:46.646826Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:36:46.763623Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:13] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:15] \"GET /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:19.359405Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"current_operation\": \"OneDrive-Poll\", \"event\": \"Manual poll blocked - sync already running\", \"logger\": \"app\", \"level\": \"warning\", \"timestamp\": \"2025-10-11T21:37:20.455943Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:20] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:24] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:35] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:37] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"6f92b3df\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:37.924553Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:37.978719Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:37.979230Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:38.221220Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:38.334653Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:38.344852Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:38] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:40] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:37:55] \"GET /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:37:59.073890Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"cafcaa3c\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:38:19.472047Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:38:19.480810Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:38:19.481156Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:38:19.617365Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:38:19.721212Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:38:19.731545Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:38:19] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:38:21] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:39:22.492407Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:22.596653Z\"}"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:22.607914Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"38a6e017\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:43.628003Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:43.642466Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:43.643011Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:43.797411Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:43.895198Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:39:43.906339Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:40:16.073594Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:16.130681Z\"}"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:16.137771Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"ef349547\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:36.551050Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:36.563887Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:36.564182Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:36.802736Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:36.978793Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:36.989974Z\"}"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:40:39.000436Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"dcc54919\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:41:01.134914Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:41:01.144331Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:41:01.144975Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:41:01.308452Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:41:01.395255Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:41:01.404106Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:41:43] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:41:50] \"GET /sync/operations/ef349547/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:41:54] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:41:58] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:00] \"GET /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:07.677886Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "{\"operation_id\": \"186ef198\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:28.618551Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:28.626649Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:28.626966Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:28.770481Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:28.883675Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:28.896565Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:28] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:30] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:42] \"GET /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:51] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Starting manual OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:42:52.504539Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll"}
+{"event": "OneDrive poll starting with sync lock acquired (trigger: manual)"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:55] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:56] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:57] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:58] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:42:59] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:02] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:03] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:05] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:06] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:11] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"e6610b58\", \"event\": \"OneDrive poll sync operation logged to database (trigger: manual)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:43:13.236241Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-11 21:20:14\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:43:13.242517Z\"}"}
+{"event": "{\"event\": \"DataFrame 253 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:43:13.242967Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 900-276: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:43:13.404240Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:43:13.522389Z\"}"}
+{"event": "OneDrive poll completed (trigger: manual)"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"source\": \"manual_trigger\", \"event\": \"Manual OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:43:13.535367Z\"}"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:13] \"POST /sync/manual-poll HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:18] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:43:21] \"GET /sync/operations/e6610b58/logs/view HTTP/1.1\" 200 -"}
