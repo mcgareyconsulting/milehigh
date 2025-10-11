@@ -17,6 +17,9 @@ from sqlalchemy import func
 # Configure logging
 logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
+# Import datetime utilities
+from app.datetime_utils import format_datetime_mountain
+
 def init_scheduler(app):
     """Initialize the scheduler to run the OneDrive poll every hour on the hour."""
     from app.onedrive.utils import run_onedrive_poll
@@ -148,13 +151,13 @@ def create_app():
                     'description': job.description,
                     'pm': job.pm,
                     'by': job.by,
-                    'released': job.released.isoformat() if job.released else None,
+                    'released': format_datetime_mountain(job.released),
                     'fab_hrs': job.fab_hrs,
                     'install_hrs': job.install_hrs,
                     'paint_color': job.paint_color,
                     'trello_card_name': job.trello_card_name,
                     'trello_list_name': job.trello_list_name,
-                    'last_updated_at': job.last_updated_at.isoformat() if job.last_updated_at else None,
+                    'last_updated_at': format_datetime_mountain(job.last_updated_at),
                     'source_of_update': job.source_of_update
                 }
                 job_list.append(job_data)
@@ -223,7 +226,7 @@ def create_app():
             return jsonify({
                 'operation_id': operation_id,
                 'logs': [{
-                    'timestamp': log.timestamp.isoformat(),
+                    'timestamp': format_datetime_mountain(log.timestamp),
                     'level': log.level,
                     'message': log.message,
                     'data': log.data

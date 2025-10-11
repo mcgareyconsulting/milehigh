@@ -2827,3 +2827,33 @@
 {"event": "Trello sync completed successfully"}
 {"event": "Sync lock released for operation: Trello-Hook"}
 {"event": "Sync completed in 0.53s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:00:34.400863Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:00:34.474091Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:00:43] \"GET / HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:00:48] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:00:51] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:23] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:25] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:28] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:31] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:35] \"GET /sync/operations/efad4bbb/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:41] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:42] \"GET /sync/operations/view?date=2025-10-11&limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:08:45] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-11T21:10:32.895529Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-11T21:10:33.011033Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:10:52] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:01] \"GET /sync/operations/efad4bbb/logs/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:06] \"GET /sync/operations/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:08] \"\u001b[33mGET /sync/operations/ HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [11/Oct/2025 15:11:10] \"GET /sync/operations HTTP/1.1\" 200 -"}
