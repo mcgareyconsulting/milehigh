@@ -599,7 +599,7 @@ def determine_trello_list_from_db(rec):
     elif (
         rec.fitup_comp == "X"
         and rec.welded == "O"
-        and rec.paint_comp == None
+        and rec.paint_comp == ""
         and rec.ship == "T"
     ):
         return "Fit Up Complete."
