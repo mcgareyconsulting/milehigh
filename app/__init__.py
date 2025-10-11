@@ -594,11 +594,12 @@ def create_app():
                 # Log the manual poll start
                 logger.info("Starting manual OneDrive poll", source="manual_trigger")
                 
-                # Import and run the OneDrive poll function
+                # Import and run the OneDrive poll function with proper app context
                 from app.onedrive.utils import run_onedrive_poll
                 
-                # Run the poll (this will be logged as manual in the sync operation)
-                result = run_onedrive_poll(trigger_source="manual")
+                # Run the poll with Flask app context (same as scheduled poll)
+                with app.app_context():
+                    result = run_onedrive_poll(trigger_source="manual")
                 
                 logger.info("Manual OneDrive poll completed successfully", source="manual_trigger")
                 
