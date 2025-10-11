@@ -87,6 +87,8 @@ def safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
         # Don't let logging failures break the sync
         try:
             db.session.rollback()
+            # Try to recover the database session
+            db.session.remove()
         except Exception:
             pass
         logger.warning("Failed to log sync event", error=str(e), operation_id=operation_id, message=message)
@@ -101,6 +103,17 @@ def safe_sync_op_call(sync_op, func, *args, **kwargs):
                          error=str(e), 
                          operation_id=sync_op.operation_id,
                          function_name=func.__name__ if hasattr(func, '__name__') else str(func))
+            
+            # Try to recover from database connection issues
+            try:
+                db.session.rollback()
+                # Force a new connection by removing the current session
+                db.session.remove()
+                logger.info("Database session recovered after error", operation_id=sync_op.operation_id)
+            except Exception as recovery_error:
+                logger.warning("Failed to recover database session", 
+                             error=str(recovery_error),
+                             operation_id=sync_op.operation_id)
     return None
 
 def check_database_connection():
@@ -129,13 +142,25 @@ def create_sync_operation(operation_type: str, source_system: str = None, source
 
 def update_sync_operation(operation_id: str, **kwargs):
     """Update a sync operation record."""
-    sync_op = SyncOperation.query.filter_by(operation_id=operation_id).first()
-    if sync_op:
-        for key, value in kwargs.items():
-            if hasattr(sync_op, key):
-                setattr(sync_op, key, value)
-        db.session.commit()
-    return sync_op
+    try:
+        sync_op = SyncOperation.query.filter_by(operation_id=operation_id).first()
+        if sync_op:
+            for key, value in kwargs.items():
+                if hasattr(sync_op, key):
+                    setattr(sync_op, key, value)
+            db.session.commit()
+        return sync_op
+    except Exception as e:
+        logger.warning("Failed to update sync operation", 
+                     error=str(e), 
+                     operation_id=operation_id,
+                     kwargs=kwargs)
+        try:
+            db.session.rollback()
+            db.session.remove()
+        except Exception:
+            pass
+        raise
 
 def rectify_db_on_trello_move(job, new_trello_list, operation_id: str):
     """Update job status based on Trello list movement."""
@@ -975,12 +1000,37 @@ def sync_from_onedrive(data, trigger_source="scheduled"):
         if sync_op:
             try:
                 duration = (datetime.utcnow() - sync_op.started_at).total_seconds()
-                safe_sync_op_call(sync_op, update_sync_operation, 
-                    status=SyncStatus.COMPLETED,
-                    completed_at=datetime.utcnow(),
-                    duration_seconds=duration
-                )
-                safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation completed")
+                
+                # Try to update the sync operation with better error handling
+                try:
+                    update_sync_operation(
+                        sync_op.operation_id,
+                        status=SyncStatus.COMPLETED,
+                        completed_at=datetime.utcnow(),
+                        duration_seconds=duration
+                    )
+                    safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation completed")
+                    logger.info("OneDrive sync operation marked as completed", operation_id=sync_op.operation_id)
+                except Exception as db_error:
+                    logger.warning("Failed to mark sync operation as completed", 
+                                 error=str(db_error), 
+                                 operation_id=sync_op.operation_id)
+                    # Try to recover and retry once
+                    try:
+                        db.session.rollback()
+                        db.session.remove()
+                        logger.info("Database session recovered, retrying sync operation completion")
+                        update_sync_operation(
+                            sync_op.operation_id,
+                            status=SyncStatus.COMPLETED,
+                            completed_at=datetime.utcnow(),
+                            duration_seconds=duration
+                        )
+                        logger.info("OneDrive sync operation completed after recovery", operation_id=sync_op.operation_id)
+                    except Exception as retry_error:
+                        logger.error("Failed to complete sync operation even after recovery", 
+                                   error=str(retry_error),
+                                   operation_id=sync_op.operation_id)
             except Exception as e:
                 logger.warning("Failed to mark sync operation as completed", error=str(e))
         else:

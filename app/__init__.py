@@ -104,10 +104,15 @@ def create_app():
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
             "pool_pre_ping": True,  # Verify connections before use
             "pool_recycle": 300,    # Recycle connections every 5 minutes
+            "pool_timeout": 30,     # Wait up to 30 seconds for a connection from the pool
+            "max_overflow": 10,     # Allow up to 10 overflow connections
             "connect_args": {
                 "sslmode": "prefer",  # Try SSL but fallback to non-SSL if needed
                 "connect_timeout": 10,
-                "application_name": "trello_sharepoint_app"
+                "application_name": "trello_sharepoint_app",
+                "keepalives_idle": 600,  # Send keepalives every 10 minutes
+                "keepalives_interval": 30,  # Retry keepalives every 30 seconds
+                "keepalives_count": 3,  # Max keepalive retries
             }
         }
     else:
