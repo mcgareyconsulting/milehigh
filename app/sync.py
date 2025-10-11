@@ -113,7 +113,7 @@ def check_database_connection():
         logger.warning("Database connection check failed", error=str(e))
         return False
 
-def create_sync_operation(operation_type: str, source_system: str = None, source_id: str = None) -> SyncOperation:
+def create_sync_operation(operation_type: str, source_system: str = None, source_id: str = None, trigger_source: str = None) -> SyncOperation:
     """Create a new sync operation record."""
     operation_id = str(uuid.uuid4())[:8]
     sync_op = SyncOperation(
@@ -592,7 +592,7 @@ def is_formula_cell(row):
     )
 
 
-def sync_from_onedrive(data):
+def sync_from_onedrive(data, trigger_source="scheduled"):
     """
     Sync data from OneDrive to Trello based on the polling payload
     TODO: List movement mapping errors, duplicate db records being passed on one change
@@ -606,12 +606,12 @@ def sync_from_onedrive(data):
                 source_system="onedrive",
                 source_id=None,
             )
-            safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created")
-            logger.info("OneDrive poll sync operation logged to database", operation_id=sync_op.operation_id)
+            safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created", trigger_source=trigger_source)
+            logger.info(f"OneDrive poll sync operation logged to database (trigger: {trigger_source})", operation_id=sync_op.operation_id)
         else:
-            logger.warning("Database connection unavailable - proceeding without sync operation logging")
+            logger.warning(f"Database connection unavailable - proceeding without sync operation logging (trigger: {trigger_source})")
     except Exception as e:
-        logger.warning("Failed to create sync operation - proceeding without database logging", error=str(e))
+        logger.warning(f"Failed to create sync operation - proceeding without database logging (trigger: {trigger_source})", error=str(e))
 
     try:
         
