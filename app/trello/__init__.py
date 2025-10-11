@@ -78,11 +78,12 @@ def trello_webhook():
 
         # If locked, enqueue the event for later processing and return 202
         if sync_lock_manager.is_locked():
+            current_op = sync_lock_manager.get_current_operation()
             try:
                 trello_event_queue.put_nowait(event_info)
                 thread_tracker.thread_rejected()
-                app.logger.info("Trello webhook queued due to active lock")
-                return jsonify({"status": "queued"}), 202
+                app.logger.info(f"Trello webhook queued due to active lock: {current_op}")
+                return jsonify({"status": "queued", "reason": f"lock_held_by_{current_op}"}), 202
             except Full:
                 thread_tracker.thread_rejected()
                 app.logger.warning("Trello event queue is full; dropping event")
@@ -94,6 +95,20 @@ def trello_webhook():
 
             try:
                 with app.app_context():
+                    # Double-check lock status before attempting acquisition
+                    # This handles race conditions where another operation started
+                    # between the initial check and thread execution
+                    if sync_lock_manager.is_locked():
+                        current_op = sync_lock_manager.get_current_operation()
+                        app.logger.info(f"Lock acquired by {current_op} before thread execution - queuing event")
+                        try:
+                            trello_event_queue.put_nowait(event_info)
+                        except Full:
+                            app.logger.warning("Queue full while requeuing - dropping event")
+                        duration = thread_tracker.thread_completed(thread_id, success=False)
+                        thread_tracker.thread_rejected()
+                        return
+
                     # Try to acquire the sync lock in the thread
                     try:
                         with sync_lock_manager.acquire_sync_lock("Trello-Hook"):

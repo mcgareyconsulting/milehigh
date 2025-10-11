@@ -77,7 +77,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="47",  # Run at minute 0 of every hour
+        minute="58",  # Run at minute 0 of every hour
         hour="*",  # Every hour (0-23)
         day="*",   # Every day
         month="*", # Every month
@@ -103,10 +103,14 @@ def create_app():
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
             "pool_pre_ping": True,  # Verify connections before use
             "pool_recycle": 300,    # Recycle connections every 5 minutes
+            "pool_size": 10,        # Number of connections to maintain
+            "max_overflow": 20,     # Additional connections beyond pool_size
+            "pool_timeout": 30,     # Seconds to wait for connection from pool
             "connect_args": {
-                "sslmode": "prefer",  # Try SSL but fallback to non-SSL if needed
+                "sslmode": "require",  # Require SSL for production security
                 "connect_timeout": 10,
-                "application_name": "trello_sharepoint_app"
+                "application_name": "trello_sharepoint_app",
+                "options": "-c statement_timeout=30000"  # 30 second statement timeout
             }
         }
     else:

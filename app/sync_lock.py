@@ -60,8 +60,8 @@ class SyncLockManager:
                         logger.info(f"Re-entrant sync lock for operation: {operation_name}")
                     else:
                         logger.warning(
-                            f"Sync lock already held by '{current_op}'. "
-                            f"Cannot acquire for '{operation_name}'"
+                            f"Sync lock already held by '{current_op}' (thread {self._holder_thread_id}). "
+                            f"Cannot acquire for '{operation_name}' (thread {current_thread_id})"
                         )
                         raise RuntimeError(f"Sync already in progress: {current_op}")
 
@@ -70,7 +70,7 @@ class SyncLockManager:
                 self._holder_thread_id = current_thread_id
                 self._acquired_at = datetime.now()
                 acquired = True
-                logger.info(f"Sync lock acquired for operation: {operation_name}")
+                logger.info(f"Sync lock acquired for operation: {operation_name} (thread {current_thread_id})")
             finally:
                 # Release the manager mutex so work can happen while state is busy
                 self._lock.release()
