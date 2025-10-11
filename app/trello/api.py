@@ -6,10 +6,15 @@ from app.trello.utils import mountain_due_datetime
 
 
 # Main function for updating trello card information
-def update_trello_card(card_id, new_list_id=None, new_due_date=None):
+def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_date=False):
     """
     Updates a Trello card\'s list and/or due date in a single API call.
-    new_due_date should be a datetime object or None.
+    
+    Args:
+        card_id: Trello card ID
+        new_list_id: New list ID (optional)
+        new_due_date: New due date as datetime object (optional)
+        clear_due_date: If True, explicitly clear the due date even if new_due_date is None
     """
     url = f"https://api.trello.com/1/cards/{card_id}"
 
@@ -21,17 +26,23 @@ def update_trello_card(card_id, new_list_id=None, new_due_date=None):
     if new_list_id:
         payload["idList"] = new_list_id
 
+    # Handle due date
     if new_due_date:
         # Set due date to 6pm Mountain time, DST-aware
         payload["due"] = mountain_due_datetime(new_due_date)
-    else:
-        payload["due"] = None  # Clear the due date
+    elif clear_due_date:
+        # Explicitly clear the due date using empty string (Trello API requirement)
+        payload["due"] = ""
+    # If neither new_due_date nor clear_due_date, don't include 'due' parameter at all
 
     try:
+        # Log the payload for debugging
+        print(f"[TRELLO API] Updating card {card_id} with payload: {payload}")
+        
         response = requests.put(url, params=payload)
         response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
 
-        print(f"[TRELLO API] Card {card_id} updated successfully: {payload}")
+        print(f"[TRELLO API] Card {card_id} updated successfully")
         return response.json()
 
     except requests.exceptions.HTTPError as http_err:
