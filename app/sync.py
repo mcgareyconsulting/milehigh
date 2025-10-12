@@ -183,7 +183,7 @@ def rectify_db_on_trello_move(job, new_trello_list, operation_id: str):
         }
     )
     
-    if new_trello_list == "Paint complete":
+    if new_trello_list == "Paint complete" or new_trello_list == "Store at MHMW for shipping" or new_trello_list == "Shipping planning":
         job.fitup_comp = "X"
         job.welded = "X"
         job.paint_comp = "X"
