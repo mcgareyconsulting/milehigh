@@ -110,6 +110,8 @@ def get_trello_cards_from_subset():
         "Fit Up Complete.",
         "Paint complete",
         "Shipping completed",
+        "Store at MHMW for shipping",
+        "Shipping planning",
     ]
 
     # Get all lists on the board
