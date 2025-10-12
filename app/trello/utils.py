@@ -52,7 +52,15 @@ def parse_webhook_data(data):
                     "changed_fields": changed_fields,
                     "time": event_time,
                 }
-
+        # Card created
+        elif action_type == "createCard":
+            return {
+                "event": "card_created",
+                "handled": True,
+                "card_id": card_id,
+                "card_name": card_name,
+                "time": event_time,
+            }
         # Other actions can be added here
 
         # If nothing above matched, it's unhandled
