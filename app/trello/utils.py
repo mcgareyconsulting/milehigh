@@ -11,6 +11,7 @@ def parse_webhook_data(data):
     try:
         action = data.get("action", {})
         action_type = action.get("type")
+        print(action_type)
         action_data = action.get("data", {})
         card_info = action_data.get("card", {})
         card_id = card_info.get("id")
