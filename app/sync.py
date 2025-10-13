@@ -28,6 +28,98 @@ import re
 logger = get_logger(__name__)
 
 
+def create_job_from_excel_data(excel_row, source_of_update, event_time):
+    """Create a Job record from Excel data."""
+    return Job(
+        job=excel_row.get("Job #"),
+        release=excel_row.get("Release #"),
+        job_name=excel_row.get("Job"),
+        description=excel_row.get("Description"),
+        fab_hrs=excel_row.get("Fab Hrs"),
+        install_hrs=excel_row.get("Install HRS"),
+        paint_color=excel_row.get("Paint color"),
+        pm=excel_row.get("PM"),
+        by=excel_row.get("BY"),
+        released=as_date(excel_row.get("Released")),
+        fab_order=excel_row.get("Fab Order"),
+        cut_start=excel_row.get("Cut start"),
+        fitup_comp=excel_row.get("Fitup comp"),
+        welded=excel_row.get("Welded"),
+        paint_comp=excel_row.get("Paint Comp"),
+        ship=excel_row.get("Ship"),
+        start_install=as_date(excel_row.get("Start install")),
+        comp_eta=as_date(excel_row.get("Comp. ETA")),
+        job_comp=excel_row.get("Job Comp"),
+        invoiced=excel_row.get("Invoiced"),
+        notes=excel_row.get("Notes"),
+        source_of_update=source_of_update,
+        last_updated_at=event_time,
+    )
+
+
+def add_trello_data_to_job(job_record, card_id, card_data):
+    """Add Trello-specific data to a Job record."""
+    job_record.trello_card_id = card_id
+    job_record.trello_card_name = card_data.get("name")
+    job_record.trello_card_description = card_data.get("desc")
+    job_record.trello_list_id = card_data.get("idList")
+    job_record.trello_list_name = get_list_name_by_id(card_data.get("idList"))
+    
+    if card_data.get("due"):
+        job_record.trello_card_date = parse_trello_datetime(card_data["due"])
+    else:
+        job_record.trello_card_date = None
+
+
+def create_job_from_new_card(card_id, card_data, event_time, operation_id):
+    """Create a new Job record from a newly created Trello card."""
+    logger.info("Creating new DB record from card", operation_id=operation_id, card_id=card_id)
+    safe_log_sync_event(operation_id, "INFO", "Creating new DB record from card", trello_card_id=card_id)
+    
+    # Extract identifier from card name
+    identifier = extract_identifier(card_data.get("name"))
+    if not identifier:
+        logger.warning("No identifier found in card name", operation_id=operation_id, card_id=card_id, card_name=card_data.get("name"))
+        safe_log_sync_event(operation_id, "WARNING", "No identifier found in card name", trello_card_id=card_id, card_name=card_data.get("name"))
+        return None
+    
+    # Parse job and release from identifier
+    try:
+        job, release = identifier.split("-")
+    except ValueError:
+        logger.error("Invalid identifier format", operation_id=operation_id, card_id=card_id, identifier=identifier)
+        safe_log_sync_event(operation_id, "ERROR", "Invalid identifier format", trello_card_id=card_id, identifier=identifier)
+        return None
+    
+    # Look up Excel data
+    excel_index, excel_row = get_excel_row_and_index_by_identifiers(job, release)
+    if excel_row is None:
+        logger.warning("No Excel data found for new card", operation_id=operation_id, card_id=card_id, identifier=identifier)
+        safe_log_sync_event(operation_id, "WARNING", "No Excel data found for new card", trello_card_id=card_id, identifier=identifier)
+        return None
+    
+    logger.info("Found Excel data for new card", operation_id=operation_id, card_id=card_id, 
+                job=job, release=release, excel_index=excel_index)
+    
+    # Create Job record with Excel data
+    rec = create_job_from_excel_data(excel_row, "Trello", event_time)
+    
+    # Add Trello-specific data
+    add_trello_data_to_job(rec, card_id, card_data)
+    
+    # Save to database
+    db.session.add(rec)
+    db.session.commit()
+    
+    logger.info("New DB record created successfully", operation_id=operation_id, card_id=card_id, job_id=rec.id)
+    safe_log_sync_event(
+        operation_id, "INFO", "New DB record created successfully",
+        trello_card_id=card_id, job_id=rec.id, job=rec.job, release=rec.release
+    )
+    
+    return rec
+
+
 def safe_log_sync_event(operation_id: str, level: str, message: str, **kwargs):
     """Safely log a sync event, converting problematic types."""
     max_retries = 3
@@ -252,7 +344,6 @@ def sync_from_trello(event_info):
 
     card_id = event_info["card_id"]
     # print type of card id
-    print(type(card_id))
     
     event_time = parse_trello_datetime(event_info.get("time"))
     
@@ -321,21 +412,25 @@ def sync_from_trello(event_info):
                     db_name=rec.trello_card_name,
                 )
             else:
-                logger.info(
-                    "No DB record found for card - ignoring webhook",
-                    operation_id=sync_op.operation_id,
-                    card_id=card_id,
-                    trello_name=card_data.get("name")
-                )
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "INFO",
-                    "No DB record found for card - ignoring webhook",
-                    trello_card_id=card_id,
-                    trello_name=card_data.get("name"),
-                )
-                update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="NoDbRecord")
-                return
+                # if record not found, check if card was created
+                if event_info.get("event") == "card_created":
+                    rec = create_job_from_new_card(card_id, card_data, event_time, sync_op.operation_id)
+                else:
+                    logger.info(
+                        "No DB record found for card - ignoring webhook",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        trello_name=card_data.get("name")
+                    )
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "No DB record found for card - ignoring webhook",
+                        trello_card_id=card_id,
+                        trello_name=card_data.get("name"),
+                    )
+                    update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="NoDbRecord")
+                    return
 
             # Check for duplicate updates
             if rec and rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
