@@ -159,3 +159,106 @@ def get_trello_cards_from_subset():
         for card in filtered_cards
     ]
     return relevant_data
+
+
+def create_trello_card_from_excel_data(excel_data, list_name=None):
+    """
+    Creates a Trello card from Excel macro data.
+    
+    Args:
+        excel_data: Dictionary containing job data from Excel macro
+        list_name: Optional list name to create the card in (defaults to first available list)
+    
+    Returns:
+        Dictionary with card creation result
+    """
+    # Get the target list ID
+    if list_name:
+        target_list = get_list_by_name(list_name)
+        if not target_list:
+            raise ValueError(f"List '{list_name}' not found on the board")
+        list_id = target_list["id"]
+    else:
+        # Get the first available list if no specific list is provided
+        url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+        params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+        response = requests.get(url_lists, params=params)
+        response.raise_for_status()
+        lists = response.json()
+        if not lists:
+            raise ValueError("No lists found on the board")
+        list_id = lists[0]["id"]  # Use first list
+    
+    # Format card title
+    job_number = excel_data.get('Job #', 'Unknown')
+    release_number = excel_data.get('Release #', 'Unknown')
+    job_name = excel_data.get('Job', 'Unknown Job')
+    card_title = f"{job_number}-{release_number} {job_name}"
+    
+    # Format card description - simplified format
+    description_parts = []
+    
+    # Job description (first line)
+    if excel_data.get('Description'):
+        description_parts.append(excel_data['Description'])
+    
+    # Install hours (second line)
+    if excel_data.get('Install HRS'):
+        description_parts.append(f"Install hours: {excel_data['Install HRS']}")
+    
+    # PM (third line)
+    if excel_data.get('PM'):
+        description_parts.append(f"PM: {excel_data['PM']}")
+    
+    # Paint color (fourth line)
+    if excel_data.get('Paint color'):
+        description_parts.append(f"Paint color: {excel_data['Paint color']}")
+    
+    # Hard-coded "Installer/" at the bottom
+    description_parts.append("Installer/")
+    
+    # Join all description parts with newlines
+    card_description = "\n".join(description_parts)
+    
+    # Create the card
+    url = "https://api.trello.com/1/cards"
+    
+    payload = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "name": card_title,
+        "desc": card_description,
+        "idList": list_id,
+        "pos": "top"  # Add to top of list
+    }
+    
+    try:
+        print(f"[TRELLO API] Creating card with payload: {payload}")
+        
+        response = requests.post(url, params=payload)
+        response.raise_for_status()
+        
+        card_data = response.json()
+        print(f"[TRELLO API] Card created successfully: {card_data['id']}")
+        
+        return {
+            "success": True,
+            "card_id": card_data["id"],
+            "card_name": card_data["name"],
+            "card_url": card_data["url"]
+        }
+        
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error creating card: {http_err}")
+        print("[TRELLO API] Response content:", response.text)
+        return {
+            "success": False,
+            "error": f"HTTP error: {http_err}",
+            "response": response.text
+        }
+    except Exception as err:
+        print(f"[TRELLO API] Other error creating card: {err}")
+        return {
+            "success": False,
+            "error": str(err)
+        }

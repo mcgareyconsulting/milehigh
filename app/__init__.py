@@ -2,6 +2,7 @@ import os
 from flask import Flask, jsonify, request
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
+from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
 from app.models import db, SyncOperation, SyncLog, SyncStatus
@@ -423,8 +424,14 @@ def create_app():
     @app.route("/api/create_card", methods=["POST"])
     def new_card():
         data = request.get_json()
-        print(data)
-        return jsonify({"message": "Card created"}), 200
+        
+        # Create the card
+        result = create_trello_card_from_excel_data(data, "Fit Up Complete.")
+
+        if result["success"]:
+            return jsonify({"message": "Card created", "card_id": result["card_id"]}), 200
+        else:
+            return jsonify({"message": "Card creation failed", "error": result["error"]}), 500
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
