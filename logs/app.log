@@ -3676,3 +3676,52 @@
 {"event": "Trello sync completed successfully"}
 {"event": "Sync lock released for operation: Trello-Hook"}
 {"event": "Sync completed in 0.36s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-14T19:37:05.387954Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-14T19:37:05.457368Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [14/Oct/2025 13:37:47] \"\u001b[35m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 500 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-14T19:50:12.562662Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-14T19:50:12.623227Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [14/Oct/2025 13:50:23] \"\u001b[35m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 500 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 13:50:57] \"POST /api/create_card HTTP/1.1\" 200 -"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145425027072)"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [14/Oct/2025 13:50:57] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"1cd181b8\", \"start_time\": \"2025-10-14T19:50:57.180698\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T19:50:57.180796Z\"}"}
+{"event": "{\"operation_id\": \"1cd181b8\", \"card_id\": \"68eea9a049b780f516848471\", \"event_time\": \"2025-10-14T19:50:56.927000\", \"event_type\": \"card_created\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T19:50:57.197921Z\"}"}
+{"event": "{\"operation_id\": \"1cd181b8\", \"card_id\": \"68eea9a049b780f516848471\", \"trello_name\": \"222-222 Test Card\", \"event\": \"No DB record found for card - ignoring webhook\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T19:50:57.419700Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"1cd181b8\", \"duration_seconds\": 0.259422, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T19:50:57.440182Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.28s"}
+{"event": "127.0.0.1 - - [14/Oct/2025 13:54:32] \"\u001b[35m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 500 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-14T20:00:12.346210Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-14T20:00:12.422735Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [14/Oct/2025 14:00:28] \"\u001b[35m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 500 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 14:00:59] \"POST /api/create_card HTTP/1.1\" 200 -"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145514856448)"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [14/Oct/2025 14:00:59] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"8a859875\", \"start_time\": \"2025-10-14T20:00:59.683558\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T20:00:59.684637Z\"}"}
+{"event": "{\"operation_id\": \"8a859875\", \"card_id\": \"68eeabfbbb75fb22befeb3a0\", \"event_time\": \"2025-10-14T20:00:59.416000\", \"event_type\": \"card_created\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T20:00:59.699042Z\"}"}
+{"event": "{\"operation_id\": \"8a859875\", \"card_id\": \"68eeabfbbb75fb22befeb3a0\", \"trello_name\": \"222-222: Test Card\", \"event\": \"No DB record found for card - ignoring webhook\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T20:00:59.899968Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"8a859875\", \"duration_seconds\": 0.229106, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-14T20:00:59.912850Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.29s"}

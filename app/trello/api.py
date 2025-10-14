@@ -3,6 +3,8 @@ import re
 import os
 from app.config import Config as cfg
 from app.trello.utils import mountain_due_datetime
+from app.models import Job
+from flask import current_app
 
 
 # Main function for updating trello card information
@@ -161,9 +163,52 @@ def get_trello_cards_from_subset():
     return relevant_data
 
 
+def check_job_exists_in_db(job_number, release_number):
+    """
+    Check if a job with the given job number and release number already exists in the database.
+    
+    Args:
+        job_number: The job number (can be int or string)
+        release_number: The release number (can be int or string)
+    
+    Returns:
+        Job object if found, None if not found
+        
+    Raises:
+        Exception: For debugging purposes - will be caught and logged by caller
+    """
+    try:
+        print(f"[DEBUG] Checking for job: {job_number}-{release_number}")
+        
+        # Convert job_number to int, keep release_number as string to preserve format like "v862"
+        job_int = int(job_number)
+        release_str = str(release_number)
+        
+        print(f"[DEBUG] Converted identifiers - job_int: {job_int}, release_str: {release_str}")
+        
+        # Use Flask application context for database access
+        existing_job = Job.query.filter_by(job=job_int, release=release_str).one_or_none()
+        print(f"[DEBUG] Database query completed, found job: {existing_job is not None}")
+        
+        return existing_job
+        
+    except (ValueError, TypeError) as e:
+        error_msg = f"Invalid job or release identifiers: job={job_number}, release={release_number}, error={str(e)}"
+        print(f"[ERROR] {error_msg}")
+        raise Exception(error_msg)
+    except Exception as e:
+        error_msg = f"Database error checking for job {job_number}-{release_number}: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        print(f"[ERROR] Exception type: {type(e).__name__}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        raise Exception(error_msg)
+
+
 def create_trello_card_from_excel_data(excel_data, list_name=None):
     """
     Creates a Trello card from Excel macro data.
+    First checks if a job with the same identifier already exists in the database.
     
     Args:
         excel_data: Dictionary containing job data from Excel macro
@@ -172,67 +217,98 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
     Returns:
         Dictionary with card creation result
     """
-    # Get the target list ID
-    if list_name:
-        target_list = get_list_by_name(list_name)
-        if not target_list:
-            raise ValueError(f"List '{list_name}' not found on the board")
-        list_id = target_list["id"]
-    else:
-        # Get the first available list if no specific list is provided
-        url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
-        params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-        response = requests.get(url_lists, params=params)
-        response.raise_for_status()
-        lists = response.json()
-        if not lists:
-            raise ValueError("No lists found on the board")
-        list_id = lists[0]["id"]  # Use first list
-    
-    # Format card title
-    job_number = excel_data.get('Job #', 'Unknown')
-    release_number = excel_data.get('Release #', 'Unknown')
-    job_name = excel_data.get('Job', 'Unknown Job')
-    card_title = f"{job_number}-{release_number} {job_name}"
-    
-    # Format card description - simplified format
-    description_parts = []
-    
-    # Job description (first line)
-    if excel_data.get('Description'):
-        description_parts.append(excel_data['Description'])
-    
-    # Install hours (second line)
-    if excel_data.get('Install HRS'):
-        description_parts.append(f"Install hours: {excel_data['Install HRS']}")
-    
-    # PM (third line)
-    if excel_data.get('PM'):
-        description_parts.append(f"PM: {excel_data['PM']}")
-    
-    # Paint color (fourth line)
-    if excel_data.get('Paint color'):
-        description_parts.append(f"Paint color: {excel_data['Paint color']}")
-    
-    # Hard-coded "Installer/" at the bottom
-    description_parts.append("Installer/")
-    
-    # Join all description parts with newlines
-    card_description = "\n".join(description_parts)
-    
-    # Create the card
-    url = "https://api.trello.com/1/cards"
-    
-    payload = {
-        "key": cfg.TRELLO_API_KEY,
-        "token": cfg.TRELLO_TOKEN,
-        "name": card_title,
-        "desc": card_description,
-        "idList": list_id,
-        "pos": "top"  # Add to top of list
-    }
-    
     try:
+        print(f"[DEBUG] Starting card creation with data: {excel_data}")
+        
+        # Check for duplicate job in database first
+        job_number = excel_data.get('Job #')
+        release_number = excel_data.get('Release #')
+        
+        print(f"[DEBUG] Extracted identifiers - Job #: {job_number}, Release #: {release_number}")
+        
+        if not job_number or not release_number:
+            error_msg = "Missing Job # or Release # in Excel data"
+            print(f"[ERROR] {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg
+            }
+        
+        print(f"[DEBUG] Checking for duplicate job in database...")
+        existing_job = check_job_exists_in_db(job_number, release_number)
+        
+        if existing_job:
+            error_msg = f"Job {job_number}-{release_number} already exists in database"
+            print(f"[DEBUG] {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "existing_job_id": existing_job.id,
+                "existing_trello_card_id": existing_job.trello_card_id
+            }
+        
+        print(f"[DEBUG] No duplicate found, proceeding with card creation...")
+        
+        # Get the target list ID
+        if list_name:
+            target_list = get_list_by_name(list_name)
+            if not target_list:
+                raise ValueError(f"List '{list_name}' not found on the board")
+            list_id = target_list["id"]
+        else:
+            # Get the first available list if no specific list is provided
+            url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+            params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+            response = requests.get(url_lists, params=params)
+            response.raise_for_status()
+            lists = response.json()
+            if not lists:
+                raise ValueError("No lists found on the board")
+            list_id = lists[0]["id"]  # Use first list
+        
+        # Format card title
+        job_number = excel_data.get('Job #', 'Unknown')
+        release_number = excel_data.get('Release #', 'Unknown')
+        job_name = excel_data.get('Job', 'Unknown Job')
+        card_title = f"{job_number}-{release_number}: {job_name}"
+        
+        # Format card description - simplified format
+        description_parts = []
+        
+        # Job description (first line)
+        if excel_data.get('Description'):
+            description_parts.append(excel_data['Description'])
+        
+        # Install hours (second line)
+        if excel_data.get('Install HRS'):
+            description_parts.append(f"Install hours: {excel_data['Install HRS']}")
+        
+        # PM (third line)
+        if excel_data.get('PM'):
+            description_parts.append(f"PM: {excel_data['PM']}")
+        
+        # Paint color (fourth line)
+        if excel_data.get('Paint color'):
+            description_parts.append(f"Paint color: {excel_data['Paint color']}")
+        
+        # Hard-coded "Installer/" at the bottom
+        description_parts.append("Installer/")
+        
+        # Join all description parts with newlines
+        card_description = "\n".join(description_parts)
+        
+        # Create the card
+        url = "https://api.trello.com/1/cards"
+        
+        payload = {
+            "key": cfg.TRELLO_API_KEY,
+            "token": cfg.TRELLO_TOKEN,
+            "name": card_title,
+            "desc": card_description,
+            "idList": list_id,
+            "pos": "top"  # Add to top of list
+        }
+        
         print(f"[TRELLO API] Creating card with payload: {payload}")
         
         response = requests.post(url, params=payload)
@@ -261,4 +337,15 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         return {
             "success": False,
             "error": str(err)
+        }
+    
+    except Exception as e:
+        error_msg = f"Unexpected error in create_trello_card_from_excel_data: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        return {
+            "success": False,
+            "error": error_msg,
+            "exception_type": type(e).__name__
         }
