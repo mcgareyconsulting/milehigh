@@ -2990,3 +2990,627 @@
 {"event": "Trello sync completed successfully"}
 {"event": "Sync lock released for operation: Trello-Hook"}
 {"event": "Sync completed in 32.76s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-13T18:34:43.823330Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-13T18:34:44.005293Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2025-10-13 14:00:00 MDT)\" (scheduled at 2025-10-13 13:00:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:00.340170Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145536233472)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"b445ae3c\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.532309Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-13 18:24:49\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.557967Z\"}"}
+{"event": "{\"event\": \"DataFrame 254 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.558401Z\"}"}
+{"event": "{\"event\": \"200-150 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.567296Z\"}"}
+{"event": "{\"event\": \"200-125 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.580483Z\"}"}
+{"event": "{\"event\": \"200-403 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.589523Z\"}"}
+{"event": "{\"event\": \"200-879 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.601617Z\"}"}
+{"event": "{\"event\": \"340-419 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.611894Z\"}"}
+{"event": "{\"event\": \"130-271 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.621666Z\"}"}
+{"event": "{\"event\": \"130-421 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.632160Z\"}"}
+{"event": "{\"event\": \"130-430 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.638874Z\"}"}
+{"event": "{\"event\": \"130-279 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.649878Z\"}"}
+{"event": "{\"event\": \"130-323 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.658644Z\"}"}
+{"event": "{\"event\": \"130-358 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.665644Z\"}"}
+{"event": "{\"event\": \"130-359 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.673195Z\"}"}
+{"event": "{\"event\": \"130-417 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.680686Z\"}"}
+{"event": "{\"event\": \"130-416 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.691325Z\"}"}
+{"event": "{\"event\": \"190-892 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.706331Z\"}"}
+{"event": "{\"event\": \"190-278 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.712633Z\"}"}
+{"event": "{\"event\": \"190-222 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.720215Z\"}"}
+{"event": "{\"event\": \"190-863 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.724964Z\"}"}
+{"event": "{\"event\": \"190-861 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.731201Z\"}"}
+{"event": "{\"event\": \"190-337 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.736972Z\"}"}
+{"event": "{\"event\": \"190-320 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.741765Z\"}"}
+{"event": "{\"event\": \"190-335 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.747379Z\"}"}
+{"event": "{\"event\": \"190-334 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.753895Z\"}"}
+{"event": "{\"event\": \"190-176 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.759656Z\"}"}
+{"event": "{\"event\": \"190-167 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.766736Z\"}"}
+{"event": "{\"event\": \"190-848 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.773476Z\"}"}
+{"event": "{\"event\": \"190-862 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.779707Z\"}"}
+{"event": "{\"event\": \"190-847 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.786545Z\"}"}
+{"event": "{\"event\": \"170-131 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.794255Z\"}"}
+{"event": "{\"event\": \"170-130 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.803267Z\"}"}
+{"event": "{\"event\": \"170-147 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.809263Z\"}"}
+{"event": "{\"event\": \"170-132 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.818292Z\"}"}
+{"event": "{\"event\": \"170-141 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.823741Z\"}"}
+{"event": "{\"event\": \"170-146 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.829726Z\"}"}
+{"event": "{\"event\": \"170-128 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.837716Z\"}"}
+{"event": "{\"event\": \"170-129 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.842323Z\"}"}
+{"event": "{\"event\": \"900-210 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.857492Z\"}"}
+{"event": "{\"event\": \"900-408 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.864720Z\"}"}
+{"event": "{\"event\": \"900-979 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.871218Z\"}"}
+{"event": "{\"event\": \"900-217 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.878154Z\"}"}
+{"event": "{\"event\": \"900-799 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.885029Z\"}"}
+{"event": "{\"event\": \"900-800 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.890158Z\"}"}
+{"event": "{\"event\": \"900-790 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.899766Z\"}"}
+{"event": "{\"event\": \"900-791 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.905099Z\"}"}
+{"event": "{\"event\": \"900-796 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.911524Z\"}"}
+{"event": "{\"event\": \"900-797 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.917517Z\"}"}
+{"event": "{\"event\": \"340-415 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.922812Z\"}"}
+{"event": "{\"event\": \"370-512 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.927592Z\"}"}
+{"event": "{\"event\": \"370-521 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.934014Z\"}"}
+{"event": "{\"event\": \"170-449 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.940010Z\"}"}
+{"event": "{\"event\": \"200-436 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.949670Z\"}"}
+{"event": "{\"event\": \"200-261 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.955821Z\"}"}
+{"event": "{\"event\": \"320-331 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.962477Z\"}"}
+{"event": "{\"event\": \"320-398 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.972582Z\"}"}
+{"event": "{\"event\": \"320-397 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.980425Z\"}"}
+{"event": "{\"event\": \"320-352 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:18.990359Z\"}"}
+{"event": "{\"event\": \"320-344 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.003899Z\"}"}
+{"event": "{\"event\": \"320-353 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.014663Z\"}"}
+{"event": "{\"event\": \"320-399 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.022425Z\"}"}
+{"event": "{\"event\": \"340-409 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.027795Z\"}"}
+{"event": "{\"event\": \"340-423 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.036931Z\"}"}
+{"event": "{\"event\": \"130-338 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.042836Z\"}"}
+{"event": "{\"event\": \"130-426 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.053678Z\"}"}
+{"event": "{\"event\": \"190-390 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.059655Z\"}"}
+{"event": "{\"event\": \"190-413 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.067027Z\"}"}
+{"event": "{\"event\": \"190-442 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.072356Z\"}"}
+{"event": "{\"event\": \"190-461 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.086910Z\"}"}
+{"event": "{\"event\": \"300-771 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.093661Z\"}"}
+{"event": "{\"event\": \"380-376 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.105501Z\"}"}
+{"event": "{\"event\": \"330-443 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.121888Z\"}"}
+{"event": "{\"event\": \"330-447 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.130914Z\"}"}
+{"event": "{\"event\": \"370-523 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.167447Z\"}"}
+{"event": "{\"event\": \"370-525 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.174617Z\"}"}
+{"event": "{\"event\": \"370-530 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.183331Z\"}"}
+{"event": "{\"event\": \"370-527 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.189867Z\"}"}
+{"event": "{\"event\": \"170-183 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.209755Z\"}"}
+{"event": "{\"event\": \"900-276 Updating DB start_install (formula-driven): datetime.date(2025, 10, 15) -> datetime.date(2025, 10, 16)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.216066Z\"}"}
+{"event": "{\"event\": \"190-248 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.230112Z\"}"}
+{"event": "{\"event\": \"900-V862 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.242493Z\"}"}
+{"event": "{\"event\": \"380-414 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.252755Z\"}"}
+{"event": "{\"event\": \"330-430 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.258255Z\"}"}
+{"event": "{\"event\": \"190-168 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.268069Z\"}"}
+{"event": "{\"event\": \"260-483 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.279852Z\"}"}
+{"event": "{\"event\": \"370-455 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.295070Z\"}"}
+{"event": "{\"event\": \"370-458 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.302306Z\"}"}
+{"event": "{\"event\": \"370-459 Updating DB start_install (formula-driven): datetime.date(2025, 10, 16) -> datetime.date(2025, 10, 17)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.309977Z\"}"}
+{"event": "{\"event\": \"370-479 Updating DB start_install (formula-driven): datetime.date(2025, 10, 20) -> datetime.date(2025, 10, 21)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.322811Z\"}"}
+{"event": "{\"event\": \"370-480 Updating DB start_install (formula-driven): datetime.date(2025, 10, 20) -> datetime.date(2025, 10, 21)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.340345Z\"}"}
+{"event": "{\"event\": \"380-487 Updating DB start_install (formula-driven): datetime.date(2025, 10, 20) -> datetime.date(2025, 10, 21)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.349011Z\"}"}
+{"event": "{\"event\": \"260-110 Updating DB start_install (formula-driven): datetime.date(2025, 10, 20) -> datetime.date(2025, 10, 21)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.365222Z\"}"}
+{"event": "{\"event\": \"260-511 Updating DB start_install (formula-driven): datetime.date(2025, 10, 21) -> datetime.date(2025, 10, 22)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.373621Z\"}"}
+{"event": "{\"event\": \"200-516 Updating DB start_install (formula-driven): datetime.date(2025, 10, 21) -> datetime.date(2025, 10, 22)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.379517Z\"}"}
+{"event": "{\"event\": \"900-517 Updating DB start_install (formula-driven): datetime.date(2025, 10, 21) -> datetime.date(2025, 10, 22)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.386427Z\"}"}
+{"event": "{\"event\": \"222-222 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.416355Z\"}"}
+{"event": "{\"event\": \"200-152 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.424262Z\"}"}
+{"event": "{\"event\": \"260-351 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.429262Z\"}"}
+{"event": "{\"event\": \"170-453 Updating DB ship: 'T' -> 'X'\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.440759Z\"}"}
+{"event": "{\"event\": \"170-453 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.457286Z\"}"}
+{"event": "{\"event\": \"160-946 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.463214Z\"}"}
+{"event": "{\"event\": \"160-272 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.470669Z\"}"}
+{"event": "{\"event\": \"200-416 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.476210Z\"}"}
+{"event": "{\"event\": \"200-339 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.486710Z\"}"}
+{"event": "{\"event\": \"200-V460 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.498568Z\"}"}
+{"event": "{\"event\": \"200-362 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.506646Z\"}"}
+{"event": "{\"event\": \"200-729 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.512846Z\"}"}
+{"event": "{\"event\": \"200-724 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.519071Z\"}"}
+{"event": "{\"event\": \"130-396 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.527983Z\"}"}
+{"event": "{\"event\": \"130-321 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.534342Z\"}"}
+{"event": "{\"event\": \"190-332 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.548660Z\"}"}
+{"event": "{\"event\": \"190-357 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.559508Z\"}"}
+{"event": "{\"event\": \"190-240 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.566447Z\"}"}
+{"event": "{\"event\": \"190-883 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.575138Z\"}"}
+{"event": "{\"event\": \"190-213 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.580261Z\"}"}
+{"event": "{\"event\": \"260-348 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.594883Z\"}"}
+{"event": "{\"event\": \"260-365 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.602503Z\"}"}
+{"event": "{\"event\": \"300-299 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.611058Z\"}"}
+{"event": "{\"event\": \"305-448 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.620618Z\"}"}
+{"event": "{\"event\": \"370-454 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.631363Z\"}"}
+{"event": "{\"event\": \"380-380 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.640599Z\"}"}
+{"event": "{\"event\": \"380-375 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.647253Z\"}"}
+{"event": "{\"event\": \"170-311 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.661426Z\"}"}
+{"event": "{\"event\": \"385-354 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.668568Z\"}"}
+{"event": "{\"event\": \"385-326 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.675846Z\"}"}
+{"event": "{\"event\": \"385-V862 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.681114Z\"}"}
+{"event": "{\"event\": \"385-186 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.690465Z\"}"}
+{"event": "{\"event\": \"900-262 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.706555Z\"}"}
+{"event": "{\"event\": \"900-924 Updating DB start_install (formula-driven): datetime.date(2025, 10, 28) -> datetime.date(2025, 10, 29)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.713782Z\"}"}
+{"event": "{\"event\": \"Committing 126 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.718631Z\"}"}
+{"event": "{\"event\": \"Committed 126 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:19.725958Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0984c: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:33.504590Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:34] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0976c: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:34.547213Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:35] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e09772: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:35.256427Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:35] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e09776: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:36.027275Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:36] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e096f0: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:36.722374Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:37] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e096a4: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:37.392218Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:37] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e097ca: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:38.581851Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:39] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e09804: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:39.243074Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:39] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0973a: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:40.019580Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:40] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0982a: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:40.760481Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:41] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e09746: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:41.473195Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:42] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0982e: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:42.198246Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:42] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0986a: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:43.255747Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:43] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e09836: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:44.711872Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:45] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0958e: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:46.793006Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e09894: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:47.909351Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098cc: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:48.994431Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098d0: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:49.314452Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098c4: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:49.862000Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e0985c: Due Date={new_due_date} (was None), List={new_list_name} (was Shipping completed)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:50.149805Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098e4: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:51.333821Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098c8: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:51.933433Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 68ebff834fedad67f81c4726: Due Date={new_due_date} (was None), List={new_list_name} (was Fit Up Complete.)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:52.481417Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:53] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "{\"event\": \"Updating Trello card 6866a00ab050408017e098fe: Due Date={new_due_date} (was None), List={new_list_name} (was Shipping planning)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:00:53.671863Z\"}"}
+{"event": "Trello webhook queued due to active lock: OneDrive-Poll"}
+{"event": "127.0.0.1 - - [13/Oct/2025 13:00:54] \"\u001b[35m\u001b[1mPOST /trello/webhook HTTP/1.1\u001b[0m\" 202 -"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "Sync lock acquired for operation: Trello-Queue (thread 123145553559552)"}
+{"event": "Drained Trello event started with lock acquired"}
+{"event": "Sync lock already held by 'Trello-Queue' (thread 123145553559552). Cannot acquire for 'Trello-Queue' (thread 123145570349056)"}
+{"event": "Queue drain lock contention: Sync already in progress: Trello-Queue"}
+{"event": "{\"drained\": 5, \"event\": \"Post-drain Trello queue\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.295074Z\"}"}
+{"event": "Sync lock already held by 'Trello-Queue' (thread 123145553559552). Cannot acquire for 'Trello-Queue' (thread 123145587138560)"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.296195Z\"}"}
+{"event": "Queue drain lock contention: Sync already in progress: Trello-Queue"}
+{"event": "Sync lock already held by 'Trello-Queue' (thread 123145553559552). Cannot acquire for 'Trello-Queue' (thread 123145603928064)"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2025-10-13 14:00:00 MDT)\" executed successfully"}
+{"event": "Queue drain lock contention: Sync already in progress: Trello-Queue"}
+{"event": "Sync lock already held by 'Trello-Queue' (thread 123145553559552). Cannot acquire for 'Trello-Queue' (thread 123145620717568)"}
+{"event": "Queue drain lock contention: Sync already in progress: Trello-Queue"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"13f6c8c8\", \"start_time\": \"2025-10-13T19:01:02.302951\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.303079Z\"}"}
+{"event": "{\"operation_id\": \"13f6c8c8\", \"card_id\": \"6866a00ab050408017e0984c\", \"event_time\": \"2025-10-13T19:00:33.922000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.309249Z\"}"}
+{"event": "{\"operation_id\": \"13f6c8c8\", \"card_id\": \"6866a00ab050408017e0984c\", \"job_id\": 30, \"trello_name\": \"200-436 TCR - Alexan Diagonal Bld 3 Patio Rails\", \"db_name\": \"200-436 TCR - Alexan Diagonal Bld 3 Patio Rails\", \"trello_list\": \"Paint complete\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.880197Z\"}"}
+{"event": "{\"operation_id\": \"13f6c8c8\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.888356Z\"}"}
+{"event": "{\"operation_id\": \"13f6c8c8\", \"card_id\": \"6866a00ab050408017e0984c\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.888765Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"13f6c8c8\", \"duration_seconds\": 0.593051, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T19:01:02.896044Z\"}"}
+{"event": "Drained Trello event completed successfully"}
+{"event": "Sync lock released for operation: Trello-Queue"}
+{"event": "Drained sync completed in 0.60s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-13T19:19:17.528032Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-13T20:18:16.419603Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:18:37.002900Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-13T20:19:57.815079Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-13T20:20:18.868914Z\"}"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:20:19] \"HEAD /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-13T20:20:24.829608Z\"}"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145593573376)"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:20:47] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"23287952\", \"start_time\": \"2025-10-13T20:20:47.698485\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:20:47.699489Z\"}"}
+{"event": "{\"operation_id\": \"23287952\", \"card_id\": \"68ed5bb6b413f72544f889fb\", \"event_time\": \"2025-10-13T20:20:47.144000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:20:47.719209Z\"}"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '620bacb3c4371968e8fd7bcf', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/pAtihLja/dm-trello-play-toy', 'shortUrl': 'https://trello.com/b/pAtihLja', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': False}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '68a240f8e82044f97d57138e', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/original/98ddae902598e8c693c530fd01d6094b/1000009951.jpg', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 133, 'height': 100, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/133x100/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 256, 'height': 192, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/256x192/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 480, 'height': 360, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/480x360/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 960, 'height': 720, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/960x720/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1024, 'height': 768, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1024x768/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1280, 'height': 960, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1280x960/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1920, 'height': 1440, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1920x1440/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2048, 'height': 1536, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2048x1536/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2133, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2133x1600/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 4032, 'height': 3024, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/4032x3024/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': None, 'backgroundBottomColor': '#595e67', 'backgroundTopColor': '#b1bcd2', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68ed5f1fa86adc52e56bea27', 'idMemberCreator': '620bac8bbf1c5a35a47df981', 'data': {'old': {'pos': 82}, 'card': {'pos': 246, 'id': '68ed5bb6b413f72544f889fb', 'name': '385-804 Brinkmann - Gallary @ Fort Collins Roof Rail Extension', 'idShort': 1738, 'shortLink': 'X5sXAsyk'}, 'board': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'shortLink': 'pAtihLja'}, 'list': {'id': '68ed5bb5b413f72544f87b92', 'name': 'Paint complete'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-13T20:20:47.239Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_higher', 'entities': {'card': {'type': 'card', 'id': '68ed5bb6b413f72544f889fb', 'pos': 246, 'shortLink': 'X5sXAsyk', 'text': '385-804 Brinkmann - Gallary @ Fort Collins Roof Rail Extension'}, 'memberCreator': {'type': 'member', 'id': '620bac8bbf1c5a35a47df981', 'username': 'billoneill14', 'text': \"Bill O'Neill\"}}}, 'memberCreator': {'id': '620bac8bbf1c5a35a47df981', 'activityBlocked': False, 'avatarHash': 'ca8dd512713f65376a2af3e23d91c442', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/620bac8bbf1c5a35a47df981/ca8dd512713f65376a2af3e23d91c442', 'fullName': \"Bill O'Neill\", 'idMemberReferrer': None, 'initials': 'BO', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'billoneill14'}}, 'webhook': {'id': '68ed5f03ae1bd94c9e395e41', 'description': 'Track card moves', 'idModel': '68ed5bb5b413f72544f87ba2', 'callbackURL': 'https://cb1382cd5ed8.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:20:47] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"23287952\", \"card_id\": \"68ed5bb6b413f72544f889fb\", \"trello_name\": \"385-804 Brinkmann - Gallary @ Fort Collins Roof Rail Extension\", \"event\": \"No DB record found for card - ignoring webhook\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:20:48.000218Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"23287952\", \"duration_seconds\": 0.307604, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:20:48.006154Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.48s"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145593573376)"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:24:27] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"d11c9c70\", \"start_time\": \"2025-10-13T20:24:27.729812\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:27.730254Z\"}"}
+{"event": "{\"operation_id\": \"d11c9c70\", \"card_id\": \"68ed5bb6b413f72544f889f5\", \"event_time\": \"2025-10-13T20:24:27.403000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:27.747233Z\"}"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '620bacb3c4371968e8fd7bcf', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/pAtihLja/dm-trello-play-toy', 'shortUrl': 'https://trello.com/b/pAtihLja', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': False}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '68a240f8e82044f97d57138e', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/original/98ddae902598e8c693c530fd01d6094b/1000009951.jpg', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 133, 'height': 100, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/133x100/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 256, 'height': 192, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/256x192/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 480, 'height': 360, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/480x360/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 960, 'height': 720, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/960x720/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1024, 'height': 768, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1024x768/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1280, 'height': 960, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1280x960/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1920, 'height': 1440, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1920x1440/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2048, 'height': 1536, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2048x1536/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2133, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2133x1600/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 4032, 'height': 3024, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/4032x3024/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': None, 'backgroundBottomColor': '#595e67', 'backgroundTopColor': '#b1bcd2', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68ed5ffb6513c4efdf5bc5a5', 'idMemberCreator': '620bac8bbf1c5a35a47df981', 'data': {'old': {'pos': 105553111065600}, 'card': {'pos': 164608, 'id': '68ed5bb6b413f72544f889f5', 'name': '370-785 Fairfield - Vista Highlands Trellis A Embeds Dropshipped', 'idShort': 1735, 'shortLink': '5reoy5Ps'}, 'board': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'shortLink': 'pAtihLja'}, 'list': {'id': '68ed5bb5b413f72544f87b98', 'name': 'Store at MHMW for shipping'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-13T20:24:27.499Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_lower', 'entities': {'card': {'type': 'card', 'id': '68ed5bb6b413f72544f889f5', 'pos': 164608, 'shortLink': '5reoy5Ps', 'text': '370-785 Fairfield - Vista Highlands Trellis A Embeds Dropshipped'}, 'memberCreator': {'type': 'member', 'id': '620bac8bbf1c5a35a47df981', 'username': 'billoneill14', 'text': \"Bill O'Neill\"}}}, 'memberCreator': {'id': '620bac8bbf1c5a35a47df981', 'activityBlocked': False, 'avatarHash': 'ca8dd512713f65376a2af3e23d91c442', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/620bac8bbf1c5a35a47df981/ca8dd512713f65376a2af3e23d91c442', 'fullName': \"Bill O'Neill\", 'idMemberReferrer': None, 'initials': 'BO', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'billoneill14'}}, 'webhook': {'id': '68ed5f03ae1bd94c9e395e41', 'description': 'Track card moves', 'idModel': '68ed5bb5b413f72544f87ba2', 'callbackURL': 'https://cb1382cd5ed8.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:24:27] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"d11c9c70\", \"card_id\": \"68ed5bb6b413f72544f889f5\", \"trello_name\": \"370-785 Fairfield - Vista Highlands Trellis A Embeds Dropshipped\", \"event\": \"No DB record found for card - ignoring webhook\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:28.085526Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"d11c9c70\", \"duration_seconds\": 0.375862, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:28.105780Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.41s"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145593573376)"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:24:30] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"8ee9041e\", \"start_time\": \"2025-10-13T20:24:30.139203\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:30.139249Z\"}"}
+{"event": "{\"operation_id\": \"8ee9041e\", \"card_id\": \"68ed5bb6b413f72544f889f5\", \"event_time\": \"2025-10-13T20:24:29.791000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:30.149407Z\"}"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '620bacb3c4371968e8fd7bcf', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/pAtihLja/dm-trello-play-toy', 'shortUrl': 'https://trello.com/b/pAtihLja', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': False}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '68a240f8e82044f97d57138e', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/original/98ddae902598e8c693c530fd01d6094b/1000009951.jpg', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 133, 'height': 100, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/133x100/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 256, 'height': 192, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/256x192/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 480, 'height': 360, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/480x360/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 960, 'height': 720, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/960x720/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1024, 'height': 768, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1024x768/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1280, 'height': 960, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1280x960/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1920, 'height': 1440, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1920x1440/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2048, 'height': 1536, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2048x1536/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2133, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2133x1600/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 4032, 'height': 3024, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/4032x3024/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': None, 'backgroundBottomColor': '#595e67', 'backgroundTopColor': '#b1bcd2', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68ed5ffd0aed0543d5e66f71', 'idMemberCreator': '620bac8bbf1c5a35a47df981', 'data': {'old': {'pos': 164608}, 'card': {'pos': 287, 'id': '68ed5bb6b413f72544f889f5', 'name': '370-785 Fairfield - Vista Highlands Trellis A Embeds Dropshipped', 'idShort': 1735, 'shortLink': '5reoy5Ps'}, 'board': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'shortLink': 'pAtihLja'}, 'list': {'id': '68ed5bb5b413f72544f87b92', 'name': 'Paint complete'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-13T20:24:29.890Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_lower', 'entities': {'card': {'type': 'card', 'id': '68ed5bb6b413f72544f889f5', 'pos': 287, 'shortLink': '5reoy5Ps', 'text': '370-785 Fairfield - Vista Highlands Trellis A Embeds Dropshipped'}, 'memberCreator': {'type': 'member', 'id': '620bac8bbf1c5a35a47df981', 'username': 'billoneill14', 'text': \"Bill O'Neill\"}}}, 'memberCreator': {'id': '620bac8bbf1c5a35a47df981', 'activityBlocked': False, 'avatarHash': 'ca8dd512713f65376a2af3e23d91c442', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/620bac8bbf1c5a35a47df981/ca8dd512713f65376a2af3e23d91c442', 'fullName': \"Bill O'Neill\", 'idMemberReferrer': None, 'initials': 'BO', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'billoneill14'}}, 'webhook': {'id': '68ed5f03ae1bd94c9e395e41', 'description': 'Track card moves', 'idModel': '68ed5bb5b413f72544f87ba2', 'callbackURL': 'https://cb1382cd5ed8.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:24:30] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"8ee9041e\", \"card_id\": \"68ed5bb6b413f72544f889f5\", \"trello_name\": \"370-785 Fairfield - Vista Highlands Trellis A Embeds Dropshipped\", \"event\": \"No DB record found for card - ignoring webhook\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:30.440064Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"8ee9041e\", \"duration_seconds\": 0.30957, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:30.448818Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.32s"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145593573376)"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:24:45] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"3faeab84\", \"start_time\": \"2025-10-13T20:24:45.800226\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:45.800276Z\"}"}
+{"event": "{\"operation_id\": \"3faeab84\", \"card_id\": \"68ed5bb6b413f72544f888e1\", \"event_time\": \"2025-10-13T20:24:45.492000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:45.808462Z\"}"}
+{"event": "{\"operation_id\": \"3faeab84\", \"card_id\": \"68ed5bb6b413f72544f888e1\", \"trello_name\": \"440-736 Evergreen - Outlook Green Valley Ranch Shade Structure C Embeds\", \"event\": \"No DB record found for card - ignoring webhook\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:46.081398Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"3faeab84\", \"duration_seconds\": 0.291146, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:24:46.091408Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.30s"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '620bacb3c4371968e8fd7bcf', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/pAtihLja/dm-trello-play-toy', 'shortUrl': 'https://trello.com/b/pAtihLja', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': False}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '68a240f8e82044f97d57138e', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/original/98ddae902598e8c693c530fd01d6094b/1000009951.jpg', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 133, 'height': 100, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/133x100/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 256, 'height': 192, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/256x192/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 480, 'height': 360, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/480x360/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 960, 'height': 720, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/960x720/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1024, 'height': 768, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1024x768/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1280, 'height': 960, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1280x960/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1920, 'height': 1440, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1920x1440/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2048, 'height': 1536, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2048x1536/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2133, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2133x1600/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 4032, 'height': 3024, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/4032x3024/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': None, 'backgroundBottomColor': '#595e67', 'backgroundTopColor': '#b1bcd2', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68ed600d721666f03be7ea29', 'idMemberCreator': '620bac8bbf1c5a35a47df981', 'data': {'old': {'pos': 105553111363584}, 'card': {'pos': 266.5, 'id': '68ed5bb6b413f72544f888e1', 'name': '440-736 Evergreen - Outlook Green Valley Ranch Shade Structure C Embeds', 'idShort': 1597, 'shortLink': 'YBBkjJ0C'}, 'board': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'shortLink': 'pAtihLja'}, 'list': {'id': '68ed5bb5b413f72544f87b92', 'name': 'Paint complete'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-13T20:24:45.590Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_lower', 'entities': {'card': {'type': 'card', 'id': '68ed5bb6b413f72544f888e1', 'pos': 266.5, 'shortLink': 'YBBkjJ0C', 'text': '440-736 Evergreen - Outlook Green Valley Ranch Shade Structure C Embeds'}, 'memberCreator': {'type': 'member', 'id': '620bac8bbf1c5a35a47df981', 'username': 'billoneill14', 'text': \"Bill O'Neill\"}}}, 'memberCreator': {'id': '620bac8bbf1c5a35a47df981', 'activityBlocked': False, 'avatarHash': 'ca8dd512713f65376a2af3e23d91c442', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/620bac8bbf1c5a35a47df981/ca8dd512713f65376a2af3e23d91c442', 'fullName': \"Bill O'Neill\", 'idMemberReferrer': None, 'initials': 'BO', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'billoneill14'}}, 'webhook': {'id': '68ed5f03ae1bd94c9e395e41', 'description': 'Track card moves', 'idModel': '68ed5bb5b413f72544f87ba2', 'callbackURL': 'https://cb1382cd5ed8.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:24:46] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145593573376)"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:25:55] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"d5f8083e\", \"start_time\": \"2025-10-13T20:25:55.171753\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:55.172179Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"card_id\": \"68ed5bb6b413f72544f88157\", \"event_time\": \"2025-10-13T20:25:54.633000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:55.197895Z\"}"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '620bacb3c4371968e8fd7bcf', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/pAtihLja/dm-trello-play-toy', 'shortUrl': 'https://trello.com/b/pAtihLja', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': False}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '68a240f8e82044f97d57138e', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/original/98ddae902598e8c693c530fd01d6094b/1000009951.jpg', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 133, 'height': 100, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/133x100/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 256, 'height': 192, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/256x192/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 480, 'height': 360, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/480x360/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 960, 'height': 720, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/960x720/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1024, 'height': 768, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1024x768/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1280, 'height': 960, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1280x960/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1920, 'height': 1440, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1920x1440/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2048, 'height': 1536, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2048x1536/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2133, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2133x1600/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 4032, 'height': 3024, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/4032x3024/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': None, 'backgroundBottomColor': '#595e67', 'backgroundTopColor': '#b1bcd2', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68ed605282492bd2fa2ce725', 'idMemberCreator': '620bac8bbf1c5a35a47df981', 'data': {'old': {'pos': 3921775.778213501}, 'card': {'pos': 205, 'id': '68ed5bb6b413f72544f88157', 'name': '170-183 Garrett -Banyan High Point Entrance Canopies', 'idShort': 632, 'shortLink': 'I9IcPYt2'}, 'board': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'shortLink': 'pAtihLja'}, 'list': {'id': '68ed5bb5b413f72544f87b92', 'name': 'Paint complete'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-13T20:25:54.727Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_lower', 'entities': {'card': {'type': 'card', 'id': '68ed5bb6b413f72544f88157', 'pos': 205, 'shortLink': 'I9IcPYt2', 'text': '170-183 Garrett -Banyan High Point Entrance Canopies'}, 'memberCreator': {'type': 'member', 'id': '620bac8bbf1c5a35a47df981', 'username': 'billoneill14', 'text': \"Bill O'Neill\"}}}, 'memberCreator': {'id': '620bac8bbf1c5a35a47df981', 'activityBlocked': False, 'avatarHash': 'ca8dd512713f65376a2af3e23d91c442', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/620bac8bbf1c5a35a47df981/ca8dd512713f65376a2af3e23d91c442', 'fullName': \"Bill O'Neill\", 'idMemberReferrer': None, 'initials': 'BO', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'billoneill14'}}, 'webhook': {'id': '68ed5f03ae1bd94c9e395e41', 'description': 'Track card moves', 'idModel': '68ed5bb5b413f72544f87ba2', 'callbackURL': 'https://cb1382cd5ed8.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [13/Oct/2025 14:25:55] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"card_id\": \"68ed5bb6b413f72544f88157\", \"job_id\": 1, \"trello_name\": \"170-183 Garrett -Banyan High Point Entrance Canopies\", \"db_name\": \"170-183 Garrett -Banyan High Point Entrance Canopies\", \"trello_list\": \"Paint complete\", \"db_list\": \"Fit Up Complete.\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:55.752278Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:55.777727Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"card_id\": \"68ed5bb6b413f72544f88157\", \"event\": \"Updating DB record from Trello data\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:55.780150Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"event\": \"Card move detected, updating DB fields\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:56.055995Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"job_id\": 1, \"new_list\": \"Paint complete\", \"current_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"O\", \"ship\": \"T\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:56.546543Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"job_id\": 1, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"T\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:56.547248Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"card_id\": \"68ed5bb6b413f72544f88157\", \"event\": \"DB record updated successfully\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:56.557714Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"event\": \"Updating Excel from Trello changes\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:56.564821Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"job\": 170, \"release\": \"183\", \"job_type\": \"int\", \"release_type\": \"str\", \"event\": \"Looking up Excel row\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:25:56.569564Z\"}"}
+{"event": "Looking for Job # 170 (type: <class 'int'>) and Release # 183 (type: <class 'str'>)"}
+{"event": "Found match at DataFrame index 148, Excel row 152"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"job\": 170, \"release\": \"183\", \"excel_row\": \"152\", \"event\": \"Found Excel row for update\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:26:13.429090Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"cell\": \"M152\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:26:21.633336Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"cell\": \"N152\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:26:25.714172Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"cell\": \"O152\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:26:27.803378Z\"}"}
+{"event": "{\"operation_id\": \"d5f8083e\", \"cell\": \"P152\", \"value\": \"T\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:26:31.910357Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"d5f8083e\", \"duration_seconds\": 36.752334, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-13T20:26:31.924130Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 36.80s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-14T17:31:36.718636Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-14T17:31:59.520214Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:56] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:56] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:57] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:57] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:57] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:58] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:58] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:58] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:58] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:59] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:59] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:59] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:35:59] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:36:00] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:36:00] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:36:00] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:31] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:37:32] \"\u001b[31m\u001b[1mPOST /api/create_card HTTP/1.1\u001b[0m\" 400 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:41:12] \"POST /api/create_card HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [14/Oct/2025 11:48:05] \"POST /api/create_card HTTP/1.1\" 200 -"}

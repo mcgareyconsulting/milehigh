@@ -420,6 +420,12 @@ def create_app():
             logger.error("Error rendering logs view", operation_id=operation_id, error=str(e))
             return "Error", 500
 
+    @app.route("/api/create_card", methods=["POST"])
+    def new_card():
+        data = request.get_json()
+        print(data)
+        return jsonify({"message": "Card created"}), 200
+
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
