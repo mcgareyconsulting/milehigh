@@ -431,7 +431,11 @@ def create_app():
         if result["success"]:
             return jsonify({"message": "Card created", "card_id": result["card_id"]}), 200
         else:
-            return jsonify({"message": "Card creation failed", "error": result["error"]}), 500
+            # Check if it's a duplicate job (409 Conflict) vs other errors (500)
+            if "already exists in database" in result.get("error", ""):
+                return jsonify({"message": "Card creation failed", "error": result["error"]}), 409
+            else:
+                return jsonify({"message": "Card creation failed", "error": result["error"]}), 500
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
