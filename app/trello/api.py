@@ -3,8 +3,10 @@ import re
 import os
 from app.config import Config as cfg
 from app.trello.utils import mountain_due_datetime
-from app.models import Job
+from app.models import Job, db
 from flask import current_app
+from datetime import datetime
+import pandas as pd
 
 
 # Main function for updating trello card information
@@ -205,6 +207,142 @@ def check_job_exists_in_db(job_number, release_number):
         raise Exception(error_msg)
 
 
+def to_date(val):
+    """Convert a value to a date, returning None if conversion fails or value is null."""
+    if pd.isnull(val) or val is None or str(val).strip() == '':
+        return None
+    try:
+        dt = pd.to_datetime(val)
+        return dt.date() if not pd.isnull(dt) else None
+    except:
+        return None
+
+
+def safe_float(val):
+    """Safely convert a value to float, returning None if conversion fails."""
+    try:
+        return float(val) if val is not None and str(val).strip() != '' else None
+    except (TypeError, ValueError):
+        return None
+
+
+def safe_string(val, max_length=None):
+    """Safely convert a value to string, optionally truncating."""
+    if val is None or pd.isna(val):
+        return None
+    string_val = str(val)
+    if max_length and len(string_val) > max_length:
+        return string_val[:max_length-3] + "..."
+    return string_val
+
+
+def create_job_record_from_excel_data(excel_data):
+    """
+    Create a Job record from Excel data only (without Trello data initially).
+    
+    Args:
+        excel_data: Dictionary containing Excel data from macro
+    
+    Returns:
+        Job object if created successfully, None otherwise
+    """
+    try:
+        from app.onedrive.utils import parse_excel_datetime
+        
+        # Extract basic identifiers
+        job_number = int(excel_data.get('Job #', 0))
+        release_number = str(excel_data.get('Release #', ''))
+        
+        # Create new Job record with Excel data only
+        new_job = Job(
+            # Basic identifiers
+            job=job_number,
+            release=release_number,
+            
+            # Excel data
+            job_name=safe_string(excel_data.get('Job'), 128),
+            description=safe_string(excel_data.get('Description'), 256),
+            fab_hrs=safe_float(excel_data.get('Fab Hrs')),
+            install_hrs=safe_float(excel_data.get('Install HRS')),
+            paint_color=safe_string(excel_data.get('Paint color'), 64),
+            pm=safe_string(excel_data.get('PM'), 16),
+            by=safe_string(excel_data.get('BY'), 16),
+            released=to_date(excel_data.get('Released')),
+            fab_order=safe_float(excel_data.get('Fab Order')),
+            cut_start=safe_string(excel_data.get('Cut start'), 8),
+            fitup_comp=safe_string(excel_data.get('Fitup comp'), 8),
+            welded=safe_string(excel_data.get('Welded'), 8),
+            paint_comp=safe_string(excel_data.get('Paint Comp'), 8),
+            ship=safe_string(excel_data.get('Ship'), 8),
+            start_install=to_date(excel_data.get('Start install')),
+            comp_eta=to_date(excel_data.get('Comp. ETA')),
+            job_comp=safe_string(excel_data.get('Job Comp'), 8),
+            invoiced=safe_string(excel_data.get('Invoiced'), 8),
+            notes=safe_string(excel_data.get('Notes'), 256),
+            
+            # Trello fields will be empty initially
+            trello_card_id=None,
+            trello_card_name=None,
+            trello_list_id=None,
+            trello_list_name=None,
+            trello_card_description=None,
+            
+            # Metadata
+            last_updated_at=datetime.utcnow(),
+            source_of_update='Excel'  # Created from Excel macro
+        )
+        
+        # Save to database
+        db.session.add(new_job)
+        db.session.commit()
+        
+        print(f"[DEBUG] Created Job record: {job_number}-{release_number} (ID: {new_job.id})")
+        return new_job
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to create Job record: {str(e)}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        db.session.rollback()
+        return None
+
+
+def update_job_record_with_trello_data(job_record, card_data):
+    """
+    Update an existing Job record with Trello card data.
+    
+    Args:
+        job_record: Existing Job object
+        card_data: Dictionary containing Trello card information
+    
+    Returns:
+        True if updated successfully, False otherwise
+    """
+    try:
+        # Update Trello fields
+        job_record.trello_card_id = card_data.get('id')
+        job_record.trello_card_name = card_data.get('name')
+        job_record.trello_list_id = card_data.get('idList')
+        job_record.trello_list_name = get_list_name_by_id(card_data.get('idList'))
+        job_record.trello_card_description = card_data.get('desc', '')
+        
+        # Update metadata
+        job_record.last_updated_at = datetime.utcnow()
+        
+        # Save changes
+        db.session.commit()
+        
+        print(f"[DEBUG] Updated Job record {job_record.id} with Trello data")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to update Job record with Trello data: {str(e)}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        db.session.rollback()
+        return False
+
+
 def create_trello_card_from_excel_data(excel_data, list_name=None):
     """
     Creates a Trello card from Excel macro data.
@@ -249,6 +387,18 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         print(f"[DEBUG] No duplicate found, proceeding with card creation...")
         
+        # Create database record with Excel data first
+        print(f"[DEBUG] Creating database record with Excel data...")
+        new_job = create_job_record_from_excel_data(excel_data)
+        
+        if not new_job:
+            return {
+                "success": False,
+                "error": "Failed to create database record"
+            }
+        
+        print(f"[DEBUG] Database record created: Job {new_job.id}")
+        
         # Get the target list ID
         if list_name:
             target_list = get_list_by_name(list_name)
@@ -270,7 +420,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         job_number = excel_data.get('Job #', 'Unknown')
         release_number = excel_data.get('Release #', 'Unknown')
         job_name = excel_data.get('Job', 'Unknown Job')
-        card_title = f"{job_number}-{release_number}: {job_name}"
+        card_title = f"{job_number}-{release_number} {job_name}"
         
         # Format card description - simplified format
         description_parts = []
@@ -317,11 +467,21 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         card_data = response.json()
         print(f"[TRELLO API] Card created successfully: {card_data['id']}")
         
+        # Update the existing database record with Trello card data
+        print(f"[DEBUG] Updating database record with Trello card data...")
+        success = update_job_record_with_trello_data(new_job, card_data)
+        
+        if success:
+            print(f"[DEBUG] Successfully updated database record with Trello data")
+        else:
+            print(f"[ERROR] Failed to update database record with Trello data")
+        
         return {
             "success": True,
             "card_id": card_data["id"],
             "card_name": card_data["name"],
-            "card_url": card_data["url"]
+            "card_url": card_data["url"],
+            "job_id": new_job.id
         }
         
     except requests.exceptions.HTTPError as http_err:
