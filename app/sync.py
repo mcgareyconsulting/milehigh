@@ -11,6 +11,7 @@ from app.trello.api import (
     get_list_name_by_id,
     get_list_by_name,
     update_trello_card,
+    add_comment_to_trello_card,
 )
 from app.onedrive.utils import (
     get_excel_row_and_index_by_identifiers,
@@ -707,6 +708,7 @@ def sync_from_onedrive(data):
             ("Welded", "welded", "text"),
             ("Paint Comp", "paint_comp", "text"),
             ("Ship", "ship", "text"),
+            ("Notes", "notes", "text"), 
             ("Start install", "start_install", "date"),
         ]
 
@@ -791,6 +793,7 @@ def sync_from_onedrive(data):
             for excel_field, db_field, field_type in fields_to_check:
                 excel_val = row.get(excel_field)
                 db_val = getattr(rec, db_field, None)
+                
 
                 # Normalize date fields if date
                 if field_type == "date":
@@ -858,6 +861,35 @@ def sync_from_onedrive(data):
                             setattr(rec, "start_install_formula", "")
                             setattr(rec, "start_install_formulaTF", False)
                             record_updated = True
+                    continue  # skip generic update for this field
+
+                # Special handling for 'notes' - append to Trello custom field
+                if excel_field == "Notes" and field_type == "text":
+                    if excel_val != db_val and excel_val and str(excel_val).strip():
+                        logger.info(
+                            f"{job}-{release} Notes field updated, will append to Trello: {db_val!r} -> {excel_val!r}"
+                        )
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Notes field updated, will append to Trello",
+                            id=rec.id,
+                            job=rec.job,
+                            release=rec.release,
+                            excel_identifier=identifier,
+                            field=db_field,
+                            old_value=str(db_val),
+                            new_value=str(excel_val),
+                        )
+                        # Update DB with new note value
+                        setattr(rec, db_field, excel_val)
+                        record_updated = True
+                        
+                        # Store the note for Trello update later
+                        if not hasattr(rec, '_pending_note'):
+                            rec._pending_note = excel_val
+                        else:
+                            rec._pending_note = excel_val
                     continue  # skip generic update for this field
 
                 # Generic update for non-special fields
@@ -984,6 +1016,101 @@ def sync_from_onedrive(data):
                                     trello_card_id=rec.trello_card_id,
                                     list_name=new_list_name,
                                 )
+                            
+                            # Handle notes update to Trello comments
+                            if hasattr(rec, '_pending_note') and rec._pending_note:
+                                logger.info(
+                                    f"Adding note as comment to Trello card {rec.trello_card_id}: {rec._pending_note}"
+                                )
+                                safe_log_sync_event(
+                                    sync_op.operation_id,
+                                    "INFO",
+                                    "Adding note as comment to Trello card",
+                                    id=rec.id,
+                                    job=rec.job,
+                                    release=rec.release,
+                                    trello_card_id=rec.trello_card_id,
+                                    note=rec._pending_note,
+                                )
+                                
+                                success = add_comment_to_trello_card(
+                                    rec.trello_card_id, 
+                                    rec._pending_note,
+                                    sync_op.operation_id
+                                )
+                                
+                                if success:
+                                    safe_log_sync_event(
+                                        sync_op.operation_id,
+                                        "INFO",
+                                        "Note successfully added as comment to Trello",
+                                        id=rec.id,
+                                        job=rec.job,
+                                        release=rec.release,
+                                        trello_card_id=rec.trello_card_id,
+                                    )
+                                else:
+                                    safe_log_sync_event(
+                                        sync_op.operation_id,
+                                        "ERROR",
+                                        "Failed to add note as comment to Trello",
+                                        id=rec.id,
+                                        job=rec.job,
+                                        release=rec.release,
+                                        trello_card_id=rec.trello_card_id,
+                                        note=rec._pending_note,
+                                    )
+                                
+                                # Clear the pending note after processing
+                                delattr(rec, '_pending_note')
+                            else:
+                                # Handle notes update even if no other Trello updates needed
+                                if hasattr(rec, '_pending_note') and rec._pending_note:
+                                    logger.info(
+                                        f"Adding note as comment to Trello card {rec.trello_card_id}: {rec._pending_note}"
+                                    )
+                                    safe_log_sync_event(
+                                        sync_op.operation_id,
+                                        "INFO",
+                                        "Adding note as comment to Trello card (no other updates)",
+                                        id=rec.id,
+                                        job=rec.job,
+                                        release=rec.release,
+                                        trello_card_id=rec.trello_card_id,
+                                        note=rec._pending_note,
+                                    )
+                                    
+                                    success = add_comment_to_trello_card(
+                                        rec.trello_card_id, 
+                                        rec._pending_note,
+                                        sync_op.operation_id
+                                    )
+                                    
+                                    if success:
+                                        safe_log_sync_event(
+                                            sync_op.operation_id,
+                                            "INFO",
+                                            "Note successfully added as comment to Trello",
+                                            id=rec.id,
+                                            job=rec.job,
+                                            release=rec.release,
+                                            trello_card_id=rec.trello_card_id,
+                                        )
+                                    else:
+                                        safe_log_sync_event(
+                                            sync_op.operation_id,
+                                            "ERROR",
+                                            "Failed to add note as comment to Trello",
+                                            id=rec.id,
+                                            job=rec.job,
+                                            release=rec.release,
+                                            trello_card_id=rec.trello_card_id,
+                                            note=rec._pending_note,
+                                        )
+                                    
+                                    # Clear the pending note after processing
+                                    delattr(rec, '_pending_note')
+                                
                         except Exception as e:
                             logger.error(
                                 f"Error updating Trello card {rec.trello_card_id}: {e}"

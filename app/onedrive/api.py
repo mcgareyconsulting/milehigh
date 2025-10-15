@@ -52,7 +52,7 @@ def get_excel_dataframe():
         token, cfg.ONEDRIVE_USER_EMAIL, cfg.ONEDRIVE_FILE_PATH
     )
 
-    usecols = list(range(0, 17))
+    usecols = list(range(0, 20)) + [28]  # A-T (0-19) and AC (28)
     sheet_name = "Job Log"  
 
     df_all = pd.read_excel(
