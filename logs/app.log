@@ -2990,3 +2990,102 @@
 {"event": "Trello sync completed successfully"}
 {"event": "Sync lock released for operation: Trello-Hook"}
 {"event": "Sync completed in 32.76s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-15T19:53:58.757073Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T19:53:58.876766Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [15/Oct/2025 13:58:01] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-15T19:59:45.204839Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T19:59:45.264771Z\"}"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2025-10-15 15:00:00 MDT)\" (scheduled at 2025-10-15 14:00:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:00:00.036711Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145426673664)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:00:03] \"OPTIONS /sync/operations HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"994cf3fb\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:00:20.858027Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-15 17:54:30\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:00:20.892849Z\"}"}
+{"event": "{\"event\": \"DataFrame 254 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:00:20.893216Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 222-222: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:00:21.096695Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:00:21.151486Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:00:21.164323Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2025-10-15 15:00:00 MDT)\" executed successfully"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:00:24] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:02:49] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:04:03] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:05:45] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:05:45] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:11:03] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:11:03] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:13:10] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-15T20:23:15.745826Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:23:15.837117Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-15T20:23:41.200946Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T20:23:41.313693Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:07] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:07] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:07] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:07] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:07] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:07] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:14] \"GET /sync/operations/994cf3fb/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:25:14] \"GET /sync/operations/994cf3fb/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:28:46] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:28:46] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:28:46] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:28:49] \"GET /sync/operations/994cf3fb/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:28:49] \"GET /sync/operations/994cf3fb/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:30:13] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:30:13] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:30:13] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:30:13] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:30:13] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:30:13] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:31:40] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:31:40] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:31:40] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:31:40] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:31:40] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:31:40] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:32:59] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:32:59] \"GET /sync/status HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:32:59] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:32:59] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:32:59] \"GET /sync/stats HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:32:59] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:11] \"GET /sync/operations/84d4394a/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:11] \"GET /sync/operations/84d4394a/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:17] \"GET /sync/operations/f4ee2252/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:17] \"GET /sync/operations/f4ee2252/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:42] \"GET /sync/operations/8f94e48a/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:42] \"GET /sync/operations/8f94e48a/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:47] \"GET /sync/operations/994cf3fb/logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 14:39:47] \"GET /sync/operations/994cf3fb/logs HTTP/1.1\" 200 -"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2025-10-15 16:00:00 MDT)\" (scheduled at 2025-10-15 15:00:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:00:00.159779Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145518817280)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"ef1d8212\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:00:18.781330Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-15 17:54:30\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:00:18.800043Z\"}"}
+{"event": "{\"event\": \"DataFrame 254 rows, 19 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:00:18.800404Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 222-222: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:00:18.986571Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:00:19.047739Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:00:19.061409Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2025-10-15 16:00:00 MDT)\" executed successfully"}

@@ -1,5 +1,6 @@
 import os
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 
@@ -92,6 +93,9 @@ def init_scheduler(app):
 
 def create_app():
     app = Flask(__name__)
+    
+    # Enable CORS for React frontend
+    CORS(app, origins=['http://localhost:5175', 'http://localhost:5174', 'http://localhost:3000'])
     
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
