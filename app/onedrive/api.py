@@ -383,6 +383,7 @@ def get_latest_snapshot():
 def find_new_rows_in_excel(current_df, previous_df=None):
     """
     Find new rows by comparing current and previous DataFrames.
+    Also checks each new row against the database.
     
     Args:
         current_df: Current Excel data
@@ -393,23 +394,57 @@ def find_new_rows_in_excel(current_df, previous_df=None):
     """
     if previous_df is None:
         print("No previous snapshot found - treating all rows as new")
-        return current_df.copy()
-    
-    # Create unique identifiers for comparison
-    current_df = current_df.copy()
-    previous_df = previous_df.copy()
-    
-    current_df['_identifier'] = current_df['Job #'].astype(str) + '-' + current_df['Release #'].astype(str)
-    previous_df['_identifier'] = previous_df['Job #'].astype(str) + '-' + previous_df['Release #'].astype(str)
-    
-    # Find rows that exist in current but not in previous
-    previous_identifiers = set(previous_df['_identifier'])
-    new_rows = current_df[~current_df['_identifier'].isin(previous_identifiers)]
-    
-    # Clean up temporary column
-    new_rows = new_rows.drop(columns=['_identifier'])
+        new_rows = current_df.copy()
+    else:
+        # Create unique identifiers for comparison
+        current_df = current_df.copy()
+        previous_df = previous_df.copy()
+        
+        current_df['_identifier'] = current_df['Job #'].astype(str) + '-' + current_df['Release #'].astype(str)
+        previous_df['_identifier'] = previous_df['Job #'].astype(str) + '-' + previous_df['Release #'].astype(str)
+        
+        # Find rows that exist in current but not in previous
+        previous_identifiers = set(previous_df['_identifier'])
+        new_rows = current_df[~current_df['_identifier'].isin(previous_identifiers)]
+        
+        # Clean up temporary column
+        new_rows = new_rows.drop(columns=['_identifier'])
     
     print(f"Found {len(new_rows)} new rows out of {len(current_df)} total rows")
+    
+    # Process each new row - pass to Trello API for card creation
+    if len(new_rows) > 0:
+        print("\nProcessing new rows:")
+        print("-" * 50)
+        
+        for index, row in new_rows.iterrows():
+            job_number = int(row['Job #'])
+            release_number = str(row['Release #'])
+            identifier = f"{job_number}-{release_number}"
+            
+            print(f"Processing {identifier}...")
+            
+            # Convert row to dictionary for Trello API
+            excel_data = row.to_dict()
+            
+            # Call the existing Trello card creation function
+            try:
+                from app.trello.api import create_trello_card_from_excel_data
+                result = create_trello_card_from_excel_data(excel_data, "Fit Up Complete.")
+                
+                if result["success"]:
+                    print(f"{identifier}: ✅ Card created successfully (ID: {result.get('card_id')})")
+                else:
+                    if "already exists in database" in result.get("error", ""):
+                        print(f"{identifier}: ⚠️  Already exists in DB - {result.get('error')}")
+                    else:
+                        print(f"{identifier}: ❌ Failed to create card - {result.get('error')}")
+                        
+            except Exception as e:
+                print(f"{identifier}: ❌ Error processing - {str(e)}")
+        
+        print("-" * 50)
+    
     return new_rows
 
 

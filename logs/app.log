@@ -4718,3 +4718,33 @@
 {"event": "127.0.0.1 - - [16/Oct/2025 14:19:02] \"GET /snapshot/digest HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [16/Oct/2025 14:19:41] \"GET /snapshot/digest HTTP/1.1\" 200 -"}
 {"event": "127.0.0.1 - - [16/Oct/2025 14:20:40] \"GET /snapshot/digest HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-16T20:23:01.187921Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:23:01.263575Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [16/Oct/2025 14:24:46] \"GET /snapshot/digest HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-16T20:28:53.660084Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:28:53.734237Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [16/Oct/2025 14:29:48] \"GET /snapshot/digest HTTP/1.1\" 200 -"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145408450560)"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [16/Oct/2025 14:30:16] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"5f559dc4\", \"start_time\": \"2025-10-16T20:30:16.880994\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:30:16.881091Z\"}"}
+{"event": "{\"operation_id\": \"5f559dc4\", \"card_id\": \"68f155d82c550781b8ab18a6\", \"event_time\": \"2025-10-16T20:30:16.464000\", \"event_type\": \"card_created\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:30:16.888965Z\"}"}
+{"event": "127.0.0.1 - - [16/Oct/2025 14:30:17] \"GET /snapshot/digest HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"5f559dc4\", \"card_id\": \"68f155d82c550781b8ab18a6\", \"job_id\": 215, \"trello_name\": \"111-116 Pass to Trello\", \"db_name\": \"111-116 Pass to Trello\", \"trello_list\": \"Fit Up Complete.\", \"db_list\": \"Fit Up Complete.\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:30:17.452960Z\"}"}
+{"event": "{\"operation_id\": \"5f559dc4\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:30:17.457787Z\"}"}
+{"event": "{\"operation_id\": \"5f559dc4\", \"card_id\": \"68f155d82c550781b8ab18a6\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:30:17.461323Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"5f559dc4\", \"duration_seconds\": 0.592554, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-16T20:30:17.473585Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.62s"}
