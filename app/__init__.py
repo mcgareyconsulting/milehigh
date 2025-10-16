@@ -95,7 +95,7 @@ def create_app():
     app = Flask(__name__)
 
     # Enable CORS for React frontend
-    CORS(app, origins=['http://localhost:5175', 'http://localhost:5174', 'http://localhost:3000'])
+    CORS(app, origins=['http://localhost:5173'])
     
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
@@ -142,6 +142,14 @@ def create_app():
     @app.route("/")
     def index():
         return "Welcome to the Trello OneDrive Sync App!"
+
+    @app.route("/logs")
+    def get_logs():
+        logs = [
+            {"timestamp": "2025-10-15 12:00", "message": "Task started"},
+            {"timestamp": "2025-10-15 12:01", "message": "Task completed"},
+        ]
+        return jsonify(logs)
 
     # Jobs route - display all jobs in database
     @app.route("/jobs")

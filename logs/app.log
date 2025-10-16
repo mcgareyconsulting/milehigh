@@ -2990,3 +2990,194 @@
 {"event": "Trello sync completed successfully"}
 {"event": "Sync lock released for operation: Trello-Hook"}
 {"event": "Sync completed in 32.76s"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-15T21:17:02.592166Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:17:02.687534Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:17:04] \"\u001b[35m\u001b[1mGET /jobs HTTP/1.1\u001b[0m\" 500 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:17:10] \"\u001b[35m\u001b[1mGET /jobs HTTP/1.1\u001b[0m\" 500 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:17:10] \"\u001b[35m\u001b[1mGET /jobs HTTP/1.1\u001b[0m\" 500 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:25] \"\u001b[33mGET /logs HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:25] \"\u001b[33mGET /logs HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-15T21:19:33.673550Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-15T21:19:33.752141Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:36] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:41] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:44] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:44] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:49] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:54] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:19:59] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:04] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:06] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:06] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:11] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:16] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:21] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:26] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:31] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:31] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:36] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:41] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:46] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:51] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:20:56] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:01] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:01] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:06] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:11] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:16] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:21] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:26] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:31] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:36] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:41] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:46] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:51] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:21:56] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:01] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:06] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:11] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:16] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:21] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:26] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:30] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:30] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:35] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:37] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:37] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:37] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:37] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:42] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:47] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:52] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:22:57] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:02] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:07] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:12] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:18] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:23] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:28] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:33] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:38] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:42] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:47] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:52] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:23:57] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:02] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:07] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:12] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:17] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:22] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:27] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:33] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:38] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:43] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:48] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:53] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:24:58] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:25:03] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:25:08] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:25:13] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:25:18] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:25:23] \"GET /logs HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:25:42] \"GET /sync/operations HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:27:47] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:27:47] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:27:47] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:27:47] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:18] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:18] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:18] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:18] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:21] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:21] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:21] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:28:21] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] code 400, message Bad request version ('1\u00cb%\u00bd\\x03\u00c8\u00a2\u00bf\u00e7\u00b6\u00a4\\x10^\u00db\u00d4\u00fa\u00b4G\\x97\u00f5j\\x97\u00ff\\x13\\x06\u00beTw\\x94x\\x00+\\x00\\x07\\x06**\\x03\\x04\\x03\\x03\\x00')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] code 400, message Bad request version ('d\u00b7H\u00dd\u00fd\\x17\u00e0pH\u00e5\u00f5\u00e6B\u00d3\u00e6\\x81\u00ebFmwc^\\x80p[-\u00fd\u00ac')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00e0\\x01\\x00\\x06\u00dc\\x03\\x03(\u00f6O^\\x91\u00d7~[2j\\x92\\x05\u00b4\\x83n\u00ea\\x1b\u00c2y}\u00a8f\u00feB),Wg\\x1e{f\\\\ \u00a9m\u00a4O\\x1d.CD\\x7f\\x9b\\x97-X\\x10\u00ef\u00abH\u00a6r\u00d5\u00eb\u00b7p\u00e0s\\x19\u00d8\\x05\u00ef*\u00e4\u00f0\\x00 ZZ\\x13\\x01\\x13\\x02\\x13\\x03\u00c0+\u00c0/\u00c0,\u00c00\u00cc\u00a9\u00cc\u00a8\u00c0\\x13\u00c0\\x14\\x00\\x9c\\x00\\x9d\\x00/\\x005\\x01\\x00\\x06s\u00fa\u00fa\\x00\\x00\\x00\\x1b\\x00\\x03\\x02\\x00\\x02\\x00#\\x00\\x00\\x00\\x12\\x00\\x00\\x00\\x17\\x00\\x00D\u00cd\\x00\\x05\\x00\\x03\\x02h2\u00fe\\x0d\\x00\u00fa\\x00\\x00\\x01\\x00\\x015\\x00 1zzL\u00b1\\x87(8\\x89\u00c8\\x993\\x1b\u00e8\u00d3\u00d0\\x1e\\x99\\x00%\u00feBh\"\u00ce\u00b4\u00bb\\x1a\\x9e\\x8d\u00d49\\x00\u00d0\u00e90\u00c9\u00d4u\u00d9\u00ba]\u00de\u00e7\\x08c\\x1f\\x83z\u00b5j\u00f8d#o\\x85\u00cc\u00fd\\x04[\u00d3\\x08\u00de\\x13\u00e6\\x19\\x97\u00f0q\\x96l\\x97\u00b5v\\x81~\u00f2\u00db\\x14\u00d1\\x10P\\x8e\\x0e^'%P\u00e5\u00db\u00b0\u00eb\"\u00d9\u00a0\\x94\u00fd(-2>\\x8a\\x01\u00d2UT\u00af\\x13\u00ad\u00ee_\u00c3\\x82\\x11t\u00b4\u00e4f\\x8e\\x869\\x81\u00e2\\x8e0\\x94\u00d5\u00b8\u00a8\u00b3\\x05\u00d0\u00e1\u00c19\u00f2M?Z\\x9bj\\x81\u00a1\u00edZE\u00f6\u00d8\\x1f\u00c3\u00c4\\x14\u00f3\u00ec\\x12\u00e8mk\u00c5]\\x97\\x96U\\x97\u00bd\u00da\u00c4\u00f3|XW\\x08VZ\\x9f\u00de\\x0b\u00ba5\\x0c\u00c9\\x06\u00f1\\x88+\\x9f\u00b6W}.\\x8bE\u00caE\u00b3\\x94\u00fe\\x97\\x05nFoC\u00a0\u00ac\\x8e\u00d3\u00b6\u00b0\u00e8\u00e2 1\u00cb%\u00bd\\x03\u00c8\u00a2\u00bf\u00e7\u00b6\u00a4\\x10^\u00db\u00d4\u00fa\u00b4G\\x97\u00f5j\\x97\u00ff\\x13\\x06\u00beTw\\x94x\\x00+\\x00\\x07\\x06**\\x03\\x04\\x03\\x03\\x00\u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00a0\\x01\\x00\\x06\\x9c\\x03\\x03\u00f4\\x95\\x07o\\x9e\\x15-[\u00eb\\x03\u00a3\\x1c]\\x9d\u00a10@\\x1b\u00d3\u00f9m\u00c0\u00ad\\x97\u00c9\u00c7\u00dc\\x08[1\\x8a\\x00 \\x12\u00f9\u00c4\\x01\u00bd\u00d7\u00dd\u00a4\u00dcR\u00ea2o\u00b2\\x8c\u00e1k\u00c1\u00fa\u00afBDg#F\\x82v-\\x01\u00c5b\\x1c\\x00 \\x8a\\x8a\\x13\\x01\\x13\\x02\\x13\\x03\u00c0+\u00c0/\u00c0,\u00c00\u00cc\u00a9\u00cc\u00a8\u00c0\\x13\u00c0\\x14\\x00\\x9c\\x00\\x9d\\x00/\\x005\\x01\\x00\\x063**\\x00\\x00\u00ff\\x01\\x00\\x01\\x00\\x00\\x17\\x00\\x00D\u00cd\\x00\\x05\\x00\\x03\\x02h2\\x00-\\x00\\x02\\x01\\x01\u00fe\\x0d\\x00\u00ba\\x00\\x00\\x01\\x00\\x01`\\x00 d\u00b7H\u00dd\u00fd\\x17\u00e0pH\u00e5\u00f5\u00e6B\u00d3\u00e6\\x81\u00ebFmwc^\\x80p[-\u00fd\u00ac\u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] code 400, message Bad request version ('\\x87')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00c0\\x01\\x00\\x06\u00bc\\x03\\x03\u00dc\u00cd\\x9aI\\x19\\x8c\u00fe1\u00bd\u00a3\\\\\u00e3`\\x98/\\x7foc*\u00b0#\\x03z%\u00d0mb\u00f2\\x87p\\\\\u00e0 \u00eenIo\u00ef\\x1f\\x99G\u00db\u00f7\u00d4xk\u00c5\\x0c\\x87\u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] code 400, message Bad request version ('xqB\\x8f\\x97\\x8d\u00c7\u00d1\u00bf\\x92!d\u00b5\u00a7M\u00b0q\\x84\u00db\u00ca')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:32:40] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00e0\\x01\\x00\\x06\u00dc\\x03\\x03H\u00a3\\x99\\x82\\x01\u00feI\\x91\u00bb\u00cc\\x87\\x84\u00b4\u00a4\u00d6L\\x0c\\x1f\\x19\u00b7|Q\\x85\\x98?\u00d3\\x9d\\x07\u00dd:\u00be\u00c0 \u00e2\u00eb\\x0c\u00dc\u00ec\u00b9\\x87\u00ea\\x1e\\x15\u00fdn\u00e0>\u00fe\\\\\u00ec\u00a1:c\u00b5\u00da\u00b68\u00c2\u00d8HC\\x8e\u00e7\u00b4\u00c8\\x00 JJ\\x13\\x01\\x13\\x02\\x13\\x03\u00c0+\u00c0/\u00c0,\u00c00\u00cc\u00a9\u00cc\u00a8\u00c0\\x13\u00c0\\x14\\x00\\x9c\\x00\\x9d\\x00/\\x005\\x01\\x00\\x06s\u00ca\u00ca\\x00\\x00\\x003\\x04\u00ef\\x04\u00ed\u00aa\u00aa\\x00\\x01\\x00\\x11\u00ec\\x04\u00c0K\u00bb\\x00\u00e4\\x00T-\u00d1\u00c4\u00c3F8\\x85\u00ab\\x1do\u00f4\\x84\u00ad*\\x9d\u00a3\u00e4\\x82\\x17\\x0c@H\u00d1\\x80\u00ff\u00a61<\u00bc\u00cc\u00b3\u00d5L\u00b2\u00c4\u00bc\u00c6z\u00a0xqB\\x8f\\x97\\x8d\u00c7\u00d1\u00bf\\x92!d\u00b5\u00a7M\u00b0q\\x84\u00db\u00ca\u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:25] code 400, message Bad request version ('::\\x13\\x01\\x13\\x02\\x13\\x03\u00c0+\u00c0/\u00c0,\u00c00\u00cc\u00a9\u00cc\u00a8\u00c0\\x13\u00c0\\x14\\x00\\x9c\\x00\\x9d\\x00/\\x005\\x01\\x00\\x063')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:25] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00a0\\x01\\x00\\x06\\x9c\\x03\\x03\u00ad\u00f8\u00de]\\x87\u00b7%E)\u00eeY#v.\\x0f\u00c5\u00b7\\x12\u00ac\u00cd\u00dfl\\x1a\u00bbEo[\\x10\\x07\\x0e\u00f4\u00eb r\u00af\u00e4l\\x09\u00beT\u00b9\u00d8F5\u00a0\u00c46\\x0d\\x9c\\x90\u00d2\u00a4\u00f7?\u00d3\\x84#\u00e8^\\x96\\x00zG\u00be\\x8c\\x00 ::\\x13\\x01\\x13\\x02\\x13\\x03\u00c0+\u00c0/\u00c0,\u00c00\u00cc\u00a9\u00cc\u00a8\u00c0\\x13\u00c0\\x14\\x00\\x9c\\x00\\x9d\\x00/\\x005\\x01\\x00\\x063\u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:25] code 400, message Bad request version ('\\x02h2\\x08http/1.1D\u00cd\\x00\\x05\\x00\\x03\\x02h2\\x003\\x04\u00ef\\x04\u00ed')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:26] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00a0\\x01\\x00\\x06\\x9c\\x03\\x03Z\u00f1X0\\x1f\\x054\u00e6\\x16\\x8biS\\x86\\x86\u00f5/\\x03t\u00cdo\u00d1'D\\x9a\\x8c\\x93E\u00e4@8\\x9d\\x0e \u00dc\u00fc\u00d0\u00df\u00f4\\x98hI!`RM\\x94\u00d8\u00f91:\u00f5\u00df\\x1d\u00ee\\x87\\x88\u00ea\\\\!\u00b5\u00bb\u00eb\\x80N\u00e0\\x00 zz\\x13\\x01\\x13\\x02\\x13\\x03\u00c0+\u00c0/\u00c0,\u00c00\u00cc\u00a9\u00cc\u00a8\u00c0\\x13\u00c0\\x14\\x00\\x9c\\x00\\x9d\\x00/\\x005\\x01\\x00\\x063\u00fa\u00fa\\x00\\x00\\x00\\x10\\x00\\x0e\\x00\\x0c\\x02h2\\x08http/1.1D\u00cd\\x00\\x05\\x00\\x03\\x02h2\\x003\\x04\u00ef\\x04\u00ed\u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:26] code 400, message Bad request version ('\u00f8M\u00da5\\x80\u00dc\\x83\u00b7\u00b3\u00bag\\x89\u00a9z\\x105\\x01\\x96\u00c8\\x18\u00ce\u00a6\u00ca\u00f7\u00b7\u00b6\\x91\u00e4~8\u00bb\\x8bE\u00b1\\x99\u00b5\u00fa\\x05K\\x9cv\u00c0\u00ab\\x1a8\u00bc\u00b5\"\u00e8\u00ae}\u00a4\u00c1Y\u00d5\u00a9Oq@B\u00a9')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:26] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00a0\\x01\\x00\\x06\\x9c\\x03\\x03\\x83\u00f4\u00dcp11+\u00b9X\u00d1Z\u00dd\u00e9\u00f0{/g\\x81@G\\x7f0z%\u00d2k\\x02\\x08\u00ab\u00d6P' \u00d9\\x9d\u00d9\\x90K\u00f9'-\"\u00c5\u00c4\u00c8\u00f3\\x09X0Xaw\u00b0#bW\u00b3\u00f4\u00dfR\\x1b\u00ca\u00b7\\x04\u00a3\\x00 \u00fa\u00fa\\x13\\x01\\x13\\x02\\x13\\x03\u00c0+\u00c0/\u00c0,\u00c00\u00cc\u00a9\u00cc\u00a8\u00c0\\x13\u00c0\\x14\\x00\\x9c\\x00\\x9d\\x00/\\x005\\x01\\x00\\x063\\x8a\\x8a\\x00\\x00\\x00#\\x00\\x00D\u00cd\\x00\\x05\\x00\\x03\\x02h2\\x00\\x1b\\x00\\x03\\x02\\x00\\x02\\x00-\\x00\\x02\\x01\\x01\\x00\\x12\\x00\\x00\\x00\\x17\\x00\\x00\\x00+\\x00\\x07\\x06\u00ca\u00ca\\x03\\x04\\x03\\x03\\x00\\x0b\\x00\\x02\\x01\\x00\u00fe\\x0d\\x00\u00ba\\x00\\x00\\x01\\x00\\x01\u00f8\\x00 \u00b9\u00dd\u00b0\u00b9<\u00a4\\x0f\u00f9\u00e7\u00a2rNA@\\x17\\x83g\\x1e\u00dei6z\\x07\\x8dK\u00f7Q\\x15\u00df\\x1a^^\\x00\\x90G)\\x03\u00eay\u00e0~\u00c8\u00e6\u00c0m@\u00d5\\x93\\x19\u00a4<\\x19\u00fd$a\\x13\u00ed\\x03\\x8f\u00d96\u00b8!\u00eb\u00e5we \\x08Mn;\u00eaai\u00a3\u00a4\u00a0\u00e9(%PM]\u00f1/\u00bdV\u00d1\\x83\u00b0\"[\\x9d\\x84\u00fdG\u00c5\u00ab>d\u00f5|M\\x19k\\x91M9\\x01\u00e2\u00b8\u00e3\u00ba\\x99\\x1bHe&=\u00e2.F\u00daU\\x94\u00cbk\u00ef(V\\x8a\u00c3g\u00a5UR\u00ff\\x03\\x10S\\x98\u00ae\\x99h\u00cf\u00da\u00ed\u00afM{c\\x0d\u00e0P\u00cd\u00ea\u00dc\u00b11\u00ac\u00e6\\x97\u00e2\u00a7\u00ec\u00f7/(\\x01n\u00c6\\x0f6f\u00c2\\x00l\\x00\\x05\\x00\\x05\\x01\\x00\\x00\\x00\\x00\\x00\\x0d\\x00\\x12\\x00\\x10\\x04\\x03\\x08\\x04\\x04\\x01\\x05\\x03\\x08\\x05\\x05\\x01\\x08\\x06\\x06\\x01\u00ff\\x01\\x00\\x01\\x00\\x003\\x04\u00ef\\x04\u00ed\u00da\u00da\\x00\\x01\\x00\\x11\u00ec\\x04\u00c0\\x08\\x10\u00b3\u00b2AF\u00a6\u00dafD\u00e5_+\\x16\\x14\u00efu\\x08)Ew\u00aa\u00c1<\\x1c\u00f8M\u00da5\\x80\u00dc\\x83\u00b7\u00b3\u00bag\\x89\u00a9z\\x105\\x01\\x96\u00c8\\x18\u00ce\u00a6\u00ca\u00f7\u00b7\u00b6\\x91\u00e4~8\u00bb\\x8bE\u00b1\\x99\u00b5\u00fa\\x05K\\x9cv\u00c0\u00ab\\x1a8\u00bc\u00b5\"\u00e8\u00ae}\u00a4\u00c1Y\u00d5\u00a9Oq@B\u00a9\u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:26] code 400, message Bad request version ('\u00d8\u00e6a\\x9b\u00bc\\x87\u00d7w\\x87\u00d2WY\\x81)\u00ab\u00a4T\u00bb\u00db\u00f1\\x06\u00bb\\x87\u00c0\u00c8\u00a1\\x1b\u00e3~\\x81\\x96\\x9a\\x00')"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:33:26] \"\u001b[35m\u001b[1m\\x16\\x03\\x01\\x06\u00c0\\x01\\x00\\x06\u00bc\\x03\\x03\u00b9\u00d0\\x00\u00fc\u00e7\u00f4q?tkV4\\x82s\u00c7\\x8b'\"@\u00a40z\u00d1\u00fe/)\\x0d\u00d8n+\\x08/ \u00d8\u00e6a\\x9b\u00bc\\x87\u00d7w\\x87\u00d2WY\\x81)\u00ab\u00a4T\u00bb\u00db\u00f1\\x06\u00bb\\x87\u00c0\u00c8\u00a1\\x1b\u00e3~\\x81\\x96\\x9a\\x00 \u001b[0m\" HTTPStatus.BAD_REQUEST -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:34:14] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:34:14] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:34:14] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:34:14] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:36:35] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:36:35] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:36:35] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:36:35] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:37:09] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:37:09] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:37:09] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:37:09] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:06] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:06] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:06] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:06] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:07] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:07] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:07] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:38:07] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:42] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:42] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:42] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:42] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:47] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:47] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:47] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:47] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:49] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:49] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:49] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:39:49] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:42:22] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:42:22] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:42:22] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:42:22] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:43:17] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:43:17] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:43:17] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:43:17] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:44:35] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:44:35] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:44:35] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:44:35] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:45:37] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:45:37] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:45:37] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:45:37] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:46:46] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:46:46] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:46:46] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:46:46] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:02] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:02] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:02] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:02] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:03] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:03] \"\u001b[33mGET /sync/operations/dates HTTP/1.1\u001b[0m\" 404 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:03] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:47:03] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:48:17] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:48:21] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [15/Oct/2025 15:48:21] \"GET /sync/operations?limit=50 HTTP/1.1\" 200 -"}
