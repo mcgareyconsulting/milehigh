@@ -437,11 +437,27 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         # Add field details with bold formatting
         if excel_data.get('Install HRS'):
-            description_parts.append(f"**Install HRS:** {excel_data['Install HRS']}")
-
-            # Installation Duration
-            installation_duration = math.ceil(excel_data.get('Install HRS') / 2.5)
-            description_parts.append(f"**Installation Duration:** {installation_duration} days")
+            install_hrs = excel_data.get('Install HRS')
+            description_parts.append(f"**Install HRS:** {install_hrs}")
+            
+            # Installation Duration calculation with error handling
+            try:
+                # Handle different data types (None, NaN, string, number)
+                if install_hrs is None or str(install_hrs).lower() in ['nan', 'none', '']:
+                    print(f"[DEBUG] Install HRS is empty/None: {install_hrs}")
+                else:
+                    # Convert to float, handling string numbers
+                    install_hrs_float = float(install_hrs)
+                    if install_hrs_float > 0:
+                        installation_duration = math.ceil(install_hrs_float / 2.5)
+                        description_parts.append(f"**Installation Duration:** {installation_duration} days")
+                        print(f"[DEBUG] Install HRS: {install_hrs} -> Duration: {installation_duration} days")
+                    else:
+                        print(f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}")
+            except (ValueError, TypeError) as e:
+                print(f"[DEBUG] Error calculating installation duration: {e}, Install HRS: {install_hrs} (type: {type(install_hrs)})")
+            except Exception as e:
+                print(f"[DEBUG] Unexpected error calculating installation duration: {e}, Install HRS: {install_hrs}")
 
         # Paint Color
         if excel_data.get('Paint color'):

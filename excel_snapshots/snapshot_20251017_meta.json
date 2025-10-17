@@ -1,9 +1,9 @@
 {
   "snapshot_date": "2025-10-17",
-  "captured_at": "2025-10-17T16:05:57.193200",
+  "captured_at": "2025-10-17T16:38:15.653608",
   "source_file": "Job Log 2.4 DM play toy.xlsm",
-  "last_modified": "2025-10-17T16:05:13Z",
-  "row_count": 262,
+  "last_modified": "2025-10-17T16:37:51Z",
+  "row_count": 268,
   "columns": [
     "Job #",
     "Release #",
@@ -29,5 +29,5 @@
     "start_install_formula",
     "start_install_formulaTF"
   ],
-  "data_hash": "55e21f491ce380e2e4035005127f5dac"
+  "data_hash": "e25def20439af403d81345074043da2e"
 }
