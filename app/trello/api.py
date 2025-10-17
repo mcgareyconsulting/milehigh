@@ -7,6 +7,7 @@ from app.models import Job, db
 from flask import current_app
 from datetime import datetime
 import pandas as pd
+import math
 
 
 # Main function for updating trello card information
@@ -432,29 +433,27 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         # Job description (first line)
         if excel_data.get('Description'):
-            description_parts.append(excel_data['Description'])
+            description_parts.append(f"**Description:** {excel_data['Description']}")
         
         # Add field details with bold formatting
         if excel_data.get('Install HRS'):
             description_parts.append(f"**Install HRS:** {excel_data['Install HRS']}")
-        
-        if excel_data.get('PM'):
-            description_parts.append(f"**PM:** {excel_data['PM']}")
-        
-        if excel_data.get('BY'):
-            description_parts.append(f"**BY:** {excel_data['BY']}")
-        
+
+            # Installation Duration
+            installation_duration = math.ceil(excel_data.get('Install HRS') / 2.5)
+            description_parts.append(f"**Installation Duration:** {installation_duration} days")
+
+        # Paint Color
         if excel_data.get('Paint color'):
             description_parts.append(f"**Paint color:** {excel_data['Paint color']}")
+
+        # Team
+        if excel_data.get('PM') and excel_data.get('BY'):
+            description_parts.append(f"**Team:** PM: {excel_data['PM']} / BY: {excel_data['BY']}")
         
-        if excel_data.get('Fab Hrs'):
-            description_parts.append(f"**Fab Hrs:** {excel_data['Fab Hrs']}")
-        
+        # Released
         if excel_data.get('Released'):
             description_parts.append(f"**Released:** {excel_data['Released']}")
-        
-        # Hard-coded "Installer/" at the bottom
-        description_parts.append("Installer/")
         
         # Join all description parts with newlines
         card_description = "\n".join(description_parts)
