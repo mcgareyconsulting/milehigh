@@ -399,22 +399,27 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         print(f"[DEBUG] Database record created: Job {new_job.id}")
         
-        # Get the target list ID
-        if list_name:
-            target_list = get_list_by_name(list_name)
-            if not target_list:
-                raise ValueError(f"List '{list_name}' not found on the board")
-            list_id = target_list["id"]
-        else:
-            # Get the first available list if no specific list is provided
-            url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
-            params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-            response = requests.get(url_lists, params=params)
-            response.raise_for_status()
-            lists = response.json()
-            if not lists:
-                raise ValueError("No lists found on the board")
-            list_id = lists[0]["id"]  # Use first list
+        # # Get the target list ID - default to "Released" list
+        # if list_name:
+        #     target_list = get_list_by_name(list_name)
+        #     if not target_list:
+        #         raise ValueError(f"List '{list_name}' not found on the board")
+        #     list_id = target_list["id"]
+        # else:
+        #     # Default to "Released" list
+        #     target_list = get_list_by_name("Released")
+        #     if not target_list:
+        #         # Fallback to first available list if "Released" not found
+        #         url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+        #         params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+        #         response = requests.get(url_lists, params=params)
+        #         response.raise_for_status()
+        #         lists = response.json()
+        #         if not lists:
+        #             raise ValueError("No lists found on the board")
+        #         list_id = lists[0]["id"]  # Use first list
+        #     else:
+        #         list_id = target_list["id"]
         
         # Format card title
         job_number = excel_data.get('Job #', 'Unknown')
@@ -422,24 +427,31 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         job_name = excel_data.get('Job', 'Unknown Job')
         card_title = f"{job_number}-{release_number} {job_name}"
         
-        # Format card description - simplified format
+        # Format card description with bold field names
         description_parts = []
         
         # Job description (first line)
         if excel_data.get('Description'):
             description_parts.append(excel_data['Description'])
         
-        # Install hours (second line)
+        # Add field details with bold formatting
         if excel_data.get('Install HRS'):
-            description_parts.append(f"Install hours: {excel_data['Install HRS']}")
+            description_parts.append(f"**Install HRS:** {excel_data['Install HRS']}")
         
-        # PM (third line)
         if excel_data.get('PM'):
-            description_parts.append(f"PM: {excel_data['PM']}")
+            description_parts.append(f"**PM:** {excel_data['PM']}")
         
-        # Paint color (fourth line)
+        if excel_data.get('BY'):
+            description_parts.append(f"**BY:** {excel_data['BY']}")
+        
         if excel_data.get('Paint color'):
-            description_parts.append(f"Paint color: {excel_data['Paint color']}")
+            description_parts.append(f"**Paint color:** {excel_data['Paint color']}")
+        
+        if excel_data.get('Fab Hrs'):
+            description_parts.append(f"**Fab Hrs:** {excel_data['Fab Hrs']}")
+        
+        if excel_data.get('Released'):
+            description_parts.append(f"**Released:** {excel_data['Released']}")
         
         # Hard-coded "Installer/" at the bottom
         description_parts.append("Installer/")
@@ -455,7 +467,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             "token": cfg.TRELLO_TOKEN,
             "name": card_title,
             "desc": card_description,
-            "idList": list_id,
+            "idList": cfg.NEW_TRELLO_CARD_LIST_ID,
             "pos": "top"  # Add to top of list
         }
         

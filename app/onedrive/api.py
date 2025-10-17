@@ -430,7 +430,7 @@ def find_new_rows_in_excel(current_df, previous_df=None):
             # Call the existing Trello card creation function
             try:
                 from app.trello.api import create_trello_card_from_excel_data
-                result = create_trello_card_from_excel_data(excel_data, "Fit Up Complete.")
+                result = create_trello_card_from_excel_data(excel_data, "Released")
                 
                 if result["success"]:
                     print(f"{identifier}: ✅ Card created successfully (ID: {result.get('card_id')})")

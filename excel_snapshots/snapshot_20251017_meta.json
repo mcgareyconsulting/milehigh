@@ -1,0 +1,33 @@
+{
+  "snapshot_date": "2025-10-17",
+  "captured_at": "2025-10-17T16:05:57.193200",
+  "source_file": "Job Log 2.4 DM play toy.xlsm",
+  "last_modified": "2025-10-17T16:05:13Z",
+  "row_count": 262,
+  "columns": [
+    "Job #",
+    "Release #",
+    "Job",
+    "Description",
+    "Fab Hrs",
+    "Install HRS",
+    "Paint color",
+    "PM",
+    "BY",
+    "Released",
+    "Fab Order",
+    "Cut start",
+    "Fitup comp",
+    "Welded",
+    "Paint Comp",
+    "Ship",
+    "Start install",
+    "Comp. ETA",
+    "Job Comp",
+    "Invoiced",
+    "Notes",
+    "start_install_formula",
+    "start_install_formulaTF"
+  ],
+  "data_hash": "55e21f491ce380e2e4035005127f5dac"
+}
