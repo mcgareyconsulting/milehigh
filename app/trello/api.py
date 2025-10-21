@@ -505,7 +505,11 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         # Handle notes field - append as comment if not empty
         notes_value = excel_data.get('Notes')
-        if notes_value and str(notes_value).strip():
+        # Check if notes value is valid (not None, not NaN, not empty string, not 'nan'/'NaN')
+        if (notes_value is not None and 
+            not pd.isna(notes_value) and 
+            str(notes_value).strip() and
+            str(notes_value).strip().lower() not in ['nan', 'none']):
             print(f"[DEBUG] Notes field found, appending as comment to Trello card: {notes_value}")
             comment_success = add_comment_to_trello_card(card_data["id"], str(notes_value).strip())
             if comment_success:
@@ -513,7 +517,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             else:
                 print(f"[ERROR] Failed to add notes as comment to Trello card")
         else:
-            print(f"[DEBUG] No notes field or empty notes, skipping comment addition")
+            print(f"[DEBUG] No notes field, empty notes, NaN value, or 'nan'/'none' string, skipping comment addition")
         
         return {
             "success": True,
