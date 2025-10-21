@@ -503,6 +503,22 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         else:
             print(f"[ERROR] Failed to update database record with Trello data")
         
+        # Handle notes field - append as comment if not empty
+        notes_value = excel_data.get('Notes')
+        # Check if notes value is valid (not None, not NaN, not empty string, not 'nan'/'NaN')
+        if (notes_value is not None and 
+            not pd.isna(notes_value) and 
+            str(notes_value).strip() and
+            str(notes_value).strip().lower() not in ['nan', 'none']):
+            print(f"[DEBUG] Notes field found, appending as comment to Trello card: {notes_value}")
+            comment_success = add_comment_to_trello_card(card_data["id"], str(notes_value).strip())
+            if comment_success:
+                print(f"[DEBUG] Successfully added notes as comment to Trello card")
+            else:
+                print(f"[ERROR] Failed to add notes as comment to Trello card")
+        else:
+            print(f"[DEBUG] No notes field, empty notes, NaN value, or 'nan'/'none' string, skipping comment addition")
+        
         return {
             "success": True,
             "card_id": card_data["id"],
@@ -536,3 +552,111 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             "error": error_msg,
             "exception_type": type(e).__name__
         }
+
+
+def get_card_custom_field_items(card_id):
+    """
+    Retrieves all custom field items for a Trello card.
+    
+    Args:
+        card_id: Trello card ID
+    
+    Returns:
+        List of custom field items or None if error
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}/customFieldItems"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error getting custom field items for card {card_id}: {http_err}")
+        return None
+    except Exception as err:
+        print(f"[TRELLO API] Error getting custom field items for card {card_id}: {err}")
+        return None
+
+
+def update_card_custom_field(card_id, custom_field_id, text_value):
+    """
+    Updates a custom field on a Trello card.
+    
+    Args:
+        card_id: Trello card ID
+        custom_field_id: Custom field ID
+        text_value: New text value for the custom field
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}/customField/{custom_field_id}/item"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN
+    }
+    data = {
+        "value": {"text": text_value}
+    }
+    
+    try:
+        print(f"[TRELLO API] Updating custom field {custom_field_id} on card {card_id} with value: {text_value[:100]}...")
+        response = requests.put(url, params=params, json=data)
+        response.raise_for_status()
+        print(f"[TRELLO API] Custom field updated successfully")
+        return True
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error updating custom field: {http_err}")
+        print("[TRELLO API] Response content:", response.text)
+        return False
+    except Exception as err:
+        print(f"[TRELLO API] Error updating custom field: {err}")
+        return False
+
+
+def add_comment_to_trello_card(card_id, comment_text, operation_id=None):
+    """
+    Adds a timestamped comment to a Trello card.
+    
+    Args:
+        card_id: Trello card ID
+        comment_text: Comment text to add
+        operation_id: Optional operation ID for logging
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if not comment_text or not comment_text.strip():
+        print(f"[TRELLO API] Skipping empty comment for card {card_id}")
+        return True
+    
+    # Format comment with timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted_comment = f"[{timestamp}] {comment_text.strip()}"
+    
+    url = f"https://api.trello.com/1/cards/{card_id}/actions/comments"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "text": formatted_comment
+    }
+    
+    try:
+        print(f"[TRELLO API] Adding comment to card {card_id}: {formatted_comment[:100]}...")
+        response = requests.post(url, params=params)
+        response.raise_for_status()
+        print(f"[TRELLO API] Comment added successfully")
+        if operation_id:
+            print(f"[TRELLO API] Operation ID: {operation_id}")
+        return True
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error adding comment: {http_err}")
+        print("[TRELLO API] Response content:", response.text)
+        return False
+    except Exception as err:
+        print(f"[TRELLO API] Error adding comment: {err}")
+        return False
