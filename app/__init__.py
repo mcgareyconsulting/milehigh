@@ -2,6 +2,7 @@ import os
 from flask import Flask, jsonify, request
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
+from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
 from app.models import db, SyncOperation, SyncLog, SyncStatus
@@ -419,6 +420,94 @@ def create_app():
         except Exception as e:
             logger.error("Error rendering logs view", operation_id=operation_id, error=str(e))
             return "Error", 500
+
+    @app.route("/api/create_card", methods=["POST"])
+    def new_card():
+        data = request.get_json()
+        
+        # Create the card
+        result = create_trello_card_from_excel_data(data, "Fit Up Complete.")
+
+        if result["success"]:
+            return jsonify({"message": "Card created", "card_id": result["card_id"]}), 200
+        else:
+            # Check if it's a duplicate job (409 Conflict) vs other errors (500)
+            if "already exists in database" in result.get("error", ""):
+                return jsonify({"message": "Card creation failed", "error": result["error"]}), 409
+            else:
+                return jsonify({"message": "Card creation failed", "error": result["error"]}), 500
+
+    # Excel Snapshot endpoints
+    @app.route("/snapshot/capture", methods=["GET", "POST"])
+    def capture_snapshot():
+        """Capture current Excel data as a snapshot."""
+        try:
+            from app.onedrive.api import capture_excel_snapshot
+            result = capture_excel_snapshot()
+            
+            if result["success"]:
+                return jsonify({
+                    "message": "Snapshot captured successfully",
+                    "snapshot_date": result["snapshot_date"],
+                    "row_count": result["row_count"]
+                }), 200
+            else:
+                return jsonify({
+                    "message": "Failed to capture snapshot",
+                    "error": result.get("error", "Unknown error")
+                }), 500
+                
+        except Exception as e:
+            logger.error("Error capturing snapshot", error=str(e))
+            return jsonify({"message": "Error capturing snapshot", "error": str(e)}), 500
+
+    @app.route("/snapshot/digest", methods=["GET", "POST"])
+    def run_snapshot_digest():
+        """Run Excel snapshot digest to find new rows."""
+        try:
+            from app.onedrive.api import run_excel_snapshot_digest
+            result = run_excel_snapshot_digest()
+            
+            if result["success"]:
+                return jsonify({
+                    "message": "Snapshot digest completed",
+                    "current_rows": result["current_rows"],
+                    "previous_rows": result["previous_rows"],
+                    "new_rows_found": result["new_rows"],
+                    "snapshot_captured": result["snapshot_captured"],
+                    "previous_snapshot_date": result["previous_snapshot_date"]
+                }), 200
+            else:
+                return jsonify({
+                    "message": "Snapshot digest failed",
+                    "error": result.get("error", "Unknown error")
+                }), 500
+                
+        except Exception as e:
+            logger.error("Error running snapshot digest", error=str(e))
+            return jsonify({"message": "Error running snapshot digest", "error": str(e)}), 500
+
+    @app.route("/snapshot/status")
+    def snapshot_status():
+        """Get snapshot status and latest snapshot info."""
+        try:
+            from app.onedrive.api import get_latest_snapshot
+            snapshot_date, df, metadata = get_latest_snapshot()
+            
+            status = {
+                "latest_snapshot": {
+                    "date": snapshot_date.isoformat() if snapshot_date else None,
+                    "row_count": len(df) if df is not None else 0
+                },
+                "snapshots_available": snapshot_date is not None
+            }
+            
+            return jsonify(status), 200
+            
+        except Exception as e:
+            logger.error("Error getting snapshot status", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")

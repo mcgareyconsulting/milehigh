@@ -18,8 +18,24 @@ def parse_webhook_data(data):
         card_name = card_info.get("name")
         event_time = action.get("date")
 
+        # Card created
+        if action_type == "createCard":
+            list_info = action_data.get("list", {})
+            list_name = list_info.get("name")
+            list_id = list_info.get("id")
+            
+            return {
+                "event": "card_created",
+                "handled": True,
+                "card_id": card_id,
+                "card_name": card_name,
+                "list_id": list_id,
+                "list_name": list_name,
+                "time": event_time,
+            }
+
         # Card moved between lists
-        if (
+        elif (
             action_type == "updateCard"
             and "listBefore" in action_data
             and "listAfter" in action_data
