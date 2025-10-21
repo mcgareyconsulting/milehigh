@@ -7,6 +7,7 @@ from app.models import Job, db
 from flask import current_app
 from datetime import datetime
 import pandas as pd
+import math
 
 
 # Main function for updating trello card information
@@ -399,22 +400,27 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         print(f"[DEBUG] Database record created: Job {new_job.id}")
         
-        # Get the target list ID
-        if list_name:
-            target_list = get_list_by_name(list_name)
-            if not target_list:
-                raise ValueError(f"List '{list_name}' not found on the board")
-            list_id = target_list["id"]
-        else:
-            # Get the first available list if no specific list is provided
-            url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
-            params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-            response = requests.get(url_lists, params=params)
-            response.raise_for_status()
-            lists = response.json()
-            if not lists:
-                raise ValueError("No lists found on the board")
-            list_id = lists[0]["id"]  # Use first list
+        # # Get the target list ID - default to "Released" list
+        # if list_name:
+        #     target_list = get_list_by_name(list_name)
+        #     if not target_list:
+        #         raise ValueError(f"List '{list_name}' not found on the board")
+        #     list_id = target_list["id"]
+        # else:
+        #     # Default to "Released" list
+        #     target_list = get_list_by_name("Released")
+        #     if not target_list:
+        #         # Fallback to first available list if "Released" not found
+        #         url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+        #         params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+        #         response = requests.get(url_lists, params=params)
+        #         response.raise_for_status()
+        #         lists = response.json()
+        #         if not lists:
+        #             raise ValueError("No lists found on the board")
+        #         list_id = lists[0]["id"]  # Use first list
+        #     else:
+        #         list_id = target_list["id"]
         
         # Format card title
         job_number = excel_data.get('Job #', 'Unknown')
@@ -422,27 +428,48 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         job_name = excel_data.get('Job', 'Unknown Job')
         card_title = f"{job_number}-{release_number} {job_name}"
         
-        # Format card description - simplified format
+        # Format card description with bold field names
         description_parts = []
         
         # Job description (first line)
         if excel_data.get('Description'):
-            description_parts.append(excel_data['Description'])
+            description_parts.append(f"**Description:** {excel_data['Description']}")
         
-        # Install hours (second line)
+        # Add field details with bold formatting
         if excel_data.get('Install HRS'):
-            description_parts.append(f"Install hours: {excel_data['Install HRS']}")
-        
-        # PM (third line)
-        if excel_data.get('PM'):
-            description_parts.append(f"PM: {excel_data['PM']}")
-        
-        # Paint color (fourth line)
+            install_hrs = excel_data.get('Install HRS')
+            description_parts.append(f"**Install HRS:** {install_hrs}")
+            
+            # Installation Duration calculation with error handling
+            try:
+                # Handle different data types (None, NaN, string, number)
+                if install_hrs is None or str(install_hrs).lower() in ['nan', 'none', '']:
+                    print(f"[DEBUG] Install HRS is empty/None: {install_hrs}")
+                else:
+                    # Convert to float, handling string numbers
+                    install_hrs_float = float(install_hrs)
+                    if install_hrs_float > 0:
+                        installation_duration = math.ceil(install_hrs_float / 2.5)
+                        description_parts.append(f"**Installation Duration:** {installation_duration} days")
+                        print(f"[DEBUG] Install HRS: {install_hrs} -> Duration: {installation_duration} days")
+                    else:
+                        print(f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}")
+            except (ValueError, TypeError) as e:
+                print(f"[DEBUG] Error calculating installation duration: {e}, Install HRS: {install_hrs} (type: {type(install_hrs)})")
+            except Exception as e:
+                print(f"[DEBUG] Unexpected error calculating installation duration: {e}, Install HRS: {install_hrs}")
+
+        # Paint Color
         if excel_data.get('Paint color'):
-            description_parts.append(f"Paint color: {excel_data['Paint color']}")
+            description_parts.append(f"**Paint color:** {excel_data['Paint color']}")
+
+        # Team
+        if excel_data.get('PM') and excel_data.get('BY'):
+            description_parts.append(f"**Team:** PM: {excel_data['PM']} / BY: {excel_data['BY']}")
         
-        # Hard-coded "Installer/" at the bottom
-        description_parts.append("Installer/")
+        # Released
+        if excel_data.get('Released'):
+            description_parts.append(f"**Released:** {excel_data['Released']}")
         
         # Join all description parts with newlines
         card_description = "\n".join(description_parts)
@@ -455,7 +482,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             "token": cfg.TRELLO_TOKEN,
             "name": card_title,
             "desc": card_description,
-            "idList": list_id,
+            "idList": cfg.NEW_TRELLO_CARD_LIST_ID,
             "pos": "top"  # Add to top of list
         }
         

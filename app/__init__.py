@@ -437,6 +437,78 @@ def create_app():
             else:
                 return jsonify({"message": "Card creation failed", "error": result["error"]}), 500
 
+    # Excel Snapshot endpoints
+    @app.route("/snapshot/capture", methods=["GET", "POST"])
+    def capture_snapshot():
+        """Capture current Excel data as a snapshot."""
+        try:
+            from app.onedrive.api import capture_excel_snapshot
+            result = capture_excel_snapshot()
+            
+            if result["success"]:
+                return jsonify({
+                    "message": "Snapshot captured successfully",
+                    "snapshot_date": result["snapshot_date"],
+                    "row_count": result["row_count"]
+                }), 200
+            else:
+                return jsonify({
+                    "message": "Failed to capture snapshot",
+                    "error": result.get("error", "Unknown error")
+                }), 500
+                
+        except Exception as e:
+            logger.error("Error capturing snapshot", error=str(e))
+            return jsonify({"message": "Error capturing snapshot", "error": str(e)}), 500
+
+    @app.route("/snapshot/digest", methods=["GET", "POST"])
+    def run_snapshot_digest():
+        """Run Excel snapshot digest to find new rows."""
+        try:
+            from app.onedrive.api import run_excel_snapshot_digest
+            result = run_excel_snapshot_digest()
+            
+            if result["success"]:
+                return jsonify({
+                    "message": "Snapshot digest completed",
+                    "current_rows": result["current_rows"],
+                    "previous_rows": result["previous_rows"],
+                    "new_rows_found": result["new_rows"],
+                    "snapshot_captured": result["snapshot_captured"],
+                    "previous_snapshot_date": result["previous_snapshot_date"]
+                }), 200
+            else:
+                return jsonify({
+                    "message": "Snapshot digest failed",
+                    "error": result.get("error", "Unknown error")
+                }), 500
+                
+        except Exception as e:
+            logger.error("Error running snapshot digest", error=str(e))
+            return jsonify({"message": "Error running snapshot digest", "error": str(e)}), 500
+
+    @app.route("/snapshot/status")
+    def snapshot_status():
+        """Get snapshot status and latest snapshot info."""
+        try:
+            from app.onedrive.api import get_latest_snapshot
+            snapshot_date, df, metadata = get_latest_snapshot()
+            
+            status = {
+                "latest_snapshot": {
+                    "date": snapshot_date.isoformat() if snapshot_date else None,
+                    "row_count": len(df) if df is not None else 0
+                },
+                "snapshots_available": snapshot_date is not None
+            }
+            
+            return jsonify(status), 200
+            
+        except Exception as e:
+            logger.error("Error getting snapshot status", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")

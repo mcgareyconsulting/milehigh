@@ -3,6 +3,10 @@ import pandas as pd
 from io import BytesIO
 from app.config import Config as cfg
 from openpyxl import load_workbook
+import os
+import json
+import hashlib
+from datetime import datetime, date
 
 
 relevant_columns = [
@@ -189,3 +193,310 @@ def update_excel_cell(cell_address, value, worksheet_name="Job Log"):
     except Exception as e:
         print(f"Exception in update_excel_cell: {e}")
         return False
+
+
+# Excel Snapshot System
+def capture_excel_snapshot(snapshot_date=None):
+    """
+    Capture a daily Excel snapshot for diff checking.
+    
+    Args:
+        snapshot_date: Date for the snapshot (defaults to today)
+        
+    Returns:
+        dict: Snapshot data with metadata
+    """
+    if snapshot_date is None:
+        snapshot_date = date.today()
+    
+    try:
+        # Get Excel data using existing function
+        excel_data = get_excel_data_with_timestamp()
+        
+        if excel_data is None or "data" not in excel_data:
+            raise Exception("Failed to download Excel data from OneDrive")
+        
+        df = excel_data["data"]
+        
+        # Create snapshot metadata
+        snapshot_metadata = {
+            "snapshot_date": snapshot_date.isoformat(),
+            "captured_at": datetime.utcnow().isoformat(),
+            "source_file": excel_data.get("name"),
+            "last_modified": excel_data.get("last_modified_time"),
+            "row_count": len(df),
+            "columns": list(df.columns),
+            "data_hash": hashlib.md5(df.to_string().encode()).hexdigest()
+        }
+        
+        # Save snapshot
+        snapshots_dir = "excel_snapshots"
+        os.makedirs(snapshots_dir, exist_ok=True)
+        
+        snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
+        
+        # Save DataFrame (pickle is most reliable for pandas)
+        df.to_pickle(os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"))
+        
+        # Save metadata
+        with open(os.path.join(snapshots_dir, f"{snapshot_filename}_meta.json"), 'w') as f:
+            json.dump(snapshot_metadata, f, indent=2)
+        
+        print(f"Snapshot captured: {snapshot_date} ({len(df)} rows)")
+        
+        return {
+            "success": True,
+            "snapshot_date": snapshot_date.isoformat(),
+            "row_count": len(df),
+            "file_path": os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"),
+            "metadata": snapshot_metadata
+        }
+        
+    except Exception as e:
+        print(f"Error capturing snapshot: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "snapshot_date": snapshot_date.isoformat() if snapshot_date else None
+        }
+
+
+def capture_excel_snapshot_with_data(df, excel_data, snapshot_date=None):
+    """
+    Capture a snapshot using already downloaded Excel data.
+    
+    Args:
+        df: DataFrame with Excel data
+        excel_data: Excel data dict with metadata
+        snapshot_date: Date for the snapshot (defaults to today)
+        
+    Returns:
+        dict: Snapshot result
+    """
+    if snapshot_date is None:
+        snapshot_date = date.today()
+    
+    try:
+        # Create snapshot metadata
+        snapshot_metadata = {
+            "snapshot_date": snapshot_date.isoformat(),
+            "captured_at": datetime.utcnow().isoformat(),
+            "source_file": excel_data.get("name"),
+            "last_modified": excel_data.get("last_modified_time"),
+            "row_count": len(df),
+            "columns": list(df.columns),
+            "data_hash": hashlib.md5(df.to_string().encode()).hexdigest()
+        }
+        
+        # Save snapshot
+        snapshots_dir = "excel_snapshots"
+        os.makedirs(snapshots_dir, exist_ok=True)
+        
+        snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
+        
+        # Save DataFrame (pickle is most reliable for pandas)
+        df.to_pickle(os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"))
+        
+        # Save metadata
+        with open(os.path.join(snapshots_dir, f"{snapshot_filename}_meta.json"), 'w') as f:
+            json.dump(snapshot_metadata, f, indent=2)
+        
+        print(f"Snapshot captured: {snapshot_date} ({len(df)} rows)")
+        
+        return {
+            "success": True,
+            "snapshot_date": snapshot_date.isoformat(),
+            "row_count": len(df),
+            "file_path": os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"),
+            "metadata": snapshot_metadata
+        }
+        
+    except Exception as e:
+        print(f"Error capturing snapshot: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "snapshot_date": snapshot_date.isoformat() if snapshot_date else None
+        }
+
+
+def load_snapshot(snapshot_date):
+    """
+    Load a snapshot for comparison.
+    
+    Args:
+        snapshot_date: Date of snapshot to load
+        
+    Returns:
+        tuple: (DataFrame, metadata) or (None, None) if not found
+    """
+    snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
+    snapshots_dir = "excel_snapshots"
+    
+    try:
+        df = pd.read_pickle(os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"))
+        with open(os.path.join(snapshots_dir, f"{snapshot_filename}_meta.json"), 'r') as f:
+            metadata = json.load(f)
+        print(f"Snapshot loaded: {snapshot_date} ({len(df)} rows)")
+        return df, metadata
+    except FileNotFoundError:
+        print(f"Snapshot not found for date: {snapshot_date}")
+        return None, None
+    except Exception as e:
+        print(f"Error loading snapshot {snapshot_date}: {e}")
+        return None, None
+
+
+def get_latest_snapshot():
+    """
+    Get the most recent snapshot.
+    
+    Returns:
+        tuple: (date, DataFrame, metadata) or (None, None, None) if no snapshots exist
+    """
+    snapshots_dir = "excel_snapshots"
+    
+    if not os.path.exists(snapshots_dir):
+        return None, None, None
+    
+    snapshot_files = [f for f in os.listdir(snapshots_dir) if f.startswith("snapshot_") and f.endswith(".pkl")]
+    
+    if not snapshot_files:
+        return None, None, None
+    
+    # Sort by filename (which includes date) to get the latest
+    snapshot_files.sort(reverse=True)
+    latest_file = snapshot_files[0]
+    
+    # Extract date from filename
+    try:
+        date_str = latest_file.replace("snapshot_", "").replace(".pkl", "")
+        snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+        
+        df, metadata = load_snapshot(snapshot_date)
+        return snapshot_date, df, metadata
+    except Exception as e:
+        print(f"Error parsing date from snapshot filename {latest_file}: {e}")
+        return None, None, None
+
+
+def find_new_rows_in_excel(current_df, previous_df=None):
+    """
+    Find new rows by comparing current and previous DataFrames.
+    Also checks each new row against the database.
+    
+    Args:
+        current_df: Current Excel data
+        previous_df: Previous snapshot data (None if no previous data)
+        
+    Returns:
+        DataFrame: New rows only
+    """
+    if previous_df is None:
+        print("No previous snapshot found - treating all rows as new")
+        new_rows = current_df.copy()
+    else:
+        # Create unique identifiers for comparison
+        current_df = current_df.copy()
+        previous_df = previous_df.copy()
+        
+        current_df['_identifier'] = current_df['Job #'].astype(str) + '-' + current_df['Release #'].astype(str)
+        previous_df['_identifier'] = previous_df['Job #'].astype(str) + '-' + previous_df['Release #'].astype(str)
+        
+        # Find rows that exist in current but not in previous
+        previous_identifiers = set(previous_df['_identifier'])
+        new_rows = current_df[~current_df['_identifier'].isin(previous_identifiers)]
+        
+        # Clean up temporary column
+        new_rows = new_rows.drop(columns=['_identifier'])
+    
+    print(f"Found {len(new_rows)} new rows out of {len(current_df)} total rows")
+    
+    # Process each new row - pass to Trello API for card creation
+    if len(new_rows) > 0:
+        print("\nProcessing new rows:")
+        print("-" * 50)
+        
+        for index, row in new_rows.iterrows():
+            job_number = int(row['Job #'])
+            release_number = str(row['Release #'])
+            identifier = f"{job_number}-{release_number}"
+            
+            print(f"Processing {identifier}...")
+            
+            # Convert row to dictionary for Trello API
+            excel_data = row.to_dict()
+            
+            # Call the existing Trello card creation function
+            try:
+                from app.trello.api import create_trello_card_from_excel_data
+                result = create_trello_card_from_excel_data(excel_data, "Released")
+                
+                if result["success"]:
+                    print(f"{identifier}: ✅ Card created successfully (ID: {result.get('card_id')})")
+                else:
+                    if "already exists in database" in result.get("error", ""):
+                        print(f"{identifier}: ⚠️  Already exists in DB - {result.get('error')}")
+                    else:
+                        print(f"{identifier}: ❌ Failed to create card - {result.get('error')}")
+                        
+            except Exception as e:
+                print(f"{identifier}: ❌ Error processing - {str(e)}")
+        
+        print("-" * 50)
+    
+    return new_rows
+
+
+def run_excel_snapshot_digest():
+    """
+    Run the Excel snapshot digest process:
+    1. Capture current Excel data
+    2. Compare with previous snapshot
+    3. Save current data as new snapshot
+    4. Return new rows found
+    
+    Returns:
+        dict: Digest results with new rows and metadata
+    """
+    try:
+        print("Starting Excel snapshot digest...")
+        
+        # Get current Excel data
+        excel_data = get_excel_data_with_timestamp()
+        if excel_data is None or "data" not in excel_data:
+            raise Exception("Failed to download Excel data from OneDrive")
+        
+        current_df = excel_data["data"]
+        print(f"Downloaded current Excel data: {len(current_df)} rows")
+        
+        # Get previous snapshot
+        previous_date, previous_df, previous_metadata = get_latest_snapshot()
+        
+        if previous_df is not None:
+            print(f"Found previous snapshot from {previous_date}: {len(previous_df)} rows")
+        else:
+            print("No previous snapshot found")
+        
+        # Find new rows
+        new_rows = find_new_rows_in_excel(current_df, previous_df)
+        
+        # Save current data as new snapshot (reuse the downloaded data)
+        snapshot_result = capture_excel_snapshot_with_data(current_df, excel_data)
+        
+        return {
+            "success": True,
+            "current_rows": len(current_df),
+            "previous_rows": len(previous_df) if previous_df is not None else 0,
+            "new_rows": len(new_rows),
+            "new_rows_data": new_rows,
+            "snapshot_captured": snapshot_result["success"],
+            "previous_snapshot_date": previous_date.isoformat() if previous_date else None
+        }
+        
+    except Exception as e:
+        print(f"Excel snapshot digest failed: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
