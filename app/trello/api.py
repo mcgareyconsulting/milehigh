@@ -503,6 +503,18 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         else:
             print(f"[ERROR] Failed to update database record with Trello data")
         
+        # Handle notes field - append as comment if not empty
+        notes_value = excel_data.get('Notes')
+        if notes_value and str(notes_value).strip():
+            print(f"[DEBUG] Notes field found, appending as comment to Trello card: {notes_value}")
+            comment_success = add_comment_to_trello_card(card_data["id"], str(notes_value).strip())
+            if comment_success:
+                print(f"[DEBUG] Successfully added notes as comment to Trello card")
+            else:
+                print(f"[ERROR] Failed to add notes as comment to Trello card")
+        else:
+            print(f"[DEBUG] No notes field or empty notes, skipping comment addition")
+        
         return {
             "success": True,
             "card_id": card_data["id"],
