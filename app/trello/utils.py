@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, date, timezone, time
+from datetime import datetime, date, timezone, time, timedelta
 from zoneinfo import ZoneInfo
 
 
@@ -135,3 +135,34 @@ def mountain_due_datetime(local_date):
     dt_utc = dt_mountain.astimezone(ZoneInfo("UTC"))
     # Format as Trello expects (ISO with Z)
     return dt_utc.isoformat().replace("+00:00", "Z")
+
+
+def calculate_business_days_before(target_date, business_days=2):
+    """
+    Calculate the date that is a specified number of business days before the target date.
+    
+    Args:
+        target_date: The target date (date or datetime object)
+        business_days: Number of business days to go back (default: 2)
+    
+    Returns:
+        date: The calculated date that is business_days before target_date
+    """
+    # Convert to date if it's a datetime
+    if isinstance(target_date, datetime):
+        current_date = target_date.date()
+    else:
+        current_date = target_date
+    
+    days_back = 0
+    business_days_counted = 0
+    
+    while business_days_counted < business_days:
+        days_back += 1
+        check_date = current_date - timedelta(days=days_back)
+        
+        # Check if it's a weekday (Monday=0, Sunday=6)
+        if check_date.weekday() < 5:  # Monday through Friday
+            business_days_counted += 1
+    
+    return current_date - timedelta(days=days_back)

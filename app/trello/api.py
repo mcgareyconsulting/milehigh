@@ -11,15 +11,15 @@ import math
 
 
 # Main function for updating trello card information
-def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_date=False):
+def update_trello_card(card_id, new_list_id=None, new_start_date=None, clear_start_date=False):
     """
-    Updates a Trello card\'s list and/or due date in a single API call.
+    Updates a Trello card\'s list and/or start date in a single API call.
     
     Args:
         card_id: Trello card ID
         new_list_id: New list ID (optional)
-        new_due_date: New due date as datetime object (optional)
-        clear_due_date: If True, explicitly clear the due date even if new_due_date is None
+        new_start_date: New start date as datetime object (optional)
+        clear_start_date: If True, explicitly clear the start date even if new_start_date is None
     """
     url = f"https://api.trello.com/1/cards/{card_id}"
 
@@ -31,20 +31,27 @@ def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_d
     if new_list_id:
         payload["idList"] = new_list_id
 
-    # Handle due date
-    if new_due_date:
-        # Set due date to 6pm Mountain time, DST-aware
-        payload["due"] = mountain_due_datetime(new_due_date)
-    elif clear_due_date:
-        # Explicitly clear the due date using empty string (Trello API requirement)
-        payload["due"] = ""
-    # If neither new_due_date nor clear_due_date, don't include 'due' parameter at all
+    # Handle start date
+    if new_start_date:
+        # Set start date to 6pm Mountain time, DST-aware
+        payload["start"] = mountain_due_datetime(new_start_date)
+    elif clear_start_date:
+        # Clear the start date - try empty string first, then null
+        payload["start"] = ""
+    # If neither new_start_date nor clear_start_date, don't include 'start' parameter at all
 
     try:
         # Log the payload for debugging
         print(f"[TRELLO API] Updating card {card_id} with payload: {payload}")
         
-        response = requests.put(url, params=payload)
+        # For clearing start dates, we might need to use a different approach
+        if clear_start_date and "start" in payload and payload["start"] == "":
+            # Try using JSON data instead of params for clearing
+            json_payload = {"start": ""}
+            response = requests.put(url, params={"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}, json=json_payload)
+        else:
+            response = requests.put(url, params=payload)
+        
         response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
 
         print(f"[TRELLO API] Card {card_id} updated successfully")
