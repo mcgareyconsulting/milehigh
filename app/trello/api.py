@@ -2,7 +2,7 @@ import requests
 import re
 import os
 from app.config import Config as cfg
-from app.trello.utils import mountain_due_datetime
+from app.trello.utils import mountain_due_datetime, mountain_start_datetime
 from app.models import Job, db
 from flask import current_app
 from datetime import datetime
@@ -33,8 +33,8 @@ def update_trello_card(card_id, new_list_id=None, new_start_date=None, clear_sta
 
     # Handle start date
     if new_start_date:
-        # Set start date to 6pm Mountain time, DST-aware
-        payload["start"] = mountain_due_datetime(new_start_date)
+        # Set start date to 9am Mountain time, DST-aware
+        payload["start"] = mountain_start_datetime(new_start_date)
     elif clear_start_date:
         # Clear the start date - try empty string first, then null
         payload["start"] = ""
@@ -667,3 +667,363 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None):
     except Exception as err:
         print(f"[TRELLO API] Error adding comment: {err}")
         return False
+
+
+def get_card_attachments_by_job_release(job_number, release_number):
+    """
+    Get attachments for a Trello card by job number and release number.
+    
+    Args:
+        job_number (int or str): The job number
+        release_number (int or str): The release number
+        
+    Returns:
+        dict: Dictionary containing success status and attachments data
+    """
+    try:
+        # Convert job_number to int, keep release_number as string to preserve format like "v862"
+        job_int = int(job_number)
+        release_str = str(release_number)
+        
+        print(f"[TRELLO API] Looking up attachments for job: {job_int}-{release_str}")
+        
+        # Find the job record in the database
+        job_record = Job.query.filter_by(job=job_int, release=release_str).one_or_none()
+        
+        if not job_record:
+            return {
+                "success": False,
+                "error": f"Job {job_int}-{release_str} not found in database",
+                "attachments": []
+            }
+        
+        if not job_record.trello_card_id:
+            return {
+                "success": False,
+                "error": f"Job {job_int}-{release_str} has no associated Trello card",
+                "attachments": []
+            }
+        
+        # Get attachments from Trello API
+        url = f"https://api.trello.com/1/cards/{job_record.trello_card_id}/attachments"
+        
+        headers = {
+            "Accept": "application/json"
+        }
+        
+        query = {
+            'key': cfg.TRELLO_API_KEY,
+            'token': cfg.TRELLO_TOKEN
+        }
+        
+        response = requests.get(url, headers=headers, params=query)
+        
+        if response.status_code == 200:
+            attachments = response.json()
+            print(f"[TRELLO API] Found {len(attachments)} attachments for job {job_int}-{release_str}")
+            return {
+                "success": True,
+                "job": job_int,
+                "release": release_str,
+                "trello_card_id": job_record.trello_card_id,
+                "trello_card_name": job_record.trello_card_name,
+                "attachments": attachments
+            }
+        else:
+            print(f"[TRELLO API] Error getting attachments: {response.status_code} {response.text}")
+            return {
+                "success": False,
+                "error": f"Trello API error: {response.status_code} {response.text}",
+                "attachments": []
+            }
+            
+    except (ValueError, TypeError) as e:
+        error_msg = f"Invalid job or release identifiers: job={job_number}, release={release_number}, error={str(e)}"
+        print(f"[TRELLO API] {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg,
+            "attachments": []
+        }
+    except Exception as e:
+        error_msg = f"Error getting attachments for job {job_number}-{release_number}: {str(e)}"
+        print(f"[TRELLO API] {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg,
+            "attachments": []
+        }
+
+
+def update_mirror_card_date_range(trello_card_id, start_date, install_hrs):
+    """
+    Update the date range for a mirror card based on the main card's start date and installation duration.
+    
+    Args:
+        trello_card_id (str): The main Trello card ID
+        start_date (datetime.date): The exact start date (no business day adjustment)
+        install_hrs (float): Installation hours to calculate duration
+        
+    Returns:
+        dict: Dictionary containing success status and details
+    """
+    try:
+        # Get attachments for the main card
+        attachments_result = get_card_attachments_by_card_id(trello_card_id)
+        
+        if not attachments_result["success"]:
+            return {
+                "success": False,
+                "error": f"Failed to get attachments: {attachments_result['error']}"
+            }
+        
+        attachments = attachments_result["attachments"]
+        
+        # Validate we have exactly one attachment (the mirror card)
+        if len(attachments) == 0:
+            return {
+                "success": False,
+                "error": "No attachments found for this card"
+            }
+        elif len(attachments) > 1:
+            print(f"[TRELLO API] Warning: Found {len(attachments)} attachments, expected 1 mirror card")
+            # Continue anyway, but log the warning
+        
+        # Get the mirror card shortLink from the first attachment's fileName
+        mirror_attachment = attachments[0]
+        mirror_short_link = mirror_attachment.get("fileName")
+        
+        if not mirror_short_link:
+            return {
+                "success": False,
+                "error": "No fileName found in attachment data"
+            }
+        
+        # Calculate installation duration from install_hrs
+        installation_duration = calculate_installation_duration(install_hrs)
+        
+        if installation_duration is None:
+            return {
+                "success": False,
+                "error": f"Could not calculate installation duration from install_hrs: {install_hrs}"
+            }
+        
+        # Calculate due date (x business days from start date)
+        due_date = calculate_business_days_after(start_date, installation_duration)
+        
+        # Update the mirror card's date range
+        return update_card_date_range(mirror_short_link, start_date, due_date)
+        
+    except Exception as e:
+        error_msg = f"Error updating mirror card date range: {str(e)}"
+        print(f"[TRELLO API] {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg
+        }
+
+
+def get_card_attachments_by_card_id(trello_card_id):
+    """
+    Get attachments for a Trello card by card ID.
+    
+    Args:
+        trello_card_id (str): The Trello card ID
+        
+    Returns:
+        dict: Dictionary containing success status and attachments data
+    """
+    try:
+        print(f"[TRELLO API] Looking up attachments for card: {trello_card_id}")
+        
+        # Get attachments from Trello API
+        url = f"https://api.trello.com/1/cards/{trello_card_id}/attachments"
+        
+        headers = {
+            "Accept": "application/json"
+        }
+        
+        query = {
+            'key': cfg.TRELLO_API_KEY,
+            'token': cfg.TRELLO_TOKEN
+        }
+        
+        response = requests.get(url, headers=headers, params=query)
+        
+        if response.status_code == 200:
+            attachments = response.json()
+            print(f"[TRELLO API] Found {len(attachments)} attachments for card {trello_card_id}")
+            return {
+                "success": True,
+                "trello_card_id": trello_card_id,
+                "attachments": attachments
+            }
+        else:
+            print(f"[TRELLO API] Error getting attachments: {response.status_code} {response.text}")
+            return {
+                "success": False,
+                "error": f"Trello API error: {response.status_code} {response.text}",
+                "attachments": []
+            }
+            
+    except Exception as e:
+        error_msg = f"Error getting attachments for card {trello_card_id}: {str(e)}"
+        print(f"[TRELLO API] {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg,
+            "attachments": []
+        }
+
+
+def calculate_installation_duration(install_hrs):
+    """
+    Calculate installation duration in days from installation hours.
+    
+    Args:
+        install_hrs (float): Installation hours
+        
+    Returns:
+        int: Installation duration in days, or None if calculation fails
+    """
+    try:
+        if install_hrs is None or str(install_hrs).lower() in ['nan', 'none', '']:
+            print(f"[DEBUG] Install HRS is empty/None: {install_hrs}")
+            return None
+        
+        install_hrs_float = float(install_hrs)
+        if install_hrs_float > 0:
+            installation_duration = math.ceil(install_hrs_float / 2.5)
+            print(f"[DEBUG] Install HRS: {install_hrs} -> Duration: {installation_duration} days")
+            return installation_duration
+        else:
+            print(f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}")
+            return None
+            
+    except (ValueError, TypeError) as e:
+        print(f"[DEBUG] Error calculating installation duration: {e}, Install HRS: {install_hrs} (type: {type(install_hrs)})")
+        return None
+    except Exception as e:
+        print(f"[DEBUG] Unexpected error calculating installation duration: {e}, Install HRS: {install_hrs}")
+        return None
+
+
+def calculate_business_days_after(start_date, days):
+    """
+    Calculate a date that is a certain number of business days after the start date.
+    
+    Args:
+        start_date (datetime.date): The start date
+        days (int): Number of business days to add
+        
+    Returns:
+        datetime.date: The calculated due date
+    """
+    from app.trello.utils import add_business_days
+    return add_business_days(start_date, days)
+
+
+def update_card_date_range(card_short_link, start_date, due_date):
+    """
+    Update a card's start and due dates.
+    
+    Args:
+        card_short_link (str): The card's short link (from fileName)
+        start_date (datetime.date): The start date
+        due_date (datetime.date): The due date
+        
+    Returns:
+        dict: Dictionary containing success status and details
+    """
+    try:
+        # Convert dates to proper timezone-aware format for Trello
+        start_date_str = mountain_start_datetime(start_date)
+        due_date_str = mountain_due_datetime(due_date)
+        
+        url = f"https://api.trello.com/1/cards/{card_short_link}"
+        
+        payload = {
+            "key": cfg.TRELLO_API_KEY,
+            "token": cfg.TRELLO_TOKEN,
+            "start": start_date_str,
+            "due": due_date_str
+        }
+        
+        print(f"[TRELLO API] Updating mirror card {card_short_link} with start: {start_date_str}, due: {due_date_str}")
+        
+        response = requests.put(url, params=payload)
+        
+        if response.status_code == 200:
+            print(f"[TRELLO API] Successfully updated mirror card {card_short_link}")
+            return {
+                "success": True,
+                "card_short_link": card_short_link,
+                "start_date": start_date_str,
+                "due_date": due_date_str
+            }
+        else:
+            print(f"[TRELLO API] Error updating mirror card: {response.status_code} {response.text}")
+            return {
+                "success": False,
+                "error": f"Trello API error: {response.status_code} {response.text}"
+            }
+            
+    except Exception as e:
+        error_msg = f"Error updating card date range: {str(e)}"
+        print(f"[TRELLO API] {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg
+        }
+
+
+if __name__ == "__main__":
+    # # Test the attachments function
+    # from app import create_app
+    # import json
+    
+    # app = create_app()
+    
+    # with app.app_context():
+    #     print("=== Trello Card Attachments Test ===")
+    #     print()
+        
+    #     # Test with job 113, release 114
+    #     job_number = 113
+    #     release_number = "111"
+        
+    #     print(f"Testing with job {job_number}-{release_number}...")
+    #     print("-" * 50)
+        
+    #     result = get_card_attachments_by_job_release(job_number, release_number)
+        
+    #     if result["success"]:
+    #         print(f"✅ Success!")
+    #         print(f"Job: {result['job']}-{result['release']}")
+    #         print(f"Trello Card ID: {result['trello_card_id']}")
+    #         print(f"Trello Card Name: {result['trello_card_name']}")
+    #         print(f"Number of attachments: {len(result['attachments'])}")
+    #         print()
+            
+    #         if result['attachments']:
+    #             print("Attachments:")
+    #             for i, attachment in enumerate(result['attachments'], 1):
+    #                 print(f"  {i}. {attachment.get('name', 'Unnamed')}")
+    #                 print(f"     Type: {attachment.get('mimeType', 'Unknown')}")
+    #                 print(f"     Size: {attachment.get('bytes', 'Unknown')} bytes")
+    #                 print(f"     URL: {attachment.get('url', 'N/A')}")
+    #                 print(f"     Date: {attachment.get('date', 'Unknown')}")
+    #                 print()
+    #         else:
+    #             print("No attachments found for this card.")
+    #     else:
+    #         print(f"❌ Error: {result['error']}")
+        
+    #     print("\n" + "="*50)
+    #     print("Raw JSON response:")
+    #     print(json.dumps(result, indent=2, default=str))
+    id = "Bp2wVEer"
+    print(get_trello_card_by_id(id))
+    idList = "68ed5bb5b413f72544f87b8f"
+    print(get_list_name_by_id(idList))
+

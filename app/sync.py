@@ -13,6 +13,7 @@ from app.trello.api import (
     get_list_by_name,
     update_trello_card,
     add_comment_to_trello_card,
+    update_mirror_card_date_range,
 )
 from app.onedrive.utils import (
     get_excel_row_and_index_by_identifiers,
@@ -997,6 +998,57 @@ def sync_from_onedrive(data):
                                 update_trello_card(
                                     rec.trello_card_id, new_list_id, new_start_date, clear_start_date
                                 )
+
+                                # Update mirror card date range if we have a non-formula start date and install hours
+                                if not is_formula and rec.start_install and rec.install_hrs:
+                                    logger.info(
+                                        f"Updating mirror card date range for card {rec.trello_card_id}",
+                                        operation_id=sync_op.operation_id,
+                                        start_date=str(rec.start_install),
+                                        install_hrs=rec.install_hrs
+                                    )
+                                    mirror_result = update_mirror_card_date_range(
+                                        rec.trello_card_id, 
+                                        rec.start_install,  # Use exact date, no business day adjustment
+                                        rec.install_hrs
+                                    )
+                                    if mirror_result["success"]:
+                                        logger.info(
+                                            f"Successfully updated mirror card date range",
+                                            operation_id=sync_op.operation_id,
+                                            trello_card_id=rec.trello_card_id,
+                                            mirror_card_short_link=mirror_result.get("card_short_link"),
+                                            start_date=mirror_result.get("start_date"),
+                                            due_date=mirror_result.get("due_date")
+                                        )
+                                        safe_log_sync_event(
+                                            sync_op.operation_id,
+                                            "INFO",
+                                            "Mirror card date range updated",
+                                            id=rec.id,
+                                            job=rec.job,
+                                            release=rec.release,
+                                            trello_card_id=rec.trello_card_id,
+                                            mirror_card_short_link=mirror_result.get("card_short_link"),
+                                            start_date=mirror_result.get("start_date"),
+                                            due_date=mirror_result.get("due_date")
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"Failed to update mirror card date range: {mirror_result['error']}",
+                                            operation_id=sync_op.operation_id,
+                                            trello_card_id=rec.trello_card_id
+                                        )
+                                        safe_log_sync_event(
+                                            sync_op.operation_id,
+                                            "WARNING",
+                                            "Failed to update mirror card date range",
+                                            id=rec.id,
+                                            job=rec.job,
+                                            release=rec.release,
+                                            trello_card_id=rec.trello_card_id,
+                                            error=mirror_result.get("error")
+                                        )
 
                                 # Update DB record with new Trello info after successful API call
                                 rec.trello_card_date = new_start_date
