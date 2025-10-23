@@ -6154,3 +6154,114 @@
 {"event": "Drained sync completed in 0.57s"}
 {"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '620bacb3c4371968e8fd7bcf', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/pAtihLja/dm-trello-play-toy', 'shortUrl': 'https://trello.com/b/pAtihLja', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': True}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '68a240f8e82044f97d57138e', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/original/98ddae902598e8c693c530fd01d6094b/1000009951.jpg', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 133, 'height': 100, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/133x100/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 256, 'height': 192, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/256x192/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 480, 'height': 360, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/480x360/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 960, 'height': 720, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/960x720/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1024, 'height': 768, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1024x768/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1280, 'height': 960, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1280x960/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1920, 'height': 1440, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1920x1440/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2048, 'height': 1536, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2048x1536/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2133, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2133x1600/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 4032, 'height': 3024, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/4032x3024/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': None, 'backgroundBottomColor': '#595e67', 'backgroundTopColor': '#b1bcd2', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68f92dcb1b6898f6bc82dd53', 'idMemberCreator': '620bac8bbf1c5a35a47df981', 'data': {'old': {'pos': 140737488437248}, 'card': {'pos': 8796093008896, 'id': '68f92d5d77cd27535f9fa739', 'name': '113-112 New Card + Note', 'idShort': 60, 'shortLink': 'zO9js87R'}, 'board': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'shortLink': 'pAtihLja'}, 'list': {'id': '68ed5bb5b413f72544f87b8f', 'name': 'Unassigned cards'}}, 'appCreator': {'id': '56ff07afbc287582d36e19ac', 'name': 'Automation', 'icon': {'url': 'https://app.butlerfortrello.com/assets/icon-butler-bot.png'}}, 'type': 'updateCard', 'date': '2025-10-22T19:17:31.836Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_lower', 'entities': {'card': {'type': 'card', 'id': '68f92d5d77cd27535f9fa739', 'pos': 8796093008896, 'shortLink': 'zO9js87R', 'text': '113-112 New Card + Note'}, 'memberCreator': {'type': 'member', 'id': '620bac8bbf1c5a35a47df981', 'username': 'billoneill14', 'text': \"Bill O'Neill\"}}}, 'memberCreator': {'id': '620bac8bbf1c5a35a47df981', 'activityBlocked': False, 'avatarHash': 'ca8dd512713f65376a2af3e23d91c442', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/620bac8bbf1c5a35a47df981/ca8dd512713f65376a2af3e23d91c442', 'fullName': \"Bill O'Neill\", 'idMemberReferrer': None, 'initials': 'BO', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'billoneill14'}}, 'webhook': {'id': '68f7bc44b98015fcbf9f984b', 'description': 'Track card moves', 'idModel': '68ed5bb5b413f72544f87ba2', 'callbackURL': 'https://f8401d9d4934.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
 {"event": "127.0.0.1 - - [22/Oct/2025 13:17:32] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "Run time of job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 17:17:00 MDT)\" was missed by 0:47:35.355860"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 18:17:00 MDT)\" (scheduled at 2025-10-22 17:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-22T23:17:00.132816Z\"}"}
+{"event": "{\"drained\": 1, \"event\": \"Pre-drain Trello queue\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-22T23:17:00.152212Z\"}"}
+{"event": "Sync lock acquired for operation: Trello-Queue (thread 123145578172416)"}
+{"event": "Drained Trello event started with lock acquired"}
+{"event": "Sync lock already held by 'Trello-Queue' (thread 123145578172416). Cannot acquire for 'OneDrive-Poll' (thread 123145560846336)"}
+{"event": "Cannot execute OneDrive-Poll: Sync already in progress: Trello-Queue"}
+{"event": "{\"error\": \"Sync already in progress: Trello-Queue\", \"event\": \"Scheduled OneDrive poll skipped due to lock\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-22T23:17:00.219433Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 18:17:00 MDT)\" executed successfully"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"564bd34e\", \"start_time\": \"2025-10-22T23:17:00.386906\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-22T23:17:00.387029Z\"}"}
+{"event": "{\"operation_id\": \"564bd34e\", \"card_id\": \"68f92d5d77cd27535f9fa739\", \"event_time\": \"2025-10-22T19:17:18.514000\", \"event_type\": \"card_updated\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-22T23:17:00.410619Z\"}"}
+{"event": "{\"operation_id\": \"564bd34e\", \"card_id\": \"68f92d5d77cd27535f9fa739\", \"trello_name\": \"113-112 New Card + Note\", \"event\": \"No DB record found for card - ignoring webhook\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-22T23:17:00.874168Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"564bd34e\", \"duration_seconds\": 0.49818, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-22T23:17:00.885129Z\"}"}
+{"event": "Drained Trello event completed successfully"}
+{"event": "Sync lock released for operation: Trello-Queue"}
+{"event": "Drained sync completed in 0.73s"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 19:17:00 MDT)\" (scheduled at 2025-10-22 18:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T00:17:00.214240Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145560846336)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"8affa4d3\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T00:17:22.251865Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-22 19:16:12\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T00:17:22.271227Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T00:17:22.271545Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 113-112: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T00:17:22.465159Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T00:17:22.526761Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T00:17:22.543896Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 19:17:00 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 20:17:00 MDT)\" (scheduled at 2025-10-22 19:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T01:17:00.191349Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145560846336)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"1bcf51f8\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T01:17:20.701415Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-22 19:16:12\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T01:17:20.713959Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T01:17:20.714281Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 113-112: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T01:17:20.914485Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T01:17:20.963065Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T01:17:20.973584Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 20:17:00 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 21:17:00 MDT)\" (scheduled at 2025-10-22 20:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T02:17:00.137403Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145560846336)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"9f3e9c26\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T02:17:21.905593Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-22 19:16:12\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T02:17:21.921036Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T02:17:21.923134Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 113-112: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T02:17:22.147340Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T02:17:22.194735Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T02:17:22.206427Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 21:17:00 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 22:17:00 MDT)\" (scheduled at 2025-10-22 21:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T03:17:00.151051Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145560846336)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"97d00540\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T03:17:20.871156Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-22 19:16:12\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T03:17:20.882400Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T03:17:20.882704Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 113-112: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T03:17:21.059175Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T03:17:21.112171Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T03:17:21.122100Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 22:17:00 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 23:17:00 MDT)\" (scheduled at 2025-10-22 22:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T04:17:00.286233Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145560846336)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"71232320\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T04:17:23.074411Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-22 19:16:12\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T04:17:23.102607Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T04:17:23.102932Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 113-112: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T04:17:23.307757Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T04:17:23.361432Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T04:17:23.372855Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-22 23:17:00 MDT)\" executed successfully"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-23 00:17:00 MDT)\" (scheduled at 2025-10-22 23:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T05:17:00.228998Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145560846336)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"edba6465\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T05:17:20.526399Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-22 19:16:12\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T05:17:20.552771Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T05:17:20.553177Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 113-112: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T05:17:20.755271Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T05:17:20.812305Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T05:17:20.821824Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-23 00:17:00 MDT)\" executed successfully"}
+{"event": "Run time of job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-23 01:17:00 MDT)\" was missed by 0:29:03.329041"}
+{"event": "Run time of job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-23 03:17:00 MDT)\" was missed by 0:07:28.510259"}
+{"event": "Run time of job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-23 05:17:00 MDT)\" was missed by 0:37:02.853687"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-23 06:17:00 MDT)\" (scheduled at 2025-10-23 05:17:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T11:17:00.008797Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145560846336)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"06f9026e\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T11:17:17.528628Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-22 19:16:12\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T11:17:17.536271Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T11:17:17.536590Z\"}"}
+{"event": "{\"event\": \"Skipping Excel update for 113-112: event is older or same timestamp and originated from Excel.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T11:17:17.710879Z\"}"}
+{"event": "{\"event\": \"[SYNC] No records needed updating.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-23T11:17:17.755262Z\"}"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-23T11:17:17.767605Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='17'], next run at: 2025-10-23 06:17:00 MDT)\" executed successfully"}
