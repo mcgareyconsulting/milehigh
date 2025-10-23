@@ -78,7 +78,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="59",  # Run at minute 0 of every hour
+        minute="30",  # Run at minute 0 of every hour
         hour="*",  # Every hour (0-23)
         day="*",   # Every day
         month="*", # Every month

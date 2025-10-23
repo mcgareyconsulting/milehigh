@@ -710,6 +710,7 @@ def sync_from_onedrive(data):
         )
 
         updated_records = []
+        formula_updates_count = 0  # Track formula-driven start_install updates
 
         # Fields to check for diffs
         fields_to_check = [
@@ -822,21 +823,8 @@ def sync_from_onedrive(data):
                     if is_formula:
                         # If formula-driven, update DB if value differs, but do not update Trello
                         if excel_val != db_val:
-                            logger.info(
-                                f"{job}-{release} Updating DB {db_field} (formula-driven): {db_val!r} -> {excel_val!r}"
-                            )
-                            safe_log_sync_event(
-                                sync_op.operation_id,
-                                "INFO",
-                                "DB field update (formula-driven)",
-                                id=rec.id,
-                                job=rec.job,
-                                release=rec.release,
-                                excel_identifier=identifier,
-                                field=db_field,
-                                old_value=str(db_val),
-                                new_value=str(excel_val),
-                            )
+                            # Track formula updates for summary logging instead of individual logs
+                            formula_updates_count += 1
                             setattr(rec, db_field, excel_val)
                             setattr(
                                 rec,
@@ -935,6 +923,17 @@ def sync_from_onedrive(data):
                     db.session.add(rec)
                 db.session.commit()
                 logger.info(f"Committed {len(updated_records)} updated records to DB.")
+                
+                # Log formula updates summary if any occurred
+                if formula_updates_count > 0:
+                    logger.info(f"Updated {formula_updates_count} formula-driven start_install dates")
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Formula-driven start_install updates summary",
+                        formula_updates_count=formula_updates_count,
+                    )
+                
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "INFO",
