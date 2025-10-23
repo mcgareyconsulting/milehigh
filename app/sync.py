@@ -184,10 +184,20 @@ def rectify_db_on_trello_move(job, new_trello_list, operation_id: str):
         }
     )
     
-    if new_trello_list == "Paint complete" or new_trello_list == "Store at MHMW for shipping" or new_trello_list == "Shipping planning":
+    if new_trello_list == "Paint complete":
         job.fitup_comp = "X"
         job.welded = "X"
         job.paint_comp = "X"
+        job.ship = "T"
+    elif new_trello_list == "Store at MHMW for shipping":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"
+        job.ship = "T"  
+    elif new_trello_list == "Shipping planning":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"  
         job.ship = "T"
     elif new_trello_list == "Fit Up Complete.":
         job.fitup_comp = "X"
@@ -957,7 +967,26 @@ def sync_from_onedrive(data):
 
                             new_list_id = None
                             new_list_name = determine_trello_list_from_db(rec)
-                            if new_list_name:
+                            
+                            # Special handling for XXXT states (Paint complete, Store at MHMW for shipping, Shipping planning)
+                            # If the current Trello list is already one of these valid states, preserve it
+                            current_list_name = getattr(rec, "trello_list_name", None)
+                            valid_shipping_states = ["Paint complete", "Store at MHMW for shipping", "Shipping planning"]
+                            
+                            if (new_list_name == "Paint complete" and 
+                                current_list_name in valid_shipping_states):
+                                # Keep the current list instead of forcing to "Paint complete"
+                                new_list_name = current_list_name
+                                new_list = get_list_by_name(current_list_name)
+                                if new_list:
+                                    new_list_id = new_list["id"]
+                            elif new_list_name and new_list_name not in valid_shipping_states:
+                                # For non-shipping states, use the determined list
+                                new_list = get_list_by_name(new_list_name)
+                                if new_list:
+                                    new_list_id = new_list["id"]
+                            elif new_list_name in valid_shipping_states:
+                                # For shipping states, use the determined list
                                 new_list = get_list_by_name(new_list_name)
                                 if new_list:
                                     new_list_id = new_list["id"]
