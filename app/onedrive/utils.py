@@ -15,10 +15,41 @@ def run_onedrive_poll():
     Now with automatic locking protection.
     """
     from app.sync import sync_from_onedrive
+    from app.onedrive.api import capture_excel_snapshot_with_data
 
     logger.info("OneDrive poll starting with sync lock acquired")
     event_info = parse_polling_data()
+    
+    # Run the sync first
     sync_from_onedrive(event_info)
+    
+    # After sync is complete, save a snapshot
+    if event_info and "data" in event_info:
+        logger.info("Saving Excel snapshot after sync completion")
+        try:
+            # Get the Excel data that was just processed
+            excel_data = {
+                "name": "Job Log",  # Default name since we don't have it from parse_polling_data
+                "last_modified_time": event_info.get("last_modified_time"),
+                "data": event_info["data"]
+            }
+            
+            # Save snapshot using the data we already downloaded
+            snapshot_result = capture_excel_snapshot_with_data(
+                event_info["data"], 
+                excel_data
+            )
+            
+            if snapshot_result["success"]:
+                logger.info(f"Snapshot saved successfully: {snapshot_result['snapshot_date']} ({snapshot_result['row_count']} rows)")
+            else:
+                logger.warning(f"Failed to save snapshot: {snapshot_result.get('error', 'Unknown error')}")
+                
+        except Exception as e:
+            logger.error(f"Error saving snapshot: {str(e)}")
+    else:
+        logger.warning("No data available for snapshot - skipping snapshot save")
+    
     logger.info("OneDrive poll completed")
     return event_info
 
