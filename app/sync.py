@@ -305,6 +305,35 @@ def sync_from_trello(event_info):
                 )
                 update_sync_operation(sync_op.operation_id, status=SyncStatus.FAILED, error_type="CardNotFound")
                 return
+            
+            # Check if this is a card creation event that resulted from Excel sync
+            if event_info.get("event") == "card_created":
+                # Look for existing database record with this Trello card ID
+                rec = Job.query.filter_by(trello_card_id=card_id).first()
+                
+                if rec and rec.source_of_update == "Excel":
+                    # Check if the record was recently updated (within last 5 minutes)
+                    time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
+                    
+                    if time_diff and time_diff.total_seconds() < 300:  # 5 minutes
+                        logger.info(
+                            "Skipping Trello card creation webhook - card was created from Excel sync",
+                            operation_id=sync_op.operation_id,
+                            card_id=card_id,
+                            db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Skipping card creation webhook - created from Excel sync",
+                            trello_card_id=card_id,
+                            job_id=rec.id,
+                            db_last_updated=str(rec.last_updated_at) if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="ExcelSyncCard")
+                        return
 
             rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
             

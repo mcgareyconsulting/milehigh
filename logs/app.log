@@ -6319,3 +6319,7 @@
 {"event": "Sync lock released for operation: OneDrive-Poll"}
 {"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T19:19:00.124976Z\"}"}
 {"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T19:19:42.658182Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T19:42:02.359048Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 140704382080576)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
