@@ -1,0 +1,33 @@
+{
+  "snapshot_date": "2025-10-24",
+  "captured_at": "2025-10-24T21:21:18.501110",
+  "source_file": "Job Log",
+  "last_modified": "2025-10-24T21:20:27Z",
+  "row_count": 273,
+  "columns": [
+    "Job #",
+    "Release #",
+    "Job",
+    "Description",
+    "Fab Hrs",
+    "Install HRS",
+    "Paint color",
+    "PM",
+    "BY",
+    "Released",
+    "Fab Order",
+    "Cut start",
+    "Fitup comp",
+    "Welded",
+    "Paint Comp",
+    "Ship",
+    "Start install",
+    "Comp. ETA",
+    "Job Comp",
+    "Invoiced",
+    "Notes",
+    "start_install_formula",
+    "start_install_formulaTF"
+  ],
+  "data_hash": "e788add11229de649e96d1c3e499aa4a"
+}

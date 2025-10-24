@@ -19,6 +19,7 @@ from app.onedrive.utils import (
 )
 from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.models import Job, SyncOperation, SyncLog, SyncStatus, db
+from app.change_tracker import track_job_change, track_multiple_changes
 from datetime import datetime, date, timezone, time
 from zoneinfo import ZoneInfo
 from app.sync_lock import synchronized_sync, sync_lock_manager
@@ -488,6 +489,56 @@ def sync_from_trello(event_info):
                     )
                     update_sync_operation(sync_op.operation_id, records_created=1)
 
+                # Track changes before updating
+                changes_to_track = []
+                
+                # Check for changes in Trello fields
+                if rec.trello_card_name != card_data.get("name"):
+                    changes_to_track.append({
+                        'field_name': 'trello_card_name',
+                        'old_value': rec.trello_card_name,
+                        'new_value': card_data.get("name"),
+                        'change_type': 'update'
+                    })
+                
+                if rec.trello_card_description != card_data.get("desc"):
+                    changes_to_track.append({
+                        'field_name': 'trello_card_description',
+                        'old_value': rec.trello_card_description,
+                        'new_value': card_data.get("desc"),
+                        'change_type': 'update'
+                    })
+                
+                new_list_id = card_data.get("idList")
+                new_list_name = get_list_name_by_id(new_list_id)
+                if rec.trello_list_id != new_list_id:
+                    changes_to_track.append({
+                        'field_name': 'trello_list_id',
+                        'old_value': rec.trello_list_id,
+                        'new_value': new_list_id,
+                        'change_type': 'update'
+                    })
+                
+                if rec.trello_list_name != new_list_name:
+                    changes_to_track.append({
+                        'field_name': 'trello_list_name',
+                        'old_value': rec.trello_list_name,
+                        'new_value': new_list_name,
+                        'change_type': 'update'
+                    })
+                
+                new_due_date = None
+                if card_data.get("due"):
+                    new_due_date = parse_trello_datetime(card_data["due"])
+                
+                if rec.trello_card_date != new_due_date:
+                    changes_to_track.append({
+                        'field_name': 'trello_card_date',
+                        'old_value': rec.trello_card_date,
+                        'new_value': new_due_date,
+                        'change_type': 'update'
+                    })
+
                 # Update trello information
                 rec.trello_card_name = card_data.get("name")
                 rec.trello_card_description = card_data.get("desc")
@@ -516,6 +567,29 @@ def sync_from_trello(event_info):
                 db.session.add(rec)
                 db.session.commit()
                 update_sync_operation(sync_op.operation_id, records_updated=1)
+                
+                # Track the changes
+                if changes_to_track:
+                    try:
+                        track_multiple_changes(
+                            job_id=rec.id,
+                            changes=changes_to_track,
+                            source_system="Trello",
+                            operation_id=sync_op.operation_id,
+                            user_context=f"Trello webhook: {event_info.get('event', 'unknown')}",
+                            metadata={
+                                'trello_card_id': card_id,
+                                'event_type': event_info.get('event'),
+                                'event_time': event_time.isoformat() if event_time else None
+                            },
+                            job=rec.job,
+                            release=rec.release
+                        )
+                    except Exception as track_error:
+                        logger.warning("Failed to track job changes", 
+                                     error=str(track_error),
+                                     operation_id=sync_op.operation_id,
+                                     job_id=rec.id)
                 
                 logger.info("DB record updated successfully", operation_id=sync_op.operation_id, card_id=card_id)
                 safe_log_sync_event(
@@ -915,6 +989,7 @@ def sync_from_onedrive(data):
 
             record_updated = False
             formula_status_for_trello = None  # For Trello update later
+            changes_to_track = []  # Track all changes for this job
 
             for excel_field, db_field, field_type in fields_to_check:
                 excel_val = row.get(excel_field)
@@ -970,6 +1045,15 @@ def sync_from_onedrive(data):
                                 old_value=str(db_val),
                                 new_value=str(excel_val),
                             )
+                            
+                            # Track the change
+                            changes_to_track.append({
+                                'field_name': db_field,
+                                'old_value': db_val,
+                                'new_value': excel_val,
+                                'change_type': 'update'
+                            })
+                            
                             setattr(rec, db_field, excel_val)
                             setattr(rec, "start_install_formula", "")
                             setattr(rec, "start_install_formulaTF", False)
@@ -994,6 +1078,14 @@ def sync_from_onedrive(data):
                             old_value=str(db_val),
                             new_value=str(excel_val),
                         )
+                        # Track the change
+                        changes_to_track.append({
+                            'field_name': db_field,
+                            'old_value': db_val,
+                            'new_value': excel_val,
+                            'change_type': 'update'
+                        })
+                        
                         # Update DB with new note value
                         setattr(rec, db_field, excel_val)
                         record_updated = True
@@ -1022,19 +1114,28 @@ def sync_from_onedrive(data):
                         old_value=str(db_val),
                         new_value=str(excel_val),
                     )
+                    
+                    # Track the change
+                    changes_to_track.append({
+                        'field_name': db_field,
+                        'old_value': db_val,
+                        'new_value': excel_val,
+                        'change_type': 'update'
+                    })
+                    
                     setattr(rec, db_field, excel_val)
                     record_updated = True
 
             if record_updated:
                 rec.last_updated_at = excel_last_updated
                 rec.source_of_update = "Excel"
-                updated_records.append((rec, formula_status_for_trello))
+                updated_records.append((rec, formula_status_for_trello, changes_to_track))
 
         # Commit all DB updates at once
         if updated_records:
             logger.info(f"Committing {len(updated_records)} updated records to DB.")
             try:
-                for rec, _ in updated_records:
+                for rec, _, _ in updated_records:
                     db.session.add(rec)
                 db.session.commit()
                 logger.info(f"Committed {len(updated_records)} updated records to DB.")
@@ -1055,6 +1156,29 @@ def sync_from_onedrive(data):
                     "DB commit completed",
                     updated_records=len(updated_records),
                 )
+                
+                # Track all changes for updated records
+                for rec, _, changes_to_track in updated_records:
+                    if changes_to_track:
+                        try:
+                            track_multiple_changes(
+                                job_id=rec.id,
+                                changes=changes_to_track,
+                                source_system="Excel",
+                                operation_id=sync_op.operation_id,
+                                user_context="OneDrive sync",
+                                metadata={
+                                    'excel_identifier': f"{rec.job}-{rec.release}",
+                                    'excel_last_updated': excel_last_updated.isoformat() if excel_last_updated else None
+                                },
+                                job=rec.job,
+                                release=rec.release
+                            )
+                        except Exception as track_error:
+                            logger.warning("Failed to track job changes", 
+                                         error=str(track_error),
+                                         operation_id=sync_op.operation_id,
+                                         job_id=rec.id)
             except Exception as commit_error:
                 logger.error("Failed to commit database changes", 
                            error=str(commit_error),
@@ -1070,7 +1194,7 @@ def sync_from_onedrive(data):
                 raise
 
             # Trello update: due dates and list movement ONLY if the last update was NOT from Trello
-            for rec, is_formula in updated_records:
+            for rec, is_formula, _ in updated_records:
                 if rec.source_of_update != "Trello":
                     if hasattr(rec, "trello_card_id") and rec.trello_card_id:
                         try:

@@ -6323,3 +6323,169 @@
 {"event": "Sync lock acquired for operation: OneDrive-Poll (thread 140704382080576)"}
 {"event": "OneDrive poll starting with sync lock acquired"}
 {"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:00:33.020432Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:00:33.106443Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:00:55.281000Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:00:55.340266Z\"}"}
+{"event": "{\"job_id\": 1, \"field_name\": \"notes\", \"change_type\": \"update\", \"source_system\": \"system\", \"event\": \"Job change tracked\", \"logger\": \"app.change_tracker\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:00:55.349982Z\"}"}
+{"event": "{\"job_id\": 1, \"change_count\": 2, \"source_system\": \"system\", \"event\": \"Multiple job changes tracked\", \"logger\": \"app.change_tracker\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:00:55.359599Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:04:16.976085Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:04:17.036327Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145557598208)"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:05:21] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"3acae03b\", \"start_time\": \"2025-10-24T21:05:21.776352\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:21.776662Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event_time\": \"2025-10-24T21:05:20.968000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:21.809380Z\"}"}
+{"event": "Skipping unhandled webhook: {'event': 'unhandled', 'handled': False, 'details': {'model': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'desc': '', 'descData': None, 'closed': False, 'idOrganization': '620bacb3c4371968e8fd7bcf', 'idEnterprise': None, 'pinned': False, 'url': 'https://trello.com/b/pAtihLja/dm-trello-play-toy', 'shortUrl': 'https://trello.com/b/pAtihLja', 'prefs': {'permissionLevel': 'org', 'hideVotes': False, 'voting': 'disabled', 'comments': 'observers', 'invitations': 'admins', 'selfJoin': True, 'cardCovers': True, 'showCompleteStatus': True, 'cardCounts': False, 'isTemplate': False, 'cardAging': 'regular', 'calendarFeedEnabled': False, 'hiddenPluginBoardButtons': [], 'switcherViews': [{'viewType': 'Board', 'enabled': True}, {'viewType': 'Table', 'enabled': True}, {'viewType': 'Calendar', 'enabled': False}, {'viewType': 'Dashboard', 'enabled': False}, {'viewType': 'Timeline', 'enabled': True}, {'viewType': 'Map', 'enabled': False}], 'autoArchive': None, 'background': '68a240f8e82044f97d57138e', 'backgroundColor': None, 'backgroundDarkColor': None, 'backgroundImage': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/original/98ddae902598e8c693c530fd01d6094b/1000009951.jpg', 'backgroundDarkImage': None, 'backgroundImageScaled': [{'width': 133, 'height': 100, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/133x100/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 256, 'height': 192, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/256x192/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 480, 'height': 360, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/480x360/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 960, 'height': 720, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/960x720/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1024, 'height': 768, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1024x768/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1280, 'height': 960, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1280x960/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 1920, 'height': 1440, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/1920x1440/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2048, 'height': 1536, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2048x1536/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 2133, 'height': 1600, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/2133x1600/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}, {'width': 4032, 'height': 3024, 'url': 'https://trello-backgrounds.s3.amazonaws.com/6376399166567305e6c2387d/4032x3024/a4250c1b7bd21170cea1ea52d251ea5a/1000009951.webp'}], 'backgroundTile': False, 'backgroundBrightness': 'dark', 'sharedSourceUrl': None, 'backgroundBottomColor': '#595e67', 'backgroundTopColor': '#b1bcd2', 'canBePublic': True, 'canBeEnterprise': True, 'canBeOrg': True, 'canBePrivate': True, 'canInvite': True}, 'labelNames': {'green': '', 'yellow': '', 'orange': 'Ready for QC', 'red': 'HOT', 'purple': '', 'blue': '', 'sky': '', 'lime': '', 'pink': '', 'black': '', 'green_dark': 'Shipping complete', 'yellow_dark': '', 'orange_dark': '', 'red_dark': '', 'purple_dark': '', 'blue_dark': '', 'sky_dark': '', 'lime_dark': '', 'pink_dark': '', 'black_dark': '', 'green_light': '', 'yellow_light': '', 'orange_light': '', 'red_light': '', 'purple_light': '', 'blue_light': '', 'sky_light': '', 'lime_light': '', 'pink_light': '', 'black_light': ''}}, 'action': {'id': '68fbea11c52cf28f3b5dba2f', 'idMemberCreator': '620bac8bbf1c5a35a47df981', 'data': {'old': {'pos': 863707.9445533752}, 'card': {'pos': 184.5, 'id': '68f7c6d619f3fe03947f12bc', 'name': '113-112 New Card + Note', 'idShort': 53, 'shortLink': 'gOyrDV05'}, 'board': {'id': '68ed5bb5b413f72544f87ba2', 'name': 'DM Trello Play toy', 'shortLink': 'pAtihLja'}, 'list': {'id': '68ed5bb5b413f72544f87b92', 'name': 'Paint complete'}}, 'appCreator': None, 'type': 'updateCard', 'date': '2025-10-24T21:05:21.130Z', 'limits': None, 'display': {'translationKey': 'action_moved_card_lower', 'entities': {'card': {'type': 'card', 'id': '68f7c6d619f3fe03947f12bc', 'pos': 184.5, 'shortLink': 'gOyrDV05', 'text': '113-112 New Card + Note'}, 'memberCreator': {'type': 'member', 'id': '620bac8bbf1c5a35a47df981', 'username': 'billoneill14', 'text': \"Bill O'Neill\"}}}, 'memberCreator': {'id': '620bac8bbf1c5a35a47df981', 'activityBlocked': False, 'avatarHash': 'ca8dd512713f65376a2af3e23d91c442', 'avatarUrl': 'https://trello-members.s3.amazonaws.com/620bac8bbf1c5a35a47df981/ca8dd512713f65376a2af3e23d91c442', 'fullName': \"Bill O'Neill\", 'idMemberReferrer': None, 'initials': 'BO', 'nonPublic': {}, 'nonPublicAvailable': True, 'username': 'billoneill14'}}, 'webhook': {'id': '68f7bc44b98015fcbf9f984b', 'description': 'Track card moves', 'idModel': '68ed5bb5b413f72544f87ba2', 'callbackURL': 'https://f8401d9d4934.ngrok-free.app/trello/webhook', 'active': True, 'consecutiveFailures': 0, 'firstConsecutiveFailDate': None}}}"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:05:21] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_id\": \"3acae03b\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"job_id\": 225, \"trello_name\": \"113-112 New Card + Note\", \"db_name\": \"113-112 New Card + Note\", \"trello_list\": \"Paint complete\", \"db_list\": null, \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:22.420654Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:22.426176Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event\": \"Updating DB record from Trello data\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:22.426581Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"event\": \"Card move detected, updating DB fields\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:22.892616Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"job_id\": 225, \"new_list\": \"Paint complete\", \"current_status\": {\"fitup_comp\": null, \"welded\": null, \"paint_comp\": null, \"ship\": null}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:23.357121Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"job_id\": 225, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"T\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:23.357680Z\"}"}
+{"event": "{\"job_id\": 225, \"change_count\": 3, \"source_system\": \"Trello\", \"event\": \"Multiple job changes tracked\", \"logger\": \"app.change_tracker\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:23.374420Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event\": \"DB record updated successfully\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:23.379220Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"event\": \"Updating Excel from Trello changes\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:23.387591Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"job\": 113, \"release\": \"112\", \"job_type\": \"int\", \"release_type\": \"str\", \"event\": \"Looking up Excel row\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:23.395334Z\"}"}
+{"event": "Looking for Job # 113 (type: <class 'int'>) and Release # 112 (type: <class 'str'>)"}
+{"event": "Found match at DataFrame index 212, Excel row 216"}
+{"event": "{\"operation_id\": \"3acae03b\", \"job\": 113, \"release\": \"112\", \"excel_row\": \"216\", \"event\": \"Found Excel row for update\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:43.834576Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"cell\": \"M216\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:50.320332Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"cell\": \"N216\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:51.524343Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"cell\": \"O216\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:54.721837Z\"}"}
+{"event": "{\"operation_id\": \"3acae03b\", \"cell\": \"P216\", \"value\": \"T\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:56.063224Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"3acae03b\", \"duration_seconds\": 34.306424, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:05:56.082822Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 34.47s"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:06:20] \"GET /changes/recent HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:08:31.355148Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:08:31.424788Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:08:41.182046Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:08:41.239723Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:11:14.956736Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:11:15.025360Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:11:30.849410Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:11:30.912445Z\"}"}
+{"event": "{\"job_id\": 1, \"change_count\": 3, \"source_system\": \"system\", \"event\": \"Multiple job changes tracked\", \"logger\": \"app.change_tracker\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:11:30.927441Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:11:38.818563Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:11:38.885230Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:12:20.295640Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:20.619230Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145444614144)"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:12:35] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"8c9bbf6d\", \"start_time\": \"2025-10-24T21:12:35.943993\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:35.944358Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event_time\": \"2025-10-24T21:12:35.412000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:35.976706Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"job_id\": 225, \"trello_name\": \"113-112 New Card + Note\", \"db_name\": \"113-112 New Card + Note\", \"trello_list\": \"Store at MHMW for shipping\", \"db_list\": \"Paint complete\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:36.567900Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"event\": \"Event is newer than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:36.577604Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event\": \"Updating DB record from Trello data\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:36.578117Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"event\": \"Card move detected, updating DB fields\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:37.078801Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"job_id\": 225, \"new_list\": \"Store at MHMW for shipping\", \"current_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"T\"}, \"event\": \"Updating job status for Trello list move\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:37.559966Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"job_id\": 225, \"new_status\": {\"fitup_comp\": \"X\", \"welded\": \"X\", \"paint_comp\": \"X\", \"ship\": \"T\"}, \"event\": \"Job status updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:37.560574Z\"}"}
+{"event": "{\"job_id\": 225, \"change_count\": 2, \"source_system\": \"Trello\", \"event\": \"Multiple job changes tracked\", \"logger\": \"app.change_tracker\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:37.575003Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event\": \"DB record updated successfully\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:37.576745Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"event\": \"Updating Excel from Trello changes\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:37.585289Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"job\": 113, \"release\": \"112\", \"job_type\": \"int\", \"release_type\": \"str\", \"event\": \"Looking up Excel row\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:37.589566Z\"}"}
+{"event": "Looking for Job # 113 (type: <class 'int'>) and Release # 112 (type: <class 'str'>)"}
+{"event": "Found match at DataFrame index 212, Excel row 216"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"job\": 113, \"release\": \"112\", \"excel_row\": \"216\", \"event\": \"Found Excel row for update\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:12:53.946714Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"cell\": \"M216\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:13:02.952960Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"cell\": \"N216\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:13:05.869057Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"cell\": \"O216\", \"value\": \"X\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:13:07.775877Z\"}"}
+{"event": "{\"operation_id\": \"8c9bbf6d\", \"cell\": \"P216\", \"value\": \"T\", \"event\": \"Excel cell updated\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:13:10.318988Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"8c9bbf6d\", \"duration_seconds\": 34.393471, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:13:10.337552Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 34.55s"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:13:16] \"GET /changes/recent HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:14:01] \"GET /jobs/113-112/changes/view HTTP/1.1\" 200 -"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:15:10.132635Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:15:10.198868Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:16:29.146726Z\"}"}
+{"event": "{\"event\": \"Skipping scheduler startup on this worker\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:16:29.211591Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:18:35.355142Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Added job \"init_scheduler.<locals>.<lambda>\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:18:35.448691Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[hour='*', minute='19'], next run at: 2025-10-24 15:19:00 MDT)\" (scheduled at 2025-10-24 15:19:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:00.006070Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145392230400)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"f42f4c23\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:17.157698Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-24 21:16:29\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:17.182942Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:17.183291Z\"}"}
+{"event": "{\"event\": \"Committing 32 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:17.487951Z\"}"}
+{"event": "{\"event\": \"Committed 32 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:17.491665Z\"}"}
+{"event": "{\"event\": \"Updated 32 formula-driven start_install dates\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:17.491957Z\"}"}
+{"event": "Checking for new rows and saving Excel snapshot after sync completion"}
+{"event": "Comparing current data (273 rows) with latest snapshot from 2025-10-24 (273 rows)"}
+{"event": "No new rows detected - data unchanged since last snapshot"}
+{"event": "Snapshot saved successfully: 2025-10-24 (273 rows)"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:19:25.094884Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[hour='*', minute='19'], next run at: 2025-10-24 16:19:00 MDT)\" executed successfully"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:20:00] \"GET /jobs/113-112/changes/view HTTP/1.1\" 200 -"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:20:02] \"GET /jobs/113-112/changes/view HTTP/1.1\" 200 -"}
+{"event": "Scheduler has been shut down"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T21:20:26.500363Z\"}"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Adding job tentatively -- it will be properly scheduled when the scheduler starts"}
+{"event": "Added job \"OneDrive Polling Job\" to job store \"default\""}
+{"event": "Added job \"init_scheduler.<locals>.<lambda>\" to job store \"default\""}
+{"event": "Scheduler started"}
+{"event": "{\"schedule\": \"every hour on the hour\", \"event\": \"OneDrive polling scheduler started\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:20:26.579388Z\"}"}
+{"event": "\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n * Running on http://127.0.0.1:8000"}
+{"event": "\u001b[33mPress CTRL+C to quit\u001b[0m"}
+{"event": "Running job \"OneDrive Polling Job (trigger: cron[hour='*', minute='21'], next run at: 2025-10-24 15:21:00 MDT)\" (scheduled at 2025-10-24 15:21:00-06:00)"}
+{"event": "{\"event\": \"Starting scheduled OneDrive poll\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:00.008918Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 123145493143552)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"operation_id\": \"d12d210c\", \"event\": \"OneDrive poll sync operation logged to database\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.304854Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-24 21:20:27\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.316849Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.317933Z\"}"}
+{"event": "{\"event\": \"113-112 Updating DB ship: 'T' -> 'X'\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.532254Z\"}"}
+{"event": "{\"event\": \"Committing 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.590203Z\"}"}
+{"event": "{\"event\": \"Committed 1 updated records to DB.\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.592462Z\"}"}
+{"event": "{\"job_id\": 225, \"change_count\": 1, \"source_system\": \"Excel\", \"event\": \"Multiple job changes tracked\", \"logger\": \"app.change_tracker\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.606474Z\"}"}
+{"event": "{\"event\": \"Updating Trello card 68f7c6d619f3fe03947f12bc: Due Date={new_due_date} (was None), List={new_list_name} (was Store at MHMW for shipping)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:17.914371Z\"}"}
+{"event": "Checking for new rows and saving Excel snapshot after sync completion"}
+{"event": "Comparing current data (273 rows) with latest snapshot from 2025-10-24 (273 rows)"}
+{"event": "No new rows detected - data unchanged since last snapshot"}
+{"event": "Snapshot saved successfully: 2025-10-24 (273 rows)"}
+{"event": "OneDrive poll completed"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"event\": \"Scheduled OneDrive poll completed successfully\", \"logger\": \"app\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:18.569468Z\"}"}
+{"event": "Job \"OneDrive Polling Job (trigger: cron[hour='*', minute='21'], next run at: 2025-10-24 16:21:00 MDT)\" executed successfully"}
+{"event": "Sync lock acquired for operation: Trello-Hook (thread 123145527259136)"}
+{"event": "Trello webhook submitted to thread pool"}
+{"event": "Trello sync started with lock acquired"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:21:18] \"POST /trello/webhook HTTP/1.1\" 200 -"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"ea376921\", \"start_time\": \"2025-10-24T21:21:18.731572\", \"event\": \"Sync operation started\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:18.731646Z\"}"}
+{"event": "{\"operation_id\": \"ea376921\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event_time\": \"2025-10-24T21:21:18.325000\", \"event_type\": \"card_moved\", \"event\": \"Processing Trello card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:18.750641Z\"}"}
+{"event": "{\"operation_id\": \"ea376921\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"job_id\": 225, \"trello_name\": \"113-112 New Card + Note\", \"db_name\": \"113-112 New Card + Note\", \"trello_list\": \"Shipping completed\", \"db_list\": \"Shipping completed\", \"event\": \"Comparing Trello card to DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:19.261143Z\"}"}
+{"event": "{\"operation_id\": \"ea376921\", \"event\": \"Event is older than DB record\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:19.277893Z\"}"}
+{"event": "{\"operation_id\": \"ea376921\", \"card_id\": \"68f7c6d619f3fe03947f12bc\", \"event\": \"No update needed for card\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:19.278830Z\"}"}
+{"event": "{\"operation_type\": \"trello_webhook\", \"operation_id\": \"ea376921\", \"duration_seconds\": 0.553584, \"status\": \"success\", \"event\": \"Sync operation completed\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T21:21:19.285188Z\"}"}
+{"event": "Trello sync completed successfully"}
+{"event": "Sync lock released for operation: Trello-Hook"}
+{"event": "Sync completed in 0.57s"}
+{"event": "127.0.0.1 - - [24/Oct/2025 15:21:28] \"GET /jobs/113-112/changes/view HTTP/1.1\" 200 -"}
+{"event": "Scheduler has been shut down"}

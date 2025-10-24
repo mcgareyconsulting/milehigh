@@ -5,7 +5,11 @@ from app.onedrive import onedrive_bp
 from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
-from app.models import db, SyncOperation, SyncLog, SyncStatus
+from app.models import db, SyncOperation, SyncLog, SyncStatus, JobChange
+from app.change_tracker import (
+    get_job_changes, get_job_change_summary, get_field_change_history, get_recent_changes,
+    get_job_changes_by_release, get_job_change_summary_by_release, get_field_change_history_by_release
+)
 from app.seed import seed_from_combined_data
 from app.combine import combine_trello_excel_data
 
@@ -33,9 +37,9 @@ def init_scheduler(app):
 
     # --- Prevent scheduler duplication in multi-worker environments ---
     # Only run the scheduler on one instance
-    if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get("IS_RENDER_SCHEDULER"):
-        logger.info("Skipping scheduler startup on this worker")
-        return None
+    # if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get("IS_RENDER_SCHEDULER"):
+    #     logger.info("Skipping scheduler startup on this worker")
+    #     return None
 
     # --- Configure scheduler ---
     executors = {"default": ThreadPoolExecutor(3)}
@@ -106,7 +110,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="0",
+        minute="21",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
@@ -459,6 +463,325 @@ def create_app():
             logger.error("Error rendering logs view", operation_id=operation_id, error=str(e))
             return "Error", 500
 
+    # Job changes by job-release endpoints
+    @app.route("/jobs/<job_release>/changes")
+    def get_job_changes_by_release_endpoint(job_release):
+        """Get change history for a specific job-release."""
+        try:
+            # Query parameters
+            field_name = request.args.get('field')
+            source_system = request.args.get('source')
+            limit = request.args.get('limit', 100, type=int)
+            offset = request.args.get('offset', 0, type=int)
+            
+            # Date range filters
+            start_date_str = request.args.get('start_date')
+            end_date_str = request.args.get('end_date')
+            
+            start_date = None
+            end_date = None
+            if start_date_str:
+                start_date = datetime.fromisoformat(start_date_str + "T00:00:00")
+            if end_date_str:
+                end_date = datetime.fromisoformat(end_date_str + "T23:59:59.999999")
+            
+            changes = get_job_changes_by_release(
+                job_release=job_release,
+                field_name=field_name,
+                source_system=source_system,
+                start_date=start_date,
+                end_date=end_date,
+                limit=limit,
+                offset=offset
+            )
+            
+            return jsonify({
+                'job_release': job_release,
+                'changes': [change.to_dict() for change in changes],
+                'total': len(changes),
+                'filters': {
+                    'field': field_name,
+                    'source': source_system,
+                    'start_date': start_date_str,
+                    'end_date': end_date_str,
+                    'limit': limit,
+                    'offset': offset
+                }
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting job changes by release", job_release=job_release, error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/jobs/<job_release>/changes/summary")
+    def get_job_change_summary_by_release_endpoint(job_release):
+        """Get a summary of all changes for a specific job-release."""
+        try:
+            summary = get_job_change_summary_by_release(job_release)
+            return jsonify(summary), 200
+            
+        except Exception as e:
+            logger.error("Error getting job change summary by release", job_release=job_release, error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/jobs/<job_release>/changes/field/<field_name>")
+    def get_field_change_history_by_release_endpoint(job_release, field_name):
+        """Get change history for a specific field of a job-release."""
+        try:
+            limit = request.args.get('limit', 50, type=int)
+            changes = get_field_change_history_by_release(job_release, field_name, limit)
+            
+            return jsonify({
+                'job_release': job_release,
+                'field_name': field_name,
+                'changes': [change.to_dict() for change in changes],
+                'total': len(changes)
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting field change history by release", 
+                        job_release=job_release, 
+                        field_name=field_name, 
+                        error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    # Job changes HTML dashboard
+    @app.route('/jobs/<int:job_id>/changes/view')
+    def job_changes_view(job_id):
+        """HTML view for job changes."""
+        try:
+            # Get job info
+            from app.models import Job
+            job = Job.query.get_or_404(job_id)
+            
+            # Get changes
+            changes = get_job_changes(job_id=job_id, limit=100)
+            
+            from flask import render_template_string
+            html = render_template_string(
+                """
+                <html>
+                  <head>
+                    <title>Job Changes - {{ job.job }}-{{ job.release }}</title>
+                    <style>
+                      body { font-family: Arial, sans-serif; margin: 16px; }
+                      table { border-collapse: collapse; width: 100%; }
+                      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                      th { background: #f4f4f4; }
+                      .field-name { font-weight: bold; color: #2c5aa0; }
+                      .old-value { color: #d32f2f; }
+                      .new-value { color: #388e3c; }
+                      .source-trello { background: #e3f2fd; }
+                      .source-excel { background: #f3e5f5; }
+                      .source-system { background: #fff3e0; }
+                      .muted { color: #666; font-size: 12px; }
+                    </style>
+                  </head>
+                  <body>
+                    <h2>Job Changes: {{ job.job }}-{{ job.release }} - {{ job.job_name }}</h2>
+                    <p class="muted">
+                      <a href="/jobs">Back to jobs</a> | 
+                      <a href="/jobs/{{ job_id }}/changes/summary">Summary</a>
+                    </p>
+                    
+                    {% if changes %}
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Changed At</th>
+                            <th>Field</th>
+                            <th>Old Value</th>
+                            <th>New Value</th>
+                            <th>Source</th>
+                            <th>Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for change in changes %}
+                            <tr class="source-{{ change.source_system.lower() }}">
+                              <td>{{ change.changed_at }}</td>
+                              <td class="field-name">{{ change.field_name }}</td>
+                              <td class="old-value">{{ change.old_value or '' }}</td>
+                              <td class="new-value">{{ change.new_value or '' }}</td>
+                              <td>{{ change.source_system }}</td>
+                              <td>{{ change.change_type }}</td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                      <p class="muted">Total changes: {{ changes|length }}</p>
+                    {% else %}
+                      <p>No changes found for this job.</p>
+                    {% endif %}
+                  </body>
+                </html>
+                """,
+                job=job,
+                job_id=job_id,
+                changes=[change.to_dict() for change in changes]
+            )
+            return html
+        except Exception as e:
+            logger.error("Error rendering job changes view", job_id=job_id, error=str(e))
+            return "Error", 500
+
+    @app.route('/jobs/<job_release>/changes/view')
+    def job_changes_by_release_view(job_release):
+        """HTML view for job changes by job-release."""
+        try:
+            # Get job info by job-release
+            from app.models import Job
+            job = Job.query.filter_by(job=int(job_release.split('-')[0]), release=job_release.split('-')[1]).first()
+            if not job:
+                return f"Job {job_release} not found", 404
+            
+            # Get changes
+            changes = get_job_changes_by_release(job_release=job_release, limit=100)
+            
+            from flask import render_template_string
+            html = render_template_string(
+                """
+                <html>
+                  <head>
+                    <title>Job Changes - {{ job_release }}</title>
+                    <style>
+                      body { font-family: Arial, sans-serif; margin: 16px; }
+                      table { border-collapse: collapse; width: 100%; }
+                      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                      th { background: #f4f4f4; }
+                      .field-name { font-weight: bold; color: #2c5aa0; }
+                      .old-value { color: #d32f2f; }
+                      .new-value { color: #388e3c; }
+                      .source-trello { background: #e3f2fd; }
+                      .source-excel { background: #f3e5f5; }
+                      .source-system { background: #fff3e0; }
+                      .muted { color: #666; font-size: 12px; }
+                    </style>
+                  </head>
+                  <body>
+                    <h2>Job Changes: {{ job_release }} - {{ job.job_name }}</h2>
+                    <p class="muted">
+                      <a href="/jobs">Back to jobs</a> | 
+                      <a href="/jobs/{{ job_release }}/changes/summary">Summary</a>
+                    </p>
+                    
+                    {% if changes %}
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Changed At</th>
+                            <th>Field</th>
+                            <th>Old Value</th>
+                            <th>New Value</th>
+                            <th>Source</th>
+                            <th>Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for change in changes %}
+                            <tr class="source-{{ change.source_system.lower() }}">
+                              <td>{{ change.changed_at }}</td>
+                              <td class="field-name">{{ change.field_name }}</td>
+                              <td class="old-value">{{ change.old_value or '' }}</td>
+                              <td class="new-value">{{ change.new_value or '' }}</td>
+                              <td>{{ change.source_system }}</td>
+                              <td>{{ change.change_type }}</td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                      <p class="muted">Total changes: {{ changes|length }}</p>
+                    {% else %}
+                      <p>No changes found for this job.</p>
+                    {% endif %}
+                  </body>
+                </html>
+                """,
+                job=job,
+                job_release=job_release,
+                changes=[change.to_dict() for change in changes]
+            )
+            return html
+        except Exception as e:
+            logger.error("Error rendering job changes view by release", job_release=job_release, error=str(e))
+            return "Error", 500
+
+    @app.route('/changes/recent/view')
+    def recent_changes_view():
+        """HTML view for recent changes across all jobs."""
+        try:
+            hours = request.args.get('hours', 24, type=int)
+            changes = get_recent_changes(hours=hours, limit=100)
+            
+            from flask import render_template_string
+            html = render_template_string(
+                """
+                <html>
+                  <head>
+                    <title>Recent Changes</title>
+                    <style>
+                      body { font-family: Arial, sans-serif; margin: 16px; }
+                      table { border-collapse: collapse; width: 100%; }
+                      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                      th { background: #f4f4f4; }
+                      .field-name { font-weight: bold; color: #2c5aa0; }
+                      .old-value { color: #d32f2f; }
+                      .new-value { color: #388e3c; }
+                      .source-trello { background: #e3f2fd; }
+                      .source-excel { background: #f3e5f5; }
+                      .source-system { background: #fff3e0; }
+                      .muted { color: #666; font-size: 12px; }
+                    </style>
+                  </head>
+                  <body>
+                    <h2>Recent Changes (Last {{ hours }} hours)</h2>
+                    <p class="muted">
+                      <a href="/jobs">All Jobs</a> | 
+                      <a href="/changes/stats">Statistics</a>
+                    </p>
+                    
+                    {% if changes %}
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Changed At</th>
+                            <th>Job ID</th>
+                            <th>Field</th>
+                            <th>Old Value</th>
+                            <th>New Value</th>
+                            <th>Source</th>
+                            <th>Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for change in changes %}
+                            <tr class="source-{{ change.source_system.lower() }}">
+                              <td>{{ change.changed_at }}</td>
+                              <td><a href="/jobs/{{ change.job_id }}/changes/view">{{ change.job_id }}</a></td>
+                              <td class="field-name">{{ change.field_name }}</td>
+                              <td class="old-value">{{ change.old_value or '' }}</td>
+                              <td class="new-value">{{ change.new_value or '' }}</td>
+                              <td>{{ change.source_system }}</td>
+                              <td>{{ change.change_type }}</td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                      <p class="muted">Total changes: {{ changes|length }}</p>
+                    {% else %}
+                      <p>No recent changes found.</p>
+                    {% endif %}
+                  </body>
+                </html>
+                """,
+                hours=hours,
+                changes=[change.to_dict() for change in changes]
+            )
+            return html
+        except Exception as e:
+            logger.error("Error rendering recent changes view", error=str(e))
+            return "Error", 500
+
     @app.route("/api/create_card", methods=["POST"])
     def new_card():
         data = request.get_json()
@@ -735,6 +1058,167 @@ def create_app():
             
         except Exception as e:
             logger.error("Error comparing snapshots", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    # Job change history endpoints
+    @app.route("/jobs/<int:job_id>/changes")
+    def get_job_changes_endpoint(job_id):
+        """Get change history for a specific job."""
+        try:
+            # Query parameters
+            field_name = request.args.get('field')
+            source_system = request.args.get('source')
+            limit = request.args.get('limit', 100, type=int)
+            offset = request.args.get('offset', 0, type=int)
+            
+            # Date range filters
+            start_date_str = request.args.get('start_date')
+            end_date_str = request.args.get('end_date')
+            
+            start_date = None
+            end_date = None
+            if start_date_str:
+                start_date = datetime.fromisoformat(start_date_str + "T00:00:00")
+            if end_date_str:
+                end_date = datetime.fromisoformat(end_date_str + "T23:59:59.999999")
+            
+            changes = get_job_changes(
+                job_id=job_id,
+                field_name=field_name,
+                source_system=source_system,
+                start_date=start_date,
+                end_date=end_date,
+                limit=limit,
+                offset=offset
+            )
+            
+            return jsonify({
+                'job_id': job_id,
+                'changes': [change.to_dict() for change in changes],
+                'total': len(changes),
+                'filters': {
+                    'field': field_name,
+                    'source': source_system,
+                    'start_date': start_date_str,
+                    'end_date': end_date_str,
+                    'limit': limit,
+                    'offset': offset
+                }
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting job changes", job_id=job_id, error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/jobs/<int:job_id>/changes/summary")
+    def get_job_change_summary_endpoint(job_id):
+        """Get a summary of all changes for a specific job."""
+        try:
+            summary = get_job_change_summary(job_id)
+            return jsonify(summary), 200
+            
+        except Exception as e:
+            logger.error("Error getting job change summary", job_id=job_id, error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/jobs/<int:job_id>/changes/field/<field_name>")
+    def get_field_change_history_endpoint(job_id, field_name):
+        """Get change history for a specific field of a job."""
+        try:
+            limit = request.args.get('limit', 50, type=int)
+            changes = get_field_change_history(job_id, field_name, limit)
+            
+            return jsonify({
+                'job_id': job_id,
+                'field_name': field_name,
+                'changes': [change.to_dict() for change in changes],
+                'total': len(changes)
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting field change history", 
+                        job_id=job_id, 
+                        field_name=field_name, 
+                        error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/changes/recent")
+    def get_recent_changes_endpoint():
+        """Get recent changes across all jobs."""
+        try:
+            hours = request.args.get('hours', 24, type=int)
+            limit = request.args.get('limit', 100, type=int)
+            
+            changes = get_recent_changes(hours=hours, limit=limit)
+            
+            return jsonify({
+                'changes': [change.to_dict() for change in changes],
+                'total': len(changes),
+                'filters': {
+                    'hours': hours,
+                    'limit': limit
+                }
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting recent changes", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/changes/stats")
+    def get_change_stats_endpoint():
+        """Get statistics about job changes."""
+        try:
+            from sqlalchemy import func, desc
+            from datetime import timedelta
+            
+            # Recent changes count by source system
+            recent_changes = JobChange.query.filter(
+                JobChange.changed_at >= datetime.utcnow() - timedelta(hours=24)
+            ).all()
+            
+            source_counts = {}
+            field_counts = {}
+            change_type_counts = {}
+            
+            for change in recent_changes:
+                # Count by source system
+                source = change.source_system
+                source_counts[source] = source_counts.get(source, 0) + 1
+                
+                # Count by field
+                field = change.field_name
+                field_counts[field] = field_counts.get(field, 0) + 1
+                
+                # Count by change type
+                change_type = change.change_type
+                change_type_counts[change_type] = change_type_counts.get(change_type, 0) + 1
+            
+            # Most active jobs (by change count)
+            most_active_jobs = db.session.query(
+                JobChange.job_id,
+                func.count(JobChange.id).label('change_count')
+            ).filter(
+                JobChange.changed_at >= datetime.utcnow() - timedelta(days=7)
+            ).group_by(JobChange.job_id)\
+             .order_by(desc('change_count'))\
+             .limit(10)\
+             .all()
+            
+            return jsonify({
+                'last_24_hours': {
+                    'total_changes': len(recent_changes),
+                    'by_source_system': source_counts,
+                    'by_field': field_counts,
+                    'by_change_type': change_type_counts
+                },
+                'most_active_jobs_7_days': [
+                    {'job_id': job_id, 'change_count': count} 
+                    for job_id, count in most_active_jobs
+                ]
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting change stats", error=str(e))
             return jsonify({"error": str(e)}), 500
 
 

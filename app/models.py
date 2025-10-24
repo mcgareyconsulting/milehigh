@@ -90,6 +90,56 @@ class SyncLog(db.Model):
         return f"<SyncLog {self.operation_id} - {self.level} - {self.message[:50]}...>"
 
 
+class JobChange(db.Model):
+    """Track individual field changes to jobs with timestamps."""
+    __tablename__ = "job_changes"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False, index=True)
+    job = db.Column(db.Integer, nullable=False, index=True)  # Job number (e.g., 170)
+    release = db.Column(db.String(16), nullable=False, index=True)  # Release (e.g., 451)
+    job_release = db.Column(db.String(32), nullable=False, index=True)  # Combined identifier (e.g., "170-451")
+    operation_id = db.Column(db.String(32), nullable=True, index=True)  # Link to sync operation
+    
+    # Change details
+    field_name = db.Column(db.String(50), nullable=False, index=True)
+    old_value = db.Column(db.Text, nullable=True)
+    new_value = db.Column(db.Text, nullable=True)
+    
+    # Timestamps
+    changed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    source_system = db.Column(db.String(20), nullable=False)  # 'trello', 'excel', 'system'
+    
+    # Context
+    change_type = db.Column(db.String(20), nullable=False)  # 'create', 'update', 'delete'
+    user_context = db.Column(db.String(100), nullable=True)  # Optional user info
+    
+    # Additional metadata
+    change_metadata = db.Column(db.JSON, nullable=True)
+    
+    def __repr__(self):
+        return f"<JobChange {self.job_id} - {self.field_name} - {self.change_type}>"
+    
+    def to_dict(self):
+        from app.datetime_utils import format_datetime_mountain
+        return {
+            'id': self.id,
+            'job_id': self.job_id,
+            'job': self.job,
+            'release': self.release,
+            'job_release': self.job_release,
+            'operation_id': self.operation_id,
+            'field_name': self.field_name,
+            'old_value': self.old_value,
+            'new_value': self.new_value,
+            'changed_at': format_datetime_mountain(self.changed_at),
+            'source_system': self.source_system,
+            'change_type': self.change_type,
+            'user_context': self.user_context,
+            'metadata': self.change_metadata
+        }
+
+
 class Job(db.Model):
     __tablename__ = "jobs"
     __table_args__ = (db.UniqueConstraint("job", "release", name="_job_release_uc"),)
