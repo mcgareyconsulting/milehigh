@@ -233,7 +233,9 @@ def capture_excel_snapshot(snapshot_date=None):
         snapshots_dir = cfg.SNAPSHOTS_DIR
         os.makedirs(snapshots_dir, exist_ok=True)
         
-        snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
+        # Add timestamp to make each snapshot unique
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        snapshot_filename = f"snapshot_{timestamp}"
         
         # Save DataFrame (pickle is most reliable for pandas)
         df.to_pickle(os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"))
@@ -292,7 +294,9 @@ def capture_excel_snapshot_with_data(df, excel_data, snapshot_date=None):
         snapshots_dir = cfg.SNAPSHOTS_DIR
         os.makedirs(snapshots_dir, exist_ok=True)
         
-        snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
+        # Add timestamp to make each snapshot unique
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        snapshot_filename = f"snapshot_{timestamp}"
         
         # Save DataFrame (pickle is most reliable for pandas)
         df.to_pickle(os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"))
@@ -323,6 +327,7 @@ def capture_excel_snapshot_with_data(df, excel_data, snapshot_date=None):
 def load_snapshot(snapshot_date):
     """
     Load a snapshot for comparison.
+    Since we now use timestamps, this finds the most recent snapshot on the given date.
     
     Args:
         snapshot_date: Date of snapshot to load
@@ -330,17 +335,33 @@ def load_snapshot(snapshot_date):
     Returns:
         tuple: (DataFrame, metadata) or (None, None) if not found
     """
-    snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
     snapshots_dir = cfg.SNAPSHOTS_DIR
     
+    if not os.path.exists(snapshots_dir):
+        return None, None
+    
+    # Look for snapshots on the given date
+    date_str = snapshot_date.strftime('%Y%m%d')
+    snapshot_files = [f for f in os.listdir(snapshots_dir) 
+                     if f.startswith(f"snapshot_{date_str}") and f.endswith(".pkl")]
+    
+    if not snapshot_files:
+        print(f"No snapshots found for date: {snapshot_date}")
+        return None, None
+    
+    # Sort to get the most recent snapshot on that date
+    snapshot_files.sort(reverse=True)
+    latest_file = snapshot_files[0]
+    
     try:
-        df = pd.read_pickle(os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"))
-        with open(os.path.join(snapshots_dir, f"{snapshot_filename}_meta.json"), 'r') as f:
+        df = pd.read_pickle(os.path.join(snapshots_dir, latest_file))
+        metadata_file = latest_file.replace(".pkl", "_meta.json")
+        with open(os.path.join(snapshots_dir, metadata_file), 'r') as f:
             metadata = json.load(f)
-        print(f"Snapshot loaded: {snapshot_date} ({len(df)} rows)")
+        print(f"Snapshot loaded: {snapshot_date} ({len(df)} rows) - {latest_file}")
         return df, metadata
     except FileNotFoundError:
-        print(f"Snapshot not found for date: {snapshot_date}")
+        print(f"Snapshot metadata not found for: {latest_file}")
         return None, None
     except Exception as e:
         print(f"Error loading snapshot {snapshot_date}: {e}")
@@ -371,7 +392,14 @@ def get_latest_snapshot():
     # Extract date from filename
     try:
         date_str = latest_file.replace("snapshot_", "").replace(".pkl", "")
-        snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+        
+        # Try to parse as YYYYMMDD_HHMMSS first, then YYYYMMDD
+        try:
+            snapshot_datetime = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+            snapshot_date = snapshot_datetime.date()
+        except ValueError:
+            # Fall back to YYYYMMDD format for backward compatibility
+            snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
         
         df, metadata = load_snapshot(snapshot_date)
         return snapshot_date, df, metadata
