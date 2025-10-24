@@ -511,9 +511,8 @@ def create_app():
     # Snapshot routes
     @app.route("/snapshots/list")
     def list_snapshots():
-        """List all available snapshots with metadata."""
+        """List all available snapshots with basic metadata."""
         try:
-            from app.onedrive.api import get_latest_snapshot
             from app.config import Config
             import os
             import glob
@@ -521,6 +520,9 @@ def create_app():
             
             config = Config()
             snapshots_dir = config.SNAPSHOTS_DIR
+            
+            # Ensure snapshots directory exists
+            os.makedirs(snapshots_dir, exist_ok=True)
             
             if not os.path.exists(snapshots_dir):
                 return jsonify({
@@ -530,17 +532,27 @@ def create_app():
                     "message": "No snapshots directory found"
                 }), 200
             
-            # Get all snapshot files
+            # Get all snapshot files (both .pkl and _meta.json files)
             snapshot_files = glob.glob(os.path.join(snapshots_dir, "snapshot_*.pkl"))
             snapshot_files.sort(reverse=True)  # Most recent first
             
             snapshots = []
             for file_path in snapshot_files:
                 filename = os.path.basename(file_path)
-                # Extract date from filename (snapshot_YYYYMMDD.pkl)
+                # Extract date from filename (snapshot_YYYYMMDD.pkl or snapshot_YYYYMMDD_HHMMSS.pkl)
                 try:
+                    # Handle both formats: snapshot_YYYYMMDD.pkl and snapshot_YYYYMMDD_HHMMSS.pkl
                     date_str = filename.replace("snapshot_", "").replace(".pkl", "")
-                    snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+                    
+                    # Try to parse as YYYYMMDD_HHMMSS first, then YYYYMMDD
+                    try:
+                        snapshot_datetime = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+                        snapshot_date = snapshot_datetime.date()
+                        snapshot_time = snapshot_datetime.time()
+                    except ValueError:
+                        # Fall back to YYYYMMDD format
+                        snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+                        snapshot_time = None
                     
                     # Check if metadata file exists
                     meta_file = file_path.replace(".pkl", "_meta.json")
@@ -556,26 +568,21 @@ def create_app():
                     snapshots.append({
                         "filename": filename,
                         "date": snapshot_date.isoformat(),
+                        "time": snapshot_time.isoformat() if snapshot_time else None,
                         "file_size_bytes": file_size,
                         "file_size_mb": round(file_size / (1024 * 1024), 2),
-                        "metadata": metadata
+                        "row_count": metadata.get("row_count", 0),
+                        "captured_at": metadata.get("captured_at"),
+                        "source_file": metadata.get("source_file")
                     })
                 except ValueError:
                     # Skip files that don't match expected format
                     continue
             
-            # Get latest snapshot info
-            latest_date, latest_df, latest_metadata = get_latest_snapshot()
-            
             return jsonify({
                 "snapshots": snapshots,
                 "total_count": len(snapshots),
-                "snapshots_dir": snapshots_dir,
-                "latest_snapshot": {
-                    "date": latest_date.isoformat() if latest_date else None,
-                    "row_count": len(latest_df) if latest_df is not None else 0,
-                    "metadata": latest_metadata
-                }
+                "snapshots_dir": snapshots_dir
             }), 200
             
         except Exception as e:
