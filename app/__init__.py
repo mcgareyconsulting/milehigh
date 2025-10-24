@@ -21,24 +21,54 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
 
+import os
+import time
+import atexit
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.executors.pool import ThreadPoolExecutor
+from app.utils.logging import logger  # adjust import to your logger
+
 def init_scheduler(app):
-    """Initialize the scheduler to run the OneDrive poll every hour on the hour."""
+    """Initialize the scheduler to run the OneDrive poll every hour."""
     from app.onedrive.utils import run_onedrive_poll
     from app.sync_lock import sync_lock_manager
+    from app.trello import drain_trello_queue
 
-    scheduler = BackgroundScheduler()
+    # --- Prevent scheduler duplication in multi-worker environments ---
+    # Only run the scheduler on one instance
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get("IS_RENDER_SCHEDULER"):
+        logger.info("Skipping scheduler startup on this worker")
+        return None
 
+    # --- Configure scheduler ---
+    executors = {"default": ThreadPoolExecutor(3)}
+    scheduler = BackgroundScheduler(executors=executors)
+
+    # --- Simple retry wrapper for transient errors ---
+    def retry_with_backoff(func, retries=3, base_delay=5):
+        for i in range(retries):
+            try:
+                return func()
+            except Exception as e:
+                if i == retries - 1:
+                    raise
+                delay = base_delay * (2 ** i)
+                logger.warning(
+                    "Retrying OneDrive poll after failure",
+                    attempt=i + 1,
+                    delay=delay,
+                    error=str(e)
+                )
+                time.sleep(delay)
+
+    # --- The actual scheduled task ---
     def scheduled_run():
         with app.app_context():
             if sync_lock_manager.is_locked():
                 current_op = sync_lock_manager.get_current_operation()
-                logger.info(
-                    "Skipping scheduled OneDrive poll - sync locked",
-                    current_operation=current_op
-                )
-                # If OneDrive poll is skipped, try draining Trello queue lightly
+                logger.info("Skipping scheduled OneDrive poll - sync locked", current_operation=current_op)
+
                 try:
-                    from app.trello import drain_trello_queue
                     drained = drain_trello_queue(max_items=3)
                     if drained:
                         logger.info("Drained Trello queue while OneDrive locked", drained=drained)
@@ -48,48 +78,59 @@ def init_scheduler(app):
 
             try:
                 logger.info("Starting scheduled OneDrive poll")
-                # Before starting OneDrive poll, opportunistically drain a few Trello events if free
+
+                # Pre-drain Trello queue
                 try:
-                    from app.trello import drain_trello_queue
                     drained_pre = drain_trello_queue(max_items=2)
                     if drained_pre:
                         logger.info("Pre-drain Trello queue", drained=drained_pre)
                 except Exception:
                     pass
 
-                run_onedrive_poll()
+                # Run OneDrive poll with retry logic
+                retry_with_backoff(run_onedrive_poll)
 
-                # After poll, drain a few more Trello events
+                # Post-drain Trello queue
                 try:
-                    from app.trello import drain_trello_queue
                     drained_post = drain_trello_queue(max_items=5)
                     if drained_post:
                         logger.info("Post-drain Trello queue", drained=drained_post)
                 except Exception:
                     pass
+
                 logger.info("Scheduled OneDrive poll completed successfully")
 
             except RuntimeError as e:
-                logger.info("Scheduled OneDrive poll skipped due to lock", error=str(e))
-
+                logger.info("Scheduled OneDrive poll skipped due to runtime lock", error=str(e))
             except Exception as e:
                 logger.error("Scheduled OneDrive poll failed", error=str(e))
 
+    # --- Add the main job (runs hourly on the hour) ---
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="47",  # Run at minute 0 of every hour
-        hour="*",  # Every hour (0-23)
-        day="*",   # Every day
-        month="*", # Every month
-        day_of_week="*",  # Every day of the week
+        minute="1",
+        hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
+        replace_existing=True,
+    )
+
+    # --- Optional heartbeat job to confirm scheduler alive ---
+    scheduler.add_job(
+        func=lambda: logger.info("Scheduler heartbeat: alive"),
+        trigger="interval",
+        minutes=30,
+        id="heartbeat",
+        replace_existing=True,
     )
 
     scheduler.start()
+    atexit.register(lambda: scheduler.shutdown(wait=False))
+
     logger.info("OneDrive polling scheduler started", schedule="every hour on the hour")
     return scheduler
+
 
 def create_app():
     app = Flask(__name__)
@@ -100,20 +141,20 @@ def create_app():
         # For production databases (PostgreSQL, MySQL, etc.)
         app.config["SQLALCHEMY_DATABASE_URI"] = database_url
         
-        # Add SSL configuration for PostgreSQL connections
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-            "pool_pre_ping": True,  # Verify connections before use
-            "pool_recycle": 300,    # Recycle connections every 5 minutes
-            "pool_size": 10,        # Number of connections to maintain
-            "max_overflow": 20,     # Additional connections beyond pool_size
-            "pool_timeout": 30,     # Seconds to wait for connection from pool
+            "pool_pre_ping": True,        # Detect and refresh dead connections before use
+            "pool_recycle": 280,          # Recycle connections slightly before Render's idle timeout (~5 min)
+            "pool_size": 5,               # Render free-tier DBs are resource-constrained; keep this modest
+            "max_overflow": 10,           # Allow some burst usage during concurrent jobs
+            "pool_timeout": 30,           # Wait up to 30s for a connection before raising
             "connect_args": {
-                "sslmode": "require",  # Require SSL for production security
-                "connect_timeout": 10,
+                "sslmode": "require",     # Enforce SSL
+                "connect_timeout": 10,    # Fail fast if DB can’t be reached
                 "application_name": "trello_sharepoint_app",
-                "options": "-c statement_timeout=30000"  # 30 second statement timeout
-            }
+                "options": "-c statement_timeout=30000"  # 30s max per SQL statement
+            },
         }
+
     else:
         # Fallback to SQLite for local development
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
@@ -704,7 +745,10 @@ def create_app():
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
 
-    # Start the scheduler
-    init_scheduler(app)
+    # Initialize scheduler safely
+    try:
+        init_scheduler(app)
+    except Exception as e:
+        logger.error("Failed to start scheduler", error=str(e))
 
     return app
