@@ -306,10 +306,10 @@ def sync_from_trello(event_info):
                 update_sync_operation(sync_op.operation_id, status=SyncStatus.FAILED, error_type="CardNotFound")
                 return
             
-            # Check if this is a card creation or update event that resulted from Excel sync
-            if event_info.get("event") in ["card_created", "card_updated"]:
+            # Check if this is a card creation event that resulted from Excel sync
+            if event_info.get("event") == "card_created":
                 logger.info(
-                    "Processing card webhook - checking if from Excel sync",
+                    "Processing card creation webhook - checking if from Excel sync",
                     operation_id=sync_op.operation_id,
                     card_id=card_id,
                     event_type=event_info.get("event")
@@ -341,25 +341,23 @@ def sync_from_trello(event_info):
                     
                     if time_diff and time_diff.total_seconds() < 300:  # 5 minutes
                         logger.info(
-                            "Skipping Trello card webhook - card was created from Excel sync",
+                            "Processing card creation webhook from Excel sync - updating DB but skipping Excel update",
                             operation_id=sync_op.operation_id,
                             card_id=card_id,
-                            event_type=event_info.get("event"),
                             db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None,
                             time_diff_seconds=time_diff.total_seconds()
                         )
                         safe_log_sync_event(
                             sync_op.operation_id,
                             "INFO",
-                            "Skipping card webhook - created from Excel sync",
+                            "Processing card creation webhook from Excel sync - updating DB only",
                             trello_card_id=card_id,
                             job_id=rec.id,
-                            event_type=event_info.get("event"),
                             db_last_updated=str(rec.last_updated_at) if rec.last_updated_at else None,
                             time_diff_seconds=time_diff.total_seconds()
                         )
-                        update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="ExcelSyncCard")
-                        return
+                        # Set a flag to skip Excel updates for this webhook
+                        event_info["skip_excel_update"] = True
                     else:
                         logger.info(
                             "Excel sync record found but too old - proceeding with webhook",
@@ -375,6 +373,35 @@ def sync_from_trello(event_info):
                         record_found=rec is not None,
                         source_of_update=rec.source_of_update if rec else None
                     )
+            
+            # Check if this is a card update event that happened shortly after Excel sync
+            elif event_info.get("event") == "card_updated":
+                # Look for existing database record with this Trello card ID
+                rec = Job.query.filter_by(trello_card_id=card_id).first()
+                
+                if rec and rec.source_of_update == "Excel":
+                    # Check if the record was recently updated (within last 2 minutes)
+                    time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
+                    
+                    if time_diff and time_diff.total_seconds() < 120:  # 2 minutes
+                        logger.info(
+                            "Skipping Trello card update webhook - card was recently created from Excel sync",
+                            operation_id=sync_op.operation_id,
+                            card_id=card_id,
+                            db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Skipping card update webhook - recently created from Excel sync",
+                            trello_card_id=card_id,
+                            job_id=rec.id,
+                            db_last_updated=str(rec.last_updated_at) if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="ExcelSyncCard")
+                        return
 
             rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
             
@@ -502,7 +529,7 @@ def sync_from_trello(event_info):
                 )
 
                 # Update Excel if needed
-                if rec.source_of_update != "Excel":
+                if rec.source_of_update != "Excel" and not event_info.get("skip_excel_update", False):
                     logger.info("Updating Excel from Trello changes", operation_id=sync_op.operation_id)
                     safe_log_sync_event(
                         sync_op.operation_id,
@@ -607,6 +634,24 @@ def sync_from_trello(event_info):
                             job_type=type(rec.job).__name__,
                             release_type=type(rec.release).__name__
                         )
+                else:
+                    # Skip Excel update due to Excel sync flag
+                    logger.info(
+                        "Skipping Excel update - card was created from Excel sync",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        job=rec.job,
+                        release=rec.release
+                    )
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Skipping Excel update - card created from Excel sync",
+                        trello_card_id=card_id,
+                        job_id=rec.id,
+                        job=rec.job,
+                        release=rec.release
+                    )
             else:
                 logger.info("No update needed for card", operation_id=sync_op.operation_id, card_id=card_id)
                 safe_log_sync_event(sync_op.operation_id, "INFO", "No update needed for card", card_id=card_id)
