@@ -230,7 +230,7 @@ def capture_excel_snapshot(snapshot_date=None):
         }
         
         # Save snapshot
-        snapshots_dir = "excel_snapshots"
+        snapshots_dir = cfg.SNAPSHOTS_DIR
         os.makedirs(snapshots_dir, exist_ok=True)
         
         snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
@@ -289,7 +289,7 @@ def capture_excel_snapshot_with_data(df, excel_data, snapshot_date=None):
         }
         
         # Save snapshot
-        snapshots_dir = "excel_snapshots"
+        snapshots_dir = cfg.SNAPSHOTS_DIR
         os.makedirs(snapshots_dir, exist_ok=True)
         
         snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
@@ -331,7 +331,7 @@ def load_snapshot(snapshot_date):
         tuple: (DataFrame, metadata) or (None, None) if not found
     """
     snapshot_filename = f"snapshot_{snapshot_date.strftime('%Y%m%d')}"
-    snapshots_dir = "excel_snapshots"
+    snapshots_dir = cfg.SNAPSHOTS_DIR
     
     try:
         df = pd.read_pickle(os.path.join(snapshots_dir, f"{snapshot_filename}.pkl"))
@@ -354,7 +354,7 @@ def get_latest_snapshot():
     Returns:
         tuple: (date, DataFrame, metadata) or (None, None, None) if no snapshots exist
     """
-    snapshots_dir = "excel_snapshots"
+    snapshots_dir = cfg.SNAPSHOTS_DIR
     
     if not os.path.exists(snapshots_dir):
         return None, None, None

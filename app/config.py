@@ -19,3 +19,4 @@ class Config:
     EXCEL_INDEX_ADJ = (
         4  # Adjust for header rows in Excel (e.g., if data starts on row 5, this is 4)
     )
+    SNAPSHOTS_DIR = os.environ.get("SNAPSHOTS_DIR", "excel_snapshots")  # Default to local dir, use /var/data/ in production

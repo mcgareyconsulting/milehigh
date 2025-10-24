@@ -508,6 +508,185 @@ def create_app():
             logger.error("Error getting snapshot status", error=str(e))
             return jsonify({"error": str(e)}), 500
 
+    # Snapshot routes
+    @app.route("/snapshots/list")
+    def list_snapshots():
+        """List all available snapshots with metadata."""
+        try:
+            from app.onedrive.api import get_latest_snapshot
+            from app.config import Config
+            import os
+            import glob
+            from datetime import datetime
+            
+            config = Config()
+            snapshots_dir = config.SNAPSHOTS_DIR
+            
+            if not os.path.exists(snapshots_dir):
+                return jsonify({
+                    "snapshots": [],
+                    "total_count": 0,
+                    "snapshots_dir": snapshots_dir,
+                    "message": "No snapshots directory found"
+                }), 200
+            
+            # Get all snapshot files
+            snapshot_files = glob.glob(os.path.join(snapshots_dir, "snapshot_*.pkl"))
+            snapshot_files.sort(reverse=True)  # Most recent first
+            
+            snapshots = []
+            for file_path in snapshot_files:
+                filename = os.path.basename(file_path)
+                # Extract date from filename (snapshot_YYYYMMDD.pkl)
+                try:
+                    date_str = filename.replace("snapshot_", "").replace(".pkl", "")
+                    snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+                    
+                    # Check if metadata file exists
+                    meta_file = file_path.replace(".pkl", "_meta.json")
+                    metadata = {}
+                    if os.path.exists(meta_file):
+                        import json
+                        with open(meta_file, 'r') as f:
+                            metadata = json.load(f)
+                    
+                    # Get file size
+                    file_size = os.path.getsize(file_path)
+                    
+                    snapshots.append({
+                        "filename": filename,
+                        "date": snapshot_date.isoformat(),
+                        "file_size_bytes": file_size,
+                        "file_size_mb": round(file_size / (1024 * 1024), 2),
+                        "metadata": metadata
+                    })
+                except ValueError:
+                    # Skip files that don't match expected format
+                    continue
+            
+            # Get latest snapshot info
+            latest_date, latest_df, latest_metadata = get_latest_snapshot()
+            
+            return jsonify({
+                "snapshots": snapshots,
+                "total_count": len(snapshots),
+                "snapshots_dir": snapshots_dir,
+                "latest_snapshot": {
+                    "date": latest_date.isoformat() if latest_date else None,
+                    "row_count": len(latest_df) if latest_df is not None else 0,
+                    "metadata": latest_metadata
+                }
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error listing snapshots", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/snapshots/compare")
+    def compare_snapshots():
+        """Compare two snapshots and return differences."""
+        try:
+            from app.onedrive.api import load_snapshot, find_new_rows_in_excel
+            from datetime import datetime
+            import pandas as pd
+            
+            # Get parameters
+            current_date_str = request.args.get('current')
+            previous_date_str = request.args.get('previous')
+            
+            if not current_date_str or not previous_date_str:
+                return jsonify({
+                    "error": "Both 'current' and 'previous' date parameters are required (format: YYYY-MM-DD)"
+                }), 400
+            
+            try:
+                current_date = datetime.strptime(current_date_str, "%Y-%m-%d").date()
+                previous_date = datetime.strptime(previous_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                return jsonify({
+                    "error": "Invalid date format. Use YYYY-MM-DD"
+                }), 400
+            
+            # Load snapshots
+            current_df, current_metadata = load_snapshot(current_date)
+            previous_df, previous_metadata = load_snapshot(previous_date)
+            
+            if current_df is None:
+                return jsonify({
+                    "error": f"Current snapshot not found for date: {current_date_str}"
+                }), 404
+            
+            if previous_df is None:
+                return jsonify({
+                    "error": f"Previous snapshot not found for date: {previous_date_str}"
+                }), 404
+            
+            # Find differences
+            new_rows = find_new_rows_in_excel(current_df, previous_df)
+            
+            # Calculate basic statistics
+            current_count = len(current_df)
+            previous_count = len(previous_df)
+            new_count = len(new_rows)
+            
+            # Get column information
+            current_columns = list(current_df.columns)
+            previous_columns = list(previous_df.columns)
+            
+            # Check for column differences
+            columns_added = set(current_columns) - set(previous_columns)
+            columns_removed = set(previous_columns) - set(current_columns)
+            columns_unchanged = set(current_columns) & set(previous_columns)
+            
+            # Prepare new rows data for JSON serialization
+            new_rows_data = []
+            if not new_rows.empty:
+                # Convert DataFrame to list of dictionaries
+                new_rows_data = new_rows.to_dict(orient='records')
+                
+                # Convert any non-serializable objects
+                for row in new_rows_data:
+                    for key, value in row.items():
+                        if pd.isna(value):
+                            row[key] = None
+                        elif isinstance(value, (pd.Timestamp, datetime)):
+                            row[key] = value.isoformat()
+                        elif hasattr(value, 'item'):  # numpy types
+                            row[key] = value.item()
+            
+            return jsonify({
+                "comparison": {
+                    "current_date": current_date_str,
+                    "previous_date": previous_date_str,
+                    "current_metadata": current_metadata,
+                    "previous_metadata": previous_metadata
+                },
+                "statistics": {
+                    "current_row_count": current_count,
+                    "previous_row_count": previous_count,
+                    "new_rows_count": new_count,
+                    "rows_added": new_count,
+                    "rows_removed": previous_count - (current_count - new_count),
+                    "net_change": current_count - previous_count
+                },
+                "columns": {
+                    "current_columns": current_columns,
+                    "previous_columns": previous_columns,
+                    "columns_added": list(columns_added),
+                    "columns_removed": list(columns_removed),
+                    "columns_unchanged": list(columns_unchanged)
+                },
+                "new_rows": new_rows_data,
+                "summary": {
+                    "has_changes": new_count > 0 or len(columns_added) > 0 or len(columns_removed) > 0,
+                    "change_type": "new_rows" if new_count > 0 else "column_changes" if (columns_added or columns_removed) else "no_changes"
+                }
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error comparing snapshots", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
