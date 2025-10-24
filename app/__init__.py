@@ -21,12 +21,9 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
 
-import os
 import time
 import atexit
-from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
-from app.utils.logging import logger  # adjust import to your logger
 
 def init_scheduler(app):
     """Initialize the scheduler to run the OneDrive poll every hour."""
@@ -109,7 +106,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="1",
+        minute="5",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
