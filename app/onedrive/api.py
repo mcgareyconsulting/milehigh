@@ -393,13 +393,34 @@ def get_latest_snapshot():
     try:
         date_str = latest_file.replace("snapshot_", "").replace(".pkl", "")
         
-        # Try to parse as YYYYMMDD_HHMMSS first, then YYYYMMDD
+        # Handle different filename formats:
+        # 1. YYYYMMDD_HHMMSS (normal timestamp format)
+        # 2. YYYYMMDD_YYYYMMDD_HHMMSS (double date format - bug)
+        # 3. YYYYMMDD (old date-only format)
+        
         try:
+            # Try normal timestamp format first
             snapshot_datetime = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
             snapshot_date = snapshot_datetime.date()
         except ValueError:
-            # Fall back to YYYYMMDD format for backward compatibility
-            snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+            try:
+                # Try double date format (extract the second date and time)
+                if date_str.count('_') >= 2:
+                    # Split by underscores and take the last two parts
+                    parts = date_str.split('_')
+                    if len(parts) >= 3:
+                        # Reconstruct as YYYYMMDD_HHMMSS using the last two parts
+                        reconstructed = f"{parts[-2]}_{parts[-1]}"
+                        snapshot_datetime = datetime.strptime(reconstructed, "%Y%m%d_%H%M%S")
+                        snapshot_date = snapshot_datetime.date()
+                    else:
+                        raise ValueError("Invalid double date format")
+                else:
+                    # Fall back to YYYYMMDD format for backward compatibility
+                    snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+            except ValueError:
+                # Final fallback to YYYYMMDD format
+                snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
         
         df, metadata = load_snapshot(snapshot_date)
         return snapshot_date, df, metadata

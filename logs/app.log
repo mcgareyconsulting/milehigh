@@ -6306,3 +6306,16 @@
 {"event": "OneDrive poll completed"}
 {"event": "Sync lock released for operation: OneDrive-Poll"}
 {"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T18:57:28.884392Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T19:18:31.055562Z\"}"}
+{"event": "Sync lock acquired for operation: OneDrive-Poll (thread 140704382080576)"}
+{"event": "OneDrive poll starting with sync lock acquired"}
+{"event": "{\"error\": \"Working outside of application context.\\n\\nThis typically means that you attempted to use functionality that needed\\nthe current application. To solve this, set up an application context\\nwith app.app_context(). See the documentation for more information.\", \"event\": \"Database connection check failed\", \"logger\": \"app.sync\", \"level\": \"warning\", \"timestamp\": \"2025-10-24T19:18:50.599390Z\"}"}
+{"event": "{\"event\": \"Database connection unavailable - proceeding without sync operation logging\", \"logger\": \"app.sync\", \"level\": \"warning\", \"timestamp\": \"2025-10-24T19:18:50.600241Z\"}"}
+{"event": "{\"event\": \"Processing OneDrive data last modified at 2025-10-24 15:19:45\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T19:18:50.618820Z\"}"}
+{"event": "{\"event\": \"DataFrame 273 rows, 23 columns\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T19:18:50.619146Z\"}"}
+{"event": "{\"error\": \"Working outside of application context.\\n\\nThis typically means that you attempted to use functionality that needed\\nthe current application. To solve this, set up an application context\\nwith app.app_context(). See the documentation for more information.\", \"operation_id\": null, \"event\": \"Failed to rollback database changes\", \"logger\": \"app.sync\", \"level\": \"warning\", \"timestamp\": \"2025-10-24T19:18:50.619371Z\"}"}
+{"event": "{\"error\": \"'NoneType' object has no attribute 'operation_id'\", \"error_type\": \"AttributeError\", \"operation_id\": null, \"data_shape\": [273, 23], \"event\": \"OneDrive sync failed\", \"logger\": \"app.sync\", \"level\": \"error\", \"timestamp\": \"2025-10-24T19:18:50.619592Z\"}"}
+{"event": "{\"error\": \"'NoneType' object has no attribute 'operation_id'\", \"error_type\": \"AttributeError\", \"event\": \"OneDrive sync failed (no database logging available)\", \"logger\": \"app.sync\", \"level\": \"info\", \"timestamp\": \"2025-10-24T19:18:50.619796Z\"}"}
+{"event": "Sync lock released for operation: OneDrive-Poll"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T19:19:00.124976Z\"}"}
+{"event": "{\"level\": \"info\", \"file\": \"logs/app.log\", \"event\": \"Logging configured\", \"logger\": \"app\", \"timestamp\": \"2025-10-24T19:19:42.658182Z\"}"}
