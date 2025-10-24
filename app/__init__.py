@@ -536,6 +536,11 @@ def create_app():
             snapshot_files = glob.glob(os.path.join(snapshots_dir, "snapshot_*.pkl"))
             snapshot_files.sort(reverse=True)  # Most recent first
             
+            # Debug: Print all files found in the directory
+            all_files = os.listdir(snapshots_dir)
+            print(f"DEBUG: All files in {snapshots_dir}: {all_files}")
+            print(f"DEBUG: Snapshot .pkl files found: {snapshot_files}")
+            
             snapshots = []
             for file_path in snapshot_files:
                 filename = os.path.basename(file_path)
