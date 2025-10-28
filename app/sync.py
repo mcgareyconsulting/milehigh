@@ -603,14 +603,14 @@ def determine_trello_list_from_db(rec):
         rec.fitup_comp == "X"
         and rec.welded == "O"
         and rec.paint_comp == ""
-        and rec.ship == "T"
+        and (rec.ship == "T" or rec.ship == "O" or rec.ship == "")
     ):
         return "Fit Up Complete."
     elif (
         rec.fitup_comp == "X"
         and rec.welded == "X"
         and rec.paint_comp == "X"
-        and rec.ship == "X"
+        and (rec.ship == "X")
     ):
         return "Shipping completed"
     else:

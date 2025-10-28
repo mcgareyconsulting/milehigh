@@ -6,7 +6,7 @@ from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
 from app.models import db, SyncOperation, SyncLog, SyncStatus
-from app.seed import seed_from_combined_data
+from app.seed import seed_from_combined_data, incremental_seed_missing_jobs, get_trello_excel_cross_check_summary
 from app.combine import combine_trello_excel_data
 
 # scheduler imports
@@ -78,7 +78,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="17",  # Run at minute 0 of every hour
+        minute="59",  # Run at minute 0 of every hour
         hour="*",  # Every hour (0-23)
         day="*",   # Every day
         month="*", # Every month
@@ -507,6 +507,99 @@ def create_app():
         except Exception as e:
             logger.error("Error getting snapshot status", error=str(e))
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/seed/incremental", methods=["GET", "POST"])
+    def run_incremental_seed():
+        """
+        Run incremental seeding to add missing jobs from Trello/Excel cross-check.
+        This checks the database for existing jobs and only adds new ones.
+        """
+        try:
+            logger.info("Starting incremental seeding via web endpoint")
+            
+            # Get batch size from query params (default 50)
+            batch_size = request.args.get('batch_size', 50, type=int)
+            if batch_size < 1 or batch_size > 200:
+                return jsonify({
+                    "message": "Invalid batch size",
+                    "error": "Batch size must be between 1 and 200"
+                }), 400
+            
+            result = incremental_seed_missing_jobs(batch_size=batch_size)
+            
+            return jsonify({
+                "message": "Incremental seeding completed successfully",
+                "operation_id": result["operation_id"],
+                "status": result["status"],
+                "total_items": result["total_items"],
+                "existing_jobs": result["existing_jobs"],
+                "new_jobs_created": result["new_jobs_created"],
+                "batch_size_used": batch_size
+            }), 200
+            
+        except Exception as e:
+            logger.error("Incremental seeding failed via web endpoint", error=str(e))
+            return jsonify({
+                "message": "Incremental seeding failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/seed/status")
+    def seed_status():
+        """Get current database seeding status and job counts."""
+        try:
+            from app.models import Job
+            
+            total_jobs = Job.query.count()
+            jobs_with_trello = Job.query.filter(Job.trello_card_id.isnot(None)).count()
+            jobs_without_trello = total_jobs - jobs_with_trello
+            
+            # Get recent sync operations related to seeding
+            recent_seed_ops = SyncOperation.query.filter(
+                SyncOperation.operation_type.in_(['incremental_seed', 'full_seed'])
+            ).order_by(SyncOperation.started_at.desc()).limit(5).all()
+            
+            return jsonify({
+                "database_status": {
+                    "total_jobs": total_jobs,
+                    "jobs_with_trello_cards": jobs_with_trello,
+                    "jobs_without_trello_cards": jobs_without_trello
+                },
+                "recent_seed_operations": [op.to_dict() for op in recent_seed_ops]
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting seed status", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/seed/cross-check", methods=["GET"])
+    def get_cross_check_summary():
+        """
+        Get detailed summary of Trello/Excel cross-check analysis.
+        Shows what jobs have Trello cards, Excel data, and database status.
+        """
+        try:
+            logger.info("Getting Trello/Excel cross-check summary")
+            
+            summary = get_trello_excel_cross_check_summary()
+            
+            if "error" in summary:
+                return jsonify({
+                    "message": "Cross-check analysis failed",
+                    "error": summary["error"]
+                }), 500
+            
+            return jsonify({
+                "message": "Cross-check analysis completed",
+                "summary": summary
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting cross-check summary", error=str(e))
+            return jsonify({
+                "message": "Cross-check analysis failed", 
+                "error": str(e)
+            }), 500
 
 
     # Register blueprints
