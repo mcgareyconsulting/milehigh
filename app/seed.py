@@ -527,7 +527,8 @@ def get_trello_excel_cross_check_summary():
                 "Paint complete", 
                 "Shipping completed",
                 "Store at MHMW for shipping",
-                "Shipping planning"
+                "Shipping planning",
+                "Released"
             ]
         }
         

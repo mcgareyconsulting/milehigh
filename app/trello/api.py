@@ -11,15 +11,15 @@ import math
 
 
 # Main function for updating trello card information
-def update_trello_card(card_id, new_list_id=None, new_start_date=None, clear_start_date=False):
+def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_date=False):
     """
-    Updates a Trello card\'s list and/or start date in a single API call.
+    Updates a Trello card\'s list and/or due date in a single API call.
     
     Args:
         card_id: Trello card ID
         new_list_id: New list ID (optional)
-        new_start_date: New start date as datetime object (optional)
-        clear_start_date: If True, explicitly clear the start date even if new_start_date is None
+        new_due_date: New due date as datetime object (optional)
+        clear_due_date: If True, explicitly clear the due date even if new_due_date is None
     """
     url = f"https://api.trello.com/1/cards/{card_id}"
 
@@ -31,25 +31,29 @@ def update_trello_card(card_id, new_list_id=None, new_start_date=None, clear_sta
     if new_list_id:
         payload["idList"] = new_list_id
 
-    # Handle start date
-    if new_start_date:
-        # Set start date to 9am Mountain time, DST-aware
-        payload["start"] = mountain_start_datetime(new_start_date)
-    elif clear_start_date:
-        # Clear the start date - try empty string first, then null
-        payload["start"] = ""
-    # If neither new_start_date nor clear_start_date, don't include 'start' parameter at all
+    # Handle due date
+    if new_due_date:
+        # Set due date to 6pm Mountain time, DST-aware
+        payload["due"] = mountain_due_datetime(new_due_date)
+    elif clear_due_date:
+        # Clear the due date - use null value in JSON
+        payload["due"] = None
+    # If neither new_due_date nor clear_due_date, don't include 'due' parameter at all
 
     try:
         # Log the payload for debugging
         print(f"[TRELLO API] Updating card {card_id} with payload: {payload}")
         
-        # For clearing start dates, we might need to use a different approach
-        if clear_start_date and "start" in payload and payload["start"] == "":
-            # Try using JSON data instead of params for clearing
-            json_payload = {"start": ""}
-            response = requests.put(url, params={"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}, json=json_payload)
+        # Use JSON when clearing due dates (null values), otherwise use URL params
+        if clear_due_date and payload.get("due") is None:
+            # Use JSON to properly send null values for clearing
+            auth_params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+            json_payload = {"due": None}
+            if new_list_id:
+                json_payload["idList"] = new_list_id
+            response = requests.put(url, params=auth_params, json=json_payload)
         else:
+            # Use URL params for normal updates
             response = requests.put(url, params=payload)
         
         response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
@@ -124,6 +128,7 @@ def get_trello_cards_from_subset():
         "Shipping completed",
         "Store at MHMW for shipping",
         "Shipping planning",
+        "Released",
     ]
 
     # Get all lists on the board
@@ -437,7 +442,8 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         job_number = excel_data.get('Job #', 'Unknown')
         release_number = excel_data.get('Release #', 'Unknown')
         job_name = excel_data.get('Job', 'Unknown Job')
-        card_title = f"{job_number}-{release_number} {job_name}"
+        job_description = excel_data.get('Description', 'Unknown Description')
+        card_title = f"{job_number}-{release_number} {job_name} {job_description}"
         
         # Format card description with bold field names
         description_parts = []
