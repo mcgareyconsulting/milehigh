@@ -327,6 +327,9 @@ def update_job_record_with_trello_data(job_record, card_data):
         True if updated successfully, False otherwise
     """
     try:
+        # Store the ID BEFORE commit (while object is still in session)
+        job_id = job_record.id
+        
         # Update Trello fields
         job_record.trello_card_id = card_data.get('id')
         job_record.trello_card_name = card_data.get('name')
@@ -340,7 +343,8 @@ def update_job_record_with_trello_data(job_record, card_data):
         # Save changes
         db.session.commit()
         
-        print(f"[DEBUG] Updated Job record {job_record.id} with Trello data")
+        # Use the stored ID instead of accessing the expired object
+        print(f"[DEBUG] Updated Job record {job_id} with Trello data")
         return True
         
     except Exception as e:

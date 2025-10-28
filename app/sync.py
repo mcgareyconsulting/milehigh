@@ -186,10 +186,20 @@ def rectify_db_on_trello_move(job, new_trello_list, operation_id: str):
         }
     )
     
-    if new_trello_list == "Paint complete" or new_trello_list == "Store at MHMW for shipping" or new_trello_list == "Shipping planning":
+    if new_trello_list == "Paint complete":
         job.fitup_comp = "X"
         job.welded = "X"
         job.paint_comp = "X"
+        job.ship = "T"
+    elif new_trello_list == "Store at MHMW for shipping":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"
+        job.ship = "T"  
+    elif new_trello_list == "Shipping planning":
+        job.fitup_comp = "X"
+        job.welded = "X"
+        job.paint_comp = "X"  
         job.ship = "T"
     elif new_trello_list == "Fit Up Complete.":
         job.fitup_comp = "X"
@@ -297,6 +307,103 @@ def sync_from_trello(event_info):
                 )
                 update_sync_operation(sync_op.operation_id, status=SyncStatus.FAILED, error_type="CardNotFound")
                 return
+            
+            # Check if this is a card creation event that resulted from Excel sync
+            if event_info.get("event") == "card_created":
+                logger.info(
+                    "Processing card creation webhook - checking if from Excel sync",
+                    operation_id=sync_op.operation_id,
+                    card_id=card_id,
+                    event_type=event_info.get("event")
+                )
+                
+                # Look for existing database record with this Trello card ID
+                rec = Job.query.filter_by(trello_card_id=card_id).first()
+                
+                logger.info(
+                    "Database record lookup result",
+                    operation_id=sync_op.operation_id,
+                    card_id=card_id,
+                    record_found=rec is not None,
+                    source_of_update=rec.source_of_update if rec else None,
+                    last_updated=rec.last_updated_at.isoformat() if rec and rec.last_updated_at else None
+                )
+                
+                if rec and rec.source_of_update == "Excel":
+                    # Check if the record was recently updated (within last 5 minutes)
+                    time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
+                    
+                    logger.info(
+                        "Excel sync record found - checking timing",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        time_diff_seconds=time_diff.total_seconds() if time_diff else None,
+                        within_5_minutes=time_diff and time_diff.total_seconds() < 300
+                    )
+                    
+                    if time_diff and time_diff.total_seconds() < 300:  # 5 minutes
+                        logger.info(
+                            "Processing card creation webhook from Excel sync - updating DB but skipping Excel update",
+                            operation_id=sync_op.operation_id,
+                            card_id=card_id,
+                            db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Processing card creation webhook from Excel sync - updating DB only",
+                            trello_card_id=card_id,
+                            job_id=rec.id,
+                            db_last_updated=str(rec.last_updated_at) if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        # Set a flag to skip Excel updates for this webhook
+                        event_info["skip_excel_update"] = True
+                    else:
+                        logger.info(
+                            "Excel sync record found but too old - proceeding with webhook",
+                            operation_id=sync_op.operation_id,
+                            card_id=card_id,
+                            time_diff_seconds=time_diff.total_seconds() if time_diff else None
+                        )
+                else:
+                    logger.info(
+                        "No Excel sync record found - proceeding with webhook",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        record_found=rec is not None,
+                        source_of_update=rec.source_of_update if rec else None
+                    )
+            
+            # Check if this is a card update event that happened shortly after Excel sync
+            elif event_info.get("event") == "card_updated":
+                # Look for existing database record with this Trello card ID
+                rec = Job.query.filter_by(trello_card_id=card_id).first()
+                
+                if rec and rec.source_of_update == "Excel":
+                    # Check if the record was recently updated (within last 2 minutes)
+                    time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
+                    
+                    if time_diff and time_diff.total_seconds() < 120:  # 2 minutes
+                        logger.info(
+                            "Skipping Trello card update webhook - card was recently created from Excel sync",
+                            operation_id=sync_op.operation_id,
+                            card_id=card_id,
+                            db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Skipping card update webhook - recently created from Excel sync",
+                            trello_card_id=card_id,
+                            job_id=rec.id,
+                            db_last_updated=str(rec.last_updated_at) if rec.last_updated_at else None,
+                            time_diff_seconds=time_diff.total_seconds()
+                        )
+                        update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="ExcelSyncCard")
+                        return
 
             rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
             
@@ -424,7 +531,7 @@ def sync_from_trello(event_info):
                 )
 
                 # Update Excel if needed
-                if rec.source_of_update != "Excel":
+                if rec.source_of_update != "Excel" and not event_info.get("skip_excel_update", False):
                     logger.info("Updating Excel from Trello changes", operation_id=sync_op.operation_id)
                     safe_log_sync_event(
                         sync_op.operation_id,
@@ -529,6 +636,24 @@ def sync_from_trello(event_info):
                             job_type=type(rec.job).__name__,
                             release_type=type(rec.release).__name__
                         )
+                else:
+                    # Skip Excel update due to Excel sync flag
+                    logger.info(
+                        "Skipping Excel update - card was created from Excel sync",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        job=rec.job,
+                        release=rec.release
+                    )
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Skipping Excel update - card created from Excel sync",
+                        trello_card_id=card_id,
+                        job_id=rec.id,
+                        job=rec.job,
+                        release=rec.release
+                    )
             else:
                 logger.info("No update needed for card", operation_id=sync_op.operation_id, card_id=card_id)
                 safe_log_sync_event(sync_op.operation_id, "INFO", "No update needed for card", card_id=card_id)
@@ -702,6 +827,7 @@ def sync_from_onedrive(data):
         )
 
         updated_records = []
+        formula_updates_count = 0  # Track formula-driven start_install updates
 
         # Fields to check for diffs
         fields_to_check = [
@@ -814,21 +940,8 @@ def sync_from_onedrive(data):
                     if is_formula:
                         # If formula-driven, update DB if value differs, but do not update Trello
                         if excel_val != db_val:
-                            logger.info(
-                                f"{job}-{release} Updating DB {db_field} (formula-driven): {db_val!r} -> {excel_val!r}"
-                            )
-                            safe_log_sync_event(
-                                sync_op.operation_id,
-                                "INFO",
-                                "DB field update (formula-driven)",
-                                id=rec.id,
-                                job=rec.job,
-                                release=rec.release,
-                                excel_identifier=identifier,
-                                field=db_field,
-                                old_value=str(db_val),
-                                new_value=str(excel_val),
-                            )
+                            # Track formula updates for summary logging instead of individual logs
+                            formula_updates_count += 1
                             setattr(rec, db_field, excel_val)
                             setattr(
                                 rec,
@@ -927,6 +1040,17 @@ def sync_from_onedrive(data):
                     db.session.add(rec)
                 db.session.commit()
                 logger.info(f"Committed {len(updated_records)} updated records to DB.")
+                
+                # Log formula updates summary if any occurred
+                if formula_updates_count > 0:
+                    logger.info(f"Updated {formula_updates_count} formula-driven start_install dates")
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Formula-driven start_install updates summary",
+                        formula_updates_count=formula_updates_count,
+                    )
+                
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "INFO",
@@ -960,7 +1084,26 @@ def sync_from_onedrive(data):
 
                             new_list_id = None
                             new_list_name = determine_trello_list_from_db(rec)
-                            if new_list_name:
+                            
+                            # Special handling for XXXT states (Paint complete, Store at MHMW for shipping, Shipping planning)
+                            # If the current Trello list is already one of these valid states, preserve it
+                            current_list_name = getattr(rec, "trello_list_name", None)
+                            valid_shipping_states = ["Paint complete", "Store at MHMW for shipping", "Shipping planning"]
+                            
+                            if (new_list_name == "Paint complete" and 
+                                current_list_name in valid_shipping_states):
+                                # Keep the current list instead of forcing to "Paint complete"
+                                new_list_name = current_list_name
+                                new_list = get_list_by_name(current_list_name)
+                                if new_list:
+                                    new_list_id = new_list["id"]
+                            elif new_list_name and new_list_name not in valid_shipping_states:
+                                # For non-shipping states, use the determined list
+                                new_list = get_list_by_name(new_list_name)
+                                if new_list:
+                                    new_list_id = new_list["id"]
+                            elif new_list_name in valid_shipping_states:
+                                # For shipping states, use the determined list
                                 new_list = get_list_by_name(new_list_name)
                                 if new_list:
                                     new_list_id = new_list["id"]

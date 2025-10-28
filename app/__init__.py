@@ -21,24 +21,51 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
 
+import time
+import atexit
+from apscheduler.executors.pool import ThreadPoolExecutor
+
 def init_scheduler(app):
-    """Initialize the scheduler to run the OneDrive poll every hour on the hour."""
+    """Initialize the scheduler to run the OneDrive poll every hour."""
     from app.onedrive.utils import run_onedrive_poll
     from app.sync_lock import sync_lock_manager
+    from app.trello import drain_trello_queue
 
-    scheduler = BackgroundScheduler()
+    # --- Prevent scheduler duplication in multi-worker environments ---
+    # Only run the scheduler on one instance
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get("IS_RENDER_SCHEDULER"):
+        logger.info("Skipping scheduler startup on this worker")
+        return None
 
+    # --- Configure scheduler ---
+    executors = {"default": ThreadPoolExecutor(3)}
+    scheduler = BackgroundScheduler(executors=executors)
+
+    # --- Simple retry wrapper for transient errors ---
+    def retry_with_backoff(func, retries=3, base_delay=5):
+        for i in range(retries):
+            try:
+                return func()
+            except Exception as e:
+                if i == retries - 1:
+                    raise
+                delay = base_delay * (2 ** i)
+                logger.warning(
+                    "Retrying OneDrive poll after failure",
+                    attempt=i + 1,
+                    delay=delay,
+                    error=str(e)
+                )
+                time.sleep(delay)
+
+    # --- The actual scheduled task ---
     def scheduled_run():
         with app.app_context():
             if sync_lock_manager.is_locked():
                 current_op = sync_lock_manager.get_current_operation()
-                logger.info(
-                    "Skipping scheduled OneDrive poll - sync locked",
-                    current_operation=current_op
-                )
-                # If OneDrive poll is skipped, try draining Trello queue lightly
+                logger.info("Skipping scheduled OneDrive poll - sync locked", current_operation=current_op)
+
                 try:
-                    from app.trello import drain_trello_queue
                     drained = drain_trello_queue(max_items=3)
                     if drained:
                         logger.info("Drained Trello queue while OneDrive locked", drained=drained)
@@ -48,48 +75,59 @@ def init_scheduler(app):
 
             try:
                 logger.info("Starting scheduled OneDrive poll")
-                # Before starting OneDrive poll, opportunistically drain a few Trello events if free
+
+                # Pre-drain Trello queue
                 try:
-                    from app.trello import drain_trello_queue
                     drained_pre = drain_trello_queue(max_items=2)
                     if drained_pre:
                         logger.info("Pre-drain Trello queue", drained=drained_pre)
                 except Exception:
                     pass
 
-                run_onedrive_poll()
+                # Run OneDrive poll with retry logic
+                retry_with_backoff(run_onedrive_poll)
 
-                # After poll, drain a few more Trello events
+                # Post-drain Trello queue
                 try:
-                    from app.trello import drain_trello_queue
                     drained_post = drain_trello_queue(max_items=5)
                     if drained_post:
                         logger.info("Post-drain Trello queue", drained=drained_post)
                 except Exception:
                     pass
+
                 logger.info("Scheduled OneDrive poll completed successfully")
 
             except RuntimeError as e:
-                logger.info("Scheduled OneDrive poll skipped due to lock", error=str(e))
-
+                logger.info("Scheduled OneDrive poll skipped due to runtime lock", error=str(e))
             except Exception as e:
                 logger.error("Scheduled OneDrive poll failed", error=str(e))
 
+    # --- Add the main job (runs hourly on the hour) ---
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="59",  # Run at minute 0 of every hour
-        hour="*",  # Every hour (0-23)
-        day="*",   # Every day
-        month="*", # Every month
-        day_of_week="*",  # Every day of the week
+        minute="0",
+        hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
+        replace_existing=True,
+    )
+
+    # --- Optional heartbeat job to confirm scheduler alive ---
+    scheduler.add_job(
+        func=lambda: logger.info("Scheduler heartbeat: alive"),
+        trigger="interval",
+        minutes=30,
+        id="heartbeat",
+        replace_existing=True,
     )
 
     scheduler.start()
+    atexit.register(lambda: scheduler.shutdown(wait=False))
+
     logger.info("OneDrive polling scheduler started", schedule="every hour on the hour")
     return scheduler
+
 
 def create_app():
     app = Flask(__name__)
@@ -100,20 +138,20 @@ def create_app():
         # For production databases (PostgreSQL, MySQL, etc.)
         app.config["SQLALCHEMY_DATABASE_URI"] = database_url
         
-        # Add SSL configuration for PostgreSQL connections
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-            "pool_pre_ping": True,  # Verify connections before use
-            "pool_recycle": 300,    # Recycle connections every 5 minutes
-            "pool_size": 10,        # Number of connections to maintain
-            "max_overflow": 20,     # Additional connections beyond pool_size
-            "pool_timeout": 30,     # Seconds to wait for connection from pool
+            "pool_pre_ping": True,        # Detect and refresh dead connections before use
+            "pool_recycle": 280,          # Recycle connections slightly before Render's idle timeout (~5 min)
+            "pool_size": 5,               # Render free-tier DBs are resource-constrained; keep this modest
+            "max_overflow": 10,           # Allow some burst usage during concurrent jobs
+            "pool_timeout": 30,           # Wait up to 30s for a connection before raising
             "connect_args": {
-                "sslmode": "require",  # Require SSL for production security
-                "connect_timeout": 10,
+                "sslmode": "require",     # Enforce SSL
+                "connect_timeout": 10,    # Fail fast if DB can’t be reached
                 "application_name": "trello_sharepoint_app",
-                "options": "-c statement_timeout=30000"  # 30 second statement timeout
-            }
+                "options": "-c statement_timeout=30000"  # 30s max per SQL statement
+            },
         }
+
     else:
         # Fallback to SQLite for local development
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
@@ -601,12 +639,206 @@ def create_app():
                 "error": str(e)
             }), 500
 
+    # Snapshot routes
+    @app.route("/snapshots/list")
+    def list_snapshots():
+        """List all available snapshots with basic metadata."""
+        try:
+            from app.config import Config
+            import os
+            import glob
+            from datetime import datetime
+            
+            config = Config()
+            snapshots_dir = config.SNAPSHOTS_DIR
+            
+            # Ensure snapshots directory exists
+            os.makedirs(snapshots_dir, exist_ok=True)
+            
+            if not os.path.exists(snapshots_dir):
+                return jsonify({
+                    "snapshots": [],
+                    "total_count": 0,
+                    "snapshots_dir": snapshots_dir,
+                    "message": "No snapshots directory found"
+                }), 200
+            
+            # Get all snapshot files (both .pkl and _meta.json files)
+            snapshot_files = glob.glob(os.path.join(snapshots_dir, "snapshot_*.pkl"))
+            snapshot_files.sort(reverse=True)  # Most recent first
+            
+            # Debug: Print all files found in the directory
+            all_files = os.listdir(snapshots_dir)
+            print(f"DEBUG: All files in {snapshots_dir}: {all_files}")
+            print(f"DEBUG: Snapshot .pkl files found: {snapshot_files}")
+            
+            snapshots = []
+            for file_path in snapshot_files:
+                filename = os.path.basename(file_path)
+                # Extract date from filename (snapshot_YYYYMMDD.pkl or snapshot_YYYYMMDD_HHMMSS.pkl)
+                try:
+                    # Handle both formats: snapshot_YYYYMMDD.pkl and snapshot_YYYYMMDD_HHMMSS.pkl
+                    date_str = filename.replace("snapshot_", "").replace(".pkl", "")
+                    
+                    # Try to parse as YYYYMMDD_HHMMSS first, then YYYYMMDD
+                    try:
+                        snapshot_datetime = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+                        snapshot_date = snapshot_datetime.date()
+                        snapshot_time = snapshot_datetime.time()
+                    except ValueError:
+                        # Fall back to YYYYMMDD format
+                        snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+                        snapshot_time = None
+                    
+                    # Check if metadata file exists
+                    meta_file = file_path.replace(".pkl", "_meta.json")
+                    metadata = {}
+                    if os.path.exists(meta_file):
+                        import json
+                        with open(meta_file, 'r') as f:
+                            metadata = json.load(f)
+                    
+                    # Get file size
+                    file_size = os.path.getsize(file_path)
+                    
+                    snapshots.append({
+                        "filename": filename,
+                        "date": snapshot_date.isoformat(),
+                        "time": snapshot_time.isoformat() if snapshot_time else None,
+                        "file_size_bytes": file_size,
+                        "file_size_mb": round(file_size / (1024 * 1024), 2),
+                        "row_count": metadata.get("row_count", 0),
+                        "captured_at": metadata.get("captured_at"),
+                        "source_file": metadata.get("source_file")
+                    })
+                except ValueError:
+                    # Skip files that don't match expected format
+                    continue
+            
+            return jsonify({
+                "snapshots": snapshots,
+                "total_count": len(snapshots),
+                "snapshots_dir": snapshots_dir
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error listing snapshots", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/snapshots/compare")
+    def compare_snapshots():
+        """Compare two snapshots and return differences."""
+        try:
+            from app.onedrive.api import load_snapshot, find_new_rows_in_excel
+            from datetime import datetime
+            import pandas as pd
+            
+            # Get parameters
+            current_date_str = request.args.get('current')
+            previous_date_str = request.args.get('previous')
+            
+            if not current_date_str or not previous_date_str:
+                return jsonify({
+                    "error": "Both 'current' and 'previous' date parameters are required (format: YYYY-MM-DD)"
+                }), 400
+            
+            try:
+                current_date = datetime.strptime(current_date_str, "%Y-%m-%d").date()
+                previous_date = datetime.strptime(previous_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                return jsonify({
+                    "error": "Invalid date format. Use YYYY-MM-DD"
+                }), 400
+            
+            # Load snapshots
+            current_df, current_metadata = load_snapshot(current_date)
+            previous_df, previous_metadata = load_snapshot(previous_date)
+            
+            if current_df is None:
+                return jsonify({
+                    "error": f"Current snapshot not found for date: {current_date_str}"
+                }), 404
+            
+            if previous_df is None:
+                return jsonify({
+                    "error": f"Previous snapshot not found for date: {previous_date_str}"
+                }), 404
+            
+            # Find differences
+            new_rows = find_new_rows_in_excel(current_df, previous_df)
+            
+            # Calculate basic statistics
+            current_count = len(current_df)
+            previous_count = len(previous_df)
+            new_count = len(new_rows)
+            
+            # Get column information
+            current_columns = list(current_df.columns)
+            previous_columns = list(previous_df.columns)
+            
+            # Check for column differences
+            columns_added = set(current_columns) - set(previous_columns)
+            columns_removed = set(previous_columns) - set(current_columns)
+            columns_unchanged = set(current_columns) & set(previous_columns)
+            
+            # Prepare new rows data for JSON serialization
+            new_rows_data = []
+            if not new_rows.empty:
+                # Convert DataFrame to list of dictionaries
+                new_rows_data = new_rows.to_dict(orient='records')
+                
+                # Convert any non-serializable objects
+                for row in new_rows_data:
+                    for key, value in row.items():
+                        if pd.isna(value):
+                            row[key] = None
+                        elif isinstance(value, (pd.Timestamp, datetime)):
+                            row[key] = value.isoformat()
+                        elif hasattr(value, 'item'):  # numpy types
+                            row[key] = value.item()
+            
+            return jsonify({
+                "comparison": {
+                    "current_date": current_date_str,
+                    "previous_date": previous_date_str,
+                    "current_metadata": current_metadata,
+                    "previous_metadata": previous_metadata
+                },
+                "statistics": {
+                    "current_row_count": current_count,
+                    "previous_row_count": previous_count,
+                    "new_rows_count": new_count,
+                    "rows_added": new_count,
+                    "rows_removed": previous_count - (current_count - new_count),
+                    "net_change": current_count - previous_count
+                },
+                "columns": {
+                    "current_columns": current_columns,
+                    "previous_columns": previous_columns,
+                    "columns_added": list(columns_added),
+                    "columns_removed": list(columns_removed),
+                    "columns_unchanged": list(columns_unchanged)
+                },
+                "new_rows": new_rows_data,
+                "summary": {
+                    "has_changes": new_count > 0 or len(columns_added) > 0 or len(columns_removed) > 0,
+                    "change_type": "new_rows" if new_count > 0 else "column_changes" if (columns_added or columns_removed) else "no_changes"
+                }
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error comparing snapshots", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
 
-    # Start the scheduler
-    init_scheduler(app)
+    # Initialize scheduler safely
+    try:
+        init_scheduler(app)
+    except Exception as e:
+        logger.error("Failed to start scheduler", error=str(e))
 
     return app
