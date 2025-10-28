@@ -106,7 +106,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="0",
+        minute="16",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
@@ -161,7 +161,6 @@ def create_app():
     # Initialize the database - only create tables, don't drop and reseed
     with app.app_context():
         # Only create tables if they don't exist
-        db.drop_all()
         db.create_all()
         
         # Check if we need to seed the database (only if empty)
