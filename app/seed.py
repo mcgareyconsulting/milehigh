@@ -563,6 +563,193 @@ def incremental_seed_missing_jobs(batch_size=50):
         raise
 
 
+def process_single_identifier(identifier: str, dry_run: bool = True):
+    """
+    Process a single job-release identifier of the form "<job>-<release>".
+    - Validates the row meets our Ship not X/T rule
+    - Predicts the Trello list based on staging flags
+    - If dry_run=False and job not in DB:
+      - If no Trello card: create Trello card in predicted list (also creates DB)
+      - If Trello card exists: create DB record with Excel data
+    Returns a dict with details.
+    """
+    from app.onedrive.api import get_excel_dataframe
+    from app.trello.api import get_trello_cards_from_subset, create_trello_card_from_excel_data
+    from app.trello.utils import extract_identifier
+
+    # Load Excel
+    df = get_excel_dataframe()
+    df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
+
+    # Helper: Ship filter
+    def ship_has_x_or_t(ship_value):
+        if pd.isna(ship_value) or ship_value is None:
+            return False
+        s = str(ship_value).strip()
+        return "X" in s or "T" in s
+
+    # Find the row
+    row = df[df["identifier"] == identifier]
+    if row.empty:
+        return {"success": False, "error": f"Identifier not found in Excel: {identifier}", "identifier": identifier}
+
+    row = row.iloc[0]
+
+    # Ensure Ship not X/T
+    if ship_has_x_or_t(row.get("Ship")):
+        return {
+            "success": False,
+            "identifier": identifier,
+            "error": "Row excluded by Ship filter (contains X/T)",
+            "ship": row.get("Ship")
+        }
+
+    # Predict list based on staging
+    fitup_comp = str(row.get("Fitup comp", "") or "").strip()
+    welded = str(row.get("Welded", "") or "").strip()
+    paint_comp = str(row.get("Paint Comp", "") or "").strip()
+    ship_val = str(row.get("Ship", "") or "").strip()
+
+    predicted_list = None
+    if (
+        fitup_comp == "X"
+        and welded == "X"
+        and paint_comp == "X"
+        and (ship_val == "O" or ship_val == "T")
+    ):
+        predicted_list = "Paint complete"
+    elif (
+        fitup_comp == "X"
+        and welded == "O"
+        and paint_comp == ""
+        and (ship_val == "T" or ship_val == "O" or ship_val == "")
+    ):
+        predicted_list = "Fit Up Complete."
+    elif (
+        fitup_comp == "X"
+        and welded == "X"
+        and paint_comp == "X"
+        and (ship_val == "X")
+    ):
+        predicted_list = "Shipping completed"
+    else:
+        predicted_list = "Released"
+
+    # Check DB existence
+    job_num = row.get("Job #")
+    release_str = str(row.get("Release #", "")).strip()
+    existing_job = None
+    if job_num and release_str:
+        existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+
+    # Check Trello existence for this identifier
+    cards = get_trello_cards_from_subset()
+    has_trello = False
+    trello_card_found = None
+    for c in cards:
+        name = (c.get("name") or "").strip()
+        if not name:
+            continue
+        ident = extract_identifier(name)
+        if ident == identifier:
+            has_trello = True
+            trello_card_found = c
+            break
+
+    result = {
+        "success": True,
+        "identifier": identifier,
+        "job": job_num,
+        "release": release_str,
+        "ship": ship_val,
+        "predicted_list": predicted_list,
+        "exists_in_db": existing_job is not None,
+        "has_trello_card": has_trello,
+        "dry_run": dry_run,
+        "action": "none"
+    }
+
+    if dry_run:
+        # Just report what would happen
+        if existing_job:
+            result["action"] = "skip_existing_db"
+        else:
+            result["action"] = "create_trello_and_db" if not has_trello else "create_db_only"
+        return result
+
+    # Execute if not dry run
+    if existing_job:
+        result["action"] = "skip_existing_db"
+        return result
+
+    excel_data = row.to_dict()
+
+    if not has_trello:
+        # Create Trello card in predicted list (also creates DB)
+        create_res = create_trello_card_from_excel_data(excel_data, list_name=predicted_list)
+        result["action"] = "created_trello_and_db"
+        result["create_result"] = create_res
+        return result
+
+    # Has Trello already; create DB record from Excel
+    try:
+        # Mirror batch path: create Job object directly
+        def safe_float(val):
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return None
+
+        jr = Job(
+            job=excel_data.get("Job #"),
+            release=excel_data.get("Release #"),
+            job_name=safe_truncate_string(excel_data.get("Job"), 128),
+            description=safe_truncate_string(excel_data.get("Description"), 512),
+            fab_hrs=safe_float(excel_data.get("Fab Hrs")),
+            install_hrs=safe_float(excel_data.get("Install HRS")),
+            paint_color=safe_truncate_string(excel_data.get("Paint color"), 128),
+            pm=safe_truncate_string(excel_data.get("PM"), 128),
+            by=safe_truncate_string(excel_data.get("BY"), 128),
+            released=to_date(excel_data.get("Released")),
+            fab_order=safe_truncate_string(excel_data.get("Fab Order"), 128),
+            cut_start=safe_truncate_string(excel_data.get("Cut start"), 128),
+            fitup_comp=safe_truncate_string(excel_data.get("Fitup comp"), 128),
+            welded=safe_truncate_string(excel_data.get("Welded"), 128),
+            paint_comp=safe_truncate_string(excel_data.get("Paint Comp"), 128),
+            ship=safe_truncate_string(excel_data.get("Ship"), 128),
+            start_install=to_date(excel_data.get("Start install")),
+            start_install_formula=excel_data.get("start_install_formula"),
+            start_install_formulaTF=excel_data.get("start_install_formulaTF"),
+            comp_eta=to_date(excel_data.get("Comp. ETA")),
+            job_comp=safe_truncate_string(excel_data.get("Job Comp"), 128),
+            invoiced=safe_truncate_string(excel_data.get("Invoiced"), 128),
+            notes=safe_truncate_string(excel_data.get("Notes"), 512),
+            last_updated_at=pd.Timestamp.now(),
+            source_of_update="System",
+        )
+
+        # Set Trello details if we found the card
+        if trello_card_found:
+            jr.trello_card_id = trello_card_found.get("id")
+            jr.trello_card_name = safe_truncate_string(trello_card_found.get("name"), 128)
+            jr.trello_list_id = trello_card_found.get("list_id")
+            jr.trello_list_name = safe_truncate_string(trello_card_found.get("list_name"), 128)
+            jr.trello_card_description = safe_truncate_string(trello_card_found.get("desc"), 512)
+            if trello_card_found.get("due"):
+                jr.trello_card_date = to_date(trello_card_found["due"])
+
+        db.session.add(jr)
+        db.session.commit()
+
+        result["action"] = "created_db_only"
+        result["job_id"] = jr.id
+        return result
+
+    except Exception as e:
+        db.session.rollback()
+        return {"success": False, "identifier": identifier, "error": str(e)}
+
+
 def get_trello_excel_cross_check_summary():
     """
     Get a detailed summary of the Trello/Excel cross-check without making database changes.

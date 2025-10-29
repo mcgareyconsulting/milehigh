@@ -649,6 +649,34 @@ def create_app():
                 "error": str(e)
             }), 500
 
+    @app.route("/seed/run-one", methods=["POST"])
+    def run_one_seed():
+        """
+        Run seeding for a single identifier.
+        Query params:
+          - identifier: required, e.g. 1234-1
+          - dry_run: optional, default true
+        """
+        try:
+            from app.seed import process_single_identifier
+            identifier = request.args.get("identifier")
+            dry_run_param = request.args.get("dry_run", "true").lower()
+            dry_run = dry_run_param in ("true", "1", "yes", "y")
+
+            if not identifier:
+                return jsonify({"error": "identifier query param is required (e.g. 1234-1)"}), 400
+
+            logger.info("Run-one seed request", identifier=identifier, dry_run=dry_run)
+            result = process_single_identifier(identifier, dry_run=dry_run)
+            return jsonify({
+                "message": "Run-one completed",
+                "dry_run": dry_run,
+                "result": result
+            }), 200 if result.get("success", True) else 400
+        except Exception as e:
+            logger.error("Error in run-one seed", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
     # Snapshot routes
     @app.route("/snapshots/list")
     def list_snapshots():
