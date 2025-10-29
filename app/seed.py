@@ -214,10 +214,12 @@ def incremental_seed_missing_jobs(batch_size=50):
         print(f"✅ Rows eligible for seeding (Ship does NOT have X or T): {total_filtered_rows}")
         
         # Convert filtered DataFrame to combined_data format for compatibility
+        # Compute predicted list for each row and only process those that would go to "Released"
         valid_items = []
         trello_only_count = 0  # Not applicable in new approach, but kept for logging
         excel_with_trello_count = 0
         excel_without_trello_count = 0
+        predicted_released_count = 0
         
         for _, row in filtered_df.iterrows():
             identifier = row["identifier"]
@@ -225,11 +227,49 @@ def incremental_seed_missing_jobs(batch_size=50):
             
             # Convert row to dict format compatible with existing code
             excel_data = row.to_dict()
+
+            # Determine predicted list using staging flags
+            fitup_comp = str(excel_data.get("Fitup comp", "") or "").strip()
+            welded = str(excel_data.get("Welded", "") or "").strip()
+            paint_comp = str(excel_data.get("Paint Comp", "") or "").strip()
+            ship_val = str(excel_data.get("Ship", "") or "").strip()
+
+            predicted_list = None
+            if (
+                fitup_comp == "X"
+                and welded == "X"
+                and paint_comp == "X"
+                and (ship_val == "O" or ship_val == "T")
+            ):
+                predicted_list = "Paint complete"
+            elif (
+                fitup_comp == "X"
+                and welded == "O"
+                and paint_comp == ""
+                and (ship_val == "T" or ship_val == "O" or ship_val == "")
+            ):
+                predicted_list = "Fit Up Complete."
+            elif (
+                fitup_comp == "X"
+                and welded == "X"
+                and paint_comp == "X"
+                and (ship_val == "X")
+            ):
+                predicted_list = "Shipping completed"
+            else:
+                predicted_list = "Released"
+
+            if predicted_list == "Released":
+                predicted_released_count += 1
+            else:
+                # Skip items that would not go to Released per requirement
+                continue
             
             item = {
                 "identifier": identifier,
                 "trello": trello_card,
-                "excel": excel_data
+                "excel": excel_data,
+                "predicted_list": predicted_list
             }
             valid_items.append(item)
             
@@ -239,7 +279,7 @@ def incremental_seed_missing_jobs(batch_size=50):
                 excel_without_trello_count += 1
         
         total_items = len(valid_items)
-        print(f"✅ Found {total_items} eligible Excel rows (job-release, Ship without X/T)")
+        print(f"✅ Found {total_items} eligible Excel rows that would go to 'Released'")
         print(f"🔗 Rows WITH Trello cards: {excel_with_trello_count}")
         print(f"⚠️  Rows WITHOUT Trello cards: {excel_without_trello_count}")
         
@@ -263,7 +303,7 @@ def incremental_seed_missing_jobs(batch_size=50):
         new_jobs_data = []
         
         print("🔍 Checking for existing jobs in database...")
-        print("   (Processing eligible Excel rows: job-release without X/T in Ship)")
+        print("   (Only processing rows predicted for 'Released' list)")
         
         for item in combined_data:
             excel_data = item.get("excel")
@@ -288,7 +328,7 @@ def incremental_seed_missing_jobs(batch_size=50):
             if existing_job:
                 existing_jobs.add(f"{job_num}-{release_str}")
             else:
-                # This job has Excel data (and possibly Trello), Ship without X/T, but is not in the database
+                # This job has Excel data (and possibly Trello), is predicted 'Released', and is not in the database
                 new_jobs_data.append(item)
         
         existing_count = len(existing_jobs)
@@ -334,39 +374,8 @@ def incremental_seed_missing_jobs(batch_size=50):
                     excel_data = item.get("excel")
                     if not excel_data:
                         continue
-                    # Determine target list based on staging flags (mirrors determine_trello_list_from_db)
-                    fitup_comp = str(excel_data.get("Fitup comp", "") or "").strip()
-                    welded = str(excel_data.get("Welded", "") or "").strip()
-                    paint_comp = str(excel_data.get("Paint Comp", "") or "").strip()
-                    ship = str(excel_data.get("Ship", "") or "").strip()
-
-                    list_name = None
-                    if (
-                        fitup_comp == "X"
-                        and welded == "X"
-                        and paint_comp == "X"
-                        and (ship == "O" or ship == "T")
-                    ):
-                        list_name = "Paint complete"
-                    elif (
-                        fitup_comp == "X"
-                        and welded == "O"
-                        and paint_comp == ""
-                        and (ship == "T" or ship == "O" or ship == "")
-                    ):
-                        list_name = "Fit Up Complete."
-                    elif (
-                        fitup_comp == "X"
-                        and welded == "X"
-                        and paint_comp == "X"
-                        and (ship == "X")
-                    ):
-                        list_name = "Shipping completed"
-                    # Fallback to "Released" if no staging rule matched
-                    if not list_name:
-                        list_name = "Released"
-
-                    result = create_trello_card_from_excel_data(excel_data, list_name=list_name)
+                    # We already filtered to 'Released', so target list is 'Released'
+                    result = create_trello_card_from_excel_data(excel_data, list_name="Released")
                     if result and result.get("success"):
                         created_cards += 1
                         total_created += 1
