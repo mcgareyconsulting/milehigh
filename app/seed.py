@@ -958,6 +958,58 @@ def get_trello_excel_cross_check_summary():
         return {"error": str(e)}
 
 
+def get_first_identifier_to_seed():
+    """
+    Returns the first job-release identifier from Excel that:
+      - Has Job # and Release #
+      - Ship does NOT contain X or T
+      - Does not already have a Trello card in target lists
+      - Does not already exist in DB
+    Returns None if none found.
+    """
+    from app.onedrive.api import get_excel_dataframe
+    from app.trello.api import get_trello_cards_from_subset
+    from app.trello.utils import extract_identifier
+
+    # Build Trello identifier set
+    trello_cards = get_trello_cards_from_subset()
+    trello_idents = set()
+    for card in trello_cards:
+        name = (card.get("name") or "").strip()
+        if not name:
+            continue
+        ident = extract_identifier(name)
+        if ident:
+            trello_idents.add(ident)
+
+    # Load Excel
+    df = get_excel_dataframe()
+    df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
+
+    def ship_has_x_or_t(ship_value):
+        if pd.isna(ship_value) or ship_value is None:
+            return False
+        s = str(ship_value).strip()
+        return "X" in s or "T" in s
+
+    filtered_df = df[~df["Ship"].apply(ship_has_x_or_t)].copy()
+
+    # Iterate in Excel order to get the first eligible
+    for _, row in filtered_df.iterrows():
+        identifier = row["identifier"]
+        if identifier in trello_idents:
+            continue
+        job_num = row.get("Job #")
+        release_str = str(row.get("Release #", "")).strip()
+        if not job_num or not release_str:
+            continue
+        existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+        if existing_job:
+            continue
+        return identifier
+
+    return None
+
 # Example usage and testing functions
 def run_incremental_seed_example():
     """
