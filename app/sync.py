@@ -14,6 +14,10 @@ from app.trello.api import (
     update_trello_card,
     add_comment_to_trello_card,
     update_mirror_card_date_range,
+    parse_num_guys_from_description,
+    update_installation_duration_in_description,
+    parse_installation_duration,
+    update_trello_card_description,
 )
 from app.onedrive.utils import (
     get_excel_row_and_index_by_identifiers,
@@ -291,12 +295,19 @@ def sync_from_trello(event_info):
                 sync_op.operation_id, "INFO", "SyncOperation in_progress", trello_card_id=card_id
             )
             
+            # Log change types for card_updated events
+            change_types = event_info.get("change_types", [])
             logger.info(
                 "Processing Trello card",
                 operation_id=sync_op.operation_id,
                 card_id=card_id,
                 event_time=event_time.isoformat() if event_time else None,
-                event_type=event_info.get("event")
+                event_type=event_info.get("event"),
+                change_types=change_types,
+                has_list_move=event_info.get("has_list_move", False),
+                has_due_date_change=event_info.get("has_due_date_change", False),
+                has_description_change=event_info.get("has_description_change", False),
+                needs_excel_update=event_info.get("needs_excel_update", False)
             )
             
             card_data = get_trello_card_by_id(card_id)
@@ -490,6 +501,9 @@ def sync_from_trello(event_info):
                     )
                     update_sync_operation(sync_op.operation_id, records_created=1)
 
+                # Save old description BEFORE updating (needed for Number of Guys change detection)
+                old_description = rec.trello_card_description or ""
+                
                 # Update trello information
                 rec.trello_card_name = card_data.get("name")
                 rec.trello_card_description = card_data.get("desc")
@@ -503,17 +517,194 @@ def sync_from_trello(event_info):
                 rec.last_updated_at = event_time
                 rec.source_of_update = "Trello"
 
-                # Handle list movement
-                if event_info["event"] == "card_moved":
-                    logger.info("Card move detected, updating DB fields", operation_id=sync_op.operation_id)
+                # Handle list movement (now detected as part of card_updated events)
+                if event_info.get("has_list_move", False):
+                    logger.info(
+                        "Card move detected, updating DB fields",
+                        operation_id=sync_op.operation_id,
+                        from_list=event_info.get("from"),
+                        to_list=event_info.get("to")
+                    )
                     safe_log_sync_event(
                         sync_op.operation_id,
                         "INFO",
                         "Card moved - updating DB fields",
                         trello_card_id=card_id,
+                        from_list=event_info.get("from"),
                         to=get_list_name_by_id(card_data.get("idList")),
                     )
                     rectify_db_on_trello_move(rec, get_list_name_by_id(card_data.get("idList")), sync_op.operation_id)
+                
+                # Handle description changes - check for Number of Guys updates
+                if event_info.get("has_description_change", False):
+                    logger.info(
+                        "Description change detected",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        new_description_length=len(card_data.get("desc", "") or ""),
+                        old_description_length=len(old_description)
+                    )
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Description changed",
+                        trello_card_id=card_id,
+                        description_length=len(card_data.get("desc", "") or "")
+                    )
+                    
+                    # Check if "Number of Guys:" was updated and recalculate installation duration
+                    new_description = card_data.get("desc", "") or ""
+                    
+                    if new_description and "Number of Guys:" in new_description:
+                        # Parse the new number of guys from the description
+                        num_guys = parse_num_guys_from_description(new_description)
+                        old_num_guys = parse_num_guys_from_description(old_description)
+                        
+                        logger.info(
+                            "Number of Guys comparison",
+                            operation_id=sync_op.operation_id,
+                            card_id=card_id,
+                            old_num_guys=old_num_guys,
+                            new_num_guys=num_guys,
+                            old_desc_preview=old_description[:150] if old_description else None,
+                            new_desc_preview=new_description[:150] if new_description else None
+                        )
+                        
+                        # Detect if Number of Guys actually changed
+                        num_guys_changed = (old_num_guys is None) or (num_guys != old_num_guys)
+                        
+                        # Recalculate duration whenever description changed and Number of Guys exists,
+                        # even if Number of Guys didn't change (to correct manual edits to duration)
+                        if num_guys and rec.install_hrs:
+                            logger.info(
+                                "Number of Guys changed",
+                                operation_id=sync_op.operation_id,
+                                card_id=card_id,
+                                old_num_guys=old_num_guys,
+                                new_num_guys=num_guys,
+                                install_hrs=rec.install_hrs
+                            )
+                            logger.info(
+                                "Recalculating installation duration",
+                                operation_id=sync_op.operation_id,
+                                card_id=card_id,
+                                num_guys_changed=num_guys_changed,
+                                old_num_guys=old_num_guys,
+                                new_num_guys=num_guys,
+                                install_hrs=rec.install_hrs
+                            )
+                            
+                            # Update installation duration in description
+                            # Use new_description which has the updated Number of Guys
+                            updated_description = update_installation_duration_in_description(
+                                new_description,
+                                rec.install_hrs,
+                                num_guys
+                            )
+                            
+                            # Compute durations for clearer logging
+                            old_duration = parse_installation_duration(old_description)
+                            current_duration = parse_installation_duration(new_description)
+                            target_duration = parse_installation_duration(
+                                update_installation_duration_in_description(new_description, rec.install_hrs, num_guys)
+                            )
+                            logger.info(
+                                "Description update result",
+                                operation_id=sync_op.operation_id,
+                                card_id=card_id,
+                                description_changed=(updated_description != new_description),
+                                old_desc_length=len(old_description),
+                                new_desc_length=len(new_description),
+                                updated_desc_length=len(updated_description),
+                                old_duration=old_duration,
+                                current_duration=current_duration,
+                                target_duration=target_duration
+                            )
+                            
+                            # Only update if description actually changed
+                            if updated_description != new_description:
+                                try:
+                                    update_trello_card_description(card_id, updated_description)
+                                    logger.info(
+                                        "Installation duration updated in Trello card description",
+                                        operation_id=sync_op.operation_id,
+                                        card_id=card_id,
+                                        num_guys=num_guys,
+                                        install_hrs=rec.install_hrs
+                                    )
+                                    safe_log_sync_event(
+                                        sync_op.operation_id,
+                                        "INFO",
+                                        "Installation duration recalculated and updated",
+                                        trello_card_id=card_id,
+                                        num_guys=num_guys,
+                                        install_hrs=rec.install_hrs
+                                    )
+                                except Exception as update_err:
+                                    logger.error(
+                                        "Failed to update Trello card description with new installation duration",
+                                        operation_id=sync_op.operation_id,
+                                        card_id=card_id,
+                                        error=str(update_err),
+                                        error_type=type(update_err).__name__
+                                    )
+                                    safe_log_sync_event(
+                                        sync_op.operation_id,
+                                        "ERROR",
+                                        "Failed to update installation duration in description",
+                                        trello_card_id=card_id,
+                                        error=str(update_err)
+                                    )
+                            else:
+                                # If description already reflects the target duration, note it explicitly
+                                if current_duration == target_duration and old_duration is not None and current_duration != old_duration:
+                                    logger.info(
+                                        "Installation duration already corrected in description (no API call)",
+                                        operation_id=sync_op.operation_id,
+                                        card_id=card_id,
+                                        old_duration=old_duration,
+                                        current_duration=current_duration
+                                    )
+                                else:
+                                    logger.info(
+                                        "Installation duration already correct - no update needed",
+                                        operation_id=sync_op.operation_id,
+                                        card_id=card_id,
+                                        current_duration=current_duration,
+                                        target_duration=target_duration
+                                    )
+                        # Else branches
+                        elif not num_guys:
+                            logger.warning(
+                                "Number of Guys not found in description or invalid",
+                                operation_id=sync_op.operation_id,
+                                card_id=card_id,
+                                description_preview=new_description[:100] if new_description else None
+                            )
+                        elif not rec.install_hrs:
+                            logger.warning(
+                                "Install hours not available for installation duration calculation",
+                                operation_id=sync_op.operation_id,
+                                card_id=card_id,
+                                job=rec.job,
+                                release=rec.release
+                            )
+                
+                # Log due date changes for tracking
+                if event_info.get("has_due_date_change", False):
+                    logger.info(
+                        "Due date change detected",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        new_due_date=rec.trello_card_date.isoformat() if rec.trello_card_date else None
+                    )
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Due date changed",
+                        trello_card_id=card_id,
+                        new_due_date=str(rec.trello_card_date) if rec.trello_card_date else None
+                    )
 
                 db.session.add(rec)
                 db.session.commit()
@@ -531,8 +722,17 @@ def sync_from_trello(event_info):
                 )
 
                 # Update Excel if needed
-                if rec.source_of_update != "Excel" and not event_info.get("skip_excel_update", False):
-                    logger.info("Updating Excel from Trello changes", operation_id=sync_op.operation_id)
+                # Only update Excel when due date or list move changed (not for description-only changes)
+                needs_excel_update = event_info.get("needs_excel_update", False)
+                
+                if rec.source_of_update != "Excel" and not event_info.get("skip_excel_update", False) and needs_excel_update:
+                    change_types = event_info.get("change_types", [])
+                    logger.info(
+                        "Updating Excel from Trello changes",
+                        operation_id=sync_op.operation_id,
+                        change_types=change_types,
+                        reason="list_move_change"
+                    )
                     safe_log_sync_event(
                         sync_op.operation_id,
                         "INFO",
@@ -541,6 +741,9 @@ def sync_from_trello(event_info):
                         job=rec.job,
                         release=rec.release,
                         excel_identifier=f"{rec.job}-{rec.release}",
+                        change_types=change_types,
+                        has_list_move=event_info.get("has_list_move", False),
+                        has_due_date_change=event_info.get("has_due_date_change", False)
                     )
                     column_updates = {
                         "M": rec.fitup_comp,
@@ -636,7 +839,7 @@ def sync_from_trello(event_info):
                             job_type=type(rec.job).__name__,
                             release_type=type(rec.release).__name__
                         )
-                else:
+                elif rec.source_of_update == "Excel" or event_info.get("skip_excel_update", False):
                     # Skip Excel update due to Excel sync flag
                     logger.info(
                         "Skipping Excel update - card was created from Excel sync",
@@ -653,6 +856,27 @@ def sync_from_trello(event_info):
                         job_id=rec.id,
                         job=rec.job,
                         release=rec.release
+                    )
+                elif not needs_excel_update:
+                    # Skip Excel update because this was a description-only change
+                    change_types = event_info.get("change_types", [])
+                    logger.info(
+                        "Skipping Excel update - description-only change (no due date or list move)",
+                        operation_id=sync_op.operation_id,
+                        card_id=card_id,
+                        job=rec.job,
+                        release=rec.release,
+                        change_types=change_types
+                    )
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Skipping Excel update - description-only change",
+                        trello_card_id=card_id,
+                        job_id=rec.id,
+                        job=rec.job,
+                        release=rec.release,
+                        change_types=change_types
                     )
             else:
                 logger.info("No update needed for card", operation_id=sync_op.operation_id, card_id=card_id)

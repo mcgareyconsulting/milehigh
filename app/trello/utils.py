@@ -11,7 +11,6 @@ def parse_webhook_data(data):
     try:
         action = data.get("action", {})
         action_type = action.get("type")
-        print(action_type)
         action_data = action.get("data", {})
         card_info = action_data.get("card", {})
         card_id = card_info.get("id")
@@ -34,41 +33,63 @@ def parse_webhook_data(data):
                 "time": event_time,
             }
 
-        # Card moved between lists
-        elif (
-            action_type == "updateCard"
-            and "listBefore" in action_data
-            and "listAfter" in action_data
-        ):
-            return {
-                "event": "card_moved",
-                "handled": True,
-                "card_id": card_id,
-                "card_name": card_name,
-                "from": action_data["listBefore"]["name"],
-                "to": action_data["listAfter"]["name"],
-                "time": event_time,
-            }
-
-        # Card field changes (name, desc, due, labels, etc.)
+        # Card update - check for list move, due date change, description change, and combinations
         elif action_type == "updateCard":
-            changed_fields = [
-                field
-                for field in ["name", "desc", "due"]
-                if "old" in action_data and field in action_data["old"]
-            ]
-            if "label" in action_data or "labels" in action_data:
-                changed_fields.append("labels")
-            # Skip events that are only 'pos' changes
-            if changed_fields and changed_fields != ["pos"]:
-                return {
+            # Detect list move
+            list_move = "listBefore" in action_data and "listAfter" in action_data
+            list_from = action_data["listBefore"]["name"] if list_move else None
+            list_to = action_data["listAfter"]["name"] if list_move else None
+            
+            # Detect field changes from 'old' data
+            old_data = action_data.get("old", {})
+            due_date_change = "due" in old_data
+            description_change = "desc" in old_data
+            
+            # Check if there are other field changes (name, labels, etc.)
+            name_change = "name" in old_data
+            label_change = "label" in action_data or "labels" in action_data
+            
+            # Build list of change types
+            change_types = []
+            if list_move:
+                change_types.append("list_move")
+            if due_date_change:
+                change_types.append("due_date_change")
+            if description_change:
+                change_types.append("description_change")
+            if name_change:
+                change_types.append("name_change")
+            if label_change:
+                change_types.append("label_change")
+            
+            # Skip events that are only 'pos' changes or have no relevant changes
+            if change_types:
+                result = {
                     "event": "card_updated",
                     "handled": True,
                     "card_id": card_id,
                     "card_name": card_name,
-                    "changed_fields": changed_fields,
                     "time": event_time,
+                    "change_types": change_types,
                 }
+                
+                # Add specific flags for easier handling
+                result["has_list_move"] = list_move
+                result["has_due_date_change"] = due_date_change
+                result["has_description_change"] = description_change
+                
+                # Add list move details if applicable
+                if list_move:
+                    result["from"] = list_from
+                    result["to"] = list_to
+                    result["list_id_before"] = action_data["listBefore"]["id"]
+                    result["list_id_after"] = action_data["listAfter"]["id"]
+                
+                # Determine if Excel update is needed
+                # Only list moves should be reflected back to Excel
+                result["needs_excel_update"] = bool(list_move)
+                
+                return result
 
         # Other actions can be added here
 
@@ -92,6 +113,7 @@ def parse_trello_datetime(dt_str):
         dt = datetime.fromisoformat(dt_str)
         if dt.tzinfo is not None:
             dt = dt.replace(tzinfo=None)  # Remove timezone info, make naive
+        return dt
 
 
 def extract_card_name(data):
@@ -218,3 +240,5 @@ def add_business_days(start_date, business_days):
             business_days_counted += 1
     
     return current_date + timedelta(days=days_forward)
+
+
