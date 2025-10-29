@@ -643,27 +643,6 @@ def get_trello_excel_cross_check_summary():
                 else:
                     missing_from_db += 1
         
-        # Also get the original combined data for backward compatibility
-        print("📊 Cross-checking with combined Trello/Excel data (original method)...")
-        combined_data = combine_trello_excel_data()
-        
-        # Analyze the cross-check results
-        valid_items = []
-        trello_only_items = []
-        excel_only_items = []
-        
-        for item in combined_data:
-            has_trello = item.get("trello") is not None
-            has_excel = item.get("excel") is not None
-            identifier = item.get("identifier")
-            
-            if has_trello and has_excel:
-                valid_items.append(item)
-            elif has_trello and not has_excel:
-                trello_only_items.append(item)
-            elif has_excel and not has_trello:
-                excel_only_items.append(item)
-        
         summary = {
             "trello_analysis": {
                 "total_cards": len(trello_cards),
@@ -677,11 +656,6 @@ def get_trello_excel_cross_check_summary():
                 "eligible_rows_with_trello": len(excel_with_trello),
                 "eligible_rows_without_trello": len(excel_without_trello),
                 "eligible_rows_examples_without_trello": excel_without_trello[:10]  # Show first 10 examples
-            },
-            "cross_check_results": {
-                "valid_items_both_trello_excel": len(valid_items),
-                "trello_only_no_excel": len(trello_only_items),
-                "excel_only_no_trello": len(excel_only_items)
             },
             "database_status": {
                 "jobs_already_in_db": existing_in_db,
