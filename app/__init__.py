@@ -615,6 +615,7 @@ def create_app():
         """
         Get detailed summary of Trello/Excel cross-check analysis.
         Shows what jobs have Trello cards, Excel data, and database status.
+        Now includes clean list of job-release identifiers that would be created.
         """
         try:
             logger.info("Getting Trello/Excel cross-check summary")
@@ -627,9 +628,18 @@ def create_app():
                     "error": summary["error"]
                 }), 500
             
+            # Extract and format the would-be-created identifiers for cleaner display
+            would_be_created = summary.get("would_be_created_identifiers", {})
+            identifiers_list = would_be_created.get("identifiers", [])
+            
             return jsonify({
                 "message": "Cross-check analysis completed",
-                "summary": summary
+                "summary": summary,
+                "would_be_created": {
+                    "count": would_be_created.get("count", 0),
+                    "identifiers": identifiers_list,
+                    "identifiers_formatted": ", ".join(identifiers_list) if identifiers_list else "None"
+                }
             }), 200
             
         except Exception as e:

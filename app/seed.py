@@ -631,10 +631,12 @@ def get_trello_excel_cross_check_summary():
         # Check database status for eligible Excel rows
         existing_in_db = 0
         missing_from_db = 0
+        would_be_created_identifiers = []  # Clean list of identifiers that would be created
         
         for _, row in filtered_df.iterrows():
             job_num = row.get("Job #")
             release_str = str(row.get("Release #", "")).strip()
+            identifier = row["identifier"]
             
             if job_num and release_str:
                 existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
@@ -642,6 +644,16 @@ def get_trello_excel_cross_check_summary():
                     existing_in_db += 1
                 else:
                     missing_from_db += 1
+                    # Only include identifiers that don't have Trello cards (these would get cards created)
+                    if identifier not in trello_identifier_to_card:
+                        would_be_created_identifiers.append(identifier)
+        
+        # Sort identifiers for cleaner output
+        would_be_created_identifiers.sort()
+        
+        print(f"📝 Jobs that would be created (with Trello cards): {len(would_be_created_identifiers)}")
+        if would_be_created_identifiers:
+            print(f"   Identifiers: {', '.join(would_be_created_identifiers)}")
         
         summary = {
             "trello_analysis": {
@@ -663,6 +675,10 @@ def get_trello_excel_cross_check_summary():
                 "would_be_created": missing_from_db,
                 "eligible_rows_in_db": existing_in_db,
                 "eligible_rows_missing_from_db": missing_from_db
+            },
+            "would_be_created_identifiers": {
+                "count": len(would_be_created_identifiers),
+                "identifiers": would_be_created_identifiers
             },
             "target_lists": [
                 "Fit Up Complete.",
