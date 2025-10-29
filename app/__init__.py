@@ -546,69 +546,69 @@ def create_app():
             logger.error("Error getting snapshot status", error=str(e))
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/seed/incremental", methods=["GET", "POST"])
-    def run_incremental_seed():
-        """
-        Run incremental seeding to add missing jobs from Trello/Excel cross-check.
-        This checks the database for existing jobs and only adds new ones.
-        """
-        try:
-            logger.info("Starting incremental seeding via web endpoint")
+    # @app.route("/seed/incremental", methods=["GET", "POST"])
+    # def run_incremental_seed():
+    #     """
+    #     Run incremental seeding to add missing jobs from Trello/Excel cross-check.
+    #     This checks the database for existing jobs and only adds new ones.
+    #     """
+    #     try:
+    #         logger.info("Starting incremental seeding via web endpoint")
             
-            # Get batch size from query params (default 50)
-            batch_size = request.args.get('batch_size', 50, type=int)
-            if batch_size < 1 or batch_size > 200:
-                return jsonify({
-                    "message": "Invalid batch size",
-                    "error": "Batch size must be between 1 and 200"
-                }), 400
+    #         # Get batch size from query params (default 50)
+    #         batch_size = request.args.get('batch_size', 50, type=int)
+    #         if batch_size < 1 or batch_size > 200:
+    #             return jsonify({
+    #                 "message": "Invalid batch size",
+    #                 "error": "Batch size must be between 1 and 200"
+    #             }), 400
             
-            result = incremental_seed_missing_jobs(batch_size=batch_size)
+    #         result = incremental_seed_missing_jobs(batch_size=batch_size)
             
-            return jsonify({
-                "message": "Incremental seeding completed successfully",
-                "operation_id": result["operation_id"],
-                "status": result["status"],
-                "total_items": result["total_items"],
-                "existing_jobs": result["existing_jobs"],
-                "new_jobs_created": result["new_jobs_created"],
-                "batch_size_used": batch_size
-            }), 200
+    #         return jsonify({
+    #             "message": "Incremental seeding completed successfully",
+    #             "operation_id": result["operation_id"],
+    #             "status": result["status"],
+    #             "total_items": result["total_items"],
+    #             "existing_jobs": result["existing_jobs"],
+    #             "new_jobs_created": result["new_jobs_created"],
+    #             "batch_size_used": batch_size
+    #         }), 200
             
-        except Exception as e:
-            logger.error("Incremental seeding failed via web endpoint", error=str(e))
-            return jsonify({
-                "message": "Incremental seeding failed",
-                "error": str(e)
-            }), 500
+    #     except Exception as e:
+    #         logger.error("Incremental seeding failed via web endpoint", error=str(e))
+    #         return jsonify({
+    #             "message": "Incremental seeding failed",
+    #             "error": str(e)
+    #         }), 500
 
-    @app.route("/seed/status")
-    def seed_status():
-        """Get current database seeding status and job counts."""
-        try:
-            from app.models import Job
+    # @app.route("/seed/status")
+    # def seed_status():
+    #     """Get current database seeding status and job counts."""
+    #     try:
+    #         from app.models import Job
             
-            total_jobs = Job.query.count()
-            jobs_with_trello = Job.query.filter(Job.trello_card_id.isnot(None)).count()
-            jobs_without_trello = total_jobs - jobs_with_trello
+    #         total_jobs = Job.query.count()
+    #         jobs_with_trello = Job.query.filter(Job.trello_card_id.isnot(None)).count()
+    #         jobs_without_trello = total_jobs - jobs_with_trello
             
-            # Get recent sync operations related to seeding
-            recent_seed_ops = SyncOperation.query.filter(
-                SyncOperation.operation_type.in_(['incremental_seed', 'full_seed'])
-            ).order_by(SyncOperation.started_at.desc()).limit(5).all()
+    #         # Get recent sync operations related to seeding
+    #         recent_seed_ops = SyncOperation.query.filter(
+    #             SyncOperation.operation_type.in_(['incremental_seed', 'full_seed'])
+    #         ).order_by(SyncOperation.started_at.desc()).limit(5).all()
             
-            return jsonify({
-                "database_status": {
-                    "total_jobs": total_jobs,
-                    "jobs_with_trello_cards": jobs_with_trello,
-                    "jobs_without_trello_cards": jobs_without_trello
-                },
-                "recent_seed_operations": [op.to_dict() for op in recent_seed_ops]
-            }), 200
+    #         return jsonify({
+    #             "database_status": {
+    #                 "total_jobs": total_jobs,
+    #                 "jobs_with_trello_cards": jobs_with_trello,
+    #                 "jobs_without_trello_cards": jobs_without_trello
+    #             },
+    #             "recent_seed_operations": [op.to_dict() for op in recent_seed_ops]
+    #         }), 200
             
-        except Exception as e:
-            logger.error("Error getting seed status", error=str(e))
-            return jsonify({"error": str(e)}), 500
+    #     except Exception as e:
+    #         logger.error("Error getting seed status", error=str(e))
+    #         return jsonify({"error": str(e)}), 500
 
     @app.route("/seed/cross-check", methods=["GET"])
     def get_cross_check_summary():
@@ -649,42 +649,42 @@ def create_app():
                 "error": str(e)
             }), 500
 
-    @app.route("/seed/run-one", methods=["GET", "POST"])
-    def run_one_seed():
-        """
-        Run seeding for a single identifier.
-        Query params or JSON body:
-          - identifier: e.g. 1234-1 (optional; if missing, the first eligible identifier will be used)
-          - dry_run: optional, default true unless auto-picking (then defaults to false)
-        """
-        try:
-            from app.seed import process_single_identifier, get_first_identifier_to_seed
-            # Support both query params and JSON body
-            identifier = request.args.get("identifier") or (request.json.get("identifier") if request.is_json else None)
-            dry_run_param = request.args.get("dry_run") or (request.json.get("dry_run") if request.is_json else None)
+    # @app.route("/seed/run-one", methods=["GET", "POST"])
+    # def run_one_seed():
+    #     """
+    #     Run seeding for a single identifier.
+    #     Query params or JSON body:
+    #       - identifier: e.g. 1234-1 (optional; if missing, the first eligible identifier will be used)
+    #       - dry_run: optional, default true unless auto-picking (then defaults to false)
+    #     """
+    #     try:
+    #         from app.seed import process_single_identifier, get_first_identifier_to_seed
+    #         # Support both query params and JSON body
+    #         identifier = request.args.get("identifier") or (request.json.get("identifier") if request.is_json else None)
+    #         dry_run_param = request.args.get("dry_run") or (request.json.get("dry_run") if request.is_json else None)
 
-            # If no identifier provided, pick the first eligible and default dry_run to false if not specified
-            if not identifier:
-                identifier = get_first_identifier_to_seed()
-                if not identifier:
-                    return jsonify({"error": "No eligible identifiers found to seed."}), 404
-                if dry_run_param is None:
-                    dry_run_param = "false"
+    #         # If no identifier provided, pick the first eligible and default dry_run to false if not specified
+    #         if not identifier:
+    #             identifier = get_first_identifier_to_seed()
+    #             if not identifier:
+    #                 return jsonify({"error": "No eligible identifiers found to seed."}), 404
+    #             if dry_run_param is None:
+    #                 dry_run_param = "false"
 
-            dry_run_param = str(dry_run_param).lower() if dry_run_param is not None else "true"
-            dry_run = dry_run_param in ("true", "1", "yes", "y")
+    #         dry_run_param = str(dry_run_param).lower() if dry_run_param is not None else "true"
+    #         dry_run = dry_run_param in ("true", "1", "yes", "y")
 
-            logger.info("Run-one seed request", identifier=identifier, dry_run=dry_run)
-            result = process_single_identifier(identifier, dry_run=dry_run)
-            return jsonify({
-                "message": "Run-one completed",
-                "identifier": identifier,
-                "dry_run": dry_run,
-                "result": result
-            }), 200 if result.get("success", True) else 400
-        except Exception as e:
-            logger.error("Error in run-one seed", error=str(e))
-            return jsonify({"error": str(e)}), 500
+    #         logger.info("Run-one seed request", identifier=identifier, dry_run=dry_run)
+    #         result = process_single_identifier(identifier, dry_run=dry_run)
+    #         return jsonify({
+    #             "message": "Run-one completed",
+    #             "identifier": identifier,
+    #             "dry_run": dry_run,
+    #             "result": result
+    #         }), 200 if result.get("success", True) else 400
+    #     except Exception as e:
+    #         logger.error("Error in run-one seed", error=str(e))
+    #         return jsonify({"error": str(e)}), 500
 
     # Snapshot routes
     @app.route("/snapshots/list")
