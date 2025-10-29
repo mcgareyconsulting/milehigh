@@ -136,13 +136,15 @@ def seed_from_combined_data(combined_data, batch_size=50):
 def incremental_seed_missing_jobs(batch_size=50):
     """
     Incremental seeding function that checks the database for existing jobs
-    and only adds missing ones from the Trello/Excel cross-check.
+    and only adds missing ones from Excel rows with job-release that don't have X or T in Ship column.
     
     This function:
-    1. Gets combined Trello/Excel data from the 5 target lists
-    2. Checks which jobs already exist in the database
-    3. Only creates new Job records for missing ones
-    4. Tracks the operation with sync logging
+    1. Gets all Excel rows with job-release (has Job # and Release #)
+    2. Filters out rows where Ship column contains 'X' or 'T'
+    3. Cross-references with Trello cards (but seeds even without Trello cards)
+    4. Checks which jobs already exist in the database
+    5. Only creates new Job records for missing ones
+    6. Tracks the operation with sync logging
     
     Returns:
         dict: Summary of the operation including counts and operation_id
@@ -159,14 +161,16 @@ def incremental_seed_missing_jobs(batch_size=50):
         print("🔄 Starting incremental seeding process...")
         safe_log_sync_event(operation_id, "INFO", "Starting incremental seeding process")
         
-        # Get combined Trello/Excel data (already cross-checks against 5 target lists)
-        print("📊 Fetching Trello cards from 5 target lists...")
+        # Get Trello cards for cross-reference (optional - jobs will be created even without Trello)
+        print("📊 Fetching Trello cards from 5 target lists for cross-reference...")
         from app.trello.api import get_trello_cards_from_subset
         from app.trello.utils import extract_identifier
+        from app.onedrive.api import get_excel_dataframe
         
         # Get unique cards from the 5 Trello lists
         trello_cards = get_trello_cards_from_subset()
         unique_trello_identifiers = set()
+        trello_identifier_to_card = {}  # Map identifier -> card
         
         for card in trello_cards:
             name = (card.get("name") or "").strip()
@@ -174,45 +178,84 @@ def incremental_seed_missing_jobs(batch_size=50):
                 identifier = extract_identifier(name)
                 if identifier:
                     unique_trello_identifiers.add(identifier)
+                    # Store first card for each identifier
+                    if identifier not in trello_identifier_to_card:
+                        trello_identifier_to_card[identifier] = card
         
         print(f"🎯 Found {len(unique_trello_identifiers)} unique job identifiers in Trello lists")
-        print("📊 Cross-checking with Excel data...")
         
-        combined_data = combine_trello_excel_data()
+        # Get all Excel rows (already filtered to job-release: has Job # and Release #)
+        print("📊 Loading all Excel rows with job-release...")
+        df = get_excel_dataframe()
         
-        # Filter to only items that have both Trello cards AND Excel data
+        # Create identifier column for Excel rows
+        df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
+        
+        # Filter Excel rows: job-release without X or T in Ship column
+        print("🔍 Filtering Excel rows: Ship column must NOT contain 'X' or 'T'...")
+        
+        # Helper function to check if Ship contains X or T
+        def ship_has_x_or_t(ship_value):
+            """Check if Ship column contains 'X' or 'T' (case-sensitive)."""
+            if pd.isna(ship_value) or ship_value is None:
+                return False
+            ship_str = str(ship_value).strip()
+            return 'X' in ship_str or 'T' in ship_str
+        
+        # Filter rows: must have job-release AND Ship must NOT have X or T
+        filtered_df = df[~df["Ship"].apply(ship_has_x_or_t)].copy()
+        
+        total_excel_job_release = len(df)
+        total_filtered_rows = len(filtered_df)
+        rows_with_x_or_t = total_excel_job_release - total_filtered_rows
+        
+        print(f"📊 Total Excel rows with job-release: {total_excel_job_release}")
+        print(f"✂️  Rows excluded (Ship has X or T): {rows_with_x_or_t}")
+        print(f"✅ Rows eligible for seeding (Ship does NOT have X or T): {total_filtered_rows}")
+        
+        # Convert filtered DataFrame to combined_data format for compatibility
         valid_items = []
-        trello_only_count = 0
-        excel_only_count = 0
+        trello_only_count = 0  # Not applicable in new approach, but kept for logging
+        excel_with_trello_count = 0
+        excel_without_trello_count = 0
         
-        for item in combined_data:
-            has_trello = item.get("trello") is not None
-            has_excel = item.get("excel") is not None
-            identifier = item.get("identifier")
+        for _, row in filtered_df.iterrows():
+            identifier = row["identifier"]
+            trello_card = trello_identifier_to_card.get(identifier)
             
-            if has_trello and has_excel:
-                valid_items.append(item)
-            elif has_trello and not has_excel:
-                trello_only_count += 1
-            elif has_excel and not has_trello:
-                excel_only_count += 1
+            # Convert row to dict format compatible with existing code
+            excel_data = row.to_dict()
+            
+            item = {
+                "identifier": identifier,
+                "trello": trello_card,
+                "excel": excel_data
+            }
+            valid_items.append(item)
+            
+            if trello_card:
+                excel_with_trello_count += 1
+            else:
+                excel_without_trello_count += 1
         
         total_items = len(valid_items)
-        print(f"✅ Found {total_items} jobs with both Trello cards and Excel data")
-        print(f"📋 Trello-only cards (no Excel match): {trello_only_count}")
-        print(f"📊 Excel-only rows (no Trello card): {excel_only_count}")
+        print(f"✅ Found {total_items} eligible Excel rows (job-release, Ship without X/T)")
+        print(f"🔗 Rows WITH Trello cards: {excel_with_trello_count}")
+        print(f"⚠️  Rows WITHOUT Trello cards: {excel_without_trello_count}")
         
         safe_log_sync_event(
             operation_id, 
             "INFO", 
-            "Trello/Excel cross-check completed",
-            unique_trello_identifiers=len(unique_trello_identifiers),
-            valid_items_with_both=total_items,
-            trello_only=trello_only_count,
-            excel_only=excel_only_count
+            "Excel filtering and Trello cross-check completed",
+            total_excel_job_release=total_excel_job_release,
+            rows_excluded_ship_has_x_or_t=rows_with_x_or_t,
+            eligible_rows=total_items,
+            eligible_with_trello=excel_with_trello_count,
+            eligible_without_trello=excel_without_trello_count,
+            unique_trello_identifiers=len(unique_trello_identifiers)
         )
         
-        # Use the filtered valid items for processing
+        # Use the filtered items for processing
         combined_data = valid_items
         
         # Check which jobs already exist in database
@@ -220,16 +263,16 @@ def incremental_seed_missing_jobs(batch_size=50):
         new_jobs_data = []
         
         print("🔍 Checking for existing jobs in database...")
-        print("   (Only considering jobs that have both Trello cards and Excel data)")
+        print("   (Processing eligible Excel rows: job-release without X/T in Ship)")
         
         for item in combined_data:
             excel_data = item.get("excel")
             trello_data = item.get("trello")
             identifier = item.get("identifier")
             
-            # Double-check that we have both (should always be true after filtering above)
-            if not excel_data or not trello_data:
-                print(f"⚠️  Skipping {identifier} - missing Trello or Excel data")
+            # Only require Excel data (Trello is optional)
+            if not excel_data:
+                print(f"⚠️  Skipping {identifier} - missing Excel data")
                 continue
                 
             job_num = excel_data.get("Job #")
@@ -245,7 +288,7 @@ def incremental_seed_missing_jobs(batch_size=50):
             if existing_job:
                 existing_jobs.add(f"{job_num}-{release_str}")
             else:
-                # This job has a Trello card, Excel data, but is not in the database
+                # This job has Excel data (and possibly Trello), Ship without X/T, but is not in the database
                 new_jobs_data.append(item)
         
         existing_count = len(existing_jobs)
@@ -273,119 +316,170 @@ def incremental_seed_missing_jobs(batch_size=50):
                 "status": "up_to_date"
             }
         
-        # Create new jobs using batched approach
-        print(f"🚀 Creating {new_count} new jobs in batches of {batch_size}...")
+        # Split items by whether they already have a Trello card
+        jobs_with_trello = [it for it in new_jobs_data if it.get("trello")]
+        jobs_without_trello = [it for it in new_jobs_data if not it.get("trello")]
+
+        print(f"🧭 New jobs with Trello: {len(jobs_with_trello)} | without Trello: {len(jobs_without_trello)}")
+
         total_created = 0
-        batch_count = 0
-        
-        for i in range(0, len(new_jobs_data), batch_size):
-            batch_items = new_jobs_data[i:i + batch_size]
-            batch_count += 1
-            jobs_to_add = []
-            
-            print(f"Processing batch {batch_count} (items {i+1}-{min(i+batch_size, len(new_jobs_data))})...")
-            
-            for item in batch_items:
+
+        # First, create Trello cards for items without Trello, which also creates DB records
+        if jobs_without_trello:
+            print(f"🃏 Creating Trello cards for {len(jobs_without_trello)} jobs without Trello...")
+            from app.trello.api import create_trello_card_from_excel_data
+            created_cards = 0
+            for item in jobs_without_trello:
                 try:
                     excel_data = item.get("excel")
                     if not excel_data:
                         continue
-                    
-                    # Clean and convert Excel values safely
-                    def safe_float(val):
-                        try:
-                            return float(val)
-                        except (TypeError, ValueError):
-                            return None
-                    
-                    jr = Job(
-                        job=excel_data.get("Job #"),
-                        release=excel_data.get("Release #"),
-                        job_name=safe_truncate_string(excel_data.get("Job"), 128),
-                        description=safe_truncate_string(excel_data.get("Description"), 512),
-                        fab_hrs=safe_float(excel_data.get("Fab Hrs")),
-                        install_hrs=safe_float(excel_data.get("Install HRS")),
-                        paint_color=safe_truncate_string(excel_data.get("Paint color"), 128),
-                        pm=safe_truncate_string(excel_data.get("PM"), 128),
-                        by=safe_truncate_string(excel_data.get("BY"), 128),
-                        released=to_date(excel_data.get("Released")),
-                        fab_order=safe_truncate_string(excel_data.get("Fab Order"), 128),
-                        cut_start=safe_truncate_string(excel_data.get("Cut start"), 128),
-                        fitup_comp=safe_truncate_string(excel_data.get("Fitup comp"), 128),
-                        welded=safe_truncate_string(excel_data.get("Welded"), 128),
-                        paint_comp=safe_truncate_string(excel_data.get("Paint Comp"), 128),
-                        ship=safe_truncate_string(excel_data.get("Ship"), 128),
-                        start_install=to_date(excel_data.get("Start install")),
-                        start_install_formula=excel_data.get("start_install_formula"),
-                        start_install_formulaTF=excel_data.get("start_install_formulaTF"),
-                        comp_eta=to_date(excel_data.get("Comp. ETA")),
-                        job_comp=safe_truncate_string(excel_data.get("Job Comp"), 128),
-                        invoiced=safe_truncate_string(excel_data.get("Invoiced"), 128),
-                        notes=safe_truncate_string(excel_data.get("Notes"), 512),
-                        last_updated_at=pd.Timestamp.now(),
-                        source_of_update="System",
-                    )
-                    
-                    # Add Trello data if available
-                    if item.get("trello"):
-                        trello_data = item["trello"]
-                        jr.trello_card_id = trello_data.get("id")
-                        jr.trello_card_name = safe_truncate_string(trello_data.get("name"), 128)
-                        jr.trello_list_id = trello_data.get("list_id")
-                        jr.trello_list_name = safe_truncate_string(trello_data.get("list_name"), 128)
-                        jr.trello_card_description = safe_truncate_string(trello_data.get("desc"), 512)
-                        
-                        if trello_data.get("due"):
-                            jr.trello_card_date = to_date(trello_data["due"])
-                    
-                    jobs_to_add.append(jr)
-                    
+                    result = create_trello_card_from_excel_data(excel_data)
+                    if result and result.get("success"):
+                        created_cards += 1
+                        total_created += 1
+                    else:
+                        logging.warning(
+                            "Failed to create Trello card for job",
+                            extra={"identifier": item.get("identifier"), "error": result.get("error") if result else None}
+                        )
+                        safe_log_sync_event(
+                            operation_id,
+                            "WARNING",
+                            "Failed to create Trello card for job",
+                            identifier=item.get("identifier"),
+                            error=(result.get("error") if result else None)
+                        )
                 except Exception as e:
-                    identifier = item.get("identifier")
-                    logging.error(f"⚠️ Skipping record {identifier}: {e}")
+                    logging.error(f"Error creating Trello card: {e}")
                     safe_log_sync_event(
                         operation_id,
                         "ERROR",
-                        f"Failed to process record {identifier}",
-                        error=str(e),
-                        identifier=identifier
+                        "Exception while creating Trello card",
+                        identifier=item.get("identifier"),
+                        error=str(e)
                     )
+
+            print(f"🃏 Trello card creation complete. Created: {created_cards}")
+            safe_log_sync_event(
+                operation_id,
+                "INFO",
+                "Trello card creation completed for items without Trello",
+                created_cards=created_cards
+            )
+
+        # Next, batch-insert remaining jobs that already have Trello cards
+        if jobs_with_trello:
+            print(f"🚀 Creating {len(jobs_with_trello)} new jobs (with Trello) in batches of {batch_size}...")
+            batch_count = 0
+            for i in range(0, len(jobs_with_trello), batch_size):
+                batch_items = jobs_with_trello[i:i + batch_size]
+                batch_count += 1
+                jobs_to_add = []
+                
+                print(f"Processing batch {batch_count} (items {i+1}-{min(i+batch_size, len(jobs_with_trello))})...")
+                
+                for item in batch_items:
+                    try:
+                        excel_data = item.get("excel")
+                        if not excel_data:
+                            continue
+                        
+                        # Clean and convert Excel values safely
+                        def safe_float(val):
+                            try:
+                                return float(val)
+                            except (TypeError, ValueError):
+                                return None
+                        
+                        jr = Job(
+                            job=excel_data.get("Job #"),
+                            release=excel_data.get("Release #"),
+                            job_name=safe_truncate_string(excel_data.get("Job"), 128),
+                            description=safe_truncate_string(excel_data.get("Description"), 512),
+                            fab_hrs=safe_float(excel_data.get("Fab Hrs")),
+                            install_hrs=safe_float(excel_data.get("Install HRS")),
+                            paint_color=safe_truncate_string(excel_data.get("Paint color"), 128),
+                            pm=safe_truncate_string(excel_data.get("PM"), 128),
+                            by=safe_truncate_string(excel_data.get("BY"), 128),
+                            released=to_date(excel_data.get("Released")),
+                            fab_order=safe_truncate_string(excel_data.get("Fab Order"), 128),
+                            cut_start=safe_truncate_string(excel_data.get("Cut start"), 128),
+                            fitup_comp=safe_truncate_string(excel_data.get("Fitup comp"), 128),
+                            welded=safe_truncate_string(excel_data.get("Welded"), 128),
+                            paint_comp=safe_truncate_string(excel_data.get("Paint Comp"), 128),
+                            ship=safe_truncate_string(excel_data.get("Ship"), 128),
+                            start_install=to_date(excel_data.get("Start install")),
+                            start_install_formula=excel_data.get("start_install_formula"),
+                            start_install_formulaTF=excel_data.get("start_install_formulaTF"),
+                            comp_eta=to_date(excel_data.get("Comp. ETA")),
+                            job_comp=safe_truncate_string(excel_data.get("Job Comp"), 128),
+                            invoiced=safe_truncate_string(excel_data.get("Invoiced"), 128),
+                            notes=safe_truncate_string(excel_data.get("Notes"), 512),
+                            last_updated_at=pd.Timestamp.now(),
+                            source_of_update="System",
+                        )
+                        
+                        # Add Trello data if available
+                        if item.get("trello"):
+                            trello_data = item["trello"]
+                            jr.trello_card_id = trello_data.get("id")
+                            jr.trello_card_name = safe_truncate_string(trello_data.get("name"), 128)
+                            jr.trello_list_id = trello_data.get("list_id")
+                            jr.trello_list_name = safe_truncate_string(trello_data.get("list_name"), 128)
+                            jr.trello_card_description = safe_truncate_string(trello_data.get("desc"), 512)
+                            
+                            if trello_data.get("due"):
+                                jr.trello_card_date = to_date(trello_data["due"])
+                        
+                        jobs_to_add.append(jr)
+                    
+                    except Exception as e:
+                        identifier = item.get("identifier")
+                        logging.error(f"⚠️ Skipping record {identifier}: {e}")
+                        safe_log_sync_event(
+                            operation_id,
+                            "ERROR",
+                            f"Failed to process record {identifier}",
+                            error=str(e),
+                            identifier=identifier
+                        )
+                        continue
+            
+                # Commit this batch safely
+                if not jobs_to_add:
+                    print(f"  No valid jobs to commit in batch {batch_count}")
                     continue
-            
-            # Commit this batch safely
-            if not jobs_to_add:
-                print(f"  No valid jobs to commit in batch {batch_count}")
-                continue
-            
-            try:
-                print(f"  Committing batch {batch_count} with {len(jobs_to_add)} records...")
-                db.session.bulk_save_objects(jobs_to_add)
-                db.session.commit()
-                total_created += len(jobs_to_add)
-                print(f"  ✓ Batch {batch_count} committed successfully. Total created: {total_created}")
                 
-                safe_log_sync_event(
-                    operation_id,
-                    "INFO",
-                    f"Batch {batch_count} committed successfully",
-                    batch_size=len(jobs_to_add),
-                    total_created=total_created
-                )
-                
-            except SQLAlchemyError as e:
-                db.session.rollback()
-                logging.error(f"✗ Batch {batch_count} failed: {e}")
-                safe_log_sync_event(
-                    operation_id,
-                    "ERROR",
-                    f"Batch {batch_count} failed",
-                    error=str(e),
-                    batch_number=batch_count
-                )
-            finally:
-                # Memory cleanup
-                db.session.expunge_all()
-                gc.collect()
+                try:
+                    print(f"  Committing batch {batch_count} with {len(jobs_to_add)} records...")
+                    db.session.bulk_save_objects(jobs_to_add)
+                    db.session.commit()
+                    total_created += len(jobs_to_add)
+                    print(f"  ✓ Batch {batch_count} committed successfully. Total created: {total_created}")
+                    
+                    safe_log_sync_event(
+                        operation_id,
+                        "INFO",
+                        f"Batch {batch_count} committed successfully",
+                        batch_size=len(jobs_to_add),
+                        total_created=total_created
+                    )
+                    
+                except SQLAlchemyError as e:
+                    db.session.rollback()
+                    logging.error(f"✗ Batch {batch_count} failed: {e}")
+                    safe_log_sync_event(
+                        operation_id,
+                        "ERROR",
+                        f"Batch {batch_count} failed",
+                        error=str(e),
+                        batch_number=batch_count
+                    )
+                finally:
+                    # Memory cleanup
+                    db.session.expunge_all()
+                    gc.collect()
         
         # Update sync operation with final results
         update_sync_operation(
@@ -442,18 +536,22 @@ def get_trello_excel_cross_check_summary():
     Get a detailed summary of the Trello/Excel cross-check without making database changes.
     Useful for understanding what jobs would be processed by incremental seeding.
     
+    Now includes analysis of Excel rows with job-release that don't have X or T in Ship column.
+    
     Returns:
         dict: Detailed summary of the cross-check analysis
     """
     try:
         from app.trello.api import get_trello_cards_from_subset
         from app.trello.utils import extract_identifier
+        from app.onedrive.api import get_excel_dataframe
         
         # Get unique cards from the 5 Trello lists
         print("🎯 Analyzing Trello cards from 5 target lists...")
         trello_cards = get_trello_cards_from_subset()
         unique_trello_identifiers = set()
         trello_cards_by_list = {}
+        trello_identifier_to_card = {}  # Map identifier -> card for cross-checking
         
         for card in trello_cards:
             name = (card.get("name") or "").strip()
@@ -467,9 +565,86 @@ def get_trello_excel_cross_check_summary():
                 identifier = extract_identifier(name)
                 if identifier:
                     unique_trello_identifiers.add(identifier)
+                    # Store first card for each identifier
+                    if identifier not in trello_identifier_to_card:
+                        trello_identifier_to_card[identifier] = card
         
-        # Get combined data
-        print("📊 Cross-checking with Excel data...")
+        # Get all Excel rows (already filtered to job-release: has Job # and Release #)
+        print("📊 Loading all Excel rows with job-release...")
+        df = get_excel_dataframe()
+        
+        # Create identifier column for Excel rows
+        df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
+        
+        # Filter Excel rows: job-release without X or T in Ship column
+        print("🔍 Filtering Excel rows: Ship column must NOT contain 'X' or 'T'...")
+        
+        # Helper function to check if Ship contains X or T
+        def ship_has_x_or_t(ship_value):
+            """Check if Ship column contains 'X' or 'T' (case-sensitive)."""
+            if pd.isna(ship_value) or ship_value is None:
+                return False
+            ship_str = str(ship_value).strip()
+            return 'X' in ship_str or 'T' in ship_str
+        
+        # Filter rows: must have job-release AND Ship must NOT have X or T
+        filtered_df = df[~df["Ship"].apply(ship_has_x_or_t)].copy()
+        
+        total_excel_job_release = len(df)
+        total_filtered_rows = len(filtered_df)
+        rows_with_x_or_t = total_excel_job_release - total_filtered_rows
+        
+        print(f"📊 Total Excel rows with job-release: {total_excel_job_release}")
+        print(f"✂️  Rows excluded (Ship has X or T): {rows_with_x_or_t}")
+        print(f"✅ Rows eligible (Ship does NOT have X or T): {total_filtered_rows}")
+        
+        # Cross-check: Which filtered Excel rows have Trello cards?
+        excel_with_trello = []
+        excel_without_trello = []
+        
+        for _, row in filtered_df.iterrows():
+            identifier = row["identifier"]
+            has_trello = identifier in trello_identifier_to_card
+            
+            row_dict = row.to_dict()
+            if has_trello:
+                excel_with_trello.append({
+                    "identifier": identifier,
+                    "job": row.get("Job #"),
+                    "release": row.get("Release #"),
+                    "ship": row.get("Ship"),
+                    "trello_card": trello_identifier_to_card[identifier].get("name", ""),
+                    "trello_list": trello_identifier_to_card[identifier].get("list_name", "")
+                })
+            else:
+                excel_without_trello.append({
+                    "identifier": identifier,
+                    "job": row.get("Job #"),
+                    "release": row.get("Release #"),
+                    "ship": row.get("Ship"),
+                    "job_name": row.get("Job", "")
+                })
+        
+        print(f"🔗 Excel rows (eligible) WITH Trello cards: {len(excel_with_trello)}")
+        print(f"⚠️  Excel rows (eligible) WITHOUT Trello cards: {len(excel_without_trello)}")
+        
+        # Check database status for eligible Excel rows
+        existing_in_db = 0
+        missing_from_db = 0
+        
+        for _, row in filtered_df.iterrows():
+            job_num = row.get("Job #")
+            release_str = str(row.get("Release #", "")).strip()
+            
+            if job_num and release_str:
+                existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+                if existing_job:
+                    existing_in_db += 1
+                else:
+                    missing_from_db += 1
+        
+        # Also get the original combined data for backward compatibility
+        print("📊 Cross-checking with combined Trello/Excel data (original method)...")
         combined_data = combine_trello_excel_data()
         
         # Analyze the cross-check results
@@ -489,28 +664,19 @@ def get_trello_excel_cross_check_summary():
             elif has_excel and not has_trello:
                 excel_only_items.append(item)
         
-        # Check database status for valid items
-        existing_in_db = 0
-        missing_from_db = 0
-        
-        for item in valid_items:
-            excel_data = item.get("excel")
-            if excel_data:
-                job_num = excel_data.get("Job #")
-                release_str = str(excel_data.get("Release #", "")).strip()
-                
-                if job_num and release_str:
-                    existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
-                    if existing_job:
-                        existing_in_db += 1
-                    else:
-                        missing_from_db += 1
-        
         summary = {
             "trello_analysis": {
                 "total_cards": len(trello_cards),
                 "unique_identifiers": len(unique_trello_identifiers),
                 "cards_by_list": trello_cards_by_list
+            },
+            "excel_filtered_analysis": {
+                "total_excel_job_release": total_excel_job_release,
+                "rows_excluded_ship_has_x_or_t": rows_with_x_or_t,
+                "rows_eligible_ship_no_x_or_t": total_filtered_rows,
+                "eligible_rows_with_trello": len(excel_with_trello),
+                "eligible_rows_without_trello": len(excel_without_trello),
+                "eligible_rows_examples_without_trello": excel_without_trello[:10]  # Show first 10 examples
             },
             "cross_check_results": {
                 "valid_items_both_trello_excel": len(valid_items),
@@ -520,7 +686,9 @@ def get_trello_excel_cross_check_summary():
             "database_status": {
                 "jobs_already_in_db": existing_in_db,
                 "jobs_missing_from_db": missing_from_db,
-                "would_be_created": missing_from_db
+                "would_be_created": missing_from_db,
+                "eligible_rows_in_db": existing_in_db,
+                "eligible_rows_missing_from_db": missing_from_db
             },
             "target_lists": [
                 "Fit Up Complete.",
