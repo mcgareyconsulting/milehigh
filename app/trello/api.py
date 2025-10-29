@@ -456,6 +456,9 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         if excel_data.get('Install HRS'):
             install_hrs = excel_data.get('Install HRS')
             description_parts.append(f"**Install HRS:** {install_hrs}")
+            # Number of Guys
+            num_guys = 2
+            description_parts.append(f"**Number of Guys:** {num_guys}")
             
             # Installation Duration calculation with error handling
             try:
@@ -466,7 +469,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
                     # Convert to float, handling string numbers
                     install_hrs_float = float(install_hrs)
                     if install_hrs_float > 0:
-                        installation_duration = math.ceil(install_hrs_float / 2.5)
+                        installation_duration = math.ceil(install_hrs_float / num_guys)
                         description_parts.append(f"**Installation Duration:** {installation_duration} days")
                         print(f"[DEBUG] Install HRS: {install_hrs} -> Duration: {installation_duration} days")
                     else:
@@ -486,7 +489,9 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         # Released
         if excel_data.get('Released'):
-            description_parts.append(f"**Released:** {excel_data['Released']}")
+            released_date = to_date(excel_data.get('Released'))
+            if released_date:
+                description_parts.append(f"**Released:** {released_date}")
         
         # Join all description parts with newlines
         card_description = "\n".join(description_parts)
