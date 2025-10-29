@@ -416,27 +416,15 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         
         print(f"[DEBUG] Database record created: Job {new_job.id}")
         
-        # # Get the target list ID - default to "Released" list
-        # if list_name:
-        #     target_list = get_list_by_name(list_name)
-        #     if not target_list:
-        #         raise ValueError(f"List '{list_name}' not found on the board")
-        #     list_id = target_list["id"]
-        # else:
-        #     # Default to "Released" list
-        #     target_list = get_list_by_name("Released")
-        #     if not target_list:
-        #         # Fallback to first available list if "Released" not found
-        #         url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
-        #         params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-        #         response = requests.get(url_lists, params=params)
-        #         response.raise_for_status()
-        #         lists = response.json()
-        #         if not lists:
-        #             raise ValueError("No lists found on the board")
-        #         list_id = lists[0]["id"]  # Use first list
-        #     else:
-        #         list_id = target_list["id"]
+        # Determine Trello list to create the card in
+        if list_name:
+            target_list = get_list_by_name(list_name)
+            if not target_list:
+                raise ValueError(f"List '{list_name}' not found on the board")
+            list_id = target_list["id"]
+        else:
+            # Default to configured new-card list
+            list_id = cfg.NEW_TRELLO_CARD_LIST_ID
         
         # Format card title
         job_number = excel_data.get('Job #', 'Unknown')
@@ -490,7 +478,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             "token": cfg.TRELLO_TOKEN,
             "name": card_title,
             "desc": card_description,
-            "idList": cfg.NEW_TRELLO_CARD_LIST_ID,
+            "idList": list_id,
             "pos": "top"  # Add to top of list
         }
         

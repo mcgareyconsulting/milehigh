@@ -334,7 +334,39 @@ def incremental_seed_missing_jobs(batch_size=50):
                     excel_data = item.get("excel")
                     if not excel_data:
                         continue
-                    result = create_trello_card_from_excel_data(excel_data)
+                    # Determine target list based on staging flags (mirrors determine_trello_list_from_db)
+                    fitup_comp = str(excel_data.get("Fitup comp", "") or "").strip()
+                    welded = str(excel_data.get("Welded", "") or "").strip()
+                    paint_comp = str(excel_data.get("Paint Comp", "") or "").strip()
+                    ship = str(excel_data.get("Ship", "") or "").strip()
+
+                    list_name = None
+                    if (
+                        fitup_comp == "X"
+                        and welded == "X"
+                        and paint_comp == "X"
+                        and (ship == "O" or ship == "T")
+                    ):
+                        list_name = "Paint complete"
+                    elif (
+                        fitup_comp == "X"
+                        and welded == "O"
+                        and paint_comp == ""
+                        and (ship == "T" or ship == "O" or ship == "")
+                    ):
+                        list_name = "Fit Up Complete."
+                    elif (
+                        fitup_comp == "X"
+                        and welded == "X"
+                        and paint_comp == "X"
+                        and (ship == "X")
+                    ):
+                        list_name = "Shipping completed"
+                    # Fallback to "Released" if no staging rule matched
+                    if not list_name:
+                        list_name = "Released"
+
+                    result = create_trello_card_from_excel_data(excel_data, list_name=list_name)
                     if result and result.get("success"):
                         created_cards += 1
                         total_created += 1
@@ -601,6 +633,9 @@ def get_trello_excel_cross_check_summary():
         # Cross-check: Which filtered Excel rows have Trello cards?
         excel_with_trello = []
         excel_without_trello = []
+        # Predicted target lists for would-be-created cards
+        predicted_by_list_counts = {}
+        predicted_identifiers_by_list = {}
         
         for _, row in filtered_df.iterrows():
             identifier = row["identifier"]
@@ -617,12 +652,48 @@ def get_trello_excel_cross_check_summary():
                     "trello_list": trello_identifier_to_card[identifier].get("list_name", "")
                 })
             else:
+                # Determine predicted list using the same staging rules used during seeding
+                fitup_comp = str(row.get("Fitup comp", "") or "").strip()
+                welded = str(row.get("Welded", "") or "").strip()
+                paint_comp = str(row.get("Paint Comp", "") or "").strip()
+                ship_val = str(row.get("Ship", "") or "").strip()
+
+                predicted_list = None
+                if (
+                    fitup_comp == "X"
+                    and welded == "X"
+                    and paint_comp == "X"
+                    and (ship_val == "O" or ship_val == "T")
+                ):
+                    predicted_list = "Paint complete"
+                elif (
+                    fitup_comp == "X"
+                    and welded == "O"
+                    and paint_comp == ""
+                    and (ship_val == "T" or ship_val == "O" or ship_val == "")
+                ):
+                    predicted_list = "Fit Up Complete."
+                elif (
+                    fitup_comp == "X"
+                    and welded == "X"
+                    and paint_comp == "X"
+                    and (ship_val == "X")
+                ):
+                    predicted_list = "Shipping completed"
+                else:
+                    predicted_list = "Released"
+
+                # Track counts and identifiers per predicted list
+                predicted_by_list_counts[predicted_list] = predicted_by_list_counts.get(predicted_list, 0) + 1
+                predicted_identifiers_by_list.setdefault(predicted_list, []).append(identifier)
+
                 excel_without_trello.append({
                     "identifier": identifier,
                     "job": row.get("Job #"),
                     "release": row.get("Release #"),
                     "ship": row.get("Ship"),
-                    "job_name": row.get("Job", "")
+                    "job_name": row.get("Job", ""),
+                    "predicted_list": predicted_list
                 })
         
         print(f"🔗 Excel rows (eligible) WITH Trello cards: {len(excel_with_trello)}")
@@ -667,7 +738,11 @@ def get_trello_excel_cross_check_summary():
                 "rows_eligible_ship_no_x_or_t": total_filtered_rows,
                 "eligible_rows_with_trello": len(excel_with_trello),
                 "eligible_rows_without_trello": len(excel_without_trello),
-                "eligible_rows_examples_without_trello": excel_without_trello[:10]  # Show first 10 examples
+                "eligible_rows_examples_without_trello": excel_without_trello[:10],  # Show first 10 examples
+                "predicted_target_lists": {
+                    "counts_by_list": predicted_by_list_counts,
+                    "identifiers_by_list": predicted_identifiers_by_list
+                }
             },
             "database_status": {
                 "jobs_already_in_db": existing_in_db,
