@@ -461,23 +461,9 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             description_parts.append(f"**Number of Guys:** {num_guys}")
             
             # Installation Duration calculation with error handling
-            try:
-                # Handle different data types (None, NaN, string, number)
-                if install_hrs is None or str(install_hrs).lower() in ['nan', 'none', '']:
-                    print(f"[DEBUG] Install HRS is empty/None: {install_hrs}")
-                else:
-                    # Convert to float, handling string numbers
-                    install_hrs_float = float(install_hrs)
-                    if install_hrs_float > 0:
-                        installation_duration = math.ceil(install_hrs_float / num_guys)
-                        description_parts.append(f"**Installation Duration:** {installation_duration} days")
-                        print(f"[DEBUG] Install HRS: {install_hrs} -> Duration: {installation_duration} days")
-                    else:
-                        print(f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}")
-            except (ValueError, TypeError) as e:
-                print(f"[DEBUG] Error calculating installation duration: {e}, Install HRS: {install_hrs} (type: {type(install_hrs)})")
-            except Exception as e:
-                print(f"[DEBUG] Unexpected error calculating installation duration: {e}, Install HRS: {install_hrs}")
+            installation_duration = calculate_installation_duration(install_hrs, num_guys)
+            if installation_duration is not None:
+                description_parts.append(f"**Installation Duration:** {installation_duration} days")
 
         # Paint Color
         if excel_data.get('Paint color'):
@@ -891,12 +877,13 @@ def get_card_attachments_by_card_id(trello_card_id):
         }
 
 
-def calculate_installation_duration(install_hrs):
+def calculate_installation_duration(install_hrs, num_guys=2.5):
     """
-    Calculate installation duration in days from installation hours.
+    Calculate installation duration in days from installation hours and number of guys.
     
     Args:
         install_hrs (float): Installation hours
+        num_guys (float): Number of guys (default: 2.5 for backward compatibility)
         
     Returns:
         int: Installation duration in days, or None if calculation fails
@@ -907,20 +894,161 @@ def calculate_installation_duration(install_hrs):
             return None
         
         install_hrs_float = float(install_hrs)
-        if install_hrs_float > 0:
-            installation_duration = math.ceil(install_hrs_float / 2.5)
-            print(f"[DEBUG] Install HRS: {install_hrs} -> Duration: {installation_duration} days")
+        if install_hrs_float > 0 and num_guys > 0:
+            installation_duration = math.ceil(install_hrs_float / float(num_guys))
+            print(f"[DEBUG] Install HRS: {install_hrs} / Num Guys: {num_guys} -> Duration: {installation_duration} days")
             return installation_duration
         else:
-            print(f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}")
+            print(f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}, or num_guys is zero: {num_guys}")
             return None
             
     except (ValueError, TypeError) as e:
-        print(f"[DEBUG] Error calculating installation duration: {e}, Install HRS: {install_hrs} (type: {type(install_hrs)})")
+        print(f"[DEBUG] Error calculating installation duration: {e}, Install HRS: {install_hrs} (type: {type(install_hrs)}), Num Guys: {num_guys}")
         return None
     except Exception as e:
         print(f"[DEBUG] Unexpected error calculating installation duration: {e}, Install HRS: {install_hrs}")
         return None
+
+
+def parse_num_guys_from_description(description):
+    """
+    Parse the 'Number of Guys:' value from a Trello card description.
+    
+    Args:
+        description (str): The card description text
+        
+    Returns:
+        float or None: The number of guys if found, None otherwise
+    """
+    if not description:
+        return None
+    
+    # Pattern to match "**Number of Guys:** X" or "Number of Guys: X"
+    pattern = r'\*\*Number\s+of\s+Guys:\*\*\s*(\d+(?:\.\d+)?)|Number\s+of\s+Guys:\s*(\d+(?:\.\d+)?)'
+    match = re.search(pattern, description, re.IGNORECASE)
+    
+    if match:
+        # Try first group (with **), then second group (without **)
+        num_guys_str = match.group(1) or match.group(2)
+        try:
+            return float(num_guys_str)
+        except (ValueError, TypeError):
+            return None
+    
+    return None
+
+
+def update_installation_duration_in_description(description, install_hrs, num_guys):
+    """
+    Update the installation duration in a description string based on install_hrs and num_guys.
+    
+    Args:
+        description (str): The current card description
+        install_hrs (float): Installation hours from database
+        num_guys (float): Number of guys from description
+        
+    Returns:
+        str: Updated description with new installation duration, or original if update fails
+    """
+    if not description or not install_hrs or not num_guys:
+        print(f"[DEBUG] update_installation_duration_in_description: Missing required input - desc={bool(description)}, install_hrs={install_hrs}, num_guys={num_guys}")
+        return description
+    
+    # Calculate new installation duration
+    installation_duration = calculate_installation_duration(install_hrs, num_guys)
+    if installation_duration is None:
+        print(f"[DEBUG] update_installation_duration_in_description: Could not calculate duration")
+        return description
+    
+    print(f"[DEBUG] update_installation_duration_in_description: Target duration = {installation_duration} days")
+    
+    # Pattern to match "**Installation Duration:** X days"
+    pattern = r'(\*\*Installation\s+Duration:\*\*\s*)(\d+)\s*days'
+    
+    match = re.search(pattern, description, re.IGNORECASE)
+    if match:
+        current_duration = int(match.group(2))
+        print(f"[DEBUG] update_installation_duration_in_description: Found existing duration = {current_duration} days")
+        
+        # Only update if duration has actually changed
+        if current_duration != installation_duration:
+            # Replace existing installation duration using lambda to avoid backreference issues
+            def replace_duration(m):
+                return f'{m.group(1)}{installation_duration} days'
+            updated_description = re.sub(pattern, replace_duration, description, flags=re.IGNORECASE)
+            print(f"[DEBUG] update_installation_duration_in_description: Updated {current_duration} -> {installation_duration} days")
+            return updated_description
+        else:
+            print(f"[DEBUG] update_installation_duration_in_description: Duration unchanged ({current_duration} days)")
+            return description
+    else:
+        print(f"[DEBUG] update_installation_duration_in_description: No existing Installation Duration found, attempting to add")
+        # If no installation duration line exists, add it after Number of Guys
+        num_guys_pattern = r'(\*\*Number\s+of\s+Guys:\*\*\s*\d+(?:\.\d+)?)'
+        
+        if re.search(num_guys_pattern, description, re.IGNORECASE):
+            def add_duration(m):
+                return f'{m.group(1)}\n**Installation Duration:** {installation_duration} days'
+            updated_description = re.sub(num_guys_pattern, add_duration, description, flags=re.IGNORECASE)
+            print(f"[DEBUG] update_installation_duration_in_description: Added new Installation Duration line")
+            return updated_description
+        else:
+            print(f"[DEBUG] update_installation_duration_in_description: Could not find Number of Guys line to add duration after")
+    
+    return description
+
+
+def parse_installation_duration(description):
+    """
+    Parse the '**Installation Duration:** X days' value from a Trello card description.
+    Returns an int or None.
+    """
+    if not description:
+        return None
+    pattern = r"\*\*Installation\s+Duration:\*\*\s*(\d+)\s*days"
+    m = re.search(pattern, description, re.IGNORECASE)
+    if m:
+        try:
+            return int(m.group(1))
+        except Exception:
+            return None
+    return None
+
+def update_trello_card_description(card_id, new_description):
+    """
+    Update a Trello card's description via API.
+    
+    Args:
+        card_id (str): Trello card ID
+        new_description (str): New description text
+        
+    Returns:
+        dict: Response from Trello API, or None if update fails
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "desc": new_description
+    }
+    
+    try:
+        print(f"[TRELLO API] Updating description for card {card_id}")
+        response = requests.put(url, params=params)
+        response.raise_for_status()
+        
+        print(f"[TRELLO API] Card {card_id} description updated successfully")
+        return response.json()
+        
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error updating card {card_id} description: {http_err}")
+        if hasattr(http_err.response, 'text'):
+            print("[TRELLO API] Response content:", http_err.response.text)
+        raise
+    except Exception as err:
+        print(f"[TRELLO API] Other error updating card {card_id} description: {err}")
+        raise
 
 
 def calculate_business_days_after(start_date, days):
