@@ -34,6 +34,7 @@ import re
 
 from app.sync.db_operations import create_sync_operation, update_sync_operation
 from app.sync.logging import safe_log_sync_event, safe_sync_op_call
+from app.sync.services.trello_list_mapper import TrelloListMapper
 
 logger = get_logger(__name__)
 
@@ -47,59 +48,6 @@ def check_database_connection():
     except Exception as e:
         logger.warning("Database connection check failed", error=str(e))
         return False
-
-def rectify_db_on_trello_move(job, new_trello_list, operation_id: str):
-    """Update job status based on Trello list movement."""
-    logger.info(
-        "Updating job status for Trello list move",
-        operation_id=operation_id,
-        job_id=job.id,
-        new_list=new_trello_list,
-        current_status={
-            "fitup_comp": job.fitup_comp,
-            "welded": job.welded,
-            "paint_comp": job.paint_comp,
-            "ship": job.ship
-        }
-    )
-    
-    if new_trello_list == "Paint complete":
-        job.fitup_comp = "X"
-        job.welded = "X"
-        job.paint_comp = "X"
-        job.ship = "O"
-    elif new_trello_list == "Store at MHMW for shipping":
-        job.fitup_comp = "X"
-        job.welded = "X"
-        job.paint_comp = "X"
-        job.ship = "O"  
-    elif new_trello_list == "Shipping planning":
-        job.fitup_comp = "X"
-        job.welded = "X"
-        job.paint_comp = "X"  
-        job.ship = ""
-    elif new_trello_list == "Fit Up Complete.":
-        job.fitup_comp = "X"
-        job.welded = "O"
-        job.paint_comp = ""
-        job.ship = ""
-    elif new_trello_list == "Shipping completed":
-        job.fitup_comp = "X"
-        job.welded = "X"
-        job.paint_comp = "X"
-        job.ship = "X"
-    
-    logger.info(
-        "Job status updated",
-        operation_id=operation_id,
-        job_id=job.id,
-        new_status={
-            "fitup_comp": job.fitup_comp,
-            "welded": job.welded,
-            "paint_comp": job.paint_comp,
-            "ship": job.ship
-        }
-    )
 
 def compare_timestamps(event_time, source_time, operation_id: str):
     """Compare external event timestamp with database record timestamp."""
@@ -404,7 +352,7 @@ def sync_from_trello(event_info):
                         from_list=event_info.get("from"),
                         to=get_list_name_by_id(card_data.get("idList")),
                     )
-                    rectify_db_on_trello_move(rec, get_list_name_by_id(card_data.get("idList")), sync_op.operation_id)
+                    TrelloListMapper.apply_trello_list_to_db(rec, get_list_name_by_id(card_data.get("idList")), sync_op.operation_id)
                 
                 # Handle description changes - check for Number of Guys updates
                 if event_info.get("has_description_change", False):
@@ -810,32 +758,6 @@ def sync_from_trello(event_info):
             
             raise
 
-# Determine Trello list based on Excel/DB status
-def determine_trello_list_from_db(rec):
-    if (
-        rec.fitup_comp == "X"
-        and rec.welded == "X"
-        and rec.paint_comp == "X"
-        and (rec.ship == "O" or rec.ship == "T")
-    ):
-        return "Paint complete"
-    elif (
-        rec.fitup_comp == "X"
-        and rec.welded == "O"
-        and rec.paint_comp == ""
-        and (rec.ship == "T" or rec.ship == "O" or rec.ship == "")
-    ):
-        return "Fit Up Complete."
-    elif (
-        rec.fitup_comp == "X"
-        and rec.welded == "X"
-        and rec.paint_comp == "X"
-        and (rec.ship == "X")
-    ):
-        return "Shipping completed"
-    else:
-        return None  # no matching list
-
 
 # Helper: detect if start_install is formula-driven
 def is_formula_cell(row):
@@ -1178,26 +1100,25 @@ def sync_from_onedrive(data):
                                 new_due_date = calculate_business_days_before(rec.start_install, 2)
 
                             new_list_id = None
-                            new_list_name = determine_trello_list_from_db(rec)
+                            new_list_name = TrelloListMapper.determine_trello_list_from_db(rec)
                             
-                            # Special handling for XXXT states (Paint complete, Store at MHMW for shipping, Shipping planning)
+                            # Special handling for shipping states
                             # If the current Trello list is already one of these valid states, preserve it
                             current_list_name = getattr(rec, "trello_list_name", None)
-                            valid_shipping_states = ["Paint complete", "Store at MHMW for shipping", "Shipping planning"]
                             
                             if (new_list_name == "Paint complete" and 
-                                current_list_name in valid_shipping_states):
+                                TrelloListMapper.is_valid_shipping_state(current_list_name)):
                                 # Keep the current list instead of forcing to "Paint complete"
                                 new_list_name = current_list_name
                                 new_list = get_list_by_name(current_list_name)
                                 if new_list:
                                     new_list_id = new_list["id"]
-                            elif new_list_name and new_list_name not in valid_shipping_states:
+                            elif new_list_name and not TrelloListMapper.is_valid_shipping_state(new_list_name):
                                 # For non-shipping states, use the determined list
                                 new_list = get_list_by_name(new_list_name)
                                 if new_list:
                                     new_list_id = new_list["id"]
-                            elif new_list_name in valid_shipping_states:
+                            elif TrelloListMapper.is_valid_shipping_state(new_list_name):
                                 # For shipping states, use the determined list
                                 new_list = get_list_by_name(new_list_name)
                                 if new_list:
