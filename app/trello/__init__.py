@@ -1,7 +1,7 @@
 from flask import Blueprint, request, current_app, jsonify
-from app.sync import sync_from_trello
 from app.trello.utils import parse_webhook_data
 from app.sync_lock import sync_lock_manager  # Add this import
+from app.sync.sync import sync_from_trello
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
