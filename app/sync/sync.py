@@ -1,3 +1,4 @@
+from numpy import safe_eval
 import openpyxl
 import pandas as pd
 from pandas import Timestamp
@@ -33,6 +34,7 @@ import uuid
 import re
 
 from app.sync.db_operations import create_sync_operation, update_sync_operation
+from app.sync.context import sync_operation_context
 from app.sync.logging import safe_log_sync_event, safe_sync_op_call
 from app.sync.services.trello_list_mapper import TrelloListMapper
 
@@ -83,681 +85,233 @@ def as_date(val):
         return None
 
 def sync_from_trello(event_info):
-    """Sync data from Trello to OneDrive based on the webhook payload."""
+    """Sync data from Trello to OneDrive based on webhook payload."""
     if event_info is None or not event_info.get("handled"):
-        logger.info("No actionable event info received from Trello webhook")
         return
 
+    # Extract card id and event time from event info
     card_id = event_info["card_id"]
-    
     event_time = parse_trello_datetime(event_info.get("time"))
     
-    # Create sync operation record
-    sync_op = create_sync_operation(
-        operation_type="trello_webhook",
-        source_system="trello",
-        source_id=card_id
-    )
-    safe_log_sync_event(
-        sync_op.operation_id,
-        "INFO",
-        "SyncOperation created",
-        trello_card_id=card_id,
-        event=event_info.get("event"),
-    )
-    
-    with SyncContext("trello_webhook", sync_op.operation_id):
-        try:
-            # Update operation status
-            update_sync_operation(sync_op.operation_id, status=SyncStatus.IN_PROGRESS)
+    # Use context manager - it handles everything!
+    with sync_operation_context("trello_webhook", "trello", card_id) as sync_op:
+        if sync_op is None:
+            # Database unavailable, but we can still try to process
+            # (context manager already logged warning)
+            return
+        
+        # Log webhook received
+        safe_log_sync_event(
+            sync_op.operation_id,
+            "WEBHOOK",
+            "Trello webhook received",
+            card_id=card_id,
+            event_type=event_info.get("event"),
+            change_types=event_info.get("change_types", []),
+        )
+        
+        # Fetch card data
+        card_data = get_trello_card_by_id(card_id)
+        if not card_data:
+            safe_log_sync_event(sync_op.operation_id, "ERROR", "Card not found in Trello", card_id=card_id)
+            raise ValueError(f"Card {card_id} not found in Trello")
+        
+        # Check if card creation from Excel sync (skip Excel update)
+        if event_info.get("event") == "card_created":
+            rec = Job.query.filter_by(trello_card_id=card_id).first()
+            if rec and rec.source_of_update == "Excel":
+                time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
+                if time_diff and time_diff.total_seconds() < 300:  # 5 minutes
+                    event_info["skip_excel_update"] = True
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Skipping Excel update because card was created from Excel sync",
+                        reason="card_from_excel_sync",
+                        time_diff_seconds=time_diff.total_seconds()
+                    )
+        
+        # Check if card update shortly after Excel sync (skip entirely)
+        elif event_info.get("event") == "card_updated":
+            rec = Job.query.filter_by(trello_card_id=card_id).first()
+            if rec and rec.source_of_update == "Excel":
+                time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
+                if time_diff and time_diff.total_seconds() < 120:  # 2 minutes
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Skipping Excel update because card was updated shortly after Excel sync",
+                        reason="card_updated_from_excel_sync",
+                        time_diff_seconds=time_diff.total_seconds()
+                    )
+                    # Just return - context manager will mark as COMPLETED
+                    return
+
+        # Find DB record
+        rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
+        
+        if not rec:
+            safe_log_sync_event(sync_op.operation_id, "INFO", "No DB record found for card", card_id=card_id)
+            # Just return - not an error, card isn't tracked
+            return
+
+        # Check for duplicate updates
+        if rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
             safe_log_sync_event(
-                sync_op.operation_id, "INFO", "SyncOperation in_progress", trello_card_id=card_id
-            )
-            
-            # Log change types for card_updated events
-            change_types = event_info.get("change_types", [])
-            logger.info(
-                "Processing Trello card",
-                operation_id=sync_op.operation_id,
-                card_id=card_id,
-                event_time=event_time.isoformat() if event_time else None,
-                event_type=event_info.get("event"),
-                change_types=change_types,
-                has_list_move=event_info.get("has_list_move", False),
-                has_due_date_change=event_info.get("has_due_date_change", False),
-                has_description_change=event_info.get("has_description_change", False),
-                needs_excel_update=event_info.get("needs_excel_update", False)
-            )
-            
-            card_data = get_trello_card_by_id(card_id)
-            if not card_data:
-                logger.warning("Card not found in Trello API", operation_id=sync_op.operation_id, card_id=card_id)
-                safe_log_sync_event(
-                    sync_op.operation_id, "WARNING", "Card not found in Trello API", trello_card_id=card_id
-                )
-                update_sync_operation(sync_op.operation_id, status=SyncStatus.FAILED, error_type="CardNotFound")
-                return
-            
-            # Check if this is a card creation event that resulted from Excel sync
-            if event_info.get("event") == "card_created":
-                logger.info(
-                    "Processing card creation webhook - checking if from Excel sync",
-                    operation_id=sync_op.operation_id,
-                    card_id=card_id,
-                    event_type=event_info.get("event")
-                )
-                
-                # Look for existing database record with this Trello card ID
-                rec = Job.query.filter_by(trello_card_id=card_id).first()
-                
-                logger.info(
-                    "Database record lookup result",
-                    operation_id=sync_op.operation_id,
-                    card_id=card_id,
-                    record_found=rec is not None,
-                    source_of_update=rec.source_of_update if rec else None,
-                    last_updated=rec.last_updated_at.isoformat() if rec and rec.last_updated_at else None
-                )
-                
-                if rec and rec.source_of_update == "Excel":
-                    # Check if the record was recently updated (within last 5 minutes)
-                    time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
-                    
-                    logger.info(
-                        "Excel sync record found - checking timing",
-                        operation_id=sync_op.operation_id,
-                        card_id=card_id,
-                        time_diff_seconds=time_diff.total_seconds() if time_diff else None,
-                        within_5_minutes=time_diff and time_diff.total_seconds() < 300
-                    )
-                    
-                    if time_diff and time_diff.total_seconds() < 300:  # 5 minutes
-                        logger.info(
-                            "Processing card creation webhook from Excel sync - updating DB but skipping Excel update",
-                            operation_id=sync_op.operation_id,
-                            card_id=card_id,
-                            db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None,
-                            time_diff_seconds=time_diff.total_seconds()
-                        )
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Processing card creation webhook from Excel sync - updating DB only",
-                            trello_card_id=card_id,
-                            job_id=rec.id,
-                            db_last_updated=str(rec.last_updated_at) if rec.last_updated_at else None,
-                            time_diff_seconds=time_diff.total_seconds()
-                        )
-                        # Set a flag to skip Excel updates for this webhook
-                        event_info["skip_excel_update"] = True
-                    else:
-                        logger.info(
-                            "Excel sync record found but too old - proceeding with webhook",
-                            operation_id=sync_op.operation_id,
-                            card_id=card_id,
-                            time_diff_seconds=time_diff.total_seconds() if time_diff else None
-                        )
-                else:
-                    logger.info(
-                        "No Excel sync record found - proceeding with webhook",
-                        operation_id=sync_op.operation_id,
-                        card_id=card_id,
-                        record_found=rec is not None,
-                        source_of_update=rec.source_of_update if rec else None
-                    )
-            
-            # Check if this is a card update event that happened shortly after Excel sync
-            elif event_info.get("event") == "card_updated":
-                # Look for existing database record with this Trello card ID
-                rec = Job.query.filter_by(trello_card_id=card_id).first()
-                
-                if rec and rec.source_of_update == "Excel":
-                    # Check if the record was recently updated (within last 2 minutes)
-                    time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
-                    
-                    if time_diff and time_diff.total_seconds() < 120:  # 2 minutes
-                        logger.info(
-                            "Skipping Trello card update webhook - card was recently created from Excel sync",
-                            operation_id=sync_op.operation_id,
-                            card_id=card_id,
-                            db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None,
-                            time_diff_seconds=time_diff.total_seconds()
-                        )
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Skipping card update webhook - recently created from Excel sync",
-                            trello_card_id=card_id,
-                            job_id=rec.id,
-                            db_last_updated=str(rec.last_updated_at) if rec.last_updated_at else None,
-                            time_diff_seconds=time_diff.total_seconds()
-                        )
-                        update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="ExcelSyncCard")
-                        return
-
-            rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
-            
-            # Log comparison data
-            if rec:
-                logger.info(
-                    "Comparing Trello card to DB record",
-                    operation_id=sync_op.operation_id,
-                    card_id=card_id,
-                    job_id=rec.id,
-                    trello_name=card_data.get("name"),
-                    db_name=rec.trello_card_name,
-                    trello_list=get_list_name_by_id(card_data.get("idList")),
-                    db_list=rec.trello_list_name
-                )
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "INFO",
-                    "Comparing Trello card to DB record",
-                    trello_card_id=card_id,
-                    id=rec.id,
-                    job=rec.job,
-                    release=rec.release,
-                    trello_name=card_data.get("name"),
-                    db_name=rec.trello_card_name,
-                )
-            else:
-                logger.info(
-                    "No DB record found for card - ignoring webhook",
-                    operation_id=sync_op.operation_id,
-                    card_id=card_id,
-                    trello_name=card_data.get("name")
-                )
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "INFO",
-                    "No DB record found for card - ignoring webhook",
-                    trello_card_id=card_id,
-                    trello_name=card_data.get("name"),
-                )
-                update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED, error_type="NoDbRecord")
-                return
-
-            # Check for duplicate updates
-            if rec and rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
-                logger.info(
-                    "Skipping duplicate Trello update",
-                    operation_id=sync_op.operation_id,
-                    card_id=card_id,
-                    event_time=event_time.isoformat() if event_time else None,
-                    db_last_updated=rec.last_updated_at.isoformat() if rec.last_updated_at else None
-                )
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "INFO",
-                    "Duplicate Trello event skipped",
-                    trello_card_id=card_id,
-                    job_id=(rec.id if rec else None),
-                    event_time=str(event_time),
-                    db_last_updated=str(rec.last_updated_at if rec else None),
-                )
-                update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED)
-                return
-
-            # Check if update is needed
-            diff = compare_timestamps(event_time, rec.last_updated_at if rec else None, sync_op.operation_id)
-            if diff == "newer":
-                logger.info("Updating DB record from Trello data", operation_id=sync_op.operation_id, card_id=card_id)
-                safe_log_sync_event(
-                    sync_op.operation_id, "INFO", "Updating DB from Trello", trello_card_id=card_id
-                )
-                
-                if not rec:
-                    logger.info("Creating new DB record", operation_id=sync_op.operation_id, card_id=card_id)
-                    safe_log_sync_event(
-                        sync_op.operation_id, "INFO", "Creating new DB record", trello_card_id=card_id
-                    )
-                    rec = Job(
-                        job=0,  # Placeholder
-                        release=0,  # Placeholder
-                        job_name=card_data.get("name", "Unnamed Job"),
-                        source_of_update="Trello",
-                        last_updated_at=event_time,
-                    )
-                    update_sync_operation(sync_op.operation_id, records_created=1)
-
-                # Save old description BEFORE updating (needed for Number of Guys change detection)
-                old_description = rec.trello_card_description or ""
-                
-                # Update trello information
-                rec.trello_card_name = card_data.get("name")
-                rec.trello_card_description = card_data.get("desc")
-                rec.trello_list_id = card_data.get("idList")
-                rec.trello_list_name = get_list_name_by_id(card_data.get("idList"))
-                if card_data.get("due"):
-                    rec.trello_card_date = parse_trello_datetime(card_data["due"])
-                else:
-                    rec.trello_card_date = None
-
-                rec.last_updated_at = event_time
-                rec.source_of_update = "Trello"
-
-                # Handle list movement (now detected as part of card_updated events)
-                if event_info.get("has_list_move", False):
-                    logger.info(
-                        "Card move detected, updating DB fields",
-                        operation_id=sync_op.operation_id,
-                        from_list=event_info.get("from"),
-                        to_list=event_info.get("to")
-                    )
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Card moved - updating DB fields",
-                        trello_card_id=card_id,
-                        from_list=event_info.get("from"),
-                        to=get_list_name_by_id(card_data.get("idList")),
-                    )
-                    TrelloListMapper.apply_trello_list_to_db(rec, get_list_name_by_id(card_data.get("idList")), sync_op.operation_id)
-                
-                # Handle description changes - check for Number of Guys updates
-                if event_info.get("has_description_change", False):
-                    logger.info(
-                        "Description change detected",
-                        operation_id=sync_op.operation_id,
-                        card_id=card_id,
-                        new_description_length=len(card_data.get("desc", "") or ""),
-                        old_description_length=len(old_description)
-                    )
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Description changed",
-                        trello_card_id=card_id,
-                        description_length=len(card_data.get("desc", "") or "")
-                    )
-                    
-                    # Check if "Number of Guys:" was updated and recalculate installation duration
-                    new_description = card_data.get("desc", "") or ""
-                    
-                    if new_description and "Number of Guys:" in new_description:
-                        # Parse the new number of guys from the description
-                        num_guys = parse_num_guys_from_description(new_description)
-                        old_num_guys = parse_num_guys_from_description(old_description)
-                        
-                        logger.info(
-                            "Number of Guys comparison",
-                            operation_id=sync_op.operation_id,
-                            card_id=card_id,
-                            old_num_guys=old_num_guys,
-                            new_num_guys=num_guys,
-                            old_desc_preview=old_description[:150] if old_description else None,
-                            new_desc_preview=new_description[:150] if new_description else None
-                        )
-                        
-                        # Detect if Number of Guys actually changed
-                        num_guys_changed = (old_num_guys is None) or (num_guys != old_num_guys)
-                        
-                        # Recalculate duration whenever description changed and Number of Guys exists,
-                        # even if Number of Guys didn't change (to correct manual edits to duration)
-                        if num_guys and rec.install_hrs:
-                            logger.info(
-                                "Number of Guys changed",
-                                operation_id=sync_op.operation_id,
-                                card_id=card_id,
-                                old_num_guys=old_num_guys,
-                                new_num_guys=num_guys,
-                                install_hrs=rec.install_hrs
-                            )
-                            logger.info(
-                                "Recalculating installation duration",
-                                operation_id=sync_op.operation_id,
-                                card_id=card_id,
-                                num_guys_changed=num_guys_changed,
-                                old_num_guys=old_num_guys,
-                                new_num_guys=num_guys,
-                                install_hrs=rec.install_hrs
-                            )
-                            
-                            # Update installation duration in description
-                            # Use new_description which has the updated Number of Guys
-                            updated_description = update_installation_duration_in_description(
-                                new_description,
-                                rec.install_hrs,
-                                num_guys
-                            )
-                            
-                            # Compute durations for clearer logging
-                            old_duration = parse_installation_duration(old_description)
-                            current_duration = parse_installation_duration(new_description)
-                            target_duration = parse_installation_duration(
-                                update_installation_duration_in_description(new_description, rec.install_hrs, num_guys)
-                            )
-                            logger.info(
-                                "Description update result",
-                                operation_id=sync_op.operation_id,
-                                card_id=card_id,
-                                description_changed=(updated_description != new_description),
-                                old_desc_length=len(old_description),
-                                new_desc_length=len(new_description),
-                                updated_desc_length=len(updated_description),
-                                old_duration=old_duration,
-                                current_duration=current_duration,
-                                target_duration=target_duration
-                            )
-                            
-                            # Only update if description actually changed
-                            if updated_description != new_description:
-                                try:
-                                    update_trello_card_description(card_id, updated_description)
-                                    logger.info(
-                                        "Installation duration updated in Trello card description",
-                                        operation_id=sync_op.operation_id,
-                                        card_id=card_id,
-                                        num_guys=num_guys,
-                                        install_hrs=rec.install_hrs
-                                    )
-                                    safe_log_sync_event(
-                                        sync_op.operation_id,
-                                        "INFO",
-                                        "Installation duration recalculated and updated",
-                                        trello_card_id=card_id,
-                                        num_guys=num_guys,
-                                        install_hrs=rec.install_hrs
-                                    )
-                                except Exception as update_err:
-                                    logger.error(
-                                        "Failed to update Trello card description with new installation duration",
-                                        operation_id=sync_op.operation_id,
-                                        card_id=card_id,
-                                        error=str(update_err),
-                                        error_type=type(update_err).__name__
-                                    )
-                                    safe_log_sync_event(
-                                        sync_op.operation_id,
-                                        "ERROR",
-                                        "Failed to update installation duration in description",
-                                        trello_card_id=card_id,
-                                        error=str(update_err)
-                                    )
-                            else:
-                                # If description already reflects the target duration, note it explicitly
-                                if current_duration == target_duration and old_duration is not None and current_duration != old_duration:
-                                    logger.info(
-                                        "Installation duration already corrected in description (no API call)",
-                                        operation_id=sync_op.operation_id,
-                                        card_id=card_id,
-                                        old_duration=old_duration,
-                                        current_duration=current_duration
-                                    )
-                                else:
-                                    logger.info(
-                                        "Installation duration already correct - no update needed",
-                                        operation_id=sync_op.operation_id,
-                                        card_id=card_id,
-                                        current_duration=current_duration,
-                                        target_duration=target_duration
-                                    )
-                        # Else branches
-                        elif not num_guys:
-                            logger.warning(
-                                "Number of Guys not found in description or invalid",
-                                operation_id=sync_op.operation_id,
-                                card_id=card_id,
-                                description_preview=new_description[:100] if new_description else None
-                            )
-                        elif not rec.install_hrs:
-                            logger.warning(
-                                "Install hours not available for installation duration calculation",
-                                operation_id=sync_op.operation_id,
-                                card_id=card_id,
-                                job=rec.job,
-                                release=rec.release
-                            )
-                
-                # Log due date changes for tracking
-                if event_info.get("has_due_date_change", False):
-                    logger.info(
-                        "Due date change detected",
-                        operation_id=sync_op.operation_id,
-                        card_id=card_id,
-                        new_due_date=rec.trello_card_date.isoformat() if rec.trello_card_date else None
-                    )
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Due date changed",
-                        trello_card_id=card_id,
-                        new_due_date=str(rec.trello_card_date) if rec.trello_card_date else None
-                    )
-
-                db.session.add(rec)
-                db.session.commit()
-                update_sync_operation(sync_op.operation_id, records_updated=1)
-                
-                logger.info("DB record updated successfully", operation_id=sync_op.operation_id, card_id=card_id)
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "INFO",
-                    "DB record updated",
-                    trello_card_id=card_id,
-                    id=rec.id,
-                    job=rec.job,
-                    release=rec.release,
-                )
-
-                # Update Excel if needed
-                # Only update Excel when due date or list move changed (not for description-only changes)
-                needs_excel_update = event_info.get("needs_excel_update", False)
-                
-                if rec.source_of_update != "Excel" and not event_info.get("skip_excel_update", False) and needs_excel_update:
-                    change_types = event_info.get("change_types", [])
-                    logger.info(
-                        "Updating Excel from Trello changes",
-                        operation_id=sync_op.operation_id,
-                        change_types=change_types,
-                        reason="list_move_change"
-                    )
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Updating Excel from Trello",
-                        id=rec.id,
-                        job=rec.job,
-                        release=rec.release,
-                        excel_identifier=f"{rec.job}-{rec.release}",
-                        change_types=change_types,
-                        has_list_move=event_info.get("has_list_move", False),
-                        has_due_date_change=event_info.get("has_due_date_change", False)
-                    )
-                    column_updates = {
-                        "M": rec.fitup_comp,
-                        "N": rec.welded,
-                        "O": rec.paint_comp,
-                        "P": rec.ship,
-                    }
-
-                    # Debug the lookup values
-                    logger.info(
-                        "Looking up Excel row",
-                        operation_id=sync_op.operation_id,
-                        job=rec.job,
-                        release=rec.release,
-                        job_type=type(rec.job).__name__,
-                        release_type=type(rec.release).__name__
-                    )
-                    
-                    index, row = get_excel_row_and_index_by_identifiers(rec.job, rec.release)
-                    if index and row is not None:
-                        logger.info(
-                            "Found Excel row for update",
-                            operation_id=sync_op.operation_id,
-                            job=rec.job,
-                            release=rec.release,
-                            excel_row=index
-                        )
-                        try:
-                            safe_log_sync_event(
-                                sync_op.operation_id,
-                                "INFO",
-                                "Found Excel row",
-                                id=rec.id,
-                                job=rec.job,
-                                release=rec.release,
-                                trello_card_id=card_id,
-                                excel_identifier=f"{rec.job}-{rec.release}",
-                                excel_row=index,
-                            )
-                        except Exception as log_err:
-                            logger.warning("Failed to log Excel row info", error=str(log_err))
-                        
-                        for col, val in column_updates.items():
-                            cell_address = col + str(index)
-                            success = update_excel_cell(cell_address, val)
-                            if success:
-                                logger.info("Excel cell updated", operation_id=sync_op.operation_id, cell=cell_address, value=val)
-                                safe_log_sync_event(
-                                    sync_op.operation_id,
-                                    "INFO",
-                                    "Excel cell updated",
-                                    id=rec.id,
-                                    job=rec.job,
-                                    release=rec.release,
-                                    trello_card_id=card_id,
-                                    excel_identifier=f"{rec.job}-{rec.release}",
-                                    cell=cell_address,
-                                    value=val,
-                                )
-                            else:
-                                logger.error("Failed to update Excel cell", operation_id=sync_op.operation_id, cell=cell_address, value=val)
-                                safe_log_sync_event(
-                                    sync_op.operation_id,
-                                    "ERROR",
-                                    "Failed to update Excel cell",
-                                    id=rec.id,
-                                    job=rec.job,
-                                    release=rec.release,
-                                    trello_card_id=card_id,
-                                    excel_identifier=f"{rec.job}-{rec.release}",
-                                    cell=cell_address,
-                                    value=val,
-                                )
-                    else:
-                        logger.warning(
-                            "Excel row not found for update", 
-                            operation_id=sync_op.operation_id, 
-                            job=rec.job, 
-                            release=rec.release,
-                            job_type=type(rec.job).__name__,
-                            release_type=type(rec.release).__name__,
-                            excel_identifier=f"{rec.job}-{rec.release}"
-                        )
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "WARNING",
-                            "Excel row not found",
-                            id=rec.id,
-                            job=rec.job,
-                            release=rec.release,
-                            trello_card_id=card_id,
-                            excel_identifier=f"{rec.job}-{rec.release}",
-                            job_type=type(rec.job).__name__,
-                            release_type=type(rec.release).__name__
-                        )
-                elif rec.source_of_update == "Excel" or event_info.get("skip_excel_update", False):
-                    # Skip Excel update due to Excel sync flag
-                    logger.info(
-                        "Skipping Excel update - card was created from Excel sync",
-                        operation_id=sync_op.operation_id,
-                        card_id=card_id,
-                        job=rec.job,
-                        release=rec.release
-                    )
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Skipping Excel update - card created from Excel sync",
-                        trello_card_id=card_id,
-                        job_id=rec.id,
-                        job=rec.job,
-                        release=rec.release
-                    )
-                elif not needs_excel_update:
-                    # Skip Excel update because this was a description-only change
-                    change_types = event_info.get("change_types", [])
-                    logger.info(
-                        "Skipping Excel update - description-only change (no due date or list move)",
-                        operation_id=sync_op.operation_id,
-                        card_id=card_id,
-                        job=rec.job,
-                        release=rec.release,
-                        change_types=change_types
-                    )
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Skipping Excel update - description-only change",
-                        trello_card_id=card_id,
-                        job_id=rec.id,
-                        job=rec.job,
-                        release=rec.release,
-                        change_types=change_types
-                    )
-            else:
-                logger.info("No update needed for card", operation_id=sync_op.operation_id, card_id=card_id)
-                safe_log_sync_event(sync_op.operation_id, "INFO", "No update needed for card", card_id=card_id)
-                update_sync_operation(sync_op.operation_id, status=SyncStatus.SKIPPED)
-                return
-
-            # Mark operation as completed
-            update_sync_operation(
                 sync_op.operation_id,
-                status=SyncStatus.COMPLETED,
-                completed_at=datetime.utcnow(),
-                duration_seconds=(datetime.utcnow() - sync_op.started_at).total_seconds()
+                "INFO",
+                "Duplicate event detected",
+                event_time=event_time.isoformat(),
+                db_last_updated=rec.last_updated_at.isoformat()
             )
-            safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation completed", trello_card_id=card_id)
+            return
+
+        # Check if event is newer
+        if event_time <= rec.last_updated_at:
+            safe_log_sync_event(
+                sync_op.operation_id,
+                "INFO",
+                "Event is older than DB record",
+                event_time=event_time.isoformat(),
+                db_last_updated=rec.last_updated_at.isoformat()
+            )
+            return
+
+        # Log DB update starting
+        safe_log_sync_event(
+            sync_op.operation_id,
+            "INFO",
+            "DB update started",
+            job=rec.job,
+            release=rec.release,
+            card_name=card_data.get("name")
+        )
+        
+        # Save old description for comparison
+        old_description = rec.trello_card_description or ""
+        
+        # Update Trello fields
+        rec.trello_card_name = card_data.get("name")
+        rec.trello_card_description = card_data.get("desc")
+        rec.trello_list_id = card_data.get("idList")
+        rec.trello_list_name = get_list_name_by_id(card_data.get("idList"))
+        rec.trello_card_date = parse_trello_datetime(card_data["due"]) if card_data.get("due") else None
+        rec.last_updated_at = event_time
+        rec.source_of_update = "Trello"
+
+        # Handle list movement
+        if event_info.get("has_list_move", False):
+            safe_log_sync_event(
+                sync_op.operation_id,
+                "INFO",
+                "List move detected",
+                from_list=event_info.get("from"),
+                to_list=rec.trello_list_name
+            )
+            TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
+        
+        # Handle description changes - recalculate installation duration if needed
+        if event_info.get("has_description_change", False):
+            new_description = card_data.get("desc", "") or ""
             
-        except Exception as e:
-            # Rollback any pending database changes
-            try:
-                db.session.rollback()
-            except Exception as rollback_error:
-                logger.warning("Failed to rollback database changes", 
-                             error=str(rollback_error), 
-                             operation_id=sync_op.operation_id)
+            if "Number of Guys:" in new_description:
+                num_guys = parse_num_guys_from_description(new_description)
                 
-            error_context = {
-                "operation_id": sync_op.operation_id,
-                "card_id": card_id,
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "event_type": event_info.get("event") if event_info else None
+                # Recalculate duration if Number of Guys exists and we have install hours
+                if num_guys and rec.install_hrs:
+                    updated_description = update_installation_duration_in_description(
+                        new_description,
+                        rec.install_hrs,
+                        num_guys
+                    )
+                    
+                    # Only update if description changed
+                    if updated_description != new_description:
+                        update_trello_card_description(card_id, updated_description)
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Installation duration updated",
+                            num_guys=num_guys,
+                            install_hrs=rec.install_hrs
+                        )
+
+        # Commit DB changes
+        db.session.add(rec)
+        db.session.commit()
+        
+        safe_log_sync_event(
+            sync_op.operation_id,
+            "INFO",
+            "DB update completed",
+            job=rec.job,
+            release=rec.release
+        )
+
+        # Update Excel if needed
+        needs_excel_update = event_info.get("needs_excel_update", False)
+        skip_excel = event_info.get("skip_excel_update", False)
+        
+        if needs_excel_update and not skip_excel:
+            safe_log_sync_event(
+                sync_op.operation_id,   
+                "INFO",
+                "Excel update started",
+                job=rec.job,
+                release=rec.release,
+                change_types=event_info.get("change_types", [])
+            )
+            
+            column_updates = {
+                "M": rec.fitup_comp,
+                "N": rec.welded,
+                "O": rec.paint_comp,
+                "P": rec.ship,
             }
             
-            logger.error("Trello sync failed", **error_context)
-            
-            try:
+            index, row = get_excel_row_and_index_by_identifiers(rec.job, rec.release)
+            if index and row is not None:
+                updated_cells = []
+                failed_cells = []
+                
+                for col, val in column_updates.items():
+                    cell_address = col + str(index)
+                    success = update_excel_cell(cell_address, val)
+                    if success:
+                        updated_cells.append({
+                            "address": cell_address,
+                            "value": val
+                        })
+                    else:
+                        failed_cells.append(cell_address)
+                
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "INFO",
+                    "Excel update completed",
+                    job=rec.job,
+                    release=rec.release,
+                    updated_cells=updated_cells,
+                    failed_cells=failed_cells
+                )
+            else:
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "ERROR",
-                    "Trello sync failed",
-                    trello_card_id=card_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    event_type=event_info.get("event") if event_info else None
+                    "Excel row not found",
+                    job=rec.job,
+                    release=rec.release
                 )
-            except Exception as log_error:
-                logger.warning("Failed to log sync error", error=str(log_error))
-            
-            try:
-                update_sync_operation(
-                    sync_op.operation_id,
-                    status=SyncStatus.FAILED,
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    completed_at=datetime.utcnow(),
-                    duration_seconds=(datetime.utcnow() - sync_op.started_at).total_seconds()
-                )
-            except Exception as update_error:
-                logger.warning("Failed to update sync operation status", error=str(update_error))
-            
-            raise
-
+        
+        # Context manager will automatically:
+        # - Mark sync_op as COMPLETED
+        # - Calculate duration
+        # - Log success
+        # If any exception occurs, it will:
+        # - Rollback database
+        # - Mark sync_op as FAILED
+        # - Log error
+        # - Re-raise exception
 
 # Helper: detect if start_install is formula-driven
 def is_formula_cell(row):
