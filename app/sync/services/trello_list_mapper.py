@@ -52,7 +52,7 @@ class TrelloListMapper:
             rec.fitup_comp == "X"
             and rec.welded == "X"
             and rec.paint_comp == "X"
-            and (rec.ship == "O" or rec.ship == "T")
+            and (rec.ship == "O" or rec.ship == "T" or rec.ship == "")
         ):
             return "Paint complete"
         elif (

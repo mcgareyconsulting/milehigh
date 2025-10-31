@@ -323,278 +323,132 @@ def is_formula_cell(row):
 
 
 def sync_from_onedrive(data):
-    """
-    Sync data from OneDrive to Trello based on the polling payload
-    TODO: List movement mapping errors, duplicate db records being passed on one change
-    """
-    # Check database connection before creating sync operation
-    sync_op = None
-    try:
-        if check_database_connection():
-            sync_op = create_sync_operation(
-                operation_type="onedrive_poll",
-                source_system="onedrive",
-                source_id=None,
-            )
-            safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation created")
-            logger.info("OneDrive poll sync operation logged to database", operation_id=sync_op.operation_id)
-        else:
-            logger.warning("Database connection unavailable - proceeding without sync operation logging")
-    except Exception as e:
-        logger.warning("Failed to create sync operation - proceeding without database logging", error=str(e))
-
-    try:
+    """Sync data from OneDrive to Trello based on polling payload."""
+    
+    # Use context manager - handles all operation tracking
+    with sync_operation_context("onedrive_poll", "onedrive", None) as sync_op:
+        if sync_op is None:
+            # Database unavailable - context manager already logged warning
+            return
         
-        # Only update sync operation if it was successfully created
-        safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.IN_PROGRESS)
-        safe_sync_op_call(sync_op, safe_log_sync_event, "INFO", "SyncOperation in_progress")
-
+        # Validate input data
         if data is None:
-            logger.info("No data received from OneDrive polling")
-            safe_log_sync_event(sync_op.operation_id, "INFO", "No data received from OneDrive polling")
-            safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.SKIPPED)
+            safe_log_sync_event(sync_op.operation_id, "ERROR", "No data received", {})
             return
 
         if "last_modified_time" not in data or "data" not in data:
-            logger.warning("Invalid OneDrive polling data format")
-            safe_log_sync_event(sync_op.operation_id, "WARNING", "Invalid OneDrive polling data format")
-            safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.FAILED, error_type="InvalidPayload")
-            return
+            safe_log_sync_event(sync_op.operation_id, "ERROR", "invalid_payload", keys=list(data.keys()) if data else [])
+            raise ValueError("Invalid OneDrive polling data format")
 
-        # Convert Excel last_modified_time (string) → datetime
+        # Parse Excel timestamp
         try:
             excel_last_updated = parse_excel_datetime(data["last_modified_time"])
         except Exception as e:
-            logger.error("Failed to parse Excel last modified time", 
-                        error=str(e), 
-                        last_modified_time=data.get("last_modified_time"))
-            safe_log_sync_event(sync_op.operation_id, "ERROR", 
-                              "Failed to parse Excel last modified time",
-                              error=str(e),
-                              last_modified_time=data.get("last_modified_time"))
-            safe_sync_op_call(sync_op, update_sync_operation, 
-                            status=SyncStatus.FAILED, 
-                            error_type="InvalidTimestamp")
-            return
-            
+            safe_log_sync_event(
+                sync_op.operation_id,
+                "ERROR",
+                "Invalid timestamp",
+                last_modified_time=data.get("last_modified_time"),
+                error=str(e)
+            )
+            raise ValueError(f"Failed to parse Excel timestamp: {e}")
+        
         df = data["data"]
         
         # Validate DataFrame
         if df is None or df.empty:
-            logger.warning("Empty DataFrame received from OneDrive")
-            safe_log_sync_event(sync_op.operation_id, "WARNING", "Empty DataFrame received")
-            safe_sync_op_call(sync_op, update_sync_operation, status=SyncStatus.SKIPPED)
+            safe_log_sync_event(sync_op.operation_id, "ERROR", "Empty dataframe", rows=df.shape[0], cols=df.shape[1], last_modified=excel_last_updated.isoformat())
             return
 
-        logger.info(f"Processing OneDrive data last modified at {excel_last_updated}")
-        logger.info(f"DataFrame {df.shape[0]} rows, {df.shape[1]} columns")
         safe_log_sync_event(
             sync_op.operation_id,
             "INFO",
-            "Processing OneDrive data",
-            last_modified=str(excel_last_updated),
-            rows=int(df.shape[0]),
-            cols=int(df.shape[1]),
+            "Processing started",
+            rows=df.shape[0],
+            cols=df.shape[1],
+            last_modified=excel_last_updated.isoformat()
         )
 
         updated_records = []
-        formula_updates_count = 0  # Track formula-driven start_install updates
+        formula_updates_count = 0
 
         # Fields to check for diffs
         fields_to_check = [
-            # ("Excel column name", "DB field name", "type")
             ("Fitup comp", "fitup_comp", "text"),
             ("Welded", "welded", "text"),
             ("Paint Comp", "paint_comp", "text"),
             ("Ship", "ship", "text"),
-            ("Notes", "notes", "text"), 
+            ("Notes", "notes", "text"),
             ("Start install", "start_install", "date"),
         ]
 
-        def normalize_int_like(value):
-            if pd.isna(value) or value is None:
-                return None
-            if isinstance(value, (int,)):
-                return value
-            try:
-                # Extract digits from strings like 'V862' -> 862
-                if isinstance(value, str):
-                    digits = re.findall(r"\d+", value)
-                    if digits:
-                        return int("".join(digits))
-                    return None
-                # numpy integers
-                import numpy as np
-                if isinstance(value, (np.integer,)):
-                    return int(value)
-            except Exception:
-                return None
-            return None
-
+        # Process each row
         for _, row in df.iterrows():
             job = row.get("Job #")
             release = row.get("Release #")
+            
             if pd.isna(job) or pd.isna(release):
-                logger.warning(f"Skipping row with missing Job # or Release #: {row}")
                 continue
 
-            job_num = normalize_int_like(job)
-            # Don't normalize release - keep original format for string field
+            job_num = int(job)
             release_str = str(release) if not pd.isna(release) else None
-            identifier = f"{job}-{release}"
 
             rec = Job.query.filter_by(job=job_num, release=release_str).one_or_none()
             if not rec:
-                print(f"No record found for {identifier}")
                 continue
 
-            db_last_updated = rec.last_updated_at
-
-            # Check for duplicate updates from Excel itself
-            if rec.source_of_update == "Excel" and excel_last_updated <= db_last_updated:
-                logger.info(
-                    f"Skipping Excel update for {identifier}: event is older or same timestamp and originated from Excel."
-                )
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "INFO",
-                    "Skipping Excel update (same origin/timestamp)",
-                    id=rec.id,
-                    job=rec.job,
-                    release=rec.release,
-                    excel_identifier=identifier,
-                    excel_last_updated=str(excel_last_updated),
-                    db_last_updated=str(db_last_updated),
-                )
+            # Skip if Excel event is older or duplicate from Excel
+            if rec.source_of_update == "Excel" and excel_last_updated <= rec.last_updated_at:
                 continue
-
-            # Only log diffs if Excel is newer
-            if excel_last_updated <= db_last_updated:
-                logger.info(
-                    f"Skipping {identifier}: Excel last updated {excel_last_updated} <= DB {db_last_updated}"
-                )
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "INFO",
-                    "Skipping: Excel older than DB",
-                    id=rec.id,
-                    job=rec.job,
-                    release=rec.release,
-                    excel_identifier=identifier,
-                    excel_last_updated=str(excel_last_updated),
-                    db_last_updated=str(db_last_updated),
-                )
+            if excel_last_updated <= rec.last_updated_at:
                 continue
 
             record_updated = False
-            formula_status_for_trello = None  # For Trello update later
+            formula_status_for_trello = None
 
+            # Check each field for changes
             for excel_field, db_field, field_type in fields_to_check:
                 excel_val = row.get(excel_field)
                 db_val = getattr(rec, db_field, None)
-                
 
-                # Normalize date fields if date
+                # Normalize dates
                 if field_type == "date":
                     excel_val = as_date(excel_val)
                     db_val = as_date(db_val)
 
-                # For most fields, treat NaN/None as equivalent
                 if (pd.isna(excel_val) or excel_val is None) and db_val is None:
                     continue
 
-                # Special handling for 'start_install' to check formula status
+                # Special handling for start_install
                 if field_type == "date":
                     is_formula = is_formula_cell(row)
-                    formula_status_for_trello = is_formula  # Track for Trello card update
+                    formula_status_for_trello = is_formula
 
                     if is_formula:
-                        # If formula-driven, update DB if value differs, but do not update Trello
                         if excel_val != db_val:
-                            # Track formula updates for summary logging instead of individual logs
                             formula_updates_count += 1
                             setattr(rec, db_field, excel_val)
-                            setattr(
-                                rec,
-                                "start_install_formula",
-                                row.get("start_install_formula") or "",
-                            )
-                            setattr(
-                                rec,
-                                "start_install_formulaTF",
-                                bool(row.get("start_install_formulaTF")),
-                            )
+                            setattr(rec, "start_install_formula", row.get("start_install_formula") or "")
+                            setattr(rec, "start_install_formulaTF", bool(row.get("start_install_formulaTF")))
                             record_updated = True
                     else:
-                        # Hard-coded: update DB if value differs and clear formula flags
                         if excel_val != db_val:
-                            logger.info(
-                                f"{job}-{release} Updating DB {db_field} (hard-coded): {db_val!r} -> {excel_val!r}"
-                            )
-                            safe_log_sync_event(
-                                sync_op.operation_id,
-                                "INFO",
-                                "DB field update (hard-coded)",
-                                id=rec.id,
-                                job=rec.job,
-                                release=rec.release,
-                                excel_identifier=identifier,
-                                field=db_field,
-                                old_value=str(db_val),
-                                new_value=str(excel_val),
-                            )
                             setattr(rec, db_field, excel_val)
                             setattr(rec, "start_install_formula", "")
                             setattr(rec, "start_install_formulaTF", False)
                             record_updated = True
-                    continue  # skip generic update for this field
+                    continue
 
-                # Special handling for 'notes' - append to Trello custom field
+                # Special handling for notes
                 if excel_field == "Notes" and field_type == "text":
                     if excel_val != db_val and excel_val and str(excel_val).strip():
-                        logger.info(
-                            f"{job}-{release} Notes field updated, will append to Trello: {db_val!r} -> {excel_val!r}"
-                        )
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Notes field updated, will append to Trello",
-                            id=rec.id,
-                            job=rec.job,
-                            release=rec.release,
-                            excel_identifier=identifier,
-                            field=db_field,
-                            old_value=str(db_val),
-                            new_value=str(excel_val),
-                        )
-                        # Update DB with new note value
                         setattr(rec, db_field, excel_val)
+                        rec._pending_note = excel_val
                         record_updated = True
-                        
-                        # Store the note for Trello update later
-                        if not hasattr(rec, '_pending_note'):
-                            rec._pending_note = excel_val
-                        else:
-                            rec._pending_note = excel_val
-                    continue  # skip generic update for this field
+                    continue
 
-                # Generic update for non-special fields
+                # Generic field update
                 if excel_val != db_val:
-                    logger.info(
-                        f"{job}-{release} Updating DB {db_field}: {db_val!r} -> {excel_val!r}"
-                    )
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "DB field update",
-                        id=rec.id,
-                        job=rec.job,
-                        release=rec.release,
-                        excel_identifier=identifier,
-                        field=db_field,
-                        old_value=str(db_val),
-                        new_value=str(excel_val),
-                    )
                     setattr(rec, db_field, excel_val)
                     record_updated = True
 
@@ -603,355 +457,132 @@ def sync_from_onedrive(data):
                 rec.source_of_update = "Excel"
                 updated_records.append((rec, formula_status_for_trello))
 
-        # Commit all DB updates at once
+        # Commit all DB updates
         if updated_records:
-            logger.info(f"Committing {len(updated_records)} updated records to DB.")
-            try:
-                for rec, _ in updated_records:
-                    db.session.add(rec)
-                db.session.commit()
-                logger.info(f"Committed {len(updated_records)} updated records to DB.")
-                
-                # Log formula updates summary if any occurred
-                if formula_updates_count > 0:
-                    logger.info(f"Updated {formula_updates_count} formula-driven start_install dates")
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Formula-driven start_install updates summary",
-                        formula_updates_count=formula_updates_count,
-                    )
-                
+            for rec, _ in updated_records:
+                db.session.add(rec)
+            db.session.commit()
+            
+            safe_log_sync_event(
+                sync_op.operation_id,
+                "INFO",
+                "DB updated",
+                records_updated=len(updated_records),
+                formula_updates=formula_updates_count
+            )
+
+            # Update Trello cards
+            trello_updates_success = 0
+            trello_updates_failed = 0
+            
+            for rec, is_formula in updated_records:
+                if rec.source_of_update != "Trello" and hasattr(rec, "trello_card_id") and rec.trello_card_id:
+                    try:
+                        _update_trello_card_from_excel(rec, is_formula, sync_op)
+                        trello_updates_success += 1
+                    except Exception as e:
+                        trello_updates_failed += 1
+                        logger.error(
+                            f"Trello update failed for card {rec.trello_card_id}",
+                            error=str(e),
+                            operation_id=sync_op.operation_id
+                        )
+            
+            if trello_updates_success > 0 or trello_updates_failed > 0:
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "INFO",
-                    "DB commit completed",
-                    updated_records=len(updated_records),
+                    "Trello updates completed",
+                    success=trello_updates_success,
+                    failed=trello_updates_failed
                 )
-            except Exception as commit_error:
-                logger.error("Failed to commit database changes", 
-                           error=str(commit_error),
-                           updated_records=len(updated_records))
-                safe_log_sync_event(sync_op.operation_id, "ERROR", 
-                                  "Failed to commit database changes",
-                                  error=str(commit_error),
-                                  updated_records=len(updated_records))
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                raise
-
-            # Trello update: due dates and list movement ONLY if the last update was NOT from Trello
-            for rec, is_formula in updated_records:
-                if rec.source_of_update != "Trello":
-                    if hasattr(rec, "trello_card_id") and rec.trello_card_id:
-                        try:
-                            # Determine new due date and list ID
-                            new_due_date = None
-                            if not is_formula and rec.start_install:
-                                # Set due date to 2 business days before the start_install date
-                                new_due_date = calculate_business_days_before(rec.start_install, 2)
-
-                            new_list_id = None
-                            new_list_name = TrelloListMapper.determine_trello_list_from_db(rec)
-                            
-                            # Special handling for shipping states
-                            # If the current Trello list is already one of these valid states, preserve it
-                            current_list_name = getattr(rec, "trello_list_name", None)
-                            
-                            if (new_list_name == "Paint complete" and 
-                                TrelloListMapper.is_valid_shipping_state(current_list_name)):
-                                # Keep the current list instead of forcing to "Paint complete"
-                                new_list_name = current_list_name
-                                new_list = get_list_by_name(current_list_name)
-                                if new_list:
-                                    new_list_id = new_list["id"]
-                            elif new_list_name and not TrelloListMapper.is_valid_shipping_state(new_list_name):
-                                # For non-shipping states, use the determined list
-                                new_list = get_list_by_name(new_list_name)
-                                if new_list:
-                                    new_list_id = new_list["id"]
-                            elif TrelloListMapper.is_valid_shipping_state(new_list_name):
-                                # For shipping states, use the determined list
-                                new_list = get_list_by_name(new_list_name)
-                                if new_list:
-                                    new_list_id = new_list["id"]
-
-                            # Only update Trello if there's a change in due date or list
-                            current_list_id = getattr(rec, "trello_list_id", None)
-                            if (
-                                new_due_date != rec.trello_card_date
-                                or new_list_id != current_list_id
-                            ):
-                                logger.info(
-                                    f"Updating Trello card {rec.trello_card_id}: Due Date={{new_due_date}} (was {rec.trello_card_date}), List={{new_list_name}} (was {rec.trello_list_name})"
-                                )
-                                safe_log_sync_event(
-                                    sync_op.operation_id,
-                                    "INFO",
-                                    "Updating Trello card",
-                                    id=rec.id,
-                                    job=rec.job,
-                                    release=rec.release,
-                                    trello_card_id=rec.trello_card_id,
-                                    current_list_name=rec.trello_list_name,
-                                    new_list_name=new_list_name,
-                                    new_due_date=str(new_due_date) if new_due_date else None,
-                                )
-                                # Determine if we need to clear the due date
-                                clear_due_date = (new_due_date is None and rec.trello_card_date is not None)
-                                if clear_due_date:
-                                    logger.info(
-                                        "Clearing due date for Trello card",
-                                        operation_id=sync_op.operation_id,
-                                        trello_card_id=rec.trello_card_id,
-                                        current_due_date=str(rec.trello_card_date)
-                                    )
-                                update_trello_card(
-                                    rec.trello_card_id, new_list_id, new_due_date, clear_due_date
-                                )
-
-                                # Update mirror card date range if we have a non-formula start date and install hours
-                                if not is_formula and rec.start_install and rec.install_hrs:
-                                    logger.info(
-                                        f"Updating mirror card date range for card {rec.trello_card_id}",
-                                        operation_id=sync_op.operation_id,
-                                        start_date=str(rec.start_install),
-                                        install_hrs=rec.install_hrs
-                                    )
-                                    mirror_result = update_mirror_card_date_range(
-                                        rec.trello_card_id, 
-                                        rec.start_install,  # Use exact date, no business day adjustment
-                                        rec.install_hrs
-                                    )
-                                    if mirror_result["success"]:
-                                        logger.info(
-                                            f"Successfully updated mirror card date range",
-                                            operation_id=sync_op.operation_id,
-                                            trello_card_id=rec.trello_card_id,
-                                            mirror_card_short_link=mirror_result.get("card_short_link"),
-                                            start_date=mirror_result.get("start_date"),
-                                            due_date=mirror_result.get("due_date")
-                                        )
-                                        safe_log_sync_event(
-                                            sync_op.operation_id,
-                                            "INFO",
-                                            "Mirror card date range updated",
-                                            id=rec.id,
-                                            job=rec.job,
-                                            release=rec.release,
-                                            trello_card_id=rec.trello_card_id,
-                                            mirror_card_short_link=mirror_result.get("card_short_link"),
-                                            start_date=mirror_result.get("start_date"),
-                                            due_date=mirror_result.get("due_date")
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"Failed to update mirror card date range: {mirror_result['error']}",
-                                            operation_id=sync_op.operation_id,
-                                            trello_card_id=rec.trello_card_id
-                                        )
-                                        safe_log_sync_event(
-                                            sync_op.operation_id,
-                                            "WARNING",
-                                            "Failed to update mirror card date range",
-                                            id=rec.id,
-                                            job=rec.job,
-                                            release=rec.release,
-                                            trello_card_id=rec.trello_card_id,
-                                            error=mirror_result.get("error")
-                                        )
-
-                                # Update DB record with new Trello info after successful API call
-                                rec.trello_card_date = new_due_date
-                                rec.trello_list_id = new_list_id
-                                rec.trello_list_name = new_list_name
-                                rec.last_updated_at = datetime.now(timezone.utc).replace(
-                                    tzinfo=None
-                                )
-                                rec.source_of_update = "Excel"
-                                db.session.add(rec)
-                                db.session.commit()
-                                safe_log_sync_event(
-                                    sync_op.operation_id,
-                                    "INFO",
-                                    "Trello card updated",
-                                    id=rec.id,
-                                    job=rec.job,
-                                    release=rec.release,
-                                    trello_card_id=rec.trello_card_id,
-                                    list_name=new_list_name,
-                                )
-                            
-                            # Handle notes update to Trello comments
-                            if hasattr(rec, '_pending_note') and rec._pending_note:
-                                logger.info(
-                                    f"Adding note as comment to Trello card {rec.trello_card_id}: {rec._pending_note}"
-                                )
-                                safe_log_sync_event(
-                                    sync_op.operation_id,
-                                    "INFO",
-                                    "Adding note as comment to Trello card",
-                                    id=rec.id,
-                                    job=rec.job,
-                                    release=rec.release,
-                                    trello_card_id=rec.trello_card_id,
-                                    note=rec._pending_note,
-                                )
-                                
-                                success = add_comment_to_trello_card(
-                                    rec.trello_card_id, 
-                                    rec._pending_note,
-                                    sync_op.operation_id
-                                )
-                                
-                                if success:
-                                    safe_log_sync_event(
-                                        sync_op.operation_id,
-                                        "INFO",
-                                        "Note successfully added as comment to Trello",
-                                        id=rec.id,
-                                        job=rec.job,
-                                        release=rec.release,
-                                        trello_card_id=rec.trello_card_id,
-                                    )
-                                else:
-                                    safe_log_sync_event(
-                                        sync_op.operation_id,
-                                        "ERROR",
-                                        "Failed to add note as comment to Trello",
-                                        id=rec.id,
-                                        job=rec.job,
-                                        release=rec.release,
-                                        trello_card_id=rec.trello_card_id,
-                                        note=rec._pending_note,
-                                    )
-                                
-                                # Clear the pending note after processing
-                                delattr(rec, '_pending_note')
-                            else:
-                                # Handle notes update even if no other Trello updates needed
-                                if hasattr(rec, '_pending_note') and rec._pending_note:
-                                    logger.info(
-                                        f"Adding note as comment to Trello card {rec.trello_card_id}: {rec._pending_note}"
-                                    )
-                                    safe_log_sync_event(
-                                        sync_op.operation_id,
-                                        "INFO",
-                                        "Adding note as comment to Trello card (no other updates)",
-                                        id=rec.id,
-                                        job=rec.job,
-                                        release=rec.release,
-                                        trello_card_id=rec.trello_card_id,
-                                        note=rec._pending_note,
-                                    )
-                                    
-                                    success = add_comment_to_trello_card(
-                                        rec.trello_card_id, 
-                                        rec._pending_note,
-                                        sync_op.operation_id
-                                    )
-                                    
-                                    if success:
-                                        safe_log_sync_event(
-                                            sync_op.operation_id,
-                                            "INFO",
-                                            "Note successfully added as comment to Trello",
-                                            id=rec.id,
-                                            job=rec.job,
-                                            release=rec.release,
-                                            trello_card_id=rec.trello_card_id,
-                                        )
-                                    else:
-                                        safe_log_sync_event(
-                                            sync_op.operation_id,
-                                            "ERROR",
-                                            "Failed to add note as comment to Trello",
-                                            id=rec.id,
-                                            job=rec.job,
-                                            release=rec.release,
-                                            trello_card_id=rec.trello_card_id,
-                                            note=rec._pending_note,
-                                        )
-                                    
-                                    # Clear the pending note after processing
-                                    delattr(rec, '_pending_note')
-                                
-                        except Exception as e:
-                            logger.error(
-                                f"Error updating Trello card {rec.trello_card_id}: {e}"
-                            )
-                            safe_log_sync_event(
-                                sync_op.operation_id,
-                                "ERROR",
-                                "Error updating Trello card",
-                                id=rec.id,
-                                job=rec.job,
-                                release=rec.release,
-                                trello_card_id=rec.trello_card_id,
-                                error=str(e),
-                            )
         else:
-            logger.info("[SYNC] No records needed updating.")
-            safe_log_sync_event(sync_op.operation_id, "INFO", "No records needed updating")        # Mark operation as completed
-        if sync_op:
-            try:
-                duration = (datetime.utcnow() - sync_op.started_at).total_seconds()
-                safe_sync_op_call(sync_op, update_sync_operation, 
-                    status=SyncStatus.COMPLETED,
-                    completed_at=datetime.utcnow(),
-                    duration_seconds=duration
-                )
-                safe_log_sync_event(sync_op.operation_id, "INFO", "SyncOperation completed")
-            except Exception as e:
-                logger.warning("Failed to mark sync operation as completed", error=str(e))
-        else:
-            logger.info("OneDrive sync completed successfully (no database logging available)")
+            safe_log_sync_event(sync_op.operation_id, "INFO", "No updates needed")
+        
+        # Context manager will automatically mark as COMPLETED
 
-    except Exception as e:
-        # Rollback any pending database changes
-        try:
-            db.session.rollback()
-        except Exception as rollback_error:
-            logger.warning("Failed to rollback database changes", 
-                         error=str(rollback_error),
-                         operation_id=sync_op.operation_id if sync_op else None)
+
+def _update_trello_card_from_excel(rec, is_formula, sync_op):
+    """Update Trello card from Excel changes."""
+    operation_id = sync_op.operation_id if sync_op else None
+    
+    # Calculate new due date
+    new_due_date = None
+    if not is_formula and rec.start_install:
+        new_due_date = calculate_business_days_before(rec.start_install, 2)
+
+    # Determine target list with shipping state preservation
+    new_list_name = TrelloListMapper.determine_trello_list_from_db(rec)
+    current_list_name = getattr(rec, "trello_list_name", None)
+    
+    if (new_list_name == "Paint complete" and 
+        TrelloListMapper.is_valid_shipping_state(current_list_name)):
+        new_list_name = current_list_name
+    
+    new_list_id = None
+    if new_list_name:
+        new_list = get_list_by_name(new_list_name)
+        if new_list:
+            new_list_id = new_list["id"]
+
+    # Update Trello if needed
+    current_list_id = getattr(rec, "trello_list_id", None)
+    if new_due_date != rec.trello_card_date or new_list_id != current_list_id:
+        safe_log_sync_event(
+            operation_id,
+            "INFO",
+            "Trello card update started",
+            card_id=rec.trello_card_id,
+            job=rec.job,
+            release=rec.release,
+            new_list=new_list_name,
+            new_due_date=str(new_due_date) if new_due_date else "No date change"
+        )
         
-        error_context = {
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "operation_id": sync_op.operation_id if sync_op else None,
-            "data_shape": data.get("data").shape if data and "data" in data else None
-        }
-        
-        logger.error("OneDrive sync failed", **error_context)
-        
-        # Try to log the error to database if possible
-        if sync_op:
-            try:
-                duration = (datetime.utcnow() - sync_op.started_at).total_seconds()
-                safe_sync_op_call(sync_op, update_sync_operation,
-                    status=SyncStatus.FAILED,
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    completed_at=datetime.utcnow(),
-                    duration_seconds=duration
+        clear_due_date = (new_due_date is None and rec.trello_card_date is not None)
+        update_trello_card(rec.trello_card_id, new_list_id, new_due_date, clear_due_date)
+
+        # Update mirror card if applicable
+        if not is_formula and rec.start_install and rec.install_hrs:
+            mirror_result = update_mirror_card_date_range(
+                rec.trello_card_id,
+                rec.start_install,
+                rec.install_hrs
+            )
+            if mirror_result["success"]:
+                safe_log_sync_event(
+                    operation_id,
+                    "INFO",
+                    "Mirror card date range updated",
+                    card_id=rec.trello_card_id,
+                    mirror_short_link=mirror_result.get("card_short_link"),
+                    update_type="date_range",
+                    start_date=mirror_result.get("start_date"),
+                    due_date=mirror_result.get("due_date"),
+                    install_hrs=rec.install_hrs
                 )
-                safe_log_sync_event(sync_op.operation_id,
-                    "ERROR",
-                    "OneDrive sync failed",
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    data_shape=data.get("data").shape if data and "data" in data else None
-                )
-            except Exception as db_error:
-                logger.warning("Failed to log sync error to database", 
-                             db_error=str(db_error),
-                             operation_id=sync_op.operation_id)
-        else:
-            logger.info("OneDrive sync failed (no database logging available)", 
-                       error=str(e), 
-                       error_type=type(e).__name__)
-        raise
+
+        # Update DB with new Trello info
+        rec.trello_card_date = new_due_date
+        rec.trello_list_id = new_list_id
+        rec.trello_list_name = new_list_name
+        rec.last_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        rec.source_of_update = "Excel"
+        db.session.add(rec)
+        db.session.commit()
+
+    # Handle notes as comments
+    if hasattr(rec, '_pending_note') and rec._pending_note:
+        success = add_comment_to_trello_card(rec.trello_card_id, rec._pending_note, operation_id)
+        
+        safe_log_sync_event(
+            operation_id,
+            "INFO",
+            "Note added to Trello" if success else "Note add failed",
+            card_id=rec.trello_card_id,
+            job=rec.job,
+            release=rec.release
+        )
+        
+        delattr(rec, '_pending_note')
 
