@@ -37,6 +37,7 @@ from app.sync.db_operations import create_sync_operation, update_sync_operation
 from app.sync.context import sync_operation_context
 from app.sync.logging import safe_log_sync_event, safe_sync_op_call
 from app.sync.services.trello_list_mapper import TrelloListMapper
+from app.sync.state_tracker import detect_and_track_state_changes
 
 logger = get_logger(__name__)
 
@@ -155,6 +156,13 @@ def sync_from_trello(event_info):
             # Just return - not an error, card isn't tracked
             return
 
+        # CAPTURE OLD VALUES before updating
+        old_values = {
+            'fitup_comp': rec.fitup_comp,
+            'paint_comp': rec.paint_comp,
+            'ship': rec.ship,
+        }
+
         # Check for duplicate updates
         if rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
             safe_log_sync_event(
@@ -239,6 +247,14 @@ def sync_from_trello(event_info):
         # Commit DB changes
         db.session.add(rec)
         db.session.commit()
+
+        # NEW: Track state changes after commit
+        detect_and_track_state_changes(
+            job_record=rec,
+            old_values=old_values,
+            operation_id=sync_op.operation_id,
+            source="Trello"
+        )
         
         safe_log_sync_event(
             sync_op.operation_id,
@@ -403,6 +419,13 @@ def sync_from_onedrive(data):
             if excel_last_updated <= rec.last_updated_at:
                 continue
 
+            # NEW: CAPTURE OLD VALUES before any updates
+            old_values = {
+                'fitup_comp': rec.fitup_comp,
+                'paint_comp': rec.paint_comp,
+                'ship': rec.ship,
+            }
+
             record_updated = False
             formula_status_for_trello = None
 
@@ -455,13 +478,22 @@ def sync_from_onedrive(data):
             if record_updated:
                 rec.last_updated_at = excel_last_updated
                 rec.source_of_update = "Excel"
-                updated_records.append((rec, formula_status_for_trello))
+                updated_records.append((rec, formula_status_for_trello, old_values))
 
         # Commit all DB updates
         if updated_records:
-            for rec, _ in updated_records:
+            for rec, _, _ in updated_records:
                 db.session.add(rec)
             db.session.commit()
+
+            # NEW: Track state changes for all updated records
+            for rec, _, old_vals in updated_records:
+                detect_and_track_state_changes(
+                    job_record=rec,
+                    old_values=old_vals,
+                    operation_id=sync_op.operation_id,
+                    source="Excel"
+                )
             
             safe_log_sync_event(
                 sync_op.operation_id,
@@ -475,7 +507,7 @@ def sync_from_onedrive(data):
             trello_updates_success = 0
             trello_updates_failed = 0
             
-            for rec, is_formula in updated_records:
+            for rec, is_formula, _ in updated_records:
                 if rec.source_of_update != "Trello" and hasattr(rec, "trello_card_id") and rec.trello_card_id:
                     try:
                         _update_trello_card_from_excel(rec, is_formula, sync_op)
@@ -521,6 +553,7 @@ def _update_trello_card_from_excel(rec, is_formula, sync_op):
     
     new_list_id = None
     if new_list_name:
+        print('We have a list name')
         new_list = get_list_by_name(new_list_name)
         if new_list:
             new_list_id = new_list["id"]

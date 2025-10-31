@@ -171,3 +171,40 @@ def query_job_releases():
             for r in results
         ]
     )
+
+class JobChangeLog(db.Model):
+    """Tracks state changes and field updates for jobs over time."""
+    __tablename__ = 'job_change_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    job = db.Column(db.Integer, nullable=False)
+    release = db.Column(db.String(50))
+    
+    # Change information
+    change_type = db.Column(db.String(50), nullable=False)  # "state_change", "field_change" (future)
+    from_value = db.Column(db.String(200))  # Previous state/value (None for initial)
+    to_value = db.Column(db.String(200), nullable=False)  # New state/value
+    
+    # Context
+    field_name = db.Column(db.String(100))  # e.g., "fitup_comp", "state" for state changes
+    
+    # Timing
+    changed_at = db.Column(db.DateTime, nullable=False)
+    
+    # Traceability
+    operation_id = db.Column(db.String(36), nullable=True)  # Links to SyncOperation
+    source = db.Column(db.String(50), nullable=False)  # "Excel", "Trello", "Manual"
+    
+    # Optional metadata
+    triggered_by = db.Column(db.String(100))  # What caused this change
+    
+    # Indexes for efficient queries
+    __table_args__ = (
+        db.Index('idx_job_release', 'job', 'release'),
+        db.Index('idx_changed_at', 'changed_at'),
+        db.Index('idx_operation_id', 'operation_id'),
+        db.Index('idx_change_type', 'change_type'),
+    )
+    
+    def __repr__(self):
+        return f"<JobChangeLog {self.job}-{self.release}: {self.from_value}→{self.to_value}>"
