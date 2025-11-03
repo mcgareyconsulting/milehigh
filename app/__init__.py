@@ -133,11 +133,20 @@ def init_scheduler(app):
 def create_app():
     app = Flask(__name__)
 
+   # Get allowed origins from environment variable
+    allowed_origins = os.environ.get("CORS_ORIGINS", "*")
+    if allowed_origins != "*":
+        # Parse comma-separated list if provided
+        allowed_origins = [origin.strip() for origin in allowed_origins.split(",")]
+    
     # Enable CORS for React frontend
     CORS(app, resources={
-        r"/api/*": {"origins": "*"},
-        r"/sync/*": {"origins": "*"},
-        r"/jobs/*": {"origins": "*"}
+        r"/api/*": {"origins": allowed_origins},
+        r"/sync/*": {"origins": allowed_origins},
+        r"/jobs/*": {"origins": allowed_origins},
+        r"/jobs/history": {"origins": allowed_origins},
+        r"/snapshot/*": {"origins": allowed_origins},
+        r"/snapshots/*": {"origins": allowed_origins},
     })
     
     # Database configuration - use environment variable for production
