@@ -1,5 +1,6 @@
 import os
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.trello.api import create_trello_card_from_excel_data
@@ -106,7 +107,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="0",
+        minute="7",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
@@ -131,6 +132,13 @@ def init_scheduler(app):
 
 def create_app():
     app = Flask(__name__)
+
+    # Enable CORS for React frontend
+    CORS(app, resources={
+        r"/api/*": {"origins": "*"},
+        r"/sync/*": {"origins": "*"},
+        r"/jobs/*": {"origins": "*"}
+    })
     
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
@@ -211,6 +219,78 @@ def create_app():
             }), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+    # Job change history route
+    # COMMENTED OUT: JobChangeLog table not yet migrated in production DB
+    # @app.route("/jobs/<int:job>/<release>/history")
+    # def job_change_history_path(job, release):
+    #     """Get change history for a specific job-release combination via URL path."""
+    #     return _get_job_change_history(job, release)
+    
+    # @app.route("/jobs/history")
+    # def job_change_history_query():
+    #     """Get change history for a specific job-release combination via query parameters.
+    #     
+    #     Query parameters:
+    #         job (int): Job number (required)
+    #         release (str): Release number (required)
+    #     
+    #     Returns:
+    #         JSON array of change log entries ordered by most recent first
+    #     """
+    #     job = request.args.get('job', type=int)
+    #     release = request.args.get('release', type=str)
+    #     return _get_job_change_history(job, release)
+    
+    # def _get_job_change_history(job, release):
+    #     """Internal function to retrieve job change history."""
+    #     from app.models import JobChangeLog
+    #     
+    #     if job is None or release is None:
+    #         return jsonify({
+    #             'error': 'Missing required parameters',
+    #             'message': 'Both job (int) and release (str) are required',
+    #             'usage': {
+    #                 'path': '/jobs/<job>/<release>/history',
+    #                 'query': '/jobs/history?job=<int>&release=<str>'
+    #             }
+    #         }), 400
+    #     
+    #     try:
+    #         # Query change logs for this job-release
+    #         change_logs = JobChangeLog.query.filter_by(
+    #             job=job,
+    #             release=str(release)
+    #         ).order_by(JobChangeLog.changed_at.desc()).all()
+    #         
+    #         # Format the response
+    #         history = []
+    #         for log in change_logs:
+    #             history.append({
+    #                 'id': log.id,
+    #                 'change_type': log.change_type,
+    #                 'field_name': log.field_name,
+    #                 'from_value': log.from_value,
+    #                 'to_value': log.to_value,
+    #                 'changed_at': format_datetime_mountain(log.changed_at),
+    #                 'source': log.source,
+    #                 'operation_id': log.operation_id,
+    #                 'triggered_by': log.triggered_by
+    #             })
+    #         
+    #         return jsonify({
+    #             'job': job,
+    #             'release': release,
+    #             'total_changes': len(history),
+    #             'history': history
+    #         }), 200
+    #         
+    #     except Exception as e:
+    #         logger.error("Error getting job change history", error=str(e), job=job, release=release)
+    #         return jsonify({
+    #             'error': 'Failed to retrieve change history',
+    #             'message': str(e)
+    #         }), 500
 
     # Sync status route
     @app.route("/sync/status")

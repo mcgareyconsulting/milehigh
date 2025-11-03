@@ -14,7 +14,7 @@ def run_onedrive_poll():
     Used by both the manual route and the scheduler.
     Now with automatic locking protection.
     """
-    from app.sync import sync_from_onedrive
+    from app.sync.sync import sync_from_onedrive
     from app.onedrive.api import capture_excel_snapshot_with_data
 
     logger.info("OneDrive poll starting with sync lock acquired")

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, current_app, jsonify
-from app.sync import sync_from_trello
 from app.trello.utils import parse_webhook_data
 from app.sync_lock import sync_lock_manager  # Add this import
+from app.sync.sync import sync_from_trello
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
@@ -73,7 +73,8 @@ def trello_webhook():
 
         # Skip unhandled webhooks
         if not event_info.get("handled"):
-            app.logger.info(f"Skipping unhandled webhook: {event_info}")
+            action_type = event_info.get("action_type", "unknown")
+            app.logger.info(f"Skipping unhandled webhook: {action_type}")
             return "", 200
 
         # If locked, enqueue the event for later processing and return 202
