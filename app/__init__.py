@@ -131,6 +131,13 @@ def init_scheduler(app):
 
 def create_app():
     app = Flask(__name__)
+
+    # Enable CORS for React frontend
+    CORS(app, resources={
+        r"/api/*": {"origins": "*"},
+        r"/sync/*": {"origins": "*"},
+        r"/jobs/*": {"origins": "*"}
+    })
     
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
