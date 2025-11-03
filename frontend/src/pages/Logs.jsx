@@ -115,14 +115,9 @@ function Logs() {
                                             {log.message}
                                         </div>
                                         {log.data && (
-                                            <details className="mt-2">
-                                                <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-800 mb-2">
-                                                    Show data
-                                                </summary>
-                                                <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto mt-2 font-mono">
-                                                    {formatJsonData(log.data)}
-                                                </pre>
-                                            </details>
+                                            <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto mt-2 font-mono">
+                                                {formatJsonData(log.data)}
+                                            </pre>
                                         )}
                                     </div>
                                 ))}
