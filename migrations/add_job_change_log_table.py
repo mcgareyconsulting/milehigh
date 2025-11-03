@@ -30,20 +30,30 @@ def table_exists(table_name):
 
 
 def migrate():
-    """Create the job_change_logs table if it doesn't exist."""
+    """Create the job_change_logs table if it doesn't exist.
+    
+    Returns:
+        bool: True if migration was successful or already completed, False on error.
+    """
     app = create_app()
     
     with app.app_context():
         # Check if table already exists
         if table_exists('job_change_logs'):
             print("✓ Table 'job_change_logs' already exists. Migration not needed.")
-            return
+            return True
         
         print("Creating 'job_change_logs' table...")
         
         try:
             # Create the table
+            # checkfirst=True makes this idempotent (safe to run multiple times)
             JobChangeLog.__table__.create(db.engine, checkfirst=True)
+            
+            # Explicit commit for production databases (PostgreSQL, etc.)
+            # Note: DDL operations auto-commit on most databases, but being explicit is safer
+            db.session.commit()
+            
             print("✓ Successfully created 'job_change_logs' table")
             
             # Verify the table was created
@@ -55,7 +65,8 @@ def migrate():
                 columns = inspector.get_columns('job_change_logs')
                 print("\nTable structure:")
                 for col in columns:
-                    print(f"  - {col['name']}: {col['type']}")
+                    nullable = "NULL" if col.get('nullable', True) else "NOT NULL"
+                    print(f"  - {col['name']}: {col['type']} {nullable}")
                 
                 # Show indexes
                 indexes = inspector.get_indexes('job_change_logs')
@@ -64,19 +75,23 @@ def migrate():
                     for idx in indexes:
                         print(f"  - {idx['name']}: {idx['column_names']}")
                 
+                return True
             else:
                 print("✗ ERROR: Table creation verification failed")
                 return False
                 
         except Exception as e:
             print(f"✗ ERROR: Failed to create table: {e}")
-            db.session.rollback()
+            print(f"   Error type: {type(e).__name__}")
+            # DDL operations don't use db.session, so rollback is unnecessary
+            # However, if there's an active transaction, we should rollback
+            try:
+                db.session.rollback()
+            except Exception:
+                pass  # Ignore rollback errors
             return False
-        
-        return True
 
 
 if __name__ == "__main__":
     success = migrate()
     sys.exit(0 if success else 1)
-

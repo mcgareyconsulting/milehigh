@@ -1,4 +1,6 @@
-from app.models import db, Job, JobChangeLog
+from app.models import db, Job
+# COMMENTED OUT: JobChangeLog table not yet migrated in production DB
+# from app.models import JobChangeLog
 from datetime import datetime, timezone
 from app.logging_config import get_logger
 
@@ -56,44 +58,46 @@ def track_job_state_change(
     """
     current_state = JobStateConfig.get_current_state(job_record)
     
-    # Get previous state if not provided
-    if previous_state is None:
-        last_change = JobChangeLog.query.filter_by(
-            job=job_record.job,
-            release=job_record.release,
-            change_type='state_change'
-        ).order_by(JobChangeLog.changed_at.desc()).first()
-        
-        previous_state = last_change.to_value if last_change else None
+    # COMMENTED OUT: JobChangeLog table not yet migrated in production DB
+    # # Get previous state if not provided
+    # if previous_state is None:
+    #     last_change = JobChangeLog.query.filter_by(
+    #         job=job_record.job,
+    #         release=job_record.release,
+    #         change_type='state_change'
+    #     ).order_by(JobChangeLog.changed_at.desc()).first()
+    #     
+    #     previous_state = last_change.to_value if last_change else None
     
-    # Only log if state actually changed
-    if previous_state != current_state:
-        change_log = JobChangeLog(
-            job=job_record.job,
-            release=job_record.release,
-            change_type='state_change',
-            from_value=previous_state,
-            to_value=current_state,
-            field_name='state',
-            changed_at=datetime.now(timezone.utc).replace(tzinfo=None),
-            operation_id=operation_id,
-            source=source,
-            triggered_by=triggered_by
-        )
-        
-        db.session.add(change_log)
-        db.session.commit()
-        
-        logger.info(
-            f"State change tracked: {job_record.job}-{job_record.release}",
-            from_state=previous_state or "None",
-            to_state=current_state,
-            operation_id=operation_id,
-            source=source
-        )
-        
-        return change_log
+    # # Only log if state actually changed
+    # if previous_state != current_state:
+    #     change_log = JobChangeLog(
+    #         job=job_record.job,
+    #         release=job_record.release,
+    #         change_type='state_change',
+    #         from_value=previous_state,
+    #         to_value=current_state,
+    #         field_name='state',
+    #         changed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    #         operation_id=operation_id,
+    #         source=source,
+    #         triggered_by=triggered_by
+    #     )
+    #     
+    #     db.session.add(change_log)
+    #     db.session.commit()
+    #     
+    #     logger.info(
+    #         f"State change tracked: {job_record.job}-{job_record.release}",
+    #         from_state=previous_state or "None",
+    #         to_state=current_state,
+    #         operation_id=operation_id,
+    #         source=source
+    #     )
+    #     
+    #     return change_log
     
+    # COMMENTED OUT: Return None to prevent errors
     return None
 
 
