@@ -1,5 +1,6 @@
 import os
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.trello.api import create_trello_card_from_excel_data
