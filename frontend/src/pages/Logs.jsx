@@ -45,8 +45,13 @@ function Logs() {
     };
 
     const formatJsonData = (data) => {
-        if (!data) return null;
+        if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+            return null;
+        }
         try {
+            if (typeof data === 'string') {
+                return data;
+            }
             return JSON.stringify(data, null, 2);
         } catch {
             return String(data);
@@ -114,11 +119,16 @@ function Logs() {
                                         <div className="text-sm font-medium text-gray-800 mb-2">
                                             {log.message}
                                         </div>
-                                        {log.data && (
-                                            <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto mt-2 font-mono">
-                                                {formatJsonData(log.data)}
-                                            </pre>
-                                        )}
+                                        {(() => {
+                                            if (!log.data) return null;
+                                            const formattedData = formatJsonData(log.data);
+                                            if (!formattedData) return null;
+                                            return (
+                                                <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto mt-2 font-mono whitespace-pre-wrap">
+                                                    {formattedData}
+                                                </pre>
+                                            );
+                                        })()}
                                     </div>
                                 ))}
                             </div>
