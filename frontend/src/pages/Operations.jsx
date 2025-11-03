@@ -145,12 +145,13 @@ function Operations() {
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Status</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Duration (s)</th>
+                                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="bg-white divide-y divide-gray-200">
                                                 {operations.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan="6" className="px-6 py-12 text-center">
+                                                        <td colSpan="7" className="px-6 py-12 text-center">
                                                             <div className="text-gray-400 text-4xl mb-3">📭</div>
                                                             <p className="text-gray-500 font-medium">No operations found</p>
                                                         </td>
@@ -183,6 +184,14 @@ function Operations() {
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
                                                                 {(op.duration_seconds || 0).toFixed(2)}s
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                                <button
+                                                                    onClick={() => navigate(`/operations/${op.operation_id}/logs`)}
+                                                                    className="inline-flex items-center px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium rounded-md transition-colors duration-150 shadow-sm hover:shadow"
+                                                                >
+                                                                    📋 Logs
+                                                                </button>
                                                             </td>
                                                         </tr>
                                                     ))
