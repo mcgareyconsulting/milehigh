@@ -27,11 +27,12 @@ class JobStateConfig:
     def get_current_state(cls, job_record):
         """Determine current state based on DB field values."""
         # Check fields in reverse order (highest state wins)
-        if job_record.ship:
+        # Only "X" means the milestone is complete, not just any truthy value
+        if job_record.ship == "X":
             return 'Shipped'
-        if job_record.paint_comp:
+        if job_record.paint_comp == "X":
             return 'Paint Complete'
-        if job_record.fitup_comp:
+        if job_record.fitup_comp == "X":
             return 'Fitup Complete'
         return 'Created'
 

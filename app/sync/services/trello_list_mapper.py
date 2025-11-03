@@ -58,8 +58,8 @@ class TrelloListMapper:
         elif (
             rec.fitup_comp == "X"
             and rec.welded == "O"
-            and rec.paint_comp == ""
-            and (rec.ship == "T" or rec.ship == "O" or rec.ship == "")
+            and (rec.paint_comp == "" or rec.paint_comp == None)
+            and (rec.ship == "T" or rec.ship == "O" or rec.ship == "" or rec.ship == None)
         ):
             return "Fit Up Complete."
         elif (
