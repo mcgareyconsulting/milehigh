@@ -883,8 +883,9 @@ def calculate_installation_duration(install_hrs, num_guys=2.5):
         
         install_hrs_float = float(install_hrs)
         if install_hrs_float > 0 and num_guys > 0:
-            installation_duration = math.ceil(install_hrs_float / float(num_guys))
-            print(f"[DEBUG] Install HRS: {install_hrs} / Num Guys: {num_guys} -> Duration: {installation_duration} days")
+            # Calculate: (install hrs / num guys) / 8hrs/day
+            installation_duration = math.ceil((install_hrs_float / float(num_guys)) / 8.0)
+            print(f"[DEBUG] Install HRS: {install_hrs} / Num Guys: {num_guys} / 8hrs/day -> Duration: {installation_duration} days")
             return installation_duration
         else:
             print(f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}, or num_guys is zero: {num_guys}")
