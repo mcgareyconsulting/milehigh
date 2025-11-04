@@ -48,11 +48,8 @@ def migrate():
         try:
             # Create the table
             # checkfirst=True makes this idempotent (safe to run multiple times)
+            # Note: DDL operations (CREATE TABLE) auto-commit on PostgreSQL
             JobChangeLog.__table__.create(db.engine, checkfirst=True)
-            
-            # Explicit commit for production databases (PostgreSQL, etc.)
-            # Note: DDL operations auto-commit on most databases, but being explicit is safer
-            db.session.commit()
             
             print("✓ Successfully created 'job_change_logs' table")
             
@@ -83,8 +80,7 @@ def migrate():
         except Exception as e:
             print(f"✗ ERROR: Failed to create table: {e}")
             print(f"   Error type: {type(e).__name__}")
-            # DDL operations don't use db.session, so rollback is unnecessary
-            # However, if there's an active transaction, we should rollback
+            # DDL operations auto-commit on PostgreSQL, but rollback any active session transaction
             try:
                 db.session.rollback()
             except Exception:
