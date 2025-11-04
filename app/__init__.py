@@ -107,7 +107,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="0",
+        minute="5",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
@@ -758,6 +758,38 @@ def create_app():
             logger.error("Error getting cross-check summary", error=str(e))
             return jsonify({
                 "message": "Cross-check analysis failed", 
+                "error": str(e)
+            }), 500
+
+    @app.route("/fab-order/scan", methods=["GET"])
+    def scan_fab_order():
+        """
+        Scan and preview how many Trello cards would be updated with Fab Order custom field.
+        Only scans cards in "Released" or "Fit Up Complete" lists.
+        Does not perform any updates.
+        """
+        try:
+            from app.scripts.update_fab_order_custom_field import scan_fab_order_updates
+            
+            logger.info("Scanning Fab Order updates")
+            result = scan_fab_order_updates(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Fab Order scan failed",
+                    "error": result["error"],
+                    "available_fields": result.get("available_fields")
+                }), 500
+            
+            return jsonify({
+                "message": "Fab Order scan completed",
+                "scan": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error scanning Fab Order updates", error=str(e))
+            return jsonify({
+                "message": "Fab Order scan failed",
                 "error": str(e)
             }), 500
 
