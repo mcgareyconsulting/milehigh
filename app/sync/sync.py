@@ -37,8 +37,7 @@ from app.sync.db_operations import create_sync_operation, update_sync_operation
 from app.sync.context import sync_operation_context
 from app.sync.logging import safe_log_sync_event, safe_sync_op_call
 from app.sync.services.trello_list_mapper import TrelloListMapper
-# COMMENTED OUT: JobChangeLog table not yet migrated in production DB
-# from app.sync.state_tracker import detect_and_track_state_changes
+from app.sync.state_tracker import detect_and_track_state_changes
 
 logger = get_logger(__name__)
 
@@ -249,14 +248,13 @@ def sync_from_trello(event_info):
         db.session.add(rec)
         db.session.commit()
 
-        # COMMENTED OUT: JobChangeLog table not yet migrated in production DB
-        # # NEW: Track state changes after commit
-        # detect_and_track_state_changes(
-        #     job_record=rec,
-        #     old_values=old_values,
-        #     operation_id=sync_op.operation_id,
-        #     source="Trello"
-        # )
+        # NEW: Track state changes after commit
+        detect_and_track_state_changes(
+            job_record=rec,
+            old_values=old_values,
+            operation_id=sync_op.operation_id,
+            source="Trello"
+        )
         
         safe_log_sync_event(
             sync_op.operation_id,
@@ -488,15 +486,14 @@ def sync_from_onedrive(data):
                 db.session.add(rec)
             db.session.commit()
 
-            # COMMENTED OUT: JobChangeLog table not yet migrated in production DB
-            # # NEW: Track state changes for all updated records
-            # for rec, _, old_vals in updated_records:
-            #     detect_and_track_state_changes(
-            #         job_record=rec,
-            #         old_values=old_vals,
-            #         operation_id=sync_op.operation_id,
-            #         source="Excel"
-            #     )
+            # NEW: Track state changes for all updated records
+            for rec, _, old_vals in updated_records:
+                detect_and_track_state_changes(
+                    job_record=rec,
+                    old_values=old_vals,
+                    operation_id=sync_op.operation_id,
+                    source="Excel"
+                )
             
             safe_log_sync_event(
                 sync_op.operation_id,
