@@ -237,14 +237,20 @@ def create_app():
     
     @app.route("/jobs/history")
     def job_change_history_query():
-        """Get change history for a specific job-release combination via query parameters.
+        """Get change history via query parameters.
         
         Query parameters:
-            job (int): Job number (required)
-            release (str): Release number (required)
+            job (int): Job number (optional) - if provided, filters by job number
+            release (str): Release number (optional) - if provided, filters by release
+        
+        Search scenarios:
+            - Both provided: Returns history for specific job-release combination
+            - Job only: Returns history for all releases of that job number
+            - Release only: Returns history for all jobs with that release
+            - Neither: Returns error (at least one required)
         
         Returns:
-            JSON array of change log entries ordered by most recent first
+            JSON object with history array and search metadata
         """
         job = request.args.get('job', type=int)
         release = request.args.get('release', type=str)
@@ -254,28 +260,40 @@ def create_app():
         """Internal function to retrieve job change history."""
         from app.models import JobChangeLog
         
-        if job is None or release is None:
+        # At least one parameter must be provided
+        if job is None and release is None:
             return jsonify({
                 'error': 'Missing required parameters',
-                'message': 'Both job (int) and release (str) are required',
+                'message': 'At least one of job (int) or release (str) is required',
                 'usage': {
-                    'path': '/jobs/<job>/<release>/history',
-                    'query': '/jobs/history?job=<int>&release=<str>'
+                    'job_only': '/jobs/history?job=<int>',
+                    'release_only': '/jobs/history?release=<str>',
+                    'both': '/jobs/history?job=<int>&release=<str>',
+                    'path': '/jobs/<job>/<release>/history'
                 }
             }), 400
         
         try:
-            # Query change logs for this job-release
-            change_logs = JobChangeLog.query.filter_by(
-                job=job,
-                release=str(release)
-            ).order_by(JobChangeLog.changed_at.desc()).all()
+            # Build query based on provided parameters
+            query = JobChangeLog.query
+            
+            if job is not None:
+                query = query.filter_by(job=job)
+            if release is not None:
+                query = query.filter_by(release=str(release))
+            
+            # Order by most recent first
+            change_logs = query.order_by(JobChangeLog.changed_at.desc()).all()
             
             # Format the response
             history = []
+            job_releases = set()  # Track unique job-release combinations
+            
             for log in change_logs:
                 history.append({
                     'id': log.id,
+                    'job': log.job,
+                    'release': log.release,
                     'change_type': log.change_type,
                     'field_name': log.field_name,
                     'from_value': log.from_value,
@@ -285,10 +303,16 @@ def create_app():
                     'operation_id': log.operation_id,
                     'triggered_by': log.triggered_by
                 })
+                job_releases.add((log.job, log.release))
+            
+            # Determine search type for frontend
+            search_type = 'both' if job is not None and release is not None else ('job' if job is not None else 'release')
             
             return jsonify({
-                'job': job,
-                'release': release,
+                'search_type': search_type,
+                'search_job': job,
+                'search_release': release,
+                'job_releases': [{'job': jr[0], 'release': jr[1]} for jr in sorted(job_releases)],
                 'total_changes': len(history),
                 'history': history
             }), 200
