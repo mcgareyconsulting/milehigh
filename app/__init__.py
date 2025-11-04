@@ -793,6 +793,82 @@ def create_app():
                 "error": str(e)
             }), 500
 
+    @app.route("/fix-trello-list/scan", methods=["GET"])
+    def scan_missing_trello_list_info():
+        """
+        Scan and preview which cards have missing Trello list information.
+        Does not perform any updates.
+        """
+        try:
+            from app.scripts.fix_missing_trello_list_info import scan_missing_list_info
+            
+            logger.info("Scanning for missing Trello list information")
+            result = scan_missing_list_info(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Trello list info scan failed",
+                    "error": result["error"]
+                }), 500
+            
+            return jsonify({
+                "message": "Trello list info scan completed",
+                "scan": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error scanning Trello list info", error=str(e))
+            return jsonify({
+                "message": "Trello list info scan failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/fix-trello-list/run", methods=["POST"])
+    def fix_missing_trello_list_info():
+        """
+        Fix cards with missing Trello list information by fetching from Trello API.
+        Actually updates the database.
+        """
+        try:
+            from app.scripts.fix_missing_trello_list_info import fix_missing_list_info, scan_missing_list_info
+            
+            logger.info("Starting fix for missing Trello list information")
+            
+            # Run the scan first to get initial state
+            scan_result = scan_missing_list_info(return_json=True)
+            
+            if "error" in scan_result:
+                return jsonify({
+                    "message": "Trello list info fix failed",
+                    "error": scan_result["error"]
+                }), 500
+            
+            # Run the actual fix
+            fix_result = fix_missing_list_info(return_json=True)
+            
+            if "error" in fix_result:
+                return jsonify({
+                    "message": "Trello list info fix failed",
+                    "error": fix_result["error"]
+                }), 500
+            
+            # Scan again to get final state
+            final_scan = scan_missing_list_info(return_json=True)
+            
+            return jsonify({
+                "message": "Trello list info fix completed",
+                "before": scan_result,
+                "fix_result": fix_result,
+                "after": final_scan
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error fixing Trello list info", error=str(e))
+            return jsonify({
+                "message": "Trello list info fix failed",
+                "error": str(e)
+            }), 500
+
     # @app.route("/seed/run-one", methods=["GET", "POST"])
     # def run_one_seed():
     #     """
