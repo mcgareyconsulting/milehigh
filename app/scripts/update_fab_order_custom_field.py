@@ -20,8 +20,6 @@ from app.config import Config as cfg
 from app.models import Job, db
 from app import create_app
 from app.trello.api import (
-    get_board_custom_fields,
-    find_fab_order_field_id,
     update_card_custom_field_number
 )
 
@@ -41,43 +39,28 @@ def scan_fab_order_updates(return_json=False):
         print("Scanning Fab Order custom field updates (PREVIEW MODE)")
         print("=" * 60)
     
-    # Get custom fields from board
-    if not return_json:
-        print("\n[STEP 1] Fetching custom fields from Trello board...")
-    custom_fields = get_board_custom_fields(cfg.TRELLO_BOARD_ID)
+    # Validate config values
+    if not cfg.FAB_ORDER_FIELD_ID:
+        error_msg = "FAB_ORDER_FIELD_ID not configured"
+        if return_json:
+            return {"error": error_msg}
+        print(f"[ERROR] {error_msg}")
+        return
     
-    if not custom_fields:
-        error_msg = "Failed to retrieve custom fields from Trello board"
+    if not cfg.NEW_TRELLO_CARD_LIST_ID or not cfg.FIT_UP_COMPLETE_LIST_ID:
+        error_msg = "List IDs not configured (NEW_TRELLO_CARD_LIST_ID or FIT_UP_COMPLETE_LIST_ID missing)"
         if return_json:
             return {"error": error_msg}
         print(f"[ERROR] {error_msg}")
         return
     
     if not return_json:
-        print(f"[INFO] Found {len(custom_fields)} custom field(s) on board")
-    
-    # Find Fab Order field ID
-    if not return_json:
-        print("\n[STEP 2] Finding 'Fab Order' custom field...")
-    fab_order_field_id = find_fab_order_field_id(custom_fields)
-    
-    if not fab_order_field_id:
-        error_msg = "'Fab Order' custom field not found on the board"
-        if return_json:
-            available_fields = [{"name": field.get('name'), "id": field.get('id')} for field in custom_fields]
-            return {"error": error_msg, "available_fields": available_fields}
-        print(f"[ERROR] {error_msg}")
-        print("[INFO] Available custom fields:")
-        for field in custom_fields:
-            print(f"  - {field.get('name')} (ID: {field.get('id')})")
-        return
-    
-    if not return_json:
-        print(f"[INFO] Found 'Fab Order' custom field (ID: {fab_order_field_id})")
+        print(f"[INFO] Using Fab Order field ID from config: {cfg.FAB_ORDER_FIELD_ID}")
+        print(f"[INFO] Target lists: Released ({cfg.NEW_TRELLO_CARD_LIST_ID}), Fit Up Complete ({cfg.FIT_UP_COMPLETE_LIST_ID})")
     
     # Get all jobs with trello_card_id
     if not return_json:
-        print("\n[STEP 3] Fetching jobs from database...")
+        print("\n[STEP 1] Fetching jobs from database...")
     jobs = Job.query.filter(Job.trello_card_id.isnot(None)).all()
     if not return_json:
         print(f"[INFO] Found {len(jobs)} job(s) with Trello cards")
@@ -106,7 +89,7 @@ def scan_fab_order_updates(return_json=False):
     
     # Scan each job
     if not return_json:
-        print("\n[STEP 4] Scanning jobs...")
+        print("\n[STEP 2] Scanning jobs...")
     would_update_count = 0
     skipped_null_count = 0
     error_count = 0
@@ -187,31 +170,22 @@ def process_fab_order_updates():
     print("Starting Fab Order custom field update process")
     print("=" * 60)
     
-    # Get custom fields from board
-    print("\n[STEP 1] Fetching custom fields from Trello board...")
-    custom_fields = get_board_custom_fields(cfg.TRELLO_BOARD_ID)
-    
-    if not custom_fields:
-        print("[ERROR] Failed to retrieve custom fields from Trello board")
+    # Validate config values
+    if not cfg.FAB_ORDER_FIELD_ID:
+        print("[ERROR] FAB_ORDER_FIELD_ID not configured")
         return
     
-    print(f"[INFO] Found {len(custom_fields)} custom field(s) on board")
-    
-    # Find Fab Order field ID
-    print("\n[STEP 2] Finding 'Fab Order' custom field...")
-    fab_order_field_id = find_fab_order_field_id(custom_fields)
-    
-    if not fab_order_field_id:
-        print("[ERROR] 'Fab Order' custom field not found on the board")
-        print("[INFO] Available custom fields:")
-        for field in custom_fields:
-            print(f"  - {field.get('name')} (ID: {field.get('id')})")
+    if not cfg.NEW_TRELLO_CARD_LIST_ID or not cfg.FIT_UP_COMPLETE_LIST_ID:
+        print("[ERROR] List IDs not configured (NEW_TRELLO_CARD_LIST_ID or FIT_UP_COMPLETE_LIST_ID missing)")
         return
     
-    print(f"[INFO] Found 'Fab Order' custom field (ID: {fab_order_field_id})")
+    print(f"[INFO] Using Fab Order field ID from config: {cfg.FAB_ORDER_FIELD_ID}")
+    print(f"[INFO] Target lists: Released ({cfg.NEW_TRELLO_CARD_LIST_ID}), Fit Up Complete ({cfg.FIT_UP_COMPLETE_LIST_ID})")
+    
+    fab_order_field_id = cfg.FAB_ORDER_FIELD_ID
     
     # Get all jobs with trello_card_id
-    print("\n[STEP 3] Fetching jobs from database...")
+    print("\n[STEP 1] Fetching jobs from database...")
     jobs = Job.query.filter(Job.trello_card_id.isnot(None)).all()
     print(f"[INFO] Found {len(jobs)} job(s) with Trello cards")
     
@@ -229,7 +203,7 @@ def process_fab_order_updates():
         return
     
     # Process each job
-    print("\n[STEP 4] Updating Trello cards...")
+    print("\n[STEP 2] Updating Trello cards...")
     updated_count = 0
     skipped_null_count = 0
     error_count = 0
