@@ -162,58 +162,86 @@ def scan_fab_order_updates(return_json=False):
     print("=" * 60)
 
 
-def process_fab_order_updates():
+def process_fab_order_updates(return_json=False):
     """
     Main function to update all Trello cards with Fab Order custom field.
+    
+    Args:
+        return_json: If True, returns a dictionary instead of printing
+    
+    Returns:
+        dict with update results if return_json=True, None otherwise
     """
-    print("=" * 60)
-    print("Starting Fab Order custom field update process")
-    print("=" * 60)
+    if not return_json:
+        print("=" * 60)
+        print("Starting Fab Order custom field update process")
+        print("=" * 60)
     
     # Validate config values
     if not cfg.FAB_ORDER_FIELD_ID:
-        print("[ERROR] FAB_ORDER_FIELD_ID not configured")
+        error_msg = "FAB_ORDER_FIELD_ID not configured"
+        if return_json:
+            return {"error": error_msg}
+        print(f"[ERROR] {error_msg}")
         return
     
     if not cfg.NEW_TRELLO_CARD_LIST_ID or not cfg.FIT_UP_COMPLETE_LIST_ID:
-        print("[ERROR] List IDs not configured (NEW_TRELLO_CARD_LIST_ID or FIT_UP_COMPLETE_LIST_ID missing)")
+        error_msg = "List IDs not configured (NEW_TRELLO_CARD_LIST_ID or FIT_UP_COMPLETE_LIST_ID missing)"
+        if return_json:
+            return {"error": error_msg}
+        print(f"[ERROR] {error_msg}")
         return
     
-    print(f"[INFO] Using Fab Order field ID from config: {cfg.FAB_ORDER_FIELD_ID}")
-    print(f"[INFO] Target lists: Released ({cfg.NEW_TRELLO_CARD_LIST_ID}), Fit Up Complete ({cfg.FIT_UP_COMPLETE_LIST_ID})")
+    if not return_json:
+        print(f"[INFO] Using Fab Order field ID from config: {cfg.FAB_ORDER_FIELD_ID}")
+        print(f"[INFO] Target lists: Released ({cfg.NEW_TRELLO_CARD_LIST_ID}), Fit Up Complete ({cfg.FIT_UP_COMPLETE_LIST_ID})")
     
     fab_order_field_id = cfg.FAB_ORDER_FIELD_ID
     
     # Get all jobs with trello_card_id
-    print("\n[STEP 1] Fetching jobs from database...")
+    if not return_json:
+        print("\n[STEP 1] Fetching jobs from database...")
     jobs = Job.query.filter(Job.trello_card_id.isnot(None)).all()
-    print(f"[INFO] Found {len(jobs)} job(s) with Trello cards")
+    if not return_json:
+        print(f"[INFO] Found {len(jobs)} job(s) with Trello cards")
     
     if len(jobs) == 0:
+        if return_json:
+            return {"message": "No jobs to process", "total_jobs": 0}
         print("[INFO] No jobs to process")
         return
     
     # Filter jobs to only those in "Released" or "Fit Up Complete" lists
     target_list_ids = [cfg.NEW_TRELLO_CARD_LIST_ID, cfg.FIT_UP_COMPLETE_LIST_ID]
     filtered_jobs = [job for job in jobs if job.trello_list_id in target_list_ids]
-    print(f"[INFO] Filtered to {len(filtered_jobs)} job(s) in target lists (Released or Fit Up Complete)")
+    if not return_json:
+        print(f"[INFO] Filtered to {len(filtered_jobs)} job(s) in target lists (Released or Fit Up Complete)")
     
     if len(filtered_jobs) == 0:
+        if return_json:
+            return {
+                "message": "No jobs in target lists to process",
+                "total_jobs": len(jobs),
+                "filtered_jobs": 0
+            }
         print("[INFO] No jobs in target lists to process")
         return
     
     # Process each job
-    print("\n[STEP 2] Updating Trello cards...")
+    if not return_json:
+        print("\n[STEP 2] Updating Trello cards...")
     updated_count = 0
     skipped_null_count = 0
     error_count = 0
+    update_details = []
     
     for job in filtered_jobs:
         job_id = f"{job.job}-{job.release}"
         
         # Skip if fab_order is None
         if job.fab_order is None:
-            print(f"[SKIP] Job {job_id}: fab_order is null, skipping")
+            if not return_json:
+                print(f"[SKIP] Job {job_id}: fab_order is null, skipping")
             skipped_null_count += 1
             continue
         
@@ -224,7 +252,8 @@ def process_fab_order_updates():
             else:
                 fab_order_int = int(job.fab_order)
         except (ValueError, TypeError) as e:
-            print(f"[ERROR] Job {job_id}: Could not convert fab_order '{job.fab_order}' to int: {e}")
+            if not return_json:
+                print(f"[ERROR] Job {job_id}: Could not convert fab_order '{job.fab_order}' to int: {e}")
             error_count += 1
             continue
         
@@ -236,11 +265,33 @@ def process_fab_order_updates():
         )
         
         if success:
-            print(f"[SUCCESS] Job {job_id}: Updated card {job.trello_card_id} with Fab Order = {fab_order_int}")
+            if not return_json:
+                print(f"[SUCCESS] Job {job_id}: Updated card {job.trello_card_id} with Fab Order = {fab_order_int}")
             updated_count += 1
+            if return_json and len(update_details) < 10:  # Include first 10 in JSON
+                update_details.append({
+                    "job_id": job_id,
+                    "card_id": job.trello_card_id[:8] + "...",
+                    "fab_order": fab_order_int
+                })
         else:
-            print(f"[ERROR] Job {job_id}: Failed to update card {job.trello_card_id}")
+            if not return_json:
+                print(f"[ERROR] Job {job_id}: Failed to update card {job.trello_card_id}")
             error_count += 1
+    
+    # Build result
+    result = {
+        "total_jobs": len(jobs),
+        "filtered_jobs": len(filtered_jobs),
+        "updated": updated_count,
+        "skipped_null_fab_order": skipped_null_count,
+        "skipped_not_in_target_lists": len(jobs) - len(filtered_jobs),
+        "errors": error_count,
+        "sample_updates": update_details
+    }
+    
+    if return_json:
+        return result
     
     # Summary
     print("\n" + "=" * 60)

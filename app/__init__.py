@@ -793,6 +793,36 @@ def create_app():
                 "error": str(e)
             }), 500
 
+    @app.route("/fab-order/update", methods=["POST"])
+    def update_fab_order():
+        """
+        Update Trello cards with Fab Order custom field values from the database.
+        Only updates cards in "Released" or "Fit Up Complete" lists.
+        """
+        try:
+            from app.scripts.update_fab_order_custom_field import process_fab_order_updates
+            
+            logger.info("Starting Fab Order updates")
+            result = process_fab_order_updates(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Fab Order update failed",
+                    "error": result["error"]
+                }), 500
+            
+            return jsonify({
+                "message": "Fab Order update completed",
+                "update": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error updating Fab Order", error=str(e))
+            return jsonify({
+                "message": "Fab Order update failed",
+                "error": str(e)
+            }), 500
+
     @app.route("/fix-trello-list/scan", methods=["GET"])
     def scan_missing_trello_list_info():
         """
