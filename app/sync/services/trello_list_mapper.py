@@ -94,6 +94,7 @@ class TrelloListMapper:
         - "Shipping planning" → fitup_comp=X, welded=X, paint_comp=X, ship=""
         - "Fit Up Complete." → fitup_comp=X, welded=O, paint_comp="", ship=""
         - "Shipping completed" → fitup_comp=X, welded=X, paint_comp=X, ship=X
+        - "Released" → fitup_comp="", welded="", paint_comp="", ship=""
         """
         # Log the current state before applying changes
         logger.info(
@@ -135,6 +136,11 @@ class TrelloListMapper:
             job.welded = "X"
             job.paint_comp = "X"
             job.ship = "X"
+        elif trello_list_name == "Released":
+            job.fitup_comp = ""
+            job.welded = ""
+            job.paint_comp = ""
+            job.ship = ""
         
         # Log the new state after applying changes
         logger.info(
