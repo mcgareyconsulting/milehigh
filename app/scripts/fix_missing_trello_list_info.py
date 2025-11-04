@@ -145,12 +145,14 @@ def scan_missing_list_info(return_json=False):
     print("=" * 60)
 
 
-def fix_missing_list_info(return_json=False):
+def fix_missing_list_info(return_json=False, limit=None, batch_size=50):
     """
     Main function to fix all cards with missing Trello list information.
     
     Args:
         return_json: If True, returns a dictionary instead of printing
+        limit: Maximum number of cards to process (None for all)
+        batch_size: Number of cards to process before committing to DB
     
     Returns:
         dict with fix results if return_json=True, None otherwise
@@ -163,15 +165,22 @@ def fix_missing_list_info(return_json=False):
     # Get all jobs with trello_card_id but missing list info
     if not return_json:
         print("\n[STEP 1] Fetching jobs from database...")
-    jobs = Job.query.filter(
+    query = Job.query.filter(
         Job.trello_card_id.isnot(None),
         or_(
             Job.trello_list_id.is_(None),
             Job.trello_list_name.is_(None)
         )
-    ).all()
+    )
+    
+    if limit:
+        query = query.limit(limit)
+    
+    jobs = query.all()
     if not return_json:
         print(f"[INFO] Found {len(jobs)} job(s) with Trello cards but missing list info")
+        if limit:
+            print(f"[INFO] Processing limit: {limit}")
     
     if len(jobs) == 0:
         if return_json:
@@ -182,13 +191,18 @@ def fix_missing_list_info(return_json=False):
     # Process each job
     if not return_json:
         print("\n[STEP 2] Fixing Trello list information...")
+        print(f"[INFO] Processing in batches of {batch_size}")
+    
     fixed_count = 0
     not_found_count = 0
     error_count = 0
     skipped_count = 0
     fixed_jobs = []
     
-    for job in jobs:
+    # Cache list names to avoid redundant API calls
+    list_name_cache = {}
+    
+    for idx, job in enumerate(jobs, 1):
         job_id = f"{job.job}-{job.release}"
         
         # Fetch card from Trello
@@ -209,13 +223,18 @@ def fix_missing_list_info(return_json=False):
                 error_count += 1
                 continue
             
-            # Get list name
-            list_name = get_list_name_by_id(list_id)
-            if not list_name:
-                if not return_json:
-                    print(f"[WARN] Job {job_id}: Could not get list name for list ID {list_id}")
-                error_count += 1
-                continue
+            # Get list name (use cache to avoid redundant API calls)
+            if list_id in list_name_cache:
+                list_name = list_name_cache[list_id]
+            else:
+                list_name = get_list_name_by_id(list_id)
+                if list_name:
+                    list_name_cache[list_id] = list_name
+                else:
+                    if not return_json:
+                        print(f"[WARN] Job {job_id}: Could not get list name for list ID {list_id}")
+                    error_count += 1
+                    continue
             
             # Check if update is needed
             needs_update = False
@@ -248,13 +267,28 @@ def fix_missing_list_info(return_json=False):
                 "list_name": list_name
             })
             
+            # Commit in batches to avoid long transactions and timeouts
+            if fixed_count % batch_size == 0:
+                try:
+                    db.session.commit()
+                    if not return_json:
+                        print(f"[INFO] Committed batch: {fixed_count} cards fixed so far (progress: {idx}/{len(jobs)})")
+                except Exception as e:
+                    if not return_json:
+                        print(f"[ERROR] Failed to commit batch: {e}")
+                    db.session.rollback()
+                    error_count += batch_size
+                    fixed_count -= batch_size
+                    # Remove the last batch_size items from fixed_jobs
+                    fixed_jobs = fixed_jobs[:-batch_size]
+            
         except Exception as e:
             if not return_json:
                 print(f"[ERROR] Job {job_id}: Error fixing card: {e}")
             error_count += 1
             continue
     
-    # Commit all changes
+    # Commit remaining changes
     if fixed_count > 0:
         try:
             db.session.commit()
@@ -274,7 +308,9 @@ def fix_missing_list_info(return_json=False):
         "skipped": skipped_count,
         "not_found_in_trello": not_found_count,
         "errors": error_count,
-        "fixed_jobs": fixed_jobs[:10]  # Limit to first 10 for response size
+        "fixed_jobs": fixed_jobs[:10],  # Limit to first 10 for response size
+        "processed": len(jobs),
+        "limit_applied": limit is not None
     }
     
     if return_json:

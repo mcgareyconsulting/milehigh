@@ -828,11 +828,24 @@ def create_app():
         """
         Fix cards with missing Trello list information by fetching from Trello API.
         Actually updates the database.
+        
+        Query params:
+            limit: Maximum number of cards to process in this request (default: 100)
+                  Use this to process in smaller batches to avoid timeouts
+            batch_size: Number of cards to commit at once (default: 50)
         """
         try:
             from app.scripts.fix_missing_trello_list_info import fix_missing_list_info, scan_missing_list_info
             
-            logger.info("Starting fix for missing Trello list information")
+            # Get optional parameters
+            limit = request.args.get("limit", type=int)
+            batch_size = request.args.get("batch_size", default=50, type=int)
+            
+            if limit is None:
+                # Default to 100 to avoid timeouts
+                limit = 100
+            
+            logger.info("Starting fix for missing Trello list information", limit=limit, batch_size=batch_size)
             
             # Run the scan first to get initial state
             scan_result = scan_missing_list_info(return_json=True)
@@ -843,8 +856,8 @@ def create_app():
                     "error": scan_result["error"]
                 }), 500
             
-            # Run the actual fix
-            fix_result = fix_missing_list_info(return_json=True)
+            # Run the actual fix with limit
+            fix_result = fix_missing_list_info(return_json=True, limit=limit, batch_size=batch_size)
             
             if "error" in fix_result:
                 return jsonify({
@@ -857,9 +870,12 @@ def create_app():
             
             return jsonify({
                 "message": "Trello list info fix completed",
+                "limit_used": limit,
+                "batch_size_used": batch_size,
                 "before": scan_result,
                 "fix_result": fix_result,
-                "after": final_scan
+                "after": final_scan,
+                "more_remaining": final_scan.get("total_needing_fix", 0) > 0 if isinstance(final_scan, dict) else False
             }), 200
             
         except Exception as e:
