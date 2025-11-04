@@ -2,11 +2,14 @@ from numpy import safe_eval
 import openpyxl
 import pandas as pd
 from pandas import Timestamp
+import math
 from app.trello.utils import (
     extract_card_name,
     extract_identifier,
     parse_trello_datetime,
     calculate_business_days_before,
+    should_sort_list_by_fab_order,
+    sort_list_if_needed,
 )
 from app.trello.api import (
     get_trello_card_by_id,
@@ -19,6 +22,7 @@ from app.trello.api import (
     update_installation_duration_in_description,
     parse_installation_duration,
     update_trello_card_description,
+    update_card_custom_field_number,
 )
 from app.onedrive.utils import (
     get_excel_row_and_index_by_identifiers,
@@ -217,6 +221,30 @@ def sync_from_trello(event_info):
                 to_list=rec.trello_list_name
             )
             TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
+            
+            # Sort both source and destination lists by Fab Order (only for target lists)
+            from app.config import Config as cfg
+            
+            if cfg.FAB_ORDER_FIELD_ID:
+                # Sort destination list (where card was moved to)
+                destination_list_id = event_info.get("list_id_after")
+                if destination_list_id:
+                    sort_list_if_needed(
+                        destination_list_id,
+                        cfg.FAB_ORDER_FIELD_ID,
+                        sync_op.operation_id,
+                        "destination"
+                    )
+                
+                # Sort source list (where card was moved from)
+                source_list_id = event_info.get("list_id_before")
+                if source_list_id:
+                    sort_list_if_needed(
+                        source_list_id,
+                        cfg.FAB_ORDER_FIELD_ID,
+                        sync_op.operation_id,
+                        "source"
+                    )
         
         # Handle description changes - recalculate installation duration if needed
         if event_info.get("has_description_change", False):
@@ -396,6 +424,7 @@ def sync_from_onedrive(data):
             ("Ship", "ship", "text"),
             ("Notes", "notes", "text"),
             ("Start install", "start_install", "date"),
+            ("Fab Order", "fab_order", "float"),
         ]
 
         # Process each row
@@ -424,6 +453,7 @@ def sync_from_onedrive(data):
                 'fitup_comp': rec.fitup_comp,
                 'paint_comp': rec.paint_comp,
                 'ship': rec.ship,
+                'fab_order': rec.fab_order,
             }
 
             record_updated = False
@@ -438,6 +468,24 @@ def sync_from_onedrive(data):
                 if field_type == "date":
                     excel_val = as_date(excel_val)
                     db_val = as_date(db_val)
+                
+                # Normalize floats
+                if field_type == "float":
+                    # Convert to float, handling NaN and None
+                    if pd.isna(excel_val) or excel_val is None or str(excel_val).strip() == '':
+                        excel_val = None
+                    else:
+                        try:
+                            excel_val = float(excel_val)
+                        except (TypeError, ValueError):
+                            excel_val = None
+                    
+                    # Ensure db_val is also float for comparison
+                    if db_val is not None:
+                        try:
+                            db_val = float(db_val)
+                        except (TypeError, ValueError):
+                            db_val = None
 
                 if (pd.isna(excel_val) or excel_val is None) and db_val is None:
                     continue
@@ -507,10 +555,10 @@ def sync_from_onedrive(data):
             trello_updates_success = 0
             trello_updates_failed = 0
             
-            for rec, is_formula, _ in updated_records:
+            for rec, is_formula, old_vals in updated_records:
                 if rec.source_of_update != "Trello" and hasattr(rec, "trello_card_id") and rec.trello_card_id:
                     try:
-                        _update_trello_card_from_excel(rec, is_formula, sync_op)
+                        _update_trello_card_from_excel(rec, is_formula, sync_op, old_vals)
                         trello_updates_success += 1
                     except Exception as e:
                         trello_updates_failed += 1
@@ -534,9 +582,10 @@ def sync_from_onedrive(data):
         # Context manager will automatically mark as COMPLETED
 
 
-def _update_trello_card_from_excel(rec, is_formula, sync_op):
+def _update_trello_card_from_excel(rec, is_formula, sync_op, old_values=None):
     """Update Trello card from Excel changes."""
     operation_id = sync_op.operation_id if sync_op else None
+    from app.config import Config as cfg
     
     # Calculate new due date
     new_due_date = None
@@ -553,7 +602,6 @@ def _update_trello_card_from_excel(rec, is_formula, sync_op):
     
     new_list_id = None
     if new_list_name:
-        print('We have a list name')
         new_list = get_list_by_name(new_list_name)
         if new_list:
             new_list_id = new_list["id"]
@@ -603,6 +651,63 @@ def _update_trello_card_from_excel(rec, is_formula, sync_op):
         rec.source_of_update = "Excel"
         db.session.add(rec)
         db.session.commit()
+
+    # Handle Fab Order custom field update
+    if old_values and old_values.get('fab_order') != rec.fab_order:
+        if cfg.FAB_ORDER_FIELD_ID and rec.fab_order is not None:
+            # Convert to int (round up if float)
+            try:
+                if isinstance(rec.fab_order, float):
+                    fab_order_int = math.ceil(rec.fab_order)
+                else:
+                    fab_order_int = int(rec.fab_order)
+                
+                # Update Trello custom field
+                success = update_card_custom_field_number(
+                    rec.trello_card_id,
+                    cfg.FAB_ORDER_FIELD_ID,
+                    fab_order_int
+                )
+                
+                if success:
+                    safe_log_sync_event(
+                        operation_id,
+                        "INFO",
+                        "Fab Order custom field updated",
+                        card_id=rec.trello_card_id,
+                        job=rec.job,
+                        release=rec.release,
+                        fab_order=fab_order_int,
+                        old_fab_order=old_values.get('fab_order')
+                    )
+                    
+                    # Sort the list after updating Fab Order (only if it's a target list)
+                    current_list_id = rec.trello_list_id
+                    if current_list_id:
+                        sort_list_if_needed(
+                            current_list_id,
+                            cfg.FAB_ORDER_FIELD_ID,
+                            operation_id,
+                            "list"
+                        )
+                else:
+                    safe_log_sync_event(
+                        operation_id,
+                        "ERROR",
+                        "Failed to update Fab Order custom field",
+                        card_id=rec.trello_card_id,
+                        job=rec.job,
+                        release=rec.release
+                    )
+            except (ValueError, TypeError) as e:
+                safe_log_sync_event(
+                    operation_id,
+                    "ERROR",
+                    "Could not convert fab_order to int",
+                    card_id=rec.trello_card_id,
+                    fab_order=rec.fab_order,
+                    error=str(e)
+                )
 
     # Handle notes as comments
     if hasattr(rec, '_pending_note') and rec._pending_note:

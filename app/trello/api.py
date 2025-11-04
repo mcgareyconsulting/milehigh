@@ -499,6 +499,41 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         else:
             print(f"[ERROR] Failed to update database record with Trello data")
         
+        # Handle Fab Order custom field - set if value exists in Excel
+        fab_order_value = excel_data.get('Fab Order')
+        if fab_order_value is not None and not pd.isna(fab_order_value):
+            try:
+                # Convert to int (round up if float)
+                if isinstance(fab_order_value, float):
+                    fab_order_int = math.ceil(fab_order_value)
+                else:
+                    fab_order_int = int(fab_order_value)
+                
+                # Update Trello custom field
+                if cfg.FAB_ORDER_FIELD_ID:
+                    fab_order_success = update_card_custom_field_number(
+                        card_data["id"],
+                        cfg.FAB_ORDER_FIELD_ID,
+                        fab_order_int
+                    )
+                    if fab_order_success:
+                        print(f"[DEBUG] Successfully set Fab Order custom field to {fab_order_int}")
+                        
+                        # Sort the list if it's one of the target lists
+                        from app.trello.utils import sort_list_if_needed
+                        sort_list_if_needed(
+                            list_id,
+                            cfg.FAB_ORDER_FIELD_ID,
+                            None,  # No operation_id for card creation
+                            "list"
+                        )
+                    else:
+                        print(f"[ERROR] Failed to set Fab Order custom field")
+                else:
+                    print(f"[WARNING] FAB_ORDER_FIELD_ID not configured, skipping Fab Order custom field")
+            except (ValueError, TypeError) as e:
+                print(f"[ERROR] Could not convert Fab Order '{fab_order_value}' to int: {e}")
+        
         # Handle notes field - append as comment if not empty
         notes_value = excel_data.get('Notes')
         # Check if notes value is valid (not None, not NaN, not empty string, not 'nan'/'NaN')
@@ -612,6 +647,229 @@ def update_card_custom_field(card_id, custom_field_id, text_value):
     except Exception as err:
         print(f"[TRELLO API] Error updating custom field: {err}")
         return False
+
+
+def get_board_custom_fields(board_id):
+    """
+    Get all custom fields for a Trello board.
+    
+    Args:
+        board_id: Trello board ID
+    
+    Returns:
+        List of custom field definitions or None if error
+    """
+    url = f"https://api.trello.com/1/boards/{board_id}/customFields"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error getting custom fields: {http_err}")
+        print("[TRELLO API] Response content:", response.text)
+        return None
+    except Exception as err:
+        print(f"[TRELLO API] Error getting custom fields: {err}")
+        return None
+
+
+def find_fab_order_field_id(custom_fields):
+    """
+    Find the custom field ID for 'Fab Order'.
+    
+    Args:
+        custom_fields: List of custom field definitions
+    
+    Returns:
+        Custom field ID (str) or None if not found
+    """
+    if not custom_fields:
+        return None
+    
+    for field in custom_fields:
+        if field.get("name") == "Fab Order":
+            return field.get("id")
+    
+    return None
+
+
+def update_card_custom_field_number(card_id, custom_field_id, number_value):
+    """
+    Updates a number custom field on a Trello card.
+    
+    Args:
+        card_id: Trello card ID
+        custom_field_id: Custom field ID
+        number_value: Integer value for the custom field
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}/customField/{custom_field_id}/item"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN
+    }
+    data = {
+        "value": {"number": str(number_value)}  # Trello API expects number as string
+    }
+    
+    try:
+        print(f"[TRELLO API] Updating custom field {custom_field_id} on card {card_id} with value: {number_value}")
+        response = requests.put(url, params=params, json=data)
+        response.raise_for_status()
+        print(f"[TRELLO API] Custom field updated successfully")
+        return True
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error updating custom field: {http_err}")
+        print("[TRELLO API] Response content:", response.text)
+        return False
+    except Exception as err:
+        print(f"[TRELLO API] Error updating custom field: {err}")
+        return False
+
+
+def sort_list_by_fab_order(list_id, fab_order_field_id):
+    """
+    Sort a Trello list by Fab Order custom field (ascending order).
+    Cards without Fab Order values will be placed at the end.
+    
+    Args:
+        list_id: Trello list ID to sort
+        fab_order_field_id: Custom field ID for "Fab Order"
+    
+    Returns:
+        dict with keys:
+            - success: bool
+            - cards_sorted: int (number of cards that were sorted)
+            - cards_failed: int (number of cards that failed to update)
+            - total_cards: int (total cards in list)
+            - error: str (if success is False)
+    """
+    # Get all cards in the list with custom field items
+    url = f"https://api.trello.com/1/lists/{list_id}/cards"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "customFieldItems": "true",
+        "fields": "id,pos,name"
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        cards = response.json()
+        
+        if not cards:
+            print(f"[TRELLO API] List {list_id} is empty, nothing to sort")
+            return {"success": True, "cards_sorted": 0, "cards_failed": 0, "total_cards": 0}
+        
+        # Extract Fab Order for each card
+        card_data = []
+        for card in cards:
+            fab_order = None
+            
+            # Find Fab Order custom field value
+            for field_item in card.get("customFieldItems", []):
+                if field_item.get("idCustomField") == fab_order_field_id:
+                    value = field_item.get("value", {})
+                    number_val = value.get("number")
+                    if number_val:
+                        try:
+                            # Convert to float then int (handles rounding)
+                            fab_order = float(number_val)
+                        except (ValueError, TypeError):
+                            pass
+                    break
+            
+            card_data.append({
+                "card_id": card["id"],
+                "card_name": card.get("name", "Unknown"),
+                "fab_order": fab_order,
+                "current_pos": card.get("pos")
+            })
+        
+        # Sort by fab_order (None values go to end)
+        # Cards with lower fab_order come first
+        card_data.sort(key=lambda x: (x["fab_order"] is None, x["fab_order"] or 0))
+        
+        # Calculate new positions
+        # Trello positions can be:
+        # - "top" (string)
+        # - "bottom" (string)
+        # - numeric (float) - cards are ordered by position value
+        
+        position_updates = []
+        
+        if len(card_data) == 1:
+            # Only one card - use "top"
+            position_updates.append({
+                "card_id": card_data[0]["card_id"],
+                "new_pos": "top"
+            })
+        else:
+            # Multiple cards - calculate positions
+            # Start with a base position and increment
+            base_position = 16384  # Standard starting position in Trello
+            
+            for index, card_info in enumerate(card_data):
+                new_pos = base_position + (index * 16384)
+                position_updates.append({
+                    "card_id": card_info["card_id"],
+                    "new_pos": new_pos,
+                    "fab_order": card_info["fab_order"]
+                })
+        
+        # Update card positions
+        updated_count = 0
+        failed_count = 0
+        
+        for update in position_updates:
+            update_url = f"https://api.trello.com/1/cards/{update['card_id']}"
+            update_params = {
+                "key": cfg.TRELLO_API_KEY,
+                "token": cfg.TRELLO_TOKEN,
+                "pos": update["new_pos"]
+            }
+            
+            try:
+                update_response = requests.put(update_url, params=update_params)
+                update_response.raise_for_status()
+                updated_count += 1
+            except requests.exceptions.HTTPError as http_err:
+                print(f"[TRELLO API] HTTP error updating card {update['card_id']} position: {http_err}")
+                failed_count += 1
+            except Exception as err:
+                print(f"[TRELLO API] Error updating card {update['card_id']} position: {err}")
+                failed_count += 1
+        
+        if failed_count > 0:
+            print(f"[TRELLO API] Sort completed with {failed_count} failures out of {len(position_updates)} cards")
+        else:
+            print(f"[TRELLO API] Successfully sorted list {list_id} ({updated_count} cards)")
+        
+        return {
+            "success": True,
+            "cards_sorted": updated_count,
+            "cards_failed": failed_count,
+            "total_cards": len(card_data)
+        }
+        
+    except requests.exceptions.HTTPError as http_err:
+        error_msg = f"HTTP error sorting list {list_id}: {http_err}"
+        print(f"[TRELLO API] {error_msg}")
+        if hasattr(http_err.response, 'text'):
+            print(f"[TRELLO API] Response: {http_err.response.text}")
+        return {"success": False, "error": error_msg, "cards_sorted": 0, "cards_failed": 0, "total_cards": 0}
+    except Exception as err:
+        error_msg = f"Error sorting list {list_id}: {err}"
+        print(f"[TRELLO API] {error_msg}")
+        return {"success": False, "error": error_msg, "cards_sorted": 0, "cards_failed": 0, "total_cards": 0}
 
 
 def add_comment_to_trello_card(card_id, comment_text, operation_id=None):

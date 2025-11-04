@@ -242,3 +242,63 @@ def add_business_days(start_date, business_days):
     return current_date + timedelta(days=days_forward)
 
 
+def should_sort_list_by_fab_order(list_id):
+    """
+    Check if a list should be sorted by Fab Order.
+    Only sorts 'Fit Up Complete' and 'Released' lists.
+    
+    Args:
+        list_id: Trello list ID to check
+    
+    Returns:
+        bool: True if list should be sorted
+    """
+    from app.config import Config as cfg
+    return list_id in (cfg.FIT_UP_COMPLETE_LIST_ID, cfg.NEW_TRELLO_CARD_LIST_ID)
+
+
+def sort_list_if_needed(list_id, fab_order_field_id, operation_id, list_type="list"):
+    """
+    Sort a list by Fab Order if it's one of the target lists.
+    
+    Args:
+        list_id: Trello list ID
+        fab_order_field_id: Custom field ID for Fab Order
+        operation_id: Operation ID for logging (can be None)
+        list_type: Description of the list (e.g., "destination", "source", "list")
+    
+    Returns:
+        bool: True if sort was attempted and successful
+    """
+    from app.trello.api import sort_list_by_fab_order
+    from app.sync.logging import safe_log_sync_event
+    
+    if not should_sort_list_by_fab_order(list_id):
+        return False
+    
+    sort_result = sort_list_by_fab_order(list_id, fab_order_field_id)
+    if sort_result.get("success"):
+        if operation_id:
+            safe_log_sync_event(
+                operation_id,
+                "INFO",
+                f"{list_type.capitalize()} list sorted by Fab Order",
+                list_id=list_id,
+                cards_sorted=sort_result.get("cards_sorted", 0)
+            )
+        else:
+            print(f"[TRELLO API] {list_type.capitalize()} list sorted by Fab Order: {list_id} ({sort_result.get('cards_sorted', 0)} cards)")
+        return True
+    else:
+        if operation_id:
+            safe_log_sync_event(
+                operation_id,
+                "WARNING",
+                f"{list_type.capitalize()} list sort failed",
+                list_id=list_id,
+                error=sort_result.get("error", "Unknown error")
+            )
+        else:
+            print(f"[TRELLO API] {list_type.capitalize()} list sort failed: {list_id} - {sort_result.get('error', 'Unknown error')}")
+        return False
+

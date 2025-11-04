@@ -107,7 +107,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="0",
+        minute="53",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
