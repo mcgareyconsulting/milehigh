@@ -22,9 +22,10 @@ class ProcoreToken(db.Model):
     token_type = db.Column(db.String(50), default="Bearer")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    def get_current(self):
+    @classmethod
+    def get_current(cls):
         '''Get current Procore token'''
-        return self.query.order_by(self.updated_at.desc()).first()
+        return cls.query.order_by(cls.updated_at.desc()).first()
 
 class SyncOperation(db.Model):
     """Track individual sync operations."""
