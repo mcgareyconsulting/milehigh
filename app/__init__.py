@@ -587,6 +587,61 @@ def create_app():
             else:
                 return jsonify({"message": "Card creation failed", "error": result["error"]}), 500
 
+    @app.route("/procore/add-link", methods=["POST", "GET"])
+    def add_procore_link():
+        """
+        Add a Procore link to a Trello card for a given job and release.
+        
+        Query parameters:
+            job (int): Job number (required)
+            release (str): Release number (required)
+        
+        Returns:
+            JSON response with success status and details
+        """
+        try:
+            from app.procore.procore import add_procore_link_to_trello_card
+            
+            job = request.args.get('job', type=int)
+            release = request.args.get('release', type=str)
+            
+            if not job or not release:
+                return jsonify({
+                    "success": False,
+                    "message": "Missing required parameters",
+                    "error": "Both 'job' (int) and 'release' (str) are required"
+                }), 400
+            
+            logger.info("Adding Procore link to Trello card", job=job, release=release)
+            
+            result = add_procore_link_to_trello_card(job, release)
+            
+            if result is None:
+                return jsonify({
+                    "success": False,
+                    "message": "Failed to add Procore link",
+                    "error": "Job not found, no Trello card, or no Procore submittal found",
+                    "job": job,
+                    "release": release
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Procore link added to Trello card successfully",
+                "job": job,
+                "release": release
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error adding Procore link", error=str(e), job=job, release=release)
+            return jsonify({
+                "success": False,
+                "message": "Error adding Procore link",
+                "error": str(e),
+                "job": job,
+                "release": release
+            }), 500
+
     # Excel Snapshot endpoints
     @app.route("/snapshot/capture", methods=["GET", "POST"])
     def capture_snapshot():

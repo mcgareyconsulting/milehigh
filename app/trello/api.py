@@ -1366,3 +1366,67 @@ def update_card_date_range(card_short_link, start_date, due_date):
             "error": error_msg
         }
 
+
+def add_procore_link(card_id, procore_url, link_name=None):
+    """
+    Add a Procore link as an attachment to a Trello card.
+    
+    Args:
+        card_id (str): Trello card ID
+        procore_url (str): The Procore URL to attach
+        link_name (str, optional): Custom name for the link (defaults to "Procore Link)
+    
+    Returns:
+        dict: Dictionary containing success status and attachment data, or error message
+    """
+    if not procore_url or not procore_url.strip():
+        print(f"[TRELLO API] Skipping empty Procore URL for card {card_id}")
+        return {
+            "success": False,
+            "error": "Procore URL is required"
+        }
+    
+    url = f"https://api.trello.com/1/cards/{card_id}/attachments"
+    
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "url": procore_url.strip()
+    }
+    
+    # Add optional name parameter if provided
+    if link_name:
+        params["name"] = link_name
+    
+    try:
+        print(f"[TRELLO API] Adding Procore link to card {card_id}: {procore_url[:100]}...")
+        response = requests.post(url, params=params)
+        response.raise_for_status()
+        
+        attachment_data = response.json()
+        print(f"[TRELLO API] Procore link added successfully (attachment ID: {attachment_data.get('id')})")
+        
+        return {
+            "success": True,
+            "card_id": card_id,
+            "attachment_id": attachment_data.get("id"),
+            "attachment_url": attachment_data.get("url"),
+            "attachment_name": attachment_data.get("name")
+        }
+        
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error adding Procore link: {http_err}")
+        if hasattr(http_err.response, 'text'):
+            print("[TRELLO API] Response content:", http_err.response.text)
+        return {
+            "success": False,
+            "error": f"HTTP error: {http_err}",
+            "response": http_err.response.text if hasattr(http_err.response, 'text') else None
+        }
+    except Exception as err:
+        print(f"[TRELLO API] Error adding Procore link: {err}")
+        return {
+            "success": False,
+            "error": str(err)
+        }
+
