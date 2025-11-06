@@ -970,42 +970,42 @@ def create_app():
                 "error": str(e)
             }), 500
 
-    # @app.route("/seed/run-one", methods=["GET", "POST"])
-    # def run_one_seed():
-    #     """
-    #     Run seeding for a single identifier.
-    #     Query params or JSON body:
-    #       - identifier: e.g. 1234-1 (optional; if missing, the first eligible identifier will be used)
-    #       - dry_run: optional, default true unless auto-picking (then defaults to false)
-    #     """
-    #     try:
-    #         from app.seed import process_single_identifier, get_first_identifier_to_seed
-    #         # Support both query params and JSON body
-    #         identifier = request.args.get("identifier") or (request.json.get("identifier") if request.is_json else None)
-    #         dry_run_param = request.args.get("dry_run") or (request.json.get("dry_run") if request.is_json else None)
+    @app.route("/seed/run-one", methods=["GET", "POST"])
+    def run_one_seed():
+        """
+        Run seeding for a single identifier.
+        Query params or JSON body:
+          - identifier: e.g. 1234-1 (optional; if missing, the first eligible identifier will be used)
+          - dry_run: optional, default true unless auto-picking (then defaults to false)
+        """
+        try:
+            from app.seed import process_single_identifier, get_first_identifier_to_seed
+            # Support both query params and JSON body
+            identifier = request.args.get("identifier") or (request.json.get("identifier") if request.is_json else None)
+            dry_run_param = request.args.get("dry_run") or (request.json.get("dry_run") if request.is_json else None)
 
-    #         # If no identifier provided, pick the first eligible and default dry_run to false if not specified
-    #         if not identifier:
-    #             identifier = get_first_identifier_to_seed()
-    #             if not identifier:
-    #                 return jsonify({"error": "No eligible identifiers found to seed."}), 404
-    #             if dry_run_param is None:
-    #                 dry_run_param = "false"
+            # If no identifier provided, pick the first eligible and default dry_run to false if not specified
+            if not identifier:
+                identifier = get_first_identifier_to_seed()
+                if not identifier:
+                    return jsonify({"error": "No eligible identifiers found to seed."}), 404
+                if dry_run_param is None:
+                    dry_run_param = "false"
 
-    #         dry_run_param = str(dry_run_param).lower() if dry_run_param is not None else "true"
-    #         dry_run = dry_run_param in ("true", "1", "yes", "y")
+            dry_run_param = str(dry_run_param).lower() if dry_run_param is not None else "true"
+            dry_run = dry_run_param in ("true", "1", "yes", "y")
 
-    #         logger.info("Run-one seed request", identifier=identifier, dry_run=dry_run)
-    #         result = process_single_identifier(identifier, dry_run=dry_run)
-    #         return jsonify({
-    #             "message": "Run-one completed",
-    #             "identifier": identifier,
-    #             "dry_run": dry_run,
-    #             "result": result
-    #         }), 200 if result.get("success", True) else 400
-    #     except Exception as e:
-    #         logger.error("Error in run-one seed", error=str(e))
-    #         return jsonify({"error": str(e)}), 500
+            logger.info("Run-one seed request", identifier=identifier, dry_run=dry_run)
+            result = process_single_identifier(identifier, dry_run=dry_run)
+            return jsonify({
+                "message": "Run-one completed",
+                "identifier": identifier,
+                "dry_run": dry_run,
+                "result": result
+            }), 200 if result.get("success", True) else 400
+        except Exception as e:
+            logger.error("Error in run-one seed", error=str(e))
+            return jsonify({"error": str(e)}), 500
 
     # Snapshot routes
     @app.route("/snapshots/list")
