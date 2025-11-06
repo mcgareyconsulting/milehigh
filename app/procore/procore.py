@@ -3,6 +3,7 @@ from app.config import Config as cfg
 from app.models import db, Job
 from app.trello.api import add_procore_link
 from app import create_app
+from app.procore.procore_auth import get_access_token
 
 # def procore_authorization():
 #     url = "https://login.procore.com/oauth/token/"
@@ -20,24 +21,11 @@ from app import create_app
 #     print(response.json())
 #     return response.json()
 
-def refresh_access_token():
-    url = "https://login.procore.com/oauth/token/"
-    body = {
-        "grant_type": "refresh_token",
-        "refresh_token": cfg.PROD_PROCORE_REFRESH_TOKEN,
-        "client_id": cfg.PROD_PROCORE_CLIENT_ID,
-        "client_secret": cfg.PROD_PROCORE_CLIENT_SECRET,
-        "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
-    }
-    response = requests.post(url, data=body)
-    print(response.json())
-    return response.json()
-
-# TEST Get Companies List
+# Get Companies List
 def get_companies_list():
     url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.0/companies"
     headers = {
-        "Authorization": f"Bearer {cfg.PROD_PROCORE_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {get_access_token()}",
     }
     response = requests.get(url, headers=headers)
     companies = response.json()
@@ -45,14 +33,14 @@ def get_companies_list():
     return company_id
 
 
-# TEST Get Projects by Company ID
+# Get Projects by Company ID
 def get_projects_by_company_id(company_id, project_number):
     '''
     Get projects by company ID and project number
     '''
     url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
     headers = {
-        "Authorization": f"Bearer {cfg.PROD_PROCORE_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {get_access_token()}",
         "Procore-Company-Id": str(company_id),
     }
     response = requests.get(url, headers=headers)
@@ -62,10 +50,11 @@ def get_projects_by_company_id(company_id, project_number):
             return project["id"]
     return None
 
+# Get Submittals by Project ID and Identifier
 def get_submittals_by_project_id(project_id, identifier):
     """Get submittals by project ID and identifier"""
     url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects/{project_id}/submittals"
-    headers = {"Authorization": f"Bearer {cfg.PROD_PROCORE_ACCESS_TOKEN}"}
+    headers = {"Authorization": f"Bearer {get_access_token()}"}
     response = requests.get(url, headers=headers)
     submittals = response.json()
     return [
@@ -75,14 +64,16 @@ def get_submittals_by_project_id(project_id, identifier):
     ]
 
 
+# Get Workflow Data by Project ID and Submittal ID
 def get_workflow_data(project_id, submittal_id):
     """Fetch workflow data for a given submittal"""
     url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects/{project_id}/submittals/{submittal_id}/workflow_data"
-    headers = {"Authorization": f"Bearer {cfg.PROD_PROCORE_ACCESS_TOKEN}"}
+    headers = {"Authorization": f"Bearer {get_access_token()}"}
     response = requests.get(url, headers=headers)
     return response.json()
 
 
+# Get Final PDF Viewers by Project ID and Submittals
 def get_final_pdf_viewers(project_id, submittals):
     """Extract viewer URLs for 'Final PDF Pack' responses"""
     final_results = []
@@ -119,6 +110,7 @@ def get_final_pdf_viewers(project_id, submittals):
 
     return final_results
 
+# Add Procore Link to Trello Card
 def add_procore_link_to_trello_card(job, release):
     '''
     Function to add procore drafting document link to related trello card
