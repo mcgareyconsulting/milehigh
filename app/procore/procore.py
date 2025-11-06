@@ -149,11 +149,11 @@ def add_procore_link_to_trello_card(job, release):
     # Add procore link to trello card
     add_procore_link(card_id, viewer_url)
 
-if __name__ == "__main__":
-    # refresh_access_token()
-    app = create_app()
-    # app context
-    with app.app_context():
+# if __name__ == "__main__":
+#     # refresh_access_token()
+#     app = create_app()
+#     # app context
+#     with app.app_context():
 
-        add_procore_link_to_trello_card(200, '436')
-        print("Procore link added to trello card")
+#         add_procore_link_to_trello_card(200, '436')
+#         print("Procore link added to trello card")
