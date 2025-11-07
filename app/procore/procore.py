@@ -1,4 +1,5 @@
 import logging
+import re
 
 import requests
 from app.config import Config as cfg
@@ -34,6 +35,14 @@ def _request_json(url, headers, params=None):
         return None
 
     return data
+
+
+def _normalize_title(value):
+    if not value:
+        return ""
+    normalized = re.sub(r"\s*-\s*", "-", value.strip().lower())
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
 
 # def procore_authorization():
 #     url = "https://login.procore.com/oauth/token/"
@@ -88,9 +97,10 @@ def get_submittals_by_project_id(project_id, identifier):
     if not isinstance(submittals, list):
         logger.warning("Unexpected submittals payload for project_id=%s identifier=%s: %r", project_id, identifier, submittals)
         return []
+    normalized_identifier = (identifier or "").strip().lower()
     return [
         s for s in submittals
-        if identifier.lower() in s.get("title", "").lower()
+        if normalized_identifier in _normalize_title(s.get("title", ""))
         and s.get("type", {}).get("name") == "For Construction"
     ]
 
