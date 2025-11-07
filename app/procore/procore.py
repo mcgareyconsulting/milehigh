@@ -149,6 +149,10 @@ def add_procore_link_to_trello_card(job, release):
     # Add procore link to trello card
     add_procore_link(card_id, viewer_url)
 
+    # Persist viewer URL on job record
+    job_record.viewer_url = viewer_url
+    db.session.commit()
+
     return {
         "card_id": card_id,
         "viewer_url": viewer_url,
