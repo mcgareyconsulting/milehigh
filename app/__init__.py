@@ -258,7 +258,7 @@ def create_app():
     
     def _get_job_change_history(job, release):
         """Internal function to retrieve job change history."""
-        from app.models import JobChangeLog
+        from app.models import JobChangeLog, Job
         
         # At least one parameter must be provided
         if job is None and release is None:
@@ -274,20 +274,29 @@ def create_app():
             }), 400
         
         try:
-            # Build query based on provided parameters
-            query = JobChangeLog.query
+            # Build change log query based on provided parameters
+            log_query = JobChangeLog.query
             
             if job is not None:
-                query = query.filter_by(job=job)
+                log_query = log_query.filter_by(job=job)
             if release is not None:
-                query = query.filter_by(release=str(release))
+                log_query = log_query.filter_by(release=str(release))
             
             # Order by most recent first
-            change_logs = query.order_by(JobChangeLog.changed_at.desc()).all()
+            change_logs = log_query.order_by(JobChangeLog.changed_at.desc()).all()
+            
+            # Build job query to retrieve metadata for associated job-release combos
+            job_query = Job.query
+            if job is not None:
+                job_query = job_query.filter_by(job=job)
+            if release is not None:
+                job_query = job_query.filter_by(release=str(release))
+            job_records = job_query.all()
             
             # Format the response
             history = []
             job_releases = set()  # Track unique job-release combinations
+            job_details = []
             
             for log in change_logs:
                 history.append({
@@ -305,8 +314,40 @@ def create_app():
                 })
                 job_releases.add((log.job, log.release))
             
+            # Collect job metadata for frontend display
+            for job_row in job_records:
+                job_key = (job_row.job, job_row.release)
+                job_releases.add(job_key)
+                job_details.append({
+                    'job': job_row.job,
+                    'release': job_row.release,
+                    'job_name': job_row.job_name,
+                    'description': job_row.description,
+                    'install_hrs': job_row.install_hrs,
+                    'start_install': job_row.start_install.isoformat() if job_row.start_install else None,
+                    'trello_list_name': job_row.trello_list_name,
+                    'viewer_url': job_row.viewer_url
+                })
+            
+            # If we have no job releases from change logs, ensure we include jobs that match the query
+            if not job_releases and job_records:
+                job_releases = {(jr.job, jr.release) for jr in job_records}
+            
             # Determine search type for frontend
             search_type = 'both' if job is not None and release is not None else ('job' if job is not None else 'release')
+            
+            # Determine default selection for frontend convenience
+            default_selection = None
+            if job_details:
+                # Try to match an exact job-release when both provided
+                if job is not None and release is not None:
+                    default_selection = next(
+                        (detail for detail in job_details if detail['job'] == job and detail['release'] == str(release)),
+                        None
+                    )
+                # Fallback to the first job detail if no exact match found
+                if default_selection is None:
+                    default_selection = job_details[0]
             
             return jsonify({
                 'search_type': search_type,
@@ -314,7 +355,9 @@ def create_app():
                 'search_release': release,
                 'job_releases': [{'job': jr[0], 'release': jr[1]} for jr in sorted(job_releases)],
                 'total_changes': len(history),
-                'history': history
+                'history': history,
+                'job_details': job_details,
+                'default_selection': default_selection
             }), 200
             
         except Exception as e:
@@ -587,6 +630,63 @@ def create_app():
             else:
                 return jsonify({"message": "Card creation failed", "error": result["error"]}), 500
 
+    @app.route("/procore/add-link", methods=["POST", "GET"])
+    def add_procore_link():
+        """
+        Add a Procore link to a Trello card for a given job and release.
+        
+        Query parameters:
+            job (int): Job number (required)
+            release (str): Release number (required)
+        
+        Returns:
+            JSON response with success status and details
+        """
+        try:
+            from app.procore.procore import add_procore_link_to_trello_card
+            
+            job = request.args.get('job', type=int)
+            release = request.args.get('release', type=str)
+            
+            if not job or not release:
+                return jsonify({
+                    "success": False,
+                    "message": "Missing required parameters",
+                    "error": "Both 'job' (int) and 'release' (str) are required"
+                }), 400
+            
+            logger.info("Adding Procore link to Trello card", job=job, release=release)
+            
+            result = add_procore_link_to_trello_card(job, release)
+            
+            if result is None:
+                return jsonify({
+                    "success": False,
+                    "message": "Failed to add Procore link",
+                    "error": "Job not found, no Trello card, or no Procore submittal found",
+                    "job": job,
+                    "release": release
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Procore link added to Trello card successfully",
+                "job": job,
+                "release": release,
+                "card_id": result.get("card_id"),
+                "viewer_url": result.get("viewer_url"),
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error adding Procore link", error=str(e), job=job, release=release)
+            return jsonify({
+                "success": False,
+                "message": "Error adding Procore link",
+                "error": str(e),
+                "job": job,
+                "release": release
+            }), 500
+
     # Excel Snapshot endpoints
     @app.route("/snapshot/capture", methods=["GET", "POST"])
     def capture_snapshot():
@@ -761,42 +861,196 @@ def create_app():
                 "error": str(e)
             }), 500
 
-    # @app.route("/seed/run-one", methods=["GET", "POST"])
-    # def run_one_seed():
-    #     """
-    #     Run seeding for a single identifier.
-    #     Query params or JSON body:
-    #       - identifier: e.g. 1234-1 (optional; if missing, the first eligible identifier will be used)
-    #       - dry_run: optional, default true unless auto-picking (then defaults to false)
-    #     """
-    #     try:
-    #         from app.seed import process_single_identifier, get_first_identifier_to_seed
-    #         # Support both query params and JSON body
-    #         identifier = request.args.get("identifier") or (request.json.get("identifier") if request.is_json else None)
-    #         dry_run_param = request.args.get("dry_run") or (request.json.get("dry_run") if request.is_json else None)
+    @app.route("/fab-order/scan", methods=["GET"])
+    def scan_fab_order():
+        """
+        Scan and preview how many Trello cards would be updated with Fab Order custom field.
+        Only scans cards in "Released" or "Fit Up Complete" lists.
+        Does not perform any updates.
+        """
+        try:
+            from app.scripts.update_fab_order_custom_field import scan_fab_order_updates
+            
+            logger.info("Scanning Fab Order updates")
+            result = scan_fab_order_updates(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Fab Order scan failed",
+                    "error": result["error"],
+                    "available_fields": result.get("available_fields")
+                }), 500
+            
+            return jsonify({
+                "message": "Fab Order scan completed",
+                "scan": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error scanning Fab Order updates", error=str(e))
+            return jsonify({
+                "message": "Fab Order scan failed",
+                "error": str(e)
+            }), 500
 
-    #         # If no identifier provided, pick the first eligible and default dry_run to false if not specified
-    #         if not identifier:
-    #             identifier = get_first_identifier_to_seed()
-    #             if not identifier:
-    #                 return jsonify({"error": "No eligible identifiers found to seed."}), 404
-    #             if dry_run_param is None:
-    #                 dry_run_param = "false"
+    @app.route("/fab-order/update", methods=["POST"])
+    def update_fab_order():
+        """
+        Update Trello cards with Fab Order custom field values from the database.
+        Only updates cards in "Released" or "Fit Up Complete" lists.
+        """
+        try:
+            from app.scripts.update_fab_order_custom_field import process_fab_order_updates
+            
+            logger.info("Starting Fab Order updates")
+            result = process_fab_order_updates(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Fab Order update failed",
+                    "error": result["error"]
+                }), 500
+            
+            return jsonify({
+                "message": "Fab Order update completed",
+                "update": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error updating Fab Order", error=str(e))
+            return jsonify({
+                "message": "Fab Order update failed",
+                "error": str(e)
+            }), 500
 
-    #         dry_run_param = str(dry_run_param).lower() if dry_run_param is not None else "true"
-    #         dry_run = dry_run_param in ("true", "1", "yes", "y")
+    @app.route("/fix-trello-list/scan", methods=["GET"])
+    def scan_missing_trello_list_info():
+        """
+        Scan and preview which cards have missing Trello list information.
+        Does not perform any updates.
+        """
+        try:
+            from app.scripts.fix_missing_trello_list_info import scan_missing_list_info
+            
+            logger.info("Scanning for missing Trello list information")
+            result = scan_missing_list_info(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Trello list info scan failed",
+                    "error": result["error"]
+                }), 500
+            
+            return jsonify({
+                "message": "Trello list info scan completed",
+                "scan": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error scanning Trello list info", error=str(e))
+            return jsonify({
+                "message": "Trello list info scan failed",
+                "error": str(e)
+            }), 500
 
-    #         logger.info("Run-one seed request", identifier=identifier, dry_run=dry_run)
-    #         result = process_single_identifier(identifier, dry_run=dry_run)
-    #         return jsonify({
-    #             "message": "Run-one completed",
-    #             "identifier": identifier,
-    #             "dry_run": dry_run,
-    #             "result": result
-    #         }), 200 if result.get("success", True) else 400
-    #     except Exception as e:
-    #         logger.error("Error in run-one seed", error=str(e))
-    #         return jsonify({"error": str(e)}), 500
+    @app.route("/fix-trello-list/run", methods=["POST"])
+    def fix_missing_trello_list_info():
+        """
+        Fix cards with missing Trello list information by fetching from Trello API.
+        Actually updates the database.
+        
+        Query params:
+            limit: Maximum number of cards to process in this request (default: 100)
+                  Use this to process in smaller batches to avoid timeouts
+            batch_size: Number of cards to commit at once (default: 50)
+        """
+        try:
+            from app.scripts.fix_missing_trello_list_info import fix_missing_list_info, scan_missing_list_info
+            
+            # Get optional parameters
+            limit = request.args.get("limit", type=int)
+            batch_size = request.args.get("batch_size", default=50, type=int)
+            
+            if limit is None:
+                # Default to 100 to avoid timeouts
+                limit = 100
+            
+            logger.info("Starting fix for missing Trello list information", limit=limit, batch_size=batch_size)
+            
+            # Run the scan first to get initial state
+            scan_result = scan_missing_list_info(return_json=True)
+            
+            if "error" in scan_result:
+                return jsonify({
+                    "message": "Trello list info fix failed",
+                    "error": scan_result["error"]
+                }), 500
+            
+            # Run the actual fix with limit
+            fix_result = fix_missing_list_info(return_json=True, limit=limit, batch_size=batch_size)
+            
+            if "error" in fix_result:
+                return jsonify({
+                    "message": "Trello list info fix failed",
+                    "error": fix_result["error"]
+                }), 500
+            
+            # Scan again to get final state
+            final_scan = scan_missing_list_info(return_json=True)
+            
+            return jsonify({
+                "message": "Trello list info fix completed",
+                "limit_used": limit,
+                "batch_size_used": batch_size,
+                "before": scan_result,
+                "fix_result": fix_result,
+                "after": final_scan,
+                "more_remaining": final_scan.get("total_needing_fix", 0) > 0 if isinstance(final_scan, dict) else False
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error fixing Trello list info", error=str(e))
+            return jsonify({
+                "message": "Trello list info fix failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/seed/run-one", methods=["GET", "POST"])
+    def run_one_seed():
+        """
+        Run seeding for a single identifier.
+        Query params or JSON body:
+          - identifier: e.g. 1234-1 (optional; if missing, the first eligible identifier will be used)
+          - dry_run: optional, default true unless auto-picking (then defaults to false)
+        """
+        try:
+            from app.seed import process_single_identifier, get_first_identifier_to_seed
+            # Support both query params and JSON body
+            identifier = request.args.get("identifier") or (request.json.get("identifier") if request.is_json else None)
+            dry_run_param = request.args.get("dry_run") or (request.json.get("dry_run") if request.is_json else None)
+
+            # If no identifier provided, pick the first eligible and default dry_run to false if not specified
+            if not identifier:
+                identifier = get_first_identifier_to_seed()
+                if not identifier:
+                    return jsonify({"error": "No eligible identifiers found to seed."}), 404
+                if dry_run_param is None:
+                    dry_run_param = "false"
+
+            dry_run_param = str(dry_run_param).lower() if dry_run_param is not None else "true"
+            dry_run = dry_run_param in ("true", "1", "yes", "y")
+
+            logger.info("Run-one seed request", identifier=identifier, dry_run=dry_run)
+            result = process_single_identifier(identifier, dry_run=dry_run)
+            return jsonify({
+                "message": "Run-one completed",
+                "identifier": identifier,
+                "dry_run": dry_run,
+                "result": result
+            }), 200 if result.get("success", True) else 400
+        except Exception as e:
+            logger.error("Error in run-one seed", error=str(e))
+            return jsonify({"error": str(e)}), 500
 
     # Snapshot routes
     @app.route("/snapshots/list")

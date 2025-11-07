@@ -12,6 +12,21 @@ class SyncStatus(Enum):
     FAILED = "failed"
     SKIPPED = "skipped"
 
+class ProcoreToken(db.Model):
+    '''Model to store Procore access token and refresh token'''
+    __tablename__ = "procore_tokens"
+    id = db.Column(db.Integer, primary_key=True)
+    access_token = db.Column(db.Text, nullable=False)
+    refresh_token = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    token_type = db.Column(db.String(50), default="Bearer")
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    @classmethod
+    def get_current(cls):
+        '''Get current Procore token'''
+        return cls.query.order_by(cls.updated_at.desc()).first()
+
 class SyncOperation(db.Model):
     """Track individual sync operations."""
     __tablename__ = "sync_operations"
@@ -130,6 +145,7 @@ class Job(db.Model):
     trello_list_name = db.Column(db.String(128), nullable=True)
     trello_card_description = db.Column(db.String(512), nullable=True)
     trello_card_date = db.Column(db.Date, nullable=True)
+    viewer_url = db.Column(db.String(512), nullable=True)
 
     # Changelog tracking
     last_updated_at = db.Column(db.DateTime, nullable=True)
