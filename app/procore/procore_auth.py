@@ -60,5 +60,4 @@ def store_initial_tokens(access_token, refresh_token, expires_in):
 # if __name__ == "__main__":
 #     app = create_app()
 #     with app.app_context():
-#         store_initial_tokens(cfg.PROD_PROCORE_ACCESS_TOKEN, cfg.PROD_PROCORE_REFRESH_TOKEN, 3600)
-#         print("Initial Procore tokens stored in database")
+#         refresh_tokens(ProcoreToken.get_current())

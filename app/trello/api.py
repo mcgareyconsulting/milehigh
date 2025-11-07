@@ -1391,7 +1391,8 @@ def add_procore_link(card_id, procore_url, link_name=None):
     params = {
         "key": cfg.TRELLO_API_KEY,
         "token": cfg.TRELLO_TOKEN,
-        "url": procore_url.strip()
+        "url": procore_url.strip(),
+        "name": "FC Drawing - Procore Link"
     }
     
     # Add optional name parameter if provided
