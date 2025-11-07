@@ -23,6 +23,9 @@ from app.trello.api import (
     parse_installation_duration,
     update_trello_card_description,
     update_card_custom_field_number,
+    copy_trello_card,
+    link_cards,
+    card_has_link_to,
 )
 from app.onedrive.utils import (
     get_excel_row_and_index_by_identifiers,
@@ -42,7 +45,6 @@ from app.sync.context import sync_operation_context
 from app.sync.logging import safe_log_sync_event, safe_sync_op_call
 from app.sync.services.trello_list_mapper import TrelloListMapper
 from app.sync.state_tracker import detect_and_track_state_changes
-
 logger = get_logger(__name__)
 
 
@@ -91,6 +93,7 @@ def as_date(val):
 
 def sync_from_trello(event_info):
     """Sync data from Trello to OneDrive based on webhook payload."""
+    from app.config import Config as cfg
     if event_info is None or not event_info.get("handled"):
         return
 
@@ -135,6 +138,30 @@ def sync_from_trello(event_info):
                         reason="card_from_excel_sync",
                         time_diff_seconds=time_diff.total_seconds()
                     )
+
+        if event_info.get("has_list_move", False):
+            destination_name = event_info.get("to")
+            if destination_name == "Fit Up Complete.":
+                target_list_id = cfg.UNASSIGNED_LIST_ID
+                if target_list_id:
+                    # avoid double-processing: skip if already linked
+                    if not card_has_link_to(card_id):
+                        cloned = copy_trello_card(card_id, target_list_id)
+                        link_cards(card_id, cloned["id"])
+                        update_trello_card(card_id, clear_due_date=True)
+                        update_trello_card(cloned["id"], clear_due_date=True)
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Fit Up duplicate created and linked",
+                            new_card_id=cloned["id"],
+                        )
+                    else:
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Fit Up duplicate already exists; skipping clone",
+                        )
         
         # Check if card update shortly after Excel sync (skip entirely)
         elif event_info.get("event") == "card_updated":
