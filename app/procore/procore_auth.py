@@ -3,7 +3,6 @@ import requests
 from datetime import datetime, timedelta
 from app.models import db, ProcoreToken
 from app.config import Config as cfg
-from app import create_app
 
 CLIENT_ID = cfg.PROD_PROCORE_CLIENT_ID
 CLIENT_SECRET = cfg.PROD_PROCORE_CLIENT_SECRET
