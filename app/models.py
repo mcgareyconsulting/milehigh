@@ -145,6 +145,7 @@ class Job(db.Model):
     trello_list_name = db.Column(db.String(128), nullable=True)
     trello_card_description = db.Column(db.String(512), nullable=True)
     trello_card_date = db.Column(db.Date, nullable=True)
+    viewer_url = db.Column(db.String(512), nullable=True)
 
     # Changelog tracking
     last_updated_at = db.Column(db.DateTime, nullable=True)

@@ -629,7 +629,9 @@ def create_app():
                 "success": True,
                 "message": "Procore link added to Trello card successfully",
                 "job": job,
-                "release": release
+                "release": release,
+                "card_id": result.get("card_id"),
+                "viewer_url": result.get("viewer_url"),
             }), 200
             
         except Exception as e:

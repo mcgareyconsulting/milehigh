@@ -1,8 +1,14 @@
-# Migration Summary: JobChangeLog Model
+# Migration Summary
 
 ## Changes Confirmed
 
-### 1. New Model: `JobChangeLog` (app/models.py)
+### 1. New Column: `viewer_url` on `jobs` (app/models.py)
+- **Column**: `viewer_url VARCHAR(512)`
+- **Purpose**: Persists the Procore drafting document viewer link whenever `/procore/add-link` runs.
+- **API Impact**: `/procore/add-link` now returns the `card_id` and `viewer_url` in the success payload.
+- **Migration**: Run `python migrations/add_viewer_url_to_jobs.py` to alter the table (idempotent).
+
+### 2. New Model: `JobChangeLog` (app/models.py)
 Added a new model to track state changes and field updates for jobs over time:
 
 - **Table**: `job_change_logs`
@@ -18,7 +24,7 @@ Added a new model to track state changes and field updates for jobs over time:
   - `triggered_by`: Description of what caused the change
 - **Indexes**: Optimized for queries on job/release, timestamp, operation_id, and change_type
 
-### 2. New Module: `state_tracker.py` (app/sync/state_tracker.py)
+### 3. New Module: `state_tracker.py` (app/sync/state_tracker.py)
 New module that handles state change detection and tracking:
 
 - **JobStateConfig**: Defines state mappings and progression order
@@ -26,7 +32,7 @@ New module that handles state change detection and tracking:
 - **track_job_state_change()**: Logs state changes to JobChangeLog
 - **detect_and_track_state_changes()**: Detects field changes and tracks state transitions
 
-### 3. Integration: `sync.py` (app/sync/sync.py)
+### 4. Integration: `sync.py` (app/sync/sync.py)
 Integrated state tracking into sync operations:
 
 - **sync_from_trello()**: 
@@ -38,24 +44,26 @@ Integrated state tracking into sync operations:
   - Stores old_values in updated_records tuple (line 483)
   - Calls `detect_and_track_state_changes()` after commit (lines 491-498)
 
-### 4. Bug Fix
+### 5. Bug Fix
 Fixed a bug in `sync_from_onedrive()` where `updated_records` was storing tuples of `(rec, formula_status)` but the code was trying to unpack 3 values including `old_values`. Now correctly stores `(rec, formula_status, old_values)`.
 
 ## Migration Instructions
 
-### Option 1: Run Migration Script (Recommended)
+### Option 1: Run Migration Scripts (Recommended)
 ```bash
 python migrations/add_job_change_log_table.py
+python migrations/add_viewer_url_to_jobs.py
+# or pass a specific database URL:
+# python migrations/add_viewer_url_to_jobs.py --database-url "$DATABASE_URL"
 ```
 
-The script will:
-- Check if the table already exists
-- Create the table if needed
-- Verify the table structure
-- Show a summary of columns and indexes
+Each script will:
+- Check if the table/column already exists
+- Create the table or add the column if needed
+- Verify the structure and provide status output
 
 ### Option 2: Automatic Creation
-Since your app uses `db.create_all()`, the table will be automatically created on the next app startup if it doesn't exist. However, running the migration script explicitly is recommended for better control and verification.
+Since your app uses `db.create_all()`, the table and column will be automatically created on the next app startup if they don't exist. However, running the migration scripts explicitly is recommended for better control and verification.
 
 ### Option 3: Manual SQL (For Production)
 If you prefer to run SQL directly on your production database:
@@ -88,7 +96,7 @@ After running the migration, verify it worked:
 
 ```python
 from app import create_app
-from app.models import JobChangeLog, db
+from app.models import JobChangeLog, Job, db
 
 app = create_app()
 with app.app_context():
@@ -99,6 +107,11 @@ with app.app_context():
     # Check can query (should return 0 initially)
     count = JobChangeLog.query.count()
     print(f"JobChangeLog records: {count}")
+
+    # Check viewer_url column is accessible
+    job = Job.query.first()
+    if job:
+        print(f"viewer_url column value: {job.viewer_url}")
 ```
 
 ## Next Steps
