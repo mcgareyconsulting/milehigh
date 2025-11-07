@@ -26,6 +26,7 @@ from app.trello.api import (
     copy_trello_card,
     link_cards,
     card_has_link_to,
+    add_procore_link,
 )
 from app.onedrive.utils import (
     get_excel_row_and_index_by_identifiers,
@@ -39,6 +40,8 @@ from app.sync_lock import synchronized_sync, sync_lock_manager
 from app.logging_config import get_logger, SyncContext, log_sync_operation
 import uuid
 import re
+from app.config import Config as cfg
+from app.procore.procore import add_procore_link_to_trello_card
 
 from app.sync.db_operations import create_sync_operation, update_sync_operation
 from app.sync.context import sync_operation_context
@@ -139,31 +142,6 @@ def sync_from_trello(event_info):
                         time_diff_seconds=time_diff.total_seconds()
                     )
 
-        if event_info.get("has_list_move", False):
-            destination_name = event_info.get("to")
-            if destination_name == "Fit Up Complete.":
-                target_list_id = cfg.UNASSIGNED_LIST_ID
-                if target_list_id:
-                    # avoid double-processing: skip if already linked
-                    if not card_has_link_to(card_id):
-                        cloned = copy_trello_card(card_id, target_list_id)
-                        link_cards(card_id, cloned["id"])
-                        update_trello_card(card_id, clear_due_date=True)
-                        update_trello_card(cloned["id"], clear_due_date=True)
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Fit Up duplicate created and linked",
-                            new_card_id=cloned["id"],
-                        )
-                    else:
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Fit Up duplicate already exists; skipping clone",
-                        )
-        
-        # Check if card update shortly after Excel sync (skip entirely)
         elif event_info.get("event") == "card_updated":
             rec = Job.query.filter_by(trello_card_id=card_id).first()
             if rec and rec.source_of_update == "Excel":
@@ -193,6 +171,7 @@ def sync_from_trello(event_info):
             'paint_comp': rec.paint_comp,
             'ship': rec.ship,
         }
+        duplicate_card_id = None
 
         # Check for duplicate updates
         if rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
@@ -249,9 +228,36 @@ def sync_from_trello(event_info):
             )
             TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
             
+            destination_name = event_info.get("to")
+            if destination_name == "Fit Up Complete.":
+                target_list_id = cfg.UNASSIGNED_CARDS_LIST_ID
+                if target_list_id:
+                    if not card_has_link_to(card_id):
+                        cloned = copy_trello_card(card_id, target_list_id)
+                        duplicate_card_id = cloned["id"]
+                        link_cards(card_id, duplicate_card_id)
+                        update_trello_card(card_id, clear_due_date=True)
+                        update_trello_card(duplicate_card_id, clear_due_date=True)
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Fit Up duplicate created and linked",
+                            new_card_id=duplicate_card_id,
+                        )
+                    else:
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Fit Up duplicate already exists; skipping clone",
+                        )
+                else:
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "WARNING",
+                        "Unassigned cards list ID not configured; skipping duplicate",
+                    )
+
             # Sort both source and destination lists by Fab Order (only for target lists)
-            from app.config import Config as cfg
-            
             if cfg.FAB_ORDER_FIELD_ID:
                 # Sort destination list (where card was moved to)
                 destination_list_id = event_info.get("list_id_after")
@@ -271,6 +277,21 @@ def sync_from_trello(event_info):
                         cfg.FAB_ORDER_FIELD_ID,
                         sync_op.operation_id,
                         "source"
+                    )
+            
+            if duplicate_card_id:
+                viewer_url = rec.viewer_url
+                if not viewer_url:
+                    procore_result = add_procore_link_to_trello_card(rec.job, rec.release)
+                    if procore_result and procore_result.get("viewer_url"):
+                        viewer_url = procore_result["viewer_url"]
+                if viewer_url:
+                    add_procore_link(duplicate_card_id, viewer_url)
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Procore link copied to duplicate card",
+                        new_card_id=duplicate_card_id,
                     )
         
         # Handle description changes - recalculate installation duration if needed

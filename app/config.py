@@ -10,7 +10,7 @@ class Config:
     TRELLO_BOARD_ID = os.environ.get("TRELLO_BOARD_ID")
     NEW_TRELLO_CARD_LIST_ID = os.environ.get("NEW_TRELLO_CARD_LIST_ID")
     FIT_UP_COMPLETE_LIST_ID = os.environ.get("FIT_UP_COMPLETE_LIST_ID")
-    UNASSIGNED_LIST_ID = os.environ.get("UNASSIGNED_LIST_ID")
+    UNASSIGNED_CARDS_LIST_ID = os.environ.get("UNASSIGNED_CARDS_LIST_ID")
     FAB_ORDER_FIELD_ID = os.environ.get("FAB_ORDER_FIELD_ID")
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")

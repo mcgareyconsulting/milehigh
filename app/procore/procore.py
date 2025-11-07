@@ -2,7 +2,6 @@ import requests
 from app.config import Config as cfg
 from app.models import db, Job
 from app.trello.api import add_procore_link
-from app import create_app
 from app.procore.procore_auth import get_access_token
 
 # def procore_authorization():
