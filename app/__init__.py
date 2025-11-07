@@ -258,7 +258,7 @@ def create_app():
     
     def _get_job_change_history(job, release):
         """Internal function to retrieve job change history."""
-        from app.models import JobChangeLog
+        from app.models import JobChangeLog, Job
         
         # At least one parameter must be provided
         if job is None and release is None:
@@ -274,20 +274,29 @@ def create_app():
             }), 400
         
         try:
-            # Build query based on provided parameters
-            query = JobChangeLog.query
+            # Build change log query based on provided parameters
+            log_query = JobChangeLog.query
             
             if job is not None:
-                query = query.filter_by(job=job)
+                log_query = log_query.filter_by(job=job)
             if release is not None:
-                query = query.filter_by(release=str(release))
+                log_query = log_query.filter_by(release=str(release))
             
             # Order by most recent first
-            change_logs = query.order_by(JobChangeLog.changed_at.desc()).all()
+            change_logs = log_query.order_by(JobChangeLog.changed_at.desc()).all()
+            
+            # Build job query to retrieve metadata for associated job-release combos
+            job_query = Job.query
+            if job is not None:
+                job_query = job_query.filter_by(job=job)
+            if release is not None:
+                job_query = job_query.filter_by(release=str(release))
+            job_records = job_query.all()
             
             # Format the response
             history = []
             job_releases = set()  # Track unique job-release combinations
+            job_details = []
             
             for log in change_logs:
                 history.append({
@@ -305,8 +314,40 @@ def create_app():
                 })
                 job_releases.add((log.job, log.release))
             
+            # Collect job metadata for frontend display
+            for job_row in job_records:
+                job_key = (job_row.job, job_row.release)
+                job_releases.add(job_key)
+                job_details.append({
+                    'job': job_row.job,
+                    'release': job_row.release,
+                    'job_name': job_row.job_name,
+                    'description': job_row.description,
+                    'install_hrs': job_row.install_hrs,
+                    'start_install': job_row.start_install.isoformat() if job_row.start_install else None,
+                    'trello_list_name': job_row.trello_list_name,
+                    'viewer_url': job_row.viewer_url
+                })
+            
+            # If we have no job releases from change logs, ensure we include jobs that match the query
+            if not job_releases and job_records:
+                job_releases = {(jr.job, jr.release) for jr in job_records}
+            
             # Determine search type for frontend
             search_type = 'both' if job is not None and release is not None else ('job' if job is not None else 'release')
+            
+            # Determine default selection for frontend convenience
+            default_selection = None
+            if job_details:
+                # Try to match an exact job-release when both provided
+                if job is not None and release is not None:
+                    default_selection = next(
+                        (detail for detail in job_details if detail['job'] == job and detail['release'] == str(release)),
+                        None
+                    )
+                # Fallback to the first job detail if no exact match found
+                if default_selection is None:
+                    default_selection = job_details[0]
             
             return jsonify({
                 'search_type': search_type,
@@ -314,7 +355,9 @@ def create_app():
                 'search_release': release,
                 'job_releases': [{'job': jr[0], 'release': jr[1]} for jr in sorted(job_releases)],
                 'total_changes': len(history),
-                'history': history
+                'history': history,
+                'job_details': job_details,
+                'default_selection': default_selection
             }), 200
             
         except Exception as e:
