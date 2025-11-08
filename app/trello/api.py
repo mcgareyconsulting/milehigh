@@ -8,7 +8,65 @@ from flask import current_app
 from datetime import datetime
 import pandas as pd
 import math
+from typing import Any, Dict, List, Optional
 
+class TrelloAPI:
+    """The shit"""
+    BASE_URL = "https://api.trello.com/1"
+
+    def __init__(self, api_key: str, token: str):
+        self.api_key = api_key
+        self.token = token
+
+     # ---------- Core Request Helper ---------- #
+    def _request(self, method: str, endpoint: str, **kwargs) -> Any:
+        """Centralized method for all Trello API requests."""
+        url = f"{self.BASE_URL}/{endpoint.lstrip('/')}"
+        params = kwargs.pop("params", None) or {}
+        params.update({"key": self.api_key, "token": self.token})
+
+        try:
+            response = requests.request(method, url, params=params, **kwargs)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[TrelloAPI] Error on {method.upper()} {url}: {e}")
+            return None
+
+        # Try returning JSON, fallback to raw text
+        try:
+            return response.json()
+        except ValueError:
+            return response.text
+
+    # ---------- Basic HTTP Methods ---------- #
+    def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None):
+        return self._request("get", endpoint, params=params)
+
+    def post(self, endpoint: str, params: Optional[Dict[str, Any]] = None, json: Optional[Dict] = None):
+        return self._request("post", endpoint, params=params, json=json)
+
+    def put(self, endpoint: str, params: Optional[Dict[str, Any]] = None, json: Optional[Dict] = None):
+        return self._request("put", endpoint, params=params, json=json)
+
+    def delete(self, endpoint: str, params: Optional[Dict[str, Any]] = None):
+        return self._request("delete", endpoint, params=params)
+
+## Helper functions for combining Trello and Excel data
+def get_list_name_by_id(list_id):
+    """
+    Fetches the list name from Trello API by list ID.
+    """
+    trello = TrelloAPI(cfg.TRELLO_API_KEY, cfg.TRELLO_TOKEN)
+    response = trello.get(f"lists/{list_id}")
+    return response.get("name") if response else None
+
+def get_list_by_name(list_name):
+    """
+    Fetches the list details from Trello API by list name.
+    """
+    trello = TrelloAPI(cfg.TRELLO_API_KEY, cfg.TRELLO_TOKEN)
+    response = trello.get(f"boards/{cfg.TRELLO_BOARD_ID}/lists")
+    return next((lst for lst in response if lst.get("name") == list_name), None)
 
 # Main function for updating trello card information
 def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_date=False):
@@ -70,37 +128,8 @@ def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_d
         raise
 
 
-## Helper functions for combining Trello and Excel data
-def get_list_name_by_id(list_id):
-    """
-    Fetches the list name from Trello API by list ID.
-    """
-    url = f"https://api.trello.com/1/lists/{list_id}"
-    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        data = response.json()
-        return data.get("name")
-    else:
-        print(f"Trello API error: {response.status_code} {response.text}")
-        return None
 
 
-def get_list_by_name(list_name):
-    """
-    Fetches the list details from Trello API by list name.
-    """
-    url = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
-    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        lists = response.json()
-        for lst in lists:
-            if lst["name"] == list_name:
-                return {"name": lst["name"], "id": lst["id"]}
-    else:
-        print(f"Trello API error: {response.status_code} {response.text}")
-        return None
 
 
 def get_trello_card_by_id(card_id):
@@ -1467,3 +1496,8 @@ def link_cards(primary_id, secondary_id):
         }
         resp = requests.post(url, params=params)
         resp.raise_for_status()
+
+
+if __name__ == "__main__":
+    print(get_list_name_by_id("68f266ac15e2986af8135114"))
+    print(get_list_by_name("Fit Up Complete."))
