@@ -11,10 +11,12 @@ from app.trello.utils import (
     should_sort_list_by_fab_order,
     sort_list_if_needed,
 )
-from app.trello.api import (
-    get_trello_card_by_id,
+from app.trello.endpoints import (
     get_list_name_by_id,
     get_list_by_name,
+    get_trello_card_by_id,
+)
+from app.trello.api import (
     update_trello_card,
     add_comment_to_trello_card,
     update_mirror_card_date_range,

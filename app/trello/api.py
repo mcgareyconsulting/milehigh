@@ -11,12 +11,13 @@ import math
 from typing import Any, Dict, List, Optional
 
 class TrelloAPI:
-    """The shit"""
+    """Trello API connection layer utilizing requests session for better performance and error handling."""
     BASE_URL = "https://api.trello.com/1"
 
     def __init__(self, api_key: str, token: str):
         self.api_key = api_key
         self.token = token
+        self.session = requests.Session()
 
      # ---------- Core Request Helper ---------- #
     def _request(self, method: str, endpoint: str, **kwargs) -> Any:
@@ -26,7 +27,7 @@ class TrelloAPI:
         params.update({"key": self.api_key, "token": self.token})
 
         try:
-            response = requests.request(method, url, params=params, **kwargs)
+            response = self.session.request(method, url, params=params, **kwargs)
             response.raise_for_status()
         except requests.RequestException as e:
             print(f"[TrelloAPI] Error on {method.upper()} {url}: {e}")
@@ -51,22 +52,7 @@ class TrelloAPI:
     def delete(self, endpoint: str, params: Optional[Dict[str, Any]] = None):
         return self._request("delete", endpoint, params=params)
 
-## Helper functions for combining Trello and Excel data
-def get_list_name_by_id(list_id):
-    """
-    Fetches the list name from Trello API by list ID.
-    """
-    trello = TrelloAPI(cfg.TRELLO_API_KEY, cfg.TRELLO_TOKEN)
-    response = trello.get(f"lists/{list_id}")
-    return response.get("name") if response else None
 
-def get_list_by_name(list_name):
-    """
-    Fetches the list details from Trello API by list name.
-    """
-    trello = TrelloAPI(cfg.TRELLO_API_KEY, cfg.TRELLO_TOKEN)
-    response = trello.get(f"boards/{cfg.TRELLO_BOARD_ID}/lists")
-    return next((lst for lst in response if lst.get("name") == list_name), None)
 
 # Main function for updating trello card information
 def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_date=False):
@@ -132,18 +118,6 @@ def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_d
 
 
 
-def get_trello_card_by_id(card_id):
-    """
-    Fetches the full card data from Trello API by card ID.
-    """
-    url = f"https://api.trello.com/1/cards/{card_id}"
-    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Trello API error: {response.status_code} {response.text}")
-        return None
 
 
 def get_trello_cards_from_subset():
@@ -614,32 +588,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         }
 
 
-def get_card_custom_field_items(card_id):
-    """
-    Retrieves all custom field items for a Trello card.
-    
-    Args:
-        card_id: Trello card ID
-    
-    Returns:
-        List of custom field items or None if error
-    """
-    url = f"https://api.trello.com/1/cards/{card_id}/customFieldItems"
-    params = {
-        "key": cfg.TRELLO_API_KEY,
-        "token": cfg.TRELLO_TOKEN
-    }
-    
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error getting custom field items for card {card_id}: {http_err}")
-        return None
-    except Exception as err:
-        print(f"[TRELLO API] Error getting custom field items for card {card_id}: {err}")
-        return None
+
 
 
 def update_card_custom_field(card_id, custom_field_id, text_value):
@@ -677,34 +626,6 @@ def update_card_custom_field(card_id, custom_field_id, text_value):
         print(f"[TRELLO API] Error updating custom field: {err}")
         return False
 
-
-def get_board_custom_fields(board_id):
-    """
-    Get all custom fields for a Trello board.
-    
-    Args:
-        board_id: Trello board ID
-    
-    Returns:
-        List of custom field definitions or None if error
-    """
-    url = f"https://api.trello.com/1/boards/{board_id}/customFields"
-    params = {
-        "key": cfg.TRELLO_API_KEY,
-        "token": cfg.TRELLO_TOKEN
-    }
-    
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error getting custom fields: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
-        return None
-    except Exception as err:
-        print(f"[TRELLO API] Error getting custom fields: {err}")
-        return None
 
 
 def find_fab_order_field_id(custom_fields):
