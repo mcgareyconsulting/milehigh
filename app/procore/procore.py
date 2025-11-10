@@ -1,6 +1,5 @@
 import logging
 import re
-
 import requests
 from app.config import Config as cfg
 from app.models import db, Job
@@ -69,6 +68,16 @@ def get_companies_list():
         return None
     company_id = companies[0]["id"]
     return company_id
+
+# count num projects by company id
+def count_projects_by_company_id(company_id):
+    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
+    headers = {
+        "Authorization": f"Bearer {get_access_token()}",
+        "Procore-Company-Id": str(company_id),
+    }
+    projects = _request_json(url, headers=headers) or []
+    return len(projects)
 
 
 # Get Projects by Company ID
@@ -211,11 +220,16 @@ def add_procore_link_to_trello_card(job, release):
         "viewer_url": viewer_url,
     }
 
-# if __name__ == "__main__":
-#     # refresh_access_token()
-#     app = create_app()
-#     # app context
-#     with app.app_context():
+if __name__ == "__main__":
+    from app import create_app
+    app = create_app()
+    # app context
+    with app.app_context():
 
-#         add_procore_link_to_trello_card(200, '436')
-#         print("Procore link added to trello card")
+        # add_procore_link_to_trello_card(200, '436')
+        # print("Procore link added to trello card")
+        company_id = get_companies_list()
+        print(company_id)
+        projects = count_projects_by_company_id(company_id)
+        print(projects)
+
