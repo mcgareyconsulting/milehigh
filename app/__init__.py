@@ -1015,6 +1015,79 @@ def create_app():
                 "error": str(e)
             }), 500
 
+    @app.route("/shipping/store-at-mhmw/scan", methods=["GET"])
+    def scan_store_shipping_route():
+        """
+        Preview which jobs would be updated to ship='ST' based on Trello list membership.
+        Also cross-checks database and Trello list counts/IDs.
+        """
+        try:
+            from app.scripts.store_shipping_sync import scan_store_shipping as scan_store_shipping_script
+
+            limit = request.args.get("limit", type=int)
+
+            logger.info(
+                "Scanning Store at MHMW shipping sync candidates",
+                limit=limit,
+            )
+
+            result = scan_store_shipping_script(return_json=True, limit=limit)
+
+            return jsonify({
+                "message": "Store at MHMW shipping scan completed",
+                "scan": result
+            }), 200
+
+        except Exception as e:
+            logger.error("Error scanning Store at MHMW shipping sync", error=str(e))
+            return jsonify({
+                "message": "Store at MHMW shipping scan failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/shipping/store-at-mhmw/run", methods=["POST"])
+    def run_store_shipping_sync_route():
+        """
+        Update jobs so their ship column is 'ST' for cards in the target Trello list,
+        after verifying database and Trello list counts match.
+        """
+        try:
+            from app.scripts.store_shipping_sync import run_store_shipping_sync as run_store_shipping_sync_script
+
+            limit = request.args.get("limit", type=int)
+            batch_size = request.args.get("batch_size", default=50, type=int)
+
+            logger.info(
+                "Running Store at MHMW shipping sync",
+                limit=limit,
+                batch_size=batch_size,
+            )
+
+            result = run_store_shipping_sync_script(
+                return_json=True,
+                limit=limit,
+                batch_size=batch_size,
+            )
+
+            if result.get("aborted"):
+                return jsonify({
+                    "message": "Store at MHMW shipping sync aborted",
+                    "reason": result.get("reason"),
+                    "run": result
+                }), 409
+
+            return jsonify({
+                "message": "Store at MHMW shipping sync completed",
+                "run": result
+            }), 200
+
+        except Exception as e:
+            logger.error("Error running Store at MHMW shipping sync", error=str(e))
+            return jsonify({
+                "message": "Store at MHMW shipping sync failed",
+                "error": str(e)
+            }), 500
+
     @app.route("/seed/run-one", methods=["GET", "POST"])
     def run_one_seed():
         """
