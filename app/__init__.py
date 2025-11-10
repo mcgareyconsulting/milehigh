@@ -3,6 +3,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
+from app.procore import procore_bp
 from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
@@ -1247,6 +1248,7 @@ def create_app():
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
+    app.register_blueprint(procore_bp, url_prefix="/procore")
 
     # Initialize scheduler safely
     try:
