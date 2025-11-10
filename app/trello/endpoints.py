@@ -70,6 +70,39 @@ def get_cards_in_list(list_id):
     response = trello.get(f"lists/{list_id}/cards", params={"customFieldItems": "true", "fields": "id,pos,name"})
     return response if response else []
 
+def update_trello_card(card_id, new_list_id=None, new_due_date=None, clear_due_date=False):
+    """
+    Updates a Trello card's list and/or due date in a single API call.
+    """
+    trello = get_trello_client()
+    params = {}
+    json_payload = None
+
+    if new_list_id:
+        params["idList"] = new_list_id
+
+    if new_due_date:
+        params["due"] = mountain_due_datetime(new_due_date)
+    elif clear_due_date:
+        json_payload = {"due": None}
+        if new_list_id:
+            json_payload["idList"] = new_list_id
+
+    try:
+        print(f"[TRELLO API] Updating card {card_id} with params={params} json={json_payload}")
+        response = trello.put(f"cards/{card_id}", params=params if json_payload is None else None, json=json_payload)
+
+        if not response:
+            print(f"[TRELLO API] Card {card_id} update failed (no response)")
+            raise Exception("Trello API request failed")
+
+        print(f"[TRELLO API] Card {card_id} updated successfully")
+        return response
+
+    except Exception as err:
+        print(f"[TRELLO API] Error updating card {card_id}: {err}")
+        raise
+    
 def sort_list_by_fab_order(list_id, fab_order_field_id):
     """
     Sort a Trello list by Fab Order custom field (ascending order).
@@ -205,7 +238,7 @@ def update_card_date_range(card_short_link, start_date, due_date):
             "success": False,
             "error": error_msg,
         }
-        
+
 def add_procore_link(card_id, procore_url, link_name=None):
     """
     Add a Procore link as an attachment to a Trello card.
