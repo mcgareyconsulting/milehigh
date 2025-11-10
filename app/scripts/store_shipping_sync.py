@@ -236,7 +236,11 @@ def run_store_shipping_sync(
     trello_cards = _fetch_trello_cards_in_target_list()
     comparison = _compare_db_and_trello(jobs, trello_cards)
 
-    if not comparison["count_match"] or not comparison["id_sets_match"]:
+    missing_in_db = comparison["missing_in_db"]
+    missing_in_trello = comparison["missing_in_trello"]
+    jobs_missing_card_id = comparison["jobs_missing_card_id"]
+
+    if missing_in_trello or jobs_missing_card_id:
         mismatch_result = {
             "target_list": TARGET_LIST_NAME,
             "aborted": True,
@@ -260,17 +264,23 @@ def run_store_shipping_sync(
         print(f"Trello count: {comparison['trello_count']}")
         print(f"Counts match: {comparison['count_match']}")
         print(f"Card IDs match: {comparison['id_sets_match']}")
-        if comparison["missing_in_db"]:
-            print("Card IDs missing in DB:", comparison["missing_in_db"])
-        if comparison["missing_in_trello"]:
-            print("Card IDs missing in Trello:", comparison["missing_in_trello"])
-        if comparison["jobs_missing_card_id"]:
+        if missing_in_db:
+            print("Card IDs missing in DB:", missing_in_db)
+        if missing_in_trello:
+            print("Card IDs missing in Trello:", missing_in_trello)
+        if jobs_missing_card_id:
             print(
                 "Jobs missing trello_card_id: "
                 f"{', '.join(comparison['jobs_missing_card_id'])}"
             )
         print("=" * 60)
         return
+
+    if missing_in_db:
+        logger.warning(
+            "Proceeding with Store shipping sync while skipping cards missing in DB",
+            missing_in_db=missing_in_db,
+        )
 
     needing_update, status_mismatches, already_correct = _evaluate_jobs(jobs)
 
@@ -288,6 +298,7 @@ def run_store_shipping_sync(
             "comparison": comparison,
             "status_mismatches": status_mismatches,
             "already_correct": already_correct,
+            "skipped_missing_in_db": missing_in_db,
         }
         if return_json:
             return result
@@ -371,6 +382,7 @@ def run_store_shipping_sync(
         "status_mismatches": status_mismatches,
         "already_correct": already_correct,
         "limit_requested": limit,
+        "skipped_missing_in_db": missing_in_db,
     }
 
     logger.info(
@@ -409,6 +421,10 @@ def run_store_shipping_sync(
         print("\nSkipped jobs (up to 25):")
         for job_info in skipped_jobs[:25]:
             print(f"  - {job_info['job_release']}: {job_info['error']}")
+    if missing_in_db:
+        print("\nTrello cards skipped because they are missing in DB:")
+        for card_id in missing_in_db:
+            print(f"  - {card_id}")
     print("=" * 60)
 
 
