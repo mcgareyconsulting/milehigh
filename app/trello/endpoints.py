@@ -1,6 +1,7 @@
 from app.config import Config as cfg
 from app.trello.client import get_trello_client
 from app.trello.helpers import sort_cards_by_fab_order, calculate_new_positions
+from app.trello.utils import mountain_start_datetime, mountain_due_datetime
 
 ## Helper functions for combining Trello and Excel data
 def get_list_name_by_id(list_id):
@@ -124,6 +125,130 @@ def update_card_positions(position_updates):
             failed += 1
 
     return updated, failed
+
+
+
+def update_card_custom_field_number(card_id, custom_field_id, number_value):
+    """
+    Updates a number custom field on a Trello card.
+    
+    Args:
+        card_id: Trello card ID
+        custom_field_id: Custom field ID
+        number_value: Integer value for the custom field
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    trello = get_trello_client()
+    payload = {
+        "value": {"number": str(number_value)}
+    }
+    response = trello.put(f"cards/{card_id}/customField/{custom_field_id}/item", json=payload)
+    return response.json() if response else None
+
+def update_trello_card_description(card_id, new_description):
+    """
+    Update a Trello card's description via API.
+    
+    Args:
+        card_id (str): Trello card ID
+        new_description (str): New description text
+        
+    Returns:
+        dict: Response from Trello API, or None if update fails
+    """
+    trello = get_trello_client()
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    payload = {
+        "desc": new_description
+    }
+    response = trello.put(f"cards/{card_id}", json=payload)
+    return response.json() if response else None
+        
+def update_card_date_range(card_short_link, start_date, due_date):
+    """
+    Update a card's start and due dates.
+    """
+    try:
+        trello = get_trello_client()
+        start_date_str = mountain_start_datetime(start_date)
+        due_date_str = mountain_due_datetime(due_date)
+
+        params = {
+            "start": start_date_str,
+            "due": due_date_str,
+        }
+
+        print(f"[TRELLO API] Updating mirror card {card_short_link} with start: {start_date_str}, due: {due_date_str}")
+        response = trello.put(f"cards/{card_short_link}", params=params)
+
+        if response:
+            print(f"[TRELLO API] Successfully updated mirror card {card_short_link}")
+            return {
+                "success": True,
+                "card_short_link": card_short_link,
+                "start_date": start_date_str,
+                "due_date": due_date_str,
+            }
+
+        print(f"[TRELLO API] Error updating mirror card {card_short_link}")
+        return {
+            "success": False,
+            "error": "Trello API error: request failed",
+        }
+
+    except Exception as e:
+        error_msg = f"Error updating card date range: {str(e)}"
+        print(f"[TRELLO API] {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg,
+        }
+        
+def add_procore_link(card_id, procore_url, link_name=None):
+    """
+    Add a Procore link as an attachment to a Trello card.
+    """
+    if not procore_url or not procore_url.strip():
+        print(f"[TRELLO API] Skipping empty Procore URL for card {card_id}")
+        return {
+            "success": False,
+            "error": "Procore URL is required",
+        }
+
+    trello = get_trello_client()
+    params = {
+        "url": procore_url.strip(),
+        "name": link_name or "FC Drawing - Procore Link",
+    }
+
+    try:
+        print(f"[TRELLO API] Adding Procore link to card {card_id}: {procore_url[:100]}...")
+        attachment_data = trello.post(f"cards/{card_id}/attachments", params=params)
+
+        if not attachment_data:
+            print(f"[TRELLO API] Request failed while adding Procore link to card {card_id}")
+            return {
+                "success": False,
+                "error": "Trello API error: request failed",
+            }
+
+        print(f"[TRELLO API] Procore link added successfully (attachment ID: {attachment_data.get('id')})")
+        return {
+            "success": True,
+            "card_id": card_id,
+            "attachment_id": attachment_data.get("id"),
+            "attachment_url": attachment_data.get("url"),
+            "attachment_name": attachment_data.get("name"),
+        }
+
+    except Exception as err:
+        print(f"[TRELLO API] Error adding Procore link: {err}")
+        return {
+            "success": False,
+            "error": str(err),
+        }
 
 if __name__ == "__main__":
     # print(get_list_name_by_id("68f266ac15e2986af8135114"))

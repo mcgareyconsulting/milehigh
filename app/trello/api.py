@@ -648,41 +648,6 @@ def find_fab_order_field_id(custom_fields):
     return None
 
 
-def update_card_custom_field_number(card_id, custom_field_id, number_value):
-    """
-    Updates a number custom field on a Trello card.
-    
-    Args:
-        card_id: Trello card ID
-        custom_field_id: Custom field ID
-        number_value: Integer value for the custom field
-    
-    Returns:
-        True if successful, False otherwise
-    """
-    url = f"https://api.trello.com/1/cards/{card_id}/customField/{custom_field_id}/item"
-    params = {
-        "key": cfg.TRELLO_API_KEY,
-        "token": cfg.TRELLO_TOKEN
-    }
-    data = {
-        "value": {"number": str(number_value)}  # Trello API expects number as string
-    }
-    
-    try:
-        print(f"[TRELLO API] Updating custom field {custom_field_id} on card {card_id} with value: {number_value}")
-        response = requests.put(url, params=params, json=data)
-        response.raise_for_status()
-        print(f"[TRELLO API] Custom field updated successfully")
-        return True
-    except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error updating custom field: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
-        return False
-    except Exception as err:
-        print(f"[TRELLO API] Error updating custom field: {err}")
-        return False
-
 
 def sort_list_by_fab_order(list_id, fab_order_field_id):
     """
@@ -1211,41 +1176,7 @@ def parse_installation_duration(description):
             return None
     return None
 
-def update_trello_card_description(card_id, new_description):
-    """
-    Update a Trello card's description via API.
-    
-    Args:
-        card_id (str): Trello card ID
-        new_description (str): New description text
-        
-    Returns:
-        dict: Response from Trello API, or None if update fails
-    """
-    url = f"https://api.trello.com/1/cards/{card_id}"
-    
-    params = {
-        "key": cfg.TRELLO_API_KEY,
-        "token": cfg.TRELLO_TOKEN,
-        "desc": new_description
-    }
-    
-    try:
-        print(f"[TRELLO API] Updating description for card {card_id}")
-        response = requests.put(url, params=params)
-        response.raise_for_status()
-        
-        print(f"[TRELLO API] Card {card_id} description updated successfully")
-        return response.json()
-        
-    except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error updating card {card_id} description: {http_err}")
-        if hasattr(http_err.response, 'text'):
-            print("[TRELLO API] Response content:", http_err.response.text)
-        raise
-    except Exception as err:
-        print(f"[TRELLO API] Other error updating card {card_id} description: {err}")
-        raise
+
 
 
 def calculate_business_days_after(start_date, days):
@@ -1263,123 +1194,9 @@ def calculate_business_days_after(start_date, days):
     return add_business_days(start_date, days)
 
 
-def update_card_date_range(card_short_link, start_date, due_date):
-    """
-    Update a card's start and due dates.
-    
-    Args:
-        card_short_link (str): The card's short link (from fileName)
-        start_date (datetime.date): The start date
-        due_date (datetime.date): The due date
-        
-    Returns:
-        dict: Dictionary containing success status and details
-    """
-    try:
-        # Convert dates to proper timezone-aware format for Trello
-        start_date_str = mountain_start_datetime(start_date)
-        due_date_str = mountain_due_datetime(due_date)
-        
-        url = f"https://api.trello.com/1/cards/{card_short_link}"
-        
-        payload = {
-            "key": cfg.TRELLO_API_KEY,
-            "token": cfg.TRELLO_TOKEN,
-            "start": start_date_str,
-            "due": due_date_str
-        }
-        
-        print(f"[TRELLO API] Updating mirror card {card_short_link} with start: {start_date_str}, due: {due_date_str}")
-        
-        response = requests.put(url, params=payload)
-        
-        if response.status_code == 200:
-            print(f"[TRELLO API] Successfully updated mirror card {card_short_link}")
-            return {
-                "success": True,
-                "card_short_link": card_short_link,
-                "start_date": start_date_str,
-                "due_date": due_date_str
-            }
-        else:
-            print(f"[TRELLO API] Error updating mirror card: {response.status_code} {response.text}")
-            return {
-                "success": False,
-                "error": f"Trello API error: {response.status_code} {response.text}"
-            }
-            
-    except Exception as e:
-        error_msg = f"Error updating card date range: {str(e)}"
-        print(f"[TRELLO API] {error_msg}")
-        return {
-            "success": False,
-            "error": error_msg
-        }
 
 
-def add_procore_link(card_id, procore_url, link_name=None):
-    """
-    Add a Procore link as an attachment to a Trello card.
-    
-    Args:
-        card_id (str): Trello card ID
-        procore_url (str): The Procore URL to attach
-        link_name (str, optional): Custom name for the link (defaults to "Procore Link)
-    
-    Returns:
-        dict: Dictionary containing success status and attachment data, or error message
-    """
-    if not procore_url or not procore_url.strip():
-        print(f"[TRELLO API] Skipping empty Procore URL for card {card_id}")
-        return {
-            "success": False,
-            "error": "Procore URL is required"
-        }
-    
-    url = f"https://api.trello.com/1/cards/{card_id}/attachments"
-    
-    params = {
-        "key": cfg.TRELLO_API_KEY,
-        "token": cfg.TRELLO_TOKEN,
-        "url": procore_url.strip(),
-        "name": "FC Drawing - Procore Link"
-    }
-    
-    # Add optional name parameter if provided
-    if link_name:
-        params["name"] = link_name
-    
-    try:
-        print(f"[TRELLO API] Adding Procore link to card {card_id}: {procore_url[:100]}...")
-        response = requests.post(url, params=params)
-        response.raise_for_status()
-        
-        attachment_data = response.json()
-        print(f"[TRELLO API] Procore link added successfully (attachment ID: {attachment_data.get('id')})")
-        
-        return {
-            "success": True,
-            "card_id": card_id,
-            "attachment_id": attachment_data.get("id"),
-            "attachment_url": attachment_data.get("url"),
-            "attachment_name": attachment_data.get("name")
-        }
-        
-    except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error adding Procore link: {http_err}")
-        if hasattr(http_err.response, 'text'):
-            print("[TRELLO API] Response content:", http_err.response.text)
-        return {
-            "success": False,
-            "error": f"HTTP error: {http_err}",
-            "response": http_err.response.text if hasattr(http_err.response, 'text') else None
-        }
-    except Exception as err:
-        print(f"[TRELLO API] Error adding Procore link: {err}")
-        return {
-            "success": False,
-            "error": str(err)
-        }
+
 
 ########################################################
 # Copy Card to Unassigned and Link
