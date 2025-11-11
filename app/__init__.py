@@ -245,6 +245,33 @@ def create_app():
             logger.exception("Shipping audit failed")
             return jsonify({"success": False, "error": str(exc)}), 500
 
+    @app.route("/shipping/enforce-excel", methods=["GET", "POST"])
+    def shipping_enforce_excel():
+        """
+        Synchronize Excel staging columns for jobs in shipping lists.
+        DB records remain unchanged; only Excel cells are updated.
+        """
+        from app.scripts.enforce_shipping_excel import enforce_shipping_excel
+
+        dry_run = False
+        payload = request.get_json(silent=True) or {}
+
+        if "dry_run" in payload:
+            dry_run = bool(payload["dry_run"])
+        else:
+            dry_run_param = request.args.get("dry_run")
+            if isinstance(dry_run_param, str):
+                dry_run = dry_run_param.lower() in ("1", "true", "yes", "on")
+
+        try:
+            summary = enforce_shipping_excel(dry_run=dry_run, update_db=False)
+            response_data = {"success": True}
+            response_data.update(summary)
+            return jsonify(response_data), 200
+        except Exception as exc:
+            logger.exception("Shipping Excel enforcement failed")
+            return jsonify({"success": False, "error": str(exc)}), 500
+
     # Job change history route
     @app.route("/jobs/<int:job>/<release>/history")
     def job_change_history_path(job, release):
