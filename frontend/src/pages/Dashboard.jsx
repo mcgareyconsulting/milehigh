@@ -19,6 +19,14 @@ function Dashboard() {
             gradient: 'from-accent-400 to-accent-500',
             hoverGradient: 'hover:from-accent-500 hover:to-accent-600',
             onClick: () => navigate('/history')
+        },
+        {
+            title: 'Drafting Work Load',
+            description: 'Review drafting workload and filter by Ball In Court',
+            icon: '📋',
+            gradient: 'from-accent-300 to-accent-400',
+            hoverGradient: 'hover:from-accent-400 hover:to-accent-500',
+            onClick: () => navigate('/drafting-work-load')
         }
     ];
 
