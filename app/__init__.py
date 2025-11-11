@@ -254,6 +254,7 @@ def create_app():
         from app.scripts.enforce_shipping_excel import enforce_shipping_excel
 
         dry_run = False
+        batch_size = None
         payload = request.get_json(silent=True) or {}
 
         if "dry_run" in payload:
@@ -263,8 +264,27 @@ def create_app():
             if isinstance(dry_run_param, str):
                 dry_run = dry_run_param.lower() in ("1", "true", "yes", "on")
 
+        if "batch_size" in payload:
+            try:
+                batch_size_val = int(payload["batch_size"])
+                if batch_size_val > 0:
+                    batch_size = batch_size_val
+            except (TypeError, ValueError):
+                pass
+        else:
+            batch_size_param = request.args.get("batch_size")
+            if batch_size_param is not None:
+                try:
+                    batch_size_val = int(batch_size_param)
+                    if batch_size_val > 0:
+                        batch_size = batch_size_val
+                except (TypeError, ValueError):
+                    pass
+
         try:
-            summary = enforce_shipping_excel(dry_run=dry_run, update_db=False)
+            summary = enforce_shipping_excel(
+                dry_run=dry_run, update_db=False, batch_size=batch_size
+            )
             response_data = {"success": True}
             response_data.update(summary)
             return jsonify(response_data), 200

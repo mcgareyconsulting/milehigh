@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 
@@ -89,30 +89,49 @@ def _stringify(value: Optional[str]) -> Optional[str]:
     return str(value)
 
 
-def enforce_shipping_excel(dry_run: bool = False, update_db: bool = True) -> Dict[str, object]:
+def enforce_shipping_excel(
+    dry_run: bool = False,
+    update_db: bool = True,
+    batch_size: Optional[int] = None,
+) -> Dict[str, object]:
     """
     Ensure Excel staging columns align with database jobs marked as RS/ST.
 
     Args:
         dry_run: If True, do not perform Excel updates; only report.
         update_db: If True, normalize Job records before Excel updates.
+        batch_size: If provided, stream jobs from the database in batches of this size.
 
     Returns:
         Summary dictionary describing operations performed.
     """
-    logger.info("Starting shipping Excel enforcement", dry_run=dry_run, update_db=update_db)
+    logger.info(
+        "Starting shipping Excel enforcement",
+        dry_run=dry_run,
+        update_db=update_db,
+        batch_size=batch_size,
+    )
 
-    jobs = Job.query.filter(Job.ship.in_(list(ALLOWED_SHIP_VALUES))).all()
-    logger.info("Jobs fetched for enforcement", count=len(jobs))
+    query = Job.query.filter(Job.ship.in_(list(ALLOWED_SHIP_VALUES))).order_by(Job.id)
+    total_jobs = query.count()
+    logger.info("Jobs fetched for enforcement", total=total_jobs)
 
-    if not jobs:
+    if total_jobs == 0:
         return {
             "jobs_processed": 0,
             "db_updates": 0,
             "excel_updates": 0,
             "excel_missing": [],
             "results": [],
+            "dry_run": dry_run,
+            "update_db": update_db,
+            "batch_size": batch_size,
         }
+
+    if batch_size and batch_size > 0:
+        job_iterator: Iterable[Job] = query.yield_per(batch_size)
+    else:
+        job_iterator = query
 
     df = get_excel_dataframe()
     excel_lookup = _build_excel_index(df)
@@ -121,8 +140,10 @@ def enforce_shipping_excel(dry_run: bool = False, update_db: bool = True) -> Dic
     excel_updates_count = 0
     excel_missing: List[str] = []
     results: List[JobProcessingResult] = []
+    jobs_processed = 0
 
-    for job in jobs:
+    for job in job_iterator:
+        jobs_processed += 1
         expected_ship = _normalize(job.ship)
         job_release_key = f"{job.job}-{job.release}"
 
@@ -226,12 +247,13 @@ def enforce_shipping_excel(dry_run: bool = False, update_db: bool = True) -> Dic
             db.session.rollback()
 
     summary = {
-        "jobs_processed": len(jobs),
+        "jobs_processed": jobs_processed,
         "db_updates": db_updates if update_db else 0,
         "excel_updates": excel_updates_count,
         "excel_missing": excel_missing,
         "dry_run": dry_run,
         "update_db": update_db,
+        "batch_size": batch_size,
         "results": [
             {
                 "job_release": res.job_release,
