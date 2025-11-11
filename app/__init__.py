@@ -255,6 +255,7 @@ def create_app():
 
         dry_run = False
         batch_size = None
+        include_details = False
         payload = request.get_json(silent=True) or {}
 
         if "dry_run" in payload:
@@ -281,9 +282,19 @@ def create_app():
                 except (TypeError, ValueError):
                     pass
 
+        if "include_details" in payload:
+            include_details = bool(payload["include_details"])
+        else:
+            include_details_param = request.args.get("include_details")
+            if isinstance(include_details_param, str):
+                include_details = include_details_param.lower() in ("1", "true", "yes", "on")
+
         try:
             summary = enforce_shipping_excel(
-                dry_run=dry_run, update_db=False, batch_size=batch_size
+                dry_run=dry_run,
+                update_db=False,
+                batch_size=batch_size,
+                include_details=include_details,
             )
             response_data = {"success": True}
             response_data.update(summary)

@@ -28,13 +28,8 @@ logger = get_logger(__name__)
 
 ALLOWED_SHIP_VALUES = {"RS", "ST"}
 
-# Excel column mapping (column letter, column name in DataFrame)
-EXCEL_COLUMN_MAPPING: Dict[str, Tuple[str, str]] = {
-    "fitup_comp": ("M", "Fitup comp"),
-    "welded": ("N", "Welded"),
-    "paint_comp": ("O", "Paint Comp"),
-    "ship": ("P", "Ship"),
-}
+# Excel ship column mapping (column letter, column name in DataFrame)
+EXCEL_SHIP_COLUMN: Tuple[str, str] = ("P", "Ship")
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -93,6 +88,7 @@ def enforce_shipping_excel(
     dry_run: bool = False,
     update_db: bool = True,
     batch_size: Optional[int] = None,
+    include_details: bool = True,
 ) -> Dict[str, object]:
     """
     Ensure Excel staging columns align with database jobs marked as RS/ST.
@@ -101,6 +97,7 @@ def enforce_shipping_excel(
         dry_run: If True, do not perform Excel updates; only report.
         update_db: If True, normalize Job records before Excel updates.
         batch_size: If provided, stream jobs from the database in batches of this size.
+        include_details: If False, omit per-job result details to minimize memory usage.
 
     Returns:
         Summary dictionary describing operations performed.
@@ -110,6 +107,7 @@ def enforce_shipping_excel(
         dry_run=dry_run,
         update_db=update_db,
         batch_size=batch_size,
+        include_details=include_details,
     )
 
     query = Job.query.filter(Job.ship.in_(list(ALLOWED_SHIP_VALUES))).order_by(Job.id)
@@ -126,6 +124,7 @@ def enforce_shipping_excel(
             "dry_run": dry_run,
             "update_db": update_db,
             "batch_size": batch_size,
+            "include_details": include_details,
         }
 
     if batch_size and batch_size > 0:
@@ -139,8 +138,9 @@ def enforce_shipping_excel(
     db_updates = 0
     excel_updates_count = 0
     excel_missing: List[str] = []
-    results: List[JobProcessingResult] = []
+    results: List[JobProcessingResult] = [] if include_details else []
     jobs_processed = 0
+    jobs_with_excel_updates = 0
 
     for job in job_iterator:
         jobs_processed += 1
@@ -155,59 +155,49 @@ def enforce_shipping_excel(
             )
             continue
 
-        # Ensure DB staging flags are correct
+        # Ensure DB ship value is correct when updates requested
         db_changed = False
-        if update_db:
-            if _normalize(job.fitup_comp) != "X":
-                job.fitup_comp = "X"
-                db_changed = True
-            if _normalize(job.welded) != "X":
-                job.welded = "X"
-                db_changed = True
-            if _normalize(job.paint_comp) != "X":
-                job.paint_comp = "X"
-                db_changed = True
-            if _normalize(job.ship) != expected_ship:
-                job.ship = expected_ship
-                db_changed = True
+        if update_db and _normalize(job.ship) != expected_ship:
+            job.ship = expected_ship
+            db_changed = True
 
-            if db_changed:
-                job.last_updated_at = datetime.utcnow()
-                job.source_of_update = "System"
-                db_updates += 1
+            job.last_updated_at = datetime.utcnow()
+            job.source_of_update = "System"
+            db_updates += 1
 
-        result = JobProcessingResult(
-            job_release=job_release_key,
-            job_id=job.id,
-            expected_ship=expected_ship,
-            db_updated=db_changed if update_db else False,
-        )
+        result: Optional[JobProcessingResult] = None
+        if include_details:
+            result = JobProcessingResult(
+                job_release=job_release_key,
+                job_id=job.id,
+                expected_ship=expected_ship,
+                db_updated=db_changed if update_db else False,
+            )
 
         key = (int(job.job), str(job.release).strip())
         excel_entry = excel_lookup.get(key)
         if not excel_entry:
             logger.warning("Excel row not found", job_release=job_release_key)
             excel_missing.append(job_release_key)
-            result.excel_missing = True
-            results.append(result)
+            if include_details and result:
+                result.excel_missing = True
+                results.append(result)
+            if not update_db:
+                db.session.expunge(job)
             continue
 
         excel_row_number, excel_row = excel_entry
+        job_had_excel_update = False
 
-        for field, (column_letter, excel_column_name) in EXCEL_COLUMN_MAPPING.items():
-            expected_value = (
-                expected_ship if field == "ship" else "X"
-            )
-            current_excel_value = _normalize(excel_row.get(excel_column_name))
+        column_letter, excel_column_name = EXCEL_SHIP_COLUMN
+        expected_value = expected_ship
+        current_excel_value = _normalize(excel_row.get(excel_column_name))
 
-            if current_excel_value == expected_value:
-                continue
-
+        if current_excel_value != expected_value:
             cell_address = f"{column_letter}{excel_row_number}"
             logger.info(
-                "Excel value mismatch detected",
+                "Excel ship value mismatch detected",
                 job_release=job_release_key,
-                column=excel_column_name,
                 current=current_excel_value,
                 expected=expected_value,
                 cell=cell_address,
@@ -220,7 +210,7 @@ def enforce_shipping_excel(
                     excel_updates_count += 1
                 else:
                     logger.error(
-                        "Failed to update Excel cell",
+                        "Failed to update Excel ship cell",
                         job_release=job_release_key,
                         cell=cell_address,
                         expected=expected_value,
@@ -228,16 +218,28 @@ def enforce_shipping_excel(
             else:
                 excel_updates_count += 1
 
-            result.excel_updates.append(
-                ExcelUpdateResult(
-                    cell=cell_address,
-                    old_value=_stringify(excel_row.get(excel_column_name)),
-                    new_value=expected_value,
-                    success=success,
-                )
-            )
+            job_had_excel_update = True
 
-        results.append(result)
+            if include_details and result:
+                result.excel_updates.append(
+                    ExcelUpdateResult(
+                        cell=cell_address,
+                        old_value=_stringify(excel_row.get(excel_column_name)),
+                        new_value=expected_value,
+                        success=success,
+                    )
+                )
+
+        if job_had_excel_update:
+            jobs_with_excel_updates += 1
+            if include_details and result:
+                results.append(result)
+        elif include_details and result:
+            # Only include jobs without updates if details requested
+            results.append(result)
+
+        if not update_db:
+            db.session.expunge(job)
 
     if update_db:
         if db_updates:
@@ -251,10 +253,15 @@ def enforce_shipping_excel(
         "db_updates": db_updates if update_db else 0,
         "excel_updates": excel_updates_count,
         "excel_missing": excel_missing,
+        "jobs_with_excel_updates": jobs_with_excel_updates,
         "dry_run": dry_run,
         "update_db": update_db,
         "batch_size": batch_size,
-        "results": [
+        "include_details": include_details,
+    }
+
+    if include_details:
+        summary["results"] = [
             {
                 "job_release": res.job_release,
                 "job_id": res.job_id,
@@ -272,8 +279,7 @@ def enforce_shipping_excel(
                 ],
             }
             for res in results
-        ],
-    }
+        ]
 
     logger.info(
         "Shipping Excel enforcement completed",
