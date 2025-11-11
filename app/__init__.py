@@ -511,6 +511,11 @@ def create_app():
                     "details": str(exc)
                 }), 500
 
+            # Remove columns that shouldn't be exposed to the frontend
+            columns_to_drop = [col for col in ["Response"] if col in df_all.columns]
+            if columns_to_drop:
+                df_all = df_all.drop(columns=columns_to_drop)
+
             if df_all.empty:
                 return jsonify({
                     "rows": [],
