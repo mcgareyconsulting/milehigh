@@ -229,33 +229,35 @@ def sync_from_trello(event_info):
             TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
             
             destination_name = event_info.get("to")
-            if destination_name == "Fit Up Complete.":
-                target_list_id = cfg.UNASSIGNED_CARDS_LIST_ID
-                if target_list_id:
-                    if not card_has_link_to(card_id):
-                        cloned = copy_trello_card(card_id, target_list_id)
-                        duplicate_card_id = cloned["id"]
-                        link_cards(card_id, duplicate_card_id)
-                        update_trello_card(card_id, clear_due_date=True)
-                        update_trello_card(duplicate_card_id, clear_due_date=True)
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Fit Up duplicate created and linked",
-                            new_card_id=duplicate_card_id,
-                        )
-                    else:
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Fit Up duplicate already exists; skipping clone",
-                        )
-                else:
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "WARNING",
-                        "Unassigned cards list ID not configured; skipping duplicate",
-                    )
+            # Temporarily disable duplicate-and-link flow for Fit Up Complete cards.
+            # Keeping the structure ensures the surrounding sync logic still runs without Trello duplication.
+            # if destination_name == "Fit Up Complete.":
+            #     target_list_id = cfg.UNASSIGNED_CARDS_LIST_ID
+            #     if target_list_id:
+            #         if not card_has_link_to(card_id):
+            #             cloned = copy_trello_card(card_id, target_list_id)
+            #             duplicate_card_id = cloned["id"]
+            #             link_cards(card_id, duplicate_card_id)
+            #             update_trello_card(card_id, clear_due_date=True)
+            #             update_trello_card(duplicate_card_id, clear_due_date=True)
+            #             safe_log_sync_event(
+            #                 sync_op.operation_id,
+            #                 "INFO",
+            #                 "Fit Up duplicate created and linked",
+            #                 new_card_id=duplicate_card_id,
+            #             )
+            #         else:
+            #             safe_log_sync_event(
+            #                 sync_op.operation_id,
+            #                 "INFO",
+            #                 "Fit Up duplicate already exists; skipping clone",
+            #             )
+            #     else:
+            #         safe_log_sync_event(
+            #             sync_op.operation_id,
+            #             "WARNING",
+            #             "Unassigned cards list ID not configured; skipping duplicate",
+            #         )
 
             # Sort both source and destination lists by Fab Order (only for target lists)
             if cfg.FAB_ORDER_FIELD_ID:
