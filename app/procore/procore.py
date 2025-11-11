@@ -97,6 +97,23 @@ def get_projects_by_company_id(company_id, project_number):
             return project["id"]
     return None
 
+# Function to get project id by project name
+def get_project_id_by_project_name(project_name):
+    # get procore client
+    procore = get_procore_client()
+    projects = procore.get_projects(cfg.PROD_PROCORE_COMPANY_ID)
+    print(len(projects))
+    for project in projects:
+        if project["name"] == project_name:
+            return project["id"]
+    return None
+
+# Get Submittal by ID
+def get_submittal_by_id(project_id, submittal_id):
+    procore = get_procore_client()
+    submittal = procore.get_submittal_by_id(project_id, submittal_id)
+    return submittal
+
 # Get Submittals by Project ID and Identifier
 def get_submittals_by_project_id(project_id, identifier):
     """Get submittals by project ID and identifier"""
@@ -227,25 +244,8 @@ if __name__ == "__main__":
     # app context
     with app.app_context():
 
-        procore = get_procore_client()
-        company_id = '18521'
-        projects = procore.get_projects(company_id)
-        # print(projects)
-        project_id = '2900844'
-        # project_data = procore.get_project_by_id(project_id)
-        # print(project_data)
-        # Create webhook
-        # webhook = procore.create_project_webhook(project_id, "mile-high-metal-works", "created")
-        # print(webhook)
-        webhooks = procore.list_project_webhooks(project_id, "mile-high-metal-works")
-        print(webhooks)
-        webhook_id = '2012059238'
-        # Create webhook trigger
-        trigger = procore.create_webhook_trigger(project_id, webhook_id)
-        print(trigger)
-        # Get webhook resources
-        # resources = procore.get_project_webhook_resources(project_id)
-        # resources = procore.get_company_webhook_resources(company_id)
-        # print(resources)
-        # Check for hooks
-        
+        project_name = "Sandstone Ranch"
+        submittal_id = "66838267"
+        project_id = get_project_id_by_project_name(project_name)
+        submittal_data = get_submittal_by_id(project_id, submittal_id)
+        print(submittal_data)

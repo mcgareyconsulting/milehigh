@@ -65,17 +65,21 @@ class ProcoreAPI:
     def get_projects(self, company_id: int) -> List[Dict]:
         projects = self._get(f"/rest/v1.1/projects?company_id={company_id}")
         return projects
+    
 
+    # -------------------------
+    # Submittals
+    # -------------------------
+    def get_submittals(self, project_id: int) -> List[Dict]:
+        return self._get(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/submittals")
 
+    def get_submittal_by_id(self, project_id: int, submittal_id: int) -> Dict:
+        return self._get(f"/rest/v1.1/projects/{project_id}/submittals/{submittal_id}")
     # -------------------------
     # Webhooks
     # -------------------------
     def list_project_webhooks(self, project_id: int, namespace: str) -> List[Dict]:
         return self._get(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/webhooks/hooks?namespace={namespace}")
-
-    def check_for_hooks(self, project_id: int, namespace: str) -> bool:
-        webhooks_data = self.list_project_webhooks(project_id, namespace)
-        return len(webhooks_data["data"]) > 0
 
     def create_project_webhook(self, project_id: int, name: str, event_type: str) -> Dict:
         data = {
@@ -85,15 +89,9 @@ class ProcoreAPI:
         }
         return self._post(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/webhooks/hooks", data)
 
-    def create_webhook_trigger(self, project_id: int, hook_id: int) -> Dict:
+    def create_webhook_trigger(self, project_id: int, hook_id: int, event_type: str) -> Dict:
         data = {
-            "resource_name": "Submittal",
-            "event_type": "update",
+            "resource_name": "Submittals",
+            "event_type": event_type,
         }
         return self._post(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/webhooks/hooks/{hook_id}/triggers", data)
-
-    def get_project_webhook_resources(self, project_id: int) -> List[Dict]:
-        data = {
-            "payload_version": "v2.0",
-        }
-        return self._get(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/webhooks/resources", data)
