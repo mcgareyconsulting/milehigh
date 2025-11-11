@@ -227,22 +227,25 @@ if __name__ == "__main__":
     # app context
     with app.app_context():
 
-        # add_procore_link_to_trello_card(200, '436')
-        # print("Procore link added to trello card")
-        company_id = get_companies_list()
-        print(company_id)
-        projects = get_procore_client().get_projects(company_id)
-        print(len(projects))
-        project_id = projects[4]["id"]
-        print(project_id)
-        # webhooks = get_procore_client().list_project_webhooks(3203976, "mile-high-metal-works")
-        # hook_id = webhooks["data"][0]["id"]
-        # print(hook_id)
-        resources = get_procore_client().get_project_webhook_resources(3203976)
-        print(resources)
-        # result = get_procore_client().create_webhook_trigger(project_id, hook_id)
-        # print(result)
-        # has_hooks = get_procore_client().check_for_hooks(project_id, "mile-high-metal-works")
-        # print(has_hooks)
-        # result = get_procore_client().create_project_webhook(project_id, "mile-high-metal-works", "created")
-        # print(result)
+        procore = get_procore_client()
+        company_id = '18521'
+        projects = procore.get_projects(company_id)
+        # print(projects)
+        project_id = '2900844'
+        # project_data = procore.get_project_by_id(project_id)
+        # print(project_data)
+        # Create webhook
+        # webhook = procore.create_project_webhook(project_id, "mile-high-metal-works", "created")
+        # print(webhook)
+        webhooks = procore.list_project_webhooks(project_id, "mile-high-metal-works")
+        print(webhooks)
+        webhook_id = '2012059238'
+        # Create webhook trigger
+        trigger = procore.create_webhook_trigger(project_id, webhook_id)
+        print(trigger)
+        # Get webhook resources
+        # resources = procore.get_project_webhook_resources(project_id)
+        # resources = procore.get_company_webhook_resources(company_id)
+        # print(resources)
+        # Check for hooks
+        

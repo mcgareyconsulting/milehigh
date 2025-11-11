@@ -1,8 +1,8 @@
 import requests
-from app.procore.procore_auth import refresh_tokens, get_access_token
-from app.models import ProcoreToken
 from typing import Optional, Dict, List
+
 from app.config import Config as cfg
+from app.procore.procore_auth import get_access_token, get_access_token_force_refresh
 
 class ProcoreAPI:
     """ProcoreAPI connection layer utilizing requests session for better performance and error handling."""
@@ -41,9 +41,8 @@ class ProcoreAPI:
             )
 
         if r.status_code == 401:
-            # Token expired, refresh and retry once
-            auth = ProcoreToken.get_current()
-            refresh_tokens(auth)
+            # Token expired or invalid, force refresh once
+            get_access_token_force_refresh()
             self._update_auth_header()
             r = self.session.request(method, url, **kwargs)
 
@@ -58,6 +57,7 @@ class ProcoreAPI:
 
     def _delete(self, endpoint: str):
         return self._request("DELETE", endpoint)
+
 
     # -------------------------
     # Projects
