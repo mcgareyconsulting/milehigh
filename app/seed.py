@@ -576,7 +576,6 @@ def incremental_seed_missing_jobs(batch_size=50):
 def process_single_identifier(identifier: str, dry_run: bool = True):
     """
     Process a single job-release identifier of the form "<job>-<release>".
-    - Validates the row meets our Ship not X/T rule
     - Predicts the Trello list based on staging flags
     - If dry_run=False and job not in DB:
       - If no Trello card: create Trello card in predicted list (also creates DB)
@@ -591,28 +590,12 @@ def process_single_identifier(identifier: str, dry_run: bool = True):
     df = get_excel_dataframe()
     df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
 
-    # Helper: Ship filter
-    def ship_has_x_or_t(ship_value):
-        if pd.isna(ship_value) or ship_value is None:
-            return False
-        s = str(ship_value).strip()
-        return "X" in s or "T" in s
-
     # Find the row
     row = df[df["identifier"] == identifier]
     if row.empty:
         return {"success": False, "error": f"Identifier not found in Excel: {identifier}", "identifier": identifier}
 
     row = row.iloc[0]
-
-    # Ensure Ship not X/T
-    if ship_has_x_or_t(row.get("Ship")):
-        return {
-            "success": False,
-            "identifier": identifier,
-            "error": "Row excluded by Ship filter (contains X/T)",
-            "ship": row.get("Ship")
-        }
 
     # Predict list based on staging
     fitup_comp = str(row.get("Fitup comp", "") or "").strip()
