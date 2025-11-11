@@ -1088,6 +1088,104 @@ def create_app():
                 "error": str(e)
             }), 500
 
+        def _parse_bool_param(value, default=False):
+            if value is None:
+                return default
+            if isinstance(value, bool):
+                return value
+            return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+        @app.route("/shipping/excel-sync/scan", methods=["GET"])
+        def scan_shipping_excel_route():
+            try:
+                from app.scripts.sync_shipping_excel import scan_shipping_excel
+
+                limit = request.args.get("limit", type=int)
+                include_all = _parse_bool_param(request.args.get("include_all"), default=False)
+
+                logger.info(
+                    "Scanning shipping Excel alignment via route",
+                    limit=limit,
+                    include_all=include_all,
+                )
+
+                result = scan_shipping_excel(
+                    return_json=True,
+                    limit=limit,
+                    include_all_lists=include_all,
+                )
+
+                return jsonify({
+                    "message": "Shipping Excel scan completed",
+                    "scan": result,
+                }), 200
+
+            except Exception as e:
+                logger.error("Error scanning shipping Excel alignment", error=str(e))
+                return jsonify({
+                    "message": "Shipping Excel scan failed",
+                    "error": str(e),
+                }), 500
+
+        @app.route("/shipping/excel-sync/run", methods=["POST"])
+        def run_shipping_excel_route():
+            try:
+                from app.scripts.sync_shipping_excel import run_shipping_excel_sync
+
+                params = request.get_json(silent=True) if request.is_json else {}
+                limit = request.args.get("limit", type=int)
+                if limit is None and isinstance(params, dict):
+                    limit_value = params.get("limit")
+                    try:
+                        limit = int(limit_value)
+                    except (TypeError, ValueError):
+                        limit = None
+                batch_size = request.args.get("batch_size", type=int)
+                if batch_size is None and isinstance(params, dict):
+                    batch_value = params.get("batch_size")
+                    try:
+                        batch_size = int(batch_value)
+                    except (TypeError, ValueError):
+                        batch_size = None
+
+                include_all = _parse_bool_param(
+                    request.args.get("include_all"),
+                    default=_parse_bool_param((params or {}).get("include_all"), default=False),
+                )
+                dry_run = _parse_bool_param(
+                    request.args.get("dry_run"),
+                    default=_parse_bool_param((params or {}).get("dry_run"), default=False),
+                )
+
+                logger.info(
+                    "Running shipping Excel sync via route",
+                    limit=limit,
+                    batch_size=batch_size,
+                    dry_run=dry_run,
+                    include_all=include_all,
+                )
+
+                result = run_shipping_excel_sync(
+                    return_json=True,
+                    limit=limit,
+                    dry_run=dry_run,
+                    include_all_lists=include_all,
+                    batch_size=batch_size,
+                )
+
+                return jsonify({
+                    "message": "Shipping Excel sync completed",
+                    "dry_run": dry_run,
+                    "run": result,
+                }), 200
+
+            except Exception as e:
+                logger.error("Error running shipping Excel sync", error=str(e))
+                return jsonify({
+                    "message": "Shipping Excel sync failed",
+                    "error": str(e),
+                }), 500
+
     @app.route("/seed/run-one", methods=["GET", "POST"])
     def run_one_seed():
         """

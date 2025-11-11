@@ -21,11 +21,10 @@ import math
 import sys
 from typing import Dict, List, Optional
 
-from app import create_app
 from app.logging_config import get_logger
 from app.models import Job
-from app.onedrive.api import update_excel_cell
-from app.onedrive.utils import get_excel_row_and_index_by_identifiers
+from app.config import Config as cfg
+from app.onedrive.api import get_excel_dataframe, update_excel_cell
 from app.sync.services.trello_list_mapper import TrelloListMapper
 
 
@@ -63,6 +62,58 @@ EXCEL_COLUMN_MAP = {
 }
 
 STATUS_FIELDS = ["fitup_comp", "welded", "paint_comp", "ship"]
+
+
+def _build_excel_lookup(df) -> Dict[tuple, tuple]:
+    """
+    Build a lookup map from (job, release) to (excel_row_number, row_series).
+    """
+    lookup: Dict[tuple, tuple] = {}
+    for idx, row in df.iterrows():
+        job_val = row.get("Job #")
+        release_val = row.get("Release #")
+
+        if job_val is None:
+            continue
+        if isinstance(job_val, float) and math.isnan(job_val):
+            continue
+        if release_val is None:
+            continue
+        if isinstance(release_val, float) and math.isnan(release_val):
+            continue
+
+        try:
+            job_key = int(job_val)
+        except (TypeError, ValueError):
+            continue
+
+        release_key = str(release_val).strip()
+        if not release_key:
+            continue
+
+        excel_row = idx + cfg.EXCEL_INDEX_ADJ
+        lookup[(job_key, release_key)] = (excel_row, row)
+
+        # Also support release values that may appear without trailing .0
+        if release_key.endswith(".0"):
+            trimmed = release_key[:-2]
+            if trimmed:
+                lookup[(job_key, trimmed)] = (excel_row, row)
+
+    return lookup
+
+
+def _load_excel_lookup() -> Optional[Dict[tuple, tuple]]:
+    """
+    Download the Excel data once and create a lookup dictionary.
+    """
+    try:
+        df = get_excel_dataframe()
+    except Exception as exc:
+        logger.error("Failed to download Excel data for shipping sync", error=str(exc))
+        return None
+
+    return _build_excel_lookup(df)
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -116,7 +167,10 @@ def _build_job_identifier(job: Job) -> str:
     return f"{job.job}-{job.release}"
 
 
-def evaluate_job_for_excel_sync(job: Job, fetch_excel: bool = True) -> Dict[str, object]:
+def evaluate_job_for_excel_sync(
+    job: Job,
+    excel_lookup: Optional[Dict[tuple, tuple]] = None,
+) -> Dict[str, object]:
     """
     Evaluate a single job for Excel sync.
 
@@ -175,25 +229,28 @@ def evaluate_job_for_excel_sync(job: Job, fetch_excel: bool = True) -> Dict[str,
         expected_list
     )
 
-    excel_row = None
+    excel_row: Optional[int] = None
     excel_status = None
     excel_needs_update = True
     excel_missing = True
     issues: List[str] = []
 
-    if fetch_excel:
-        try:
-            row_number, row = get_excel_row_and_index_by_identifiers(job.job, job.release)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error(
-                "Failed to load Excel row",
-                job_release=job_release,
-                error=str(exc),
-            )
-            issues.append(f"Excel lookup error: {exc}")
-            row_number, row = None, None
+    lookup_key = None
+    try:
+        job_key = int(job.job)
+        release_key = str(job.release).strip()
+        lookup_key = (job_key, release_key)
+    except (TypeError, ValueError):
+        issues.append("Invalid job or release identifiers")
 
-        if row_number is not None and row is not None:
+    if lookup_key is not None and excel_lookup is not None:
+        match = excel_lookup.get(lookup_key)
+        if match is None and lookup_key[1].endswith(".0"):
+            trimmed_key = (lookup_key[0], lookup_key[1][:-2])
+            match = excel_lookup.get(trimmed_key)
+
+        if match:
+            row_number, row = match
             excel_row = row_number
             excel_status = _extract_excel_status(row)
             excel_missing = False
@@ -201,9 +258,9 @@ def evaluate_job_for_excel_sync(job: Job, fetch_excel: bool = True) -> Dict[str,
                 excel_status[field] != expected_status[field] for field in STATUS_FIELDS
             )
         else:
-            excel_missing = True
-            excel_needs_update = True
             issues.append("Excel row not found")
+    elif excel_lookup is None:
+        issues.append("Excel lookup unavailable")
 
     if not db_matches_expected:
         issues.append("Database status does not match expected shipping pattern")
@@ -259,14 +316,19 @@ def scan_shipping_excel(
     else:
         jobs = query.all()
 
+    excel_lookup = _load_excel_lookup() if jobs else None
+
     logger.info(
         "Scanning jobs for shipping Excel alignment",
         total_candidates=len(jobs),
         include_all_lists=include_all_lists,
         limit=limit,
+        excel_lookup_available=excel_lookup is not None,
     )
 
-    evaluations = [evaluate_job_for_excel_sync(job) for job in jobs]
+    evaluations = [
+        evaluate_job_for_excel_sync(job, excel_lookup=excel_lookup) for job in jobs
+    ]
 
     excel_missing = sum(1 for ev in evaluations if ev["excel_missing"])
     excel_needs_update = sum(
@@ -286,6 +348,7 @@ def scan_shipping_excel(
         "mapper_mismatches": mapper_mismatches,
         "trello_mismatches": trello_mismatches,
         "jobs": evaluations,
+        "excel_lookup_available": excel_lookup is not None,
     }
 
     if not return_json:
@@ -337,6 +400,7 @@ def run_shipping_excel_sync(
     limit: Optional[int] = None,
     dry_run: bool = False,
     include_all_lists: bool = False,
+    batch_size: Optional[int] = None,
 ) -> Dict[str, object]:
     """
     Apply Excel updates for jobs whose shipping columns are out of sync.
@@ -346,6 +410,7 @@ def run_shipping_excel_sync(
         limit: optional limit on number of jobs inspected (same semantics as scan).
         dry_run: if True, only report what would change (no API calls).
         include_all_lists: if True, do not filter by Trello list name.
+        batch_size: maximum number of jobs to update in this invocation.
     """
     scan_result = scan_shipping_excel(
         return_json=True, limit=limit, include_all_lists=include_all_lists
@@ -354,12 +419,18 @@ def run_shipping_excel_sync(
     updates: List[Dict[str, object]] = []
     failed_updates: List[Dict[str, object]] = []
 
-    for job_info in scan_result["jobs"]:
-        if job_info["excel_missing"]:
-            continue
-        if not job_info["excel_needs_update"]:
-            continue
+    jobs_needing_update = [
+        job_info
+        for job_info in scan_result["jobs"]
+        if not job_info["excel_missing"] and job_info["excel_needs_update"]
+    ]
 
+    if batch_size is not None and batch_size > 0:
+        jobs_to_update = jobs_needing_update[:batch_size]
+    else:
+        jobs_to_update = jobs_needing_update
+
+    for job_info in jobs_to_update:
         job_update = {
             "job_release": job_info["job_release"],
             "excel_row": job_info["excel_row"],
@@ -396,6 +467,8 @@ def run_shipping_excel_sync(
     summary = {
         "scan": scan_result,
         "dry_run": dry_run,
+        "batch_size_used": batch_size,
+        "jobs_considered": len(jobs_needing_update),
         "updates_attempted": len(updates),
         "cell_updates": sum(len(job_update["cells"]) for job_update in updates),
         "failed_updates": failed_updates,
@@ -406,8 +479,10 @@ def run_shipping_excel_sync(
         print("Shipping Excel Sync - Run Summary")
         print("=" * 70)
         print(f"Dry run:                    {dry_run}")
+        print(f"Batch size limit:           {batch_size or 'None'}")
         print(f"Jobs inspected:             {scan_result['total_jobs']}")
         print(f"Jobs needing Excel updates: {scan_result['excel_rows_needing_update']}")
+        print(f"Jobs eligible this run:     {len(jobs_needing_update)}")
         print(f"Jobs updated this run:      {len(updates)}")
         print(f"Cell updates attempted:     {summary['cell_updates']}")
         if failed_updates:
@@ -461,6 +536,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include jobs regardless of Trello list assignment",
     )
+    run_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Limit the number of jobs updated in a single run",
+    )
 
     parser.set_defaults(command="scan")
     return parser
@@ -470,16 +551,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
-    app = create_app()
+    from app import create_app as create_app_factory
+
+    app = create_app_factory()
     with app.app_context():
         limit = getattr(args, "limit", None)
         include_all = getattr(args, "include_all", False)
         if args.command == "run":
             dry_run = getattr(args, "dry_run", False)
+            batch_size = getattr(args, "batch_size", None)
             run_shipping_excel_sync(
                 limit=limit,
                 dry_run=dry_run,
                 include_all_lists=include_all,
+                batch_size=batch_size,
             )
         else:
             scan_shipping_excel(
