@@ -10,6 +10,7 @@ class Config:
     TRELLO_BOARD_ID = os.environ.get("TRELLO_BOARD_ID")
     NEW_TRELLO_CARD_LIST_ID = os.environ.get("NEW_TRELLO_CARD_LIST_ID")
     FIT_UP_COMPLETE_LIST_ID = os.environ.get("FIT_UP_COMPLETE_LIST_ID")
+    UNASSIGNED_CARDS_LIST_ID = os.environ.get("UNASSIGNED_CARDS_LIST_ID")
     FAB_ORDER_FIELD_ID = os.environ.get("FAB_ORDER_FIELD_ID")
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
@@ -28,9 +29,13 @@ class Config:
     PROCORE_SANDBOX_BASE_URL = os.environ.get("PROCORE_SANDBOX_BASE_URL")
 
     # Production Procore
+    PROD_PROCORE_COMPANY_ID = os.environ.get("PROD_PROCORE_COMPANY_ID")
     PROD_PROCORE_BASE_URL = os.environ.get("PROD_PROCORE_BASE_URL")
     PROD_PROCORE_AUTH_CODE = os.environ.get("PROD_PROCORE_AUTH_CODE")
     PROD_PROCORE_CLIENT_ID = os.environ.get("PROD_PROCORE_CLIENT_ID")
     PROD_PROCORE_CLIENT_SECRET = os.environ.get("PROD_PROCORE_CLIENT_SECRET")
     PROD_PROCORE_ACCESS_TOKEN = os.environ.get("PROD_PROCORE_ACCESS_TOKEN")
     PROD_PROCORE_REFRESH_TOKEN = os.environ.get("PROD_PROCORE_REFRESH_TOKEN")
+
+    # Procore Webhook
+    PROCORE_DEV_WEBHOOK_URL = os.environ.get("PROCORE_DEV_WEBHOOK_URL")

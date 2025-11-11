@@ -43,11 +43,27 @@ class TrelloListMapper:
             Trello list name, or None if no matching list is found
             
         Mapping logic:
-        - If fitup_comp=X, welded=X, paint_comp=X, ship=O or T → "Paint complete"
+        - If fitup_comp=X, welded=X, paint_comp=X, ship=ST → "Store at MHMW for shipping"
+        - If fitup_comp=X, welded=X, paint_comp=X, ship=RS → "Shipping planning"
+        - If fitup_comp=X, welded=X, paint_comp=X, ship=O/T/""/None → "Paint complete"
         - If fitup_comp=X, welded=O, paint_comp="", ship=T/O/"" → "Fit Up Complete."
         - If fitup_comp=X, welded=X, paint_comp=X, ship=X → "Shipping completed"
         - Otherwise → None
         """
+        if (
+            rec.fitup_comp == "X"
+            and rec.welded == "X"
+            and rec.paint_comp == "X"
+            and rec.ship == "ST"
+        ):
+            return "Store at MHMW for shipping"
+        if (
+            rec.fitup_comp == "X"
+            and rec.welded == "X"
+            and rec.paint_comp == "X"
+            and rec.ship == "RS"
+        ):
+            return "Shipping planning"
         if (
             rec.fitup_comp == "X"
             and rec.welded == "X"
@@ -90,8 +106,8 @@ class TrelloListMapper:
             
         Mapping logic:
         - "Paint complete" → fitup_comp=X, welded=X, paint_comp=X, ship=O
-        - "Store at MHMW for shipping" → fitup_comp=X, welded=X, paint_comp=X, ship=O
-        - "Shipping planning" → fitup_comp=X, welded=X, paint_comp=X, ship=""
+        - "Store at MHMW for shipping" → fitup_comp=X, welded=X, paint_comp=X, ship=ST
+        - "Shipping planning" → fitup_comp=X, welded=X, paint_comp=X, ship=RS
         - "Fit Up Complete." → fitup_comp=X, welded=O, paint_comp="", ship=""
         - "Shipping completed" → fitup_comp=X, welded=X, paint_comp=X, ship=X
         - "Released" → fitup_comp="", welded="", paint_comp="", ship=""
@@ -120,12 +136,12 @@ class TrelloListMapper:
             job.fitup_comp = "X"
             job.welded = "X"
             job.paint_comp = "X"
-            job.ship = "O"
+            job.ship = "ST"
         elif trello_list_name == "Shipping planning":
             job.fitup_comp = "X"
             job.welded = "X"
             job.paint_comp = "X"
-            job.ship = ""
+            job.ship = "RS"
         elif trello_list_name == "Fit Up Complete.":
             job.fitup_comp = "X"
             job.welded = "O"

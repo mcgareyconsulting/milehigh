@@ -1431,3 +1431,39 @@ def add_procore_link(card_id, procore_url, link_name=None):
             "error": str(err)
         }
 
+########################################################
+# Copy Card to Unassigned and Link
+########################################################
+def copy_trello_card(card_id, target_list_id, pos="bottom"):
+    url = "https://api.trello.com/1/cards"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "idCardSource": card_id,
+        "idList": target_list_id,
+        "keepFromSource": "all",
+        "pos": pos,
+    }
+    resp = requests.post(url, params=params)
+    resp.raise_for_status()
+    return resp.json()
+
+def card_has_link_to(card_id):
+    url = f"https://api.trello.com/1/cards/{card_id}/attachments"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    resp = requests.get(url, params=params)
+    resp.raise_for_status()
+    return any(att.get("name") == "Linked card" for att in resp.json())
+
+def link_cards(primary_id, secondary_id):
+    base = "https://trello.com/c/"
+    for src, dst in ((primary_id, secondary_id), (secondary_id, primary_id)):
+        url = f"https://api.trello.com/1/cards/{src}/attachments"
+        params = {
+            "key": cfg.TRELLO_API_KEY,
+            "token": cfg.TRELLO_TOKEN,
+            "url": f"{base}{dst}",
+            "name": "Linked card",
+        }
+        resp = requests.post(url, params=params)
+        resp.raise_for_status()
