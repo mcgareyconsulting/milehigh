@@ -229,6 +229,22 @@ def create_app():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @app.route("/shipping/audit", methods=["GET", "POST"])
+    def shipping_audit():
+        """
+        Run the shipping reconciliation scan and return the summary payload.
+        """
+        from app.scripts.check_shipping_lists import run_reconciliation
+
+        try:
+            summary = run_reconciliation()
+            response_data = {"success": True}
+            response_data.update(summary)
+            return jsonify(response_data), 200
+        except Exception as exc:
+            logger.exception("Shipping audit failed")
+            return jsonify({"success": False, "error": str(exc)}), 500
+
     # Job change history route
     @app.route("/jobs/<int:job>/<release>/history")
     def job_change_history_path(job, release):
