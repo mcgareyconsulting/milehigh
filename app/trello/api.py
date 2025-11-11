@@ -2,7 +2,6 @@ import requests
 import re
 import os
 from app.config import Config as cfg
-from app.trello.utils import mountain_due_datetime, mountain_start_datetime
 from app.models import Job, db
 from flask import current_app
 from datetime import datetime
