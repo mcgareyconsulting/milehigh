@@ -1,11 +1,11 @@
 import logging
 import re
-
 import requests
 from app.config import Config as cfg
 from app.models import db, Job
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
+from app.procore.client import get_procore_client
 
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,16 @@ def get_companies_list():
     company_id = companies[0]["id"]
     return company_id
 
+# count num projects by company id
+def count_projects_by_company_id(company_id):
+    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
+    headers = {
+        "Authorization": f"Bearer {get_access_token()}",
+        "Procore-Company-Id": str(company_id),
+    }
+    projects = _request_json(url, headers=headers) or []
+    return len(projects)
+
 
 # Get Projects by Company ID
 def get_projects_by_company_id(company_id, project_number):
@@ -86,6 +96,23 @@ def get_projects_by_company_id(company_id, project_number):
         if project["project_number"] == str(project_number):
             return project["id"]
     return None
+
+# Function to get project id by project name
+def get_project_id_by_project_name(project_name):
+    # get procore client
+    procore = get_procore_client()
+    projects = procore.get_projects(cfg.PROD_PROCORE_COMPANY_ID)
+    print(len(projects))
+    for project in projects:
+        if project["name"] == project_name:
+            return project["id"]
+    return None
+
+# Get Submittal by ID
+def get_submittal_by_id(project_id, submittal_id):
+    procore = get_procore_client()
+    submittal = procore.get_submittal_by_id(project_id, submittal_id)
+    return submittal
 
 # Get Submittals by Project ID and Identifier
 def get_submittals_by_project_id(project_id, identifier):
@@ -211,11 +238,14 @@ def add_procore_link_to_trello_card(job, release):
         "viewer_url": viewer_url,
     }
 
-# if __name__ == "__main__":
-#     # refresh_access_token()
-#     app = create_app()
-#     # app context
-#     with app.app_context():
+if __name__ == "__main__":
+    from app import create_app
+    app = create_app()
+    # app context
+    with app.app_context():
 
-#         add_procore_link_to_trello_card(200, '436')
-#         print("Procore link added to trello card")
+        project_name = "Sandstone Ranch"
+        submittal_id = "66838267"
+        project_id = get_project_id_by_project_name(project_name)
+        submittal_data = get_submittal_by_id(project_id, submittal_id)
+        print(submittal_data)
