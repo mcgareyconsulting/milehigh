@@ -43,6 +43,7 @@ def _ensure_token(force_refresh: bool = False) -> ProcoreToken:
     return auth
 
 def _persist_token(access_token: str, expires_at: datetime, token_type: str) -> ProcoreToken:
+    """Persist access token. Note: Client credentials flow doesn't use refresh tokens."""
     auth = ProcoreToken.get_current()
     if auth is None:
         auth = ProcoreToken(access_token=access_token, expires_at=expires_at)
@@ -50,7 +51,7 @@ def _persist_token(access_token: str, expires_at: datetime, token_type: str) -> 
     else:
         auth.access_token = access_token
         auth.expires_at = expires_at
-    auth.refresh_token = ""
+    # Client credentials flow doesn't provide refresh tokens - new tokens are requested when expired
     auth.token_type = token_type or "Bearer"
     auth.updated_at = datetime.utcnow()
     db.session.commit()

@@ -13,11 +13,15 @@ class SyncStatus(Enum):
     SKIPPED = "skipped"
 
 class ProcoreToken(db.Model):
-    '''Model to store Procore access token metadata'''
+    '''Model to store Procore access token metadata for client credentials flow.
+    
+    Note: refresh_token field exists in the schema but is not used for client credentials flow.
+    New tokens are requested directly using client_id/client_secret when they expire.
+    '''
     __tablename__ = "procore_tokens"
     id = db.Column(db.Integer, primary_key=True)
     access_token = db.Column(db.Text, nullable=False)
-    refresh_token = db.Column(db.Text, nullable=True)
+    refresh_token = db.Column(db.Text, nullable=True)  # Not used for client credentials flow
     expires_at = db.Column(db.DateTime, nullable=False)
     token_type = db.Column(db.String(50), default="Bearer")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
