@@ -95,3 +95,6 @@ class ProcoreAPI:
             "event_type": event_type,
         }
         return self._post(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/webhooks/hooks/{hook_id}/triggers", data)
+
+    def get_webhook_deliveries(self, company_id: int, project_id: int, hook_id: int) -> List[Dict]:
+        return self._get(f"/rest/v2.0/companies/{company_id}/projects/{project_id}/webhooks/hooks/{hook_id}/deliveries")

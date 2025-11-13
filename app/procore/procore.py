@@ -105,6 +105,7 @@ def get_project_id_by_project_name(project_name):
     print(len(projects))
     for project in projects:
         if project["name"] == project_name:
+            print(project["project_number"], project["name"], project["id"])
             return project["id"]
     return None
 
@@ -244,8 +245,14 @@ if __name__ == "__main__":
     # app context
     with app.app_context():
 
-        project_name = "Sandstone Ranch"
-        submittal_id = "66838267"
-        project_id = get_project_id_by_project_name(project_name)
-        submittal_data = get_submittal_by_id(project_id, submittal_id)
+        procore = get_procore_client()
+        project_id = 2900844
+        submittal_id = 65961512
+        submittal_data = procore.get_submittal_by_id(project_id, submittal_id)
         print(submittal_data)
+
+        # list project webhooks
+        # procore = get_procore_client()
+        # project_id = 2900844
+        # webhooks = procore.list_project_webhooks(project_id, 'mile-high-metal-works')
+        # print(webhooks)
