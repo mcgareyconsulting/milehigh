@@ -151,6 +151,7 @@ def create_app():
         r"/jobs/history": {"origins": allowed_origins},
         r"/snapshot/*": {"origins": allowed_origins},
         r"/snapshots/*": {"origins": allowed_origins},
+        r"/procore/*": {"origins": allowed_origins},
     })
     
     # Database configuration - use environment variable for production
@@ -554,127 +555,6 @@ def create_app():
             logger.error("Error getting sync stats", error=str(e))
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/api/drafting-work-load", methods=["GET"])
-    def drafting_work_load():
-        """Return Drafting Work Load data from the latest Excel snapshot."""
-        try:
-            file_override = os.environ.get("DRAFTING_WORK_LOAD_FILE")
-            base_path = Path(app.root_path).parent
-            file_path = Path(file_override).expanduser().resolve() if file_override else (base_path / "Drafting Work Load 11_10_25.xlsx").resolve()
-
-            if not file_path.exists():
-                logger.warning(
-                    "Drafting Work Load file not found",
-                    requested_path=str(file_path)
-                )
-                return jsonify({
-                    "error": "Drafting Work Load file not found",
-                    "path": str(file_path)
-                }), 404
-
-            try:
-                df_all = pd.read_excel(file_path)
-            except Exception as exc:
-                logger.error(
-                    "Failed to read Drafting Work Load Excel file",
-                    path=str(file_path),
-                    error=str(exc)
-                )
-                return jsonify({
-                    "error": "Failed to read Drafting Work Load file",
-                    "details": str(exc)
-                }), 500
-
-            # Remove columns that shouldn't be exposed to the frontend
-            columns_to_drop = [col for col in ["Response"] if col in df_all.columns]
-            if columns_to_drop:
-                df_all = df_all.drop(columns=columns_to_drop)
-
-            if df_all.empty:
-                return jsonify({
-                    "rows": [],
-                    "columns": [],
-                    "ball_in_court_options": [],
-                    "filters": {"ball_in_court": []},
-                    "total": 0,
-                    "last_updated": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
-                }), 200
-
-            ball_in_court_column = "Ball In Court"
-            if ball_in_court_column not in df_all.columns:
-                logger.error(
-                    "Drafting Work Load file is missing expected column",
-                    missing_column=ball_in_court_column,
-                    available_columns=list(df_all.columns)
-                )
-                return jsonify({
-                    "error": f"Drafting Work Load file is missing '{ball_in_court_column}' column"
-                }), 500
-
-            # Build filter options from the full dataset before any filtering
-            ball_in_court_options = sorted({
-                str(value).strip()
-                for value in df_all[ball_in_court_column].dropna()
-                if str(value).strip()
-            })
-
-            requested_filter = request.args.get("ball_in_court")
-            filter_values = []
-            df_filtered = df_all.copy()
-
-            if requested_filter:
-                filter_values = [
-                    value.strip() for value in requested_filter.split(",") if value.strip()
-                ]
-                if filter_values:
-                    normalized_filters = {value.casefold() for value in filter_values}
-
-                    def matches_ball_in_court(cell_value):
-                        if pd.isna(cell_value):
-                            return False
-                        text_value = str(cell_value).strip()
-                        return text_value.casefold() in normalized_filters
-
-                    df_filtered = df_filtered[df_filtered[ball_in_court_column].apply(matches_ball_in_court)]
-
-            def serialize_value(value):
-                if pd.isna(value):
-                    return None
-                if isinstance(value, pd.Timestamp):
-                    return value.isoformat()
-                if isinstance(value, datetime):
-                    return value.isoformat()
-                if isinstance(value, float):
-                    if value.is_integer():
-                        return int(value)
-                    return float(value)
-                if isinstance(value, (int, str, bool)):
-                    return value
-                if hasattr(value, "item"):  # Handle numpy scalar types
-                    return serialize_value(value.item())
-                return str(value)
-
-            rows = []
-            for record in df_filtered.to_dict(orient="records"):
-                serialized = {column: serialize_value(val) for column, val in record.items()}
-                rows.append(serialized)
-
-            response = {
-                "rows": rows,
-                "columns": df_all.columns.tolist(),
-                "ball_in_court_options": ball_in_court_options,
-                "filters": {"ball_in_court": filter_values},
-                "total": len(rows),
-                "last_updated": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
-            }
-
-            return jsonify(response), 200
-        except Exception as exc:
-            logger.error("Unexpected error loading Drafting Work Load data", error=str(exc))
-            return jsonify({
-                "error": "Unexpected error loading Drafting Work Load data",
-                "details": str(exc)
-            }), 500
 
     # Lightweight HTML dashboard for operations and logs
     @app.route('/sync/operations/view')

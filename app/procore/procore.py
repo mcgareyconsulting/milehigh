@@ -102,7 +102,6 @@ def get_project_id_by_project_name(project_name):
     # get procore client
     procore = get_procore_client()
     projects = procore.get_projects(cfg.PROD_PROCORE_COMPANY_ID)
-    print(len(projects))
     for project in projects:
         if project["name"] == project_name:
             return project["id"]

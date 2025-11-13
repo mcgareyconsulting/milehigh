@@ -27,6 +27,41 @@ class ProcoreToken(db.Model):
         '''Get current Procore token'''
         return cls.query.order_by(cls.updated_at.desc()).first()
 
+class ProcoreSubmittal(db.Model):
+    __tablename__ = "procore_submittals"
+    id = db.Column(db.Integer, primary_key=True)
+    submittal_id = db.Column(db.String(255), unique=True, nullable=False)
+    procore_project_id = db.Column(db.String(100))
+    project_number = db.Column(db.String(100))
+    project_name = db.Column(db.String(255))
+    title = db.Column(db.Text)
+    ball_in_court_due_date = db.Column(db.Date)
+    status = db.Column(db.String(100))
+    type = db.Column(db.String(100))
+    ball_in_court = db.Column(db.String(100))
+    submittal_manager = db.Column(db.String(255))
+    order_number = db.Column(db.Integer)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "submittal_id": self.submittal_id,
+            "procore_project_id": self.procore_project_id,
+            "project_number": self.project_number,
+            "project_name": self.project_name,
+            "title": self.title,
+            "ball_in_court_due_date": self.ball_in_court_due_date,
+            "status": self.status,
+            "type": self.type,
+            "ball_in_court": self.ball_in_court,
+            "submittal_manager": self.submittal_manager,
+            "order_number": self.order_number,
+            "last_updated": self.last_updated,
+            "created_at": self.created_at,
+        }
+
 class SyncOperation(db.Model):
     """Track individual sync operations."""
     __tablename__ = "sync_operations"

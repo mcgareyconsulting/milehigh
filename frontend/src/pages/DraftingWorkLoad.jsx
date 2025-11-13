@@ -36,6 +36,9 @@ function DraftingWorkLoad() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState(null);
+    const [uploadSuccess, setUploadSuccess] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -43,39 +46,40 @@ function DraftingWorkLoad() {
         })
     );
 
+    const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await axios.get(`${API_BASE_URL}/procore/api/drafting-work-load`);
+            console.log(response);
+            const data = response.data || {};
+
+            const cleanedRows = (data.submittals || []).map((row, index) => {
+                const rawId = row.submittal_id ?? row.id ?? `row-${index}`;
+                return {
+                    ...row,
+                    id: String(rawId)
+                };
+            });
+
+            const visibleColumns = (data.columns && data.columns.length > 0
+                ? data.columns
+                : (cleanedRows[0] ? Object.keys(cleanedRows[0]) : [])
+            ).filter((column) => column !== 'Response');
+
+            setRows(cleanedRows);
+            setColumns(visibleColumns);
+            setLastUpdated(data.last_updated || null);
+        } catch (err) {
+            const message = err.response?.data?.error || err.message || 'Failed to load Drafting Work Load data.';
+            setError(message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            setError(null);
-
-            try {
-                const response = await axios.get(`${API_BASE_URL}/api/drafting-work-load`);
-                const data = response.data || {};
-
-                const cleanedRows = (data.rows || []).map((row, index) => {
-                    const rawId = row['Submittals Id'] ?? row.id ?? `row-${index}`;
-                    return {
-                        ...row,
-                        id: String(rawId)
-                    };
-                });
-
-                const visibleColumns = (data.columns && data.columns.length > 0
-                    ? data.columns
-                    : (cleanedRows[0] ? Object.keys(cleanedRows[0]) : [])
-                ).filter((column) => column !== 'Response');
-
-                setRows(cleanedRows);
-                setColumns(visibleColumns);
-                setLastUpdated(data.last_updated || null);
-            } catch (err) {
-                const message = err.response?.data?.error || err.message || 'Failed to load Drafting Work Load data.';
-                setError(message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchData();
     }, []);
 
@@ -83,7 +87,7 @@ function DraftingWorkLoad() {
         if (selectedBallInCourt === ALL_OPTION_VALUE) {
             return true;
         }
-        const value = row['Ball In Court'];
+        const value = row.ball_in_court;
         return (value ?? '').toString().trim() === selectedBallInCourt;
     }, [selectedBallInCourt]);
 
@@ -92,7 +96,7 @@ function DraftingWorkLoad() {
     const ballInCourtOptions = useMemo(() => {
         const values = new Set();
         rows.forEach((row) => {
-            const value = row['Ball In Court'];
+            const value = row.ball_in_court;
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 values.add(String(value).trim());
             }
@@ -116,6 +120,59 @@ function DraftingWorkLoad() {
 
     const resetFilters = () => {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
+    };
+
+    const handleFileUpload = async (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        // Validate file type
+        if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+            setUploadError('Please select an Excel file (.xlsx or .xls)');
+            setUploadSuccess(false);
+            return;
+        }
+
+        setUploading(true);
+        setUploadError(null);
+        setUploadSuccess(false);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await axios.post(
+                `${API_BASE_URL}/procore/api/upload/drafting-workload-submittals`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+
+            if (response.data.success) {
+                setUploadSuccess(true);
+                setUploadError(null);
+                // Refresh data after successful upload
+                await fetchData();
+                // Clear success message after 3 seconds
+                setTimeout(() => setUploadSuccess(false), 3000);
+            } else {
+                setUploadError(response.data.error || 'Upload failed');
+                setUploadSuccess(false);
+            }
+        } catch (err) {
+            const message = err.response?.data?.error || err.response?.data?.details || err.message || 'Failed to upload file.';
+            setUploadError(message);
+            setUploadSuccess(false);
+        } finally {
+            setUploading(false);
+            // Reset file input
+            event.target.value = '';
+        }
     };
 
     const handleDragEnd = useCallback((event) => {
@@ -268,9 +325,60 @@ function DraftingWorkLoad() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="mt-4 text-sm text-gray-500">
-                                Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
+                            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-sm text-gray-500">
+                                    Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <label className="relative cursor-pointer">
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.xls"
+                                            onChange={handleFileUpload}
+                                            disabled={uploading}
+                                            className="hidden"
+                                            id="file-upload"
+                                        />
+                                        <span className={`inline-flex items-center px-5 py-2.5 rounded-lg font-medium shadow-sm transition-all ${uploading
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-accent-500 text-white hover:bg-accent-600 cursor-pointer'
+                                            }`}>
+                                            {uploading ? (
+                                                <>
+                                                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                                                    Uploading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    📤 Upload Excel File
+                                                </>
+                                            )}
+                                        </span>
+                                    </label>
+                                </div>
                             </div>
+                            {uploadSuccess && (
+                                <div className="mt-4 bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg shadow-sm">
+                                    <div className="flex items-start">
+                                        <span className="text-xl mr-3">✓</span>
+                                        <div>
+                                            <p className="font-semibold">File uploaded successfully!</p>
+                                            <p className="text-sm mt-1">The data has been refreshed.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {uploadError && (
+                                <div className="mt-4 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg shadow-sm">
+                                    <div className="flex items-start">
+                                        <span className="text-xl mr-3">⚠️</span>
+                                        <div>
+                                            <p className="font-semibold">Upload failed</p>
+                                            <p className="text-sm mt-1">{uploadError}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {loading && (
