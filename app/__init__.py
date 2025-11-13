@@ -1,4 +1,7 @@
 import os
+from pathlib import Path
+
+import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from app.trello import trello_bp
@@ -229,6 +232,80 @@ def create_app():
             }), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+    @app.route("/shipping/audit", methods=["GET", "POST"])
+    def shipping_audit():
+        """
+        Run the shipping reconciliation scan and return the summary payload.
+        """
+        from app.scripts.check_shipping_lists import run_reconciliation
+
+        try:
+            summary = run_reconciliation()
+            response_data = {"success": True}
+            response_data.update(summary)
+            return jsonify(response_data), 200
+        except Exception as exc:
+            logger.exception("Shipping audit failed")
+            return jsonify({"success": False, "error": str(exc)}), 500
+
+    @app.route("/shipping/enforce-excel", methods=["GET", "POST"])
+    def shipping_enforce_excel():
+        """
+        Synchronize Excel staging columns for jobs in shipping lists.
+        DB records remain unchanged; only Excel cells are updated.
+        """
+        from app.scripts.enforce_shipping_excel import enforce_shipping_excel
+
+        dry_run = False
+        batch_size = None
+        include_details = False
+        payload = request.get_json(silent=True) or {}
+
+        if "dry_run" in payload:
+            dry_run = bool(payload["dry_run"])
+        else:
+            dry_run_param = request.args.get("dry_run")
+            if isinstance(dry_run_param, str):
+                dry_run = dry_run_param.lower() in ("1", "true", "yes", "on")
+
+        if "batch_size" in payload:
+            try:
+                batch_size_val = int(payload["batch_size"])
+                if batch_size_val > 0:
+                    batch_size = batch_size_val
+            except (TypeError, ValueError):
+                pass
+        else:
+            batch_size_param = request.args.get("batch_size")
+            if batch_size_param is not None:
+                try:
+                    batch_size_val = int(batch_size_param)
+                    if batch_size_val > 0:
+                        batch_size = batch_size_val
+                except (TypeError, ValueError):
+                    pass
+
+        if "include_details" in payload:
+            include_details = bool(payload["include_details"])
+        else:
+            include_details_param = request.args.get("include_details")
+            if isinstance(include_details_param, str):
+                include_details = include_details_param.lower() in ("1", "true", "yes", "on")
+
+        try:
+            summary = enforce_shipping_excel(
+                dry_run=dry_run,
+                update_db=False,
+                batch_size=batch_size,
+                include_details=include_details,
+            )
+            response_data = {"success": True}
+            response_data.update(summary)
+            return jsonify(response_data), 200
+        except Exception as exc:
+            logger.exception("Shipping Excel enforcement failed")
+            return jsonify({"success": False, "error": str(exc)}), 500
 
     # Job change history route
     @app.route("/jobs/<int:job>/<release>/history")
@@ -476,6 +553,128 @@ def create_app():
         except Exception as e:
             logger.error("Error getting sync stats", error=str(e))
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/drafting-work-load", methods=["GET"])
+    def drafting_work_load():
+        """Return Drafting Work Load data from the latest Excel snapshot."""
+        try:
+            file_override = os.environ.get("DRAFTING_WORK_LOAD_FILE")
+            base_path = Path(app.root_path).parent
+            file_path = Path(file_override).expanduser().resolve() if file_override else (base_path / "Drafting Work Load 11_10_25.xlsx").resolve()
+
+            if not file_path.exists():
+                logger.warning(
+                    "Drafting Work Load file not found",
+                    requested_path=str(file_path)
+                )
+                return jsonify({
+                    "error": "Drafting Work Load file not found",
+                    "path": str(file_path)
+                }), 404
+
+            try:
+                df_all = pd.read_excel(file_path)
+            except Exception as exc:
+                logger.error(
+                    "Failed to read Drafting Work Load Excel file",
+                    path=str(file_path),
+                    error=str(exc)
+                )
+                return jsonify({
+                    "error": "Failed to read Drafting Work Load file",
+                    "details": str(exc)
+                }), 500
+
+            # Remove columns that shouldn't be exposed to the frontend
+            columns_to_drop = [col for col in ["Response"] if col in df_all.columns]
+            if columns_to_drop:
+                df_all = df_all.drop(columns=columns_to_drop)
+
+            if df_all.empty:
+                return jsonify({
+                    "rows": [],
+                    "columns": [],
+                    "ball_in_court_options": [],
+                    "filters": {"ball_in_court": []},
+                    "total": 0,
+                    "last_updated": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
+                }), 200
+
+            ball_in_court_column = "Ball In Court"
+            if ball_in_court_column not in df_all.columns:
+                logger.error(
+                    "Drafting Work Load file is missing expected column",
+                    missing_column=ball_in_court_column,
+                    available_columns=list(df_all.columns)
+                )
+                return jsonify({
+                    "error": f"Drafting Work Load file is missing '{ball_in_court_column}' column"
+                }), 500
+
+            # Build filter options from the full dataset before any filtering
+            ball_in_court_options = sorted({
+                str(value).strip()
+                for value in df_all[ball_in_court_column].dropna()
+                if str(value).strip()
+            })
+
+            requested_filter = request.args.get("ball_in_court")
+            filter_values = []
+            df_filtered = df_all.copy()
+
+            if requested_filter:
+                filter_values = [
+                    value.strip() for value in requested_filter.split(",") if value.strip()
+                ]
+                if filter_values:
+                    normalized_filters = {value.casefold() for value in filter_values}
+
+                    def matches_ball_in_court(cell_value):
+                        if pd.isna(cell_value):
+                            return False
+                        text_value = str(cell_value).strip()
+                        return text_value.casefold() in normalized_filters
+
+                    df_filtered = df_filtered[df_filtered[ball_in_court_column].apply(matches_ball_in_court)]
+
+            def serialize_value(value):
+                if pd.isna(value):
+                    return None
+                if isinstance(value, pd.Timestamp):
+                    return value.isoformat()
+                if isinstance(value, datetime):
+                    return value.isoformat()
+                if isinstance(value, float):
+                    if value.is_integer():
+                        return int(value)
+                    return float(value)
+                if isinstance(value, (int, str, bool)):
+                    return value
+                if hasattr(value, "item"):  # Handle numpy scalar types
+                    return serialize_value(value.item())
+                return str(value)
+
+            rows = []
+            for record in df_filtered.to_dict(orient="records"):
+                serialized = {column: serialize_value(val) for column, val in record.items()}
+                rows.append(serialized)
+
+            response = {
+                "rows": rows,
+                "columns": df_all.columns.tolist(),
+                "ball_in_court_options": ball_in_court_options,
+                "filters": {"ball_in_court": filter_values},
+                "total": len(rows),
+                "last_updated": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
+            }
+
+            return jsonify(response), 200
+        except Exception as exc:
+            logger.error("Unexpected error loading Drafting Work Load data", error=str(exc))
+            return jsonify({
+                "error": "Unexpected error loading Drafting Work Load data",
+                "details": str(exc)
+            }), 500
 
     # Lightweight HTML dashboard for operations and logs
     @app.route('/sync/operations/view')
@@ -1013,6 +1212,79 @@ def create_app():
             logger.error("Error fixing Trello list info", error=str(e))
             return jsonify({
                 "message": "Trello list info fix failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/shipping/store-at-mhmw/scan", methods=["GET"])
+    def scan_store_shipping_route():
+        """
+        Preview which jobs would be updated to ship='ST' based on Trello list membership.
+        Also cross-checks database and Trello list counts/IDs.
+        """
+        try:
+            from app.scripts.store_shipping_sync import scan_store_shipping as scan_store_shipping_script
+
+            limit = request.args.get("limit", type=int)
+
+            logger.info(
+                "Scanning Store at MHMW shipping sync candidates",
+                limit=limit,
+            )
+
+            result = scan_store_shipping_script(return_json=True, limit=limit)
+
+            return jsonify({
+                "message": "Store at MHMW shipping scan completed",
+                "scan": result
+            }), 200
+
+        except Exception as e:
+            logger.error("Error scanning Store at MHMW shipping sync", error=str(e))
+            return jsonify({
+                "message": "Store at MHMW shipping scan failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/shipping/store-at-mhmw/run", methods=["POST"])
+    def run_store_shipping_sync_route():
+        """
+        Update jobs so their ship column is 'ST' for cards in the target Trello list,
+        after verifying database and Trello list counts match.
+        """
+        try:
+            from app.scripts.store_shipping_sync import run_store_shipping_sync as run_store_shipping_sync_script
+
+            limit = request.args.get("limit", type=int)
+            batch_size = request.args.get("batch_size", default=50, type=int)
+
+            logger.info(
+                "Running Store at MHMW shipping sync",
+                limit=limit,
+                batch_size=batch_size,
+            )
+
+            result = run_store_shipping_sync_script(
+                return_json=True,
+                limit=limit,
+                batch_size=batch_size,
+            )
+
+            if result.get("aborted"):
+                return jsonify({
+                    "message": "Store at MHMW shipping sync aborted",
+                    "reason": result.get("reason"),
+                    "run": result
+                }), 409
+
+            return jsonify({
+                "message": "Store at MHMW shipping sync completed",
+                "run": result
+            }), 200
+
+        except Exception as e:
+            logger.error("Error running Store at MHMW shipping sync", error=str(e))
+            return jsonify({
+                "message": "Store at MHMW shipping sync failed",
                 "error": str(e)
             }), 500
 
