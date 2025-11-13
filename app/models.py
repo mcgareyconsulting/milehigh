@@ -40,7 +40,7 @@ class ProcoreSubmittal(db.Model):
     type = db.Column(db.String(100))
     ball_in_court = db.Column(db.String(100))
     submittal_manager = db.Column(db.String(255))
-    order_number = db.Column(db.Integer)
+    order_number = db.Column(db.Float)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
