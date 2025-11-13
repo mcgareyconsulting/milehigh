@@ -322,6 +322,13 @@ def incremental_seed_missing_jobs(batch_size=50):
             if not job_num or not release_str:
                 print(f"⚠️  Skipping {identifier} - invalid job/release numbers")
                 continue
+            
+            # Validate job number is an integer
+            try:
+                job_num = int(job_num)
+            except (ValueError, TypeError):
+                print(f"⚠️  Skipping {identifier} - Job # is not a valid integer: {job_num}")
+                continue
                 
             # Check if job already exists in database
             existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
@@ -633,7 +640,13 @@ def process_single_identifier(identifier: str, dry_run: bool = True):
     release_str = str(row.get("Release #", "")).strip()
     existing_job = None
     if job_num and release_str:
-        existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+        # Validate job number is an integer
+        try:
+            job_num = int(job_num)
+            existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+        except (ValueError, TypeError):
+            # Skip rows with invalid job numbers
+            pass
 
     # Check Trello existence for this identifier
     cards = get_trello_cards_from_subset()
@@ -890,7 +903,13 @@ def get_trello_excel_cross_check_summary():
             identifier = row["identifier"]
             
             if job_num and release_str:
-                existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+                # Validate job number is an integer
+                try:
+                    job_num = int(job_num)
+                    existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+                except (ValueError, TypeError):
+                    # Skip rows with invalid job numbers
+                    existing_job = None
                 if existing_job:
                     existing_in_db += 1
                 else:
@@ -995,6 +1014,12 @@ def get_first_identifier_to_seed():
         job_num = row.get("Job #")
         release_str = str(row.get("Release #", "")).strip()
         if not job_num or not release_str:
+            continue
+        # Validate job number is an integer
+        try:
+            job_num = int(job_num)
+        except (ValueError, TypeError):
+            # Skip rows with invalid job numbers
             continue
         existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
         if existing_job:
