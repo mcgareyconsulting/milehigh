@@ -196,7 +196,13 @@ def check_job_exists_in_db(job_number, release_number):
         print(f"[DEBUG] Checking for job: {job_number}-{release_number}")
         
         # Convert job_number to int, keep release_number as string to preserve format like "v862"
-        job_int = int(job_number)
+        try:
+            job_int = int(job_number)
+        except (ValueError, TypeError):
+            error_msg = f"Invalid job number: {job_number} - cannot convert to integer"
+            print(f"[ERROR] {error_msg}")
+            raise Exception(error_msg)
+        
         release_str = str(release_number)
         
         print(f"[DEBUG] Converted identifiers - job_int: {job_int}, release_str: {release_str}")
@@ -262,8 +268,14 @@ def create_job_record_from_excel_data(excel_data):
     try:
         from app.onedrive.utils import parse_excel_datetime
         
-        # Extract basic identifiers
-        job_number = int(excel_data.get('Job #', 0))
+        # Extract basic identifiers with validation
+        job_val = excel_data.get('Job #')
+        try:
+            job_number = int(job_val) if job_val is not None else 0
+        except (ValueError, TypeError):
+            print(f"[ERROR] Invalid Job # value: {job_val} - cannot convert to integer")
+            return None
+        
         release_number = str(excel_data.get('Release #', ''))
         
         # Create new Job record with Excel data only
@@ -929,7 +941,17 @@ def get_card_attachments_by_job_release(job_number, release_number):
     """
     try:
         # Convert job_number to int, keep release_number as string to preserve format like "v862"
-        job_int = int(job_number)
+        try:
+            job_int = int(job_number)
+        except (ValueError, TypeError):
+            error_msg = f"Invalid job number: {job_number} - cannot convert to integer"
+            print(f"[TRELLO API] {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "attachments": []
+            }
+        
         release_str = str(release_number)
         
         print(f"[TRELLO API] Looking up attachments for job: {job_int}-{release_str}")

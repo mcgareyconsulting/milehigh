@@ -485,7 +485,13 @@ def sync_from_onedrive(data):
             if pd.isna(job) or pd.isna(release):
                 continue
 
-            job_num = int(job)
+            # Validate job number is an integer
+            try:
+                job_num = int(job)
+            except (ValueError, TypeError):
+                # Skip rows with invalid job numbers (e.g., '{' character)
+                continue
+
             release_str = str(release) if not pd.isna(release) else None
 
             rec = Job.query.filter_by(job=job_num, release=release_str).one_or_none()

@@ -69,6 +69,24 @@ def get_excel_dataframe():
 
     df_final = df_all.dropna(subset=["Job #", "Release #"]).copy()
 
+    # Filter out rows where Job # is not a valid integer
+    def is_valid_job_number(val):
+        """Check if a value can be converted to an integer."""
+        try:
+            if pd.isna(val):
+                return False
+            int(val)
+            return True
+        except (ValueError, TypeError):
+            return False
+    
+    # Filter to keep only rows with valid job numbers
+    valid_job_mask = df_final["Job #"].apply(is_valid_job_number)
+    invalid_count = (~valid_job_mask).sum()
+    if invalid_count > 0:
+        print(f"⚠️  Filtering out {invalid_count} row(s) with invalid Job # values (not integers)")
+    df_final = df_final[valid_job_mask].copy()
+
     # Release # should be string (handle mixed types)
     df_final["Release #"] = df_final["Release #"].astype(str)
 
@@ -467,30 +485,41 @@ def find_new_rows_in_excel(current_df, previous_df=None):
         print("-" * 50)
         
         for index, row in new_rows.iterrows():
-            job_number = int(row['Job #'])
-            release_number = str(row['Release #'])
-            identifier = f"{job_number}-{release_number}"
-            
-            print(f"Processing {identifier}...")
-            
-            # Convert row to dictionary for Trello API
-            excel_data = row.to_dict()
-            
-            # Call the existing Trello card creation function
             try:
-                from app.trello.api import create_trello_card_from_excel_data
-                result = create_trello_card_from_excel_data(excel_data, "Released")
+                # Validate job number is an integer before processing
+                job_val = row['Job #']
+                try:
+                    job_number = int(job_val)
+                except (ValueError, TypeError):
+                    print(f"⚠️  Skipping row with invalid Job # value: {job_val}")
+                    continue
                 
-                if result["success"]:
-                    print(f"{identifier}: ✅ Card created successfully (ID: {result.get('card_id')})")
-                else:
-                    if "already exists in database" in result.get("error", ""):
-                        print(f"{identifier}: ⚠️  Already exists in DB - {result.get('error')}")
+                release_number = str(row['Release #'])
+                identifier = f"{job_number}-{release_number}"
+                
+                print(f"Processing {identifier}...")
+                
+                # Convert row to dictionary for Trello API
+                excel_data = row.to_dict()
+                
+                # Call the existing Trello card creation function
+                try:
+                    from app.trello.api import create_trello_card_from_excel_data
+                    result = create_trello_card_from_excel_data(excel_data, "Released")
+                    
+                    if result["success"]:
+                        print(f"{identifier}: ✅ Card created successfully (ID: {result.get('card_id')})")
                     else:
-                        print(f"{identifier}: ❌ Failed to create card - {result.get('error')}")
-                        
+                        if "already exists in database" in result.get("error", ""):
+                            print(f"{identifier}: ⚠️  Already exists in DB - {result.get('error')}")
+                        else:
+                            print(f"{identifier}: ❌ Failed to create card - {result.get('error')}")
+                            
+                except Exception as e:
+                    print(f"{identifier}: ❌ Error processing - {str(e)}")
             except Exception as e:
-                print(f"{identifier}: ❌ Error processing - {str(e)}")
+                print(f"❌ Error processing row at index {index}: {str(e)}")
+                continue
         
         print("-" * 50)
     
