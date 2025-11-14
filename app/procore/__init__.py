@@ -52,8 +52,8 @@ def drafting_workload_submittals():
     inserted_count = 0
 
     for _, row in df.iterrows():
-        submittal_id = row['Submittals Id']
-        if ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first():
+        submittal_id = str(row['Submittals Id']) if pd.notna(row['Submittals Id']) else None
+        if not submittal_id or ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first():
             skipped_count += 1
             continue
 
@@ -68,7 +68,7 @@ def drafting_workload_submittals():
 
         # Insert/update in DB
         submittal = ProcoreSubmittal(
-            submittal_id=row['Submittals Id'],
+            submittal_id=submittal_id,
             procore_project_id=project_id,
             project_number=row['Project Number'],
             project_name=project_name,
@@ -123,6 +123,9 @@ def update_submittal_order():
             return jsonify({
                 "error": "submittal_id is required"
             }), 400
+        
+        # Ensure submittal_id is a string for proper database comparison
+        submittal_id = str(submittal_id)
         
         submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
