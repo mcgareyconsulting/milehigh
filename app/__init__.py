@@ -1602,6 +1602,160 @@ def create_app():
             logger.error("Error downloading file", error=str(e), file=file_path)
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/files/read-pkl")
+    def read_pkl_file():
+        """
+        Read a .pkl (pickle) file from the persistent disk and return its contents.
+        
+        Query parameters:
+            file: Relative path to the .pkl file (required)
+            path: Optional base directory (defaults to SNAPSHOTS_DIR or /var/data/)
+            format: Output format - 'json' (default) or 'csv'
+            limit: Optional limit on number of rows to return (default: all rows)
+            offset: Optional offset for pagination (default: 0)
+        
+        Returns:
+            JSON with file contents (DataFrame converted to records) and metadata
+        """
+        try:
+            from app.config import Config
+            import pandas as pd
+            import json
+            
+            config = Config()
+            
+            file_path = request.args.get('file')
+            base_path = request.args.get('path', '')
+            output_format = request.args.get('format', 'json').lower()
+            limit = request.args.get('limit', type=int)
+            offset = request.args.get('offset', 0, type=int)
+            
+            if not file_path:
+                return jsonify({
+                    "error": "Missing required parameter",
+                    "message": "The 'file' parameter is required"
+                }), 400
+            
+            # Determine base directory
+            if not base_path:
+                if os.path.exists('/var/data'):
+                    base_path = '/var/data'
+                else:
+                    base_path = config.SNAPSHOTS_DIR
+            else:
+                if not os.path.isabs(base_path):
+                    base_path = os.path.join(config.SNAPSHOTS_DIR, base_path)
+                allowed_bases = ['/var/data', config.SNAPSHOTS_DIR]
+                if not any(base_path.startswith(base) for base in allowed_bases if base):
+                    return jsonify({
+                        "error": "Path not allowed"
+                    }), 403
+            
+            base_path = os.path.abspath(os.path.normpath(base_path))
+            
+            # Construct full file path
+            if os.path.isabs(file_path):
+                full_path = os.path.abspath(os.path.normpath(file_path))
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            else:
+                full_path = os.path.abspath(os.path.normpath(os.path.join(base_path, file_path)))
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            
+            if not os.path.exists(full_path):
+                return jsonify({
+                    "error": "File not found",
+                    "file": file_path
+                }), 404
+            
+            if not full_path.endswith('.pkl'):
+                return jsonify({
+                    "error": "File is not a .pkl file",
+                    "file": file_path
+                }), 400
+            
+            # Read the pickle file
+            try:
+                df = pd.read_pickle(full_path)
+            except Exception as e:
+                logger.error("Error reading pickle file", error=str(e), file=full_path)
+                return jsonify({
+                    "error": "Failed to read pickle file",
+                    "message": str(e)
+                }), 500
+            
+            # Check if it's a DataFrame
+            if not isinstance(df, pd.DataFrame):
+                return jsonify({
+                    "error": "Pickle file does not contain a DataFrame",
+                    "type": str(type(df))
+                }), 400
+            
+            # Get metadata if available
+            metadata = None
+            metadata_path = full_path.replace('.pkl', '_meta.json')
+            if os.path.exists(metadata_path):
+                try:
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                except Exception as e:
+                    logger.warning("Could not load metadata file", error=str(e))
+            
+            # Apply pagination if requested
+            total_rows = len(df)
+            if offset > 0 or limit is not None:
+                end_idx = offset + limit if limit is not None else None
+                df = df.iloc[offset:end_idx]
+            
+            # Convert DataFrame to records
+            records = df.to_dict(orient='records')
+            
+            # Convert non-serializable types (pandas Timestamps, numpy types, etc.)
+            for record in records:
+                for key, value in record.items():
+                    if pd.isna(value):
+                        record[key] = None
+                    elif isinstance(value, (pd.Timestamp, datetime)):
+                        record[key] = value.isoformat()
+                    elif hasattr(value, 'item'):  # numpy types
+                        try:
+                            record[key] = value.item()
+                        except (ValueError, AttributeError):
+                            record[key] = str(value)
+            
+            # Prepare response based on format
+            if output_format == 'csv':
+                # Return as CSV string
+                csv_string = df.to_csv(index=False)
+                from flask import Response
+                return Response(
+                    csv_string,
+                    mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={os.path.basename(full_path).replace(".pkl", ".csv")}'}
+                )
+            else:
+                # Return as JSON
+                return jsonify({
+                    "file": file_path,
+                    "full_path": full_path,
+                    "total_rows": total_rows,
+                    "returned_rows": len(records),
+                    "offset": offset,
+                    "limit": limit,
+                    "columns": list(df.columns),
+                    "metadata": metadata,
+                    "data": records
+                }), 200
+            
+        except Exception as e:
+            logger.error("Error reading pkl file", error=str(e), file=file_path)
+            return jsonify({"error": str(e)}), 500
+
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
