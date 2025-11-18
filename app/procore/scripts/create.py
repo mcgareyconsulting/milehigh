@@ -1,0 +1,244 @@
+"""
+Script to create Procore webhooks for Submittals updates.
+
+Usage:
+    python -m app.procore.scripts.create
+
+Scans the procore_submittals table for unique project_numbers,
+creates webhooks for Submittals resource with 'update' event type,
+and logs all webhook responses to a file for debugging.
+"""
+
+from typing import Dict, Optional
+
+from app import create_app
+from app.procore.client import get_procore_client
+from app.procore.webhook_utils import (
+    get_unique_projects,
+    log_operation,
+    has_submittals_update_trigger,
+    get_webhook_triggers
+)
+
+
+def create_webhook_and_trigger(procore_client, project_id: int, project_number: Optional[str], 
+                               namespace: str = "mile-high-metal-works") -> Dict:
+    """
+    Create a webhook and trigger for Submittals updates if it doesn't exist.
+    Returns operation result dictionary.
+    """
+    log_file = "procore_webhook_responses.log"
+    
+    # Check if webhook with Submittals/update trigger already exists
+    exists, existing_hook_id = has_submittals_update_trigger(procore_client, project_id, namespace)
+    
+    if exists:
+        log_operation(
+            log_file,
+            "webhook_already_exists",
+            project_id,
+            project_number,
+            {"hook_id": existing_hook_id, "message": "Webhook with Submittals/update trigger already exists"},
+            "skipped"
+        )
+        return {
+            "status": "skipped",
+            "message": "Webhook already exists",
+            "hook_id": existing_hook_id
+        }
+    
+    # If webhook exists but trigger doesn't, add the trigger
+    if existing_hook_id:
+        try:
+            # First check if trigger already exists but wasn't detected
+            triggers = get_webhook_triggers(procore_client, project_id, existing_hook_id)
+            has_trigger = any(
+                isinstance(t, dict) and t.get("resource_name") == "Submittals" and t.get("event_type") == "update"
+                for t in triggers
+            )
+            
+            if has_trigger:
+                log_operation(
+                    log_file,
+                    "trigger_already_exists",
+                    project_id,
+                    project_number,
+                    {"hook_id": existing_hook_id, "message": "Trigger already exists"},
+                    "skipped"
+                )
+                return {
+                    "status": "skipped",
+                    "message": "Trigger already exists",
+                    "hook_id": existing_hook_id
+                }
+            
+            # Create the trigger
+            trigger_response = procore_client.create_webhook_trigger(project_id, existing_hook_id, "update")
+            log_operation(
+                log_file,
+                "create_webhook_trigger",
+                project_id,
+                project_number,
+                trigger_response,
+                "success"
+            )
+            return {
+                "status": "success",
+                "action": "trigger_created",
+                "hook_id": existing_hook_id,
+                "response": trigger_response
+            }
+        except Exception as e:
+            error_data = {"hook_id": existing_hook_id, "error": str(e)}
+            log_operation(
+                log_file,
+                "create_webhook_trigger",
+                project_id,
+                project_number,
+                error_data,
+                "error"
+            )
+            return {
+                "status": "error",
+                "action": "create_trigger",
+                "error": str(e)
+            }
+    
+    # Create new webhook
+    try:
+        # Note: name and event_type parameters are accepted but not used in the API call
+        webhook_response = procore_client.create_project_webhook(project_id, "Submittals Updates", "update")
+        
+        # Handle Procore API response format - could be wrapped in {"data": {...}} or direct dict
+        if isinstance(webhook_response, dict) and "data" in webhook_response:
+            webhook_data = webhook_response["data"]
+            if isinstance(webhook_data, dict):
+                hook_id = webhook_data.get("id")
+            else:
+                hook_id = None
+        elif isinstance(webhook_response, dict):
+            hook_id = webhook_response.get("id")
+        else:
+            hook_id = None
+        
+        if not hook_id:
+            raise ValueError(f"Webhook created but no hook_id returned. Response: {webhook_response}")
+        
+        log_operation(
+            log_file,
+            "create_project_webhook",
+            project_id,
+            project_number,
+            webhook_response,
+            "success"
+        )
+        
+        # Create the trigger for Submittals/update
+        try:
+            trigger_response = procore_client.create_webhook_trigger(project_id, hook_id, "update")
+            log_operation(
+                log_file,
+                "create_webhook_trigger",
+                project_id,
+                project_number,
+                trigger_response,
+                "success"
+            )
+            
+            return {
+                "status": "success",
+                "action": "webhook_and_trigger_created",
+                "hook_id": hook_id,
+                "webhook_response": webhook_response,
+                "trigger_response": trigger_response
+            }
+        except Exception as e:
+            error_data = {"hook_id": hook_id, "error": str(e)}
+            log_operation(
+                log_file,
+                "create_webhook_trigger",
+                project_id,
+                project_number,
+                error_data,
+                "error"
+            )
+            return {
+                "status": "partial_success",
+                "action": "webhook_created_trigger_failed",
+                "hook_id": hook_id,
+                "webhook_response": webhook_response,
+                "trigger_error": str(e)
+            }
+            
+    except Exception as e:
+        error_data = {"error": str(e)}
+        log_operation(
+            log_file,
+            "create_project_webhook",
+            project_id,
+            project_number,
+            error_data,
+            "error"
+        )
+        return {
+            "status": "error",
+            "action": "create_webhook",
+            "error": str(e)
+        }
+
+
+def main():
+    """Main function to create webhooks for all unique projects in procore_submittals."""
+    app = create_app()
+    
+    with app.app_context():
+        print("Scanning procore_submittals table for unique projects...")
+        projects = get_unique_projects()
+        
+        if not projects:
+            print("No projects found in procore_submittals table.")
+            return
+        
+        print(f"Found {len(projects)} unique project(s).")
+        print("-" * 60)
+        
+        procore_client = get_procore_client()
+        namespace = "mile-high-metal-works"
+        
+        results = {
+            "total": len(projects),
+            "success": 0,
+            "skipped": 0,
+            "error": 0,
+            "details": []
+        }
+        
+        for project_id, project_number in projects:
+            print(f"\nProcessing Project ID: {project_id} (Project Number: {project_number})")
+            result = create_webhook_and_trigger(procore_client, project_id, project_number, namespace)
+            results["details"].append({
+                "project_id": project_id,
+                "project_number": project_number,
+                "result": result
+            })
+            
+            if result["status"] == "success":
+                results["success"] += 1
+            elif result["status"] == "skipped":
+                results["skipped"] += 1
+            else:
+                results["error"] += 1
+        
+        print("\n" + "=" * 60)
+        print("SUMMARY")
+        print("=" * 60)
+        print(f"Total projects processed: {results['total']}")
+        print(f"Webhooks/triggers created: {results['success']}")
+        print(f"Already existed (skipped): {results['skipped']}")
+        print(f"Errors: {results['error']}")
+        print(f"\nDetailed responses logged to: logs/procore_webhook_responses.log")
+
+
+if __name__ == "__main__":
+    main()
+

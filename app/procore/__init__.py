@@ -1,5 +1,6 @@
 # Package
 import os
+import json
 from pathlib import Path
 from datetime import datetime, date
 from collections import defaultdict
@@ -13,20 +14,224 @@ from app.procore.procore import get_project_id_by_project_name
 from app.procore.helpers import clean_value
 
 from app.logging_config import get_logger
+from app.config import Config as cfg
 
 logger = get_logger(__name__)
 
 procore_bp = Blueprint("procore", __name__)
 
+
+def log_webhook_payload(payload: dict, headers: dict = None):
+    """
+    Log incoming webhook payload to persistent disk (same as Excel snapshots).
+    Uses JSON Lines format (one JSON object per line) for easy parsing.
+    """
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "headers": dict(headers) if headers else {},
+        "payload": payload
+    }
+    
+    # Use the same persistent disk directory as Excel snapshots
+    webhook_logs_dir = cfg.SNAPSHOTS_DIR
+    os.makedirs(webhook_logs_dir, exist_ok=True)
+    
+    # Use a subdirectory for webhook logs
+    webhook_logs_path = os.path.join(webhook_logs_dir, "procore_webhook_payloads.log")
+    
+    # Append to log file (JSON Lines format)
+    try:
+        with open(webhook_logs_path, "a") as f:
+            f.write(json.dumps(log_entry) + "\n")
+        logger.info(f"Logged Procore webhook payload to {webhook_logs_path}")
+    except Exception as e:
+        logger.error(f"Failed to log webhook payload: {str(e)}", exc_info=True)
+
+
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
 def procore_webhook():
+    """
+    Procore webhook endpoint to receive Submittals update events.
+    For now, just logs all incoming payloads to a file for debugging.
+    """
     if request.method == "HEAD":
+        # Procore webhook verification request
         return "", 200
 
     if request.method == "POST":
-        data = request.json
-        print(data)
-        return "", 200
+        try:
+            # Get the raw payload
+            payload = request.json if request.is_json else request.get_data(as_text=True)
+            
+            # Get headers for context
+            headers = {k: v for k, v in request.headers}
+            
+            # Log the webhook payload
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, log as text
+                    pass
+            
+            log_webhook_payload(payload, headers)
+            
+            # Also log via application logger
+            event_type = payload.get("event_type") if isinstance(payload, dict) else "unknown"
+            resource_name = payload.get("resource_name") if isinstance(payload, dict) else "unknown"
+            project_id = payload.get("project_id") if isinstance(payload, dict) else None
+            
+            logger.info(
+                f"Received Procore webhook: resource={resource_name}, "
+                f"event_type={event_type}, project_id={project_id}"
+            )
+            
+            # Return 200 OK to acknowledge receipt
+            return jsonify({
+                "status": "received",
+                "timestamp": datetime.utcnow().isoformat()
+            }), 200
+            
+        except Exception as e:
+            # Log the error but still return 200 to avoid webhook retries
+            # Procore will retry if we return an error status
+            logger.error(f"Error processing Procore webhook: {str(e)}", exc_info=True)
+            
+            # Try to log the error payload anyway
+            try:
+                error_payload = {
+                    "error": str(e),
+                    "raw_data": request.get_data(as_text=True) if hasattr(request, 'get_data') else None
+                }
+                log_webhook_payload(error_payload, {k: v for k, v in request.headers})
+            except:
+                pass
+            
+            return jsonify({
+                "status": "error",
+                "message": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }), 200
+
+@procore_bp.route("/api/webhook/payloads", methods=["GET"])
+def webhook_payloads():
+    """
+    API endpoint to view recent webhook payloads from the persistent disk.
+    Returns the last N webhook payloads that hit the production server.
+    
+    Query Parameters:
+    - limit: Number of payloads to return (default: 50, max: 200)
+    - project_id: Filter by project_id (optional)
+    - resource_name: Filter by resource_name (optional, e.g., "Submittals")
+    - event_type: Filter by event_type (optional, e.g., "update")
+    
+    Example:
+    GET /procore/api/webhook/payloads?limit=100
+    GET /procore/api/webhook/payloads?limit=50&resource_name=Submittals&event_type=update
+    GET /procore/api/webhook/payloads?project_id=2900844
+    """
+    try:
+        import json as json_lib
+        
+        # Get query parameters
+        limit = request.args.get("limit", default=50, type=int)
+        limit = min(limit, 200)  # Cap at 200 for performance
+        project_id_filter = request.args.get("project_id")
+        resource_name_filter = request.args.get("resource_name")
+        event_type_filter = request.args.get("event_type")
+        
+        # Use the same persistent disk directory as Excel snapshots
+        webhook_logs_dir = cfg.SNAPSHOTS_DIR
+        log_file = os.path.join(webhook_logs_dir, "procore_webhook_payloads.log")
+        
+        if not os.path.exists(log_file):
+            return jsonify({
+                "status": "success",
+                "message": "No webhook payloads logged yet",
+                "payloads": [],
+                "total": 0,
+                "log_file": log_file
+            }), 200
+        
+        # Read all lines (we'll filter after parsing)
+        all_payloads = []
+        try:
+            with open(log_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            payload = json_lib.loads(line)
+                            all_payloads.append(payload)
+                        except json_lib.JSONDecodeError:
+                            continue
+            
+            # Filter payloads based on query parameters
+            filtered_payloads = []
+            for payload in all_payloads:
+                payload_data = payload.get("payload", {})
+                if isinstance(payload_data, str):
+                    try:
+                        payload_data = json_lib.loads(payload_data)
+                    except:
+                        payload_data = {}
+                
+                # Apply filters
+                if project_id_filter:
+                    payload_project_id = payload_data.get("project_id") or payload_data.get("project", {}).get("id")
+                    if str(payload_project_id) != str(project_id_filter):
+                        continue
+                
+                if resource_name_filter:
+                    payload_resource = payload_data.get("resource_name") or payload_data.get("resource", {}).get("name")
+                    if payload_resource != resource_name_filter:
+                        continue
+                
+                if event_type_filter:
+                    payload_event = payload_data.get("event_type") or payload_data.get("event", {}).get("type")
+                    if payload_event != event_type_filter:
+                        continue
+                
+                filtered_payloads.append(payload)
+            
+            # Sort by timestamp (most recent first)
+            filtered_payloads.sort(
+                key=lambda x: x.get("timestamp", ""), 
+                reverse=True
+            )
+            
+            # Limit results
+            payloads = filtered_payloads[:limit]
+            
+        except Exception as e:
+            logger.error(f"Error reading webhook payloads: {str(e)}", exc_info=True)
+            return jsonify({
+                "status": "error",
+                "error": f"Failed to read log file: {str(e)}",
+                "log_file": log_file
+            }), 500
+        
+        return jsonify({
+            "status": "success",
+            "payloads": payloads,
+            "total": len(payloads),
+            "total_matching": len(filtered_payloads),
+            "limit": limit,
+            "filters": {
+                "project_id": project_id_filter,
+                "resource_name": resource_name_filter,
+                "event_type": event_type_filter
+            },
+            "log_file": log_file
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving webhook payloads: {str(e)}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
 
 @procore_bp.route("/api/drafting-work-load", methods=["GET"])
 def drafting_work_load():
