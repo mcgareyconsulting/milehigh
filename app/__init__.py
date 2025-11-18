@@ -152,6 +152,7 @@ def create_app():
         r"/snapshot/*": {"origins": allowed_origins},
         r"/snapshots/*": {"origins": allowed_origins},
         r"/procore/*": {"origins": allowed_origins},
+        r"/files/*": {"origins": allowed_origins},
     })
     
     # Database configuration - use environment variable for production
@@ -1394,6 +1395,211 @@ def create_app():
             
         except Exception as e:
             logger.error("Error comparing snapshots", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    # Persistent disk file management routes
+    @app.route("/files/list")
+    def list_persistent_disk_files():
+        """
+        List all files on the persistent disk.
+        
+        Query parameters:
+            path: Optional subdirectory path (defaults to SNAPSHOTS_DIR or /var/data/)
+            recursive: If true, recursively list files in subdirectories (default: false)
+        
+        Returns:
+            JSON with list of files and their metadata
+        """
+        try:
+            from app.config import Config
+            
+            config = Config()
+            
+            # Determine base directory - check for Render persistent disk or use SNAPSHOTS_DIR
+            base_path = request.args.get('path', '')
+            recursive = request.args.get('recursive', 'false').lower() == 'true'
+            
+            # If no path specified, use SNAPSHOTS_DIR or check for /var/data/ (Render persistent disk)
+            if not base_path:
+                # Check if /var/data/ exists (Render persistent disk)
+                if os.path.exists('/var/data'):
+                    base_path = '/var/data'
+                else:
+                    # Fall back to SNAPSHOTS_DIR
+                    base_path = config.SNAPSHOTS_DIR
+            else:
+                # If path is provided, resolve it relative to a safe base
+                # For security, only allow paths within /var/data/ or SNAPSHOTS_DIR
+                if not os.path.isabs(base_path):
+                    # Relative path - resolve relative to SNAPSHOTS_DIR
+                    base_path = os.path.join(config.SNAPSHOTS_DIR, base_path)
+                # Ensure the path is within allowed directories
+                allowed_bases = ['/var/data', config.SNAPSHOTS_DIR]
+                if not any(base_path.startswith(base) for base in allowed_bases if base):
+                    return jsonify({
+                        "error": "Path not allowed",
+                        "message": "Only paths within persistent disk are accessible"
+                    }), 403
+            
+            # Normalize the path
+            base_path = os.path.normpath(base_path)
+            
+            if not os.path.exists(base_path):
+                return jsonify({
+                    "files": [],
+                    "total_count": 0,
+                    "base_path": base_path,
+                    "message": "Directory does not exist"
+                }), 200
+            
+            if not os.path.isdir(base_path):
+                return jsonify({
+                    "error": "Path is not a directory"
+                }), 400
+            
+            # Collect files
+            files = []
+            if recursive:
+                # Recursive listing
+                for root, dirs, filenames in os.walk(base_path):
+                    for filename in filenames:
+                        file_path = os.path.join(root, filename)
+                        rel_path = os.path.relpath(file_path, base_path)
+                        try:
+                            stat = os.stat(file_path)
+                            files.append({
+                                "name": filename,
+                                "path": rel_path,
+                                "full_path": file_path,
+                                "size_bytes": stat.st_size,
+                                "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                                "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                "is_file": True
+                            })
+                        except OSError:
+                            continue
+            else:
+                # Non-recursive listing
+                try:
+                    items = os.listdir(base_path)
+                    for item in items:
+                        item_path = os.path.join(base_path, item)
+                        try:
+                            stat = os.stat(item_path)
+                            files.append({
+                                "name": item,
+                                "path": item,
+                                "full_path": item_path,
+                                "size_bytes": stat.st_size if os.path.isfile(item_path) else 0,
+                                "size_mb": round(stat.st_size / (1024 * 1024), 2) if os.path.isfile(item_path) else 0,
+                                "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                "is_file": os.path.isfile(item_path),
+                                "is_directory": os.path.isdir(item_path)
+                            })
+                        except OSError:
+                            continue
+                except PermissionError:
+                    return jsonify({
+                        "error": "Permission denied",
+                        "message": f"Cannot access directory: {base_path}"
+                    }), 403
+            
+            # Sort by modified time (newest first)
+            files.sort(key=lambda x: x.get('modified_time', ''), reverse=True)
+            
+            return jsonify({
+                "files": files,
+                "total_count": len(files),
+                "base_path": base_path,
+                "recursive": recursive
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error listing persistent disk files", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/files/download")
+    def download_persistent_disk_file():
+        """
+        Download a file from the persistent disk.
+        
+        Query parameters:
+            file: Relative path to the file (required)
+            path: Optional base directory (defaults to SNAPSHOTS_DIR or /var/data/)
+        
+        Returns:
+            File download response
+        """
+        try:
+            from app.config import Config
+            from flask import send_file
+            
+            config = Config()
+            
+            file_path = request.args.get('file')
+            base_path = request.args.get('path', '')
+            
+            if not file_path:
+                return jsonify({
+                    "error": "Missing required parameter",
+                    "message": "The 'file' parameter is required"
+                }), 400
+            
+            # Determine base directory
+            if not base_path:
+                if os.path.exists('/var/data'):
+                    base_path = '/var/data'
+                else:
+                    base_path = config.SNAPSHOTS_DIR
+            else:
+                if not os.path.isabs(base_path):
+                    base_path = os.path.join(config.SNAPSHOTS_DIR, base_path)
+                allowed_bases = ['/var/data', config.SNAPSHOTS_DIR]
+                if not any(base_path.startswith(base) for base in allowed_bases if base):
+                    return jsonify({
+                        "error": "Path not allowed"
+                    }), 403
+            
+            base_path = os.path.abspath(os.path.normpath(base_path))
+            
+            # Construct full file path
+            if os.path.isabs(file_path):
+                # If absolute path, ensure it's within allowed base
+                full_path = os.path.abspath(os.path.normpath(file_path))
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            else:
+                # Relative path - join with base
+                full_path = os.path.abspath(os.path.normpath(os.path.join(base_path, file_path)))
+                # Security check: ensure the resolved path is still within base_path
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            
+            if not os.path.exists(full_path):
+                return jsonify({
+                    "error": "File not found",
+                    "file": file_path
+                }), 404
+            
+            if not os.path.isfile(full_path):
+                return jsonify({
+                    "error": "Path is not a file",
+                    "file": file_path
+                }), 400
+            
+            # Send the file
+            return send_file(
+                full_path,
+                as_attachment=True,
+                download_name=os.path.basename(full_path)
+            )
+            
+        except Exception as e:
+            logger.error("Error downloading file", error=str(e), file=file_path)
             return jsonify({"error": str(e)}), 500
 
 
