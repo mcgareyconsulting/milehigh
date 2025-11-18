@@ -1009,12 +1009,24 @@ def create_app():
         """
         Scan and preview which cards have missing Trello list information.
         Does not perform any updates.
+        
+        Query params:
+            job: Optional job number to filter by (int)
+            release: Optional release number to filter by (str)
         """
         try:
             from app.scripts.fix_missing_trello_list_info import scan_missing_list_info
             
-            logger.info("Scanning for missing Trello list information")
-            result = scan_missing_list_info(return_json=True)
+            # Get optional parameters
+            job = request.args.get("job", type=int)
+            release = request.args.get("release", type=str)
+            
+            logger.info(
+                "Scanning for missing Trello list information",
+                job=job,
+                release=release
+            )
+            result = scan_missing_list_info(return_json=True, job=job, release=release)
             
             if "error" in result:
                 return jsonify({
@@ -1024,6 +1036,8 @@ def create_app():
             
             return jsonify({
                 "message": "Trello list info scan completed",
+                "job": job,
+                "release": release,
                 "scan": result
             }), 200
             
@@ -1034,14 +1048,16 @@ def create_app():
                 "error": str(e)
             }), 500
 
-    @app.route("/fix-trello-list/run", methods=["POST"])
+    @app.route("/fix-trello-list/run", methods=["GET", "POST"])
     def fix_missing_trello_list_info():
         """
         Fix cards with missing Trello list information by fetching from Trello API.
         Actually updates the database.
         
         Query params:
-            limit: Maximum number of cards to process in this request (default: 100)
+            job: Optional job number to filter by (int) - if provided with release, updates only that job-release
+            release: Optional release number to filter by (str) - if provided with job, updates only that job-release
+            limit: Maximum number of cards to process in this request (default: 100, ignored if job+release provided)
                   Use this to process in smaller batches to avoid timeouts
             batch_size: Number of cards to commit at once (default: 50)
         """
@@ -1049,17 +1065,34 @@ def create_app():
             from app.scripts.fix_missing_trello_list_info import fix_missing_list_info, scan_missing_list_info
             
             # Get optional parameters
+            job = request.args.get("job", type=int)
+            release = request.args.get("release", type=str)
             limit = request.args.get("limit", type=int)
             batch_size = request.args.get("batch_size", default=50, type=int)
             
-            if limit is None:
-                # Default to 100 to avoid timeouts
-                limit = 100
-            
-            logger.info("Starting fix for missing Trello list information", limit=limit, batch_size=batch_size)
+            # If job and release are provided, don't use limit (only one job-release)
+            if job is not None and release is not None:
+                limit = None
+                logger.info(
+                    "Starting fix for missing Trello list information",
+                    job=job,
+                    release=release,
+                    batch_size=batch_size
+                )
+            else:
+                if limit is None:
+                    # Default to 100 to avoid timeouts
+                    limit = 100
+                logger.info(
+                    "Starting fix for missing Trello list information",
+                    limit=limit,
+                    batch_size=batch_size,
+                    job=job,
+                    release=release
+                )
             
             # Run the scan first to get initial state
-            scan_result = scan_missing_list_info(return_json=True)
+            scan_result = scan_missing_list_info(return_json=True, job=job, release=release)
             
             if "error" in scan_result:
                 return jsonify({
@@ -1068,7 +1101,13 @@ def create_app():
                 }), 500
             
             # Run the actual fix with limit
-            fix_result = fix_missing_list_info(return_json=True, limit=limit, batch_size=batch_size)
+            fix_result = fix_missing_list_info(
+                return_json=True,
+                limit=limit,
+                batch_size=batch_size,
+                job=job,
+                release=release
+            )
             
             if "error" in fix_result:
                 return jsonify({
@@ -1076,11 +1115,17 @@ def create_app():
                     "error": fix_result["error"]
                 }), 500
             
-            # Scan again to get final state
-            final_scan = scan_missing_list_info(return_json=True)
+            # Scan again to get final state (only if not filtering by specific job-release)
+            if job is not None and release is not None:
+                # For single job-release, just return the fix result
+                final_scan = {"message": "Single job-release update completed"}
+            else:
+                final_scan = scan_missing_list_info(return_json=True, job=job, release=release)
             
             return jsonify({
                 "message": "Trello list info fix completed",
+                "job": job,
+                "release": release,
                 "limit_used": limit,
                 "batch_size_used": batch_size,
                 "before": scan_result,
