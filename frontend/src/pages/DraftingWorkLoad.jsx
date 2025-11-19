@@ -36,7 +36,6 @@ function DraftingWorkLoad() {
                     ...submittal,
                     'Submittals Id': submittal.submittal_id,
                     'Project Id': submittal.procore_project_id,
-                    'Ball In Court Due Date': submittal.ball_in_court_due_date,
                     'Submittal Manager': submittal.submittal_manager,
                     'Project Name': submittal.project_name,
                     'Project Number': submittal.project_number,
@@ -45,6 +44,7 @@ function DraftingWorkLoad() {
                     'Type': submittal.type,
                     'Ball In Court': submittal.ball_in_court,
                     'Order Number': submittal.order_number,
+                    'Notes': submittal.notes,
                     id: String(rawId)
                 };
             });
@@ -70,8 +70,8 @@ function DraftingWorkLoad() {
                 'Ball In Court',
                 'Type',
                 'Status',
-                'Ball In Court Due Date',
-                'Submittal Manager'
+                'Submittal Manager',
+                'Notes'
             ];
 
             // Get all available columns from the data
@@ -227,6 +227,22 @@ function DraftingWorkLoad() {
             await fetchData(true);
         } catch (err) {
             console.error(`Failed to update order for ${submittalId}:`, err);
+            // Refresh to get correct state
+            await fetchData(true);
+        }
+    }, [fetchData]);
+
+    const handleNotesChange = useCallback(async (submittalId, newValue) => {
+        try {
+            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/notes`, {
+                submittal_id: submittalId,
+                notes: newValue
+            });
+
+            // Refresh data to get updated notes
+            await fetchData(true);
+        } catch (err) {
+            console.error(`Failed to update notes for ${submittalId}:`, err);
             // Refresh to get correct state
             await fetchData(true);
         }
@@ -468,6 +484,7 @@ function DraftingWorkLoad() {
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
                                                         onOrderNumberChange={handleOrderNumberChange}
+                                                        onNotesChange={handleNotesChange}
                                                     />
                                                 ))
                                             )}
@@ -485,10 +502,13 @@ function DraftingWorkLoad() {
 
 export default DraftingWorkLoad;
 
-function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange }) {
+function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
+    const [editingNotes, setEditingNotes] = useState(false);
+    const [notesValue, setNotesValue] = useState('');
     const inputRef = useRef(null);
+    const notesInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
 
@@ -515,12 +535,43 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
         }
     };
 
+    const handleNotesFocus = () => {
+        const currentValue = row['Notes'] ?? row.notes ?? '';
+        setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
+        setEditingNotes(true);
+    };
+
+    const handleNotesBlur = () => {
+        setEditingNotes(false);
+        if (submittalId && onNotesChange) {
+            onNotesChange(submittalId, notesValue);
+        }
+    };
+
+    const handleNotesKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            const currentValue = row['Notes'] ?? row.notes ?? '';
+            setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
+            setEditingNotes(false);
+        }
+    };
+
     useEffect(() => {
         if (editingOrderNumber && inputRef.current) {
             inputRef.current.focus();
             inputRef.current.select();
         }
     }, [editingOrderNumber]);
+
+    useEffect(() => {
+        if (editingNotes && notesInputRef.current) {
+            notesInputRef.current.focus();
+            notesInputRef.current.select();
+        }
+    }, [editingNotes]);
 
     const rowType = row.type ?? row['Type'] ?? '';
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
@@ -532,15 +583,10 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
             {columns.map((column) => {
                 const isOrderNumber = column === 'Order Number';
                 const isSubmittalId = column === 'Submittals Id';
-                const isBallInCourtDueDate = column === 'Ball In Court Due Date';
                 const isType = column === 'Type';
+                const isNotes = column === 'Notes';
 
-                let cellValue;
-                if (isBallInCourtDueDate) {
-                    cellValue = formatDate(row[column] ?? row.ball_in_court_due_date);
-                } else {
-                    cellValue = formatCellValue(row[column]);
-                }
+                let cellValue = formatCellValue(row[column]);
 
                 if (isOrderNumber && editingOrderNumber) {
                     return (
@@ -572,6 +618,41 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                         >
                             <div className="px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[60px] max-w-[80px] inline-block">
                                 {cellValue}
+                            </div>
+                        </td>
+                    );
+                }
+
+                if (isNotes && editingNotes) {
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className="px-6 py-4 align-top bg-white"
+                        >
+                            <textarea
+                                ref={notesInputRef}
+                                value={notesValue}
+                                onChange={(e) => setNotesValue(e.target.value)}
+                                onBlur={handleNotesBlur}
+                                onKeyDown={handleNotesKeyDown}
+                                className="w-full px-3 py-2 text-sm border-2 border-accent-500 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900 resize-none"
+                                rows={3}
+                                placeholder="Add notes..."
+                            />
+                        </td>
+                    );
+                }
+
+                if (isNotes) {
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className="px-6 py-4 whitespace-pre-wrap text-sm align-top font-medium bg-white"
+                            onClick={handleNotesFocus}
+                            title="Click to edit notes"
+                        >
+                            <div className="px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors text-gray-700 min-h-[60px]">
+                                {cellValue || <span className="text-gray-400 italic">Click to add notes...</span>}
                             </div>
                         </td>
                     );
