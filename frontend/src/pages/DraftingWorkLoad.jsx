@@ -5,32 +5,11 @@ import { io } from 'socket.io-client';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const ALL_OPTION_VALUE = '__ALL__';
 
-const interpolateChannel = (start, end, factor) => Math.round(start + (end - start) * factor);
-
-const interpolateColor = (startHex, endHex, factor) => {
-    const parseHex = (hex) => {
-        const sanitized = hex.replace('#', '');
-        return {
-            r: parseInt(sanitized.slice(0, 2), 16),
-            g: parseInt(sanitized.slice(2, 4), 16),
-            b: parseInt(sanitized.slice(4, 6), 16),
-        };
-    };
-
-    const startColor = parseHex(startHex);
-    const endColor = parseHex(endHex);
-
-    const r = interpolateChannel(startColor.r, endColor.r, factor);
-    const g = interpolateChannel(startColor.g, endColor.g, factor);
-    const b = interpolateChannel(startColor.b, endColor.b, factor);
-
-    return `rgb(${r}, ${g}, ${b})`;
-};
-
 function DraftingWorkLoad() {
     const [rows, setRows] = useState([]);
     const [columns, setColumns] = useState([]);
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
+    const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -59,7 +38,6 @@ function DraftingWorkLoad() {
                     ...submittal,
                     'Submittals Id': submittal.submittal_id,
                     'Project Id': submittal.procore_project_id,
-                    'Ball In Court Due Date': submittal.ball_in_court_due_date,
                     'Submittal Manager': submittal.submittal_manager,
                     'Project Name': submittal.project_name,
                     'Project Number': submittal.project_number,
@@ -68,6 +46,7 @@ function DraftingWorkLoad() {
                     'Type': submittal.type,
                     'Ball In Court': submittal.ball_in_court,
                     'Order Number': submittal.order_number,
+                    'Notes': submittal.notes,
                     id: String(rawId)
                 };
             });
@@ -82,19 +61,18 @@ function DraftingWorkLoad() {
                 return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
             });
 
-            // Define the desired column order
+            // Define the desired column order (Project Id is tracked but hidden from display)
             const desiredColumnOrder = [
                 'Order Number',
                 'Submittals Id',
-                'Project Id',
                 'Project Number',
                 'Project Name',
                 'Title',
                 'Ball In Court',
                 'Type',
                 'Status',
-                'Ball In Court Due Date',
-                'Submittal Manager'
+                'Submittal Manager',
+                'Notes'
             ];
 
             // Get all available columns from the data
@@ -164,12 +142,24 @@ function DraftingWorkLoad() {
     }, [fetchData]);
 
     const matchesSelectedFilter = useCallback((row) => {
-        if (selectedBallInCourt === ALL_OPTION_VALUE) {
-            return true;
+        // Check Ball In Court filter
+        if (selectedBallInCourt !== ALL_OPTION_VALUE) {
+            const ballInCourtValue = row.ball_in_court;
+            if ((ballInCourtValue ?? '').toString().trim() !== selectedBallInCourt) {
+                return false;
+            }
         }
-        const value = row.ball_in_court;
-        return (value ?? '').toString().trim() === selectedBallInCourt;
-    }, [selectedBallInCourt]);
+
+        // Check Submittal Manager filter
+        if (selectedSubmittalManager !== ALL_OPTION_VALUE) {
+            const managerValue = row.submittal_manager ?? row['Submittal Manager'];
+            if ((managerValue ?? '').toString().trim() !== selectedSubmittalManager) {
+                return false;
+            }
+        }
+
+        return true;
+    }, [selectedBallInCourt, selectedSubmittalManager]);
 
     const displayRows = useMemo(() => {
         const filtered = rows.filter(matchesSelectedFilter);
@@ -194,6 +184,17 @@ function DraftingWorkLoad() {
         const values = new Set();
         rows.forEach((row) => {
             const value = row.ball_in_court;
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+                values.add(String(value).trim());
+            }
+        });
+        return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }, [rows]);
+
+    const submittalManagerOptions = useMemo(() => {
+        const values = new Set();
+        rows.forEach((row) => {
+            const value = row.submittal_manager ?? row['Submittal Manager'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 values.add(String(value).trim());
             }
@@ -229,8 +230,13 @@ function DraftingWorkLoad() {
         setSelectedBallInCourt(event.target.value);
     };
 
+    const handleSubmittalManagerChange = (event) => {
+        setSelectedSubmittalManager(event.target.value);
+    };
+
     const resetFilters = () => {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
+        setSelectedSubmittalManager(ALL_OPTION_VALUE);
     };
 
     const handleOrderNumberChange = useCallback(async (submittalId, newValue) => {
@@ -254,6 +260,22 @@ function DraftingWorkLoad() {
             await fetchData(true);
         } catch (err) {
             console.error(`Failed to update order for ${submittalId}:`, err);
+            // Refresh to get correct state
+            await fetchData(true);
+        }
+    }, [fetchData]);
+
+    const handleNotesChange = useCallback(async (submittalId, newValue) => {
+        try {
+            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/notes`, {
+                submittal_id: submittalId,
+                notes: newValue
+            });
+
+            // Refresh data to get updated notes
+            await fetchData(true);
+        } catch (err) {
+            console.error(`Failed to update notes for ${submittalId}:`, err);
             // Refresh to get correct state
             await fetchData(true);
         }
@@ -322,57 +344,53 @@ function DraftingWorkLoad() {
 
     const tableColumnCount = columnHeaders.length;
 
-    const urgencyStyles = useMemo(() => {
-        if (!hasData) {
-            return {};
-        }
-
-        const total = displayRows.length;
-        const lowUrgencyBackground = '#BBF7D0';
-        const highUrgencyBackground = '#FECACA';
-        const lowUrgencyBorder = '#10B981';
-        const highUrgencyBorder = '#EF4444';
-
-        return displayRows.reduce((acc, row, index) => {
-            const factor = total <= 1 ? 0 : index / (total - 1);
-            const borderColor = interpolateColor(highUrgencyBorder, lowUrgencyBorder, factor);
-
-            acc[row.id] = {
-                borderLeft: `6px solid ${borderColor}`,
-            };
-
-            return acc;
-        }, {});
-    }, [displayRows, hasData]);
-
     return (
         <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-[95%] mx-auto w-full" style={{ width: '100%' }}>
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-6">
                         <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
-                        <p className="text-accent-100 mt-2">View and filter drafting workload by Ball In Court.</p>
+                        <p className="text-accent-100 mt-2">View and filter drafting workload by Ball In Court and Submittal Manager.</p>
                     </div>
 
                     <div className="p-8 space-y-6">
                         <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-6 border border-gray-200 shadow-sm">
                             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                                <div className="flex-1 min-w-[200px]">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        🎯 Filter by Ball In Court
-                                    </label>
-                                    <select
-                                        value={selectedBallInCourt}
-                                        onChange={handleBallInCourtChange}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
-                                    >
-                                        <option value={ALL_OPTION_VALUE}>All</option>
-                                        {ballInCourtOptions.map((option) => (
-                                            <option key={option} value={option}>
-                                                {option}
-                                            </option>
-                                        ))}
-                                    </select>
+                                <div className="flex flex-col gap-4 md:flex-row md:flex-1">
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            🎯 Filter by Ball In Court
+                                        </label>
+                                        <select
+                                            value={selectedBallInCourt}
+                                            onChange={handleBallInCourtChange}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        >
+                                            <option value={ALL_OPTION_VALUE}>All</option>
+                                            {ballInCourtOptions.map((option) => (
+                                                <option key={option} value={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            👤 Filter by Submittal Manager
+                                        </label>
+                                        <select
+                                            value={selectedSubmittalManager}
+                                            onChange={handleSubmittalManagerChange}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        >
+                                            <option value={ALL_OPTION_VALUE}>All</option>
+                                            {submittalManagerOptions.map((option) => (
+                                                <option key={option} value={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="flex gap-3">
                                     <button
@@ -464,15 +482,16 @@ function DraftingWorkLoad() {
                         {!loading && !error && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                                 <div className="overflow-x-auto">
-                                    <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+                                    <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
+                                                    const isNotes = column === 'Notes';
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-3 py-3 w-24' : 'px-6 py-4'} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
+                                                            className={`${isOrderNumber ? 'px-3 py-3 w-24' : 'px-6 py-4'} ${isNotes ? 'min-w-[400px]' : ''} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
                                                         >
                                                             {column}
                                                         </th>
@@ -498,8 +517,8 @@ function DraftingWorkLoad() {
                                                         columns={columnHeaders}
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
-                                                        urgencyStyle={urgencyStyles[row.id]}
                                                         onOrderNumberChange={handleOrderNumberChange}
+                                                        onNotesChange={handleNotesChange}
                                                     />
                                                 ))
                                             )}
@@ -517,14 +536,13 @@ function DraftingWorkLoad() {
 
 export default DraftingWorkLoad;
 
-function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onOrderNumberChange }) {
+function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
+    const [editingNotes, setEditingNotes] = useState(false);
+    const [notesValue, setNotesValue] = useState('');
     const inputRef = useRef(null);
-
-    const style = {
-        borderLeft: urgencyStyle?.borderLeft,
-    };
+    const notesInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
 
@@ -551,6 +569,30 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
         }
     };
 
+    const handleNotesFocus = () => {
+        const currentValue = row['Notes'] ?? row.notes ?? '';
+        setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
+        setEditingNotes(true);
+    };
+
+    const handleNotesBlur = () => {
+        setEditingNotes(false);
+        if (submittalId && onNotesChange) {
+            onNotesChange(submittalId, notesValue);
+        }
+    };
+
+    const handleNotesKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            const currentValue = row['Notes'] ?? row.notes ?? '';
+            setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
+            setEditingNotes(false);
+        }
+    };
+
     useEffect(() => {
         if (editingOrderNumber && inputRef.current) {
             inputRef.current.focus();
@@ -558,42 +600,33 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
         }
     }, [editingOrderNumber]);
 
-    // Determine background color based on order_number
-    const orderNumber = row.order_number ?? row['Order Number'] ?? null;
-    let rowBgClass = 'bg-white';
-    if (orderNumber !== null && orderNumber !== undefined) {
-        const orderNum = parseFloat(orderNumber);
-        if (!isNaN(orderNum)) {
-            if (orderNum < 1) {
-                rowBgClass = 'bg-red-100';
-            } else if (orderNum >= 1 && orderNum < 2) {
-                rowBgClass = 'bg-yellow-100';
-            }
+    useEffect(() => {
+        if (editingNotes && notesInputRef.current) {
+            notesInputRef.current.focus();
+            notesInputRef.current.select();
         }
-    }
+    }, [editingNotes]);
+
+    const rowType = row.type ?? row['Type'] ?? '';
+    const isDraftingReleaseReview = rowType === 'Drafting Release Review';
 
     return (
         <tr
-            style={style}
-            className={`${rowBgClass} hover:opacity-90 transition-colors duration-150`}
+            className="bg-white hover:opacity-90 transition-colors duration-150 border-b border-gray-200"
         >
             {columns.map((column) => {
                 const isOrderNumber = column === 'Order Number';
                 const isSubmittalId = column === 'Submittals Id';
-                const isBallInCourtDueDate = column === 'Ball In Court Due Date';
+                const isType = column === 'Type';
+                const isNotes = column === 'Notes';
 
-                let cellValue;
-                if (isBallInCourtDueDate) {
-                    cellValue = formatDate(row[column] ?? row.ball_in_court_due_date);
-                } else {
-                    cellValue = formatCellValue(row[column]);
-                }
+                let cellValue = formatCellValue(row[column]);
 
                 if (isOrderNumber && editingOrderNumber) {
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-3 py-3 align-middle ${rowBgClass}`}
+                            className="px-3 py-3 align-middle bg-white"
                         >
                             <input
                                 ref={inputRef}
@@ -613,12 +646,60 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-3 py-3 align-middle ${rowBgClass}`}
+                            className="px-3 py-3 align-middle bg-white"
                             onClick={handleOrderNumberFocus}
                             title="Click to edit order number"
                         >
                             <div className="px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[60px] max-w-[80px] inline-block">
                                 {cellValue}
+                            </div>
+                        </td>
+                    );
+                }
+
+                if (isNotes && editingNotes) {
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className="px-6 py-4 align-top bg-white"
+                            style={{ minWidth: '400px' }}
+                        >
+                            <textarea
+                                ref={notesInputRef}
+                                value={notesValue}
+                                onChange={(e) => setNotesValue(e.target.value)}
+                                onBlur={handleNotesBlur}
+                                onKeyDown={handleNotesKeyDown}
+                                className="w-full px-3 py-2.5 text-sm border-2 border-accent-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all"
+                                rows={6}
+                                placeholder="Add notes..."
+                                style={{ lineHeight: '1.5' }}
+                            />
+                        </td>
+                    );
+                }
+
+                if (isNotes) {
+                    const hasNotes = cellValue && cellValue !== '—';
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className="px-6 py-4 align-top bg-white"
+                            style={{ minWidth: '400px' }}
+                            onClick={handleNotesFocus}
+                            title="Click to edit notes"
+                        >
+                            <div className={`px-3 py-2.5 text-sm rounded-lg border transition-all cursor-text min-h-[120px] ${hasNotes
+                                ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800'
+                                : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
+                                }`}>
+                                {hasNotes ? (
+                                    <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                        {cellValue}
+                                    </div>
+                                ) : (
+                                    <span className="italic">Click to add notes...</span>
+                                )}
                             </div>
                         </td>
                     );
@@ -634,7 +715,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-6 py-4 whitespace-pre-wrap text-sm align-top font-medium ${rowBgClass}`}
+                            className="px-6 py-4 whitespace-pre-wrap text-sm align-top font-medium bg-white"
                         >
                             {href !== '#' ? (
                                 <a
@@ -652,10 +733,15 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
                     );
                 }
 
+                // Apply light green background for Type cell when type is "Drafting Release Review"
+                const cellBgClass = isType && isDraftingReleaseReview
+                    ? 'bg-green-100'
+                    : 'bg-white';
+
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className={`px-6 py-4 whitespace-pre-wrap text-sm text-gray-900 align-top font-medium ${rowBgClass}`}
+                        className={`px-6 py-4 whitespace-pre-wrap text-sm text-gray-900 align-top font-medium ${cellBgClass}`}
                     >
                         {cellValue}
                     </td>

@@ -50,12 +50,12 @@ class ProcoreSubmittal(db.Model):
     project_number = db.Column(db.String(100))
     project_name = db.Column(db.String(255))
     title = db.Column(db.Text)
-    ball_in_court_due_date = db.Column(db.Date)
     status = db.Column(db.String(100))
     type = db.Column(db.String(100))
     ball_in_court = db.Column(db.String(100))
     submittal_manager = db.Column(db.String(255))
     order_number = db.Column(db.Float)
+    notes = db.Column(db.Text)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -67,12 +67,12 @@ class ProcoreSubmittal(db.Model):
             "project_number": self.project_number,
             "project_name": self.project_name,
             "title": self.title,
-            "ball_in_court_due_date": self.ball_in_court_due_date,
             "status": self.status,
             "type": self.type,
             "ball_in_court": self.ball_in_court,
             "submittal_manager": self.submittal_manager,
             "order_number": self.order_number,
+            "notes": self.notes,
             "last_updated": self.last_updated,
             "created_at": self.created_at,
         }
