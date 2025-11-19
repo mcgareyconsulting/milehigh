@@ -146,12 +146,9 @@ def procore_webhook():
         # PROCESS ACTUAL SUBMITTAL
         # -----------------------------------
         try:
-            # Lazy import to avoid circular import
-            from app import socketio
             updated, record, ball_in_court = check_and_update_ball_in_court(
                 project_id, 
-                resource_id, 
-                socketio_instance=socketio
+                resource_id
             )
             if updated:
                 current_app.logger.info(

@@ -4,7 +4,6 @@ from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_socketio import SocketIO
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.procore import procore_bp
@@ -26,33 +25,6 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
-
-
-def get_socketio_cors_origins():
-    """Get allowed CORS origins for SocketIO from environment or default to localhost:5173 (Vite default)"""
-    allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173")
-    if allowed_origins != "*":
-        # Parse comma-separated list if provided
-        origins = [origin.strip() for origin in allowed_origins.split(",")]
-        return origins
-    # If "*" is explicitly set, allow all (not recommended for production)
-    return "*"
-
-# Initialize SocketIO with CORS restricted to frontend origins
-# Use eventlet for async websocket support with Gunicorn
-# Falls back to threading if eventlet is not available
-try:
-    import eventlet
-    async_mode = 'eventlet'
-except ImportError:
-    async_mode = 'threading'
-
-socketio = SocketIO(
-    cors_allowed_origins=get_socketio_cors_origins(),
-    async_mode=async_mode,
-    logger=False,
-    engineio_logger=False
-)
 
 import time
 import atexit
@@ -180,35 +152,24 @@ def create_app():
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
     
-    # Initialize SocketIO with app
-    socketio.init_app(app)
-    
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
     if database_url:
         # For production databases (PostgreSQL, MySQL, etc.)
         app.config["SQLALCHEMY_DATABASE_URI"] = database_url
         
-        # Import pool classes for eventlet compatibility
-        from sqlalchemy.pool import NullPool, QueuePool
+        # Import pool classes
+        from sqlalchemy.pool import QueuePool
         
-        # Use NullPool for eventlet to avoid threading issues with connection pool
-        # NullPool creates a new connection for each request, which is safe for eventlet
-        # For threading mode, use QueuePool with proper thread safety
-        if async_mode == 'eventlet':
-            pool_class = NullPool
-            pool_size = None
-            max_overflow = None
-        else:
-            pool_class = QueuePool
-            pool_size = 5
-            max_overflow = 10
-        
+        # Use QueuePool with proper thread safety settings
         engine_options = {
             "pool_pre_ping": True,        # Detect and refresh dead connections before use
             "pool_recycle": 280,          # Recycle connections slightly before Render's idle timeout (~5 min)
+            "pool_size": 5,               # Render free-tier DBs are resource-constrained; keep this modest
+            "max_overflow": 10,           # Allow some burst usage during concurrent jobs
             "pool_timeout": 30,           # Wait up to 30s for a connection before raising
             "pool_reset_on_return": "commit",  # Reset connections properly on return
+            "poolclass": QueuePool,       # Use QueuePool for standard threading
             "connect_args": {
                 "sslmode": "require",     # Enforce SSL
                 "connect_timeout": 10,    # Fail fast if DB can't be reached
@@ -216,14 +177,6 @@ def create_app():
                 "options": "-c statement_timeout=30000"  # 30s max per SQL statement
             },
         }
-        
-        # Only set pool_size and max_overflow for QueuePool (not NullPool)
-        if pool_class == QueuePool:
-            engine_options["pool_size"] = pool_size
-            engine_options["max_overflow"] = max_overflow
-        
-        # Set the pool class
-        engine_options["poolclass"] = pool_class
         
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_options
 
