@@ -10,7 +10,8 @@ import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
 from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
-from app.procore.procore import get_project_id_by_project_name, handle_submittal_update
+from app.procore.procore import get_project_id_by_project_name, check_and_update_ball_in_court
+from app import socketio
 
 from app.procore.helpers import clean_value
 
@@ -73,20 +74,38 @@ def procore_webhook():
             payload = {}
 
         # Extract metadata
-        resource_id = payload.get("id")
-        project_id = payload.get("project_id")
+        # Procore webhook uses "id" for resource_id, not "resource_id"
+        resource_id_raw = payload.get("resource_id")
+        project_id_raw = payload.get("project_id")
         event_type = payload.get("reason") or "unknown"
         resource_type = payload.get("resource_type") or "unknown"
+
+        # Validate and convert to int
+        if not resource_id_raw:
+            current_app.logger.warning("Webhook payload missing 'id' or 'resource_id'")
+            return jsonify({"status": "ignored"}), 200
+        
+        try:
+            resource_id = int(resource_id_raw)
+        except (ValueError, TypeError):
+            current_app.logger.warning(f"Invalid resource_id format: {resource_id_raw}")
+            return jsonify({"status": "ignored"}), 200
+        
+        if not project_id_raw:
+            current_app.logger.warning("Webhook payload missing 'project_id'")
+            return jsonify({"status": "ignored"}), 200
+        
+        try:
+            project_id = int(project_id_raw)
+        except (ValueError, TypeError):
+            current_app.logger.warning(f"Invalid project_id format: {project_id_raw}")
+            return jsonify({"status": "ignored"}), 200
 
         # Use your existing logger setup
         current_app.logger.info(
             f"Received Procore webhook: resource={resource_type}, "
             f"event_type={event_type}, id={resource_id}, project={project_id}"
         )
-
-        if not resource_id:
-            current_app.logger.warning("Webhook payload missing 'id'")
-            return jsonify({"status": "ignored"}), 200
 
         now = datetime.utcnow()
 
@@ -128,13 +147,15 @@ def procore_webhook():
         # PROCESS ACTUAL SUBMITTAL
         # -----------------------------------
         try:
-            record, ball_in_court, approvers = handle_submittal_update(project_id, resource_id)
-            print(f"DB Record: {record}")
-            print(f"Ball in Court: {ball_in_court}")
-            print(f"Approvers: {len(approvers) if approvers else 0} approvers")
-            if record:
-                print(f"DB ball_in_court: {record.ball_in_court}")
-                print(f"Match: {record.ball_in_court == ball_in_court}")
+            updated, record, ball_in_court = check_and_update_ball_in_court(
+                project_id, 
+                resource_id, 
+                socketio_instance=socketio
+            )
+            if updated:
+                current_app.logger.info(
+                    f"Submittal {resource_id} ball_in_court updated via webhook"
+                )
         except Exception as e:
             current_app.logger.error(
                 f"Error processing submittal {resource_id}: {e}",

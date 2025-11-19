@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const ALL_OPTION_VALUE = '__ALL__';
@@ -15,6 +16,7 @@ function DraftingWorkLoad() {
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState(null);
     const [uploadSuccess, setUploadSuccess] = useState(false);
+    const socketRef = useRef(null);
 
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) {
@@ -105,6 +107,38 @@ function DraftingWorkLoad() {
 
     useEffect(() => {
         fetchData();
+    }, [fetchData]);
+
+    // Setup websocket connection for real-time updates
+    useEffect(() => {
+        // Create socket connection
+        socketRef.current = io(API_BASE_URL, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 5
+        });
+
+        socketRef.current.on('connect', () => {
+            console.log('WebSocket connected');
+        });
+
+        socketRef.current.on('disconnect', () => {
+            console.log('WebSocket disconnected');
+        });
+
+        socketRef.current.on('ball_in_court_updated', (data) => {
+            console.log('Ball in court updated:', data);
+            // Reload data silently (no loading spinner)
+            fetchData(true);
+        });
+
+        // Cleanup on unmount
+        return () => {
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+            }
+        };
     }, [fetchData]);
 
     const matchesSelectedFilter = useCallback((row) => {

@@ -1,6 +1,7 @@
 import logging
 import re
 import requests
+from datetime import datetime
 from app.config import Config as cfg
 from app.models import db, Job, ProcoreSubmittal
 from app.trello.api import add_procore_link
@@ -227,6 +228,69 @@ def handle_submittal_update(project_id, submittal_id):
     # Always return a tuple, even if procore_submittal is None
     return procore_submittal, ball_in_court, approvers
 
+
+def check_and_update_ball_in_court(project_id, submittal_id, socketio_instance=None):
+    """
+    Check if ball_in_court from Procore differs from DB, update if needed, and emit websocket event.
+    
+    Args:
+        project_id: Procore project ID
+        submittal_id: Procore submittal ID
+        socketio_instance: Optional SocketIO instance to emit events
+        
+    Returns:
+        tuple: (updated: bool, record: ProcoreSubmittal or None, ball_in_court: str or None)
+    """
+    try:
+        record, ball_in_court, approvers = handle_submittal_update(project_id, submittal_id)
+        
+        if not record:
+            logger.warning(f"No DB record found for submittal {submittal_id}")
+            return False, None, ball_in_court
+        
+        # Normalize None to empty string for comparison
+        db_value = record.ball_in_court if record.ball_in_court is not None else ""
+        webhook_value = ball_in_court if ball_in_court is not None else ""
+        
+        # Check for mismatch
+        if db_value != webhook_value:
+            logger.info(
+                f"Ball in court mismatch detected for submittal {submittal_id}: "
+                f"DB='{record.ball_in_court}' vs Webhook='{ball_in_court}'"
+            )
+            
+            # Update database
+            record.ball_in_court = ball_in_court
+            record.last_updated = datetime.utcnow()
+            db.session.commit()
+            
+            logger.info(
+                f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'"
+            )
+            
+            # Emit websocket event if socketio instance provided
+            if socketio_instance:
+                socketio_instance.emit('ball_in_court_updated', {
+                    'submittal_id': str(submittal_id),
+                    'ball_in_court': ball_in_court,
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+                logger.info(f"Emitted websocket event for submittal {submittal_id}")
+            
+            return True, record, ball_in_court
+        else:
+            logger.debug(
+                f"Ball in court match for submittal {submittal_id}: '{ball_in_court}'"
+            )
+            return False, record, ball_in_court
+            
+    except Exception as e:
+        logger.error(
+            f"Error checking/updating ball_in_court for submittal {submittal_id}: {e}",
+            exc_info=True
+        )
+        return False, None, None
+
 # Add Procore Link to Trello Card
 def add_procore_link_to_trello_card(job, release):
     '''
@@ -293,8 +357,7 @@ if __name__ == "__main__":
         procore = get_procore_client()
         proj = 3203976
         sub = 64744482
-        submittal = procore.get_submittal_by_id(proj, sub)
-        result = compare_ball_in_court_from_submittal_to_db(sub, submittal)
+        result = handle_submittal_update(proj, sub)
         if result is None:
             print("Failed to parse submittal data")
         else:
