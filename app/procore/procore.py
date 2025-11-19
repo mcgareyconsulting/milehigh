@@ -198,7 +198,7 @@ def get_webhook_deliveries(company_id, project_id):
     return procore.get_deliveries(company_id, project_id, webhook_id)
 
 
-def compare_ball_in_court_from_submittal_to_db(submittal_id, submittal):
+def handle_submittal_update(project_id, submittal_id):
     """
     Compare ball_in_court from submittal webhook data against DB record.
     
@@ -212,6 +212,8 @@ def compare_ball_in_court_from_submittal_to_db(submittal_id, submittal):
         - ball_in_court: str or None - User who has the ball in court
         - approvers: list - List of approver data
     """
+    # Collect submittal data and pass to parser function
+    submittal = get_submittal_by_id(project_id, submittal_id)
     parsed = parse_ball_in_court_from_submittal(submittal)
     if parsed is None:
         return None
@@ -289,8 +291,8 @@ if __name__ == "__main__":
     with app.app_context():
 
         procore = get_procore_client()
-        proj = 3083390
-        sub = 66110537
+        proj = 3203976
+        sub = 64744482
         submittal = procore.get_submittal_by_id(proj, sub)
         result = compare_ball_in_court_from_submittal_to_db(sub, submittal)
         if result is None:
