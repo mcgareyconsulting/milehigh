@@ -30,6 +30,7 @@ function DraftingWorkLoad() {
     const [rows, setRows] = useState([]);
     const [columns, setColumns] = useState([]);
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
+    const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -130,12 +131,24 @@ function DraftingWorkLoad() {
     }, [fetchData]);
 
     const matchesSelectedFilter = useCallback((row) => {
-        if (selectedBallInCourt === ALL_OPTION_VALUE) {
-            return true;
+        // Check Ball In Court filter
+        if (selectedBallInCourt !== ALL_OPTION_VALUE) {
+            const ballInCourtValue = row.ball_in_court;
+            if ((ballInCourtValue ?? '').toString().trim() !== selectedBallInCourt) {
+                return false;
+            }
         }
-        const value = row.ball_in_court;
-        return (value ?? '').toString().trim() === selectedBallInCourt;
-    }, [selectedBallInCourt]);
+
+        // Check Submittal Manager filter
+        if (selectedSubmittalManager !== ALL_OPTION_VALUE) {
+            const managerValue = row.submittal_manager ?? row['Submittal Manager'];
+            if ((managerValue ?? '').toString().trim() !== selectedSubmittalManager) {
+                return false;
+            }
+        }
+
+        return true;
+    }, [selectedBallInCourt, selectedSubmittalManager]);
 
     const displayRows = useMemo(() => {
         const filtered = rows.filter(matchesSelectedFilter);
@@ -160,6 +173,17 @@ function DraftingWorkLoad() {
         const values = new Set();
         rows.forEach((row) => {
             const value = row.ball_in_court;
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+                values.add(String(value).trim());
+            }
+        });
+        return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }, [rows]);
+
+    const submittalManagerOptions = useMemo(() => {
+        const values = new Set();
+        rows.forEach((row) => {
+            const value = row.submittal_manager ?? row['Submittal Manager'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 values.add(String(value).trim());
             }
@@ -195,8 +219,13 @@ function DraftingWorkLoad() {
         setSelectedBallInCourt(event.target.value);
     };
 
+    const handleSubmittalManagerChange = (event) => {
+        setSelectedSubmittalManager(event.target.value);
+    };
+
     const resetFilters = () => {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
+        setSelectedSubmittalManager(ALL_OPTION_VALUE);
     };
 
     const handleOrderNumberChange = useCallback(async (submittalId, newValue) => {
@@ -317,28 +346,47 @@ function DraftingWorkLoad() {
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-6">
                         <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
-                        <p className="text-accent-100 mt-2">View and filter drafting workload by Ball In Court.</p>
+                        <p className="text-accent-100 mt-2">View and filter drafting workload by Ball In Court and Submittal Manager.</p>
                     </div>
 
                     <div className="p-8 space-y-6">
                         <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-6 border border-gray-200 shadow-sm">
                             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                                <div className="flex-1 min-w-[200px]">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        🎯 Filter by Ball In Court
-                                    </label>
-                                    <select
-                                        value={selectedBallInCourt}
-                                        onChange={handleBallInCourtChange}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
-                                    >
-                                        <option value={ALL_OPTION_VALUE}>All</option>
-                                        {ballInCourtOptions.map((option) => (
-                                            <option key={option} value={option}>
-                                                {option}
-                                            </option>
-                                        ))}
-                                    </select>
+                                <div className="flex flex-col gap-4 md:flex-row md:flex-1">
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            🎯 Filter by Ball In Court
+                                        </label>
+                                        <select
+                                            value={selectedBallInCourt}
+                                            onChange={handleBallInCourtChange}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        >
+                                            <option value={ALL_OPTION_VALUE}>All</option>
+                                            {ballInCourtOptions.map((option) => (
+                                                <option key={option} value={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            👤 Filter by Submittal Manager
+                                        </label>
+                                        <select
+                                            value={selectedSubmittalManager}
+                                            onChange={handleSubmittalManagerChange}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        >
+                                            <option value={ALL_OPTION_VALUE}>All</option>
+                                            {submittalManagerOptions.map((option) => (
+                                                <option key={option} value={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="flex gap-3">
                                     <button
