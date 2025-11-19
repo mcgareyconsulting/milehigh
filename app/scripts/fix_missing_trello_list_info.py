@@ -19,12 +19,14 @@ from app import create_app
 from app.trello.api import get_trello_card_by_id, get_list_name_by_id
 
 
-def scan_missing_list_info(return_json=False):
+def scan_missing_list_info(return_json=False, job=None, release=None):
     """
     Scan and preview which cards would be updated without actually updating them.
     
     Args:
         return_json: If True, returns a dictionary instead of printing
+        job: Optional job number to filter by (int)
+        release: Optional release number to filter by (str)
     
     Returns:
         dict with scan results if return_json=True, None otherwise
@@ -38,13 +40,21 @@ def scan_missing_list_info(return_json=False):
     if not return_json:
         print("\n[STEP 1] Fetching jobs from database...")
     
-    jobs = Job.query.filter(
+    query = Job.query.filter(
         Job.trello_card_id.isnot(None),
         or_(
             Job.trello_list_id.is_(None),
             Job.trello_list_name.is_(None)
         )
-    ).all()
+    )
+    
+    # Filter by job and/or release if provided
+    if job is not None:
+        query = query.filter(Job.job == job)
+    if release is not None:
+        query = query.filter(Job.release == str(release))
+    
+    jobs = query.all()
     
     if not return_json:
         print(f"[INFO] Found {len(jobs)} job(s) with Trello cards but missing list info")
@@ -145,7 +155,7 @@ def scan_missing_list_info(return_json=False):
     print("=" * 60)
 
 
-def fix_missing_list_info(return_json=False, limit=None, batch_size=50):
+def fix_missing_list_info(return_json=False, limit=None, batch_size=50, job=None, release=None):
     """
     Main function to fix all cards with missing Trello list information.
     
@@ -153,6 +163,8 @@ def fix_missing_list_info(return_json=False, limit=None, batch_size=50):
         return_json: If True, returns a dictionary instead of printing
         limit: Maximum number of cards to process (None for all)
         batch_size: Number of cards to process before committing to DB
+        job: Optional job number to filter by (int)
+        release: Optional release number to filter by (str)
     
     Returns:
         dict with fix results if return_json=True, None otherwise
@@ -161,6 +173,8 @@ def fix_missing_list_info(return_json=False, limit=None, batch_size=50):
         print("=" * 60)
         print("Starting fix for missing Trello list information")
         print("=" * 60)
+        if job is not None or release is not None:
+            print(f"Filtering by: job={job}, release={release}")
     
     # Get all jobs with trello_card_id but missing list info
     if not return_json:
@@ -172,6 +186,12 @@ def fix_missing_list_info(return_json=False, limit=None, batch_size=50):
             Job.trello_list_name.is_(None)
         )
     )
+    
+    # Filter by job and/or release if provided
+    if job is not None:
+        query = query.filter(Job.job == job)
+    if release is not None:
+        query = query.filter(Job.release == str(release))
     
     if limit:
         query = query.limit(limit)

@@ -152,6 +152,7 @@ def create_app():
         r"/snapshot/*": {"origins": allowed_origins},
         r"/snapshots/*": {"origins": allowed_origins},
         r"/procore/*": {"origins": allowed_origins},
+        r"/files/*": {"origins": allowed_origins},
     })
     
     # Database configuration - use environment variable for production
@@ -1008,12 +1009,24 @@ def create_app():
         """
         Scan and preview which cards have missing Trello list information.
         Does not perform any updates.
+        
+        Query params:
+            job: Optional job number to filter by (int)
+            release: Optional release number to filter by (str)
         """
         try:
             from app.scripts.fix_missing_trello_list_info import scan_missing_list_info
             
-            logger.info("Scanning for missing Trello list information")
-            result = scan_missing_list_info(return_json=True)
+            # Get optional parameters
+            job = request.args.get("job", type=int)
+            release = request.args.get("release", type=str)
+            
+            logger.info(
+                "Scanning for missing Trello list information",
+                job=job,
+                release=release
+            )
+            result = scan_missing_list_info(return_json=True, job=job, release=release)
             
             if "error" in result:
                 return jsonify({
@@ -1023,6 +1036,8 @@ def create_app():
             
             return jsonify({
                 "message": "Trello list info scan completed",
+                "job": job,
+                "release": release,
                 "scan": result
             }), 200
             
@@ -1033,14 +1048,16 @@ def create_app():
                 "error": str(e)
             }), 500
 
-    @app.route("/fix-trello-list/run", methods=["POST"])
+    @app.route("/fix-trello-list/run", methods=["GET", "POST"])
     def fix_missing_trello_list_info():
         """
         Fix cards with missing Trello list information by fetching from Trello API.
         Actually updates the database.
         
         Query params:
-            limit: Maximum number of cards to process in this request (default: 100)
+            job: Optional job number to filter by (int) - if provided with release, updates only that job-release
+            release: Optional release number to filter by (str) - if provided with job, updates only that job-release
+            limit: Maximum number of cards to process in this request (default: 100, ignored if job+release provided)
                   Use this to process in smaller batches to avoid timeouts
             batch_size: Number of cards to commit at once (default: 50)
         """
@@ -1048,17 +1065,34 @@ def create_app():
             from app.scripts.fix_missing_trello_list_info import fix_missing_list_info, scan_missing_list_info
             
             # Get optional parameters
+            job = request.args.get("job", type=int)
+            release = request.args.get("release", type=str)
             limit = request.args.get("limit", type=int)
             batch_size = request.args.get("batch_size", default=50, type=int)
             
-            if limit is None:
-                # Default to 100 to avoid timeouts
-                limit = 100
-            
-            logger.info("Starting fix for missing Trello list information", limit=limit, batch_size=batch_size)
+            # If job and release are provided, don't use limit (only one job-release)
+            if job is not None and release is not None:
+                limit = None
+                logger.info(
+                    "Starting fix for missing Trello list information",
+                    job=job,
+                    release=release,
+                    batch_size=batch_size
+                )
+            else:
+                if limit is None:
+                    # Default to 100 to avoid timeouts
+                    limit = 100
+                logger.info(
+                    "Starting fix for missing Trello list information",
+                    limit=limit,
+                    batch_size=batch_size,
+                    job=job,
+                    release=release
+                )
             
             # Run the scan first to get initial state
-            scan_result = scan_missing_list_info(return_json=True)
+            scan_result = scan_missing_list_info(return_json=True, job=job, release=release)
             
             if "error" in scan_result:
                 return jsonify({
@@ -1067,7 +1101,13 @@ def create_app():
                 }), 500
             
             # Run the actual fix with limit
-            fix_result = fix_missing_list_info(return_json=True, limit=limit, batch_size=batch_size)
+            fix_result = fix_missing_list_info(
+                return_json=True,
+                limit=limit,
+                batch_size=batch_size,
+                job=job,
+                release=release
+            )
             
             if "error" in fix_result:
                 return jsonify({
@@ -1075,11 +1115,17 @@ def create_app():
                     "error": fix_result["error"]
                 }), 500
             
-            # Scan again to get final state
-            final_scan = scan_missing_list_info(return_json=True)
+            # Scan again to get final state (only if not filtering by specific job-release)
+            if job is not None and release is not None:
+                # For single job-release, just return the fix result
+                final_scan = {"message": "Single job-release update completed"}
+            else:
+                final_scan = scan_missing_list_info(return_json=True, job=job, release=release)
             
             return jsonify({
                 "message": "Trello list info fix completed",
+                "job": job,
+                "release": release,
                 "limit_used": limit,
                 "batch_size_used": batch_size,
                 "before": scan_result,
@@ -1394,6 +1440,365 @@ def create_app():
             
         except Exception as e:
             logger.error("Error comparing snapshots", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    # Persistent disk file management routes
+    @app.route("/files/list")
+    def list_persistent_disk_files():
+        """
+        List all files on the persistent disk.
+        
+        Query parameters:
+            path: Optional subdirectory path (defaults to SNAPSHOTS_DIR or /var/data/)
+            recursive: If true, recursively list files in subdirectories (default: false)
+        
+        Returns:
+            JSON with list of files and their metadata
+        """
+        try:
+            from app.config import Config
+            
+            config = Config()
+            
+            # Determine base directory - check for Render persistent disk or use SNAPSHOTS_DIR
+            base_path = request.args.get('path', '')
+            recursive = request.args.get('recursive', 'false').lower() == 'true'
+            
+            # If no path specified, use SNAPSHOTS_DIR or check for /var/data/ (Render persistent disk)
+            if not base_path:
+                # Check if /var/data/ exists (Render persistent disk)
+                if os.path.exists('/var/data'):
+                    base_path = '/var/data'
+                else:
+                    # Fall back to SNAPSHOTS_DIR
+                    base_path = config.SNAPSHOTS_DIR
+            else:
+                # If path is provided, resolve it relative to a safe base
+                # For security, only allow paths within /var/data/ or SNAPSHOTS_DIR
+                if not os.path.isabs(base_path):
+                    # Relative path - resolve relative to SNAPSHOTS_DIR
+                    base_path = os.path.join(config.SNAPSHOTS_DIR, base_path)
+                # Ensure the path is within allowed directories
+                allowed_bases = ['/var/data', config.SNAPSHOTS_DIR]
+                if not any(base_path.startswith(base) for base in allowed_bases if base):
+                    return jsonify({
+                        "error": "Path not allowed",
+                        "message": "Only paths within persistent disk are accessible"
+                    }), 403
+            
+            # Normalize the path
+            base_path = os.path.normpath(base_path)
+            
+            if not os.path.exists(base_path):
+                return jsonify({
+                    "files": [],
+                    "total_count": 0,
+                    "base_path": base_path,
+                    "message": "Directory does not exist"
+                }), 200
+            
+            if not os.path.isdir(base_path):
+                return jsonify({
+                    "error": "Path is not a directory"
+                }), 400
+            
+            # Collect files
+            files = []
+            if recursive:
+                # Recursive listing
+                for root, dirs, filenames in os.walk(base_path):
+                    for filename in filenames:
+                        file_path = os.path.join(root, filename)
+                        rel_path = os.path.relpath(file_path, base_path)
+                        try:
+                            stat = os.stat(file_path)
+                            files.append({
+                                "name": filename,
+                                "path": rel_path,
+                                "full_path": file_path,
+                                "size_bytes": stat.st_size,
+                                "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                                "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                "is_file": True
+                            })
+                        except OSError:
+                            continue
+            else:
+                # Non-recursive listing
+                try:
+                    items = os.listdir(base_path)
+                    for item in items:
+                        item_path = os.path.join(base_path, item)
+                        try:
+                            stat = os.stat(item_path)
+                            files.append({
+                                "name": item,
+                                "path": item,
+                                "full_path": item_path,
+                                "size_bytes": stat.st_size if os.path.isfile(item_path) else 0,
+                                "size_mb": round(stat.st_size / (1024 * 1024), 2) if os.path.isfile(item_path) else 0,
+                                "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                "is_file": os.path.isfile(item_path),
+                                "is_directory": os.path.isdir(item_path)
+                            })
+                        except OSError:
+                            continue
+                except PermissionError:
+                    return jsonify({
+                        "error": "Permission denied",
+                        "message": f"Cannot access directory: {base_path}"
+                    }), 403
+            
+            # Sort by modified time (newest first)
+            files.sort(key=lambda x: x.get('modified_time', ''), reverse=True)
+            
+            return jsonify({
+                "files": files,
+                "total_count": len(files),
+                "base_path": base_path,
+                "recursive": recursive
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error listing persistent disk files", error=str(e))
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/files/download")
+    def download_persistent_disk_file():
+        """
+        Download a file from the persistent disk.
+        
+        Query parameters:
+            file: Relative path to the file (required)
+            path: Optional base directory (defaults to SNAPSHOTS_DIR or /var/data/)
+        
+        Returns:
+            File download response
+        """
+        try:
+            from app.config import Config
+            from flask import send_file
+            
+            config = Config()
+            
+            file_path = request.args.get('file')
+            base_path = request.args.get('path', '')
+            
+            if not file_path:
+                return jsonify({
+                    "error": "Missing required parameter",
+                    "message": "The 'file' parameter is required"
+                }), 400
+            
+            # Determine base directory
+            if not base_path:
+                if os.path.exists('/var/data'):
+                    base_path = '/var/data'
+                else:
+                    base_path = config.SNAPSHOTS_DIR
+            else:
+                if not os.path.isabs(base_path):
+                    base_path = os.path.join(config.SNAPSHOTS_DIR, base_path)
+                allowed_bases = ['/var/data', config.SNAPSHOTS_DIR]
+                if not any(base_path.startswith(base) for base in allowed_bases if base):
+                    return jsonify({
+                        "error": "Path not allowed"
+                    }), 403
+            
+            base_path = os.path.abspath(os.path.normpath(base_path))
+            
+            # Construct full file path
+            if os.path.isabs(file_path):
+                # If absolute path, ensure it's within allowed base
+                full_path = os.path.abspath(os.path.normpath(file_path))
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            else:
+                # Relative path - join with base
+                full_path = os.path.abspath(os.path.normpath(os.path.join(base_path, file_path)))
+                # Security check: ensure the resolved path is still within base_path
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            
+            if not os.path.exists(full_path):
+                return jsonify({
+                    "error": "File not found",
+                    "file": file_path
+                }), 404
+            
+            if not os.path.isfile(full_path):
+                return jsonify({
+                    "error": "Path is not a file",
+                    "file": file_path
+                }), 400
+            
+            # Send the file
+            return send_file(
+                full_path,
+                as_attachment=True,
+                download_name=os.path.basename(full_path)
+            )
+            
+        except Exception as e:
+            logger.error("Error downloading file", error=str(e), file=file_path)
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/files/read-pkl")
+    def read_pkl_file():
+        """
+        Read a .pkl (pickle) file from the persistent disk and return its contents.
+        
+        Query parameters:
+            file: Relative path to the .pkl file (required)
+            path: Optional base directory (defaults to SNAPSHOTS_DIR or /var/data/)
+            format: Output format - 'json' (default) or 'csv'
+            limit: Optional limit on number of rows to return (default: all rows)
+            offset: Optional offset for pagination (default: 0)
+        
+        Returns:
+            JSON with file contents (DataFrame converted to records) and metadata
+        """
+        try:
+            from app.config import Config
+            import pandas as pd
+            import json
+            
+            config = Config()
+            
+            file_path = request.args.get('file')
+            base_path = request.args.get('path', '')
+            output_format = request.args.get('format', 'json').lower()
+            limit = request.args.get('limit', type=int)
+            offset = request.args.get('offset', 0, type=int)
+            
+            if not file_path:
+                return jsonify({
+                    "error": "Missing required parameter",
+                    "message": "The 'file' parameter is required"
+                }), 400
+            
+            # Determine base directory
+            if not base_path:
+                if os.path.exists('/var/data'):
+                    base_path = '/var/data'
+                else:
+                    base_path = config.SNAPSHOTS_DIR
+            else:
+                if not os.path.isabs(base_path):
+                    base_path = os.path.join(config.SNAPSHOTS_DIR, base_path)
+                allowed_bases = ['/var/data', config.SNAPSHOTS_DIR]
+                if not any(base_path.startswith(base) for base in allowed_bases if base):
+                    return jsonify({
+                        "error": "Path not allowed"
+                    }), 403
+            
+            base_path = os.path.abspath(os.path.normpath(base_path))
+            
+            # Construct full file path
+            if os.path.isabs(file_path):
+                full_path = os.path.abspath(os.path.normpath(file_path))
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            else:
+                full_path = os.path.abspath(os.path.normpath(os.path.join(base_path, file_path)))
+                if not full_path.startswith(base_path):
+                    return jsonify({
+                        "error": "File path not allowed"
+                    }), 403
+            
+            if not os.path.exists(full_path):
+                return jsonify({
+                    "error": "File not found",
+                    "file": file_path
+                }), 404
+            
+            if not full_path.endswith('.pkl'):
+                return jsonify({
+                    "error": "File is not a .pkl file",
+                    "file": file_path
+                }), 400
+            
+            # Read the pickle file
+            try:
+                df = pd.read_pickle(full_path)
+            except Exception as e:
+                logger.error("Error reading pickle file", error=str(e), file=full_path)
+                return jsonify({
+                    "error": "Failed to read pickle file",
+                    "message": str(e)
+                }), 500
+            
+            # Check if it's a DataFrame
+            if not isinstance(df, pd.DataFrame):
+                return jsonify({
+                    "error": "Pickle file does not contain a DataFrame",
+                    "type": str(type(df))
+                }), 400
+            
+            # Get metadata if available
+            metadata = None
+            metadata_path = full_path.replace('.pkl', '_meta.json')
+            if os.path.exists(metadata_path):
+                try:
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                except Exception as e:
+                    logger.warning("Could not load metadata file", error=str(e))
+            
+            # Apply pagination if requested
+            total_rows = len(df)
+            if offset > 0 or limit is not None:
+                end_idx = offset + limit if limit is not None else None
+                df = df.iloc[offset:end_idx]
+            
+            # Convert DataFrame to records
+            records = df.to_dict(orient='records')
+            
+            # Convert non-serializable types (pandas Timestamps, numpy types, etc.)
+            for record in records:
+                for key, value in record.items():
+                    if pd.isna(value):
+                        record[key] = None
+                    elif isinstance(value, (pd.Timestamp, datetime)):
+                        record[key] = value.isoformat()
+                    elif hasattr(value, 'item'):  # numpy types
+                        try:
+                            record[key] = value.item()
+                        except (ValueError, AttributeError):
+                            record[key] = str(value)
+            
+            # Prepare response based on format
+            if output_format == 'csv':
+                # Return as CSV string
+                csv_string = df.to_csv(index=False)
+                from flask import Response
+                return Response(
+                    csv_string,
+                    mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={os.path.basename(full_path).replace(".pkl", ".csv")}'}
+                )
+            else:
+                # Return as JSON
+                return jsonify({
+                    "file": file_path,
+                    "full_path": full_path,
+                    "total_rows": total_rows,
+                    "returned_rows": len(records),
+                    "offset": offset,
+                    "limit": limit,
+                    "columns": list(df.columns),
+                    "metadata": metadata,
+                    "data": records
+                }), 200
+            
+        except Exception as e:
+            logger.error("Error reading pkl file", error=str(e), file=file_path)
             return jsonify({"error": str(e)}), 500
 
 
