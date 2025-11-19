@@ -85,9 +85,21 @@ def migrate(database_url: str = None) -> bool:
             print("✗ Table 'procore_submittals' does not exist. Nothing to do.")
             return False
 
+        # Check column existence BEFORE starting transaction to avoid lock conflicts
+        notes_exists = column_exists(engine, "procore_submittals", "notes")
+        ball_in_court_due_date_exists = column_exists(engine, "procore_submittals", "ball_in_court_due_date")
+
+        # Determine if we need to make any changes
+        needs_changes = not notes_exists or ball_in_court_due_date_exists
+
+        if not needs_changes:
+            print("✓ Column 'notes' already exists and 'ball_in_court_due_date' does not exist. Nothing to do.")
+            return True
+
+        # Now start transaction only if we need to make changes
         with engine.begin() as conn:
             # Add notes column if it doesn't exist
-            if not column_exists(engine, "procore_submittals", "notes"):
+            if not notes_exists:
                 print("Adding column 'notes' to 'procore_submittals' table...")
                 conn.execute(text("ALTER TABLE procore_submittals ADD COLUMN notes TEXT"))
                 print("✓ Successfully added 'notes' column.")
@@ -95,15 +107,18 @@ def migrate(database_url: str = None) -> bool:
                 print("✓ Column 'notes' already exists. Skipping.")
 
             # Remove ball_in_court_due_date column if it exists
-            if column_exists(engine, "procore_submittals", "ball_in_court_due_date"):
+            if ball_in_court_due_date_exists:
                 print("Removing column 'ball_in_court_due_date' from 'procore_submittals' table...")
-                # SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
-                # This is a simplified approach - in production you might want a more sophisticated migration
-                print("⚠ Note: SQLite doesn't support DROP COLUMN directly.")
-                print("⚠ You may need to manually remove the column or use a table recreation strategy.")
-                print("⚠ For now, the column will remain but won't be used by the application.")
-                # For SQLite, we'll leave a note that manual intervention may be needed
-                # For PostgreSQL/MySQL, we could do: conn.execute(text("ALTER TABLE procore_submittals DROP COLUMN ball_in_court_due_date"))
+                # Check if we're using PostgreSQL (supports DROP COLUMN)
+                db_url_lower = str(db_url).lower()
+                if "postgresql" in db_url_lower or "postgres" in db_url_lower:
+                    conn.execute(text("ALTER TABLE procore_submittals DROP COLUMN ball_in_court_due_date"))
+                    print("✓ Successfully removed 'ball_in_court_due_date' column.")
+                else:
+                    # SQLite doesn't support DROP COLUMN directly
+                    print("⚠ Note: SQLite doesn't support DROP COLUMN directly.")
+                    print("⚠ You may need to manually remove the column or use a table recreation strategy.")
+                    print("⚠ For now, the column will remain but won't be used by the application.")
             else:
                 print("✓ Column 'ball_in_court_due_date' does not exist. Nothing to remove.")
 
