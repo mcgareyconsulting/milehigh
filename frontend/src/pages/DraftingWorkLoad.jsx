@@ -4,28 +4,6 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const ALL_OPTION_VALUE = '__ALL__';
 
-const interpolateChannel = (start, end, factor) => Math.round(start + (end - start) * factor);
-
-const interpolateColor = (startHex, endHex, factor) => {
-    const parseHex = (hex) => {
-        const sanitized = hex.replace('#', '');
-        return {
-            r: parseInt(sanitized.slice(0, 2), 16),
-            g: parseInt(sanitized.slice(2, 4), 16),
-            b: parseInt(sanitized.slice(4, 6), 16),
-        };
-    };
-
-    const startColor = parseHex(startHex);
-    const endColor = parseHex(endHex);
-
-    const r = interpolateChannel(startColor.r, endColor.r, factor);
-    const g = interpolateChannel(startColor.g, endColor.g, factor);
-    const b = interpolateChannel(startColor.b, endColor.b, factor);
-
-    return `rgb(${r}, ${g}, ${b})`;
-};
-
 function DraftingWorkLoad() {
     const [rows, setRows] = useState([]);
     const [columns, setColumns] = useState([]);
@@ -317,29 +295,6 @@ function DraftingWorkLoad() {
 
     const tableColumnCount = columnHeaders.length;
 
-    const urgencyStyles = useMemo(() => {
-        if (!hasData) {
-            return {};
-        }
-
-        const total = displayRows.length;
-        const lowUrgencyBackground = '#BBF7D0';
-        const highUrgencyBackground = '#FECACA';
-        const lowUrgencyBorder = '#10B981';
-        const highUrgencyBorder = '#EF4444';
-
-        return displayRows.reduce((acc, row, index) => {
-            const factor = total <= 1 ? 0 : index / (total - 1);
-            const borderColor = interpolateColor(highUrgencyBorder, lowUrgencyBorder, factor);
-
-            acc[row.id] = {
-                borderLeft: `6px solid ${borderColor}`,
-            };
-
-            return acc;
-        }, {});
-    }, [displayRows, hasData]);
-
     return (
         <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-[95%] mx-auto w-full" style={{ width: '100%' }}>
@@ -512,7 +467,6 @@ function DraftingWorkLoad() {
                                                         columns={columnHeaders}
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
-                                                        urgencyStyle={urgencyStyles[row.id]}
                                                         onOrderNumberChange={handleOrderNumberChange}
                                                     />
                                                 ))
@@ -531,14 +485,10 @@ function DraftingWorkLoad() {
 
 export default DraftingWorkLoad;
 
-function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onOrderNumberChange }) {
+function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const inputRef = useRef(null);
-
-    const style = {
-        borderLeft: urgencyStyle?.borderLeft,
-    };
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
 
@@ -572,24 +522,9 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
         }
     }, [editingOrderNumber]);
 
-    // Determine background color based on order_number
-    const orderNumber = row.order_number ?? row['Order Number'] ?? null;
-    let rowBgClass = 'bg-white';
-    if (orderNumber !== null && orderNumber !== undefined) {
-        const orderNum = parseFloat(orderNumber);
-        if (!isNaN(orderNum)) {
-            if (orderNum < 1) {
-                rowBgClass = 'bg-red-100';
-            } else if (orderNum >= 1 && orderNum < 2) {
-                rowBgClass = 'bg-yellow-100';
-            }
-        }
-    }
-
     return (
         <tr
-            style={style}
-            className={`${rowBgClass} hover:opacity-90 transition-colors duration-150`}
+            className="bg-white hover:opacity-90 transition-colors duration-150"
         >
             {columns.map((column) => {
                 const isOrderNumber = column === 'Order Number';
@@ -607,7 +542,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-3 py-3 align-middle ${rowBgClass}`}
+                            className="px-3 py-3 align-middle bg-white"
                         >
                             <input
                                 ref={inputRef}
@@ -627,7 +562,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-3 py-3 align-middle ${rowBgClass}`}
+                            className="px-3 py-3 align-middle bg-white"
                             onClick={handleOrderNumberFocus}
                             title="Click to edit order number"
                         >
@@ -648,7 +583,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-6 py-4 whitespace-pre-wrap text-sm align-top font-medium ${rowBgClass}`}
+                            className="px-6 py-4 whitespace-pre-wrap text-sm align-top font-medium bg-white"
                         >
                             {href !== '#' ? (
                                 <a
@@ -669,7 +604,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, urgencyStyle, onO
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className={`px-6 py-4 whitespace-pre-wrap text-sm text-gray-900 align-top font-medium ${rowBgClass}`}
+                        className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-900 align-top font-medium bg-white"
                     >
                         {cellValue}
                     </td>
