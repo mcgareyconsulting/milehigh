@@ -73,8 +73,8 @@ def procore_webhook():
             payload = {}
 
         # Extract metadata
-        resource_id = payload.get("id")
-        project_id = payload.get("project_id")
+        resource_id = int(payload.get("resource_id"))
+        project_id = int(payload.get("project_id"))
         event_type = payload.get("reason") or "unknown"
         resource_type = payload.get("resource_type") or "unknown"
 
