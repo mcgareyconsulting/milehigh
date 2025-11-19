@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_socketio import SocketIO
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.procore import procore_bp
@@ -25,6 +26,20 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
+
+
+def get_socketio_cors_origins():
+    """Get allowed CORS origins for SocketIO from environment or default to localhost:5173 (Vite default)"""
+    allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173")
+    if allowed_origins != "*":
+        # Parse comma-separated list if provided
+        origins = [origin.strip() for origin in allowed_origins.split(",")]
+        return origins
+    # If "*" is explicitly set, allow all (not recommended for production)
+    return "*"
+
+# Initialize SocketIO with CORS restricted to frontend origins
+socketio = SocketIO(cors_allowed_origins=get_socketio_cors_origins())
 
 import time
 import atexit
@@ -154,6 +169,9 @@ def create_app():
         r"/procore/*": {"origins": allowed_origins},
         r"/files/*": {"origins": allowed_origins},
     })
+    
+    # Initialize SocketIO with app
+    socketio.init_app(app)
     
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
