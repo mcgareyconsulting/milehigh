@@ -93,6 +93,7 @@ def check_project_webhooks(procore_client, project_id: int, project_number: Opti
                 deliveries = procore_client.get_webhook_deliveries(
                     cfg.PROD_PROCORE_COMPANY_ID, project_id, hook_id
                 )
+                # 404 is normal if no deliveries yet - empty list is returned
                 if deliveries:
                     # Ensure deliveries is a list
                     if isinstance(deliveries, list):

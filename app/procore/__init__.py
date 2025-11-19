@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from datetime import datetime, date
 from collections import defaultdict
+from typing import Optional
 
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
@@ -21,15 +22,19 @@ logger = get_logger(__name__)
 procore_bp = Blueprint("procore", __name__)
 
 
-def log_webhook_payload(payload: dict, headers: dict = None):
+def log_webhook_payload(payload: dict, headers: dict = None, hook_id: Optional[int] = None):
     """
     Log incoming webhook payload to persistent disk (same as Excel snapshots).
     Uses JSON Lines format (one JSON object per line) for easy parsing.
+    
+    Note: Procore webhook payloads don't include hook_id - it must be inferred
+    by querying Procore's API or looking up webhooks for the project.
     """
     log_entry = {
         "timestamp": datetime.utcnow().isoformat(),
         "headers": dict(headers) if headers else {},
-        "payload": payload
+        "payload": payload,
+        "hook_id": hook_id  # Will be None if not provided - must be looked up separately
     }
     
     # Use the same persistent disk directory as Excel snapshots
@@ -74,16 +79,33 @@ def procore_webhook():
                     # If it's not valid JSON, log as text
                     pass
             
-            log_webhook_payload(payload, headers)
+            # Try to identify hook_id by looking up webhooks for this project
+            # Note: Procore payloads don't include hook_id, so we infer it
+            hook_id = None
+            if isinstance(payload, dict):
+                project_id = payload.get("project_id")
+                if project_id:
+                    try:
+                        from app.procore.client import get_procore_client
+                        procore_client = get_procore_client()
+                        webhooks = procore_client.list_project_webhooks(int(project_id), "mile-high-metal-works")
+                        # If only one webhook exists, use it; otherwise leave as None
+                        if webhooks and len(webhooks) == 1:
+                            hook_id = webhooks[0].get("id")
+                    except Exception as e:
+                        # If lookup fails, continue without hook_id
+                        logger.debug(f"Could not determine hook_id for project {project_id}: {e}")
+            
+            log_webhook_payload(payload, headers, hook_id)
             
             # Also log via application logger
-            event_type = payload.get("event_type") if isinstance(payload, dict) else "unknown"
-            resource_name = payload.get("resource_name") if isinstance(payload, dict) else "unknown"
+            event_type = payload.get("reason") if isinstance(payload, dict) else "unknown"  # Use "reason" instead of "event_type"
+            resource_type = payload.get("resource_type") if isinstance(payload, dict) else "unknown"  # Use "resource_type" instead of "resource_name"
             project_id = payload.get("project_id") if isinstance(payload, dict) else None
             
             logger.info(
-                f"Received Procore webhook: resource={resource_name}, "
-                f"event_type={event_type}, project_id={project_id}"
+                f"Received Procore webhook: resource={resource_type}, "
+                f"event_type={event_type}, project_id={project_id}, hook_id={hook_id}"
             )
             
             # Return 200 OK to acknowledge receipt
@@ -112,6 +134,110 @@ def procore_webhook():
                 "message": str(e),
                 "timestamp": datetime.utcnow().isoformat()
             }), 200
+
+@procore_bp.route("/api/webhook/deliveries", methods=["GET"])
+def webhook_deliveries():
+    """
+    API endpoint to get webhook deliveries from Procore's API.
+    Takes company_id and project_id, looks up the webhook (assumes 1 webhook),
+    and returns deliveries for that webhook.
+    
+    Query Parameters:
+    - company_id: Company ID (required)
+    - project_id: Project ID (required)
+    - limit: Number of deliveries to return (default: 50, max: 200)
+    
+    Example:
+    GET /procore/api/webhook/deliveries?company_id=18521&project_id=3260690
+    GET /procore/api/webhook/deliveries?company_id=18521&project_id=3260690&limit=100
+    """
+    try:
+        from app.procore.client import get_procore_client
+        
+        # Get query parameters
+        company_id = request.args.get("company_id", type=int)
+        project_id = request.args.get("project_id", type=int)
+        limit = request.args.get("limit", default=50, type=int)
+        limit = min(limit, 200)  # Cap at 200 for performance
+        
+        if not company_id or not project_id:
+            return jsonify({
+                "status": "error",
+                "error": "company_id and project_id are required"
+            }), 400
+        
+        # Get Procore client
+        procore_client = get_procore_client()
+        namespace = "mile-high-metal-works"
+        
+        # Look up webhooks for this project
+        webhooks = procore_client.list_project_webhooks(project_id, namespace)
+        
+        if not webhooks or len(webhooks) == 0:
+            return jsonify({
+                "status": "success",
+                "message": "No webhooks found for this project",
+                "deliveries": [],
+                "total": 0,
+                "company_id": company_id,
+                "project_id": project_id
+            }), 200
+        
+        if len(webhooks) > 1:
+            return jsonify({
+                "status": "error",
+                "error": f"Multiple webhooks found for project {project_id}. Cannot determine which one to use.",
+                "webhook_count": len(webhooks),
+                "webhook_ids": [w.get("id") for w in webhooks]
+            }), 400
+        
+        # Get the single webhook
+        hook_id = webhooks[0].get("id")
+        if not hook_id:
+            return jsonify({
+                "status": "error",
+                "error": "Webhook found but no hook_id in response"
+            }), 500
+        
+        # Get deliveries for this webhook
+        try:
+            deliveries = procore_client.get_webhook_deliveries(company_id, project_id, hook_id)
+            
+            # Sort by most recent first
+            if deliveries:
+                deliveries.sort(
+                    key=lambda x: x.get("created_at", ""), 
+                    reverse=True
+                )
+                deliveries = deliveries[:limit]
+            
+            return jsonify({
+                "status": "success",
+                "deliveries": deliveries,
+                "total": len(deliveries),
+                "limit": limit,
+                "company_id": company_id,
+                "project_id": project_id,
+                "hook_id": hook_id
+            }), 200
+            
+        except Exception as e:
+            logger.error(f"Error getting webhook deliveries: {str(e)}", exc_info=True)
+            return jsonify({
+                "status": "error",
+                "error": str(e),
+                "company_id": company_id,
+                "project_id": project_id,
+                "hook_id": hook_id
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error retrieving webhook deliveries: {str(e)}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
 
 @procore_bp.route("/api/webhook/payloads", methods=["GET"])
 def webhook_payloads():
@@ -176,19 +302,21 @@ def webhook_payloads():
                     except:
                         payload_data = {}
                 
-                # Apply filters
+                # Apply filters (Procore payload uses "resource_type" and "reason")
                 if project_id_filter:
                     payload_project_id = payload_data.get("project_id") or payload_data.get("project", {}).get("id")
                     if str(payload_project_id) != str(project_id_filter):
                         continue
                 
                 if resource_name_filter:
-                    payload_resource = payload_data.get("resource_name") or payload_data.get("resource", {}).get("name")
+                    # Procore uses "resource_type" in payload
+                    payload_resource = payload_data.get("resource_type") or payload_data.get("resource_name") or payload_data.get("resource", {}).get("name")
                     if payload_resource != resource_name_filter:
                         continue
                 
                 if event_type_filter:
-                    payload_event = payload_data.get("event_type") or payload_data.get("event", {}).get("type")
+                    # Procore uses "reason" in payload for event type
+                    payload_event = payload_data.get("reason") or payload_data.get("event_type") or payload_data.get("event", {}).get("type")
                     if payload_event != event_type_filter:
                         continue
                 

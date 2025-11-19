@@ -2,10 +2,11 @@ import logging
 import re
 import requests
 from app.config import Config as cfg
-from app.models import db, Job
+from app.models import db, Job, ProcoreSubmittal
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
+from app.procore.helpers import parse_ball_in_court_from_submittal
 
 
 logger = logging.getLogger(__name__)
@@ -182,6 +183,48 @@ def get_final_pdf_viewers(project_id, submittals):
 
     return final_results
 
+def get_webhook_deliveries(company_id, project_id):
+    procore = get_procore_client()
+
+    # get webhook_id based on project_id assuming 1 hook
+    webhooks = procore.list_project_webhooks(project_id, 'mile-high-metal-works')
+    if not webhooks:
+        logger.error("No Procore webhooks found for project_id=%s", project_id)
+        return None
+    webhook_id = webhooks[0]["id"]
+    if not webhook_id:
+        logger.error("No Procore webhook_id found for project_id=%s", project_id)
+        return None
+    return procore.get_deliveries(company_id, project_id, webhook_id)
+
+
+def compare_ball_in_court_from_submittal_to_db(submittal_id, submittal):
+    """
+    Compare ball_in_court from submittal webhook data against DB record.
+    
+    Args:
+        submittal_id: The submittal ID (resource_id from webhook)
+        submittal: Dict containing submittal data from Procore webhook
+        
+    Returns:
+        tuple: (procore_submittal, ball_in_court, approvers) or None if parsing fails
+        - procore_submittal: ProcoreSubmittal DB record or None if not found
+        - ball_in_court: str or None - User who has the ball in court
+        - approvers: list - List of approver data
+    """
+    parsed = parse_ball_in_court_from_submittal(submittal)
+    if parsed is None:
+        return None
+    
+    ball_in_court = parsed.get("ball_in_court")
+    approvers = parsed.get("approvers", [])
+    
+    # Look up the DB record
+    procore_submittal = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+    
+    # Always return a tuple, even if procore_submittal is None
+    return procore_submittal, ball_in_court, approvers
+
 # Add Procore Link to Trello Card
 def add_procore_link_to_trello_card(job, release):
     '''
@@ -246,13 +289,17 @@ if __name__ == "__main__":
     with app.app_context():
 
         procore = get_procore_client()
-        project_id = 2900844
-        submittal_id = 65961512
-        submittal_data = procore.get_submittal_by_id(project_id, submittal_id)
-        print(submittal_data)
-
-        # list project webhooks
-        # procore = get_procore_client()
-        # project_id = 2900844
-        # webhooks = procore.list_project_webhooks(project_id, 'mile-high-metal-works')
-        # print(webhooks)
+        proj = 3083390
+        sub = 66110537
+        submittal = procore.get_submittal_by_id(proj, sub)
+        result = compare_ball_in_court_from_submittal_to_db(sub, submittal)
+        if result is None:
+            print("Failed to parse submittal data")
+        else:
+            procore_submittal, ball_in_court, approvers = result
+            print(f"DB Record: {procore_submittal}")
+            print(f"Ball in Court: {ball_in_court}")
+            print(f"Approvers: {len(approvers) if approvers else 0} approvers")
+            if procore_submittal:
+                print(f"DB ball_in_court: {procore_submittal.ball_in_court}")
+                print(f"Match: {procore_submittal.ball_in_court == ball_in_court}")

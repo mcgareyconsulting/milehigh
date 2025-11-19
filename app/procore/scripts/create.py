@@ -110,6 +110,9 @@ def create_webhook_and_trigger(procore_client, project_id: int, project_number: 
         webhook_response = procore_client.create_project_webhook(project_id, "Submittals Updates", "update")
         
         # Handle Procore API response format - could be wrapped in {"data": {...}} or direct dict
+        # Log the full response for debugging
+        print(f"DEBUG: Webhook creation response: {webhook_response}")
+        
         if isinstance(webhook_response, dict) and "data" in webhook_response:
             webhook_data = webhook_response["data"]
             if isinstance(webhook_data, dict):
@@ -122,7 +125,16 @@ def create_webhook_and_trigger(procore_client, project_id: int, project_number: 
             hook_id = None
         
         if not hook_id:
-            raise ValueError(f"Webhook created but no hook_id returned. Response: {webhook_response}")
+            # Try alternative field names
+            if isinstance(webhook_response, dict):
+                hook_id = webhook_response.get("hook_id") or webhook_response.get("webhook_id")
+            if isinstance(webhook_response, dict) and "data" in webhook_response:
+                data = webhook_response["data"]
+                if isinstance(data, dict):
+                    hook_id = hook_id or data.get("hook_id") or data.get("webhook_id")
+            
+            if not hook_id:
+                raise ValueError(f"Webhook created but no hook_id returned. Response keys: {list(webhook_response.keys()) if isinstance(webhook_response, dict) else 'not a dict'}. Full response: {webhook_response}")
         
         log_operation(
             log_file,

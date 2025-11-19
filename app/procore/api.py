@@ -117,15 +117,27 @@ class ProcoreAPI:
             return response
         return []
 
-    def get_webhook_deliveries(self, company_id: int, project_id: int, hook_id: int) -> List[Dict]:
-        """Get deliveries for a specific webhook."""
-        response = self._get(f"/rest/v2.0/companies/{company_id}/projects/{project_id}/webhooks/hooks/{hook_id}/deliveries")
-        # Procore API returns {"data": [...]} format, extract the list
-        if isinstance(response, dict) and "data" in response:
-            return response["data"] if response["data"] else []
-        elif isinstance(response, list):
-            return response
-        return []
+    def get_deliveries(self, company_id: int, project_id: int, hook_id: int) -> List[Dict]:
+        """
+        Get deliveries for a specific webhook.
+        
+        Note: Deliveries may not exist until webhooks have been triggered.
+        Returns empty list if 404 (webhook exists but no deliveries yet).
+        """
+        try:
+            response = self._get(f"/rest/v2.0/companies/{company_id}/projects/{project_id}/webhooks/hooks/{hook_id}/deliveries")
+            # Procore API returns {"data": [...]} format, extract the list
+            if isinstance(response, dict) and "data" in response:
+                return response["data"] if response["data"] else []
+            elif isinstance(response, list):
+                return response
+            return []
+        except requests.HTTPError as e:
+            # If 404, webhook exists but no deliveries yet (normal for new webhooks)
+            if e.response and e.response.status_code == 404:
+                return []
+            # Re-raise other HTTP errors
+            raise
 
     def delete_webhook(self, project_id: int, hook_id: int) -> Dict:
         """Delete a specific webhook."""
