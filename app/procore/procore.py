@@ -229,14 +229,13 @@ def handle_submittal_update(project_id, submittal_id):
     return procore_submittal, ball_in_court, approvers
 
 
-def check_and_update_ball_in_court(project_id, submittal_id, socketio_instance=None):
+def check_and_update_ball_in_court(project_id, submittal_id):
     """
-    Check if ball_in_court from Procore differs from DB, update if needed, and emit websocket event.
+    Check if ball_in_court from Procore differs from DB, update if needed.
     
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID
-        socketio_instance: Optional SocketIO instance to emit events
         
     Returns:
         tuple: (updated: bool, record: ProcoreSubmittal or None, ball_in_court: str or None)
@@ -267,15 +266,6 @@ def check_and_update_ball_in_court(project_id, submittal_id, socketio_instance=N
             logger.info(
                 f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'"
             )
-            
-            # Emit websocket event if socketio instance provided
-            if socketio_instance:
-                socketio_instance.emit('ball_in_court_updated', {
-                    'submittal_id': str(submittal_id),
-                    'ball_in_court': ball_in_court,
-                    'timestamp': datetime.utcnow().isoformat()
-                })
-                logger.info(f"Emitted websocket event for submittal {submittal_id}")
             
             return True, record, ball_in_court
         else:

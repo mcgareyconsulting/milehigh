@@ -4,7 +4,6 @@ from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_socketio import SocketIO
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.procore import procore_bp
@@ -26,20 +25,6 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
-
-
-def get_socketio_cors_origins():
-    """Get allowed CORS origins for SocketIO from environment or default to localhost:5173 (Vite default)"""
-    allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173")
-    if allowed_origins != "*":
-        # Parse comma-separated list if provided
-        origins = [origin.strip() for origin in allowed_origins.split(",")]
-        return origins
-    # If "*" is explicitly set, allow all (not recommended for production)
-    return "*"
-
-# Initialize SocketIO with CORS restricted to frontend origins
-socketio = SocketIO(cors_allowed_origins=get_socketio_cors_origins())
 
 import time
 import atexit
@@ -159,19 +144,13 @@ def create_app():
         allowed_origins = [origin.strip() for origin in allowed_origins.split(",")]
     
     # Enable CORS for React frontend
-    CORS(app, resources={
-        r"/api/*": {"origins": allowed_origins},
-        r"/sync/*": {"origins": allowed_origins},
-        r"/jobs/*": {"origins": allowed_origins},
-        r"/jobs/history": {"origins": allowed_origins},
-        r"/snapshot/*": {"origins": allowed_origins},
-        r"/snapshots/*": {"origins": allowed_origins},
-        r"/procore/*": {"origins": allowed_origins},
-        r"/files/*": {"origins": allowed_origins},
-    })
-    
-    # Initialize SocketIO with app
-    socketio.init_app(app)
+    # Use a simpler configuration that applies to all routes
+    # This ensures CORS headers are always sent, even on errors
+    CORS(app, 
+         resources={r"/*": {"origins": allowed_origins}},
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
     
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
@@ -179,23 +158,36 @@ def create_app():
         # For production databases (PostgreSQL, MySQL, etc.)
         app.config["SQLALCHEMY_DATABASE_URI"] = database_url
         
-        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        # Import pool classes
+        from sqlalchemy.pool import QueuePool
+        
+        # Use QueuePool with proper thread safety settings
+        engine_options = {
             "pool_pre_ping": True,        # Detect and refresh dead connections before use
             "pool_recycle": 280,          # Recycle connections slightly before Render's idle timeout (~5 min)
             "pool_size": 5,               # Render free-tier DBs are resource-constrained; keep this modest
             "max_overflow": 10,           # Allow some burst usage during concurrent jobs
             "pool_timeout": 30,           # Wait up to 30s for a connection before raising
+            "pool_reset_on_return": "commit",  # Reset connections properly on return
+            "poolclass": QueuePool,       # Use QueuePool for standard threading
             "connect_args": {
                 "sslmode": "require",     # Enforce SSL
-                "connect_timeout": 10,    # Fail fast if DB can’t be reached
+                "connect_timeout": 10,    # Fail fast if DB can't be reached
                 "application_name": "trello_sharepoint_app",
                 "options": "-c statement_timeout=30000"  # 30s max per SQL statement
             },
         }
+        
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_options
 
     else:
         # Fallback to SQLite for local development
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
+    
+    # Configure Flask-SQLAlchemy for proper session management
+    # This ensures sessions are properly scoped and closed, preventing threading issues
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ECHO"] = False  # Set to True for SQL query debugging
     
     db.init_app(app)
 
@@ -1824,6 +1816,33 @@ def create_app():
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
     app.register_blueprint(procore_bp, url_prefix="/procore")
+
+    # Global error handler to ensure CORS headers are always included
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        """Handle all exceptions and ensure CORS headers are included"""
+        from flask_cors import cross_origin
+        
+        # Log the error
+        logger.error("Unhandled exception", error=str(e), exc_info=True)
+        
+        # Return JSON error response with proper status code
+        if hasattr(e, 'code'):
+            status_code = e.code
+        elif hasattr(e, 'status_code'):
+            status_code = e.status_code
+        else:
+            status_code = 500
+        
+        response = jsonify({
+            "error": str(e),
+            "message": "An error occurred processing your request"
+        })
+        response.status_code = status_code
+        
+        # CORS headers should be added automatically by Flask-CORS
+        # but we ensure they're present
+        return response
 
     # Initialize scheduler safely
     try:

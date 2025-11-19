@@ -33,5 +33,7 @@ Jinja2>=3.1.2
 MarkupSafe>=2.1.3
 Werkzeug>=3.0.1
 SQLAlchemy>=2.0.23
-Flask-SocketIO==5.3.5
-python-socketio==5.10.0
+# SocketIO removed - was causing threading issues
+# Flask-SocketIO==5.3.5
+# python-socketio==5.10.0
+# eventlet==0.33.3

@@ -11,7 +11,6 @@ from flask import Blueprint, request, jsonify, current_app
 from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
 from app.procore.procore import get_project_id_by_project_name, check_and_update_ball_in_court
-from app import socketio
 
 from app.procore.helpers import clean_value
 
@@ -149,8 +148,7 @@ def procore_webhook():
         try:
             updated, record, ball_in_court = check_and_update_ball_in_court(
                 project_id, 
-                resource_id, 
-                socketio_instance=socketio
+                resource_id
             )
             if updated:
                 current_app.logger.info(
