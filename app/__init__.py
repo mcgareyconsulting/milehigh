@@ -39,7 +39,20 @@ def get_socketio_cors_origins():
     return "*"
 
 # Initialize SocketIO with CORS restricted to frontend origins
-socketio = SocketIO(cors_allowed_origins=get_socketio_cors_origins())
+# Use eventlet for async websocket support with Gunicorn
+# Falls back to threading if eventlet is not available
+try:
+    import eventlet
+    async_mode = 'eventlet'
+except ImportError:
+    async_mode = 'threading'
+
+socketio = SocketIO(
+    cors_allowed_origins=get_socketio_cors_origins(),
+    async_mode=async_mode,
+    logger=False,
+    engineio_logger=False
+)
 
 import time
 import atexit
