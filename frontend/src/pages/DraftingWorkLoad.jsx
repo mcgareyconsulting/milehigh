@@ -433,7 +433,7 @@ function DraftingWorkLoad() {
                         {!loading && !error && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                                 <div className="overflow-x-auto">
-                                    <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+                                    <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
                                                 {columnHeaders.map((column) => {
@@ -522,14 +522,18 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
         }
     }, [editingOrderNumber]);
 
+    const rowType = row.type ?? row['Type'] ?? '';
+    const isDraftingReleaseReview = rowType === 'Drafting Release Review';
+
     return (
         <tr
-            className="bg-white hover:opacity-90 transition-colors duration-150"
+            className="bg-white hover:opacity-90 transition-colors duration-150 border-b border-gray-200"
         >
             {columns.map((column) => {
                 const isOrderNumber = column === 'Order Number';
                 const isSubmittalId = column === 'Submittals Id';
                 const isBallInCourtDueDate = column === 'Ball In Court Due Date';
+                const isType = column === 'Type';
 
                 let cellValue;
                 if (isBallInCourtDueDate) {
@@ -601,10 +605,15 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     );
                 }
 
+                // Apply light green background for Type cell when type is "Drafting Release Review"
+                const cellBgClass = isType && isDraftingReleaseReview
+                    ? 'bg-green-100'
+                    : 'bg-white';
+
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-900 align-top font-medium bg-white"
+                        className={`px-6 py-4 whitespace-pre-wrap text-sm text-gray-900 align-top font-medium ${cellBgClass}`}
                     >
                         {cellValue}
                     </td>
