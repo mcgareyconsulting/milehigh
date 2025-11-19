@@ -59,11 +59,10 @@ function DraftingWorkLoad() {
                 return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
             });
 
-            // Define the desired column order
+            // Define the desired column order (Project Id is tracked but hidden from display)
             const desiredColumnOrder = [
                 'Order Number',
                 'Submittals Id',
-                'Project Id',
                 'Project Number',
                 'Project Name',
                 'Title',
@@ -454,10 +453,11 @@ function DraftingWorkLoad() {
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
+                                                    const isNotes = column === 'Notes';
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-3 py-3 w-24' : 'px-6 py-4'} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
+                                                            className={`${isOrderNumber ? 'px-3 py-3 w-24' : 'px-6 py-4'} ${isNotes ? 'min-w-[400px]' : ''} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
                                                         >
                                                             {column}
                                                         </th>
@@ -628,6 +628,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                         <td
                             key={`${row.id}-${column}`}
                             className="px-6 py-4 align-top bg-white"
+                            style={{ minWidth: '400px' }}
                         >
                             <textarea
                                 ref={notesInputRef}
@@ -635,24 +636,36 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                                 onChange={(e) => setNotesValue(e.target.value)}
                                 onBlur={handleNotesBlur}
                                 onKeyDown={handleNotesKeyDown}
-                                className="w-full px-3 py-2 text-sm border-2 border-accent-500 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900 resize-none"
-                                rows={3}
+                                className="w-full px-3 py-2.5 text-sm border-2 border-accent-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all"
+                                rows={6}
                                 placeholder="Add notes..."
+                                style={{ lineHeight: '1.5' }}
                             />
                         </td>
                     );
                 }
 
                 if (isNotes) {
+                    const hasNotes = cellValue && cellValue !== '—';
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className="px-6 py-4 whitespace-pre-wrap text-sm align-top font-medium bg-white"
+                            className="px-6 py-4 align-top bg-white"
+                            style={{ minWidth: '400px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
                         >
-                            <div className="px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors text-gray-700 min-h-[60px]">
-                                {cellValue || <span className="text-gray-400 italic">Click to add notes...</span>}
+                            <div className={`px-3 py-2.5 text-sm rounded-lg border transition-all cursor-text min-h-[120px] ${hasNotes
+                                ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800'
+                                : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
+                                }`}>
+                                {hasNotes ? (
+                                    <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                        {cellValue}
+                                    </div>
+                                ) : (
+                                    <span className="italic">Click to add notes...</span>
+                                )}
                             </div>
                         </td>
                     );
