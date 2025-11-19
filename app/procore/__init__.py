@@ -74,20 +74,38 @@ def procore_webhook():
             payload = {}
 
         # Extract metadata
-        resource_id = int(payload.get("resource_id"))
-        project_id = int(payload.get("project_id"))
+        # Procore webhook uses "id" for resource_id, not "resource_id"
+        resource_id_raw = payload.get("resource_id")
+        project_id_raw = payload.get("project_id")
         event_type = payload.get("reason") or "unknown"
         resource_type = payload.get("resource_type") or "unknown"
+
+        # Validate and convert to int
+        if not resource_id_raw:
+            current_app.logger.warning("Webhook payload missing 'id' or 'resource_id'")
+            return jsonify({"status": "ignored"}), 200
+        
+        try:
+            resource_id = int(resource_id_raw)
+        except (ValueError, TypeError):
+            current_app.logger.warning(f"Invalid resource_id format: {resource_id_raw}")
+            return jsonify({"status": "ignored"}), 200
+        
+        if not project_id_raw:
+            current_app.logger.warning("Webhook payload missing 'project_id'")
+            return jsonify({"status": "ignored"}), 200
+        
+        try:
+            project_id = int(project_id_raw)
+        except (ValueError, TypeError):
+            current_app.logger.warning(f"Invalid project_id format: {project_id_raw}")
+            return jsonify({"status": "ignored"}), 200
 
         # Use your existing logger setup
         current_app.logger.info(
             f"Received Procore webhook: resource={resource_type}, "
             f"event_type={event_type}, id={resource_id}, project={project_id}"
         )
-
-        if not resource_id:
-            current_app.logger.warning("Webhook payload missing 'id'")
-            return jsonify({"status": "ignored"}), 200
 
         now = datetime.utcnow()
 
