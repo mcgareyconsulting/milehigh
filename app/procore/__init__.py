@@ -8,9 +8,9 @@ from typing import Optional
 
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
-from app.models import db, ProcoreSubmittal
+from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
-from app.procore.procore import get_project_id_by_project_name
+from app.procore.procore import get_project_id_by_project_name, handle_submittal_update
 
 from app.procore.helpers import clean_value
 
@@ -52,6 +52,8 @@ def log_webhook_payload(payload: dict, headers: dict = None, hook_id: Optional[i
     except Exception as e:
         logger.error(f"Failed to log webhook payload: {str(e)}", exc_info=True)
 
+DEBOUNCE_SECONDS = 8  # 8 seconds
+
 
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
 def procore_webhook():
@@ -64,76 +66,82 @@ def procore_webhook():
         return "", 200
 
     if request.method == "POST":
+
         try:
-            # Get the raw payload
-            payload = request.json if request.is_json else request.get_data(as_text=True)
-            
-            # Get headers for context
-            headers = {k: v for k, v in request.headers}
-            
-            # Log the webhook payload
-            if isinstance(payload, str):
-                try:
-                    payload = json.loads(payload)
-                except json.JSONDecodeError:
-                    # If it's not valid JSON, log as text
-                    pass
-            
-            # Try to identify hook_id by looking up webhooks for this project
-            # Note: Procore payloads don't include hook_id, so we infer it
-            hook_id = None
-            if isinstance(payload, dict):
-                project_id = payload.get("project_id")
-                if project_id:
-                    try:
-                        from app.procore.client import get_procore_client
-                        procore_client = get_procore_client()
-                        webhooks = procore_client.list_project_webhooks(int(project_id), "mile-high-metal-works")
-                        # If only one webhook exists, use it; otherwise leave as None
-                        if webhooks and len(webhooks) == 1:
-                            hook_id = webhooks[0].get("id")
-                    except Exception as e:
-                        # If lookup fails, continue without hook_id
-                        logger.debug(f"Could not determine hook_id for project {project_id}: {e}")
-            
-            log_webhook_payload(payload, headers, hook_id)
-            
-            # Also log via application logger
-            event_type = payload.get("reason") if isinstance(payload, dict) else "unknown"  # Use "reason" instead of "event_type"
-            resource_type = payload.get("resource_type") if isinstance(payload, dict) else "unknown"  # Use "resource_type" instead of "resource_name"
-            project_id = payload.get("project_id") if isinstance(payload, dict) else None
-            
-            logger.info(
-                f"Received Procore webhook: resource={resource_type}, "
-                f"event_type={event_type}, project_id={project_id}, hook_id={hook_id}"
+            payload = request.get_json(silent=True) or {}
+        except:
+            payload = {}
+
+        # Extract metadata
+        resource_id = payload.get("id")
+        project_id = payload.get("project_id")
+        event_type = payload.get("reason") or "unknown"
+        resource_type = payload.get("resource_type") or "unknown"
+
+        # Use your existing logger setup
+        current_app.logger.info(
+            f"Received Procore webhook: resource={resource_type}, "
+            f"event_type={event_type}, id={resource_id}, project={project_id}"
+        )
+
+        if not resource_id:
+            current_app.logger.warning("Webhook payload missing 'id'")
+            return jsonify({"status": "ignored"}), 200
+
+        now = datetime.utcnow()
+
+        # -----------------------------------
+        # Debounce lookup
+        # -----------------------------------
+        event = ProcoreWebhookEvents.query.filter_by(
+            resource_id=resource_id,
+            project_id=project_id
+        ).first()
+
+        if event:
+            diff = (now - event.last_seen).total_seconds()
+
+            if diff < DEBOUNCE_SECONDS:
+                current_app.logger.info(
+                    f"Debounced duplicate webhook; id={resource_id}, "
+                    f"project={project_id}, seen {diff:.2f}s ago"
+                )
+                # Update timestamp so rapid bursts extend window
+                event.last_seen = now
+                db.session.commit()
+                return jsonify({"status": "debounced"}), 200
+
+            # Not debounced → update timestamp
+            event.last_seen = now
+
+        else:
+            # First time this resource/project combo has been seen
+            event = ProcoreWebhookEvents(
+                resource_id=resource_id,
+                project_id=project_id,
+                last_seen=now
             )
-            
-            # Return 200 OK to acknowledge receipt
-            return jsonify({
-                "status": "received",
-                "timestamp": datetime.utcnow().isoformat()
-            }), 200
-            
+            db.session.add(event)
+        db.session.commit()
+
+        # -----------------------------------
+        # PROCESS ACTUAL SUBMITTAL
+        # -----------------------------------
+        try:
+            record, ball_in_court, approvers = handle_submittal_update(project_id, resource_id)
+            print(f"DB Record: {record}")
+            print(f"Ball in Court: {ball_in_court}")
+            print(f"Approvers: {len(approvers) if approvers else 0} approvers")
+            if record:
+                print(f"DB ball_in_court: {record.ball_in_court}")
+                print(f"Match: {record.ball_in_court == ball_in_court}")
         except Exception as e:
-            # Log the error but still return 200 to avoid webhook retries
-            # Procore will retry if we return an error status
-            logger.error(f"Error processing Procore webhook: {str(e)}", exc_info=True)
-            
-            # Try to log the error payload anyway
-            try:
-                error_payload = {
-                    "error": str(e),
-                    "raw_data": request.get_data(as_text=True) if hasattr(request, 'get_data') else None
-                }
-                log_webhook_payload(error_payload, {k: v for k, v in request.headers})
-            except:
-                pass
-            
-            return jsonify({
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }), 200
+            current_app.logger.error(
+                f"Error processing submittal {resource_id}: {e}",
+                exc_info=True
+            )
+
+        return jsonify({"status": "processed"}), 200
 
 @procore_bp.route("/api/webhook/deliveries", methods=["GET"])
 def webhook_deliveries():
