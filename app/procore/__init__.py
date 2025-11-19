@@ -398,7 +398,7 @@ def drafting_workload_submittals():
 
         # Validate required columns
         required_columns = ['Submittals Id', 'Project Name', 'Project Number', 'Title', 
-                          'Ball In Court Due Date', 'Status', 'Type', 'Ball In Court', 
+                          'Status', 'Type', 'Ball In Court', 
                           'Submittal Manager']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
@@ -481,7 +481,6 @@ def drafting_workload_submittals():
                     project_number=str(safe_get(row, 'Project Number', '') or '').strip() or None,
                     project_name=project_name,
                     title=str(safe_get(row, 'Title', '') or '').strip() or None,
-                    ball_in_court_due_date=clean_value(safe_get(row, 'Ball In Court Due Date')),
                     status=str(safe_get(row, 'Status', '') or '').strip() or None,
                     type=str(safe_get(row, 'Type', '') or '').strip() or None,
                     ball_in_court=str(safe_get(row, 'Ball In Court', '') or '').strip() or None,
@@ -502,8 +501,8 @@ def drafting_workload_submittals():
             db.session.rollback()
             return jsonify({'error': f'Failed to save submittals: {str(exc)}'}), 500
 
-        # Assign order_number based on ball_in_court_due_date for submittals with null order_number
-        # Group by ball_in_court, sort by ball_in_court_due_date (nulls last), then assign 0-x within each group
+        # Assign order_number for submittals with null order_number
+        # Group by ball_in_court, then assign 0-x within each group
         try:
             submittals_without_order = ProcoreSubmittal.query.filter(
                 ProcoreSubmittal.order_number.is_(None)
@@ -515,12 +514,9 @@ def drafting_workload_submittals():
                 ball_in_court_value = submittal.ball_in_court or 'None'
                 grouped_by_ball_in_court[ball_in_court_value].append(submittal)
             
-            # Sort each group by ball_in_court_due_date (nulls last) and assign order numbers
+            # Assign order numbers within each group
             total_assigned = 0
             for ball_in_court_value, submittals in grouped_by_ball_in_court.items():
-                # Sort by ball_in_court_due_date (nulls last)
-                submittals.sort(key=lambda s: (s.ball_in_court_due_date is None, s.ball_in_court_due_date or date.max))
-                
                 # Assign 0.0-x within this group (using floats)
                 for index, submittal in enumerate(submittals):
                     submittal.order_number = float(index)
@@ -598,5 +594,49 @@ def update_submittal_order():
         db.session.rollback()
         return jsonify({
             "error": "Failed to update order",
+            "details": str(exc)
+        }), 500
+
+@procore_bp.route("/api/drafting-work-load/notes", methods=["PUT"])
+def update_submittal_notes():
+    """Update the notes for a submittal"""
+    try:
+        data = request.json
+        submittal_id = data.get('submittal_id')
+        notes = data.get('notes')
+        
+        if submittal_id is None:
+            return jsonify({
+                "error": "submittal_id is required"
+            }), 400
+        
+        # Ensure submittal_id is a string for proper database comparison
+        submittal_id = str(submittal_id)
+        
+        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({
+                "error": "Submittal not found"
+            }), 404
+        
+        # Allow notes to be None or empty string
+        if notes is not None:
+            notes = str(notes).strip() or None
+        
+        submittal.notes = notes
+        submittal.last_updated = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "notes": notes
+        }), 200
+    except Exception as exc:
+        logger.error("Error updating submittal notes", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to update notes",
             "details": str(exc)
         }), 500
