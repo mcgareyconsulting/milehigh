@@ -107,6 +107,60 @@ function DraftingWorkLoad() {
         fetchData();
     }, [fetchData]);
 
+    // Poll for updates every 30 seconds
+    // Pauses when tab is not visible to save resources
+    useEffect(() => {
+        let intervalId = null;
+        let visibilityChangeHandler = null;
+
+        const startPolling = () => {
+            // Clear any existing interval
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+
+            // Poll every 30 seconds
+            intervalId = setInterval(() => {
+                // Only poll if tab is visible
+                if (!document.hidden) {
+                    fetchData(true); // Silent refresh (no loading spinner)
+                }
+            }, 30000); // 30 seconds
+        };
+
+        const stopPolling = () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        };
+
+        // Handle visibility changes - pause polling when tab is hidden
+        visibilityChangeHandler = () => {
+            if (document.hidden) {
+                stopPolling();
+            } else {
+                startPolling();
+                // Immediately fetch when tab becomes visible
+                fetchData(true);
+            }
+        };
+
+        // Start polling initially
+        startPolling();
+
+        // Listen for visibility changes
+        document.addEventListener('visibilitychange', visibilityChangeHandler);
+
+        // Cleanup on unmount
+        return () => {
+            stopPolling();
+            if (visibilityChangeHandler) {
+                document.removeEventListener('visibilitychange', visibilityChangeHandler);
+            }
+        };
+    }, [fetchData]);
+
     const matchesSelectedFilter = useCallback((row) => {
         // Check Ball In Court filter
         if (selectedBallInCourt !== ALL_OPTION_VALUE) {
