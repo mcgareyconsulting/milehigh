@@ -2,13 +2,18 @@
 Script to create Procore webhooks for Submittals updates.
 
 Usage:
+    # Create webhooks for all projects in database
     python -m app.procore.scripts.create
+    
+    # Create webhook for a single project
+    python -m app.procore.scripts.create --project-id <project_id> [--namespace <namespace>]
 
 Scans the procore_submittals table for unique project_numbers,
 creates webhooks for Submittals resource with 'update' event type,
 and logs all webhook responses to a file for debugging.
 """
 
+import argparse
 from typing import Dict, Optional
 
 from app import create_app
@@ -199,11 +204,75 @@ def create_webhook_and_trigger(procore_client, project_id: int, project_number: 
         }
 
 
-def main():
-    """Main function to create webhooks for all unique projects in procore_submittals."""
+def create_single_webhook(project_id: int, namespace: str = "mile-high-metal-works"):
+    """Create a webhook for a single project."""
     app = create_app()
     
     with app.app_context():
+        procore_client = get_procore_client()
+        
+        print(f"Creating webhook for Project ID: {project_id}")
+        print(f"Namespace: {namespace}")
+        print("-" * 60)
+        
+        result = create_webhook_and_trigger(procore_client, project_id, None, namespace)
+        
+        print("\n" + "=" * 60)
+        print("RESULT")
+        print("=" * 60)
+        print(f"Status: {result['status']}")
+        if result.get("message"):
+            print(f"Message: {result['message']}")
+        if result.get("hook_id"):
+            print(f"Webhook ID: {result['hook_id']}")
+        if result.get("error"):
+            print(f"Error: {result['error']}")
+        print(f"\nDetailed response logged to: logs/procore_webhook_responses.log")
+        
+        return result
+
+
+def main():
+    """Main function to create webhooks."""
+    parser = argparse.ArgumentParser(
+        description="Create Procore webhooks for Submittals updates",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Create webhooks for all projects in database
+  python -m app.procore.scripts.create
+  
+  # Create webhook for a specific project by ID
+  python -m app.procore.scripts.create --project-id 12345
+  
+  # Create webhook with custom namespace
+  python -m app.procore.scripts.create --project-id 12345 --namespace my-namespace
+        """
+    )
+    
+    parser.add_argument(
+        "--project-id",
+        type=int,
+        help="Procore project ID to create webhook for (single webhook mode)"
+    )
+    parser.add_argument(
+        "--namespace",
+        type=str,
+        default="mile-high-metal-works",
+        help="Webhook namespace (default: mile-high-metal-works)"
+    )
+    
+    args = parser.parse_args()
+    
+    app = create_app()
+    
+    with app.app_context():
+        # Single webhook mode
+        if args.project_id:
+            create_single_webhook(args.project_id, args.namespace)
+            return
+        
+        # Batch mode: create webhooks for all projects in database
         print("Scanning procore_submittals table for unique projects...")
         projects = get_unique_projects()
         
@@ -215,7 +284,7 @@ def main():
         print("-" * 60)
         
         procore_client = get_procore_client()
-        namespace = "mile-high-metal-works"
+        namespace = args.namespace
         
         results = {
             "total": len(projects),
