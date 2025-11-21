@@ -501,23 +501,17 @@ function DraftingWorkLoad() {
 
                         {!loading && !error && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                <div className="overflow-x-hidden">
-                                    <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
-                                                    let widthClass = '';
-                                                    if (isOrderNumber) {
-                                                        widthClass = 'w-24';
-                                                    } else if (isNotes) {
-                                                        widthClass = 'w-1/4'; // 25% width for Notes
-                                                    }
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-3 py-3' : 'px-6 py-4'} ${widthClass} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
+                                                            className={`${isOrderNumber ? 'px-3 py-3 w-24' : 'px-6 py-4'} ${isNotes ? 'min-w-[400px]' : ''} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
                                                         >
                                                             {column}
                                                         </th>
@@ -688,7 +682,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                         <td
                             key={`${row.id}-${column}`}
                             className="px-6 py-4 align-top bg-white"
-                            style={{ width: '25%' }}
+                            style={{ minWidth: '400px' }}
                         >
                             <textarea
                                 ref={notesInputRef}
@@ -711,7 +705,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                         <td
                             key={`${row.id}-${column}`}
                             className="px-6 py-4 align-top bg-white"
-                            style={{ width: '25%' }}
+                            style={{ minWidth: '400px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
                         >
