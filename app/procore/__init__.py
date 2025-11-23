@@ -16,6 +16,8 @@ from app.procore.helpers import clean_value
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
+from app.sync.context import sync_operation_context
+from app.sync.logging import safe_log_sync_event
 
 logger = get_logger(__name__)
 
@@ -146,14 +148,32 @@ def procore_webhook():
         # PROCESS ACTUAL SUBMITTAL
         # -----------------------------------
         try:
+            # Get old value before update
+            old_record = ProcoreSubmittal.query.filter_by(submittal_id=str(resource_id)).first()
+            old_ball_in_court = old_record.ball_in_court if old_record else None
+            
             updated, record, ball_in_court = check_and_update_ball_in_court(
                 project_id, 
                 resource_id
             )
             if updated:
-                current_app.logger.info(
-                    f"Submittal {resource_id} ball_in_court updated via webhook"
-                )
+                # Create SyncOperation for ball_in_court update
+                with sync_operation_context(
+                    operation_type="procore_ball_in_court",
+                    source_system="procore",
+                    source_id=str(resource_id)
+                ) as sync_op:
+                    if sync_op:
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Ball in court updated via webhook",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            old_value=old_ball_in_court,
+                            new_value=ball_in_court,
+                            submittal_title=record.title if record else None
+                        )
         except Exception as e:
             current_app.logger.error(
                 f"Error processing submittal {resource_id}: {e}",
