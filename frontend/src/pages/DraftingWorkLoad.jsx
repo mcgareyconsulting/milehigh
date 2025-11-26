@@ -10,6 +10,7 @@ function DraftingWorkLoad() {
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
     const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
     const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
+    const [projectNameSortMode, setProjectNameSortMode] = useState('normal'); // 'normal', 'a-z', 'z-a'
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -193,21 +194,48 @@ function DraftingWorkLoad() {
     const displayRows = useMemo(() => {
         const filtered = rows.filter(matchesSelectedFilter);
 
-        // Sort by Ball In Court, then by order_number (as float)
-        return filtered.sort((a, b) => {
-            const ballA = (a.ball_in_court ?? '').toString();
-            const ballB = (b.ball_in_court ?? '').toString();
+        // Sort based on Project Name sort mode
+        if (projectNameSortMode === 'a-z') {
+            return filtered.sort((a, b) => {
+                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
+                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
+                if (projectA !== projectB) {
+                    return projectA.localeCompare(projectB);
+                }
+                // Secondary sort by order_number
+                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+                return orderA - orderB;
+            });
+        } else if (projectNameSortMode === 'z-a') {
+            return filtered.sort((a, b) => {
+                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
+                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
+                if (projectA !== projectB) {
+                    return projectB.localeCompare(projectA);
+                }
+                // Secondary sort by order_number
+                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+                return orderA - orderB;
+            });
+        } else {
+            // Normal sort: by Ball In Court, then by order_number (as float)
+            return filtered.sort((a, b) => {
+                const ballA = (a.ball_in_court ?? '').toString();
+                const ballB = (b.ball_in_court ?? '').toString();
 
-            if (ballA !== ballB) {
-                return ballA.localeCompare(ballB);
-            }
+                if (ballA !== ballB) {
+                    return ballA.localeCompare(ballB);
+                }
 
-            // Sort by order_number as float (nulls last)
-            const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-            const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-            return orderA - orderB;
-        });
-    }, [rows, matchesSelectedFilter]);
+                // Sort by order_number as float (nulls last)
+                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+                return orderA - orderB;
+            });
+        }
+    }, [rows, matchesSelectedFilter, projectNameSortMode]);
 
     const ballInCourtOptions = useMemo(() => {
         const values = new Set();
@@ -270,6 +298,17 @@ function DraftingWorkLoad() {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
         setSelectedSubmittalManager(ALL_OPTION_VALUE);
         setSelectedProjectName(ALL_OPTION_VALUE);
+        setProjectNameSortMode('normal');
+    };
+
+    const handleProjectNameSortToggle = () => {
+        if (projectNameSortMode === 'normal') {
+            setProjectNameSortMode('a-z');
+        } else if (projectNameSortMode === 'a-z') {
+            setProjectNameSortMode('z-a');
+        } else {
+            setProjectNameSortMode('normal');
+        }
     };
 
     const handleOrderNumberChange = useCallback(async (submittalId, newValue) => {
@@ -581,6 +620,32 @@ function DraftingWorkLoad() {
                                                 {columnHeaders.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
+                                                    const isProjectName = column === 'Project Name';
+
+                                                    if (isProjectName) {
+                                                        return (
+                                                            <th
+                                                                key={column}
+                                                                className="px-2 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                            >
+                                                                <button
+                                                                    onClick={handleProjectNameSortToggle}
+                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                    title={
+                                                                        projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
+                                                                            projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
+                                                                                'Click to sort by Order Number'
+                                                                    }
+                                                                >
+                                                                    <span>{column}</span>
+                                                                    {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
+                                                                    {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
+                                                                    {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
+                                                                </button>
+                                                            </th>
+                                                        );
+                                                    }
+
                                                     return (
                                                         <th
                                                             key={column}
