@@ -501,32 +501,17 @@ function DraftingWorkLoad() {
 
                         {!loading && !error && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                                <div className="">
+                                    <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
-                                                    const isTitle = column === 'Title';
-                                                    const isProjectName = column === 'Project Name';
-
-                                                    // Set appropriate widths for columns
-                                                    let widthClass = '';
-                                                    if (isOrderNumber) {
-                                                        widthClass = 'w-24';
-                                                    } else if (isNotes) {
-                                                        widthClass = 'w-[400px]';
-                                                    } else if (isTitle) {
-                                                        widthClass = 'w-[300px]';
-                                                    } else if (isProjectName) {
-                                                        widthClass = 'w-[200px]';
-                                                    }
-
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-3 py-2' : 'px-6 py-2'} ${widthClass} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
+                                                            className={`${isOrderNumber ? 'px-1 py-0.5 w-16' : 'px-2 py-0.5'} ${isNotes ? 'w-40' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
                                                         >
                                                             {column}
                                                         </th>
@@ -651,7 +636,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
 
     return (
         <tr
-            className={`${rowBgClass} hover:bg-gray-100 transition-colors duration-150 border-b border-gray-200`}
+            className={`${rowBgClass} hover:bg-gray-100 transition-colors duration-150 border-b border-gray-300`}
         >
             {columns.map((column) => {
                 const isOrderNumber = column === 'Order Number';
@@ -659,13 +644,25 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                 const isType = column === 'Type';
                 const isNotes = column === 'Notes';
 
+                // Defi// Custom width for Submittals Id and Project Number
+                let customWidthClass = '';
+                if (isSubmittalId) {
+                    customWidthClass = 'w-24'; // Accommodate 8-10 digit ID
+                } else if (column === 'Project Number') {
+                    customWidthClass = 'w-20'; // Accommodate 3-4 digit number
+                } else if (column === 'Title') {
+                    customWidthClass = 'w-48'; // Give Title a fixed width to help with wrapping
+                } else if (column === 'Submittal Manager') {
+                    customWidthClass = 'w-32'; // Reduce Submittal Manager width
+                }
+
                 let cellValue = formatCellValue(row[column]);
 
                 if (isOrderNumber && editingOrderNumber) {
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-3 py-3 align-middle ${rowBgClass}`}
+                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
                         >
                             <input
                                 ref={inputRef}
@@ -674,8 +671,8 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                                 onChange={(e) => setOrderNumberValue(e.target.value)}
                                 onBlur={handleOrderNumberBlur}
                                 onKeyDown={handleOrderNumberKeyDown}
-                                className="w-full px-2 py-1.5 text-sm border-2 border-accent-500 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
-                                style={{ minWidth: '60px', maxWidth: '80px' }}
+                                className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
+                                style={{ minWidth: '30px', maxWidth: '50px' }}
                             />
                         </td>
                     );
@@ -685,11 +682,11 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-3 py-3 align-middle ${rowBgClass}`}
+                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
                             onClick={handleOrderNumberFocus}
                             title="Click to edit order number"
                         >
-                            <div className="px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[60px] max-w-[80px] inline-block">
+                            <div className="px-0.5 py-0 text-xs border border-gray-300 rounded-sm bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[20px] max-w-[50px] inline-block">
                                 {cellValue}
                             </div>
                         </td>
@@ -700,8 +697,8 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-6 py-4 align-top ${rowBgClass}`}
-                            style={{ minWidth: '400px' }}
+                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            style={{ width: '160px' }}
                         >
                             <textarea
                                 ref={notesInputRef}
@@ -709,8 +706,8 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                                 onChange={(e) => setNotesValue(e.target.value)}
                                 onBlur={handleNotesBlur}
                                 onKeyDown={handleNotesKeyDown}
-                                className="w-full px-3 py-2.5 text-sm border-2 border-accent-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all"
-                                rows={6}
+                                className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all text-center"
+                                rows={1}
                                 placeholder="Add notes..."
                                 style={{ lineHeight: '1.5' }}
                             />
@@ -723,17 +720,17 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-6 py-4 align-top ${rowBgClass}`}
-                            style={{ minWidth: '400px' }}
+                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            style={{ width: '160px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
                         >
-                            <div className={`px-3 py-2.5 text-sm rounded-lg border transition-all cursor-text min-h-[120px] ${hasNotes
+                            <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all cursor-text min-h-[10px] text-center ${hasNotes
                                 ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800'
                                 : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
                                 }`}>
                                 {hasNotes ? (
-                                    <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                    <div className="whitespace-normal break-words leading-tight">
                                         {cellValue}
                                     </div>
                                 ) : (
@@ -754,7 +751,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-6 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-xs align-middle font-medium ${rowBgClass}`}
+                            className={`px-2 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
                             title={cellValue}
                         >
                             {href !== '#' ? (
@@ -762,12 +759,12 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                                     href={href}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-800 underline font-semibold inline-flex items-center gap-1"
+                                    className="text-blue-600 hover:text-blue-800 underline font-semibold inline-flex items-center gap-1 text-xs"
                                 >
                                     <span>{cellValue}</span>
                                 </a>
                             ) : (
-                                <span className="text-gray-900">{cellValue}</span>
+                                <span className="text-gray-900 text-xs">{cellValue}</span>
                             )}
                         </td>
                     );
@@ -778,10 +775,14 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     ? 'bg-green-100'
                     : rowBgClass;
 
+                // Determine if this column should allow text wrapping
+                const shouldWrap = column === 'Title' || column === 'Notes' || column === 'Status';
+                const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
+
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className={`px-6 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-xs text-gray-900 align-middle font-medium ${cellBgClass}`}
+                        className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
                         title={cellValue}
                     >
                         {cellValue}
