@@ -424,7 +424,7 @@ function DraftingWorkLoad() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
-                                <p className="text-accent-100 mt-2">View and filter drafting workload by Ball In Court and Submittal Manager.</p>
+
                             </div>
                             <div>
                                 <label className="relative cursor-pointer">
