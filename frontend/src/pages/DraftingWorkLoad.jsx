@@ -9,6 +9,8 @@ function DraftingWorkLoad() {
     const [columns, setColumns] = useState([]);
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
     const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
+    const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
+    const [projectNameSortMode, setProjectNameSortMode] = useState('normal'); // 'normal', 'a-z', 'z-a'
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -40,7 +42,8 @@ function DraftingWorkLoad() {
                     'Project Name': submittal.project_name,
                     'Project Number': submittal.project_number,
                     'Title': submittal.title,
-                    'Status': submittal.status,
+                    'Status': submittal.submittal_drafting_status ?? submittal.status,
+                    'Submittal Drafting Status': submittal.submittal_drafting_status,
                     'Type': submittal.type,
                     'Ball In Court': submittal.ball_in_court,
                     'Order Number': submittal.order_number,
@@ -178,27 +181,62 @@ function DraftingWorkLoad() {
             }
         }
 
+        // Check Project Name filter
+        if (selectedProjectName !== ALL_OPTION_VALUE) {
+            const projectNameValue = row.project_name ?? row['Project Name'];
+            if ((projectNameValue ?? '').toString().trim() !== selectedProjectName) {
+                return false;
+            }
+        }
+
         return true;
-    }, [selectedBallInCourt, selectedSubmittalManager]);
+    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName]);
 
     const displayRows = useMemo(() => {
         const filtered = rows.filter(matchesSelectedFilter);
 
-        // Sort by Ball In Court, then by order_number (as float)
-        return filtered.sort((a, b) => {
-            const ballA = (a.ball_in_court ?? '').toString();
-            const ballB = (b.ball_in_court ?? '').toString();
+        // Sort based on Project Name sort mode
+        if (projectNameSortMode === 'a-z') {
+            return filtered.sort((a, b) => {
+                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
+                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
+                if (projectA !== projectB) {
+                    return projectA.localeCompare(projectB);
+                }
+                // Secondary sort by order_number
+                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+                return orderA - orderB;
+            });
+        } else if (projectNameSortMode === 'z-a') {
+            return filtered.sort((a, b) => {
+                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
+                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
+                if (projectA !== projectB) {
+                    return projectB.localeCompare(projectA);
+                }
+                // Secondary sort by order_number
+                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+                return orderA - orderB;
+            });
+        } else {
+            // Normal sort: by Ball In Court, then by order_number (as float)
+            return filtered.sort((a, b) => {
+                const ballA = (a.ball_in_court ?? '').toString();
+                const ballB = (b.ball_in_court ?? '').toString();
 
-            if (ballA !== ballB) {
-                return ballA.localeCompare(ballB);
-            }
+                if (ballA !== ballB) {
+                    return ballA.localeCompare(ballB);
+                }
 
-            // Sort by order_number as float (nulls last)
-            const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-            const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-            return orderA - orderB;
-        });
-    }, [rows, matchesSelectedFilter]);
+                // Sort by order_number as float (nulls last)
+                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+                return orderA - orderB;
+            });
+        }
+    }, [rows, matchesSelectedFilter, projectNameSortMode]);
 
     const ballInCourtOptions = useMemo(() => {
         const values = new Set();
@@ -215,6 +253,17 @@ function DraftingWorkLoad() {
         const values = new Set();
         rows.forEach((row) => {
             const value = row.submittal_manager ?? row['Submittal Manager'];
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+                values.add(String(value).trim());
+            }
+        });
+        return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }, [rows]);
+
+    const projectNameOptions = useMemo(() => {
+        const values = new Set();
+        rows.forEach((row) => {
+            const value = row.project_name ?? row['Project Name'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 values.add(String(value).trim());
             }
@@ -246,17 +295,21 @@ function DraftingWorkLoad() {
         return value;
     };
 
-    const handleBallInCourtChange = (event) => {
-        setSelectedBallInCourt(event.target.value);
-    };
-
-    const handleSubmittalManagerChange = (event) => {
-        setSelectedSubmittalManager(event.target.value);
-    };
-
     const resetFilters = () => {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
         setSelectedSubmittalManager(ALL_OPTION_VALUE);
+        setSelectedProjectName(ALL_OPTION_VALUE);
+        setProjectNameSortMode('normal');
+    };
+
+    const handleProjectNameSortToggle = () => {
+        if (projectNameSortMode === 'normal') {
+            setProjectNameSortMode('a-z');
+        } else if (projectNameSortMode === 'a-z') {
+            setProjectNameSortMode('z-a');
+        } else {
+            setProjectNameSortMode('normal');
+        }
     };
 
     const handleOrderNumberChange = useCallback(async (submittalId, newValue) => {
@@ -296,6 +349,22 @@ function DraftingWorkLoad() {
             await fetchData(true);
         } catch (err) {
             console.error(`Failed to update notes for ${submittalId}:`, err);
+            // Refresh to get correct state
+            await fetchData(true);
+        }
+    }, [fetchData]);
+
+    const handleStatusChange = useCallback(async (submittalId, newValue) => {
+        try {
+            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/submittal-drafting-status`, {
+                submittal_id: submittalId,
+                submittal_drafting_status: newValue
+            });
+
+            // Refresh data to get updated status
+            await fetchData(true);
+        } catch (err) {
+            console.error(`Failed to update status for ${submittalId}:`, err);
             // Refresh to get correct state
             await fetchData(true);
         }
@@ -368,92 +437,152 @@ function DraftingWorkLoad() {
         <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-[95%] mx-auto w-full" style={{ width: '100%' }}>
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-6">
-                        <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
-                        <p className="text-accent-100 mt-2">View and filter drafting workload by Ball In Court and Submittal Manager.</p>
+                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
+
+                            </div>
+                            <div>
+                                <label className="relative cursor-pointer">
+                                    <input
+                                        type="file"
+                                        accept=".xlsx,.xls"
+                                        onChange={handleFileUpload}
+                                        disabled={uploading}
+                                        className="hidden"
+                                        id="file-upload"
+                                    />
+                                    <span className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${uploading
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
+                                        }`}>
+                                        {uploading ? (
+                                            <>
+                                                <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600 mr-2"></span>
+                                                Uploading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                📤 Upload Excel
+                                            </>
+                                        )}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="p-8 space-y-6">
-                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-6 border border-gray-200 shadow-sm">
-                            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                                <div className="flex flex-col gap-4 md:flex-row md:flex-1">
-                                    <div className="flex-1 min-w-[200px]">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            🎯 Filter by Ball In Court
-                                        </label>
-                                        <select
-                                            value={selectedBallInCourt}
-                                            onChange={handleBallInCourtChange}
-                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
-                                        >
-                                            <option value={ALL_OPTION_VALUE}>All</option>
-                                            {ballInCourtOptions.map((option) => (
-                                                <option key={option} value={option}>
-                                                    {option}
-                                                </option>
-                                            ))}
-                                        </select>
+                    <div className="p-6 space-y-4">
+                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-4 border border-gray-200 shadow-sm">
+                            <div className="flex flex-col gap-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-3">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                                🎯 Ball In Court
+                                            </label>
+                                            <div className="grid grid-cols-8 gap-1">
+                                                <button
+                                                    onClick={() => setSelectedBallInCourt(ALL_OPTION_VALUE)}
+                                                    className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedBallInCourt === ALL_OPTION_VALUE
+                                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                        }`}
+                                                    title="All"
+                                                >
+                                                    All
+                                                </button>
+                                                {ballInCourtOptions.map((option) => (
+                                                    <button
+                                                        key={option}
+                                                        onClick={() => setSelectedBallInCourt(option)}
+                                                        className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedBallInCourt === option
+                                                            ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                            }`}
+                                                        title={option}
+                                                    >
+                                                        {option}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                                👤 Submittal Manager
+                                            </label>
+                                            <div className="grid grid-cols-8 gap-1">
+                                                <button
+                                                    onClick={() => setSelectedSubmittalManager(ALL_OPTION_VALUE)}
+                                                    className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedSubmittalManager === ALL_OPTION_VALUE
+                                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                        }`}
+                                                    title="All"
+                                                >
+                                                    All
+                                                </button>
+                                                {submittalManagerOptions.map((option) => (
+                                                    <button
+                                                        key={option}
+                                                        onClick={() => setSelectedSubmittalManager(option)}
+                                                        className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedSubmittalManager === option
+                                                            ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                            }`}
+                                                        title={option}
+                                                    >
+                                                        {option}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex-1 min-w-[200px]">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            👤 Filter by Submittal Manager
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                            📁 Project Name
                                         </label>
-                                        <select
-                                            value={selectedSubmittalManager}
-                                            onChange={handleSubmittalManagerChange}
-                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
-                                        >
-                                            <option value={ALL_OPTION_VALUE}>All</option>
-                                            {submittalManagerOptions.map((option) => (
-                                                <option key={option} value={option}>
+                                        <div className="grid grid-cols-8 gap-1">
+                                            <button
+                                                onClick={() => setSelectedProjectName(ALL_OPTION_VALUE)}
+                                                className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedProjectName === ALL_OPTION_VALUE
+                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                    }`}
+                                                title="All"
+                                            >
+                                                All
+                                            </button>
+                                            {projectNameOptions.map((option) => (
+                                                <button
+                                                    key={option}
+                                                    onClick={() => setSelectedProjectName(option)}
+                                                    className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedProjectName === option
+                                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                        }`}
+                                                    title={option}
+                                                >
                                                     {option}
-                                                </option>
+                                                </button>
                                             ))}
-                                        </select>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-3">
+                                <div className="flex items-center gap-2 pt-2">
                                     <button
                                         onClick={resetFilters}
-                                        className="px-5 py-2.5 bg-white border border-accent-300 text-accent-700 rounded-lg font-medium shadow-sm hover:bg-accent-50 transition-all"
+                                        className="px-2 py-1 bg-white border border-accent-300 text-accent-700 rounded text-xs font-medium shadow-sm hover:bg-accent-50 transition-all"
                                     >
                                         Reset Filters
                                     </button>
-                                    <div className="px-5 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-lg font-medium shadow-sm">
+                                    <div className="px-2 py-1 bg-white border border-gray-200 text-gray-600 rounded text-xs font-medium shadow-sm">
                                         Total: <span className="text-gray-900">{displayRows.length}</span> records
                                     </div>
-                                </div>
-                            </div>
-                            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="text-sm text-gray-500">
-                                    Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <label className="relative cursor-pointer">
-                                        <input
-                                            type="file"
-                                            accept=".xlsx,.xls"
-                                            onChange={handleFileUpload}
-                                            disabled={uploading}
-                                            className="hidden"
-                                            id="file-upload"
-                                        />
-                                        <span className={`inline-flex items-center px-5 py-2.5 rounded-lg font-medium shadow-sm transition-all ${uploading
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-accent-500 text-white hover:bg-accent-600 cursor-pointer'
-                                            }`}>
-                                            {uploading ? (
-                                                <>
-                                                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
-                                                    Uploading...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    📤 Upload Excel File
-                                                </>
-                                            )}
-                                        </span>
-                                    </label>
+                                    <div className="text-xs text-gray-500 ml-auto">
+                                        Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
+                                    </div>
                                 </div>
                             </div>
                             {uploadSuccess && (
@@ -501,17 +630,43 @@ function DraftingWorkLoad() {
 
                         {!loading && !error && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                <div className="overflow-x-auto">
+                                <div className="">
                                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
+                                                    const isProjectName = column === 'Project Name';
+
+                                                    if (isProjectName) {
+                                                        return (
+                                                            <th
+                                                                key={column}
+                                                                className="px-2 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                            >
+                                                                <button
+                                                                    onClick={handleProjectNameSortToggle}
+                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                    title={
+                                                                        projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
+                                                                            projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
+                                                                                'Click to sort by Order Number'
+                                                                    }
+                                                                >
+                                                                    <span>{column}</span>
+                                                                    {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
+                                                                    {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
+                                                                    {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
+                                                                </button>
+                                                            </th>
+                                                        );
+                                                    }
+
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-3 py-3 w-24' : 'px-6 py-4'} ${isNotes ? 'min-w-[400px]' : ''} text-left text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100`}
+                                                            className={`${isOrderNumber ? 'px-1 py-0.5 w-16' : 'px-2 py-0.5'} ${isNotes ? 'w-40' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
                                                         >
                                                             {column}
                                                         </th>
@@ -530,7 +685,7 @@ function DraftingWorkLoad() {
                                                     </td>
                                                 </tr>
                                             ) : (
-                                                displayRows.map((row) => (
+                                                displayRows.map((row, index) => (
                                                     <TableRow
                                                         key={row.id}
                                                         row={row}
@@ -539,6 +694,8 @@ function DraftingWorkLoad() {
                                                         formatDate={formatDate}
                                                         onOrderNumberChange={handleOrderNumberChange}
                                                         onNotesChange={handleNotesChange}
+                                                        onStatusChange={handleStatusChange}
+                                                        rowIndex={index}
                                                     />
                                                 ))
                                             )}
@@ -556,7 +713,7 @@ function DraftingWorkLoad() {
 
 export default DraftingWorkLoad;
 
-function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange }) {
+function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -565,6 +722,17 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
     const notesInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
+
+    const formatTypeValue = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return value;
+        }
+        const typeMap = {
+            'Submittal For Gc  Approval': 'Sub GC',
+            'Drafting Release Review': 'DRR'
+        };
+        return typeMap[value] || value;
+    };
 
     const handleOrderNumberFocus = () => {
         const currentValue = row['Order Number'] ?? row.order_number ?? '';
@@ -630,23 +798,44 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
     const rowType = row.type ?? row['Type'] ?? '';
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
 
+    // Alternate row background colors
+    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
     return (
         <tr
-            className="bg-white hover:opacity-90 transition-colors duration-150 border-b border-gray-200"
+            className={`${rowBgClass} hover:bg-gray-100 transition-colors duration-150 border-b border-gray-300`}
         >
             {columns.map((column) => {
                 const isOrderNumber = column === 'Order Number';
                 const isSubmittalId = column === 'Submittals Id';
                 const isType = column === 'Type';
                 const isNotes = column === 'Notes';
+                const isStatus = column === 'Status';
 
-                let cellValue = formatCellValue(row[column]);
+                // Defi// Custom width for Submittals Id and Project Number
+                let customWidthClass = '';
+                if (isSubmittalId) {
+                    customWidthClass = 'w-24'; // Accommodate 8-10 digit ID
+                } else if (column === 'Project Number') {
+                    customWidthClass = 'w-20'; // Accommodate 3-4 digit number
+                } else if (column === 'Title') {
+                    customWidthClass = 'w-48'; // Give Title a fixed width to help with wrapping
+                } else if (column === 'Submittal Manager') {
+                    customWidthClass = 'w-32'; // Reduce Submittal Manager width
+                }
+
+                // Apply Type truncation mapping before formatting
+                let rawValue = row[column];
+                if (isType) {
+                    rawValue = formatTypeValue(rawValue);
+                }
+                let cellValue = formatCellValue(rawValue);
 
                 if (isOrderNumber && editingOrderNumber) {
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className="px-3 py-3 align-middle bg-white"
+                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
                         >
                             <input
                                 ref={inputRef}
@@ -655,8 +844,8 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                                 onChange={(e) => setOrderNumberValue(e.target.value)}
                                 onBlur={handleOrderNumberBlur}
                                 onKeyDown={handleOrderNumberKeyDown}
-                                className="w-full px-2 py-1.5 text-sm border-2 border-accent-500 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
-                                style={{ minWidth: '60px', maxWidth: '80px' }}
+                                className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
+                                style={{ minWidth: '30px', maxWidth: '50px' }}
                             />
                         </td>
                     );
@@ -666,11 +855,11 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className="px-3 py-3 align-middle bg-white"
+                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
                             onClick={handleOrderNumberFocus}
                             title="Click to edit order number"
                         >
-                            <div className="px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[60px] max-w-[80px] inline-block">
+                            <div className="px-0.5 py-0 text-xs border border-gray-300 rounded-sm bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[20px] max-w-[50px] inline-block">
                                 {cellValue}
                             </div>
                         </td>
@@ -681,8 +870,8 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className="px-6 py-4 align-top bg-white"
-                            style={{ minWidth: '400px' }}
+                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            style={{ width: '160px' }}
                         >
                             <textarea
                                 ref={notesInputRef}
@@ -690,8 +879,8 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                                 onChange={(e) => setNotesValue(e.target.value)}
                                 onBlur={handleNotesBlur}
                                 onKeyDown={handleNotesKeyDown}
-                                className="w-full px-3 py-2.5 text-sm border-2 border-accent-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all"
-                                rows={6}
+                                className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all text-center"
+                                rows={1}
                                 placeholder="Add notes..."
                                 style={{ lineHeight: '1.5' }}
                             />
@@ -704,17 +893,17 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className="px-6 py-4 align-top bg-white"
-                            style={{ minWidth: '400px' }}
+                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            style={{ width: '160px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
                         >
-                            <div className={`px-3 py-2.5 text-sm rounded-lg border transition-all cursor-text min-h-[120px] ${hasNotes
+                            <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all cursor-text min-h-[10px] text-center ${hasNotes
                                 ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800'
                                 : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
                                 }`}>
                                 {hasNotes ? (
-                                    <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                    <div className="whitespace-normal break-words leading-tight">
                                         {cellValue}
                                     </div>
                                 ) : (
@@ -735,20 +924,49 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className="px-6 py-4 whitespace-pre-wrap text-sm align-top font-medium bg-white"
+                            className={`px-2 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
+                            title={cellValue}
                         >
                             {href !== '#' ? (
                                 <a
                                     href={href}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-800 underline font-semibold inline-flex items-center gap-1"
+                                    className="text-blue-600 hover:text-blue-800 underline font-semibold inline-flex items-center gap-1 text-xs"
                                 >
                                     <span>{cellValue}</span>
                                 </a>
                             ) : (
-                                <span className="text-gray-900">{cellValue}</span>
+                                <span className="text-gray-900 text-xs">{cellValue}</span>
                             )}
+                        </td>
+                    );
+                }
+
+                if (isStatus) {
+                    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? 'STARTED';
+                    const statusOptions = ['STARTED', 'NEED VIF', 'HOLD'];
+
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                        >
+                            <select
+                                value={currentStatus}
+                                onChange={(e) => {
+                                    if (submittalId && onStatusChange) {
+                                        onStatusChange(submittalId, e.target.value);
+                                    }
+                                }}
+                                className="w-full px-1 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
+                            >
+                                {statusOptions.map((option) => (
+                                    <option key={option} value={option}>
+                                        {option}
+                                    </option>
+                                ))}
+                            </select>
                         </td>
                     );
                 }
@@ -756,12 +974,17 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                 // Apply light green background for Type cell when type is "Drafting Release Review"
                 const cellBgClass = isType && isDraftingReleaseReview
                     ? 'bg-green-100'
-                    : 'bg-white';
+                    : rowBgClass;
+
+                // Determine if this column should allow text wrapping
+                const shouldWrap = column === 'Title' || column === 'Notes';
+                const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className={`px-6 py-4 whitespace-pre-wrap text-sm text-gray-900 align-top font-medium ${cellBgClass}`}
+                        className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
+                        title={cellValue}
                     >
                         {cellValue}
                     </td>
