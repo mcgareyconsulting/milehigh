@@ -42,7 +42,8 @@ function DraftingWorkLoad() {
                     'Project Name': submittal.project_name,
                     'Project Number': submittal.project_number,
                     'Title': submittal.title,
-                    'Status': submittal.status,
+                    'Status': submittal.submittal_drafting_status ?? submittal.status,
+                    'Submittal Drafting Status': submittal.submittal_drafting_status,
                     'Type': submittal.type,
                     'Ball In Court': submittal.ball_in_court,
                     'Order Number': submittal.order_number,
@@ -348,6 +349,22 @@ function DraftingWorkLoad() {
             await fetchData(true);
         } catch (err) {
             console.error(`Failed to update notes for ${submittalId}:`, err);
+            // Refresh to get correct state
+            await fetchData(true);
+        }
+    }, [fetchData]);
+
+    const handleStatusChange = useCallback(async (submittalId, newValue) => {
+        try {
+            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/submittal-drafting-status`, {
+                submittal_id: submittalId,
+                submittal_drafting_status: newValue
+            });
+
+            // Refresh data to get updated status
+            await fetchData(true);
+        } catch (err) {
+            console.error(`Failed to update status for ${submittalId}:`, err);
             // Refresh to get correct state
             await fetchData(true);
         }
@@ -677,6 +694,7 @@ function DraftingWorkLoad() {
                                                         formatDate={formatDate}
                                                         onOrderNumberChange={handleOrderNumberChange}
                                                         onNotesChange={handleNotesChange}
+                                                        onStatusChange={handleStatusChange}
                                                         rowIndex={index}
                                                     />
                                                 ))
@@ -695,7 +713,7 @@ function DraftingWorkLoad() {
 
 export default DraftingWorkLoad;
 
-function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, rowIndex }) {
+function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -704,6 +722,17 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
     const notesInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
+
+    const formatTypeValue = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return value;
+        }
+        const typeMap = {
+            'Submittal For Gc  Approval': 'Sub GC',
+            'Drafting Release Review': 'DRR'
+        };
+        return typeMap[value] || value;
+    };
 
     const handleOrderNumberFocus = () => {
         const currentValue = row['Order Number'] ?? row.order_number ?? '';
@@ -781,6 +810,7 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                 const isSubmittalId = column === 'Submittals Id';
                 const isType = column === 'Type';
                 const isNotes = column === 'Notes';
+                const isStatus = column === 'Status';
 
                 // Defi// Custom width for Submittals Id and Project Number
                 let customWidthClass = '';
@@ -794,7 +824,12 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     customWidthClass = 'w-32'; // Reduce Submittal Manager width
                 }
 
-                let cellValue = formatCellValue(row[column]);
+                // Apply Type truncation mapping before formatting
+                let rawValue = row[column];
+                if (isType) {
+                    rawValue = formatTypeValue(rawValue);
+                }
+                let cellValue = formatCellValue(rawValue);
 
                 if (isOrderNumber && editingOrderNumber) {
                     return (
@@ -908,13 +943,41 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                     );
                 }
 
+                if (isStatus) {
+                    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? 'STARTED';
+                    const statusOptions = ['STARTED', 'NEED VIF', 'HOLD'];
+
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                        >
+                            <select
+                                value={currentStatus}
+                                onChange={(e) => {
+                                    if (submittalId && onStatusChange) {
+                                        onStatusChange(submittalId, e.target.value);
+                                    }
+                                }}
+                                className="w-full px-1 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
+                            >
+                                {statusOptions.map((option) => (
+                                    <option key={option} value={option}>
+                                        {option}
+                                    </option>
+                                ))}
+                            </select>
+                        </td>
+                    );
+                }
+
                 // Apply light green background for Type cell when type is "Drafting Release Review"
                 const cellBgClass = isType && isDraftingReleaseReview
                     ? 'bg-green-100'
                     : rowBgClass;
 
                 // Determine if this column should allow text wrapping
-                const shouldWrap = column === 'Title' || column === 'Notes' || column === 'Status';
+                const shouldWrap = column === 'Title' || column === 'Notes';
                 const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                 return (

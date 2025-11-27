@@ -56,6 +56,7 @@ class ProcoreSubmittal(db.Model):
     submittal_manager = db.Column(db.String(255))
     order_number = db.Column(db.Float)
     notes = db.Column(db.Text)
+    submittal_drafting_status = db.Column(db.String(50), nullable=False, default='STARTED')
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -73,6 +74,7 @@ class ProcoreSubmittal(db.Model):
             "submittal_manager": self.submittal_manager,
             "order_number": self.order_number,
             "notes": self.notes,
+            "submittal_drafting_status": self.submittal_drafting_status,
             "last_updated": self.last_updated,
             "created_at": self.created_at,
         }
