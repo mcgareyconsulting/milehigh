@@ -10,7 +10,7 @@ import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
 from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
-from app.procore.procore import get_project_id_by_project_name, check_and_update_ball_in_court
+from app.procore.procore import get_project_id_by_project_name, check_and_update_submittal
 
 from app.procore.helpers import clean_value
 
@@ -148,16 +148,18 @@ def procore_webhook():
         # PROCESS ACTUAL SUBMITTAL
         # -----------------------------------
         try:
-            # Get old value before update
+            # Get old values before update
             old_record = ProcoreSubmittal.query.filter_by(submittal_id=str(resource_id)).first()
             old_ball_in_court = old_record.ball_in_court if old_record else None
+            old_status = old_record.status if old_record else None
             
-            updated, record, ball_in_court = check_and_update_ball_in_court(
+            ball_updated, status_updated, record, ball_in_court, status = check_and_update_submittal(
                 project_id, 
                 resource_id
             )
-            if updated:
-                # Create SyncOperation for ball_in_court update
+            
+            # Log ball_in_court changes
+            if ball_updated:
                 with sync_operation_context(
                     operation_type="procore_ball_in_court",
                     source_system="procore",
@@ -172,6 +174,25 @@ def procore_webhook():
                             project_id=project_id,
                             old_value=old_ball_in_court,
                             new_value=ball_in_court,
+                            submittal_title=record.title if record else None
+                        )
+            
+            # Log status changes
+            if status_updated:
+                with sync_operation_context(
+                    operation_type="procore_submittal_status",
+                    source_system="procore",
+                    source_id=str(resource_id)
+                ) as sync_op:
+                    if sync_op:
+                        safe_log_sync_event(
+                            sync_op.operation_id,
+                            "INFO",
+                            "Submittal status updated via webhook",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            old_value=old_status,
+                            new_value=status,
                             submittal_title=record.title if record else None
                         )
         except Exception as e:
@@ -410,8 +431,12 @@ def webhook_payloads():
 
 @procore_bp.route("/api/drafting-work-load", methods=["GET"])
 def drafting_work_load():
-    """Return Drafting Work Load data from the db"""
-    submittals = ProcoreSubmittal.query.all()
+    """Return Drafting Work Load data from the db, filtered to only show submittals with status='Open'"""
+    # Filter to only show submittals with status == 'Open'
+    # Exclude None statuses - only show submittals that are explicitly 'Open'
+    submittals = ProcoreSubmittal.query.filter(
+        ProcoreSubmittal.status == 'Open'
+    ).all()
     return jsonify({
         "submittals": [submittal.to_dict() for submittal in submittals]
     }), 200

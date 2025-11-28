@@ -201,20 +201,24 @@ def get_webhook_deliveries(company_id, project_id):
 
 def handle_submittal_update(project_id, submittal_id):
     """
-    Compare ball_in_court from submittal webhook data against DB record.
+    Compare ball_in_court and status from submittal webhook data against DB record.
     
     Args:
+        project_id: The Procore project ID
         submittal_id: The submittal ID (resource_id from webhook)
-        submittal: Dict containing submittal data from Procore webhook
         
     Returns:
-        tuple: (procore_submittal, ball_in_court, approvers) or None if parsing fails
+        tuple: (procore_submittal, ball_in_court, approvers, status) or None if parsing fails
         - procore_submittal: ProcoreSubmittal DB record or None if not found
         - ball_in_court: str or None - User who has the ball in court
         - approvers: list - List of approver data
+        - status: str or None - Status of the submittal from Procore
     """
     # Collect submittal data and pass to parser function
     submittal = get_submittal_by_id(project_id, submittal_id)
+    if not isinstance(submittal, dict):
+        return None
+    
     parsed = parse_ball_in_court_from_submittal(submittal)
     if parsed is None:
         return None
@@ -222,64 +226,100 @@ def handle_submittal_update(project_id, submittal_id):
     ball_in_court = parsed.get("ball_in_court")
     approvers = parsed.get("approvers", [])
     
+    # Extract status from submittal data
+    # Status might be a string or nested in a dict with 'name' key
+    status_obj = submittal.get("status")
+    if isinstance(status_obj, dict):
+        status = status_obj.get("name")
+    elif isinstance(status_obj, str):
+        status = status_obj
+    else:
+        status = None
+    
+    # Normalize status to string or None
+    status = str(status).strip() if status else None
+    
     # Look up the DB record
     procore_submittal = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
     
     # Always return a tuple, even if procore_submittal is None
-    return procore_submittal, ball_in_court, approvers
+    return procore_submittal, ball_in_court, approvers, status
 
 
-def check_and_update_ball_in_court(project_id, submittal_id):
+def check_and_update_submittal(project_id, submittal_id):
     """
-    Check if ball_in_court from Procore differs from DB, update if needed.
+    Check if ball_in_court and status from Procore differ from DB, update if needed.
     
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID
         
     Returns:
-        tuple: (updated: bool, record: ProcoreSubmittal or None, ball_in_court: str or None)
+        tuple: (ball_updated: bool, status_updated: bool, record: ProcoreSubmittal or None, 
+                ball_in_court: str or None, status: str or None)
     """
     try:
-        record, ball_in_court, approvers = handle_submittal_update(project_id, submittal_id)
+        result = handle_submittal_update(project_id, submittal_id)
+        if result is None:
+            logger.warning(f"Failed to parse submittal data for submittal {submittal_id}")
+            return False, False, None, None, None
+        
+        record, ball_in_court, approvers, status = result
         
         if not record:
             logger.warning(f"No DB record found for submittal {submittal_id}")
-            return False, None, ball_in_court
+            return False, False, None, ball_in_court, status
         
-        # Normalize None to empty string for comparison
-        db_value = record.ball_in_court if record.ball_in_court is not None else ""
-        webhook_value = ball_in_court if ball_in_court is not None else ""
+        ball_updated = False
+        status_updated = False
         
-        # Check for mismatch
-        if db_value != webhook_value:
+        # Check and update ball_in_court
+        db_ball_value = record.ball_in_court if record.ball_in_court is not None else ""
+        webhook_ball_value = ball_in_court if ball_in_court is not None else ""
+        
+        if db_ball_value != webhook_ball_value:
             logger.info(
                 f"Ball in court mismatch detected for submittal {submittal_id}: "
-                f"DB='{record.ball_in_court}' vs Webhook='{ball_in_court}'"
+                f"DB='{record.ball_in_court}' vs Procore='{ball_in_court}'"
             )
-            
-            # Update database
             record.ball_in_court = ball_in_court
+            ball_updated = True
+        
+        # Check and update status
+        db_status_value = record.status if record.status is not None else ""
+        webhook_status_value = status if status is not None else ""
+        
+        if db_status_value != webhook_status_value:
+            logger.info(
+                f"Status mismatch detected for submittal {submittal_id}: "
+                f"DB='{record.status}' vs Procore='{status}'"
+            )
+            record.status = status
+            status_updated = True
+        
+        # Update timestamp and commit if any changes
+        if ball_updated or status_updated:
             record.last_updated = datetime.utcnow()
             db.session.commit()
             
-            logger.info(
-                f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'"
-            )
-            
-            return True, record, ball_in_court
+            if ball_updated:
+                logger.info(f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'")
+            if status_updated:
+                logger.info(f"Updated status for submittal {submittal_id} from '{db_status_value}' to '{status}'")
         else:
             logger.debug(
-                f"Ball in court match for submittal {submittal_id}: '{ball_in_court}'"
+                f"Ball in court and status match for submittal {submittal_id}: "
+                f"ball='{ball_in_court}', status='{status}'"
             )
-            return False, record, ball_in_court
+        
+        return ball_updated, status_updated, record, ball_in_court, status
             
     except Exception as e:
         logger.error(
-            f"Error checking/updating ball_in_court for submittal {submittal_id}: {e}",
+            f"Error checking/updating ball_in_court and status for submittal {submittal_id}: {e}",
             exc_info=True
         )
-        return False, None, None
+        return False, False, None, None, None
 
 # Add Procore Link to Trello Card
 def add_procore_link_to_trello_card(job, release):
@@ -351,10 +391,13 @@ if __name__ == "__main__":
         if result is None:
             print("Failed to parse submittal data")
         else:
-            procore_submittal, ball_in_court, approvers = result
+            procore_submittal, ball_in_court, approvers, status = result
             print(f"DB Record: {procore_submittal}")
             print(f"Ball in Court: {ball_in_court}")
+            print(f"Status: {status}")
             print(f"Approvers: {len(approvers) if approvers else 0} approvers")
             if procore_submittal:
                 print(f"DB ball_in_court: {procore_submittal.ball_in_court}")
-                print(f"Match: {procore_submittal.ball_in_court == ball_in_court}")
+                print(f"DB status: {procore_submittal.status}")
+                print(f"Ball in court match: {procore_submittal.ball_in_court == ball_in_court}")
+                print(f"Status match: {procore_submittal.status == status}")
