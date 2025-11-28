@@ -2,6 +2,7 @@ import logging
 import re
 import requests
 from datetime import datetime
+from sqlalchemy.exc import IntegrityError
 from app.config import Config as cfg
 from app.models import db, Job, ProcoreSubmittal
 from app.trello.api import add_procore_link
@@ -244,6 +245,184 @@ def handle_submittal_update(project_id, submittal_id):
     
     # Always return a tuple, even if procore_submittal is None
     return procore_submittal, ball_in_court, approvers, status
+
+
+def get_project_info(project_id):
+    """
+    Get project information (name and number) by project ID.
+    
+    Args:
+        project_id: Procore project ID
+        
+    Returns:
+        dict with 'name' and 'project_number' keys, or None if not found
+    """
+    try:
+        procore = get_procore_client()
+        projects = procore.get_projects(cfg.PROD_PROCORE_COMPANY_ID)
+        for project in projects:
+            if project.get("id") == project_id:
+                return {
+                    "name": project.get("name"),
+                    "project_number": project.get("project_number")
+                }
+        logger.warning(f"Project {project_id} not found")
+        return None
+    except Exception as e:
+        logger.error(f"Error getting project info for project {project_id}: {e}", exc_info=True)
+        return None
+
+
+def create_submittal_from_webhook(project_id, submittal_id):
+    """
+    Create a new ProcoreSubmittal record in the database from a webhook create event.
+    
+    Args:
+        project_id: Procore project ID
+        submittal_id: Procore submittal ID (resource_id from webhook)
+        
+    Returns:
+        tuple: (created: bool, record: ProcoreSubmittal or None, error_message: str or None)
+    """
+    try:
+        logger.info(f"Starting create_submittal_from_webhook for submittal {submittal_id}, project {project_id}")
+        
+        # Check if submittal already exists
+        existing = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+        if existing:
+            logger.info(f"Submittal {submittal_id} already exists in database, skipping creation")
+            return False, existing, None
+        
+        logger.info(f"Fetching submittal data from Procore API for submittal {submittal_id}")
+        # Get submittal data from Procore API
+        submittal_data = get_submittal_by_id(project_id, submittal_id)
+        if not isinstance(submittal_data, dict):
+            error_msg = f"Failed to fetch submittal data from Procore API - got {type(submittal_data)} instead of dict"
+            logger.error(f"{error_msg} for submittal {submittal_id}")
+            return False, None, error_msg
+        
+        logger.info(f"Fetching project info for project {project_id}")
+        # Get project information
+        project_info = get_project_info(project_id)
+        if not project_info:
+            error_msg = f"Failed to fetch project info for project {project_id}"
+            logger.error(f"{error_msg}")
+            return False, None, error_msg
+        
+        logger.info(f"Successfully fetched project info: {project_info.get('name')} ({project_info.get('project_number')})")
+        
+        # Parse ball_in_court from submittal data
+        parsed = parse_ball_in_court_from_submittal(submittal_data)
+        ball_in_court = parsed.get("ball_in_court") if parsed else None
+        
+        # Extract status
+        status_obj = submittal_data.get("status")
+        if isinstance(status_obj, dict):
+            status = status_obj.get("name")
+        elif isinstance(status_obj, str):
+            status = status_obj
+        else:
+            status = None
+        status = str(status).strip() if status else None
+        
+        # Extract type
+        type_obj = submittal_data.get("type")
+        if isinstance(type_obj, dict):
+            submittal_type = type_obj.get("name")
+        elif isinstance(type_obj, str):
+            submittal_type = type_obj
+        else:
+            submittal_type = None
+        submittal_type = str(submittal_type).strip() if submittal_type else None
+        
+        # Extract title
+        title = submittal_data.get("title")
+        title = str(title).strip() if title else None
+        
+        # Extract submittal_manager (if available)
+        submittal_manager_obj = submittal_data.get("submittal_manager") or submittal_data.get("manager")
+        if isinstance(submittal_manager_obj, dict):
+            submittal_manager = submittal_manager_obj.get("name") or submittal_manager_obj.get("login")
+        elif isinstance(submittal_manager_obj, str):
+            submittal_manager = submittal_manager_obj
+        else:
+            submittal_manager = None
+        submittal_manager = str(submittal_manager).strip() if submittal_manager else None
+        
+        logger.info(f"Creating new ProcoreSubmittal record with title: {title}")
+        
+        # Double-check it doesn't exist (race condition protection)
+        # Another thread/request might have created it between our initial check and now
+        existing_check = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+        if existing_check:
+            logger.info(
+                f"Submittal {submittal_id} was created by another process between initial check and commit. "
+                f"Returning existing record."
+            )
+            return False, existing_check, None
+        
+        # Create new ProcoreSubmittal record
+        new_submittal = ProcoreSubmittal(
+            submittal_id=str(submittal_id),
+            procore_project_id=str(project_id),
+            project_number=str(project_info.get("project_number", "")).strip() or None,
+            project_name=project_info.get("name"),
+            title=title,
+            status=status,
+            type=submittal_type,
+            ball_in_court=str(ball_in_court).strip() if ball_in_court else None,
+            submittal_manager=submittal_manager,
+            submittal_drafting_status='STARTED',  # Default value
+            created_at=datetime.utcnow(),
+            last_updated=datetime.utcnow()
+        )
+        
+        db.session.add(new_submittal)
+        logger.info(f"Added submittal to session, committing to database...")
+        
+        try:
+            db.session.commit()
+            logger.info(f"Successfully committed submittal to database")
+        except IntegrityError as integrity_error:
+            # Handle unique constraint violations (if another thread created it during commit)
+            logger.warning(
+                f"Unique constraint violation during commit for submittal {submittal_id}. "
+                f"This likely means another process created it concurrently. Rolling back and fetching existing record."
+            )
+            db.session.rollback()
+            # Fetch the record that was created by the other process
+            existing_after_error = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+            if existing_after_error:
+                logger.info(f"Found existing record created by concurrent process, returning it")
+                return False, existing_after_error, None
+            else:
+                # Unexpected: constraint violation but no record found
+                error_msg = f"Unique constraint violation but no existing record found: {integrity_error}"
+                logger.error(error_msg)
+                return False, None, error_msg
+        except Exception as commit_error:
+            # Re-raise other commit errors after logging
+            logger.error(f"Unexpected error during commit: {commit_error}", exc_info=True)
+            raise
+        
+        logger.info(
+            f"Created new submittal record: submittal_id={submittal_id}, "
+            f"project_id={project_id}, title={title}"
+        )
+        
+        return True, new_submittal, None
+        
+    except Exception as e:
+        error_msg = f"Exception in create_submittal_from_webhook: {str(e)}"
+        logger.error(
+            f"Error creating submittal {submittal_id} from webhook: {e}",
+            exc_info=True
+        )
+        try:
+            db.session.rollback()
+        except Exception as rollback_error:
+            logger.error(f"Error during rollback: {rollback_error}", exc_info=True)
+        return False, None, error_msg
 
 
 def check_and_update_submittal(project_id, submittal_id):

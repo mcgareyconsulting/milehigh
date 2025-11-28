@@ -165,10 +165,12 @@ function DraftingWorkLoad() {
     }, [fetchData]);
 
     const matchesSelectedFilter = useCallback((row) => {
-        // Check Ball In Court filter
+        // Check Ball In Court filter (handles comma-separated values for multiple assignees)
         if (selectedBallInCourt !== ALL_OPTION_VALUE) {
-            const ballInCourtValue = row.ball_in_court;
-            if ((ballInCourtValue ?? '').toString().trim() !== selectedBallInCourt) {
+            const ballInCourtValue = (row.ball_in_court ?? '').toString().trim();
+            // Check if selected value matches exactly OR appears in comma-separated list
+            const ballInCourtNames = ballInCourtValue.split(',').map(name => name.trim());
+            if (!ballInCourtNames.includes(selectedBallInCourt)) {
                 return false;
             }
         }
@@ -203,7 +205,25 @@ function DraftingWorkLoad() {
                 if (projectA !== projectB) {
                     return projectA.localeCompare(projectB);
                 }
-                // Secondary sort by order_number
+                // Secondary sort: multi-assignee rows go to bottom within same project
+                const ballA = (a.ball_in_court ?? '').toString();
+                const ballB = (b.ball_in_court ?? '').toString();
+                const hasMultipleA = ballA.includes(',');
+                const hasMultipleB = ballB.includes(',');
+
+                // Multi-assignee rows should go to the bottom
+                if (hasMultipleA && !hasMultipleB) {
+                    return 1; // A goes after B
+                }
+                if (!hasMultipleA && hasMultipleB) {
+                    return -1; // A goes before B
+                }
+
+                // If both have multiple or both are single, sort by order_number or submittal_id
+                if (hasMultipleA && hasMultipleB) {
+                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
+                }
+
                 const orderA = a.order_number ?? a['Order Number'] ?? 999999;
                 const orderB = b.order_number ?? b['Order Number'] ?? 999999;
                 return orderA - orderB;
@@ -215,22 +235,64 @@ function DraftingWorkLoad() {
                 if (projectA !== projectB) {
                     return projectB.localeCompare(projectA);
                 }
-                // Secondary sort by order_number
+                // Secondary sort: multi-assignee rows go to bottom within same project
+                const ballA = (a.ball_in_court ?? '').toString();
+                const ballB = (b.ball_in_court ?? '').toString();
+                const hasMultipleA = ballA.includes(',');
+                const hasMultipleB = ballB.includes(',');
+
+                // Multi-assignee rows should go to the bottom
+                if (hasMultipleA && !hasMultipleB) {
+                    return 1; // A goes after B
+                }
+                if (!hasMultipleA && hasMultipleB) {
+                    return -1; // A goes before B
+                }
+
+                // If both have multiple or both are single, sort by order_number or submittal_id
+                if (hasMultipleA && hasMultipleB) {
+                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
+                }
+
                 const orderA = a.order_number ?? a['Order Number'] ?? 999999;
                 const orderB = b.order_number ?? b['Order Number'] ?? 999999;
                 return orderA - orderB;
             });
         } else {
             // Normal sort: by Ball In Court, then by order_number (as float)
+            // Multi-assignee cases (comma-separated = reviewers) sort to the bottom
             return filtered.sort((a, b) => {
                 const ballA = (a.ball_in_court ?? '').toString();
                 const ballB = (b.ball_in_court ?? '').toString();
 
+                // Check if either has multiple assignees (comma indicates reviewers)
+                const hasMultipleA = ballA.includes(',');
+                const hasMultipleB = ballB.includes(',');
+
+                // Multi-assignee rows should go to the bottom
+                // If one has multiple and the other doesn't, single assignee comes first
+                if (hasMultipleA && !hasMultipleB) {
+                    return 1; // A goes after B (A has multiple, B doesn't)
+                }
+                if (!hasMultipleA && hasMultipleB) {
+                    return -1; // A goes before B (A doesn't have multiple, B does)
+                }
+
+                // If both have multiple assignees, sort them together alphabetically
+                if (hasMultipleA && hasMultipleB) {
+                    if (ballA !== ballB) {
+                        return ballA.localeCompare(ballB);
+                    }
+                    // Tiebreaker: sort by submittal_id
+                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
+                }
+
+                // Both are single assignees: sort alphabetically by ball_in_court
                 if (ballA !== ballB) {
                     return ballA.localeCompare(ballB);
                 }
 
-                // Sort by order_number as float (nulls last)
+                // Same ball_in_court: sort by order_number as float (nulls last)
                 const orderA = a.order_number ?? a['Order Number'] ?? 999999;
                 const orderB = b.order_number ?? b['Order Number'] ?? 999999;
                 return orderA - orderB;
@@ -243,7 +305,9 @@ function DraftingWorkLoad() {
         rows.forEach((row) => {
             const value = row.ball_in_court;
             if (value !== null && value !== undefined && String(value).trim() !== '') {
-                values.add(String(value).trim());
+                // Extract individual names from comma-separated values
+                const names = String(value).split(',').map(name => name.trim()).filter(name => name !== '');
+                names.forEach(name => values.add(name));
             }
         });
         return Array.from(values).sort((a, b) => a.localeCompare(b));
@@ -735,6 +799,15 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
     };
 
     const handleOrderNumberFocus = () => {
+        // Check if this row has multiple assignees (comma-separated ball_in_court)
+        const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
+        const hasMultipleAssignees = String(ballInCourt).includes(',');
+
+        // Don't allow editing order number for multiple assignees (reviewers)
+        if (hasMultipleAssignees) {
+            return;
+        }
+
         const currentValue = row['Order Number'] ?? row.order_number ?? '';
         setOrderNumberValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
         setEditingOrderNumber(true);
@@ -852,14 +925,22 @@ function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChan
                 }
 
                 if (isOrderNumber) {
+                    // Check if this row has multiple assignees (comma-separated ball_in_court)
+                    const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
+                    const hasMultipleAssignees = String(ballInCourt).includes(',');
+                    const isEditable = !hasMultipleAssignees;
+
                     return (
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
-                            onClick={handleOrderNumberFocus}
-                            title="Click to edit order number"
+                            onClick={isEditable ? handleOrderNumberFocus : undefined}
+                            title={isEditable ? "Click to edit order number" : "Order number editing disabled for multiple assignees (reviewers)"}
                         >
-                            <div className="px-0.5 py-0 text-xs border border-gray-300 rounded-sm bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[20px] max-w-[50px] inline-block">
+                            <div className={`px-0.5 py-0 text-xs border rounded-sm font-medium min-w-[20px] max-w-[50px] inline-block transition-colors ${isEditable
+                                ? 'border-gray-300 bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text text-gray-700'
+                                : 'border-gray-200 bg-gray-100 cursor-not-allowed text-gray-500 opacity-75'
+                                }`}>
                                 {cellValue}
                             </div>
                         </td>

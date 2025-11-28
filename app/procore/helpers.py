@@ -10,14 +10,16 @@ def clean_value(value):
 
 def parse_ball_in_court_from_submittal(submittal_data):
     """
-    Parse the current user assigned to ball_in_court and approvers from submittal webhook data.
+    Parse the users assigned to ball_in_court and approvers from submittal webhook data.
+    Handles multiple assignees by returning a comma-separated string.
     
     Args:
         submittal_data: Dict containing submittal data from Procore webhook
         
     Returns:
         dict: {
-            'ball_in_court': str or None - User name or login of the person who has the ball in court,
+            'ball_in_court': str or None - Comma-separated list of user names/logins who have the ball in court,
+                                          or single user name/login if only one person,
             'approvers': list - List of approver data from the submittal
         }
         Returns None if submittal_data is not a valid dict
@@ -30,29 +32,27 @@ def parse_ball_in_court_from_submittal(submittal_data):
     if not isinstance(approvers, list):
         approvers = []
     
-    ball_in_court_user = None
+    ball_in_court_users = []
     
     # First, check if ball_in_court array has entries
     ball_in_court = submittal_data.get("ball_in_court", [])
     if ball_in_court and isinstance(ball_in_court, list) and len(ball_in_court) > 0:
-        # Extract user info from ball_in_court entries
-        # ball_in_court typically contains user objects or IDs
+        # Extract user info from ALL ball_in_court entries (not just the first)
         for entry in ball_in_court:
             if isinstance(entry, dict):
                 user = entry.get("user") or entry
                 if user and isinstance(user, dict):
                     name = user.get("name")
                     if name:
-                        ball_in_court_user = name
-                        break
-                    login = user.get("login")
-                    if login:
-                        ball_in_court_user = login
-                        break
+                        ball_in_court_users.append(name)
+                    else:
+                        login = user.get("login")
+                        if login:
+                            ball_in_court_users.append(login)
     
     # If ball_in_court is empty, derive from approvers with pending responses
-    if not ball_in_court_user and approvers:
-        # Find approvers who need to respond (pending state)
+    if not ball_in_court_users and approvers:
+        # Find ALL approvers who need to respond (pending state)
         for approver in approvers:
             if not isinstance(approver, dict):
                 continue
@@ -83,15 +83,23 @@ def parse_ball_in_court_from_submittal(submittal_data):
                 user = approver.get("user")
                 if user and isinstance(user, dict):
                     name = user.get("name")
-                    if name:
-                        ball_in_court_user = name
-                        break
-                    login = user.get("login")
-                    if login:
-                        ball_in_court_user = login
-                        break
+                    if name and name not in ball_in_court_users:
+                        ball_in_court_users.append(name)
+                    else:
+                        login = user.get("login")
+                        if login and login not in ball_in_court_users:
+                            ball_in_court_users.append(login)
+    
+    # Return comma-separated string if multiple users, single string if one, None if empty
+    if not ball_in_court_users:
+        ball_in_court_value = None
+    elif len(ball_in_court_users) == 1:
+        ball_in_court_value = ball_in_court_users[0]
+    else:
+        # Multiple users - join with comma and space
+        ball_in_court_value = ", ".join(ball_in_court_users)
     
     return {
-        "ball_in_court": ball_in_court_user,
+        "ball_in_court": ball_in_court_value,
         "approvers": approvers
     }

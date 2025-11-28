@@ -10,7 +10,7 @@ import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
 from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
-from app.procore.procore import get_project_id_by_project_name, check_and_update_submittal
+from app.procore.procore import get_project_id_by_project_name, check_and_update_submittal, create_submittal_from_webhook
 
 from app.procore.helpers import clean_value
 
@@ -60,8 +60,10 @@ DEBOUNCE_SECONDS = 8  # 8 seconds
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
 def procore_webhook():
     """
-    Procore webhook endpoint to receive Submittals update events.
-    For now, just logs all incoming payloads to a file for debugging.
+    Procore webhook endpoint to receive Submittals create and update events.
+    Handles both 'create' and 'update' event types:
+    - 'create': Creates a new submittal record in the database
+    - 'update': Updates existing submittal record (ball_in_court, status, etc.)
     """
     if request.method == "HEAD":
         # Procore webhook verification request
@@ -107,6 +109,12 @@ def procore_webhook():
             f"Received Procore webhook: resource={resource_type}, "
             f"event_type={event_type}, id={resource_id}, project={project_id}"
         )
+        
+        # Debug: Log the full payload for create events to verify structure
+        if event_type == "create":
+            current_app.logger.debug(
+                f"DEBUG: Full webhook payload for create event: {json.dumps(payload)}"
+            )
 
         now = datetime.utcnow()
 
@@ -148,53 +156,138 @@ def procore_webhook():
         # PROCESS ACTUAL SUBMITTAL
         # -----------------------------------
         try:
-            # Get old values before update
-            old_record = ProcoreSubmittal.query.filter_by(submittal_id=str(resource_id)).first()
-            old_ball_in_court = old_record.ball_in_court if old_record else None
-            old_status = old_record.status if old_record else None
-            
-            ball_updated, status_updated, record, ball_in_court, status = check_and_update_submittal(
-                project_id, 
-                resource_id
+            current_app.logger.debug(
+                f"DEBUG: About to process event. event_type='{event_type}' "
+                f"(type: {type(event_type)}), resource_id={resource_id}"
             )
             
-            # Log ball_in_court changes
-            if ball_updated:
-                with sync_operation_context(
-                    operation_type="procore_ball_in_court",
-                    source_system="procore",
-                    source_id=str(resource_id)
-                ) as sync_op:
-                    if sync_op:
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Ball in court updated via webhook",
-                            submittal_id=resource_id,
-                            project_id=project_id,
-                            old_value=old_ball_in_court,
-                            new_value=ball_in_court,
-                            submittal_title=record.title if record else None
+            # Handle create events - add new submittal to database
+            if event_type == "create":
+                current_app.logger.info(
+                    f"Processing create event for submittal {resource_id} in project {project_id}"
+                )
+                try:
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id)
+                    
+                    if created and record:
+                        with sync_operation_context(
+                            operation_type="procore_submittal_create",
+                            source_system="procore",
+                            source_id=str(resource_id)
+                        ) as sync_op:
+                            if sync_op:
+                                safe_log_sync_event(
+                                    sync_op.operation_id,
+                                    "INFO",
+                                    "Submittal created via webhook",
+                                    submittal_id=resource_id,
+                                    project_id=project_id,
+                                    submittal_title=record.title if record else None
+                                )
+                        current_app.logger.info(
+                            f"✓ Successfully created new submittal {resource_id} from webhook create event"
                         )
+                    elif error_msg:
+                        current_app.logger.error(
+                            f"✗ Failed to create submittal {resource_id}: {error_msg}",
+                            exc_info=True
+                        )
+                    elif record:
+                        current_app.logger.info(
+                            f"Submittal {resource_id} already exists in database, skipped creation"
+                        )
+                    else:
+                        # This case: created=False, record=None, error_msg=None
+                        # Should not happen, but log it
+                        current_app.logger.warning(
+                            f"Create submittal returned unexpected state: created={created}, "
+                            f"record={'exists' if record else 'None'}, error_msg={error_msg}"
+                        )
+                except Exception as create_exception:
+                    current_app.logger.error(
+                        f"✗ Exception while processing create event for submittal {resource_id}: {create_exception}",
+                        exc_info=True
+                    )
             
-            # Log status changes
-            if status_updated:
-                with sync_operation_context(
-                    operation_type="procore_submittal_status",
-                    source_system="procore",
-                    source_id=str(resource_id)
-                ) as sync_op:
-                    if sync_op:
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Submittal status updated via webhook",
-                            submittal_id=resource_id,
-                            project_id=project_id,
-                            old_value=old_status,
-                            new_value=status,
-                            submittal_title=record.title if record else None
+            # Handle update events - update existing submittal
+            elif event_type == "update":
+                # Check if record exists first
+                old_record = ProcoreSubmittal.query.filter_by(submittal_id=str(resource_id)).first()
+                
+                # If record doesn't exist, try to create it (fallback for race conditions)
+                # This handles the case where update events arrive before create events
+                if not old_record:
+                    current_app.logger.warning(
+                        f"Update event received for submittal {resource_id} but record doesn't exist. "
+                        f"Attempting to create it first (fallback for race conditions)..."
+                    )
+                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id)
+                    if created and new_record:
+                        current_app.logger.info(
+                            f"Successfully created missing submittal {resource_id} from update event fallback"
                         )
+                        old_record = new_record
+                    elif new_record:  # Record exists but wasn't newly created (already existed)
+                        current_app.logger.info(
+                            f"Submittal {resource_id} was already created by another process (likely create event), "
+                            f"using existing record"
+                        )
+                        old_record = new_record
+                    elif create_error:
+                        current_app.logger.error(
+                            f"Failed to create missing submittal {resource_id} from update event: {create_error}"
+                        )
+                
+                old_ball_in_court = old_record.ball_in_court if old_record else None
+                old_status = old_record.status if old_record else None
+                
+                ball_updated, status_updated, record, ball_in_court, status = check_and_update_submittal(
+                    project_id, 
+                    resource_id
+                )
+                
+                # Log ball_in_court changes
+                if ball_updated:
+                    with sync_operation_context(
+                        operation_type="procore_ball_in_court",
+                        source_system="procore",
+                        source_id=str(resource_id)
+                    ) as sync_op:
+                        if sync_op:
+                            safe_log_sync_event(
+                                sync_op.operation_id,
+                                "INFO",
+                                "Ball in court updated via webhook",
+                                submittal_id=resource_id,
+                                project_id=project_id,
+                                old_value=old_ball_in_court,
+                                new_value=ball_in_court,
+                                submittal_title=record.title if record else None
+                            )
+                
+                # Log status changes
+                if status_updated:
+                    with sync_operation_context(
+                        operation_type="procore_submittal_status",
+                        source_system="procore",
+                        source_id=str(resource_id)
+                    ) as sync_op:
+                        if sync_op:
+                            safe_log_sync_event(
+                                sync_op.operation_id,
+                                "INFO",
+                                "Submittal status updated via webhook",
+                                submittal_id=resource_id,
+                                project_id=project_id,
+                                old_value=old_status,
+                                new_value=status,
+                                submittal_title=record.title if record else None
+                            )
+            else:
+                current_app.logger.warning(
+                    f"Unhandled event type '{event_type}' for submittal {resource_id}, ignoring. "
+                    f"Expected 'create' or 'update'"
+                )
         except Exception as e:
             current_app.logger.error(
                 f"Error processing submittal {resource_id}: {e}",
