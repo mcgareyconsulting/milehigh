@@ -1,114 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { useDataFetching } from '../hooks/useDataFetching';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const ALL_OPTION_VALUE = '__ALL__';
 
 function DraftingWorkLoad() {
-    const [rows, setRows] = useState([]);
-    const [columns, setColumns] = useState([]);
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
     const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
     const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
     const [projectNameSortMode, setProjectNameSortMode] = useState('normal'); // 'normal', 'a-z', 'z-a'
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [lastUpdated, setLastUpdated] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState(null);
     const [uploadSuccess, setUploadSuccess] = useState(false);
 
-    const fetchData = useCallback(async (silent = false) => {
-        if (!silent) {
-            setLoading(true);
-        }
-        setError(null);
+    const { submittals, columns, loading, error, lastUpdated, refetch } = useDataFetching();
+    const rows = submittals; // now that submittals is clean, we alias
 
-        try {
-            const response = await axios.get(`${API_BASE_URL}/procore/api/drafting-work-load`);
-            const data = response.data || {};
-
-            const submittals = data.submittals || [];
-
-            const cleanedRows = submittals.map((submittal, index) => {
-                const rawId = submittal.submittal_id ?? submittal.id ?? `row-${index}`;
-
-                // Map database field names to frontend expected names
-                return {
-                    ...submittal,
-                    'Submittals Id': submittal.submittal_id,
-                    'Project Id': submittal.procore_project_id,
-                    'Submittal Manager': submittal.submittal_manager,
-                    'Project Name': submittal.project_name,
-                    'Project Number': submittal.project_number,
-                    'Title': submittal.title,
-                    'Status': submittal.submittal_drafting_status ?? submittal.status,
-                    'Submittal Drafting Status': submittal.submittal_drafting_status,
-                    'Type': submittal.type,
-                    'Ball In Court': submittal.ball_in_court,
-                    'Order Number': submittal.order_number,
-                    'Notes': submittal.notes,
-                    id: String(rawId)
-                };
-            });
-
-            // Sort by order_number (nulls last), then by submittal_id
-            cleanedRows.sort((a, b) => {
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                if (orderA !== orderB) {
-                    return orderA - orderB;
-                }
-                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-            });
-
-            // Define the desired column order (Project Id is tracked but hidden from display)
-            const desiredColumnOrder = [
-                'Order Number',
-                'Submittals Id',
-                'Project Number',
-                'Project Name',
-                'Title',
-                'Ball In Court',
-                'Type',
-                'Status',
-                'Submittal Manager',
-                'Notes'
-            ];
-
-            // Get all available columns from the data
-            const allColumns = data.columns && data.columns.length > 0
-                ? data.columns
-                : (cleanedRows[0] ? Object.keys(cleanedRows[0]) : []);
-
-            // Filter and order columns according to desired order
-            const visibleColumns = desiredColumnOrder.filter(column =>
-                allColumns.includes(column) || cleanedRows.some(row => row[column] !== undefined)
-            );
-
-            setRows(cleanedRows);
-            setColumns(visibleColumns);
-
-            const mostRecentUpdate = cleanedRows.length > 0
-                ? cleanedRows.reduce((latest, row) => {
-                    const rowDate = row.last_updated ? new Date(row.last_updated) : null;
-                    return rowDate && (!latest || rowDate > latest) ? rowDate : latest;
-                }, null)
-                : null;
-            setLastUpdated(mostRecentUpdate ? mostRecentUpdate.toISOString() : null);
-        } catch (err) {
-            const message = err.response?.data?.error || err.message || 'Failed to load Drafting Work Load data.';
-            setError(message);
-        } finally {
-            if (!silent) {
-                setLoading(false);
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
 
     // Poll for updates every 30 seconds
     // Pauses when tab is not visible to save resources
@@ -126,7 +34,7 @@ function DraftingWorkLoad() {
             intervalId = setInterval(() => {
                 // Only poll if tab is visible
                 if (!document.hidden) {
-                    fetchData(true); // Silent refresh (no loading spinner)
+                    refetch(true); // Silent refresh (no loading spinner)
                 }
             }, 30000); // 30 seconds
         };
@@ -145,7 +53,7 @@ function DraftingWorkLoad() {
             } else {
                 startPolling();
                 // Immediately fetch when tab becomes visible
-                fetchData(true);
+                refetch(true);
             }
         };
 
@@ -162,7 +70,7 @@ function DraftingWorkLoad() {
                 document.removeEventListener('visibilitychange', visibilityChangeHandler);
             }
         };
-    }, [fetchData]);
+    }, [refetch]);
 
     const matchesSelectedFilter = useCallback((row) => {
         // Check Ball In Court filter (handles comma-separated values for multiple assignees)
@@ -394,13 +302,13 @@ function DraftingWorkLoad() {
             });
 
             // Refresh data to get updated order
-            await fetchData(true);
+            await refetch(true);
         } catch (err) {
             console.error(`Failed to update order for ${submittalId}:`, err);
             // Refresh to get correct state
-            await fetchData(true);
+            await refetch(true);
         }
-    }, [fetchData]);
+    }, [refetch]);
 
     const handleNotesChange = useCallback(async (submittalId, newValue) => {
         try {
@@ -410,13 +318,13 @@ function DraftingWorkLoad() {
             });
 
             // Refresh data to get updated notes
-            await fetchData(true);
+            await refetch(true);
         } catch (err) {
             console.error(`Failed to update notes for ${submittalId}:`, err);
             // Refresh to get correct state
-            await fetchData(true);
+            await refetch(true);
         }
-    }, [fetchData]);
+    }, [refetch]);
 
     const handleStatusChange = useCallback(async (submittalId, newValue) => {
         try {
@@ -426,13 +334,13 @@ function DraftingWorkLoad() {
             });
 
             // Refresh data to get updated status
-            await fetchData(true);
+            await refetch(true);
         } catch (err) {
             console.error(`Failed to update status for ${submittalId}:`, err);
             // Refresh to get correct state
-            await fetchData(true);
+            await refetch(true);
         }
-    }, [fetchData]);
+    }, [refetch]);
 
 
     const handleFileUpload = async (event) => {
