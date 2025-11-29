@@ -230,7 +230,7 @@ function DraftingWorkLoad() {
         }
     };
 
-    const handleOrderNumberChange = useCallback(async (submittalId, newValue) => {
+    const handleOrderNumberChange = async (submittalId, newValue) => {
         // Parse the value as float
         const parsedValue = newValue === '' || newValue === null || newValue === undefined
             ? null
@@ -242,19 +242,13 @@ function DraftingWorkLoad() {
         }
 
         try {
-            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/order`, {
-                submittal_id: submittalId,
-                order_number: parsedValue
-            });
-
-            // Refresh data to get updated order
-            await refetch(true);
+            await draftingWorkLoadApi.updateOrderNumber(submittalId, parsedValue);
+            await refetch();
         } catch (err) {
             console.error(`Failed to update order for ${submittalId}:`, err);
-            // Refresh to get correct state
-            await refetch(true);
+            await refetch();
         }
-    }, [refetch]);
+    };
 
     const handleNotesChange = useCallback(async (submittalId, newValue) => {
         try {

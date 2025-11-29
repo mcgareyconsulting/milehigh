@@ -16,6 +16,21 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Update order number for a submittal
+     */
+    async updateOrderNumber(submittalId, orderNumber) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/order`, {
+                submittal_id: submittalId,
+                order_number: orderNumber
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update order number for submittal ${submittalId}`);
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {
