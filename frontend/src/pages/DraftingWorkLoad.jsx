@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useDataFetching } from '../hooks/useDataFetching';
+import { useMutations } from '../hooks/useMutations';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const ALL_OPTION_VALUE = '__ALL__';
@@ -14,7 +15,9 @@ function DraftingWorkLoad() {
     const [uploadError, setUploadError] = useState(null);
     const [uploadSuccess, setUploadSuccess] = useState(false);
 
-    const { submittals, columns, loading, error, lastUpdated, refetch } = useDataFetching();
+    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
+    const { updateOrderNumber, updating, error: mutationError, success } = useMutations(refetch);
+
     const rows = submittals; // now that submittals is clean, we alias
 
 
@@ -230,25 +233,7 @@ function DraftingWorkLoad() {
         }
     };
 
-    const handleOrderNumberChange = async (submittalId, newValue) => {
-        // Parse the value as float
-        const parsedValue = newValue === '' || newValue === null || newValue === undefined
-            ? null
-            : parseFloat(newValue);
 
-        // Validate it's a number if not null
-        if (parsedValue !== null && isNaN(parsedValue)) {
-            return; // Invalid input, don't update
-        }
-
-        try {
-            await draftingWorkLoadApi.updateOrderNumber(submittalId, parsedValue);
-            await refetch();
-        } catch (err) {
-            console.error(`Failed to update order for ${submittalId}:`, err);
-            await refetch();
-        }
-    };
 
     const handleNotesChange = useCallback(async (submittalId, newValue) => {
         try {
@@ -528,19 +513,19 @@ function DraftingWorkLoad() {
                             </div>
                         )}
 
-                        {error && !loading && (
+                        {fetchError && !loading && (
                             <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded-lg shadow-sm">
                                 <div className="flex items-start">
                                     <span className="text-xl mr-3">⚠️</span>
                                     <div>
                                         <p className="font-semibold">Unable to load Drafting Work Load data</p>
-                                        <p className="text-sm mt-1">{error}</p>
+                                        <p className="text-sm mt-1">{fetchError}</p>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {!loading && !error && (
+                        {!loading && !fetchError && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                                 <div className="">
                                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -604,7 +589,7 @@ function DraftingWorkLoad() {
                                                         columns={columnHeaders}
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
-                                                        onOrderNumberChange={handleOrderNumberChange}
+                                                        onOrderNumberChange={updateOrderNumber}
                                                         onNotesChange={handleNotesChange}
                                                         onStatusChange={handleStatusChange}
                                                         rowIndex={index}

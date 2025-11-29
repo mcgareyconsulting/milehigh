@@ -1,26 +1,51 @@
-import { useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
 export function useMutations(refetch) {
+    const [updating, setUpdating] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(false);
+
+    const executeMutation = useCallback(async (apiCall, errorMessage) => {
+        setUpdating(true);
+        setError(null);
+        setSuccess(false);
+
+        try {
+            await apiCall();
+            setSuccess(true);
+            if (refetch) await refetch(true);
+        } catch (err) {
+            console.error(errorMessage, err);
+            setError(err.message);
+            if (refetch) {
+                try {
+                    await refetch(true);
+                } catch (refetchErr) {
+                    console.error('Refetch failed:', refetchErr);
+                }
+            }
+        } finally {
+            setUpdating(false);
+        }
+    }, [refetch]);
+
     const updateOrderNumber = useCallback(async (submittalId, orderNumber) => {
-        // parse value as float
+
         const parsedValue = orderNumber === '' || orderNumber === null || orderNumber === undefined
             ? null
             : parseFloat(orderNumber);
 
-        // validate it's a number if not null
         if (parsedValue !== null && isNaN(parsedValue)) {
-            throw new Error('Invalid order number');
+            setError('Invalid order number');
+            return;
         }
 
-        try {
-            await draftingWorkLoadApi.updateOrderNumber(submittalId, parsedValue);
-            if (refetch) await refetch(true);
-        } catch (error) {
-            console.error(`Failed to update status for submittal ${submittalId}:`, error);
-            throw error;
-        }
-    }, [refetch]);
+        await executeMutation(
+            () => draftingWorkLoadApi.updateOrderNumber(submittalId, parsedValue),
+            `Failed to update order number for submittal ${submittalId}`
+        );
+    }, [executeMutation]);
 
-    return { updateOrderNumber };
+    return { updateOrderNumber, updating, error, success };
 }
