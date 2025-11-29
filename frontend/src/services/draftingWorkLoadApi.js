@@ -39,4 +39,5 @@ class DraftingWorkLoadApi {
     }
 }
 
+// Singleton instance
 export const draftingWorkLoadApi = new DraftingWorkLoadApi();

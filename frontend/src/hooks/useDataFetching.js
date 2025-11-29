@@ -39,8 +39,56 @@ export function useDataFetching() {
         }
     }, []);
 
+
+    // Fetch data on mount
     useEffect(() => {
         fetchData();
+    }, [fetchData]);
+
+    // Poll for updates every 30 seconds, pauses when tab is not visible to save resources
+    useEffect(() => {
+        let intervalId = null;
+        let visibilityChangeHandler = null;
+
+        const startPolling = () => {
+            // Clear any existing interval
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+
+            intervalId = setInterval(() => {
+                if (!document.hidden) {
+                    fetchData(true);
+                }
+            }, 30000);
+        }
+
+        const stopPolling = () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        };
+
+        visibilityChangeHandler = () => {
+            if (document.hidden) {
+                stopPolling();
+            } else {
+                startPolling();
+                fetchData(true); // Immediately fetch when tab becomes visible
+            }
+        };
+
+        // Start polling
+        startPolling();
+
+        document.addEventListener('visibilitychange', visibilityChangeHandler);
+
+        // Cleanup
+        return () => {
+            stopPolling();
+            document.removeEventListener('visibilitychange', visibilityChangeHandler);
+        };
     }, [fetchData]);
 
     return {
