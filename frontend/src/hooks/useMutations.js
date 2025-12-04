@@ -6,6 +6,11 @@ export function useMutations(refetch) {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
+    // Separate state for upload since it has different UI behavior
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState(null);
+    const [uploadSuccess, setUploadSuccess] = useState(false);
+
     const executeMutation = useCallback(async (apiCall, errorMessage) => {
         setUpdating(true);
         setError(null);
@@ -31,7 +36,6 @@ export function useMutations(refetch) {
     }, [refetch]);
 
     const updateOrderNumber = useCallback(async (submittalId, orderNumber) => {
-
         const parsedValue = orderNumber === '' || orderNumber === null || orderNumber === undefined
             ? null
             : parseFloat(orderNumber);
@@ -47,5 +51,61 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
-    return { updateOrderNumber, updating, error, success };
+    const updateNotes = useCallback(async (submittalId, notes) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.updateNotes(submittalId, notes),
+            `Failed to update notes for submittal ${submittalId}`
+        );
+    }, [executeMutation]);
+
+    const updateStatus = useCallback(async (submittalId, status) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.updateStatus(submittalId, status),
+            `Failed to update status for submittal ${submittalId}`
+        );
+    }, [executeMutation]);
+
+    const uploadFile = useCallback(async (file) => {
+        setUploading(true);
+        setUploadError(null);
+        setUploadSuccess(false);
+
+        try {
+            await draftingWorkLoadApi.uploadFile(file);
+            setUploadSuccess(true);
+            setUploadError(null);
+            if (refetch) await refetch(true);
+        } catch (err) {
+            console.error('Failed to upload file:', err);
+            setUploadError(err.message);
+            setUploadSuccess(false);
+        } finally {
+            setUploading(false);
+        }
+    }, [refetch]);
+
+    const clearUploadSuccess = useCallback(() => {
+        setUploadSuccess(false);
+    }, []);
+
+    return {
+        // Order number mutation
+        updateOrderNumber,
+        updating,
+        error,
+        success,
+
+        // Notes mutation
+        updateNotes,
+
+        // Status mutation
+        updateStatus,
+
+        // Upload mutation
+        uploadFile,
+        uploading,
+        uploadError,
+        uploadSuccess,
+        clearUploadSuccess,
+    };
 }

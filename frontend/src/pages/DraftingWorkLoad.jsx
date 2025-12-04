@@ -2,15 +2,22 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
-import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
 function DraftingWorkLoad() {
-    const [uploading, setUploading] = useState(false);
-    const [uploadError, setUploadError] = useState(null);
-    const [uploadSuccess, setUploadSuccess] = useState(false);
-
     const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
-    const { updateOrderNumber, updating, error: mutationError, success } = useMutations(refetch);
+    const {
+        updateOrderNumber,
+        updateNotes,
+        updateStatus,
+        uploadFile,
+        uploading,
+        uploadError,
+        uploadSuccess,
+        clearUploadSuccess,
+        updating,
+        error: mutationError,
+        success
+    } = useMutations(refetch);
 
     const rows = submittals; // now that submittals is clean, we alias
 
@@ -56,61 +63,27 @@ function DraftingWorkLoad() {
         return value;
     };
 
-
-
-
-    const handleNotesChange = useCallback(async (submittalId, newValue) => {
-        try {
-            await draftingWorkLoadApi.updateNotes(submittalId, newValue);
-            // Refresh data to get updated notes
-            await refetch(true);
-        } catch (err) {
-            console.error(`Failed to update notes for ${submittalId}:`, err);
-            // Refresh to get correct state
-            await refetch(true);
-        }
-    }, [refetch]);
-
-    const handleStatusChange = useCallback(async (submittalId, newValue) => {
-        try {
-            await draftingWorkLoadApi.updateStatus(submittalId, newValue);
-            // Refresh data to get updated status
-            await refetch(true);
-        } catch (err) {
-            console.error(`Failed to update status for ${submittalId}:`, err);
-            // Refresh to get correct state
-            await refetch(true);
-        }
-    }, [refetch]);
-
-
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) {
             return;
         }
 
-        setUploading(true);
-        setUploadError(null);
-        setUploadSuccess(false);
+        await uploadFile(file);
 
-        try {
-            await draftingWorkLoadApi.uploadFile(file);
-            setUploadSuccess(true);
-            setUploadError(null);
-            // Refresh data after successful upload
-            await refetch(true);
-            // Clear success message after 3 seconds
-            setTimeout(() => setUploadSuccess(false), 3000);
-        } catch (err) {
-            setUploadError(err.message);
-            setUploadSuccess(false);
-        } finally {
-            setUploading(false);
-            // Reset file input
-            event.target.value = '';
-        }
+        // Reset file input
+        event.target.value = '';
     };
+
+    // Clear upload success message after 3 seconds
+    useEffect(() => {
+        if (uploadSuccess) {
+            const timer = setTimeout(() => {
+                clearUploadSuccess();
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [uploadSuccess, clearUploadSuccess]);
 
 
     const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
@@ -381,8 +354,8 @@ function DraftingWorkLoad() {
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
                                                         onOrderNumberChange={updateOrderNumber}
-                                                        onNotesChange={handleNotesChange}
-                                                        onStatusChange={handleStatusChange}
+                                                        onNotesChange={updateNotes}
+                                                        onStatusChange={updateStatus}
                                                         rowIndex={index}
                                                     />
                                                 ))
