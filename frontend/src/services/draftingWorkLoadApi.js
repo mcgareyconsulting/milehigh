@@ -31,6 +31,69 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Update notes for a submittal
+     */
+    async updateNotes(submittalId, notes) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/notes`, {
+                submittal_id: submittalId,
+                notes: notes
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update notes for submittal ${submittalId}`);
+        }
+    }
+
+    /**
+     * Update submittal drafting status
+     */
+    async updateStatus(submittalId, status) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/submittal-drafting-status`, {
+                submittal_id: submittalId,
+                submittal_drafting_status: status
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update status for submittal ${submittalId}`);
+        }
+    }
+
+    /**
+     * Upload Excel file for drafting workload submittals
+     */
+    async uploadFile(file) {
+        // Validate file type
+        if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+            throw new Error('Please select an Excel file (.xlsx or .xls)');
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await axios.post(
+                `${API_BASE_URL}/procore/api/upload/drafting-workload-submittals`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+
+            if (!response.data.success) {
+                throw new Error(response.data.error || 'Upload failed');
+            }
+
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to upload file');
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

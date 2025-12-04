@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import axios from 'axios';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
 function DraftingWorkLoad() {
     const [uploading, setUploading] = useState(false);
@@ -63,11 +61,7 @@ function DraftingWorkLoad() {
 
     const handleNotesChange = useCallback(async (submittalId, newValue) => {
         try {
-            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/notes`, {
-                submittal_id: submittalId,
-                notes: newValue
-            });
-
+            await draftingWorkLoadApi.updateNotes(submittalId, newValue);
             // Refresh data to get updated notes
             await refetch(true);
         } catch (err) {
@@ -79,11 +73,7 @@ function DraftingWorkLoad() {
 
     const handleStatusChange = useCallback(async (submittalId, newValue) => {
         try {
-            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/submittal-drafting-status`, {
-                submittal_id: submittalId,
-                submittal_drafting_status: newValue
-            });
-
+            await draftingWorkLoadApi.updateStatus(submittalId, newValue);
             // Refresh data to get updated status
             await refetch(true);
         } catch (err) {
@@ -100,45 +90,20 @@ function DraftingWorkLoad() {
             return;
         }
 
-        // Validate file type
-        if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
-            setUploadError('Please select an Excel file (.xlsx or .xls)');
-            setUploadSuccess(false);
-            return;
-        }
-
         setUploading(true);
         setUploadError(null);
         setUploadSuccess(false);
 
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await axios.post(
-                `${API_BASE_URL}/procore/api/upload/drafting-workload-submittals`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
-                }
-            );
-
-            if (response.data.success) {
-                setUploadSuccess(true);
-                setUploadError(null);
-                // Refresh data after successful upload
-                await refetch(true);
-                // Clear success message after 3 seconds
-                setTimeout(() => setUploadSuccess(false), 3000);
-            } else {
-                setUploadError(response.data.error || 'Upload failed');
-                setUploadSuccess(false);
-            }
+            await draftingWorkLoadApi.uploadFile(file);
+            setUploadSuccess(true);
+            setUploadError(null);
+            // Refresh data after successful upload
+            await refetch(true);
+            // Clear success message after 3 seconds
+            setTimeout(() => setUploadSuccess(false), 3000);
         } catch (err) {
-            const message = err.response?.data?.error || err.response?.data?.details || err.message || 'Failed to upload file.';
-            setUploadError(message);
+            setUploadError(err.message);
             setUploadSuccess(false);
         } finally {
             setUploading(false);
