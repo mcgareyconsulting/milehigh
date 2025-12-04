@@ -1320,6 +1320,66 @@ def update_trello_card_description(card_id, new_description):
         raise
 
 
+def update_trello_card_name(card_id, new_name):
+    """
+    Update a Trello card's name via API.
+    
+    Args:
+        card_id (str): Trello card ID
+        new_name (str): New card name
+        
+    Returns:
+        dict: Response from Trello API, or None if update fails
+    """
+    url = f"https://api.trello.com/1/cards/{card_id}"
+    
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "name": new_name
+    }
+    
+    try:
+        print(f"[TRELLO API] Updating name for card {card_id}")
+        response = requests.put(url, params=params)
+        response.raise_for_status()
+        
+        print(f"[TRELLO API] Card {card_id} name updated successfully")
+        return response.json()
+        
+    except requests.exceptions.HTTPError as http_err:
+        print(f"[TRELLO API] HTTP error updating card {card_id} name: {http_err}")
+        if hasattr(http_err.response, 'text'):
+            print("[TRELLO API] Response content:", http_err.response.text)
+        raise
+    except Exception as err:
+        print(f"[TRELLO API] Other error updating card {card_id} name: {err}")
+        raise
+
+
+def get_expected_card_name(job_number, release_number, job_name, description):
+    """
+    Generate the expected Trello card name based on database values.
+    Format: {job_number}-{release_number} {job_name} {description}
+    
+    Args:
+        job_number: Job number (int or str)
+        release_number: Release number (str)
+        job_name: Job name (str)
+        description: Description (str)
+        
+    Returns:
+        str: Expected card name
+    """
+    # Handle None/empty values
+    job_name = job_name or "Unknown Job"
+    description = description or "Unknown Description"
+    
+    # Format: {job}-{release} {job_name} {description}
+    expected_name = f"{job_number}-{release_number} {job_name} {description}"
+    return expected_name
+
+
 def calculate_business_days_after(start_date, days):
     """
     Calculate a date that is a certain number of business days after the start date.

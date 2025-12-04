@@ -1224,6 +1224,122 @@ def create_app():
                 "error": str(e)
             }), 500
 
+    @app.route("/health-scan", methods=["GET"])
+    def health_scan_route():
+        """
+        Perform a comprehensive health scan to identify jobs missing from the database.
+        
+        Scans:
+        - OneDrive (Excel) for all jobs with valid identifiers
+        - Trello lists (Released through Shipping completed) for all cards
+        - Compares both against the database (source of truth)
+        
+        Returns a detailed report of missing jobs categorized by:
+        - Jobs in both Excel & Trello but not in DB (most critical)
+        - Jobs in Excel only (not in Trello, not in DB)
+        - Jobs in Trello only (not in Excel, not in DB)
+        """
+        try:
+            from app.scripts.health_scan import health_scan
+            
+            logger.info("Starting health scan")
+            result = health_scan(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Health scan failed",
+                    "error": result["error"],
+                    "error_type": result.get("error_type")
+                }), 500
+            
+            return jsonify({
+                "message": "Health scan completed",
+                "scan": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error running health scan", error=str(e))
+            return jsonify({
+                "message": "Health scan failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/health-scan/card-names/scan", methods=["GET"])
+    def scan_card_names_route():
+        """
+        Scan Trello cards for inaccurate names (preview only, no updates).
+        
+        The expected card name format is: {job_number}-{release_number} {job_name} {description}
+        Some older cards may be missing the description part.
+        
+        Query params:
+            limit: Optional maximum number of cards to process (int)
+        """
+        try:
+            from app.scripts.health_scan import scan_trello_card_names
+            
+            limit = request.args.get("limit", type=int)
+            
+            logger.info("Scanning Trello card names", limit=limit)
+            result = scan_trello_card_names(return_json=True, fix_names=False, limit=limit)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Card name scan failed",
+                    "error": result["error"],
+                    "error_type": result.get("error_type")
+                }), 500
+            
+            return jsonify({
+                "message": "Card name scan completed",
+                "scan": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error scanning card names", error=str(e))
+            return jsonify({
+                "message": "Card name scan failed",
+                "error": str(e)
+            }), 500
+
+    @app.route("/health-scan/card-names/update", methods=["POST"])
+    def update_card_names_route():
+        """
+        Scan and update Trello cards with inaccurate names.
+        
+        The expected card name format is: {job_number}-{release_number} {job_name} {description}
+        This will actually update the card names in Trello.
+        
+        Query params:
+            limit: Optional maximum number of cards to process (int)
+        """
+        try:
+            from app.scripts.health_scan import scan_trello_card_names
+            
+            limit = request.args.get("limit", type=int)
+            
+            logger.info("Updating Trello card names", limit=limit)
+            result = scan_trello_card_names(return_json=True, fix_names=True, limit=limit)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Card name update failed",
+                    "error": result["error"],
+                    "error_type": result.get("error_type")
+                }), 500
+            
+            return jsonify({
+                "message": "Card name update completed",
+                "update": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error updating card names", error=str(e))
+            return jsonify({
+                "message": "Card name update failed",
+                "error": str(e)
+            }), 500
+
     @app.route("/seed/run-one", methods=["GET", "POST"])
     def run_one_seed():
         """
