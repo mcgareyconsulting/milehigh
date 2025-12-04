@@ -16,7 +16,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         }
         const typeMap = {
             'Submittal For Gc  Approval': 'Sub GC',
-            'Drafting Release Review': 'DRR'
+            'Drafting Release Review': 'DRR',
+            'For Construction': 'FC'
         };
         return typeMap[value] || value;
     };
