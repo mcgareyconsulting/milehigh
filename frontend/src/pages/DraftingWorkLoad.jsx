@@ -1,275 +1,44 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const ALL_OPTION_VALUE = '__ALL__';
+import { useDataFetching } from '../hooks/useDataFetching';
+import { useMutations } from '../hooks/useMutations';
+import { useFilters } from '../hooks/useFilters';
+import { TableRow } from '../components/TableRow';
 
 function DraftingWorkLoad() {
-    const [rows, setRows] = useState([]);
-    const [columns, setColumns] = useState([]);
-    const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
-    const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
-    const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
-    const [projectNameSortMode, setProjectNameSortMode] = useState('normal'); // 'normal', 'a-z', 'z-a'
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [lastUpdated, setLastUpdated] = useState(null);
-    const [uploading, setUploading] = useState(false);
-    const [uploadError, setUploadError] = useState(null);
-    const [uploadSuccess, setUploadSuccess] = useState(false);
+    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
+    const {
+        updateOrderNumber,
+        updateNotes,
+        updateStatus,
+        uploadFile,
+        uploading,
+        uploadError,
+        uploadSuccess,
+        clearUploadSuccess,
+        updating,
+        error: mutationError,
+        success
+    } = useMutations(refetch);
 
-    const fetchData = useCallback(async (silent = false) => {
-        if (!silent) {
-            setLoading(true);
-        }
-        setError(null);
+    const rows = submittals; // now that submittals is clean, we alias
 
-        try {
-            const response = await axios.get(`${API_BASE_URL}/procore/api/drafting-work-load`);
-            const data = response.data || {};
-
-            const submittals = data.submittals || [];
-
-            const cleanedRows = submittals.map((submittal, index) => {
-                const rawId = submittal.submittal_id ?? submittal.id ?? `row-${index}`;
-
-                // Map database field names to frontend expected names
-                return {
-                    ...submittal,
-                    'Submittals Id': submittal.submittal_id,
-                    'Project Id': submittal.procore_project_id,
-                    'Submittal Manager': submittal.submittal_manager,
-                    'Project Name': submittal.project_name,
-                    'Project Number': submittal.project_number,
-                    'Title': submittal.title,
-                    'Status': submittal.submittal_drafting_status ?? submittal.status,
-                    'Submittal Drafting Status': submittal.submittal_drafting_status,
-                    'Type': submittal.type,
-                    'Ball In Court': submittal.ball_in_court,
-                    'Order Number': submittal.order_number,
-                    'Notes': submittal.notes,
-                    id: String(rawId)
-                };
-            });
-
-            // Sort by order_number (nulls last), then by submittal_id
-            cleanedRows.sort((a, b) => {
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                if (orderA !== orderB) {
-                    return orderA - orderB;
-                }
-                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-            });
-
-            // Define the desired column order (Project Id is tracked but hidden from display)
-            const desiredColumnOrder = [
-                'Order Number',
-                'Submittals Id',
-                'Project Number',
-                'Project Name',
-                'Title',
-                'Ball In Court',
-                'Type',
-                'Status',
-                'Submittal Manager',
-                'Notes'
-            ];
-
-            // Get all available columns from the data
-            const allColumns = data.columns && data.columns.length > 0
-                ? data.columns
-                : (cleanedRows[0] ? Object.keys(cleanedRows[0]) : []);
-
-            // Filter and order columns according to desired order
-            const visibleColumns = desiredColumnOrder.filter(column =>
-                allColumns.includes(column) || cleanedRows.some(row => row[column] !== undefined)
-            );
-
-            setRows(cleanedRows);
-            setColumns(visibleColumns);
-
-            const mostRecentUpdate = cleanedRows.length > 0
-                ? cleanedRows.reduce((latest, row) => {
-                    const rowDate = row.last_updated ? new Date(row.last_updated) : null;
-                    return rowDate && (!latest || rowDate > latest) ? rowDate : latest;
-                }, null)
-                : null;
-            setLastUpdated(mostRecentUpdate ? mostRecentUpdate.toISOString() : null);
-        } catch (err) {
-            const message = err.response?.data?.error || err.message || 'Failed to load Drafting Work Load data.';
-            setError(message);
-        } finally {
-            if (!silent) {
-                setLoading(false);
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    // Poll for updates every 30 seconds
-    // Pauses when tab is not visible to save resources
-    useEffect(() => {
-        let intervalId = null;
-        let visibilityChangeHandler = null;
-
-        const startPolling = () => {
-            // Clear any existing interval
-            if (intervalId) {
-                clearInterval(intervalId);
-            }
-
-            // Poll every 30 seconds
-            intervalId = setInterval(() => {
-                // Only poll if tab is visible
-                if (!document.hidden) {
-                    fetchData(true); // Silent refresh (no loading spinner)
-                }
-            }, 30000); // 30 seconds
-        };
-
-        const stopPolling = () => {
-            if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-            }
-        };
-
-        // Handle visibility changes - pause polling when tab is hidden
-        visibilityChangeHandler = () => {
-            if (document.hidden) {
-                stopPolling();
-            } else {
-                startPolling();
-                // Immediately fetch when tab becomes visible
-                fetchData(true);
-            }
-        };
-
-        // Start polling initially
-        startPolling();
-
-        // Listen for visibility changes
-        document.addEventListener('visibilitychange', visibilityChangeHandler);
-
-        // Cleanup on unmount
-        return () => {
-            stopPolling();
-            if (visibilityChangeHandler) {
-                document.removeEventListener('visibilitychange', visibilityChangeHandler);
-            }
-        };
-    }, [fetchData]);
-
-    const matchesSelectedFilter = useCallback((row) => {
-        // Check Ball In Court filter
-        if (selectedBallInCourt !== ALL_OPTION_VALUE) {
-            const ballInCourtValue = row.ball_in_court;
-            if ((ballInCourtValue ?? '').toString().trim() !== selectedBallInCourt) {
-                return false;
-            }
-        }
-
-        // Check Submittal Manager filter
-        if (selectedSubmittalManager !== ALL_OPTION_VALUE) {
-            const managerValue = row.submittal_manager ?? row['Submittal Manager'];
-            if ((managerValue ?? '').toString().trim() !== selectedSubmittalManager) {
-                return false;
-            }
-        }
-
-        // Check Project Name filter
-        if (selectedProjectName !== ALL_OPTION_VALUE) {
-            const projectNameValue = row.project_name ?? row['Project Name'];
-            if ((projectNameValue ?? '').toString().trim() !== selectedProjectName) {
-                return false;
-            }
-        }
-
-        return true;
-    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName]);
-
-    const displayRows = useMemo(() => {
-        const filtered = rows.filter(matchesSelectedFilter);
-
-        // Sort based on Project Name sort mode
-        if (projectNameSortMode === 'a-z') {
-            return filtered.sort((a, b) => {
-                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
-                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
-                if (projectA !== projectB) {
-                    return projectA.localeCompare(projectB);
-                }
-                // Secondary sort by order_number
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                return orderA - orderB;
-            });
-        } else if (projectNameSortMode === 'z-a') {
-            return filtered.sort((a, b) => {
-                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
-                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
-                if (projectA !== projectB) {
-                    return projectB.localeCompare(projectA);
-                }
-                // Secondary sort by order_number
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                return orderA - orderB;
-            });
-        } else {
-            // Normal sort: by Ball In Court, then by order_number (as float)
-            return filtered.sort((a, b) => {
-                const ballA = (a.ball_in_court ?? '').toString();
-                const ballB = (b.ball_in_court ?? '').toString();
-
-                if (ballA !== ballB) {
-                    return ballA.localeCompare(ballB);
-                }
-
-                // Sort by order_number as float (nulls last)
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                return orderA - orderB;
-            });
-        }
-    }, [rows, matchesSelectedFilter, projectNameSortMode]);
-
-    const ballInCourtOptions = useMemo(() => {
-        const values = new Set();
-        rows.forEach((row) => {
-            const value = row.ball_in_court;
-            if (value !== null && value !== undefined && String(value).trim() !== '') {
-                values.add(String(value).trim());
-            }
-        });
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
-    }, [rows]);
-
-    const submittalManagerOptions = useMemo(() => {
-        const values = new Set();
-        rows.forEach((row) => {
-            const value = row.submittal_manager ?? row['Submittal Manager'];
-            if (value !== null && value !== undefined && String(value).trim() !== '') {
-                values.add(String(value).trim());
-            }
-        });
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
-    }, [rows]);
-
-    const projectNameOptions = useMemo(() => {
-        const values = new Set();
-        rows.forEach((row) => {
-            const value = row.project_name ?? row['Project Name'];
-            if (value !== null && value !== undefined && String(value).trim() !== '') {
-                values.add(String(value).trim());
-            }
-        });
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
-    }, [rows]);
+    // Use the filters hook
+    const {
+        selectedBallInCourt,
+        selectedSubmittalManager,
+        selectedProjectName,
+        projectNameSortMode,
+        setSelectedBallInCourt,
+        setSelectedSubmittalManager,
+        setSelectedProjectName,
+        ballInCourtOptions,
+        submittalManagerOptions,
+        projectNameOptions,
+        displayRows,
+        resetFilters,
+        handleProjectNameSortToggle,
+        ALL_OPTION_VALUE,
+    } = useFilters(rows);
 
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
@@ -295,134 +64,27 @@ function DraftingWorkLoad() {
         return value;
     };
 
-    const resetFilters = () => {
-        setSelectedBallInCourt(ALL_OPTION_VALUE);
-        setSelectedSubmittalManager(ALL_OPTION_VALUE);
-        setSelectedProjectName(ALL_OPTION_VALUE);
-        setProjectNameSortMode('normal');
-    };
-
-    const handleProjectNameSortToggle = () => {
-        if (projectNameSortMode === 'normal') {
-            setProjectNameSortMode('a-z');
-        } else if (projectNameSortMode === 'a-z') {
-            setProjectNameSortMode('z-a');
-        } else {
-            setProjectNameSortMode('normal');
-        }
-    };
-
-    const handleOrderNumberChange = useCallback(async (submittalId, newValue) => {
-        // Parse the value as float
-        const parsedValue = newValue === '' || newValue === null || newValue === undefined
-            ? null
-            : parseFloat(newValue);
-
-        // Validate it's a number if not null
-        if (parsedValue !== null && isNaN(parsedValue)) {
-            return; // Invalid input, don't update
-        }
-
-        try {
-            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/order`, {
-                submittal_id: submittalId,
-                order_number: parsedValue
-            });
-
-            // Refresh data to get updated order
-            await fetchData(true);
-        } catch (err) {
-            console.error(`Failed to update order for ${submittalId}:`, err);
-            // Refresh to get correct state
-            await fetchData(true);
-        }
-    }, [fetchData]);
-
-    const handleNotesChange = useCallback(async (submittalId, newValue) => {
-        try {
-            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/notes`, {
-                submittal_id: submittalId,
-                notes: newValue
-            });
-
-            // Refresh data to get updated notes
-            await fetchData(true);
-        } catch (err) {
-            console.error(`Failed to update notes for ${submittalId}:`, err);
-            // Refresh to get correct state
-            await fetchData(true);
-        }
-    }, [fetchData]);
-
-    const handleStatusChange = useCallback(async (submittalId, newValue) => {
-        try {
-            await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/submittal-drafting-status`, {
-                submittal_id: submittalId,
-                submittal_drafting_status: newValue
-            });
-
-            // Refresh data to get updated status
-            await fetchData(true);
-        } catch (err) {
-            console.error(`Failed to update status for ${submittalId}:`, err);
-            // Refresh to get correct state
-            await fetchData(true);
-        }
-    }, [fetchData]);
-
-
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) {
             return;
         }
 
-        // Validate file type
-        if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
-            setUploadError('Please select an Excel file (.xlsx or .xls)');
-            setUploadSuccess(false);
-            return;
-        }
+        await uploadFile(file);
 
-        setUploading(true);
-        setUploadError(null);
-        setUploadSuccess(false);
-
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await axios.post(
-                `${API_BASE_URL}/procore/api/upload/drafting-workload-submittals`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
-                }
-            );
-
-            if (response.data.success) {
-                setUploadSuccess(true);
-                setUploadError(null);
-                // Refresh data after successful upload
-                await fetchData();
-                // Clear success message after 3 seconds
-                setTimeout(() => setUploadSuccess(false), 3000);
-            } else {
-                setUploadError(response.data.error || 'Upload failed');
-                setUploadSuccess(false);
-            }
-        } catch (err) {
-            const message = err.response?.data?.error || err.response?.data?.details || err.message || 'Failed to upload file.';
-            setUploadError(message);
-            setUploadSuccess(false);
-        } finally {
-            setUploading(false);
-            // Reset file input
-            event.target.value = '';
-        }
+        // Reset file input
+        event.target.value = '';
     };
+
+    // Clear upload success message after 3 seconds
+    useEffect(() => {
+        if (uploadSuccess) {
+            const timer = setTimeout(() => {
+                clearUploadSuccess();
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [uploadSuccess, clearUploadSuccess]);
 
 
     const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
@@ -616,19 +278,19 @@ function DraftingWorkLoad() {
                             </div>
                         )}
 
-                        {error && !loading && (
+                        {fetchError && !loading && (
                             <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded-lg shadow-sm">
                                 <div className="flex items-start">
                                     <span className="text-xl mr-3">⚠️</span>
                                     <div>
                                         <p className="font-semibold">Unable to load Drafting Work Load data</p>
-                                        <p className="text-sm mt-1">{error}</p>
+                                        <p className="text-sm mt-1">{fetchError}</p>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {!loading && !error && (
+                        {!loading && !fetchError && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                                 <div className="">
                                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -692,9 +354,9 @@ function DraftingWorkLoad() {
                                                         columns={columnHeaders}
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
-                                                        onOrderNumberChange={handleOrderNumberChange}
-                                                        onNotesChange={handleNotesChange}
-                                                        onStatusChange={handleStatusChange}
+                                                        onOrderNumberChange={updateOrderNumber}
+                                                        onNotesChange={updateNotes}
+                                                        onStatusChange={updateStatus}
                                                         rowIndex={index}
                                                     />
                                                 ))
@@ -712,285 +374,4 @@ function DraftingWorkLoad() {
 }
 
 export default DraftingWorkLoad;
-
-function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex }) {
-    const [editingOrderNumber, setEditingOrderNumber] = useState(false);
-    const [orderNumberValue, setOrderNumberValue] = useState('');
-    const [editingNotes, setEditingNotes] = useState(false);
-    const [notesValue, setNotesValue] = useState('');
-    const inputRef = useRef(null);
-    const notesInputRef = useRef(null);
-
-    const submittalId = row['Submittals Id'] || row.submittal_id;
-
-    const formatTypeValue = (value) => {
-        if (value === null || value === undefined || value === '') {
-            return value;
-        }
-        const typeMap = {
-            'Submittal For Gc  Approval': 'Sub GC',
-            'Drafting Release Review': 'DRR'
-        };
-        return typeMap[value] || value;
-    };
-
-    const handleOrderNumberFocus = () => {
-        const currentValue = row['Order Number'] ?? row.order_number ?? '';
-        setOrderNumberValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
-        setEditingOrderNumber(true);
-    };
-
-    const handleOrderNumberBlur = () => {
-        setEditingOrderNumber(false);
-        if (submittalId && onOrderNumberChange) {
-            onOrderNumberChange(submittalId, orderNumberValue);
-        }
-    };
-
-    const handleOrderNumberKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.target.blur();
-        } else if (e.key === 'Escape') {
-            const currentValue = row['Order Number'] ?? row.order_number ?? '';
-            setOrderNumberValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
-            setEditingOrderNumber(false);
-        }
-    };
-
-    const handleNotesFocus = () => {
-        const currentValue = row['Notes'] ?? row.notes ?? '';
-        setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
-        setEditingNotes(true);
-    };
-
-    const handleNotesBlur = () => {
-        setEditingNotes(false);
-        if (submittalId && onNotesChange) {
-            onNotesChange(submittalId, notesValue);
-        }
-    };
-
-    const handleNotesKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            e.target.blur();
-        } else if (e.key === 'Escape') {
-            const currentValue = row['Notes'] ?? row.notes ?? '';
-            setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
-            setEditingNotes(false);
-        }
-    };
-
-    useEffect(() => {
-        if (editingOrderNumber && inputRef.current) {
-            inputRef.current.focus();
-            inputRef.current.select();
-        }
-    }, [editingOrderNumber]);
-
-    useEffect(() => {
-        if (editingNotes && notesInputRef.current) {
-            notesInputRef.current.focus();
-            notesInputRef.current.select();
-        }
-    }, [editingNotes]);
-
-    const rowType = row.type ?? row['Type'] ?? '';
-    const isDraftingReleaseReview = rowType === 'Drafting Release Review';
-
-    // Alternate row background colors
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-
-    return (
-        <tr
-            className={`${rowBgClass} hover:bg-gray-100 transition-colors duration-150 border-b border-gray-300`}
-        >
-            {columns.map((column) => {
-                const isOrderNumber = column === 'Order Number';
-                const isSubmittalId = column === 'Submittals Id';
-                const isType = column === 'Type';
-                const isNotes = column === 'Notes';
-                const isStatus = column === 'Status';
-
-                // Defi// Custom width for Submittals Id and Project Number
-                let customWidthClass = '';
-                if (isSubmittalId) {
-                    customWidthClass = 'w-24'; // Accommodate 8-10 digit ID
-                } else if (column === 'Project Number') {
-                    customWidthClass = 'w-20'; // Accommodate 3-4 digit number
-                } else if (column === 'Title') {
-                    customWidthClass = 'w-48'; // Give Title a fixed width to help with wrapping
-                } else if (column === 'Submittal Manager') {
-                    customWidthClass = 'w-32'; // Reduce Submittal Manager width
-                }
-
-                // Apply Type truncation mapping before formatting
-                let rawValue = row[column];
-                if (isType) {
-                    rawValue = formatTypeValue(rawValue);
-                }
-                let cellValue = formatCellValue(rawValue);
-
-                if (isOrderNumber && editingOrderNumber) {
-                    return (
-                        <td
-                            key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
-                        >
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                value={orderNumberValue}
-                                onChange={(e) => setOrderNumberValue(e.target.value)}
-                                onBlur={handleOrderNumberBlur}
-                                onKeyDown={handleOrderNumberKeyDown}
-                                className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
-                                style={{ minWidth: '30px', maxWidth: '50px' }}
-                            />
-                        </td>
-                    );
-                }
-
-                if (isOrderNumber) {
-                    return (
-                        <td
-                            key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
-                            onClick={handleOrderNumberFocus}
-                            title="Click to edit order number"
-                        >
-                            <div className="px-0.5 py-0 text-xs border border-gray-300 rounded-sm bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text transition-colors font-medium text-gray-700 min-w-[20px] max-w-[50px] inline-block">
-                                {cellValue}
-                            </div>
-                        </td>
-                    );
-                }
-
-                if (isNotes && editingNotes) {
-                    return (
-                        <td
-                            key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '160px' }}
-                        >
-                            <textarea
-                                ref={notesInputRef}
-                                value={notesValue}
-                                onChange={(e) => setNotesValue(e.target.value)}
-                                onBlur={handleNotesBlur}
-                                onKeyDown={handleNotesKeyDown}
-                                className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all text-center"
-                                rows={1}
-                                placeholder="Add notes..."
-                                style={{ lineHeight: '1.5' }}
-                            />
-                        </td>
-                    );
-                }
-
-                if (isNotes) {
-                    const hasNotes = cellValue && cellValue !== '—';
-                    return (
-                        <td
-                            key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '160px' }}
-                            onClick={handleNotesFocus}
-                            title="Click to edit notes"
-                        >
-                            <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all cursor-text min-h-[10px] text-center ${hasNotes
-                                ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800'
-                                : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
-                                }`}>
-                                {hasNotes ? (
-                                    <div className="whitespace-normal break-words leading-tight">
-                                        {cellValue}
-                                    </div>
-                                ) : (
-                                    <span className="italic">Click to add notes...</span>
-                                )}
-                            </div>
-                        </td>
-                    );
-                }
-
-                if (isSubmittalId && cellValue !== '—') {
-                    const projectId = row['Project Id'] ?? row.procore_project_id ?? '';
-                    const submittalId = row['Submittals Id'] ?? row.submittal_id ?? '';
-                    const href = projectId && submittalId
-                        ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
-                        : '#';
-
-                    return (
-                        <td
-                            key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
-                            title={cellValue}
-                        >
-                            {href !== '#' ? (
-                                <a
-                                    href={href}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-800 underline font-semibold inline-flex items-center gap-1 text-xs"
-                                >
-                                    <span>{cellValue}</span>
-                                </a>
-                            ) : (
-                                <span className="text-gray-900 text-xs">{cellValue}</span>
-                            )}
-                        </td>
-                    );
-                }
-
-                if (isStatus) {
-                    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? 'STARTED';
-                    const statusOptions = ['STARTED', 'NEED VIF', 'HOLD'];
-
-                    return (
-                        <td
-                            key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                        >
-                            <select
-                                value={currentStatus}
-                                onChange={(e) => {
-                                    if (submittalId && onStatusChange) {
-                                        onStatusChange(submittalId, e.target.value);
-                                    }
-                                }}
-                                className="w-full px-1 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
-                            >
-                                {statusOptions.map((option) => (
-                                    <option key={option} value={option}>
-                                        {option}
-                                    </option>
-                                ))}
-                            </select>
-                        </td>
-                    );
-                }
-
-                // Apply light green background for Type cell when type is "Drafting Release Review"
-                const cellBgClass = isType && isDraftingReleaseReview
-                    ? 'bg-green-100'
-                    : rowBgClass;
-
-                // Determine if this column should allow text wrapping
-                const shouldWrap = column === 'Title' || column === 'Notes';
-                const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
-
-                return (
-                    <td
-                        key={`${row.id}-${column}`}
-                        className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
-                        title={cellValue}
-                    >
-                        {cellValue}
-                    </td>
-                );
-            })}
-        </tr>
-    );
-}
 

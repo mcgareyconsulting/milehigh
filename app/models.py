@@ -52,7 +52,7 @@ class ProcoreSubmittal(db.Model):
     title = db.Column(db.Text)
     status = db.Column(db.String(100))
     type = db.Column(db.String(100))
-    ball_in_court = db.Column(db.String(100))
+    ball_in_court = db.Column(db.String(255))  # Increased to handle multiple assignees (comma-separated)
     submittal_manager = db.Column(db.String(255))
     order_number = db.Column(db.Float)
     notes = db.Column(db.Text)

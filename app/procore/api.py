@@ -139,6 +139,10 @@ class ProcoreAPI:
             # Re-raise other HTTP errors
             raise
 
+    def get_webhook_deliveries(self, company_id: int, project_id: int, hook_id: int) -> List[Dict]:
+        """Alias for get_deliveries() for backward compatibility."""
+        return self.get_deliveries(company_id, project_id, hook_id)
+
     def delete_webhook(self, project_id: int, hook_id: int) -> Dict:
         """Delete a specific webhook."""
         return self._delete(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/webhooks/hooks/{hook_id}")
