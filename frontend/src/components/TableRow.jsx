@@ -303,12 +303,13 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     );
                 }
 
-                // Handle Ball In Court: wrap only when there are multiple assignees (comma-separated)
+                // Handle Ball In Court: wrap if value is longer than 'Rourke Alvarado' (15 chars)
                 if (isBallInCourt) {
-                    // Check the raw value before formatting to detect commas
+                    // Check the raw value length before formatting
                     const ballInCourtRawValue = rawValue ?? '';
-                    const hasMultipleAssignees = String(ballInCourtRawValue).includes(',');
-                    const whitespaceClass = hasMultipleAssignees ? 'whitespace-normal' : 'whitespace-nowrap';
+                    const ballInCourtString = String(ballInCourtRawValue);
+                    const shouldWrap = ballInCourtString.length > 15; // 'Rourke Alvarado' is 15 chars
+                    const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                     return (
                         <td
