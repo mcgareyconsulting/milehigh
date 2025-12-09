@@ -325,10 +325,12 @@ function DraftingWorkLoad() {
                                                         );
                                                     }
 
+                                                    const isStatus = column === 'Status';
+
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-1 py-0.5 w-16' : 'px-2 py-0.5'} ${isNotes ? 'w-40' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
+                                                            className={`${isOrderNumber ? 'px-1 py-0.5 w-16' : 'px-2 py-0.5'} ${isNotes ? 'w-56' : ''} ${isStatus ? 'w-24' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
                                                         >
                                                             {column}
                                                         </th>

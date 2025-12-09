@@ -178,7 +178,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '160px' }}
+                            style={{ width: '220px' }}
                         >
                             <textarea
                                 ref={notesInputRef}
@@ -201,7 +201,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '160px' }}
+                            style={{ width: '220px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
                         >
@@ -257,7 +257,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            className={`px-1 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            style={{ width: '90px' }}
                         >
                             <select
                                 value={currentStatus || ''}
@@ -267,7 +268,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         onStatusChange(submittalId, e.target.value);
                                     }
                                 }}
-                                className="w-full px-1 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
+                                className="w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
                             >
                                 <option value="">—</option>
                                 {statusOptions.map((option) => (
