@@ -305,16 +305,17 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                 // Handle Ball In Court: wrap if value is longer than 'Rourke Alvarado' (15 chars)
                 if (isBallInCourt) {
-                    // Check the raw value length before formatting
-                    const ballInCourtRawValue = rawValue ?? '';
-                    const ballInCourtString = String(ballInCourtRawValue);
+                    // Get the value directly from row to ensure we have it
+                    const ballInCourtValue = row.ball_in_court ?? row['Ball In Court'] ?? rawValue ?? '';
+                    const ballInCourtString = String(ballInCourtValue);
                     const shouldWrap = ballInCourtString.length > 15; // 'Rourke Alvarado' is 15 chars
-                    const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
+                    const whitespaceClass = shouldWrap ? 'whitespace-normal break-words' : 'whitespace-nowrap';
 
                     return (
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            style={shouldWrap ? { maxWidth: '120px' } : {}}
                             title={cellValue}
                         >
                             {cellValue}
