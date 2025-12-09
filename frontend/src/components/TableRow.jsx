@@ -305,8 +305,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                 // Handle Ball In Court: wrap only when there are multiple assignees (comma-separated)
                 if (isBallInCourt) {
-                    const ballInCourtValue = row.ball_in_court ?? row['Ball In Court'] ?? '';
-                    const hasMultipleAssignees = String(ballInCourtValue).includes(',');
+                    // Check the raw value before formatting to detect commas
+                    const ballInCourtRawValue = rawValue ?? '';
+                    const hasMultipleAssignees = String(ballInCourtRawValue).includes(',');
                     const whitespaceClass = hasMultipleAssignees ? 'whitespace-normal' : 'whitespace-nowrap';
 
                     return (
