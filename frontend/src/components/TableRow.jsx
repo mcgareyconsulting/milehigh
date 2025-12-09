@@ -108,6 +108,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 const isType = column === 'Type';
                 const isNotes = column === 'Notes';
                 const isStatus = column === 'Status';
+                const isProjectName = column === 'Project Name';
 
                 // Custom width for Submittals Id and Project Number
                 let customWidthClass = '';
@@ -283,8 +284,26 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     ? 'bg-green-100'
                     : rowBgClass;
 
+                // Handle Project Name truncation to 20 characters
+                if (isProjectName) {
+                    const fullProjectName = cellValue;
+                    const truncatedProjectName = fullProjectName && fullProjectName.length > 20
+                        ? fullProjectName.substring(0, 20) + '...'
+                        : fullProjectName;
+
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className={`px-2 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            title={fullProjectName}
+                        >
+                            {truncatedProjectName}
+                        </td>
+                    );
+                }
+
                 // Determine if this column should allow text wrapping
-                const shouldWrap = column === 'Title' || column === 'Notes' || column === 'Project Name' || column === 'Ball In Court';
+                const shouldWrap = column === 'Title' || column === 'Notes' || column === 'Ball In Court';
                 const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                 return (
