@@ -96,7 +96,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
 
     // Alternate row background colors
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100';
+    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
 
     return (
         <tr
@@ -109,6 +109,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 const isNotes = column === 'Notes';
                 const isStatus = column === 'Status';
                 const isProjectName = column === 'Project Name';
+                const isBallInCourt = column === 'Ball In Court';
 
                 // Custom width for Submittals Id and Project Number
                 let customWidthClass = '';
@@ -302,8 +303,25 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     );
                 }
 
+                // Handle Ball In Court: wrap only when there are multiple assignees (comma-separated)
+                if (isBallInCourt) {
+                    const ballInCourtValue = row.ball_in_court ?? row['Ball In Court'] ?? '';
+                    const hasMultipleAssignees = String(ballInCourtValue).includes(',');
+                    const whitespaceClass = hasMultipleAssignees ? 'whitespace-normal' : 'whitespace-nowrap';
+
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            title={cellValue}
+                        >
+                            {cellValue}
+                        </td>
+                    );
+                }
+
                 // Determine if this column should allow text wrapping
-                const shouldWrap = column === 'Title' || column === 'Notes' || column === 'Ball In Court';
+                const shouldWrap = column === 'Title' || column === 'Notes';
                 const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                 return (
