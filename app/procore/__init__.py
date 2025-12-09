@@ -811,16 +811,15 @@ def update_submittal_drafting_status():
                 "error": "submittal_id is required"
             }), 400
         
+        # Allow None or empty string for blank status
         if submittal_drafting_status is None:
-            return jsonify({
-                "error": "submittal_drafting_status is required"
-            }), 400
+            submittal_drafting_status = ''
         
-        # Validate status value
-        valid_statuses = ['STARTED', 'NEED VIF', 'HOLD']
+        # Validate status value (empty string is allowed for blank/placeholder)
+        valid_statuses = ['', 'STARTED', 'NEED VIF', 'HOLD']
         if submittal_drafting_status not in valid_statuses:
             return jsonify({
-                "error": f"submittal_drafting_status must be one of: {', '.join(valid_statuses)}"
+                "error": f"submittal_drafting_status must be one of: (blank), {', '.join([s for s in valid_statuses if s])}"
             }), 400
         
         # Ensure submittal_id is a string for proper database comparison

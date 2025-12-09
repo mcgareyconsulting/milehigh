@@ -96,7 +96,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
 
     // Alternate row background colors
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100';
 
     return (
         <tr
@@ -249,7 +249,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 }
 
                 if (isStatus) {
-                    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? 'STARTED';
+                    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? '';
                     const statusOptions = ['STARTED', 'NEED VIF', 'HOLD'];
 
                     return (
@@ -258,14 +258,16 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
                         >
                             <select
-                                value={currentStatus}
+                                value={currentStatus || ''}
                                 onChange={(e) => {
                                     if (submittalId && onStatusChange) {
+                                        // Send empty string for blank, not null
                                         onStatusChange(submittalId, e.target.value);
                                     }
                                 }}
                                 className="w-full px-1 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
                             >
+                                <option value="">—</option>
                                 {statusOptions.map((option) => (
                                     <option key={option} value={option}>
                                         {option}
@@ -282,7 +284,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     : rowBgClass;
 
                 // Determine if this column should allow text wrapping
-                const shouldWrap = column === 'Title' || column === 'Notes';
+                const shouldWrap = column === 'Title' || column === 'Notes' || column === 'Project Name' || column === 'Ball In Court';
                 const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                 return (
