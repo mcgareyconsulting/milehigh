@@ -157,17 +157,27 @@ export function useFilters(rows = []) {
      * Filtered and sorted rows for display
      */
     const displayRows = useMemo(() => {
-        const filtered = rows.filter(matchesSelectedFilter);
+        // First, filter out rows where type is 'For Construction'
+        const withoutForConstruction = rows.filter((row) => {
+            const type = row.type ?? row['Type'] ?? '';
+            return type !== 'For Construction';
+        });
+        // Then apply user-selected filters
+        const filtered = withoutForConstruction.filter(matchesSelectedFilter);
         return sortRows([...filtered]); // Create a copy to avoid mutating the filtered array
     }, [rows, matchesSelectedFilter, sortRows]);
 
     /**
      * Extract unique ball in court options from rows
      * Handles comma-separated values by extracting individual names
+     * Excludes rows where type is 'For Construction'
      */
     const ballInCourtOptions = useMemo(() => {
         const values = new Set();
         rows.forEach((row) => {
+            const type = row.type ?? row['Type'] ?? '';
+            if (type === 'For Construction') return; // Skip 'For Construction' rows
+
             const value = row.ball_in_court;
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 // Extract individual names from comma-separated values
@@ -180,10 +190,14 @@ export function useFilters(rows = []) {
 
     /**
      * Extract unique submittal manager options from rows
+     * Excludes rows where type is 'For Construction'
      */
     const submittalManagerOptions = useMemo(() => {
         const values = new Set();
         rows.forEach((row) => {
+            const type = row.type ?? row['Type'] ?? '';
+            if (type === 'For Construction') return; // Skip 'For Construction' rows
+
             const value = row.submittal_manager ?? row['Submittal Manager'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 values.add(String(value).trim());
@@ -194,10 +208,14 @@ export function useFilters(rows = []) {
 
     /**
      * Extract unique project name options from rows
+     * Excludes rows where type is 'For Construction'
      */
     const projectNameOptions = useMemo(() => {
         const values = new Set();
         rows.forEach((row) => {
+            const type = row.type ?? row['Type'] ?? '';
+            if (type === 'For Construction') return; // Skip 'For Construction' rows
+
             const value = row.project_name ?? row['Project Name'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 values.add(String(value).trim());
