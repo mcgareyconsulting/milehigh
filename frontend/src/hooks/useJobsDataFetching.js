@@ -17,19 +17,7 @@ export function useJobsDataFetching() {
             const data = await jobsApi.fetchData();
 
             // Extract jobs array
-            let jobsList = data.jobs || [];
-
-            // Sort by Job # ascending, then Release # ascending
-            jobsList = jobsList.sort((a, b) => {
-                // First sort by Job #
-                if (a['Job #'] !== b['Job #']) {
-                    return (a['Job #'] || 0) - (b['Job #'] || 0);
-                }
-                // Then sort by Release # (treat as string for comparison)
-                const releaseA = String(a['Release #'] || '').toLowerCase();
-                const releaseB = String(b['Release #'] || '').toLowerCase();
-                return releaseA.localeCompare(releaseB);
-            });
+            const jobsList = data.jobs || [];
 
             // Get columns from first job if available
             const jobColumns = jobsList.length > 0
