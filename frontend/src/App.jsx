@@ -4,6 +4,7 @@ import Operations from './pages/Operations';
 import History from './pages/History';
 import Logs from './pages/Logs';
 import DraftingWorkLoad from './pages/DraftingWorkLoad';
+import Jobs from './pages/Jobs';
 import Navbar from './components/Navbar';
 import './App.css';
 

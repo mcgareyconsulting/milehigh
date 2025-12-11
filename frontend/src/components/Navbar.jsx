@@ -36,6 +36,24 @@ function Navbar() {
                             History
                         </button>
                         <button
+                            onClick={() => navigate('/drafting-work-load')}
+                            className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${isActive('/drafting-work-load')
+                                ? 'bg-accent-500 text-white shadow-md'
+                                : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            Drafting Work Load
+                        </button>
+                        <button
+                            onClick={() => navigate('/jobs')}
+                            className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${isActive('/jobs')
+                                ? 'bg-accent-500 text-white shadow-md'
+                                : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            Jobs
+                        </button>
+                        <button
                             onClick={() => navigate('/')}
                             className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${isActive('/')
                                 ? 'bg-accent-500 text-white shadow-md'

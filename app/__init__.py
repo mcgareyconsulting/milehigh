@@ -212,6 +212,31 @@ def create_app():
         return "Welcome to the Trello OneDrive Sync App!"
 
     # Jobs route - display all jobs in database
+    def determine_stage_from_db_fields(job):
+        """
+        Determine the stage from database fields using TrelloListMapper logic.
+        Returns the stage name or 'Released' if all fields are null/blank.
+        """
+        from app.sync.services.trello_list_mapper import TrelloListMapper
+        
+        # Use TrelloListMapper to determine stage from the 5 columns
+        trello_list = TrelloListMapper.determine_trello_list_from_db(job)
+        
+        # If TrelloListMapper returns a list name, use it as the stage
+        if trello_list:
+            return trello_list
+        
+        # If all fields are null/blank, default to 'Released'
+        if (not job.cut_start or job.cut_start == '') and \
+           (not job.fitup_comp or job.fitup_comp == '') and \
+           (not job.welded or job.welded == '') and \
+           (not job.paint_comp or job.paint_comp == '') and \
+           (not job.ship or job.ship == ''):
+            return 'Released'
+        
+        # If we can't determine a stage but have some values, default to 'Released'
+        return 'Released'
+
     @app.route("/jobs")
     def list_jobs():
         from app.models import Job
@@ -219,22 +244,29 @@ def create_app():
             jobs = Job.query.all()
             job_list = []
             for job in jobs:
+                # Determine stage from the 5 columns
+                stage = determine_stage_from_db_fields(job)
+                
+                # Return all Excel fields (excluding Trello fields and the 5 stage columns)
                 job_data = {
                     'id': job.id,
-                    'job': job.job,
-                    'release': job.release,
-                    'job_name': job.job_name,
-                    'description': job.description,
-                    'pm': job.pm,
-                    'by': job.by,
-                    'released': format_datetime_mountain(job.released),
-                    'fab_hrs': job.fab_hrs,
-                    'install_hrs': job.install_hrs,
-                    'paint_color': job.paint_color,
-                    'trello_card_name': job.trello_card_name,
-                    'trello_list_name': job.trello_list_name,
-                    'last_updated_at': format_datetime_mountain(job.last_updated_at),
-                    'source_of_update': job.source_of_update
+                    'Job #': job.job,
+                    'Release #': job.release,
+                    'Job': job.job_name,
+                    'Description': job.description,
+                    'Fab Hrs': job.fab_hrs,
+                    'Install HRS': job.install_hrs,
+                    'Paint color': job.paint_color,
+                    'PM': job.pm,
+                    'BY': job.by,
+                    'Released': job.released.isoformat() if job.released else None,
+                    'Fab Order': job.fab_order,
+                    'Stage': stage,  # Single Stage column instead of 5 separate columns
+                    'Start install': job.start_install.isoformat() if job.start_install else None,
+                    'Comp. ETA': job.comp_eta.isoformat() if job.comp_eta else None,
+                    'Job Comp': job.job_comp,
+                    'Invoiced': job.invoiced,
+                    'Notes': job.notes,
                 }
                 job_list.append(job_data)
             
@@ -1224,64 +1256,24 @@ def create_app():
                 "error": str(e)
             }), 500
 
-    @app.route("/health-scan", methods=["GET"])
-    def health_scan_route():
-        """
-        Perform a comprehensive health scan to identify jobs missing from the database.
-        
-        Scans:
-        - OneDrive (Excel) for all jobs with valid identifiers
-        - Trello lists (Released through Shipping completed) for all cards
-        - Compares both against the database (source of truth)
-        
-        Returns a detailed report of missing jobs categorized by:
-        - Jobs in both Excel & Trello but not in DB (most critical)
-        - Jobs in Excel only (not in Trello, not in DB)
-        - Jobs in Trello only (not in Excel, not in DB)
-        """
-        try:
-            from app.scripts.health_scan import health_scan
-            
-            logger.info("Starting health scan")
-            result = health_scan(return_json=True)
-            
-            if "error" in result:
-                return jsonify({
-                    "message": "Health scan failed",
-                    "error": result["error"],
-                    "error_type": result.get("error_type")
-                }), 500
-            
-            return jsonify({
-                "message": "Health scan completed",
-                "scan": result
-            }), 200
-            
-        except Exception as e:
-            logger.error("Error running health scan", error=str(e))
-            return jsonify({
-                "message": "Health scan failed",
-                "error": str(e)
-            }), 500
-
-    @app.route("/health-scan/card-names/scan", methods=["GET"])
+    @app.route("/name-check/scan", methods=["GET"])
     def scan_card_names_route():
         """
-        Scan Trello cards for inaccurate names (preview only, no updates).
+        Scan Trello card names for accuracy (dry run, preview only).
         
-        The expected card name format is: {job_number}-{release_number} {job_name} {description}
-        Some older cards may be missing the description part.
+        Compares DB trello_card_name with expected format: {job}-{release} {job_name} {description}
+        Does not perform any updates.
         
         Query params:
-            limit: Optional maximum number of cards to process (int)
+            limit: Optional maximum number of jobs to process (int)
         """
         try:
-            from app.scripts.health_scan import scan_trello_card_names
+            from app.scripts.name_check import check_card_names
             
             limit = request.args.get("limit", type=int)
             
             logger.info("Scanning Trello card names", limit=limit)
-            result = scan_trello_card_names(return_json=True, fix_names=False, limit=limit)
+            result = check_card_names(return_json=True, dry_run=True, limit=limit)
             
             if "error" in result:
                 return jsonify({
@@ -1302,24 +1294,24 @@ def create_app():
                 "error": str(e)
             }), 500
 
-    @app.route("/health-scan/card-names/update", methods=["POST"])
+    @app.route("/name-check/update", methods=["POST"])
     def update_card_names_route():
         """
-        Scan and update Trello cards with inaccurate names.
+        Scan and update Trello card names that don't match expected format.
         
-        The expected card name format is: {job_number}-{release_number} {job_name} {description}
-        This will actually update the card names in Trello.
+        Compares DB trello_card_name with expected format: {job}-{release} {job_name} {description}
+        Updates both Trello API and DB trello_card_name field for cards that don't match.
         
         Query params:
-            limit: Optional maximum number of cards to process (int)
+            limit: Optional maximum number of jobs to process (int)
         """
         try:
-            from app.scripts.health_scan import scan_trello_card_names
+            from app.scripts.name_check import check_card_names
             
             limit = request.args.get("limit", type=int)
             
             logger.info("Updating Trello card names", limit=limit)
-            result = scan_trello_card_names(return_json=True, fix_names=True, limit=limit)
+            result = check_card_names(return_json=True, dry_run=False, limit=limit)
             
             if "error" in result:
                 return jsonify({

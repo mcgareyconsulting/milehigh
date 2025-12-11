@@ -1365,18 +1365,25 @@ def get_expected_card_name(job_number, release_number, job_name, description):
     Args:
         job_number: Job number (int or str)
         release_number: Release number (str)
-        job_name: Job name (str)
-        description: Description (str)
+        job_name: Job name (str, can be None/empty)
+        description: Description (str, can be None/empty)
         
     Returns:
         str: Expected card name
     """
-    # Handle None/empty values
-    job_name = job_name or "Unknown Job"
-    description = description or "Unknown Description"
+    # Handle None/empty values - use empty strings
+    job_name = (job_name or "").strip()
+    description = (description or "").strip()
     
     # Format: {job}-{release} {job_name} {description}
-    expected_name = f"{job_number}-{release_number} {job_name} {description}"
+    # Build parts and join with spaces, avoiding double spaces
+    parts = [f"{job_number}-{release_number}"]
+    if job_name:
+        parts.append(job_name)
+    if description:
+        parts.append(description)
+    
+    expected_name = " ".join(parts)
     return expected_name
 
 

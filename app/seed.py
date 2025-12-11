@@ -761,7 +761,7 @@ def get_trello_excel_cross_check_summary():
     Get a detailed summary of the Trello/Excel cross-check without making database changes.
     Useful for understanding what jobs would be processed by incremental seeding.
     
-    Now includes analysis of Excel rows with job-release that don't have X or T in Ship column.
+    Includes all Excel rows with job-release (no filtering by Ship column).
     
     Returns:
         dict: Detailed summary of the cross-check analysis
@@ -801,29 +801,14 @@ def get_trello_excel_cross_check_summary():
         # Create identifier column for Excel rows
         df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
         
-        # Filter Excel rows: job-release without X or T in Ship column
-        print("🔍 Filtering Excel rows: Ship column must NOT contain 'X' or 'T'...")
-        
-        # Helper function to check if Ship contains X or T
-        def ship_has_x_or_t(ship_value):
-            """Check if Ship column contains 'X' or 'T' (case-sensitive)."""
-            if pd.isna(ship_value) or ship_value is None:
-                return False
-            ship_str = str(ship_value).strip()
-            return 'X' in ship_str or 'T' in ship_str
-        
-        # Filter rows: must have job-release AND Ship must NOT have X or T
-        filtered_df = df[~df["Ship"].apply(ship_has_x_or_t)].copy()
-        
+        # Use all rows (no filtering by Ship column)
+        filtered_df = df.copy()
         total_excel_job_release = len(df)
-        total_filtered_rows = len(filtered_df)
-        rows_with_x_or_t = total_excel_job_release - total_filtered_rows
         
         print(f"📊 Total Excel rows with job-release: {total_excel_job_release}")
-        print(f"✂️  Rows excluded (Ship has X or T): {rows_with_x_or_t}")
-        print(f"✅ Rows eligible (Ship does NOT have X or T): {total_filtered_rows}")
+        print(f"✅ Processing all rows (no Ship column filtering)")
         
-        # Cross-check: Which filtered Excel rows have Trello cards?
+        # Cross-check: Which Excel rows have Trello cards?
         excel_with_trello = []
         excel_without_trello = []
         # Predicted target lists for would-be-created cards
@@ -889,10 +874,10 @@ def get_trello_excel_cross_check_summary():
                     "predicted_list": predicted_list
                 })
         
-        print(f"🔗 Excel rows (eligible) WITH Trello cards: {len(excel_with_trello)}")
-        print(f"⚠️  Excel rows (eligible) WITHOUT Trello cards: {len(excel_without_trello)}")
+        print(f"🔗 Excel rows WITH Trello cards: {len(excel_with_trello)}")
+        print(f"⚠️  Excel rows WITHOUT Trello cards: {len(excel_without_trello)}")
         
-        # Check database status for eligible Excel rows
+        # Check database status for all Excel rows
         existing_in_db = 0
         missing_from_db = 0
         would_be_created_identifiers = []  # Clean list of identifiers that would be created
@@ -931,13 +916,11 @@ def get_trello_excel_cross_check_summary():
                 "unique_identifiers": len(unique_trello_identifiers),
                 "cards_by_list": trello_cards_by_list
             },
-            "excel_filtered_analysis": {
+            "excel_analysis": {
                 "total_excel_job_release": total_excel_job_release,
-                "rows_excluded_ship_has_x_or_t": rows_with_x_or_t,
-                "rows_eligible_ship_no_x_or_t": total_filtered_rows,
-                "eligible_rows_with_trello": len(excel_with_trello),
-                "eligible_rows_without_trello": len(excel_without_trello),
-                "eligible_rows_examples_without_trello": excel_without_trello[:10],  # Show first 10 examples
+                "rows_with_trello": len(excel_with_trello),
+                "rows_without_trello": len(excel_without_trello),
+                "rows_examples_without_trello": excel_without_trello[:10],  # Show first 10 examples
                 "predicted_target_lists": {
                     "counts_by_list": predicted_by_list_counts,
                     "identifiers_by_list": predicted_identifiers_by_list
@@ -947,8 +930,8 @@ def get_trello_excel_cross_check_summary():
                 "jobs_already_in_db": existing_in_db,
                 "jobs_missing_from_db": missing_from_db,
                 "would_be_created": missing_from_db,
-                "eligible_rows_in_db": existing_in_db,
-                "eligible_rows_missing_from_db": missing_from_db
+                "rows_in_db": existing_in_db,
+                "rows_missing_from_db": missing_from_db
             },
             "would_be_created_identifiers": {
                 "count": len(would_be_created_identifiers),
