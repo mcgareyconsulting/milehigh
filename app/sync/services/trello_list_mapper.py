@@ -36,7 +36,7 @@ class TrelloListMapper:
         where a card should be placed.
         
         Args:
-            rec: Database record (Job model instance) with fitup_comp, welded,
+            rec: Database record (Job model instance) with cut_start, fitup_comp, welded,
                  paint_comp, and ship fields
                  
         Returns:
