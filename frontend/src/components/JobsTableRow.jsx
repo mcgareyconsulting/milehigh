@@ -48,12 +48,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     rawValue = formatCellValue(rawValue, column);
                 }
 
-                // Truncate Job and Description columns
-                const shouldTruncate = column === 'Job' || column === 'Description';
-                const maxLength = 10;
-                const displayValue = shouldTruncate && rawValue && rawValue.length > maxLength
-                    ? rawValue.substring(0, maxLength) + '...'
-                    : rawValue;
+                // Job and Description: wrap to 2 lines then truncate with ellipsis
+                const shouldWrapAndTruncate = column === 'Job' || column === 'Description';
 
                 // Determine if this column should allow text wrapping
                 const shouldWrap = column === 'Notes' || column === 'Paint color';
@@ -99,16 +95,39 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     );
                 }
 
-                // For Job and Description, show full value in tooltip, truncated value in cell
-                const tooltipValue = shouldTruncate ? rawValue : displayValue;
+                // For Job and Description, show full value in tooltip
+                const tooltipValue = shouldWrapAndTruncate ? rawValue : rawValue;
 
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className={`${paddingClass} py-0.5 ${whitespaceClass} text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
+                        className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center ${shouldWrapAndTruncate
+                            ? ''
+                            : whitespaceClass
+                            }`}
                         title={tooltipValue}
+                        style={shouldWrapAndTruncate ? {
+                            maxWidth: column === 'Job' ? '120px' : '150px',
+                            width: column === 'Job' ? '120px' : '150px'
+                        } : {}}
                     >
-                        {displayValue}
+                        {shouldWrapAndTruncate ? (
+                            <div
+                                style={{
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    lineHeight: '1.2',
+                                    textAlign: 'center'
+                                }}
+                            >
+                                {rawValue}
+                            </div>
+                        ) : (
+                            rawValue
+                        )}
                     </td>
                 );
             })}

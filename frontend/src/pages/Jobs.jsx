@@ -75,8 +75,14 @@ function Jobs() {
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-4">
                         <div className="flex items-center justify-between">
-                            <div>
-                                <h1 className="text-3xl font-bold text-white">Jobs</h1>
+                            <div className="flex items-center gap-3">
+                                <h1 className="text-3xl font-bold text-white">Job Log 2.0</h1>
+                                <img
+                                    src="/bananas-svgrepo-com.svg"
+                                    alt="banana"
+                                    className="w-7 h-7"
+                                    style={{ filter: 'brightness(0) invert(1)' }}
+                                />
                             </div>
                         </div>
                     </div>
