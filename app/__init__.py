@@ -206,10 +206,13 @@ def create_app():
         else:
             print(f"Database already contains {job_count} jobs, skipping seed.")
 
-    # Index route
-    @app.route("/")
-    def index():
-        return "Welcome to the Trello OneDrive Sync App!"
+    # Configure static file serving for React frontend
+    # Get the path to the frontend build directory
+    frontend_dist_path = os.path.join(
+        Path(__file__).parent.parent,  # Go up from app/__init__.py to project root
+        'frontend',
+        'dist'
+    )
 
     # Jobs route - display all jobs in database
     def determine_stage_from_db_fields(job):
@@ -1924,6 +1927,69 @@ def create_app():
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
     app.register_blueprint(procore_bp, url_prefix="/procore")
+
+    # Serve static assets from frontend build (JS, CSS, images, etc.)
+    # These routes must come before the catch-all route
+    if os.path.exists(frontend_dist_path):
+        @app.route('/assets/<path:filename>')
+        def serve_assets(filename):
+            """Serve static assets from the frontend dist/assets directory."""
+            from flask import send_from_directory
+            assets_dir = os.path.join(frontend_dist_path, 'assets')
+            if os.path.exists(os.path.join(assets_dir, filename)):
+                return send_from_directory(assets_dir, filename)
+            return '', 404
+        
+        # Serve other static files like favicon, robots.txt, etc.
+        @app.route('/favicon.ico')
+        def serve_favicon():
+            """Serve favicon from frontend dist."""
+            from flask import send_from_directory
+            favicon_path = os.path.join(frontend_dist_path, 'favicon.ico')
+            if os.path.exists(favicon_path):
+                return send_from_directory(frontend_dist_path, 'favicon.ico')
+            return '', 404
+
+    # Catch-all route for React Router (must be last)
+    # This serves index.html for all routes that aren't API routes
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_react_app(path):
+        """
+        Serve the React app's index.html for all non-API routes.
+        This enables client-side routing to work properly.
+        """
+        # List of API route prefixes that should NOT serve index.html
+        api_prefixes = [
+            '/api',
+            '/trello',
+            '/onedrive',
+            '/procore',
+            '/sync',
+            '/shipping',
+            '/snapshot',
+            '/snapshots',
+            '/files',
+            '/fab-order',
+            '/fix-trello-list',
+            '/name-check',
+            '/seed',
+        ]
+        
+        # Check if this is an API route (remove leading slash for comparison)
+        path_with_slash = '/' + path if path else '/'
+        if any(path_with_slash.startswith(prefix) for prefix in api_prefixes):
+            # This shouldn't happen if routes are registered correctly, but just in case
+            return '', 404
+        
+        # Serve index.html from the frontend dist directory
+        index_path = os.path.join(frontend_dist_path, 'index.html')
+        if os.path.exists(index_path):
+            from flask import send_file
+            return send_file(index_path)
+        else:
+            # Fallback if dist directory doesn't exist (development)
+            return "Frontend not built. Please run 'npm run build' in the frontend directory.", 404
 
     # Global error handler to ensure CORS headers are always included
     @app.errorhandler(Exception)
