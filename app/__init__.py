@@ -245,6 +245,7 @@ def create_app():
         from app.models import Job
         try:
             jobs = Job.query.all()
+            print(jobs)
             job_list = []
             for job in jobs:
                 # Determine stage from the 5 columns
@@ -1950,6 +1951,13 @@ def create_app():
                 return send_from_directory(frontend_dist_path, 'favicon.ico')
             return '', 404
 
+    # Redirect /index.html to / to prevent React Router from trying to match it as a route
+    @app.route('/index.html')
+    def redirect_index_html():
+        """Redirect /index.html to root to prevent React Router issues."""
+        from flask import redirect
+        return redirect('/', code=301)
+    
     # Catch-all route for React Router (must be last)
     # This serves index.html for all routes that aren't API routes
     @app.route('/', defaults={'path': ''})
