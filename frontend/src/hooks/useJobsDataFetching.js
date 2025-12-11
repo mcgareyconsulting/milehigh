@@ -19,15 +19,6 @@ export function useJobsDataFetching() {
             // Extract jobs array
             const jobsList = data.jobs || [];
 
-            // Debug logging
-            if (!silent) {
-                console.log('Jobs API response:', {
-                    totalJobs: data.total_jobs,
-                    jobsCount: jobsList.length,
-                    hasJobs: jobsList.length > 0
-                });
-            }
-
             // Get columns from first job if available
             const jobColumns = jobsList.length > 0
                 ? Object.keys(jobsList[0]).filter(key => key !== 'id')
@@ -40,11 +31,6 @@ export function useJobsDataFetching() {
 
         } catch (error) {
             console.error('Error fetching jobs data:', error);
-            console.error('Error details:', {
-                message: error.message,
-                statusCode: error.statusCode,
-                originalError: error.originalError
-            });
             setError(error.message);
         } finally {
             if (!silent) setLoading(false);
