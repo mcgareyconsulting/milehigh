@@ -3,7 +3,7 @@ import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
 
-function Jobs() {
+function JobLog() {
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch } = useJobsDataFetching();
 
     // Use the filters hook
@@ -289,5 +289,5 @@ function Jobs() {
     );
 }
 
-export default Jobs;
+export default JobLog;
 
