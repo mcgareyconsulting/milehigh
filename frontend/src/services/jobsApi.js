@@ -12,33 +12,63 @@ class JobsApi {
             console.log('Fetching jobs from:', url);
             const response = await axios.get(url);
 
+            // Debug: Check what we actually received
+            console.log('=== RAW RESPONSE DEBUG ===');
+            console.log('response.data type:', typeof response.data);
+            console.log('response.data is Array?', Array.isArray(response.data));
+            console.log('response.data is Object?', typeof response.data === 'object' && response.data !== null && !Array.isArray(response.data));
+            console.log('response.data value:', response.data);
+
             // Debug: Check if response.data is an array (wrong) or object (correct)
             const isArray = Array.isArray(response.data);
             const isObject = !isArray && typeof response.data === 'object' && response.data !== null;
 
+            // Get keys - this is what's showing 147338
+            let dataKeys = [];
+            if (isArray) {
+                dataKeys = Array.from({ length: response.data.length }, (_, i) => String(i));
+                console.log('Array length:', response.data.length);
+                console.log('First array item:', response.data[0]);
+            } else if (isObject) {
+                dataKeys = Object.keys(response.data);
+                console.log('Object keys:', dataKeys);
+                console.log('Object values for keys:', dataKeys.reduce((acc, key) => {
+                    acc[key] = typeof response.data[key];
+                    return acc;
+                }, {}));
+            }
+
             console.log('Jobs API response received:', {
                 status: response.status,
                 dataType: isArray ? 'array (WRONG!)' : isObject ? 'object (correct)' : typeof response.data,
-                dataKeys: isArray
-                    ? `Array[${response.data.length}]`
-                    : Object.keys(response.data || {}),
-                hasJobsKey: 'jobs' in (response.data || {}),
-                hasTotalJobsKey: 'total_jobs' in (response.data || {}),
-                jobsCount: response.data?.jobs?.length || 0,
-                totalJobs: response.data?.total_jobs,
-                // If it's an array, show first item structure
-                firstItemKeys: isArray && response.data.length > 0
-                    ? Object.keys(response.data[0]).slice(0, 5)
-                    : null
+                dataKeysCount: dataKeys.length,
+                dataKeysPreview: dataKeys.slice(0, 10),
+                hasJobsKey: isObject && 'jobs' in response.data,
+                hasTotalJobsKey: isObject && 'total_jobs' in response.data,
+                jobsCount: isObject ? (response.data?.jobs?.length || 0) : 0,
+                totalJobs: isObject ? response.data?.total_jobs : undefined
             });
+            console.log('=== END RAW RESPONSE DEBUG ===');
 
             // Handle case where API incorrectly returns array instead of object
             if (isArray) {
                 console.error('ERROR: API returned array instead of object! Wrapping in expected format.');
+                console.error('Array length:', response.data.length);
+                console.error('First array item:', response.data[0]);
                 return {
                     total_jobs: response.data.length,
                     jobs: response.data
                 };
+            }
+
+            // If response.data doesn't have the expected structure, log it
+            if (!response.data || !('jobs' in response.data)) {
+                console.error('ERROR: Response data missing expected structure!', {
+                    hasData: !!response.data,
+                    dataType: typeof response.data,
+                    dataKeys: response.data ? Object.keys(response.data) : null,
+                    dataValue: response.data
+                });
             }
 
             return response.data;

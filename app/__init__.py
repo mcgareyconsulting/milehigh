@@ -292,10 +292,24 @@ def create_app():
             logger.info("Jobs API response prepared", 
                        total_jobs=len(job_list), 
                        jobs_in_response=len(response_data['jobs']),
-                       response_keys=list(response_data.keys()))
+                       response_keys=list(response_data.keys()),
+                       response_type=type(response_data).__name__,
+                       is_dict=isinstance(response_data, dict))
             
-            # Use jsonify directly - it should handle this correctly
-            return jsonify(response_data), 200
+            # Create the JSON response
+            json_response = jsonify(response_data)
+            
+            # Log response details
+            logger.info("JSON response created", 
+                       response_type=type(json_response).__name__,
+                       response_data_type=type(json_response.data).__name__ if hasattr(json_response, 'data') else 'no data attr',
+                       response_status=json_response.status_code if hasattr(json_response, 'status_code') else 'no status')
+            
+            # Ensure proper headers
+            json_response.headers['Content-Type'] = 'application/json'
+            json_response.headers['Content-Length'] = str(len(json_response.get_data()))
+            
+            return json_response
         except Exception as e:
             logger.error("Error in /api/jobs", error=str(e), exc_info=True)
             return jsonify({'error': str(e)}), 500
