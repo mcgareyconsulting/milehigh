@@ -243,7 +243,6 @@ def create_app():
     @app.route("/api/jobs")
     def list_jobs():
         from app.models import Job
-        from flask import make_response
         try:
             jobs = Job.query.all()
             job_list = []
@@ -274,42 +273,9 @@ def create_app():
                 }
                 job_list.append(job_data)
             
-            # Create response data - ensure it's a dict, not a list
-            response_data = {
-                'total_jobs': len(job_list),
-                'jobs': job_list
-            }
-            
-            # Validate structure before returning
-            if not isinstance(response_data, dict):
-                logger.error("Response data is not a dict!", type=type(response_data).__name__)
-                raise ValueError("Response data must be a dictionary")
-            
-            if 'jobs' not in response_data:
-                logger.error("Response data missing 'jobs' key!", keys=list(response_data.keys()))
-                raise ValueError("Response data must contain 'jobs' key")
-            
-            logger.info("Jobs API response prepared", 
-                       total_jobs=len(job_list), 
-                       jobs_in_response=len(response_data['jobs']),
-                       response_keys=list(response_data.keys()),
-                       response_type=type(response_data).__name__,
-                       is_dict=isinstance(response_data, dict))
-            
-            # Create the JSON response
-            json_response = jsonify(response_data)
-            
-            # Log response details
-            logger.info("JSON response created", 
-                       response_type=type(json_response).__name__,
-                       response_data_type=type(json_response.data).__name__ if hasattr(json_response, 'data') else 'no data attr',
-                       response_status=json_response.status_code if hasattr(json_response, 'status_code') else 'no status')
-            
-            # Ensure proper headers
-            json_response.headers['Content-Type'] = 'application/json'
-            json_response.headers['Content-Length'] = str(len(json_response.get_data()))
-            
-            return json_response
+            return jsonify({
+                "jobs": job_list
+            }), 200
         except Exception as e:
             logger.error("Error in /api/jobs", error=str(e), exc_info=True)
             return jsonify({'error': str(e)}), 500
