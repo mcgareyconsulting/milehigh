@@ -239,17 +239,6 @@ def create_app():
 
     @app.route("/jobs")
     def list_jobs():
-        # Check if this is a browser navigation (HTML) vs API request
-        # Browsers send Accept: text/html, API calls typically send Accept: application/json
-        accept_header = request.headers.get('Accept', '')
-        is_api_request = 'application/json' in accept_header or accept_header == '' or '*/*' in accept_header
-        
-        # If it's not an API request (i.e., browser navigation), let catch-all handle it
-        if not is_api_request and 'text/html' in accept_header:
-            from flask import abort
-            abort(404)  # This will trigger the catch-all to serve index.html
-        
-        # This is an API request - return JSON
         from app.models import Job
         try:
             jobs = Job.query.all()
@@ -1963,42 +1952,6 @@ def create_app():
         # but we ensure they're present
         return response
 
-    # Catch-all route for frontend SPA - handles 404s and serves index.html
-    # This allows React Router to handle client-side routing
-    @app.errorhandler(404)
-    def serve_frontend(e):
-        """Serve frontend index.html for 404s (client-side routes)."""
-        from flask import send_from_directory
-        import os
-        
-        path = request.path
-        accept_header = request.headers.get('Accept', '')
-        
-        # If it's a JSON API request for a non-existent API route, return JSON 404
-        is_api_route = path.startswith(('/api/', '/trello/', '/onedrive/', '/procore/', 
-                                       '/sync/', '/shipping/', '/seed/', '/fab-order/', 
-                                       '/fix-trello-list/', '/name-check/', '/snapshot/', 
-                                       '/snapshots/', '/files/'))
-        
-        if 'application/json' in accept_header or is_api_route:
-            return jsonify({'error': 'Not found'}), 404
-        
-        # For browser navigation (frontend routes like /jobs, /drafting-work-load), serve index.html
-        try:
-            # Try to find the frontend build directory
-            frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
-            if os.path.exists(frontend_dist):
-                return send_from_directory(frontend_dist, 'index.html')
-            else:
-                # Fallback - try to find index.html in frontend directory (development)
-                frontend_index = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'index.html')
-                if os.path.exists(frontend_index):
-                    return send_from_directory(os.path.dirname(frontend_index), 'index.html')
-                else:
-                    return "Frontend not found. Please build the frontend (npm run build).", 404
-        except Exception as ex:
-            logger.error(f"Error serving frontend: {ex}")
-            return jsonify({'error': 'Frontend not available'}), 404
 
     # Initialize scheduler safely
     try:
