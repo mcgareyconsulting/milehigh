@@ -274,6 +274,10 @@ function JobLog() {
                                                         formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
                                                         formatDate={formatDate}
                                                         rowIndex={index}
+                                                        onStageUpdateSuccess={refetch}
+                                                        onStageUpdateError={(row, error) => {
+                                                            console.error('Stage update failed:', error);
+                                                        }}
                                                     />
                                                 ))
                                             )}

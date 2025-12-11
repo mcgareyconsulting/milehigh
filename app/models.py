@@ -199,11 +199,14 @@ class Job(db.Model):
     trello_card_date = db.Column(db.Date, nullable=True)
     viewer_url = db.Column(db.String(512), nullable=True)
 
+    # Stage field (new approach)
+    stage = db.Column(db.String(128), nullable=True)
+
     # Changelog tracking
     last_updated_at = db.Column(db.DateTime, nullable=True)
     source_of_update = db.Column(
         db.String(16), nullable=True
-    )  # 'Trello' or 'Excel' or 'System'
+    )  # 'Trello' or 'Excel' or 'System' or 'UI'
 
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"

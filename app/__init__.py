@@ -214,9 +214,15 @@ def create_app():
     # Jobs route - display all jobs in database
     def determine_stage_from_db_fields(job):
         """
-        Determine the stage from database fields using TrelloListMapper logic.
+        Determine the stage from database fields.
+        First checks the stage column if available, otherwise falls back to TrelloListMapper logic.
         Returns the stage name or 'Released' if all fields are null/blank.
         """
+        # If stage column is set, use it directly
+        if hasattr(job, 'stage') and job.stage:
+            return job.stage
+        
+        # Fallback to TrelloListMapper logic for backward compatibility
         from app.sync.services.trello_list_mapper import TrelloListMapper
         
         # Use TrelloListMapper to determine stage from the 5 columns
@@ -350,6 +356,108 @@ def create_app():
         except Exception as exc:
             logger.exception("Shipping Excel enforcement failed")
             return jsonify({"success": False, "error": str(exc)}), 500
+
+    # Update job stage endpoint
+    @app.route("/jobs/<int:job>/<release>/stage", methods=["PATCH"])
+    def update_job_stage(job, release):
+        """Update a job's stage and move Trello card to corresponding list."""
+        from app.models import Job
+        from app.trello.api import update_trello_card, get_list_by_name
+        from app.sync_lock import sync_lock_manager
+        from datetime import datetime, timezone
+        
+        data = request.get_json()
+        if not data or 'stage' not in data:
+            return jsonify({'error': 'Missing stage in request body'}), 400
+        
+        new_stage = data.get('stage')
+        
+        # Skip "Cut start" - do nothing
+        if new_stage == 'Cut start':
+            return jsonify({
+                'success': True,
+                'message': 'Cut start stage change ignored',
+                'stage': new_stage
+            }), 200
+        
+        # Valid stage names that map to Trello lists
+        valid_stages = [
+            'Released',
+            'Fit Up Complete.',
+            'Paint complete',
+            'Store at MHMW for shipping',
+            'Shipping planning',
+            'Shipping completed'
+        ]
+        
+        if new_stage not in valid_stages:
+            return jsonify({
+                'error': f'Invalid stage: {new_stage}',
+                'valid_stages': valid_stages
+            }), 400
+        
+        try:
+            # Use sync lock to prevent race conditions
+            with sync_lock_manager.acquire_sync_lock("UI-Stage-Update"):
+                # Find the job
+                job_record = Job.query.filter_by(job=job, release=release).first()
+                if not job_record:
+                    return jsonify({'error': f'Job {job}-{release} not found'}), 404
+                
+                old_stage = job_record.stage
+                
+                # Update stage in database
+                job_record.stage = new_stage
+                job_record.last_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                job_record.source_of_update = "UI"
+                
+                # Update Trello card if it exists
+                trello_updated = False
+                if job_record.trello_card_id:
+                    # Get the Trello list ID for the new stage
+                    list_info = get_list_by_name(new_stage)
+                    if list_info:
+                        new_list_id = list_info["id"]
+                        # Only update if list is different
+                        if job_record.trello_list_id != new_list_id:
+                            update_trello_card(job_record.trello_card_id, new_list_id=new_list_id)
+                            job_record.trello_list_id = new_list_id
+                            job_record.trello_list_name = new_stage
+                            trello_updated = True
+                            logger.info(
+                                f"Updated Trello card {job_record.trello_card_id} to list {new_stage}",
+                                job=job,
+                                release=release
+                            )
+                
+                # Commit database changes
+                db.session.add(job_record)
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'job': job,
+                    'release': release,
+                    'old_stage': old_stage,
+                    'new_stage': new_stage,
+                    'trello_updated': trello_updated
+                }), 200
+                
+        except RuntimeError as e:
+            # Lock acquisition failed
+            logger.warning(f"Failed to acquire lock for stage update: {e}")
+            return jsonify({
+                'error': 'Sync operation in progress, please try again',
+                'message': str(e)
+            }), 409
+        except Exception as e:
+            # Rollback on error
+            db.session.rollback()
+            logger.exception(f"Error updating job stage: {e}")
+            return jsonify({
+                'error': 'Failed to update stage',
+                'message': str(e)
+            }), 500
 
     # Job change history route
     @app.route("/jobs/<int:job>/<release>/history")

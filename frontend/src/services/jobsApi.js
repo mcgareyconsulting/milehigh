@@ -15,6 +15,18 @@ class JobsApi {
         }
     }
 
+    async updateStage(job, release, stage) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/jobs/${job}/${release}/stage`,
+                { stage }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update stage');
+        }
+    }
+
     /**
      * Handle API errors
      */

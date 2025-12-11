@@ -227,6 +227,8 @@ def sync_from_trello(event_info):
                 to_list=rec.trello_list_name
             )
             TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
+            # Update stage column to match Trello list name
+            rec.stage = rec.trello_list_name
             
             destination_name = event_info.get("to")
             # Temporarily disable duplicate-and-link flow for Fit Up Complete cards.

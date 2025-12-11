@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { jobsApi } from '../services/jobsApi';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onStageUpdateError, onStageUpdateSuccess }) {
     // Alternate row background colors with higher contrast
     const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
 
@@ -26,13 +27,53 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         'Shipping completed': 'bg-gray-100 text-gray-800 border-gray-300'
     };
 
-    // Local state for stage (editable but not saved to backend)
+    // Local state for stage
     const [localStage, setLocalStage] = useState(row['Stage'] || 'Released');
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [error, setError] = useState(null);
 
     // Sync local state when row data changes (e.g., on refresh)
     useEffect(() => {
         setLocalStage(row['Stage'] || 'Released');
+        setError(null); // Clear error on data refresh
     }, [row['Stage']]);
+
+    const handleStageChange = async (newStage) => {
+        // Optimistically update UI
+        const previousStage = localStage;
+        setLocalStage(newStage);
+        setError(null);
+        setIsUpdating(true);
+
+        try {
+            // Skip "Cut start" - do nothing (backend also handles this, but we can skip the API call)
+            if (newStage === 'Cut start') {
+                setIsUpdating(false);
+                return;
+            }
+
+            const job = row['Job #'];
+            const release = row['Release #'];
+
+            await jobsApi.updateStage(job, release, newStage);
+            setIsUpdating(false);
+
+            // Notify parent to refetch data after successful update
+            if (onStageUpdateSuccess) {
+                onStageUpdateSuccess();
+            }
+        } catch (err) {
+            // Rollback on error
+            setLocalStage(previousStage);
+            setError(err.message || 'Failed to update stage');
+            setIsUpdating(false);
+
+            // Notify parent component if callback provided
+            if (onStageUpdateError) {
+                onStageUpdateError(row, err);
+            }
+        }
+    };
 
     return (
         <tr
@@ -72,25 +113,39 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
                             style={{ minWidth: '140px' }}
                         >
-                            <select
-                                value={localStage}
-                                onChange={(e) => setLocalStage(e.target.value)}
-                                className={`w-full px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-colors ${currentColorClass}`}
-                                style={{ minWidth: '120px' }}
-                            >
-                                {stageOptions.map((option) => {
-                                    const optionColorClass = stageColors[option.value] || stageColors['Released'];
-                                    return (
-                                        <option
-                                            key={option.value}
-                                            value={option.value}
-                                            className={optionColorClass}
-                                        >
-                                            {option.label}
-                                        </option>
-                                    );
-                                })}
-                            </select>
+                            <div className="relative">
+                                <select
+                                    value={localStage}
+                                    onChange={(e) => handleStageChange(e.target.value)}
+                                    disabled={isUpdating}
+                                    className={`w-full px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-colors ${currentColorClass} ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''} ${error ? 'border-red-500' : ''}`}
+                                    style={{ minWidth: '120px' }}
+                                    title={error || (isUpdating ? 'Updating...' : '')}
+                                >
+                                    {stageOptions.map((option) => {
+                                        const optionColorClass = stageColors[option.value] || stageColors['Released'];
+                                        return (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                                className={optionColorClass}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                {isUpdating && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-50">
+                                        <div className="w-3 h-3 border-2 border-accent-500 border-t-transparent rounded-full animate-spin"></div>
+                                    </div>
+                                )}
+                            </div>
+                            {error && (
+                                <div className="text-[8px] text-red-600 mt-0.5" title={error}>
+                                    Error: {error}
+                                </div>
+                            )}
                         </td>
                     );
                 }
