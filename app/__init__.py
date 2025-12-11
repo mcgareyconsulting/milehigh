@@ -245,6 +245,7 @@ def create_app():
         from app.models import Job
         try:
             jobs = Job.query.all()
+            print(jobs)
             job_list = []
             for job in jobs:
                 # Determine stage from the 5 columns
