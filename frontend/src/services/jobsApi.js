@@ -11,11 +11,36 @@ class JobsApi {
             const url = `${API_BASE_URL}/api/jobs`;
             console.log('Fetching jobs from:', url);
             const response = await axios.get(url);
+
+            // Debug: Check if response.data is an array (wrong) or object (correct)
+            const isArray = Array.isArray(response.data);
+            const isObject = !isArray && typeof response.data === 'object' && response.data !== null;
+
             console.log('Jobs API response received:', {
                 status: response.status,
-                dataKeys: Object.keys(response.data || {}),
-                jobsCount: response.data?.jobs?.length || 0
+                dataType: isArray ? 'array (WRONG!)' : isObject ? 'object (correct)' : typeof response.data,
+                dataKeys: isArray
+                    ? `Array[${response.data.length}]`
+                    : Object.keys(response.data || {}),
+                hasJobsKey: 'jobs' in (response.data || {}),
+                hasTotalJobsKey: 'total_jobs' in (response.data || {}),
+                jobsCount: response.data?.jobs?.length || 0,
+                totalJobs: response.data?.total_jobs,
+                // If it's an array, show first item structure
+                firstItemKeys: isArray && response.data.length > 0
+                    ? Object.keys(response.data[0]).slice(0, 5)
+                    : null
             });
+
+            // Handle case where API incorrectly returns array instead of object
+            if (isArray) {
+                console.error('ERROR: API returned array instead of object! Wrapping in expected format.');
+                return {
+                    total_jobs: response.data.length,
+                    jobs: response.data
+                };
+            }
+
             return response.data;
         } catch (error) {
             console.error('Jobs API error:', {
