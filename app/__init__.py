@@ -212,6 +212,31 @@ def create_app():
         return "Welcome to the Trello OneDrive Sync App!"
 
     # Jobs route - display all jobs in database
+    def determine_stage_from_db_fields(job):
+        """
+        Determine the stage from database fields using TrelloListMapper logic.
+        Returns the stage name or 'Released' if all fields are null/blank.
+        """
+        from app.sync.services.trello_list_mapper import TrelloListMapper
+        
+        # Use TrelloListMapper to determine stage from the 5 columns
+        trello_list = TrelloListMapper.determine_trello_list_from_db(job)
+        
+        # If TrelloListMapper returns a list name, use it as the stage
+        if trello_list:
+            return trello_list
+        
+        # If all fields are null/blank, default to 'Released'
+        if (not job.cut_start or job.cut_start == '') and \
+           (not job.fitup_comp or job.fitup_comp == '') and \
+           (not job.welded or job.welded == '') and \
+           (not job.paint_comp or job.paint_comp == '') and \
+           (not job.ship or job.ship == ''):
+            return 'Released'
+        
+        # If we can't determine a stage but have some values, default to 'Released'
+        return 'Released'
+
     @app.route("/jobs")
     def list_jobs():
         from app.models import Job
@@ -219,22 +244,29 @@ def create_app():
             jobs = Job.query.all()
             job_list = []
             for job in jobs:
+                # Determine stage from the 5 columns
+                stage = determine_stage_from_db_fields(job)
+                
+                # Return all Excel fields (excluding Trello fields and the 5 stage columns)
                 job_data = {
                     'id': job.id,
-                    'job': job.job,
-                    'release': job.release,
-                    'job_name': job.job_name,
-                    'description': job.description,
-                    'pm': job.pm,
-                    'by': job.by,
-                    'released': format_datetime_mountain(job.released),
-                    'fab_hrs': job.fab_hrs,
-                    'install_hrs': job.install_hrs,
-                    'paint_color': job.paint_color,
-                    'trello_card_name': job.trello_card_name,
-                    'trello_list_name': job.trello_list_name,
-                    'last_updated_at': format_datetime_mountain(job.last_updated_at),
-                    'source_of_update': job.source_of_update
+                    'Job #': job.job,
+                    'Release #': job.release,
+                    'Job': job.job_name,
+                    'Description': job.description,
+                    'Fab Hrs': job.fab_hrs,
+                    'Install HRS': job.install_hrs,
+                    'Paint color': job.paint_color,
+                    'PM': job.pm,
+                    'BY': job.by,
+                    'Released': job.released.isoformat() if job.released else None,
+                    'Fab Order': job.fab_order,
+                    'Stage': stage,  # Single Stage column instead of 5 separate columns
+                    'Start install': job.start_install.isoformat() if job.start_install else None,
+                    'Comp. ETA': job.comp_eta.isoformat() if job.comp_eta else None,
+                    'Job Comp': job.job_comp,
+                    'Invoiced': job.invoiced,
+                    'Notes': job.notes,
                 }
                 job_list.append(job_data)
             

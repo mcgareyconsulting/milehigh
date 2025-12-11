@@ -16,7 +16,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         }
         const typeMap = {
             'Submittal For Gc  Approval': 'Sub GC',
-            'Drafting Release Review': 'DRR'
+            'Submittal for GC  Approval': 'Sub GC',
+            'Drafting Release Review': 'DRR',
         };
         return typeMap[value] || value;
     };
@@ -95,7 +96,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
 
     // Alternate row background colors
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
 
     return (
         <tr
@@ -107,6 +108,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 const isType = column === 'Type';
                 const isNotes = column === 'Notes';
                 const isStatus = column === 'Status';
+                const isProjectName = column === 'Project Name';
+                const isBallInCourt = column === 'Ball In Court';
 
                 // Custom width for Submittals Id and Project Number
                 let customWidthClass = '';
@@ -175,7 +178,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '160px' }}
+                            style={{ width: '220px' }}
                         >
                             <textarea
                                 ref={notesInputRef}
@@ -198,7 +201,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '160px' }}
+                            style={{ width: '220px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
                         >
@@ -248,23 +251,26 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 }
 
                 if (isStatus) {
-                    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? 'STARTED';
+                    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? '';
                     const statusOptions = ['STARTED', 'NEED VIF', 'HOLD'];
 
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            className={`px-1 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            style={{ width: '90px' }}
                         >
                             <select
-                                value={currentStatus}
+                                value={currentStatus || ''}
                                 onChange={(e) => {
                                     if (submittalId && onStatusChange) {
+                                        // Send empty string for blank, not null
                                         onStatusChange(submittalId, e.target.value);
                                     }
                                 }}
-                                className="w-full px-1 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
+                                className="w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
                             >
+                                <option value="">—</option>
                                 {statusOptions.map((option) => (
                                     <option key={option} value={option}>
                                         {option}
@@ -279,6 +285,44 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 const cellBgClass = isType && isDraftingReleaseReview
                     ? 'bg-green-100'
                     : rowBgClass;
+
+                // Handle Project Name truncation to 20 characters
+                if (isProjectName) {
+                    const fullProjectName = cellValue;
+                    const truncatedProjectName = fullProjectName && fullProjectName.length > 20
+                        ? fullProjectName.substring(0, 20) + '...'
+                        : fullProjectName;
+
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className={`px-2 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            title={fullProjectName}
+                        >
+                            {truncatedProjectName}
+                        </td>
+                    );
+                }
+
+                // Handle Ball In Court: wrap if value is longer than 'Rourke Alvarado' (15 chars)
+                if (isBallInCourt) {
+                    // Get the value directly from row to ensure we have it
+                    const ballInCourtValue = row.ball_in_court ?? row['Ball In Court'] ?? rawValue ?? '';
+                    const ballInCourtString = String(ballInCourtValue);
+                    const shouldWrap = ballInCourtString.length > 15; // 'Rourke Alvarado' is 15 chars
+                    const whitespaceClass = shouldWrap ? 'whitespace-normal break-words' : 'whitespace-nowrap';
+
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            style={shouldWrap ? { maxWidth: '120px' } : {}}
+                            title={cellValue}
+                        >
+                            {cellValue}
+                        </td>
+                    );
+                }
 
                 // Determine if this column should allow text wrapping
                 const shouldWrap = column === 'Title' || column === 'Notes';
