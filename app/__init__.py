@@ -237,7 +237,7 @@ def create_app():
         # If we can't determine a stage but have some values, default to 'Released'
         return 'Released'
 
-    @app.route("/jobs")
+    @app.route("/api/jobs")
     def list_jobs():
         from app.models import Job
         try:
@@ -352,12 +352,12 @@ def create_app():
             return jsonify({"success": False, "error": str(exc)}), 500
 
     # Job change history route
-    @app.route("/jobs/<int:job>/<release>/history")
+    @app.route("/api/jobs/<int:job>/<release>/history")
     def job_change_history_path(job, release):
         """Get change history for a specific job-release combination via URL path."""
         return _get_job_change_history(job, release)
     
-    @app.route("/jobs/history")
+    @app.route("/api/jobs/history")
     def job_change_history_query():
         """Get change history via query parameters.
         
@@ -388,10 +388,10 @@ def create_app():
                 'error': 'Missing required parameters',
                 'message': 'At least one of job (int) or release (str) is required',
                 'usage': {
-                    'job_only': '/jobs/history?job=<int>',
-                    'release_only': '/jobs/history?release=<str>',
-                    'both': '/jobs/history?job=<int>&release=<str>',
-                    'path': '/jobs/<job>/<release>/history'
+                    'job_only': '/api/jobs/history?job=<int>',
+                    'release_only': '/api/jobs/history?release=<str>',
+                    'both': '/api/jobs/history?job=<int>&release=<str>',
+                    'path': '/api/jobs/<job>/<release>/history'
                 }
             }), 400
         

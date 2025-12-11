@@ -34,7 +34,7 @@ function History() {
             if (job) params.job = parseInt(job);
             if (release) params.release = release;
 
-            const response = await axios.get(`${API_BASE_URL}/jobs/history`, { params });
+            const response = await axios.get(`${API_BASE_URL}/api/jobs/history`, { params });
             const historyData = response.data.history || [];
             setHistory(historyData);
 
