@@ -3,7 +3,7 @@ import axios from 'axios';
 // Use environment variable if set, otherwise use relative URL (works for both dev and production)
 // In development with Vite dev server, you can set VITE_API_URL=http://localhost:8000
 // In production, if frontend and backend are on same domain, use relative URL (empty string)
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 class JobsApi {
     async fetchData() {
