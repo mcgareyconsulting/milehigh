@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
@@ -152,8 +152,38 @@ def create_app():
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
     
+    # Configure React frontend serving
+    FRONTEND_BUILD_DIR = Path(__file__).parent.parent / 'frontend' / 'dist'
     # Database configuration - use environment variable for production
     database_url = os.environ.get("DATABASE_URL")
+
+    # List of API route prefixes to exclude from React catch-all
+    API_ROUTE_PREFIXES = [
+        'api/',
+        'jobs/',  # API endpoint: /jobs (GET) - note the trailing slash
+        'sync/',
+        'trello/',
+        'onedrive/',
+        'procore/',
+        'shipping/',
+        'snapshot',
+        'snapshots/',
+        'files/',
+        'seed/',
+        'fab-order/',
+        'fix-trello-list/',
+        'name-check/',
+    ]
+
+    def is_api_route(path):
+        """Check if a path is an API route that should be handled by Flask."""
+        if not path:
+            return False
+        # Note: /jobs is handled separately in the list_jobs route to distinguish
+        # between API requests (JSON) and browser requests (React app)
+        # Check if path starts with any API prefix
+        return any(path.startswith(prefix) for prefix in API_ROUTE_PREFIXES)
+
     if database_url:
         # For production databases (PostgreSQL, MySQL, etc.)
         app.config["SQLALCHEMY_DATABASE_URI"] = database_url
@@ -206,10 +236,32 @@ def create_app():
         else:
             print(f"Database already contains {job_count} jobs, skipping seed.")
 
-    # Index route
+    # Index route - serve React app
     @app.route("/")
     def index():
-        return "Welcome to the Trello OneDrive Sync App!"
+        if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
+            return send_file(FRONTEND_BUILD_DIR / 'index.html')
+        return "Welcome to the Trello OneDrive Sync App! (React build not found. Run 'npm run build' in frontend directory.)", 200
+
+    # Serve static assets from React build (JS, CSS, images, etc.)
+    @app.route('/assets/<path:filename>')
+    def serve_static_assets(filename):
+        assets_dir = FRONTEND_BUILD_DIR / 'assets'
+        if assets_dir.exists():
+            return send_from_directory(assets_dir, filename)
+        return "Assets not found", 404
+    
+    # Serve specific root-level static files if they exist
+    @app.route('/favicon.ico')
+    @app.route('/robots.txt')
+    @app.route('/vite.svg')
+    def serve_root_static_files():
+        filename = request.path.lstrip('/')
+        file_path = FRONTEND_BUILD_DIR / filename
+        if file_path.exists() and file_path.is_file():
+            return send_file(file_path)
+        from flask import abort
+        abort(404)
 
     # Jobs route - display all jobs in database
     def determine_stage_from_db_fields(job):
@@ -245,6 +297,22 @@ def create_app():
 
     @app.route("/jobs")
     def list_jobs():
+        # Check if this is a browser request (wants HTML) vs API request (wants JSON)
+        # If browser request, serve React app; if API request, return JSON
+        accept_header = request.headers.get('Accept', '')
+        is_api_request = (
+            'application/json' in accept_header or
+            request.args.get('format') == 'json' or
+            request.is_json
+        )
+        
+        # If it's a browser request, serve React app (React Router will handle /jobs route)
+        if not is_api_request:
+            if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
+                return send_file(FRONTEND_BUILD_DIR / 'index.html')
+            return "React build not found. Run 'npm run build' in the frontend directory.", 200
+        
+        # Otherwise, return JSON data (API request)
         from app.models import Job
         try:
             jobs = Job.query.all()
@@ -2027,6 +2095,24 @@ def create_app():
             logger.error("Error reading pkl file", error=str(e), file=file_path)
             return jsonify({"error": str(e)}), 500
 
+    # Catch-all route for React Router (must be last, after all API routes)
+    # This handles direct URL access to React routes like /history, /operations, etc.
+    # Note: /jobs is handled above with special logic to distinguish API vs browser requests
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_react_app(path):
+        # Skip if this is an API route
+        if is_api_route(path):
+            # Return 404 for API routes that don't exist
+            from flask import abort
+            abort(404)
+        
+        # Serve index.html for all React routes
+        # React Router will handle client-side routing
+        if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
+            return send_file(FRONTEND_BUILD_DIR / 'index.html')
+        else:
+            return "React build not found. Run 'npm run build' in the frontend directory.", 404
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
