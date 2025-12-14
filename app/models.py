@@ -207,6 +207,48 @@ class Job(db.Model):
 
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"
+    
+    def to_dict(self):
+        """
+        Return raw job data as a dictionary.
+        All fields are included with their original types (dates remain as date objects).
+        Use helper functions in app.api.helpers for transformations.
+        """
+        return {
+            "id": self.id,
+            "job": self.job,
+            "release": self.release,
+            "job_name": self.job_name,
+            "description": self.description,
+            "fab_hrs": self.fab_hrs,
+            "install_hrs": self.install_hrs,
+            "paint_color": self.paint_color,
+            "pm": self.pm,
+            "by": self.by,
+            "released": self.released,
+            "fab_order": self.fab_order,
+            "cut_start": self.cut_start,
+            "fitup_comp": self.fitup_comp,
+            "welded": self.welded,
+            "paint_comp": self.paint_comp,
+            "ship": self.ship,
+            "start_install": self.start_install,
+            "start_install_formula": self.start_install_formula,
+            "start_install_formulaTF": self.start_install_formulaTF,
+            "comp_eta": self.comp_eta,
+            "job_comp": self.job_comp,
+            "invoiced": self.invoiced,
+            "notes": self.notes,
+            "trello_card_id": self.trello_card_id,
+            "trello_card_name": self.trello_card_name,
+            "trello_list_id": self.trello_list_id,
+            "trello_list_name": self.trello_list_name,
+            "trello_card_description": self.trello_card_description,
+            "trello_card_date": self.trello_card_date,
+            "viewer_url": self.viewer_url,
+            "last_updated_at": self.last_updated_at,
+            "source_of_update": self.source_of_update,
+        }
 
 
 def query_job_releases():
