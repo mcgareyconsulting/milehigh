@@ -16,8 +16,12 @@ export function useJobsDataFetching() {
             // Fetch data from API
             const data = await jobsApi.fetchData();
 
+            console.log('data:', data);
+
             // Extract jobs array - same pattern as drafting-work-load
             const jobsList = data.jobs || [];
+
+            console.log('jobsList:', jobsList);
 
             // Get columns from first job if available
             const jobColumns = jobsList.length > 0
