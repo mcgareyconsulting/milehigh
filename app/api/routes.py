@@ -21,10 +21,10 @@ def get_jobs():
         jobs = Job.query.all()
 
         # transform data for display - convert Job objects to dicts first
-        # jobs = [transform_job_for_display(job.to_dict()) for job in jobs]
+        jobs = jobs[:200]
+        jobs = [transform_job_for_display(job.to_dict()) for job in jobs]
         # truncate to first 10 jobs
-        jobs = jobs[:100]
-        jobs = [job.to_dict() for job in jobs]
+        # jobs = [job.to_dict() for job in jobs]
         # add a total count of jobs
         total_count = len(jobs)
         return jsonify({
