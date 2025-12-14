@@ -16,7 +16,7 @@ export function useJobsDataFetching() {
             // Fetch data from API
             const data = await jobsApi.fetchData();
 
-            // Extract jobs array
+            // Extract jobs array - same pattern as drafting-work-load
             const jobsList = data.jobs || [];
 
             // Get columns from first job if available
@@ -28,6 +28,11 @@ export function useJobsDataFetching() {
             setJobs(jobsList);
             setColumns(jobColumns);
             setLastUpdated(new Date().toISOString());
+
+            // Debug: Log if jobs list is empty but data exists (production debugging)
+            if (jobsList.length === 0 && data && Object.keys(data).length > 0) {
+                console.warn('useJobsDataFetching: Jobs list is empty. Data keys:', Object.keys(data), 'data.jobs:', data.jobs);
+            }
 
         } catch (error) {
             console.error('Error fetching jobs data:', error);

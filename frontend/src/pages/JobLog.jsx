@@ -1,10 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
 
 function JobLog() {
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch } = useJobsDataFetching();
+
+    // Debug logging for production issue
+    useEffect(() => {
+        console.log('JobLog - jobs count:', jobs.length);
+        console.log('JobLog - loading:', loading);
+        console.log('JobLog - error:', fetchError);
+    }, [jobs, loading, fetchError]);
 
     // Use the filters hook
     const {
@@ -24,6 +31,13 @@ function JobLog() {
         toggleStage,
         ALL_OPTION_VALUE,
     } = useJobsFilters(jobs);
+
+    // Debug logging for displayJobs
+    useEffect(() => {
+        console.log('JobLog - displayJobs count:', displayJobs.length);
+        console.log('JobLog - hasData:', displayJobs.length > 0);
+        console.log('JobLog - hasJobsData:', !loading && jobs.length > 0);
+    }, [displayJobs, jobs, loading]);
 
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
@@ -58,7 +72,11 @@ function JobLog() {
 
     const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
 
+    // Check if we have data to display
+    // Only show "No records found" if we've finished loading and have no jobs at all
+    // If we have jobs but displayJobs is empty, that means filters are excluding everything
     const hasData = displayJobs.length > 0;
+    const hasJobsData = !loading && jobs.length > 0;
 
     // Define column order explicitly
     const columnOrder = [
@@ -262,7 +280,10 @@ function JobLog() {
                                                         colSpan={tableColumnCount}
                                                         className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
                                                     >
-                                                        No records found.
+                                                        {hasJobsData
+                                                            ? 'No records match the selected filters.'
+                                                            : 'No records found.'
+                                                        }
                                                     </td>
                                                 </tr>
                                             ) : (
