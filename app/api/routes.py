@@ -23,7 +23,7 @@ def get_jobs():
         # transform data for display - convert Job objects to dicts first
         # jobs = [transform_job_for_display(job.to_dict()) for job in jobs]
         # truncate to first 10 jobs
-        jobs = jobs[:10]
+        jobs = jobs[:100]
         jobs = [job.to_dict() for job in jobs]
         # add a total count of jobs
         total_count = len(jobs)

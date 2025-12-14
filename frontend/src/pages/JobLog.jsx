@@ -25,13 +25,6 @@ function JobLog() {
         ALL_OPTION_VALUE,
     } = useJobsFilters(jobs);
 
-    // Debug logging for displayJobs
-    useEffect(() => {
-        console.log('JobLog - displayJobs count:', displayJobs.length);
-        console.log('JobLog - hasData:', displayJobs.length > 0);
-        console.log('JobLog - hasJobsData:', !loading && jobs.length > 0);
-    }, [displayJobs, jobs, loading]);
-
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
         try {
