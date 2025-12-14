@@ -22,6 +22,7 @@ def get_jobs():
 
         # transform data for display - convert Job objects to dicts first
         # jobs = [transform_job_for_display(job.to_dict()) for job in jobs]
+        jobs = [job.to_dict() for job in jobs]
         return jsonify({
             "jobs": jobs
         }), 200
