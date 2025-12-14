@@ -16,58 +16,18 @@ export function useJobsDataFetching() {
             // Fetch data from API
             const data = await jobsApi.fetchData();
 
-
-            // Extract jobs array - handle both {jobs: [...]} and direct array
-            let jobsList = [];
-            if (isDataArray) {
-                // If data is directly an array
-                // Check if first item looks like a job object
-                if (firstItem && typeof firstItem === 'object' && ('Job #' in firstItem || 'id' in firstItem)) {
-                    console.log('Data is an array of job objects with', data.length, 'items. Using directly.');
-                    jobsList = data;
-                } else {
-                    // Array but doesn't look like jobs - might be malformed
-                    console.error('Data is array but items dont look like jobs. First item:', firstItem);
-                    console.error('Expected job object with "Job #" or "id" key');
-                }
-            } else if (data && data.jobs) {
-                // Normal case: { jobs: [...] }
-                console.log('Data is object with jobs property. Extracting jobs array.');
-                jobsList = Array.isArray(data.jobs) ? data.jobs : [];
-            } else if (data && typeof data === 'object') {
-                // Fallback: check if data has any array-like structure
-                console.warn('Unexpected data structure. Data keys:', Object.keys(data).slice(0, 20));
-            } else {
-                console.warn('Data is not in expected format:', typeof data);
-            }
-
-            console.log('Jobs list extracted:', {
-                length: jobsList.length,
-                isArray: Array.isArray(jobsList),
-                firstItemKeys: jobsList[0] ? Object.keys(jobsList[0]) : null
-            });
+            // Extract jobs array - same pattern as drafting-work-load
+            const jobsList = data.jobs || [];
 
             // Get columns from first job if available
             const jobColumns = jobsList.length > 0
                 ? Object.keys(jobsList[0]).filter(key => key !== 'id')
                 : [];
 
-            console.log('About to set state:', {
-                jobsCount: jobsList.length,
-                columnsCount: jobColumns.length
-            });
-
             // Update state
             setJobs(jobsList);
             setColumns(jobColumns);
             setLastUpdated(new Date().toISOString());
-
-            console.log('State updated successfully');
-
-            // Debug: Log if jobs list is empty but data exists (production debugging)
-            if (jobsList.length === 0 && data && Object.keys(data).length > 0) {
-                console.warn('useJobsDataFetching: Jobs list is empty. Data keys:', Object.keys(data), 'data.jobs type:', typeof data.jobs);
-            }
 
         } catch (error) {
             console.error('Error fetching jobs data:', error);
@@ -127,17 +87,6 @@ export function useJobsDataFetching() {
             document.removeEventListener('visibilitychange', visibilityChangeHandler);
         };
     }, [fetchData]);
-
-    // Log when state actually updates
-    useEffect(() => {
-        console.log('Jobs state updated:', {
-            jobsCount: jobs.length,
-            columnsCount: columns.length,
-            loading,
-            error,
-            sampleJob: jobs[0] ? Object.keys(jobs[0]) : null
-        });
-    }, [jobs, columns, loading, error]);
 
     return {
         jobs,
