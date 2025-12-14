@@ -19,8 +19,12 @@ export function useDataFetching() {
             // Fetch data from API
             const data = await draftingWorkLoadApi.fetchData();
 
+            console.log('data:', data);
+
             // Transform data
             const transformed = transformSubmittals(data.submittals);
+
+            console.log('transformed:', transformed);
             const sorted = sortByOrderNumber(transformed);
             const visibleCols = getVisibleColumns(sorted);
             const latestUpdate = getMostRecentUpdate(sorted);
