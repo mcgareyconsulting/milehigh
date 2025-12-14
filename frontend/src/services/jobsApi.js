@@ -13,6 +13,19 @@ class JobsApi {
             const response = await axios.get(
                 `${API_BASE_URL}/api/jobs`
             );
+
+            // Debug: Log response structure
+            console.log('JobsApi - Response received:', {
+                dataType: typeof response.data,
+                isArray: Array.isArray(response.data),
+                hasJobs: response.data && 'jobs' in response.data,
+                dataKeys: response.data && typeof response.data === 'object'
+                    ? (Array.isArray(response.data)
+                        ? `Array[${response.data.length}]`
+                        : Object.keys(response.data).slice(0, 5))
+                    : null
+            });
+
             return response.data;
         } catch (error) {
             // Add context and re-throw

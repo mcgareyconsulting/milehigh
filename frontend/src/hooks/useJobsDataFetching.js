@@ -16,18 +16,58 @@ export function useJobsDataFetching() {
             // Fetch data from API
             const data = await jobsApi.fetchData();
 
+            console.log('Raw data:', data);
+
             // Log metadata instead of full data (avoids console truncation)
+            const isDataArray = Array.isArray(data);
+            const firstItem = isDataArray && data.length > 0 ? data[0] : null;
+            const firstItemKeys = firstItem && typeof firstItem === 'object' ? Object.keys(firstItem) : null;
+
             console.log('Data received:', {
                 hasData: !!data,
-                dataKeys: data ? Object.keys(data) : [],
+                dataType: typeof data,
+                isArray: isDataArray,
+                arrayLength: isDataArray ? data.length : null,
+                firstItemType: firstItem ? typeof firstItem : null,
+                firstItemIsObject: firstItem ? typeof firstItem === 'object' : null,
+                firstItemKeys: firstItemKeys,
                 jobsType: typeof data?.jobs,
                 jobsIsArray: Array.isArray(data?.jobs),
-                jobsLength: data?.jobs?.length,
-                firstJobSample: data?.jobs?.[0] ? Object.keys(data.jobs[0]) : null
+                jobsLength: data?.jobs?.length
             });
 
-            // Extract jobs array - same pattern as drafting-work-load
-            const jobsList = data.jobs || [];
+            // Check if this looks like a jobs array or something else
+            if (isDataArray && firstItem) {
+                console.log('First array item sample:', {
+                    hasId: 'id' in firstItem,
+                    hasJob: 'Job #' in firstItem || 'Job' in firstItem,
+                    keys: firstItemKeys?.slice(0, 10)
+                });
+            }
+
+            // Extract jobs array - handle both {jobs: [...]} and direct array
+            let jobsList = [];
+            if (isDataArray) {
+                // If data is directly an array
+                // Check if first item looks like a job object
+                if (firstItem && typeof firstItem === 'object' && ('Job #' in firstItem || 'id' in firstItem)) {
+                    console.log('Data is an array of job objects with', data.length, 'items. Using directly.');
+                    jobsList = data;
+                } else {
+                    // Array but doesn't look like jobs - might be malformed
+                    console.error('Data is array but items dont look like jobs. First item:', firstItem);
+                    console.error('Expected job object with "Job #" or "id" key');
+                }
+            } else if (data && data.jobs) {
+                // Normal case: { jobs: [...] }
+                console.log('Data is object with jobs property. Extracting jobs array.');
+                jobsList = Array.isArray(data.jobs) ? data.jobs : [];
+            } else if (data && typeof data === 'object') {
+                // Fallback: check if data has any array-like structure
+                console.warn('Unexpected data structure. Data keys:', Object.keys(data).slice(0, 20));
+            } else {
+                console.warn('Data is not in expected format:', typeof data);
+            }
 
             console.log('Jobs list extracted:', {
                 length: jobsList.length,
