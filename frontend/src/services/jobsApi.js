@@ -15,10 +15,12 @@ class JobsApi {
             );
 
             // Debug: Log response structure
+            const isObject = response.data && typeof response.data === 'object' && !Array.isArray(response.data);
             console.log('JobsApi - Response received:', {
                 dataType: typeof response.data,
                 isArray: Array.isArray(response.data),
-                hasJobs: response.data && 'jobs' in response.data,
+                isObject: isObject,
+                hasJobs: isObject && 'jobs' in response.data,
                 dataKeys: response.data && typeof response.data === 'object'
                     ? (Array.isArray(response.data)
                         ? `Array[${response.data.length}]`
