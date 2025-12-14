@@ -285,13 +285,22 @@ def create_app():
             return send_from_directory(assets_dir, filename)
         return "Assets not found", 404
     
-    # Serve specific root-level static files if they exist
+    # Serve root-level static files from dist directory
+    # This handles favicon, robots.txt, and any other root-level static files
     @app.route('/favicon.ico')
     @app.route('/robots.txt')
     @app.route('/vite.svg')
+    @app.route('/bananas-svgrepo-com.svg')
     def serve_root_static_files():
         filename = request.path.lstrip('/')
         file_path = FRONTEND_BUILD_DIR / filename
+        
+        # Special handling for favicon.ico - serve SVG if .ico doesn't exist
+        if filename == 'favicon.ico' and not file_path.exists():
+            svg_path = FRONTEND_BUILD_DIR / 'bananas-svgrepo-com.svg'
+            if svg_path.exists():
+                return send_file(svg_path, mimetype='image/svg+xml')
+        
         if file_path.exists() and file_path.is_file():
             return send_file(file_path)
         from flask import abort
@@ -2006,6 +2015,13 @@ def create_app():
             # Return 404 for API routes that don't exist
             from flask import abort
             abort(404)
+        
+        # Check if this is a static file in the dist directory (not in assets)
+        # This handles any root-level static files we might have missed
+        if path and not path.startswith('assets/'):
+            static_file_path = FRONTEND_BUILD_DIR / path
+            if static_file_path.exists() and static_file_path.is_file():
+                return send_file(static_file_path)
         
         # Serve index.html for all React routes
         # React Router will handle client-side routing
