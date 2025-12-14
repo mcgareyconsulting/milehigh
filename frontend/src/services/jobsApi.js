@@ -1,17 +1,34 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Automatically detect dev vs production mode
+// Dev mode (npm run dev): Use Flask backend at localhost:8000
+// Production mode (npm run build): Use same origin (empty string)
+// Can override with VITE_API_URL env var if needed
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
+    (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
 class JobsApi {
     async fetchData() {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/api/jobs`
+                `${API_BASE_URL}/jobs`
             );
             return response.data;
         } catch (error) {
             // Add context and re-throw
             throw this._handleError(error, 'Failed to fetch jobs data');
+        }
+    }
+
+    async updateStage(job, release, stage) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/jobs/${job}/${release}/stage`,
+                { stage }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update stage');
         }
     }
 
