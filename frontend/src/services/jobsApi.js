@@ -14,19 +14,18 @@ class JobsApi {
                 `${API_BASE_URL}/api/jobs`
             );
 
-            // Debug: Log response structure
-            const isObject = response.data && typeof response.data === 'object' && !Array.isArray(response.data);
-            console.log('JobsApi - Response received:', {
-                dataType: typeof response.data,
-                isArray: Array.isArray(response.data),
-                isObject: isObject,
-                hasJobs: isObject && 'jobs' in response.data,
-                dataKeys: response.data && typeof response.data === 'object'
-                    ? (Array.isArray(response.data)
-                        ? `Array[${response.data.length}]`
-                        : Object.keys(response.data).slice(0, 5))
-                    : null
-            });
+            // Log what we get
+            console.log('Jobs API response:', response.data);
+            console.log('Jobs API response type:', typeof response.data);
+            console.log('Jobs Object', response.data.jobs);
+            console.log('Jobs Object type:', typeof response.data.jobs);
+            // console.log('Jobs Object keys:', Object.keys(response.data.jobs));
+            // console.log('Jobs Object length:', response.data.jobs.length);
+            // console.log('Jobs Object first item:', response.data.jobs[0]);
+            // console.log('Jobs Object first item type:', typeof response.data.jobs[0]);
+            // console.log('Jobs Object first item keys:', Object.keys(response.data.jobs[0]));
+            // console.log('Jobs Object first item length:', Object.keys(response.data.jobs[0]).length);
+            // console.log('Jobs Object first item keys:', Object.keys(response.data.jobs[0]));
 
             return response.data;
         } catch (error) {

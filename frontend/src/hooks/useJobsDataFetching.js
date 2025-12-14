@@ -16,34 +16,6 @@ export function useJobsDataFetching() {
             // Fetch data from API
             const data = await jobsApi.fetchData();
 
-            console.log('Raw data:', data);
-
-            // Log metadata instead of full data (avoids console truncation)
-            const isDataArray = Array.isArray(data);
-            const firstItem = isDataArray && data.length > 0 ? data[0] : null;
-            const firstItemKeys = firstItem && typeof firstItem === 'object' ? Object.keys(firstItem) : null;
-
-            console.log('Data received:', {
-                hasData: !!data,
-                dataType: typeof data,
-                isArray: isDataArray,
-                arrayLength: isDataArray ? data.length : null,
-                firstItemType: firstItem ? typeof firstItem : null,
-                firstItemIsObject: firstItem ? typeof firstItem === 'object' : null,
-                firstItemKeys: firstItemKeys,
-                jobsType: typeof data?.jobs,
-                jobsIsArray: Array.isArray(data?.jobs),
-                jobsLength: data?.jobs?.length
-            });
-
-            // Check if this looks like a jobs array or something else
-            if (isDataArray && firstItem) {
-                console.log('First array item sample:', {
-                    hasId: 'id' in firstItem,
-                    hasJob: 'Job #' in firstItem || 'Job' in firstItem,
-                    keys: firstItemKeys?.slice(0, 10)
-                });
-            }
 
             // Extract jobs array - handle both {jobs: [...]} and direct array
             let jobsList = [];
