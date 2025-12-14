@@ -11,8 +11,9 @@ class JobsApi {
     async fetchData() {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/jobs`
+                `${API_BASE_URL}/api/jobs`
             );
+            console.log(response.data);
             return response.data;
         } catch (error) {
             // Add context and re-throw

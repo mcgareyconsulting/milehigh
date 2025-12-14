@@ -7,6 +7,7 @@ from flask_cors import CORS
 from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.procore import procore_bp
+from app.api import api_bp
 from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
@@ -276,6 +277,14 @@ def create_app():
         if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
             return send_file(FRONTEND_BUILD_DIR / 'index.html')
         return "Welcome to the Trello OneDrive Sync App! (React build not found. Run 'npm run build' in frontend directory.)", 200
+
+    # Job Log route - serve React app
+    @app.route("/job-log")
+    def job_log():
+        """Serve the React app for the Job Log page. Frontend will call /api/jobs for data."""
+        if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
+            return send_file(FRONTEND_BUILD_DIR / 'index.html')
+        return "React build not found. Run 'npm run build' in the frontend directory.", 200
 
     # Serve static assets from React build (JS, CSS, images, etc.)
     @app.route('/assets/<path:filename>')
@@ -2034,6 +2043,7 @@ def create_app():
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
     app.register_blueprint(procore_bp, url_prefix="/procore")
+    app.register_blueprint(api_bp, url_prefix="/api")
 
     # Global error handler to ensure CORS headers are always included
     @app.errorhandler(Exception)

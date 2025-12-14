@@ -21,6 +21,7 @@ function AppContent() {
         <Route path="/history" element={<History />} />
         <Route path="/drafting-work-load" element={<DraftingWorkLoad />} />
         <Route path="/jobs" element={<JobLog />} />
+        <Route path="/job-log" element={<JobLog />} />
         <Route path="/operations/:operationId/logs" element={<Logs />} />
       </Routes>
     </div>
