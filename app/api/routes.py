@@ -22,9 +22,14 @@ def get_jobs():
 
         # transform data for display - convert Job objects to dicts first
         # jobs = [transform_job_for_display(job.to_dict()) for job in jobs]
+        # truncate to first 10 jobs
+        jobs = jobs[:10]
         jobs = [job.to_dict() for job in jobs]
+        # add a total count of jobs
+        total_count = len(jobs)
         return jsonify({
-            "jobs": jobs
+            "jobs": jobs,
+            "total_count": total_count
         }), 200
     except Exception as e:
         logger.error("Error in /api/jobs", error=str(e), exc_info=True)

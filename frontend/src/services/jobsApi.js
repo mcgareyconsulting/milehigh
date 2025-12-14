@@ -19,6 +19,7 @@ class JobsApi {
             console.log('Jobs API response type:', typeof response.data);
             console.log('Jobs Object', response.data.jobs);
             console.log('Jobs Object type:', typeof response.data.jobs);
+            console.log('Total count:', response.data.total_count);
             // console.log('Jobs Object keys:', Object.keys(response.data.jobs));
             // console.log('Jobs Object length:', response.data.jobs.length);
             // console.log('Jobs Object first item:', response.data.jobs[0]);

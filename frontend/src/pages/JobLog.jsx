@@ -6,13 +6,6 @@ import { JobsTableRow } from '../components/JobsTableRow';
 function JobLog() {
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch } = useJobsDataFetching();
 
-    // Debug logging for production issue
-    useEffect(() => {
-        console.log('JobLog - jobs count:', jobs.length);
-        console.log('JobLog - loading:', loading);
-        console.log('JobLog - error:', fetchError);
-    }, [jobs, loading, fetchError]);
-
     // Use the filters hook
     const {
         selectedProjectName,
