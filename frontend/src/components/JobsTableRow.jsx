@@ -36,7 +36,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
     return (
         <tr
-            className={`${rowBgClass} hover:bg-gray-100 transition-colors duration-150 border-b border-gray-300`}
+            className={`${rowBgClass} border-b border-gray-400`}
         >
             {columns.map((column) => {
                 let rawValue = row[column];
@@ -69,7 +69,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
+                            className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border border-gray-400 text-center`}
                             style={{ minWidth: '140px' }}
                         >
                             <select
@@ -101,7 +101,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center ${shouldWrapAndTruncate
+                        className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border border-gray-400 text-center ${shouldWrapAndTruncate
                             ? ''
                             : whitespaceClass
                             }`}
