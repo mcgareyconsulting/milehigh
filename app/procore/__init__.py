@@ -631,6 +631,10 @@ def drafting_workload_submittals():
                 if project_id is not None:
                     project_id = str(project_id)
 
+                # Get ball_in_court value and determine if it's multiple assignees
+                ball_in_court_value = str(safe_get(row, 'Ball In Court', '') or '').strip() or None
+                is_multiple_assignees = ball_in_court_value and ',' in ball_in_court_value
+                
                 # Insert/update in DB with cleaned values
                 submittal = ProcoreSubmittal(
                     submittal_id=submittal_id,
@@ -640,8 +644,9 @@ def drafting_workload_submittals():
                     title=str(safe_get(row, 'Title', '') or '').strip() or None,
                     status=str(safe_get(row, 'Status', '') or '').strip() or None,
                     type=str(safe_get(row, 'Type', '') or '').strip() or None,
-                    ball_in_court=str(safe_get(row, 'Ball In Court', '') or '').strip() or None,
-                    submittal_manager=str(safe_get(row, 'Submittal Manager', '') or '').strip() or None
+                    ball_in_court=ball_in_court_value,
+                    submittal_manager=str(safe_get(row, 'Submittal Manager', '') or '').strip() or None,
+                    was_multiple_assignees=is_multiple_assignees
                 )
                 db.session.add(submittal)
                 inserted_count += 1

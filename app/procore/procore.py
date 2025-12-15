@@ -461,6 +461,65 @@ def check_and_update_submittal(project_id, submittal_id):
                 f"Ball in court mismatch detected for submittal {submittal_id}: "
                 f"DB='{record.ball_in_court}' vs Procore='{ball_in_court}'"
             )
+            
+            # Check if new value is multiple assignees (comma-separated)
+            is_new_multiple = webhook_ball_value and ',' in webhook_ball_value
+            
+            # Update the flag: set to True if new value is multiple assignees
+            if is_new_multiple:
+                record.was_multiple_assignees = True
+            elif record.was_multiple_assignees and not is_new_multiple:
+                # Was multiple, now single - this is the bounce-back scenario
+                # Convert integer order numbers to urgent decimals
+                if record.order_number is not None:
+                    current_order = record.order_number
+                    # Check if order_number is an integer >= 1
+                    if isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order):
+                        # Convert to urgent decimal (e.g., 6 -> 0.6)
+                        target_decimal = current_order / 10.0
+                        
+                        # Find all existing order numbers for this ball_in_court that are < 1
+                        existing_urgent_orders = db.session.query(ProcoreSubmittal.order_number).filter(
+                            ProcoreSubmittal.ball_in_court == webhook_ball_value,
+                            ProcoreSubmittal.submittal_id != submittal_id,  # Exclude current submittal
+                            ProcoreSubmittal.order_number < 1,
+                            ProcoreSubmittal.order_number.isnot(None)
+                        ).all()
+                        existing_urgent_orders = [float(o[0]) for o in existing_urgent_orders if o[0] is not None]
+                        
+                        # Find next available decimal that is more urgent (smaller) than any collision
+                        new_order = target_decimal
+                        if target_decimal in existing_urgent_orders:
+                            # Collision detected - find next available smaller decimal
+                            if existing_urgent_orders:
+                                smallest_existing = min(existing_urgent_orders)
+                                candidate = smallest_existing / 2.0
+                                
+                                # Keep halving until we find a value that's not in the list
+                                max_iterations = 10  # Prevent infinite loops
+                                iteration = 0
+                                while candidate in existing_urgent_orders and candidate > 0.001 and iteration < max_iterations:
+                                    candidate = candidate / 2.0
+                                    iteration += 1
+                                
+                                # If we still have a collision after iterations, use a fixed small value
+                                if candidate in existing_urgent_orders or candidate <= 0:
+                                    candidate = 0.01
+                                
+                                new_order = candidate
+                            else:
+                                # No existing urgent orders, but target_decimal is somehow in the list (shouldn't happen)
+                                new_order = target_decimal / 2.0
+                        
+                        record.order_number = new_order
+                        logger.info(
+                            f"Bounce-back detected: Converted order_number from {int(current_order)} to {new_order} "
+                            f"for submittal {submittal_id} (was_multiple_assignees={record.was_multiple_assignees})"
+                        )
+                
+                # Reset the flag after handling bounce-back
+                record.was_multiple_assignees = False
+            
             record.ball_in_court = ball_in_court
             ball_updated = True
         
