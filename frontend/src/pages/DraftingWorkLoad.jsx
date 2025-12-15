@@ -40,6 +40,238 @@ function DraftingWorkLoad() {
         ALL_OPTION_VALUE,
     } = useFilters(rows);
 
+    // Drag and drop state
+    const [draggedIndex, setDraggedIndex] = useState(null);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
+    const [draggedRow, setDraggedRow] = useState(null);
+
+    /**
+     * Calculate a new "top bump" order number when moving a row above the current #1
+     * for a given ball_in_court group.
+     *
+     * Rules:
+     * - If the smallest order >= 1, use 0.5
+     * - If there are already decimals < 1, keep halving the current smallest positive order
+     */
+    const calculateTopOrderNumber = useCallback((draggedRow, allRows) => {
+        const draggedBallInCourt = draggedRow.ball_in_court ?? draggedRow['Ball In Court'] ?? '';
+
+        // Filter rows to only those with the same ball_in_court (use all rows, not just filtered)
+        const sameBallInCourtRows = allRows.filter(row => {
+            const rowBallInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
+            return String(rowBallInCourt) === String(draggedBallInCourt);
+        });
+
+        if (sameBallInCourtRows.length === 0) {
+            return 0.5;
+        }
+
+        // Sort by current order number
+        const sortedRows = [...sameBallInCourtRows].sort((a, b) => {
+            const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+            const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+            return orderA - orderB;
+        });
+
+        const first = sortedRows[0];
+        const firstOrderRaw = first.order_number ?? first['Order Number'] ?? 1;
+        const firstOrder = typeof firstOrderRaw === 'number' ? firstOrderRaw : parseFloat(firstOrderRaw) || 1;
+
+        // If the first order is an integer >= 1, just use 0.5
+        if (firstOrder >= 1) {
+            return 0.5;
+        }
+
+        // Otherwise, find the smallest positive order and halve it
+        let minPositive = Infinity;
+        for (const row of sortedRows) {
+            const raw = row.order_number ?? row['Order Number'];
+            if (raw === null || raw === undefined) continue;
+            const val = typeof raw === 'number' ? raw : parseFloat(raw);
+            if (!isNaN(val) && val > 0 && val < minPositive) {
+                minPositive = val;
+            }
+        }
+
+        const base = minPositive === Infinity ? 1 : minPositive;
+        const newOrder = base / 2;
+
+        // Round to reasonable precision (4 decimal places)
+        return Math.round(newOrder * 10000) / 10000;
+    }, []);
+
+    // Drag handlers
+    const handleDragStart = useCallback((e, index, row) => {
+        setDraggedIndex(index);
+        setDraggedRow(row);
+    }, []);
+
+    const handleDragOver = useCallback((e, index) => {
+        e.preventDefault();
+        if (draggedRow) {
+            const targetRow = displayRows[index];
+            const draggedBallInCourt = draggedRow.ball_in_court ?? draggedRow['Ball In Court'] ?? '';
+            const targetBallInCourt = targetRow.ball_in_court ?? targetRow['Ball In Court'] ?? '';
+
+            // Only allow drag over if same ball_in_court
+            if (String(draggedBallInCourt) === String(targetBallInCourt)) {
+                setDragOverIndex(index);
+            }
+        }
+    }, [draggedRow, displayRows]);
+
+    const handleDrop = useCallback(async (e, targetIndex, targetRow) => {
+        e.preventDefault();
+
+        if (!draggedRow) return;
+
+        const draggedBallInCourt = draggedRow.ball_in_court ?? draggedRow['Ball In Court'] ?? '';
+        const targetBallInCourt = targetRow.ball_in_court ?? targetRow['Ball In Court'] ?? '';
+
+        // Only allow drop if same ball_in_court
+        if (String(draggedBallInCourt) !== String(targetBallInCourt)) {
+            setDraggedIndex(null);
+            setDragOverIndex(null);
+            setDraggedRow(null);
+            return;
+        }
+
+        // Work with all rows in this ball_in_court group, sorted by current order
+        const draggedRowId = draggedRow['Submittals Id'] || draggedRow.submittal_id;
+        const targetRowId = targetRow['Submittals Id'] || targetRow.submittal_id;
+
+        const sameBallInCourtRows = rows.filter(row => {
+            const rowBallInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
+            return String(rowBallInCourt) === String(draggedBallInCourt);
+        });
+
+        const sortedGroup = [...sameBallInCourtRows].sort((a, b) => {
+            const orderA = a.order_number ?? a['Order Number'] ?? 999999;
+            const orderB = b.order_number ?? b['Order Number'] ?? 999999;
+            return orderA - orderB;
+        });
+
+        const draggedPosition = sortedGroup.findIndex(r => {
+            const rowId = r['Submittals Id'] || r.submittal_id;
+            return rowId === draggedRowId;
+        });
+
+        const targetPosition = sortedGroup.findIndex(r => {
+            const rowId = r['Submittals Id'] || r.submittal_id;
+            return rowId === targetRowId;
+        });
+
+        if (draggedPosition === -1 || targetPosition === -1) {
+            setDraggedIndex(null);
+            setDragOverIndex(null);
+            setDraggedRow(null);
+            return;
+        }
+
+        const submittalId = draggedRowId;
+
+        // Case 1: moving above the current first item -> use decimal bumping
+        if (targetPosition === 0 && draggedPosition !== 0) {
+            const newOrderNumber = calculateTopOrderNumber(draggedRow, rows);
+            if (submittalId) {
+                await updateOrderNumber(submittalId, newOrderNumber);
+            }
+        } else {
+            // Case 2: reordering in the middle or end -> renumber entire group to 1, 2, 3, ...
+
+            // Remove dragged row from group
+            const groupWithoutDragged = sortedGroup.filter(r => {
+                const rowId = r['Submittals Id'] || r.submittal_id;
+                return rowId !== draggedRowId;
+            });
+
+            // Find target index in the reduced group
+            const targetIndexInReduced = groupWithoutDragged.findIndex(r => {
+                const rowId = r['Submittals Id'] || r.submittal_id;
+                return rowId === targetRowId;
+            });
+
+            if (targetIndexInReduced === -1) {
+                setDraggedIndex(null);
+                setDragOverIndex(null);
+                setDraggedRow(null);
+                return;
+            }
+
+            // Determine insert position: if dragging down, insert after target; if up, before target
+            let insertPosition;
+            if (draggedPosition < targetPosition) {
+                insertPosition = targetIndexInReduced + 1;
+            } else {
+                insertPosition = targetIndexInReduced;
+            }
+
+            const clampedInsert = Math.max(0, Math.min(insertPosition, groupWithoutDragged.length));
+
+            const reorderedGroup = [
+                ...groupWithoutDragged.slice(0, clampedInsert),
+                draggedRow,
+                ...groupWithoutDragged.slice(clampedInsert),
+            ];
+
+            // Renumber group while preserving meaning of decimal "urgent" orders:
+            // - A contiguous prefix of rows whose current order < 1 keep their decimal values
+            // - Everything after that prefix is renumbered to 1, 2, 3, ... based on new order
+            let urgentPrefixLength = 0;
+
+            for (let i = 0; i < reorderedGroup.length; i++) {
+                const row = reorderedGroup[i];
+                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
+                const currentOrder = typeof currentOrderRaw === 'number'
+                    ? currentOrderRaw
+                    : currentOrderRaw !== null && currentOrderRaw !== undefined
+                        ? parseFloat(currentOrderRaw)
+                        : null;
+
+                if (currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
+                    urgentPrefixLength += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let nextIntegerOrder = 1;
+
+            for (let i = 0; i < reorderedGroup.length; i++) {
+                const row = reorderedGroup[i];
+                const rowId = row['Submittals Id'] || row.submittal_id;
+                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
+                const currentOrder = typeof currentOrderRaw === 'number'
+                    ? currentOrderRaw
+                    : currentOrderRaw !== null && currentOrderRaw !== undefined
+                        ? parseFloat(currentOrderRaw)
+                        : null;
+
+                let newOrderNumber;
+
+                if (i < urgentPrefixLength && currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
+                    // Preserve existing urgent decimal orders at the top
+                    newOrderNumber = currentOrder;
+                } else {
+                    // Renumber everything after the urgent prefix as 1, 2, 3, ...
+                    newOrderNumber = nextIntegerOrder;
+                    nextIntegerOrder += 1;
+                }
+
+                // Only send update if the order actually changed
+                if (rowId && currentOrder !== newOrderNumber) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await updateOrderNumber(rowId, newOrderNumber);
+                }
+            }
+        }
+
+        // Reset drag state
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+        setDraggedRow(null);
+    }, [draggedRow, rows, calculateTopOrderNumber, updateOrderNumber]);
+
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
         try {
@@ -296,6 +528,13 @@ function DraftingWorkLoad() {
                                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
+                                                {/* Ellipsis header column - far left */}
+                                                <th
+                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                    style={{ width: '32px' }}
+                                                >
+                                                    {/* Empty header for ellipsis column */}
+                                                </th>
                                                 {columnHeaders.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
@@ -342,7 +581,7 @@ function DraftingWorkLoad() {
                                             {!hasData ? (
                                                 <tr>
                                                     <td
-                                                        colSpan={tableColumnCount}
+                                                        colSpan={tableColumnCount + 1}
                                                         className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
                                                     >
                                                         No records match the selected filters.
@@ -360,6 +599,11 @@ function DraftingWorkLoad() {
                                                         onNotesChange={updateNotes}
                                                         onStatusChange={updateStatus}
                                                         rowIndex={index}
+                                                        onDragStart={handleDragStart}
+                                                        onDragOver={handleDragOver}
+                                                        onDrop={handleDrop}
+                                                        isDragging={draggedIndex}
+                                                        dragOverIndex={dragOverIndex}
                                                     />
                                                 ))
                                             )}

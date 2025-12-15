@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex, onDragStart, onDragOver, onDrop, isDragging, dragOverIndex }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -9,6 +9,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const notesInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
+    const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
+    const hasMultipleAssignees = String(ballInCourt).includes(',');
+    const isDraggable = !hasMultipleAssignees;
 
     const formatTypeValue = (value) => {
         if (value === null || value === undefined || value === '') {
@@ -98,10 +101,63 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     // Alternate row background colors
     const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
 
+    // Drag and drop handlers
+    const handleDragStart = (e) => {
+        if (!isDraggable) {
+            e.preventDefault();
+            return;
+        }
+        if (onDragStart) {
+            onDragStart(e, rowIndex, row);
+        }
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', ''); // Required for Firefox
+    };
+
+    const handleDragOver = (e) => {
+        if (!isDraggable) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (onDragOver) {
+            onDragOver(e, rowIndex);
+        }
+    };
+
+    const handleDrop = (e) => {
+        if (!isDraggable) return;
+        e.preventDefault();
+        if (onDrop) {
+            onDrop(e, rowIndex, row);
+        }
+    };
+
+    const isDragOver = dragOverIndex === rowIndex;
+    const isBeingDragged = isDragging === rowIndex;
+
     return (
         <tr
-            className={`${rowBgClass} hover:bg-gray-100 transition-colors duration-150 border-b border-gray-300`}
+            className={`${rowBgClass} hover:bg-gray-100 transition-colors duration-150 border-b border-gray-300 ${isDragOver ? 'bg-accent-100' : ''} ${isBeingDragged ? 'opacity-50' : ''}`}
+            draggable={isDraggable}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
         >
+            {/* Ellipsis indicator column - far left */}
+            <td
+                className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
+                style={{ width: '32px' }}
+            >
+                <div
+                    className={`flex flex-col items-center justify-center w-6 h-6 rounded transition-colors pointer-events-none ${isDraggable ? '' : 'opacity-50'}`}
+                    title={isDraggable ? "Drag row to reorder" : "Cannot reorder (multiple assignees)"}
+                >
+                    <div className="flex flex-col items-center gap-0.5">
+                        <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                        <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                        <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                    </div>
+                </div>
+            </td>
             {columns.map((column) => {
                 const isOrderNumber = column === 'Order Number';
                 const isSubmittalId = column === 'Submittals Id';
@@ -151,10 +207,30 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 }
 
                 if (isOrderNumber) {
-                    // Check if this row has multiple assignees (comma-separated ball_in_court)
-                    const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
-                    const hasMultipleAssignees = String(ballInCourt).includes(',');
+                    // isEditable already determined above (hasMultipleAssignees)
                     const isEditable = !hasMultipleAssignees;
+
+                    // Determine visibility of Order Number:
+                    // - Show all decimals < 1 (urgent)
+                    // - Show values from 1 up to 10 (including decimals like 9.5)
+                    // - Hide (blank) anything > 10
+                    const rawOrderValue = row['Order Number'] ?? row.order_number;
+                    let displayOrder = '';
+
+                    if (rawOrderValue !== null && rawOrderValue !== undefined && rawOrderValue !== '') {
+                        const numericOrder = typeof rawOrderValue === 'number'
+                            ? rawOrderValue
+                            : parseFloat(rawOrderValue);
+
+                        if (!Number.isNaN(numericOrder)) {
+                            if (numericOrder <= 10) {
+                                displayOrder = String(numericOrder);
+                            } else {
+                                // > 10: keep in DB but hide in UI
+                                displayOrder = '';
+                            }
+                        }
+                    }
 
                     return (
                         <td
@@ -167,7 +243,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 ? 'border-gray-300 bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text text-gray-700'
                                 : 'border-gray-200 bg-gray-100 cursor-not-allowed text-gray-500 opacity-75'
                                 }`}>
-                                {cellValue}
+                                {displayOrder}
                             </div>
                         </td>
                     );
