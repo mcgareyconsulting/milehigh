@@ -12,10 +12,18 @@ function JobLog() {
         selectedStages,
         jobNumberSearch,
         releaseNumberSearch,
+        sortBy,
+        showNotComplete,
+        showNotShippingComplete,
+        showBeforePaintComplete,
         setSelectedProjectName,
         setSelectedStages,
         setJobNumberSearch,
         setReleaseNumberSearch,
+        setSortBy,
+        setShowNotComplete,
+        setShowNotShippingComplete,
+        setShowBeforePaintComplete,
         projectNameOptions,
         stageOptions,
         stageColors,
@@ -147,6 +155,72 @@ function JobLog() {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                            Filters
+                                        </label>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <button
+                                                onClick={() => setSortBy(sortBy === 'fab_order_asc' ? 'default' : 'fab_order_asc')}
+                                                className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all ${sortBy === 'fab_order_asc'
+                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                    }`}
+                                            >
+                                                Sort by Fab Order {sortBy === 'fab_order_asc' && '↑'}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const newValue = !showNotComplete;
+                                                    setShowNotComplete(newValue);
+                                                    // When activating, also sort by fab order ascending
+                                                    if (newValue) {
+                                                        setSortBy('fab_order_asc');
+                                                    }
+                                                }}
+                                                className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all ${showNotComplete
+                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                    }`}
+                                            >
+                                                All Not Complete
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const newValue = !showNotShippingComplete;
+                                                    setShowNotShippingComplete(newValue);
+                                                    // When activating, also sort by fab order ascending
+                                                    if (newValue) {
+                                                        setSortBy('fab_order_asc');
+                                                    }
+                                                }}
+                                                className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all ${showNotShippingComplete
+                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                    }`}
+                                            >
+                                                Not Shipping Complete
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const newValue = !showBeforePaintComplete;
+                                                    setShowBeforePaintComplete(newValue);
+                                                    // When activating, also sort by fab order ascending
+                                                    if (newValue) {
+                                                        setSortBy('fab_order_asc');
+                                                    }
+                                                }}
+                                                className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all ${showBeforePaintComplete
+                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                    }`}
+                                            >
+                                                Before Paint Complete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                                             Stage
                                         </label>
                                         <div className="grid grid-cols-8 gap-0.5">
@@ -176,6 +250,9 @@ function JobLog() {
                                                 );
                                             })}
                                         </div>
+                                    </div>
+                                    <div>
+                                        {/* Empty div to maintain grid alignment */}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 pt-2 flex-wrap">
