@@ -3,8 +3,7 @@ import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
 import { TableRow } from '../components/TableRow';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 
 function DraftingWorkLoad() {
     const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
@@ -298,96 +297,9 @@ function DraftingWorkLoad() {
         return value;
     };
 
-    const generatePDF = useCallback(() => {
-        if (displayRows.length === 0) {
-            alert('No data to export');
-            return;
-        }
-
-        const doc = new jsPDF('landscape', 'pt', 'letter');
-
-        // Add title
-        doc.setFontSize(18);
-        doc.text('Drafting Work Load', 40, 30);
-
-        // Add date
-        doc.setFontSize(10);
-        const formattedDate = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 50);
-        doc.text(`Last Updated: ${formattedDate}`, 40, 65);
-        doc.text(`Total Records: ${displayRows.length}`, 40, 80);
-
-        // Helper function to get column value from row
-        const getColumnValue = (row, column) => {
-            // Try exact column name first
-            if (row[column] !== undefined && row[column] !== null) {
-                return row[column];
-            }
-            // Try snake_case version
-            const snakeCase = column.toLowerCase().replace(/\s+/g, '_');
-            if (row[snakeCase] !== undefined && row[snakeCase] !== null) {
-                return row[snakeCase];
-            }
-            // Try camelCase version
-            const camelCase = column.replace(/\s+(.)/g, (_, c) => c.toUpperCase()).replace(/^./, c => c.toLowerCase());
-            if (row[camelCase] !== undefined && row[camelCase] !== null) {
-                return row[camelCase];
-            }
-            return '';
-        };
-
-        // Prepare table data
-        const tableData = displayRows.map(row => {
-            return columns.map(column => {
-                let value = getColumnValue(row, column);
-
-                // Format dates
-                if (column.includes('Date') || column.includes('date')) {
-                    value = formatDate(value);
-                } else {
-                    value = formatCellValue(value);
-                }
-
-                // Truncate long values for PDF
-                if (typeof value === 'string' && value.length > 50) {
-                    value = value.substring(0, 47) + '...';
-                }
-
-                return value;
-            });
-        });
-
-        // Generate table
-        autoTable(doc, {
-            head: [columns],
-            body: tableData,
-            startY: 90,
-            styles: {
-                fontSize: 7,
-                cellPadding: 2,
-            },
-            headStyles: {
-                fillColor: [100, 100, 100],
-                textColor: [255, 255, 255],
-                fontStyle: 'bold',
-            },
-            alternateRowStyles: {
-                fillColor: [245, 245, 245],
-            },
-            columnStyles: {
-                // Make certain columns narrower
-                0: { cellWidth: 40 }, // Order Number
-                1: { cellWidth: 60 }, // Submittals Id
-                5: { cellWidth: 80 }, // Ball In Court
-                9: { cellWidth: 120 }, // Notes
-            },
-            margin: { top: 90, left: 40, right: 40 },
-        });
-
-        // Save the PDF
-        const fileName = `Drafting_Work_Load_${new Date().toISOString().split('T')[0]}.pdf`;
-        doc.save(fileName);
-    }, [displayRows, columns, lastUpdated, formatDate, formatCellValue]);
+    const handleGeneratePDF = useCallback(() => {
+        generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
+    }, [displayRows, columns, lastUpdated]);
 
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
@@ -432,7 +344,7 @@ function DraftingWorkLoad() {
                             </div>
                             <div className="flex items-center gap-3">
                                 <button
-                                    onClick={generatePDF}
+                                    onClick={handleGeneratePDF}
                                     disabled={!hasData || loading}
                                     className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${!hasData || loading
                                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
