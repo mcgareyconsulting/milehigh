@@ -1,35 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-/**
- * Format a date value for display
- */
-function formatDate(dateValue) {
-    if (!dateValue) return '—';
-    try {
-        const date = new Date(dateValue);
-        if (isNaN(date.getTime())) return '—';
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${month}/${day}/${year}`;
-    } catch (e) {
-        return '—';
-    }
-}
-
-/**
- * Format a cell value for display
- */
-function formatCellValue(value) {
-    if (value === null || value === undefined || value === '') {
-        return '—';
-    }
-    if (Array.isArray(value)) {
-        return value.join(', ');
-    }
-    return value;
-}
+import { formatDate, formatCellValue } from './formatters';
 
 /**
  * Get column value from row, trying multiple field name formats

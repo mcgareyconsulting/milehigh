@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
+import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { TableRow } from '../components/TableRow';
+import { FilterButtonGroup } from '../components/FilterButtonGroup';
+import { AlertMessage } from '../components/AlertMessage';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
+import { formatDate, formatCellValue } from '../utils/formatters';
 
 function DraftingWorkLoad() {
     const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
@@ -16,9 +20,6 @@ function DraftingWorkLoad() {
         uploadError,
         uploadSuccess,
         clearUploadSuccess,
-        updating,
-        error: mutationError,
-        success
     } = useMutations(refetch);
 
     const rows = submittals; // now that submittals is clean, we alias
@@ -41,261 +42,15 @@ function DraftingWorkLoad() {
         ALL_OPTION_VALUE,
     } = useFilters(rows);
 
-    // Drag and drop state
-    const [draggedIndex, setDraggedIndex] = useState(null);
-    const [dragOverIndex, setDragOverIndex] = useState(null);
-    const [draggedRow, setDraggedRow] = useState(null);
+    // Drag and drop functionality
+    const {
+        draggedIndex,
+        dragOverIndex,
+        handleDragStart,
+        handleDragOver,
+        handleDrop,
+    } = useDragAndDrop(rows, displayRows, updateOrderNumber);
 
-    /**
-     * Calculate a new "top bump" order number when moving a row above the current #1
-     * for a given ball_in_court group.
-     *
-     * Rules:
-     * - If the smallest order >= 1, use 0.5
-     * - If there are already decimals < 1, keep halving the current smallest positive order
-     */
-    const calculateTopOrderNumber = useCallback((draggedRow, allRows) => {
-        const draggedBallInCourt = draggedRow.ball_in_court ?? draggedRow['Ball In Court'] ?? '';
-
-        // Filter rows to only those with the same ball_in_court (use all rows, not just filtered)
-        const sameBallInCourtRows = allRows.filter(row => {
-            const rowBallInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
-            return String(rowBallInCourt) === String(draggedBallInCourt);
-        });
-
-        if (sameBallInCourtRows.length === 0) {
-            return 0.5;
-        }
-
-        // Sort by current order number
-        const sortedRows = [...sameBallInCourtRows].sort((a, b) => {
-            const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-            const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-            return orderA - orderB;
-        });
-
-        const first = sortedRows[0];
-        const firstOrderRaw = first.order_number ?? first['Order Number'] ?? 1;
-        const firstOrder = typeof firstOrderRaw === 'number' ? firstOrderRaw : parseFloat(firstOrderRaw) || 1;
-
-        // If the first order is an integer >= 1, just use 0.5
-        if (firstOrder >= 1) {
-            return 0.5;
-        }
-
-        // Otherwise, find the smallest positive order and halve it
-        let minPositive = Infinity;
-        for (const row of sortedRows) {
-            const raw = row.order_number ?? row['Order Number'];
-            if (raw === null || raw === undefined) continue;
-            const val = typeof raw === 'number' ? raw : parseFloat(raw);
-            if (!isNaN(val) && val > 0 && val < minPositive) {
-                minPositive = val;
-            }
-        }
-
-        const base = minPositive === Infinity ? 1 : minPositive;
-        const newOrder = base / 2;
-
-        // Round to reasonable precision (4 decimal places)
-        return Math.round(newOrder * 10000) / 10000;
-    }, []);
-
-    // Drag handlers
-    const handleDragStart = useCallback((e, index, row) => {
-        setDraggedIndex(index);
-        setDraggedRow(row);
-    }, []);
-
-    const handleDragOver = useCallback((e, index) => {
-        e.preventDefault();
-        if (draggedRow) {
-            const targetRow = displayRows[index];
-            const draggedBallInCourt = draggedRow.ball_in_court ?? draggedRow['Ball In Court'] ?? '';
-            const targetBallInCourt = targetRow.ball_in_court ?? targetRow['Ball In Court'] ?? '';
-
-            // Only allow drag over if same ball_in_court
-            if (String(draggedBallInCourt) === String(targetBallInCourt)) {
-                setDragOverIndex(index);
-            }
-        }
-    }, [draggedRow, displayRows]);
-
-    const handleDrop = useCallback(async (e, targetIndex, targetRow) => {
-        e.preventDefault();
-
-        if (!draggedRow) return;
-
-        const draggedBallInCourt = draggedRow.ball_in_court ?? draggedRow['Ball In Court'] ?? '';
-        const targetBallInCourt = targetRow.ball_in_court ?? targetRow['Ball In Court'] ?? '';
-
-        // Only allow drop if same ball_in_court
-        if (String(draggedBallInCourt) !== String(targetBallInCourt)) {
-            setDraggedIndex(null);
-            setDragOverIndex(null);
-            setDraggedRow(null);
-            return;
-        }
-
-        // Work with all rows in this ball_in_court group, sorted by current order
-        const draggedRowId = draggedRow['Submittals Id'] || draggedRow.submittal_id;
-        const targetRowId = targetRow['Submittals Id'] || targetRow.submittal_id;
-
-        const sameBallInCourtRows = rows.filter(row => {
-            const rowBallInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
-            return String(rowBallInCourt) === String(draggedBallInCourt);
-        });
-
-        const sortedGroup = [...sameBallInCourtRows].sort((a, b) => {
-            const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-            const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-            return orderA - orderB;
-        });
-
-        const draggedPosition = sortedGroup.findIndex(r => {
-            const rowId = r['Submittals Id'] || r.submittal_id;
-            return rowId === draggedRowId;
-        });
-
-        const targetPosition = sortedGroup.findIndex(r => {
-            const rowId = r['Submittals Id'] || r.submittal_id;
-            return rowId === targetRowId;
-        });
-
-        if (draggedPosition === -1 || targetPosition === -1) {
-            setDraggedIndex(null);
-            setDragOverIndex(null);
-            setDraggedRow(null);
-            return;
-        }
-
-        const submittalId = draggedRowId;
-
-        // Case 1: moving above the current first item -> use decimal bumping
-        if (targetPosition === 0 && draggedPosition !== 0) {
-            const newOrderNumber = calculateTopOrderNumber(draggedRow, rows);
-            if (submittalId) {
-                await updateOrderNumber(submittalId, newOrderNumber);
-            }
-        } else {
-            // Case 2: reordering in the middle or end -> renumber entire group to 1, 2, 3, ...
-
-            // Remove dragged row from group
-            const groupWithoutDragged = sortedGroup.filter(r => {
-                const rowId = r['Submittals Id'] || r.submittal_id;
-                return rowId !== draggedRowId;
-            });
-
-            // Find target index in the reduced group
-            const targetIndexInReduced = groupWithoutDragged.findIndex(r => {
-                const rowId = r['Submittals Id'] || r.submittal_id;
-                return rowId === targetRowId;
-            });
-
-            if (targetIndexInReduced === -1) {
-                setDraggedIndex(null);
-                setDragOverIndex(null);
-                setDraggedRow(null);
-                return;
-            }
-
-            // Determine insert position: if dragging down, insert after target; if up, before target
-            let insertPosition;
-            if (draggedPosition < targetPosition) {
-                insertPosition = targetIndexInReduced + 1;
-            } else {
-                insertPosition = targetIndexInReduced;
-            }
-
-            const clampedInsert = Math.max(0, Math.min(insertPosition, groupWithoutDragged.length));
-
-            const reorderedGroup = [
-                ...groupWithoutDragged.slice(0, clampedInsert),
-                draggedRow,
-                ...groupWithoutDragged.slice(clampedInsert),
-            ];
-
-            // Renumber group while preserving meaning of decimal "urgent" orders:
-            // - A contiguous prefix of rows whose current order < 1 keep their decimal values
-            // - Everything after that prefix is renumbered to 1, 2, 3, ... based on new order
-            let urgentPrefixLength = 0;
-
-            for (let i = 0; i < reorderedGroup.length; i++) {
-                const row = reorderedGroup[i];
-                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
-                const currentOrder = typeof currentOrderRaw === 'number'
-                    ? currentOrderRaw
-                    : currentOrderRaw !== null && currentOrderRaw !== undefined
-                        ? parseFloat(currentOrderRaw)
-                        : null;
-
-                if (currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
-                    urgentPrefixLength += 1;
-                } else {
-                    break;
-                }
-            }
-
-            let nextIntegerOrder = 1;
-
-            for (let i = 0; i < reorderedGroup.length; i++) {
-                const row = reorderedGroup[i];
-                const rowId = row['Submittals Id'] || row.submittal_id;
-                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
-                const currentOrder = typeof currentOrderRaw === 'number'
-                    ? currentOrderRaw
-                    : currentOrderRaw !== null && currentOrderRaw !== undefined
-                        ? parseFloat(currentOrderRaw)
-                        : null;
-
-                let newOrderNumber;
-
-                if (i < urgentPrefixLength && currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
-                    // Preserve existing urgent decimal orders at the top
-                    newOrderNumber = currentOrder;
-                } else {
-                    // Renumber everything after the urgent prefix as 1, 2, 3, ...
-                    newOrderNumber = nextIntegerOrder;
-                    nextIntegerOrder += 1;
-                }
-
-                // Only send update if the order actually changed
-                if (rowId && currentOrder !== newOrderNumber) {
-                    // eslint-disable-next-line no-await-in-loop
-                    await updateOrderNumber(rowId, newOrderNumber);
-                }
-            }
-        }
-
-        // Reset drag state
-        setDraggedIndex(null);
-        setDragOverIndex(null);
-        setDraggedRow(null);
-    }, [draggedRow, rows, calculateTopOrderNumber, updateOrderNumber]);
-
-    const formatDate = (dateValue) => {
-        if (!dateValue) return '—';
-        try {
-            const date = new Date(dateValue);
-            if (isNaN(date.getTime())) return '—';
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${month}/${day}/${year}`;
-        } catch (e) {
-            return '—';
-        }
-    };
-
-    const formatCellValue = (value) => {
-        if (value === null || value === undefined || value === '') {
-            return '—';
-        }
-        if (Array.isArray(value)) {
-            return value.join(', ');
-        }
-        return value;
-    };
 
     const handleGeneratePDF = useCallback(() => {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
@@ -324,13 +79,13 @@ function DraftingWorkLoad() {
     }, [uploadSuccess, clearUploadSuccess]);
 
 
-    const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
+    const formattedLastUpdated = useMemo(
+        () => lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown',
+        [lastUpdated]
+    );
 
     const hasData = displayRows.length > 0;
-
-    const columnHeaders = useMemo(() => columns, [columns]);
-
-    const tableColumnCount = columnHeaders.length;
+    const tableColumnCount = columns.length;
 
     return (
         <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
@@ -388,96 +143,29 @@ function DraftingWorkLoad() {
                             <div className="flex flex-col gap-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="flex flex-col gap-3">
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                                                🎯 Ball In Court
-                                            </label>
-                                            <div className="grid grid-cols-8 gap-1">
-                                                <button
-                                                    onClick={() => setSelectedBallInCourt(ALL_OPTION_VALUE)}
-                                                    className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedBallInCourt === ALL_OPTION_VALUE
-                                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                        }`}
-                                                    title="All"
-                                                >
-                                                    All
-                                                </button>
-                                                {ballInCourtOptions.map((option) => (
-                                                    <button
-                                                        key={option}
-                                                        onClick={() => setSelectedBallInCourt(option)}
-                                                        className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedBallInCourt === option
-                                                            ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                            }`}
-                                                        title={option}
-                                                    >
-                                                        {option}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                                                👤 Submittal Manager
-                                            </label>
-                                            <div className="grid grid-cols-8 gap-1">
-                                                <button
-                                                    onClick={() => setSelectedSubmittalManager(ALL_OPTION_VALUE)}
-                                                    className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedSubmittalManager === ALL_OPTION_VALUE
-                                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                        }`}
-                                                    title="All"
-                                                >
-                                                    All
-                                                </button>
-                                                {submittalManagerOptions.map((option) => (
-                                                    <button
-                                                        key={option}
-                                                        onClick={() => setSelectedSubmittalManager(option)}
-                                                        className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedSubmittalManager === option
-                                                            ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                            }`}
-                                                        title={option}
-                                                    >
-                                                        {option}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        <FilterButtonGroup
+                                            label="🎯 Ball In Court"
+                                            options={ballInCourtOptions}
+                                            selectedValue={selectedBallInCourt}
+                                            onSelect={setSelectedBallInCourt}
+                                            allOptionValue={ALL_OPTION_VALUE}
+                                        />
+                                        <FilterButtonGroup
+                                            label="👤 Submittal Manager"
+                                            options={submittalManagerOptions}
+                                            selectedValue={selectedSubmittalManager}
+                                            onSelect={setSelectedSubmittalManager}
+                                            allOptionValue={ALL_OPTION_VALUE}
+                                        />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                                            📁 Project Name
-                                        </label>
-                                        <div className="grid grid-cols-8 gap-1">
-                                            <button
-                                                onClick={() => setSelectedProjectName(ALL_OPTION_VALUE)}
-                                                className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedProjectName === ALL_OPTION_VALUE
-                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                    }`}
-                                                title="All"
-                                            >
-                                                All
-                                            </button>
-                                            {projectNameOptions.map((option) => (
-                                                <button
-                                                    key={option}
-                                                    onClick={() => setSelectedProjectName(option)}
-                                                    className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedProjectName === option
-                                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                        }`}
-                                                    title={option}
-                                                >
-                                                    {option}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <FilterButtonGroup
+                                            label="📁 Project Name"
+                                            options={projectNameOptions}
+                                            selectedValue={selectedProjectName}
+                                            onSelect={setSelectedProjectName}
+                                            allOptionValue={ALL_OPTION_VALUE}
+                                        />
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 pt-2">
@@ -496,26 +184,18 @@ function DraftingWorkLoad() {
                                 </div>
                             </div>
                             {uploadSuccess && (
-                                <div className="mt-4 bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg shadow-sm">
-                                    <div className="flex items-start">
-                                        <span className="text-xl mr-3">✓</span>
-                                        <div>
-                                            <p className="font-semibold">File uploaded successfully!</p>
-                                            <p className="text-sm mt-1">The data has been refreshed.</p>
-                                        </div>
-                                    </div>
-                                </div>
+                                <AlertMessage
+                                    type="success"
+                                    title="File uploaded successfully!"
+                                    message="The data has been refreshed."
+                                />
                             )}
                             {uploadError && (
-                                <div className="mt-4 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg shadow-sm">
-                                    <div className="flex items-start">
-                                        <span className="text-xl mr-3">⚠️</span>
-                                        <div>
-                                            <p className="font-semibold">Upload failed</p>
-                                            <p className="text-sm mt-1">{uploadError}</p>
-                                        </div>
-                                    </div>
-                                </div>
+                                <AlertMessage
+                                    type="error"
+                                    title="Upload failed"
+                                    message={uploadError}
+                                />
                             )}
                         </div>
 
@@ -527,15 +207,11 @@ function DraftingWorkLoad() {
                         )}
 
                         {fetchError && !loading && (
-                            <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded-lg shadow-sm">
-                                <div className="flex items-start">
-                                    <span className="text-xl mr-3">⚠️</span>
-                                    <div>
-                                        <p className="font-semibold">Unable to load Drafting Work Load data</p>
-                                        <p className="text-sm mt-1">{fetchError}</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <AlertMessage
+                                type="error"
+                                title="Unable to load Drafting Work Load data"
+                                message={fetchError}
+                            />
                         )}
 
                         {!loading && !fetchError && (
@@ -551,7 +227,7 @@ function DraftingWorkLoad() {
                                                 >
                                                     {/* Empty header for ellipsis column */}
                                                 </th>
-                                                {columnHeaders.map((column) => {
+                                                {columns.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
                                                     const isProjectName = column === 'Project Name';
@@ -608,7 +284,7 @@ function DraftingWorkLoad() {
                                                     <TableRow
                                                         key={row.id}
                                                         row={row}
-                                                        columns={columnHeaders}
+                                                        columns={columns}
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
                                                         onOrderNumberChange={updateOrderNumber}
