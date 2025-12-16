@@ -3,6 +3,21 @@ import autoTable from 'jspdf-autotable';
 import { formatDate, formatCellValue } from './formatters';
 
 /**
+ * Format type value using the same mapping as the UI
+ */
+function formatTypeValue(value) {
+    if (value === null || value === undefined || value === '') {
+        return value;
+    }
+    const typeMap = {
+        'Submittal For Gc  Approval': 'Sub GC',
+        'Submittal for GC  Approval': 'Sub GC',
+        'Drafting Release Review': 'DRR',
+    };
+    return typeMap[value] || value;
+}
+
+/**
  * Get column value from row, trying multiple field name formats
  */
 function getColumnValue(row, column) {
@@ -25,11 +40,25 @@ function getColumnValue(row, column) {
 
 /**
  * Prepare table data for PDF export
+ * Returns both the table data and a set of row indices that are DRR rows
  */
 function prepareTableData(rows, columns) {
-    return rows.map(row => {
+    const drrRowIndices = new Set();
+
+    const tableData = rows.map((row, rowIndex) => {
+        // Check if this row is a DRR row
+        const rowType = row.type ?? row['Type'] ?? '';
+        if (rowType === 'Drafting Release Review') {
+            drrRowIndices.add(rowIndex);
+        }
+
         return columns.map(column => {
             let value = getColumnValue(row, column);
+
+            // Apply type mapping for Type column
+            if (column === 'Type') {
+                value = formatTypeValue(value);
+            }
 
             // Format dates
             if (column.includes('Date') || column.includes('date')) {
@@ -46,6 +75,8 @@ function prepareTableData(rows, columns) {
             return value;
         });
     });
+
+    return { tableData, drrRowIndices };
 }
 
 /**
@@ -73,8 +104,8 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
     doc.text(`Last Updated: ${formattedDate}`, 40, 65);
     doc.text(`Total Records: ${displayRows.length}`, 40, 80);
 
-    // Prepare table data
-    const tableData = prepareTableData(displayRows, columns);
+    // Prepare table data and get DRR row indices
+    const { tableData, drrRowIndices } = prepareTableData(displayRows, columns);
 
     // Generate table
     autoTable(doc, {
@@ -101,6 +132,13 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
             9: { cellWidth: 120 }, // Notes
         },
         margin: { top: 90, left: 40, right: 40 },
+        didParseCell: function (data) {
+            // Highlight DRR rows with green background
+            // data.row.index is 0-based for body rows (header is -1)
+            if (data.row.index >= 0 && drrRowIndices.has(data.row.index)) {
+                data.cell.styles.fillColor = [220, 252, 231]; // Light green (equivalent to bg-green-100)
+            }
+        },
     });
 
     // Save the PDF
