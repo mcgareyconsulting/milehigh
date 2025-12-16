@@ -663,33 +663,8 @@ def drafting_workload_submittals():
             db.session.rollback()
             return jsonify({'error': f'Failed to save submittals: {str(exc)}'}), 500
 
-        # Assign order_number for submittals with null order_number
-        # Group by ball_in_court, then assign 0-x within each group
-        try:
-            submittals_without_order = ProcoreSubmittal.query.filter(
-                ProcoreSubmittal.order_number.is_(None)
-            ).all()
-            
-            # Group by ball_in_court
-            grouped_by_ball_in_court = defaultdict(list)
-            for submittal in submittals_without_order:
-                ball_in_court_value = submittal.ball_in_court or 'None'
-                grouped_by_ball_in_court[ball_in_court_value].append(submittal)
-            
-            # Assign order numbers within each group
-            total_assigned = 0
-            for ball_in_court_value, submittals in grouped_by_ball_in_court.items():
-                # Assign 0.0-x within this group (using floats)
-                for index, submittal in enumerate(submittals):
-                    submittal.order_number = float(index)
-                    submittal.last_updated = datetime.utcnow()
-                    total_assigned += 1
-            
-            db.session.commit()
-        except Exception as exc:
-            logger.error(f"Error assigning order numbers: {str(exc)}", exc_info=True)
-            db.session.rollback()
-            # Don't fail the whole request if order assignment fails
+        # Note: Order numbers are no longer auto-assigned.
+        # Submittals start with NULL order_number and only get assigned via drag-and-drop or manual entry.
 
         return jsonify({
             'success': True, 
@@ -697,8 +672,7 @@ def drafting_workload_submittals():
             'rows_inserted': inserted_count,
             'rows_skipped': skipped_count,
             'rows_with_errors': error_count,
-            'projects_cached': len(project_id_cache), 
-            'order_numbers_assigned': total_assigned
+            'projects_cached': len(project_id_cache)
         }), 200
 
     except Exception as exc:
@@ -735,14 +709,76 @@ def update_submittal_order():
         if order_number is not None:
             try:
                 order_number = float(order_number)
+                # Block 0 - order numbers must be > 0 or NULL
+                if order_number == 0:
+                    return jsonify({
+                        "error": "order_number cannot be 0"
+                    }), 400
             except (ValueError, TypeError):
                 return jsonify({
                     "error": "order_number must be a valid number"
                 }), 400
         
-        # Simple update - no cascading
-        submittal.order_number = order_number
-        submittal.last_updated = datetime.utcnow()
+        # If setting a number >= 1, renumber the entire ball_in_court group to be tight (1, 2, 3, ...)
+        # while preserving decimals < 1 (urgent orders)
+        if order_number is not None and order_number >= 1:
+            ball_in_court = submittal.ball_in_court
+            if ball_in_court:
+                # Get all submittals in the same ball_in_court group
+                same_group = ProcoreSubmittal.query.filter_by(ball_in_court=ball_in_court).all()
+                
+                # Separate urgent (decimals < 1) from regular (>= 1 or NULL)
+                urgent_rows = []
+                regular_rows = []
+                for s in same_group:
+                    if s.submittal_id == submittal_id:
+                        continue  # Skip the one we're updating
+                    if s.order_number is not None and 0 < s.order_number < 1:
+                        urgent_rows.append(s)
+                    else:
+                        regular_rows.append(s)
+                
+                # Sort urgent rows by order number
+                urgent_rows.sort(key=lambda s: s.order_number)
+                
+                # Sort regular rows: those with order >= 1 first (by order), then NULLs (by last_updated, oldest first)
+                regular_with_order = [s for s in regular_rows if s.order_number is not None and s.order_number >= 1]
+                regular_with_order.sort(key=lambda s: s.order_number)
+                regular_nulls = [s for s in regular_rows if s.order_number is None]
+                regular_nulls.sort(key=lambda s: s.last_updated or datetime(1970, 1, 1))
+                
+                # The entered number represents desired position in the ordered section (1-based, after urgent)
+                # So position 1 = first item after urgent decimals
+                target_pos_in_ordered = int(order_number) - 1  # Convert to 0-based
+                target_pos_in_ordered = max(0, min(target_pos_in_ordered, len(regular_with_order) + len(regular_nulls)))
+                
+                # Combine regular rows and insert submittal at target position
+                all_regular = regular_with_order + regular_nulls
+                reordered_regular = all_regular[:target_pos_in_ordered] + [submittal] + all_regular[target_pos_in_ordered:]
+                
+                # Final order: urgent first, then reordered regular
+                final_order = urgent_rows + reordered_regular
+                
+                # Renumber: preserve urgent decimals, then number 1, 2, 3, ...
+                next_integer = 1
+                for row in final_order:
+                    if row.order_number is not None and 0 < row.order_number < 1:
+                        # Preserve urgent decimal - don't update
+                        continue
+                    else:
+                        # Assign next integer
+                        if row.order_number != next_integer:
+                            row.order_number = float(next_integer)
+                            row.last_updated = datetime.utcnow()
+                        next_integer += 1
+            else:
+                # No ball_in_court, just update this one
+                submittal.order_number = order_number
+                submittal.last_updated = datetime.utcnow()
+        else:
+            # Setting to NULL or decimal < 1, just update this one (no renumbering)
+            submittal.order_number = order_number
+            submittal.last_updated = datetime.utcnow()
         
         db.session.commit()
         

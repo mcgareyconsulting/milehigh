@@ -210,10 +210,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     // isEditable already determined above (hasMultipleAssignees)
                     const isEditable = !hasMultipleAssignees;
 
-                    // Determine visibility of Order Number:
-                    // - Show all decimals < 1 (urgent)
-                    // - Show values from 1 up to 10 (including decimals like 9.5)
-                    // - Hide (blank) anything > 10
+                    // Display Order Number - show all values (including decimals and numbers > 10)
                     const rawOrderValue = row['Order Number'] ?? row.order_number;
                     let displayOrder = '';
 
@@ -223,12 +220,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             : parseFloat(rawOrderValue);
 
                         if (!Number.isNaN(numericOrder)) {
-                            if (numericOrder <= 10) {
-                                displayOrder = String(numericOrder);
-                            } else {
-                                // > 10: keep in DB but hide in UI
-                                displayOrder = '';
-                            }
+                            displayOrder = String(numericOrder);
                         }
                     }
 
