@@ -400,6 +400,155 @@ def webhook_deliveries():
         }), 500
 
 
+@procore_bp.route("/api/webhook/test", methods=["HEAD", "POST"])
+def webhook_test():
+    """
+    Testing endpoint to cleanly parse and display Procore webhook information.
+    Useful for identifying new resources and understanding webhook payload structure.
+    
+    Returns a formatted JSON response with:
+    - All headers received
+    - Parsed payload structure
+    - Identified resource information
+    - All top-level and nested keys
+    - Raw payload for reference
+    """
+    if request.method == "HEAD":
+        # Procore webhook verification request
+        return "", 200
+    
+    if request.method == "POST":
+        try:
+            # Get all headers
+            headers = dict(request.headers)
+            
+            # Get payload
+            try:
+                payload = request.get_json(silent=True) or {}
+            except Exception as e:
+                payload = {"_parse_error": str(e)}
+            
+            # Extract common fields
+            resource_id = payload.get("resource_id") or payload.get("id")
+            project_id = payload.get("project_id")
+            event_type = payload.get("reason") or payload.get("event_type")
+            resource_type = payload.get("resource_type")
+            
+            # Recursively extract all keys from nested structures
+            def extract_keys(obj, prefix="", max_depth=5, current_depth=0):
+                """Recursively extract all keys from nested dict/list structures"""
+                if current_depth >= max_depth:
+                    return [f"{prefix}... (max depth reached)"]
+                
+                keys = []
+                if isinstance(obj, dict):
+                    for key, value in obj.items():
+                        full_key = f"{prefix}.{key}" if prefix else key
+                        keys.append(full_key)
+                        if isinstance(value, (dict, list)):
+                            keys.extend(extract_keys(value, full_key, max_depth, current_depth + 1))
+                elif isinstance(obj, list) and len(obj) > 0:
+                    # Sample first item if it's a dict
+                    if isinstance(obj[0], dict):
+                        keys.append(f"{prefix}[0] (sample from list)")
+                        keys.extend(extract_keys(obj[0], f"{prefix}[0]", max_depth, current_depth + 1))
+                    else:
+                        keys.append(f"{prefix}[] (list of {type(obj[0]).__name__})")
+                return keys
+            
+            all_keys = extract_keys(payload)
+            
+            # Identify data types for each top-level key
+            def get_value_info(value):
+                """Get information about a value's type and structure"""
+                if value is None:
+                    return {"type": "null", "value": None}
+                elif isinstance(value, dict):
+                    return {
+                        "type": "object",
+                        "keys": list(value.keys()),
+                        "key_count": len(value)
+                    }
+                elif isinstance(value, list):
+                    return {
+                        "type": "array",
+                        "length": len(value),
+                        "item_type": type(value[0]).__name__ if len(value) > 0 else "empty"
+                    }
+                elif isinstance(value, (str, int, float, bool)):
+                    return {
+                        "type": type(value).__name__,
+                        "value": value if not isinstance(value, str) or len(value) < 200 else value[:200] + "..."
+                    }
+                else:
+                    return {
+                        "type": type(value).__name__,
+                        "value": str(value)[:200]
+                    }
+            
+            top_level_info = {
+                key: get_value_info(value)
+                for key, value in payload.items()
+            }
+            
+            # Build response
+            response = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "summary": {
+                    "resource_id": resource_id,
+                    "project_id": project_id,
+                    "event_type": event_type,
+                    "resource_type": resource_type,
+                    "payload_keys_count": len(payload),
+                    "total_nested_keys": len(all_keys)
+                },
+                "headers": headers,
+                "payload_structure": {
+                    "top_level_keys": top_level_info,
+                    "all_keys": sorted(set(all_keys))
+                },
+                "raw_payload": payload
+            }
+            
+            # Log the parsed analysis to a separate test log file
+            test_log_entry = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "headers": headers,
+                "parsed_analysis": {
+                    "summary": response["summary"],
+                    "payload_structure": response["payload_structure"]
+                },
+                "raw_payload": payload
+            }
+            
+            # Log to a separate test file for easy review
+            webhook_logs_dir = cfg.SNAPSHOTS_DIR
+            os.makedirs(webhook_logs_dir, exist_ok=True)
+            test_log_path = os.path.join(webhook_logs_dir, "procore_webhook_test_analysis.log")
+            
+            try:
+                with open(test_log_path, "a") as f:
+                    f.write(json.dumps(test_log_entry) + "\n")
+                logger.info(f"Logged webhook test analysis to {test_log_path}")
+            except Exception as log_error:
+                logger.error(f"Failed to log webhook test analysis: {str(log_error)}", exc_info=True)
+            
+            logger.info(
+                f"Webhook test endpoint received: resource_type={resource_type}, "
+                f"event_type={event_type}, resource_id={resource_id}, project_id={project_id}"
+            )
+            
+            return jsonify(response), 200
+            
+        except Exception as e:
+            logger.error(f"Error in webhook test endpoint: {str(e)}", exc_info=True)
+            return jsonify({
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }), 500
+
+
 @procore_bp.route("/api/webhook/payloads", methods=["GET"])
 def webhook_payloads():
     """
