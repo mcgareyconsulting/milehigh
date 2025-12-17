@@ -2074,10 +2074,10 @@ def create_app():
         return response
 
 
-    # # Initialize scheduler safely
-    # try:
-    #     init_scheduler(app)
-    # except Exception as e:
-    #     logger.error("Failed to start scheduler", error=str(e))
+    # Initialize scheduler safely
+    try:
+        init_scheduler(app)
+    except Exception as e:
+        logger.error("Failed to start scheduler", error=str(e))
 
     return app
