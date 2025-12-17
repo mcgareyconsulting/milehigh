@@ -36,12 +36,25 @@ export function useMutations(refetch) {
     }, [refetch]);
 
     const updateOrderNumber = useCallback(async (submittalId, orderNumber) => {
-        const parsedValue = orderNumber === '' || orderNumber === null || orderNumber === undefined
+        // Handle dash, blank, empty string, null, or undefined as NULL (clear order number)
+        const trimmedValue = typeof orderNumber === 'string' ? orderNumber.trim() : orderNumber;
+        const isClearValue = trimmedValue === '' ||
+            trimmedValue === '-' ||
+            trimmedValue === null ||
+            trimmedValue === undefined;
+
+        const parsedValue = isClearValue
             ? null
-            : parseFloat(orderNumber);
+            : parseFloat(trimmedValue);
 
         if (parsedValue !== null && isNaN(parsedValue)) {
             setError('Invalid order number');
+            return;
+        }
+
+        // Block 0 - order numbers must be > 0 or NULL
+        if (parsedValue !== null && parsedValue === 0) {
+            setError('Order number cannot be 0');
             return;
         }
 

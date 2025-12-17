@@ -103,12 +103,17 @@ class DraftingWorkLoadApi {
      */
     _handleError(error, defaultMessage) {
         // Extract the best error message we can find
-        const message =
+        const errorMessage =
             error.response?.data?.error ||      // Custom API error
-            error.response?.data?.details ||    // API details
             error.response?.data?.message ||    // Standard message
             error.message ||                    // JS error message
             defaultMessage;                     // Fallback
+
+        // Include details if available (often contains the actual exception)
+        const details = error.response?.data?.details;
+        const message = details
+            ? `${errorMessage}: ${details}`
+            : errorMessage;
 
         // Create a new error with the message
         const customError = new Error(message);

@@ -77,9 +77,36 @@ export function useFilters(rows = []) {
                     return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
                 }
 
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                return orderA - orderB;
+                // Sort by order number (ordered items first, then unordered by last_updated)
+                const orderA = a.order_number ?? a['Order Number'];
+                const orderB = b.order_number ?? b['Order Number'];
+
+                const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
+                const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
+
+                if (hasOrderA && !hasOrderB) return -1;
+                if (!hasOrderA && hasOrderB) return 1;
+
+                if (hasOrderA && hasOrderB) {
+                    const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
+                    const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return numA - numB;
+                    }
+                }
+
+                // Both unordered - sort by last_updated (oldest first)
+                const lastUpdatedA = a.last_updated ?? a['Last Updated'];
+                const lastUpdatedB = b.last_updated ?? b['Last Updated'];
+                if (lastUpdatedA && lastUpdatedB) {
+                    const dateA = new Date(lastUpdatedA);
+                    const dateB = new Date(lastUpdatedB);
+                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+                        return dateA - dateB;
+                    }
+                }
+
+                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
             });
         } else if (projectNameSortMode === 'z-a') {
             return filteredRows.sort((a, b) => {
@@ -107,9 +134,36 @@ export function useFilters(rows = []) {
                     return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
                 }
 
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                return orderA - orderB;
+                // Sort by order number (ordered items first, then unordered by last_updated)
+                const orderA = a.order_number ?? a['Order Number'];
+                const orderB = b.order_number ?? b['Order Number'];
+
+                const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
+                const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
+
+                if (hasOrderA && !hasOrderB) return -1;
+                if (!hasOrderA && hasOrderB) return 1;
+
+                if (hasOrderA && hasOrderB) {
+                    const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
+                    const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return numA - numB;
+                    }
+                }
+
+                // Both unordered - sort by last_updated (oldest first)
+                const lastUpdatedA = a.last_updated ?? a['Last Updated'];
+                const lastUpdatedB = b.last_updated ?? b['Last Updated'];
+                if (lastUpdatedA && lastUpdatedB) {
+                    const dateA = new Date(lastUpdatedA);
+                    const dateB = new Date(lastUpdatedB);
+                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+                        return dateA - dateB;
+                    }
+                }
+
+                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
             });
         } else {
             // Normal sort: by Ball In Court, then by order_number (as float)
@@ -145,10 +199,39 @@ export function useFilters(rows = []) {
                     return ballA.localeCompare(ballB);
                 }
 
-                // Same ball_in_court: sort by order_number as float (nulls last)
-                const orderA = a.order_number ?? a['Order Number'] ?? 999999;
-                const orderB = b.order_number ?? b['Order Number'] ?? 999999;
-                return orderA - orderB;
+                // Same ball_in_court: sort by order_number (ordered items first, then unordered by last_updated)
+                const orderA = a.order_number ?? a['Order Number'];
+                const orderB = b.order_number ?? b['Order Number'];
+
+                const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
+                const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
+
+                // If one has order and the other doesn't, ordered item comes first
+                if (hasOrderA && !hasOrderB) return -1;
+                if (!hasOrderA && hasOrderB) return 1;
+
+                // Both have orders - sort by order number
+                if (hasOrderA && hasOrderB) {
+                    const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
+                    const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return numA - numB;
+                    }
+                }
+
+                // Both are unordered - sort by last_updated (oldest first)
+                const lastUpdatedA = a.last_updated ?? a['Last Updated'];
+                const lastUpdatedB = b.last_updated ?? b['Last Updated'];
+
+                if (lastUpdatedA && lastUpdatedB) {
+                    const dateA = new Date(lastUpdatedA);
+                    const dateB = new Date(lastUpdatedB);
+                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+                        return dateA - dateB;
+                    }
+                }
+
+                return 0;
             });
         }
     }, [projectNameSortMode]);

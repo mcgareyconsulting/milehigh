@@ -8,11 +8,12 @@ from typing import Optional
 
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
+from sqlalchemy.exc import IntegrityError
 from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
 from app.procore.procore import get_project_id_by_project_name, check_and_update_submittal, create_submittal_from_webhook
 
-from app.procore.helpers import clean_value
+from app.procore.helpers import clean_value, is_email
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -119,38 +120,113 @@ def procore_webhook():
         now = datetime.utcnow()
 
         # -----------------------------------
-        # Debounce lookup
+        # Debounce lookup (only for update events)
+        # Create events are not debounced - let DB handle duplicates via unique constraint
         # -----------------------------------
-        event = ProcoreWebhookEvents.query.filter_by(
-            resource_id=resource_id,
-            project_id=project_id
-        ).first()
-
-        if event:
-            diff = (now - event.last_seen).total_seconds()
-
-            if diff < DEBOUNCE_SECONDS:
-                current_app.logger.info(
-                    f"Debounced duplicate webhook; id={resource_id}, "
-                    f"project={project_id}, seen {diff:.2f}s ago"
-                )
-                # Update timestamp so rapid bursts extend window
-                event.last_seen = now
-                db.session.commit()
-                return jsonify({"status": "debounced"}), 200
-
-            # Not debounced → update timestamp
-            event.last_seen = now
-
-        else:
-            # First time this resource/project combo has been seen
-            event = ProcoreWebhookEvents(
+        if event_type == "update":
+            # Only debounce update events
+            event = ProcoreWebhookEvents.query.filter_by(
                 resource_id=resource_id,
                 project_id=project_id,
-                last_seen=now
+                event_type=event_type
+            ).first()
+
+            if event:
+                diff = (now - event.last_seen).total_seconds()
+
+                if diff < DEBOUNCE_SECONDS:
+                    current_app.logger.info(
+                        f"Debounced duplicate update webhook; id={resource_id}, "
+                        f"project={project_id}, seen {diff:.2f}s ago"
+                    )
+                    # Update timestamp so rapid bursts extend window
+                    event.last_seen = now
+                    db.session.commit()
+                    return jsonify({"status": "debounced"}), 200
+
+                # Not debounced → update timestamp
+                event.last_seen = now
+            else:
+                # First time this resource/project/event_type combo has been seen
+                event = ProcoreWebhookEvents(
+                    resource_id=resource_id,
+                    project_id=project_id,
+                    event_type=event_type,
+                    last_seen=now
+                )
+                db.session.add(event)
+            try:
+                db.session.commit()
+            except IntegrityError as e:
+                # Handle case where old unique constraint on resource_id still exists
+                # or duplicate record exists - just update the existing record
+                db.session.rollback()
+                current_app.logger.warning(
+                    f"IntegrityError when recording update event (likely old constraint): {e}. "
+                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
+                )
+                # Try to find and update existing record
+                existing = ProcoreWebhookEvents.query.filter_by(
+                    resource_id=resource_id,
+                    project_id=project_id
+                ).first()
+                if existing:
+                    existing.event_type = event_type  # Update event_type if it changed
+                    existing.last_seen = now
+                    db.session.commit()
+                else:
+                    # If we can't find it, log and continue (tracking is non-critical)
+                    current_app.logger.warning(
+                        f"Could not find existing record to update. Continuing without tracking."
+                    )
+        else:
+            # For create events (and any other event types), record but don't debounce
+            # Still track in database for logging/auditing purposes
+            event = ProcoreWebhookEvents.query.filter_by(
+                resource_id=resource_id,
+                project_id=project_id,
+                event_type=event_type
+            ).first()
+
+            if event:
+                # Update timestamp for tracking
+                event.last_seen = now
+            else:
+                # First time this resource/project/event_type combo has been seen
+                event = ProcoreWebhookEvents(
+                    resource_id=resource_id,
+                    project_id=project_id,
+                    event_type=event_type,
+                    last_seen=now
+                )
+                db.session.add(event)
+            try:
+                db.session.commit()
+            except IntegrityError as e:
+                # Handle case where old unique constraint on resource_id still exists
+                # or duplicate record exists - just update the existing record
+                db.session.rollback()
+                current_app.logger.warning(
+                    f"IntegrityError when recording {event_type} event (likely old constraint): {e}. "
+                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
+                )
+                # Try to find and update existing record
+                existing = ProcoreWebhookEvents.query.filter_by(
+                    resource_id=resource_id,
+                    project_id=project_id
+                ).first()
+                if existing:
+                    existing.event_type = event_type  # Update event_type if it changed
+                    existing.last_seen = now
+                    db.session.commit()
+                else:
+                    # If we can't find it, log and continue (tracking is non-critical)
+                    current_app.logger.warning(
+                        f"Could not find existing record to update. Continuing without tracking."
+                    )
+            current_app.logger.info(
+                f"Processing {event_type} event immediately (not debounced); id={resource_id}, project={project_id}"
             )
-            db.session.add(event)
-        db.session.commit()
 
         # -----------------------------------
         # PROCESS ACTUAL SUBMITTAL
@@ -182,7 +258,8 @@ def procore_webhook():
                                     "Submittal created via webhook",
                                     submittal_id=resource_id,
                                     project_id=project_id,
-                                    submittal_title=record.title if record else None
+                                    submittal_title=record.title if record else None,
+                                    project_name=record.project_name if record else None
                                 )
                         current_app.logger.info(
                             f"✓ Successfully created new submittal {resource_id} from webhook create event"
@@ -262,7 +339,8 @@ def procore_webhook():
                                 project_id=project_id,
                                 old_value=old_ball_in_court,
                                 new_value=ball_in_court,
-                                submittal_title=record.title if record else None
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
                             )
                 
                 # Log status changes
@@ -281,7 +359,8 @@ def procore_webhook():
                                 project_id=project_id,
                                 old_value=old_status,
                                 new_value=status,
-                                submittal_title=record.title if record else None
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
                             )
             else:
                 current_app.logger.warning(
@@ -398,6 +477,155 @@ def webhook_deliveries():
             "status": "error",
             "error": str(e)
         }), 500
+
+
+@procore_bp.route("/api/webhook/test", methods=["HEAD", "POST"])
+def webhook_test():
+    """
+    Testing endpoint to cleanly parse and display Procore webhook information.
+    Useful for identifying new resources and understanding webhook payload structure.
+    
+    Returns a formatted JSON response with:
+    - All headers received
+    - Parsed payload structure
+    - Identified resource information
+    - All top-level and nested keys
+    - Raw payload for reference
+    """
+    if request.method == "HEAD":
+        # Procore webhook verification request
+        return "", 200
+    
+    if request.method == "POST":
+        try:
+            # Get all headers
+            headers = dict(request.headers)
+            
+            # Get payload
+            try:
+                payload = request.get_json(silent=True) or {}
+            except Exception as e:
+                payload = {"_parse_error": str(e)}
+            
+            # Extract common fields
+            resource_id = payload.get("resource_id") or payload.get("id")
+            project_id = payload.get("project_id")
+            event_type = payload.get("reason") or payload.get("event_type")
+            resource_type = payload.get("resource_type")
+            
+            # Recursively extract all keys from nested structures
+            def extract_keys(obj, prefix="", max_depth=5, current_depth=0):
+                """Recursively extract all keys from nested dict/list structures"""
+                if current_depth >= max_depth:
+                    return [f"{prefix}... (max depth reached)"]
+                
+                keys = []
+                if isinstance(obj, dict):
+                    for key, value in obj.items():
+                        full_key = f"{prefix}.{key}" if prefix else key
+                        keys.append(full_key)
+                        if isinstance(value, (dict, list)):
+                            keys.extend(extract_keys(value, full_key, max_depth, current_depth + 1))
+                elif isinstance(obj, list) and len(obj) > 0:
+                    # Sample first item if it's a dict
+                    if isinstance(obj[0], dict):
+                        keys.append(f"{prefix}[0] (sample from list)")
+                        keys.extend(extract_keys(obj[0], f"{prefix}[0]", max_depth, current_depth + 1))
+                    else:
+                        keys.append(f"{prefix}[] (list of {type(obj[0]).__name__})")
+                return keys
+            
+            all_keys = extract_keys(payload)
+            
+            # Identify data types for each top-level key
+            def get_value_info(value):
+                """Get information about a value's type and structure"""
+                if value is None:
+                    return {"type": "null", "value": None}
+                elif isinstance(value, dict):
+                    return {
+                        "type": "object",
+                        "keys": list(value.keys()),
+                        "key_count": len(value)
+                    }
+                elif isinstance(value, list):
+                    return {
+                        "type": "array",
+                        "length": len(value),
+                        "item_type": type(value[0]).__name__ if len(value) > 0 else "empty"
+                    }
+                elif isinstance(value, (str, int, float, bool)):
+                    return {
+                        "type": type(value).__name__,
+                        "value": value if not isinstance(value, str) or len(value) < 200 else value[:200] + "..."
+                    }
+                else:
+                    return {
+                        "type": type(value).__name__,
+                        "value": str(value)[:200]
+                    }
+            
+            top_level_info = {
+                key: get_value_info(value)
+                for key, value in payload.items()
+            }
+            
+            # Build response
+            response = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "summary": {
+                    "resource_id": resource_id,
+                    "project_id": project_id,
+                    "event_type": event_type,
+                    "resource_type": resource_type,
+                    "payload_keys_count": len(payload),
+                    "total_nested_keys": len(all_keys)
+                },
+                "headers": headers,
+                "payload_structure": {
+                    "top_level_keys": top_level_info,
+                    "all_keys": sorted(set(all_keys))
+                },
+                "raw_payload": payload
+            }
+            
+            # Log the parsed analysis to a separate test log file
+            test_log_entry = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "headers": headers,
+                "parsed_analysis": {
+                    "summary": response["summary"],
+                    "payload_structure": response["payload_structure"]
+                },
+                "raw_payload": payload
+            }
+            
+            # Log to a separate test file for easy review
+            webhook_logs_dir = cfg.SNAPSHOTS_DIR
+            os.makedirs(webhook_logs_dir, exist_ok=True)
+            test_log_path = os.path.join(webhook_logs_dir, "procore_webhook_test_analysis.log")
+            
+            try:
+                with open(test_log_path, "a") as f:
+                    f.write(json.dumps(test_log_entry) + "\n")
+                logger.info(f"Logged webhook test analysis to {test_log_path}")
+            except Exception as log_error:
+                logger.error(f"Failed to log webhook test analysis: {str(log_error)}", exc_info=True)
+            
+            logger.info(
+                f"Webhook test endpoint received: resource_type={resource_type}, "
+                f"event_type={event_type}, resource_id={resource_id}, project_id={project_id}"
+            )
+            
+            return jsonify(response), 200
+            
+        except Exception as e:
+            logger.error(f"Error in webhook test endpoint: {str(e)}", exc_info=True)
+            return jsonify({
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }), 500
 
 
 @procore_bp.route("/api/webhook/payloads", methods=["GET"])
@@ -522,6 +750,130 @@ def webhook_payloads():
         }), 500
 
 
+@procore_bp.route("/api/webhook/submittal-data", methods=["GET"])
+def submittal_data():
+    """
+    API endpoint to view parsed submittal data from webhook processing.
+    Returns the last N parsed submittal data entries that were logged.
+    
+    Query Parameters:
+    - limit: Number of entries to return (default: 50, max: 200)
+    - project_id: Filter by project_id (optional)
+    - submittal_id: Filter by submittal_id (optional)
+    - source: Filter by source (optional, e.g., "webhook_create", "webhook_update")
+    
+    Example:
+    GET /procore/api/webhook/submittal-data?limit=100
+    GET /procore/api/webhook/submittal-data?project_id=2900844&limit=50
+    GET /procore/api/webhook/submittal-data?submittal_id=12345
+    """
+    try:
+        import json as json_lib
+        
+        # Get query parameters
+        limit = request.args.get("limit", default=50, type=int)
+        limit = min(limit, 200)  # Cap at 200 for performance
+        project_id_filter = request.args.get("project_id")
+        submittal_id_filter = request.args.get("submittal_id")
+        source_filter = request.args.get("source")
+        
+        # Read the log file
+        webhook_logs_dir = cfg.SNAPSHOTS_DIR
+        log_file = os.path.join(webhook_logs_dir, "procore_submittal_data.log")
+        
+        if not os.path.exists(log_file):
+            return jsonify({
+                "status": "success",
+                "message": "No submittal data logged yet",
+                "entries": [],
+                "total": 0
+            }), 200
+        
+        # Read and parse entries (JSON Lines format, separated by dashes)
+        entries = []
+        current_entry = []
+        
+        try:
+            with open(log_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line == "-" * 80:
+                        # End of entry, parse it
+                        if current_entry:
+                            entry_text = "\n".join(current_entry)
+                            try:
+                                entry = json_lib.loads(entry_text)
+                                
+                                # Apply filters
+                                if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
+                                    current_entry = []
+                                    continue
+                                if submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
+                                    current_entry = []
+                                    continue
+                                if source_filter and entry.get("source") != source_filter:
+                                    current_entry = []
+                                    continue
+                                
+                                entries.append(entry)
+                            except json_lib.JSONDecodeError:
+                                # Skip malformed entries
+                                pass
+                            current_entry = []
+                    elif line:
+                        current_entry.append(line)
+                
+                # Handle last entry if file doesn't end with separator
+                if current_entry:
+                    entry_text = "\n".join(current_entry)
+                    try:
+                        entry = json_lib.loads(entry_text)
+                        
+                        # Apply filters
+                        if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
+                            pass
+                        elif submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
+                            pass
+                        elif source_filter and entry.get("source") != source_filter:
+                            pass
+                        else:
+                            entries.append(entry)
+                    except json_lib.JSONDecodeError:
+                        pass
+        
+        except Exception as e:
+            logger.error(f"Error reading submittal data log: {str(e)}", exc_info=True)
+            return jsonify({
+                "status": "error",
+                "error": str(e),
+                "log_file": log_file
+            }), 500
+        
+        # Sort by timestamp (most recent first) and limit
+        entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        entries = entries[:limit]
+        
+        return jsonify({
+            "status": "success",
+            "entries": entries,
+            "total": len(entries),
+            "limit": limit,
+            "filters": {
+                "project_id": project_id_filter,
+                "submittal_id": submittal_id_filter,
+                "source": source_filter
+            },
+            "log_file": log_file
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving submittal data: {str(e)}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+
 @procore_bp.route("/api/drafting-work-load", methods=["GET"])
 def drafting_work_load():
     """Return Drafting Work Load data from the db, filtered to only show submittals with status='Open'"""
@@ -631,6 +983,18 @@ def drafting_workload_submittals():
                 if project_id is not None:
                     project_id = str(project_id)
 
+                # Get ball_in_court value and determine if it's multiple assignees
+                ball_in_court_value = str(safe_get(row, 'Ball In Court', '') or '').strip() or None
+                
+                # Filter out email addresses from ball_in_court (handle comma-separated values)
+                if ball_in_court_value:
+                    # Split by comma, filter out emails, then rejoin
+                    parts = [part.strip() for part in ball_in_court_value.split(',')]
+                    filtered_parts = [part for part in parts if part and not is_email(part)]
+                    ball_in_court_value = ', '.join(filtered_parts) if filtered_parts else None
+                
+                is_multiple_assignees = ball_in_court_value and ',' in ball_in_court_value
+                
                 # Insert/update in DB with cleaned values
                 submittal = ProcoreSubmittal(
                     submittal_id=submittal_id,
@@ -640,8 +1004,9 @@ def drafting_workload_submittals():
                     title=str(safe_get(row, 'Title', '') or '').strip() or None,
                     status=str(safe_get(row, 'Status', '') or '').strip() or None,
                     type=str(safe_get(row, 'Type', '') or '').strip() or None,
-                    ball_in_court=str(safe_get(row, 'Ball In Court', '') or '').strip() or None,
-                    submittal_manager=str(safe_get(row, 'Submittal Manager', '') or '').strip() or None
+                    ball_in_court=ball_in_court_value,
+                    submittal_manager=str(safe_get(row, 'Submittal Manager', '') or '').strip() or None,
+                    was_multiple_assignees=is_multiple_assignees
                 )
                 db.session.add(submittal)
                 inserted_count += 1
@@ -658,33 +1023,8 @@ def drafting_workload_submittals():
             db.session.rollback()
             return jsonify({'error': f'Failed to save submittals: {str(exc)}'}), 500
 
-        # Assign order_number for submittals with null order_number
-        # Group by ball_in_court, then assign 0-x within each group
-        try:
-            submittals_without_order = ProcoreSubmittal.query.filter(
-                ProcoreSubmittal.order_number.is_(None)
-            ).all()
-            
-            # Group by ball_in_court
-            grouped_by_ball_in_court = defaultdict(list)
-            for submittal in submittals_without_order:
-                ball_in_court_value = submittal.ball_in_court or 'None'
-                grouped_by_ball_in_court[ball_in_court_value].append(submittal)
-            
-            # Assign order numbers within each group
-            total_assigned = 0
-            for ball_in_court_value, submittals in grouped_by_ball_in_court.items():
-                # Assign 0.0-x within this group (using floats)
-                for index, submittal in enumerate(submittals):
-                    submittal.order_number = float(index)
-                    submittal.last_updated = datetime.utcnow()
-                    total_assigned += 1
-            
-            db.session.commit()
-        except Exception as exc:
-            logger.error(f"Error assigning order numbers: {str(exc)}", exc_info=True)
-            db.session.rollback()
-            # Don't fail the whole request if order assignment fails
+        # Note: Order numbers are no longer auto-assigned.
+        # Submittals start with NULL order_number and only get assigned via drag-and-drop or manual entry.
 
         return jsonify({
             'success': True, 
@@ -692,8 +1032,7 @@ def drafting_workload_submittals():
             'rows_inserted': inserted_count,
             'rows_skipped': skipped_count,
             'rows_with_errors': error_count,
-            'projects_cached': len(project_id_cache), 
-            'order_numbers_assigned': total_assigned
+            'projects_cached': len(project_id_cache)
         }), 200
 
     except Exception as exc:
@@ -730,14 +1069,146 @@ def update_submittal_order():
         if order_number is not None:
             try:
                 order_number = float(order_number)
+                # Block 0 - order numbers must be > 0 or NULL
+                if order_number == 0:
+                    return jsonify({
+                        "error": "order_number cannot be 0"
+                    }), 400
             except (ValueError, TypeError):
                 return jsonify({
                     "error": "order_number must be a valid number"
                 }), 400
         
-        # Simple update - no cascading
-        submittal.order_number = order_number
-        submittal.last_updated = datetime.utcnow()
+        # Helper function to safely convert order_number to float for comparisons
+        def safe_float_order(order_val):
+            """Convert order_number to float, handling None and string values"""
+            if order_val is None:
+                return None
+            try:
+                return float(order_val)
+            except (ValueError, TypeError):
+                return None
+        
+        # Save the old order_number before updating
+        old_order_number = safe_float_order(submittal.order_number)
+        
+        # Handle setting to NULL (blank) - renumber values >= 1 that are greater than old value
+        if order_number is None:
+            # Only renumber if the old value was >= 1
+            if old_order_number is not None and old_order_number >= 1:
+                ball_in_court = submittal.ball_in_court
+                if ball_in_court:
+                    # Get all submittals in the same ball_in_court group
+                    same_group = ProcoreSubmittal.query.filter_by(ball_in_court=ball_in_court).all()
+                    
+                    # Decrease all order numbers > old_order_number by 1 (only for values >= 1)
+                    for s in same_group:
+                        if s.submittal_id == submittal_id:
+                            continue  # Skip the one we're updating
+                        s_order_val = safe_float_order(s.order_number)
+                        # Only affect integer values >= 1, not decimals < 1
+                        if s_order_val is not None and s_order_val >= 1 and s_order_val > old_order_number:
+                            s.order_number = float(s_order_val - 1)
+                            s.last_updated = datetime.utcnow()
+                
+                # Set the current submittal to NULL
+                submittal.order_number = None
+                submittal.last_updated = datetime.utcnow()
+            else:
+                # Old value was NULL or < 1, just set to NULL (no renumbering needed)
+                submittal.order_number = None
+                submittal.last_updated = datetime.utcnow()
+        
+        # Handle setting to decimal < 1 (urgent orders)
+        # This allows changing from one decimal to another (e.g., 0.3 -> 0.5) or from decimal to blank
+        # If old value was >= 1, we need to renumber (decrease values > old_value by 1)
+        # If old value was already a decimal (< 1), no renumbering needed - just update the value
+        elif order_number < 1:
+            # If old value was >= 1, renumber values greater than old value
+            if old_order_number is not None and old_order_number >= 1:
+                ball_in_court = submittal.ball_in_court
+                if ball_in_court:
+                    # Get all submittals in the same ball_in_court group
+                    same_group = ProcoreSubmittal.query.filter_by(ball_in_court=ball_in_court).all()
+                    
+                    # Decrease all order numbers > old_order_number by 1 (only for values >= 1)
+                    for s in same_group:
+                        if s.submittal_id == submittal_id:
+                            continue  # Skip the one we're updating
+                        s_order_val = safe_float_order(s.order_number)
+                        # Only affect integer values >= 1, not decimals < 1
+                        if s_order_val is not None and s_order_val >= 1 and s_order_val > old_order_number:
+                            s.order_number = float(s_order_val - 1)
+                            s.last_updated = datetime.utcnow()
+            
+            # Set the current submittal to the decimal value (or new decimal if changing from old decimal)
+            # This allows changing from 0.3 to 0.5, or from 0.3 to any other decimal, or from decimal to blank (handled above)
+            submittal.order_number = order_number
+            submittal.last_updated = datetime.utcnow()
+        
+        # Handle setting to number >= 1 - renumber all values >= 1 to be tight, preserve decimals < 1
+        else:  # order_number >= 1
+            ball_in_court = submittal.ball_in_court
+            if ball_in_court:
+                # Get all submittals in the same ball_in_court group
+                same_group = ProcoreSubmittal.query.filter_by(ball_in_court=ball_in_court).all()
+                
+                # Separate urgent (decimals < 1) from regular (>= 1) and NULLs
+                # Urgent rows keep their exact decimal values and are sorted
+                # Regular rows (>= 1) will be renumbered to be tight (1, 2, 3, ...)
+                # NULL rows stay NULL and are not included in renumbering
+                urgent_rows = []
+                regular_with_order = []  # Only rows with order >= 1 (excluding the one we're updating)
+                
+                for s in same_group:
+                    if s.submittal_id == submittal_id:
+                        continue  # Skip the one we're updating (it will be inserted at target position)
+                    order_val = safe_float_order(s.order_number)
+                    if order_val is not None and 0 < order_val < 1:
+                        urgent_rows.append(s)
+                    elif order_val is not None and order_val >= 1:
+                        regular_with_order.append(s)
+                    # NULL rows are ignored - they won't get numbers assigned
+                
+                # Sort urgent rows by their decimal value (preserve exact values)
+                urgent_rows.sort(key=lambda s: safe_float_order(s.order_number) or 0)
+                
+                # Sort regular rows with order >= 1 by their current order number
+                regular_with_order.sort(key=lambda s: safe_float_order(s.order_number) or 0)
+                
+                # The entered number represents desired position in the ordered section (1-based, after urgent)
+                # So position 1 = first item after urgent decimals
+                # Only count rows with order >= 1 (exclude NULLs from position calculation)
+                target_pos_in_ordered = int(order_number) - 1  # Convert to 0-based
+                target_pos_in_ordered = max(0, min(target_pos_in_ordered, len(regular_with_order)))
+                
+                # Insert submittal at target position (removes it from old position if it had one >= 1)
+                reordered_regular = regular_with_order[:target_pos_in_ordered] + [submittal] + regular_with_order[target_pos_in_ordered:]
+                
+                # Final order: urgent first (sorted by decimal), then reordered regular (will be renumbered to 1, 2, 3...)
+                final_order = urgent_rows + reordered_regular
+                
+                # Renumber all values >= 1 to be tight (1, 2, 3, ...)
+                # Preserve all decimals < 1 exactly as they are
+                # Note: The submittal being updated may have an old decimal value, but we want to update it to integer
+                next_integer = 1
+                for row in final_order:
+                    row_order_val = safe_float_order(row.order_number)
+                    # Check if this is the submittal being updated - if so, always update it (even if old value was decimal)
+                    is_being_updated = row.submittal_id == submittal_id
+                    if row_order_val is not None and 0 < row_order_val < 1 and not is_being_updated:
+                        # Preserve urgent decimal exactly as-is - don't update (unless it's the one being updated)
+                        continue
+                    else:
+                        # This is a regular row (>= 1) or the row being updated (even if it was a decimal)
+                        # Renumber to next integer
+                        row.order_number = float(next_integer)
+                        row.last_updated = datetime.utcnow()
+                        next_integer += 1
+            else:
+                # No ball_in_court, just update this one
+                submittal.order_number = order_number
+                submittal.last_updated = datetime.utcnow()
         
         db.session.commit()
         
