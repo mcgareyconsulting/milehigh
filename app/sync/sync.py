@@ -336,12 +336,6 @@ def sync_from_trello(event_info):
             job=rec.job,
             release=rec.release
         )
-
-        # Excel update functionality removed - no longer syncing to OneDrive
-                    "Excel row not found",
-                    job=rec.job,
-                    release=rec.release
-                )
         
         # Context manager will automatically:
         # - Mark sync_op as COMPLETED
