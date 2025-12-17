@@ -279,12 +279,13 @@ def create_app():
         return "Welcome to the Trello OneDrive Sync App! (React build not found. Run 'npm run build' in frontend directory.)", 200
 
     # Job Log route - serve React app
-    @app.route("/job-log")
-    def job_log():
-        """Serve the React app for the Job Log page. Frontend will call /api/jobs for data."""
-        if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
-            return send_file(FRONTEND_BUILD_DIR / 'index.html')
-        return "React build not found. Run 'npm run build' in the frontend directory.", 200
+    # DISABLED: Job log functionality not working yet
+    # @app.route("/job-log")
+    # def job_log():
+    #     """Serve the React app for the Job Log page. Frontend will call /api/jobs for data."""
+    #     if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
+    #         return send_file(FRONTEND_BUILD_DIR / 'index.html')
+    #     return "React build not found. Run 'npm run build' in the frontend directory.", 200
 
     # Serve static assets from React build (JS, CSS, images, etc.)
     @app.route('/assets/<path:filename>')
