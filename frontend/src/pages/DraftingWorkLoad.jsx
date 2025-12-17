@@ -88,10 +88,10 @@ function DraftingWorkLoad() {
     const tableColumnCount = columns.length;
 
     return (
-        <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
-            <div className="max-w-[95%] mx-auto w-full" style={{ width: '100%' }}>
+        <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="max-w-full mx-auto w-full" style={{ width: '100%' }}>
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-4">
+                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-4 py-3">
                         <div className="flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
@@ -138,8 +138,8 @@ function DraftingWorkLoad() {
                         </div>
                     </div>
 
-                    <div className="p-6 space-y-4">
-                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-4 border border-gray-200 shadow-sm">
+                    <div className="p-2 space-y-2">
+                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-2 border border-gray-200 shadow-sm">
                             <div className="flex flex-col gap-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="flex flex-col gap-3">
@@ -222,7 +222,7 @@ function DraftingWorkLoad() {
                                             <tr>
                                                 {/* Ellipsis header column - far left */}
                                                 <th
-                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                    className="px-0.5 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
                                                     style={{ width: '32px' }}
                                                 >
                                                     {/* Empty header for ellipsis column */}
@@ -236,7 +236,7 @@ function DraftingWorkLoad() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className="px-2 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                                className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
                                                             >
                                                                 <button
                                                                     onClick={handleProjectNameSortToggle}
@@ -261,7 +261,7 @@ function DraftingWorkLoad() {
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-1 py-0.5 w-16' : 'px-2 py-0.5'} ${isNotes ? 'w-56' : ''} ${isStatus ? 'w-24' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
+                                                            className={`${isOrderNumber ? 'px-0.5 py-0.5 w-16' : 'px-1 py-0.5'} ${isNotes ? 'w-56' : ''} ${isStatus ? 'w-24' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
                                                         >
                                                             {column}
                                                         </th>

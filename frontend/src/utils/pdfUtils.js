@@ -95,23 +95,26 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
 
     // Add title
     doc.setFontSize(18);
-    doc.text('Drafting Work Load', 40, 30);
+    doc.text('Drafting Work Load', 10, 20);
 
     // Add metadata
     doc.setFontSize(10);
     const formattedDate = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 50);
-    doc.text(`Last Updated: ${formattedDate}`, 40, 65);
-    doc.text(`Total Records: ${displayRows.length}`, 40, 80);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 10, 35);
+    doc.text(`Last Updated: ${formattedDate}`, 10, 47);
+    doc.text(`Total Records: ${displayRows.length}`, 10, 59);
 
     // Prepare table data and get DRR row indices
     const { tableData, drrRowIndices } = prepareTableData(displayRows, columns);
+
+    // Find the index of the Type column
+    const typeColumnIndex = columns.findIndex(col => col === 'Type' || col.toLowerCase() === 'type');
 
     // Generate table
     autoTable(doc, {
         head: [columns],
         body: tableData,
-        startY: 90,
+        startY: 65,
         styles: {
             fontSize: 7,
             cellPadding: 2,
@@ -131,11 +134,15 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
             5: { cellWidth: 80 }, // Ball In Court
             9: { cellWidth: 120 }, // Notes
         },
-        margin: { top: 90, left: 40, right: 40 },
+        margin: { top: 65, left: 10, right: 10 },
         didParseCell: function (data) {
-            // Highlight DRR rows with green background
+            // Highlight only the Type column cell for DRR rows with green background
             // data.row.index is 0-based for body rows (header is -1)
-            if (data.row.index >= 0 && drrRowIndices.has(data.row.index)) {
+            // data.column.index is the column index
+            if (data.row.index >= 0 &&
+                drrRowIndices.has(data.row.index) &&
+                typeColumnIndex !== -1 &&
+                data.column.index === typeColumnIndex) {
                 data.cell.styles.fillColor = [220, 252, 231]; // Light green (equivalent to bg-green-100)
             }
         },

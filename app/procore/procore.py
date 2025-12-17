@@ -1,5 +1,7 @@
 import logging
 import re
+import json
+import os
 import requests
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
@@ -112,6 +114,103 @@ def get_project_id_by_project_name(project_name):
             return project["id"]
     return None
 
+def parse_and_log_submittal_data(submittal_data: dict, project_id: int, submittal_id: int, source: str = "webhook"):
+    """
+    Parse submittal data into a clean, structured format and log it for easy visualization.
+    
+    Args:
+        submittal_data: Raw submittal data from Procore API
+        project_id: Procore project ID
+        submittal_id: Procore submittal ID
+        source: Source of the data (e.g., "webhook", "api")
+    
+    Returns:
+        dict: Parsed submittal data in a structured format
+    """
+    if not isinstance(submittal_data, dict):
+        logger.warning(f"Cannot parse submittal data - not a dict: {type(submittal_data)}")
+        return None
+    
+    # Extract key fields in a structured way
+    parsed = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "source": source,
+        "project_id": project_id,
+        "submittal_id": submittal_id,
+        "summary": {},
+        "fields": {},
+        "nested_objects": {},
+        "raw_data_keys": list(submittal_data.keys()) if isinstance(submittal_data, dict) else []
+    }
+    
+    # Extract common fields
+    def extract_value(obj, default=None):
+        """Extract value from object (handles dict, string, or None)"""
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            return obj.get("name") or obj.get("id") or obj.get("login") or str(obj)
+        if isinstance(obj, str):
+            return obj.strip() if obj.strip() else default
+        return str(obj) if obj else default
+    
+    # Summary fields (most important)
+    parsed["summary"] = {
+        "title": submittal_data.get("title"),
+        "status": extract_value(submittal_data.get("status")),
+        "type": extract_value(submittal_data.get("type")),
+        "ball_in_court": extract_value(submittal_data.get("ball_in_court")),
+        "submittal_manager": extract_value(submittal_data.get("submittal_manager") or submittal_data.get("manager")),
+        "specification_section": extract_value(submittal_data.get("specification_section")),
+        "created_at": submittal_data.get("created_at"),
+        "updated_at": submittal_data.get("updated_at"),
+    }
+    
+    # Parse ball_in_court using existing helper
+    ball_parsed = parse_ball_in_court_from_submittal(submittal_data)
+    if ball_parsed:
+        parsed["summary"]["ball_in_court_parsed"] = ball_parsed.get("ball_in_court")
+        parsed["summary"]["ball_in_court_details"] = ball_parsed
+    
+    # Extract all top-level fields
+    for key, value in submittal_data.items():
+        if key in ["status", "type", "ball_in_court", "submittal_manager", "manager", "specification_section"]:
+            # Already in summary, skip
+            continue
+        
+        if isinstance(value, (str, int, float, bool, type(None))):
+            parsed["fields"][key] = value
+        elif isinstance(value, dict):
+            # Store nested objects separately
+            parsed["nested_objects"][key] = {
+                "type": "object",
+                "keys": list(value.keys()) if isinstance(value, dict) else [],
+                "sample": {k: v for k, v in list(value.items())[:5]}  # First 5 items
+            }
+        elif isinstance(value, list):
+            parsed["nested_objects"][key] = {
+                "type": "array",
+                "length": len(value),
+                "item_type": type(value[0]).__name__ if len(value) > 0 else "empty",
+                "sample": value[0] if len(value) > 0 and isinstance(value[0], (str, int, float, bool)) else None
+            }
+    
+    # Log to file
+    try:
+        log_dir = cfg.SNAPSHOTS_DIR
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, "procore_submittal_data.log")
+        
+        with open(log_file, "a") as f:
+            f.write(json.dumps(parsed, indent=2) + "\n" + "-" * 80 + "\n")
+        
+        logger.info(f"Logged parsed submittal data to {log_file}")
+    except Exception as e:
+        logger.error(f"Failed to log submittal data: {str(e)}", exc_info=True)
+    
+    return parsed
+
+
 # Get Submittal by ID
 def get_submittal_by_id(project_id, submittal_id):
     procore = get_procore_client()
@@ -220,6 +319,12 @@ def handle_submittal_update(project_id, submittal_id):
     if not isinstance(submittal, dict):
         return None
     
+    # Parse and log submittal data for visualization
+    try:
+        parse_and_log_submittal_data(submittal, project_id, submittal_id, source="webhook_update")
+    except Exception as parse_error:
+        logger.warning(f"Failed to parse/log submittal data (non-fatal): {parse_error}")
+    
     parsed = parse_ball_in_court_from_submittal(submittal)
     if parsed is None:
         return None
@@ -300,6 +405,12 @@ def create_submittal_from_webhook(project_id, submittal_id):
             error_msg = f"Failed to fetch submittal data from Procore API - got {type(submittal_data)} instead of dict"
             logger.error(f"{error_msg} for submittal {submittal_id}")
             return False, None, error_msg
+        
+        # Parse and log submittal data for visualization
+        try:
+            parse_and_log_submittal_data(submittal_data, project_id, submittal_id, source="webhook_create")
+        except Exception as parse_error:
+            logger.warning(f"Failed to parse/log submittal data (non-fatal): {parse_error}")
         
         logger.info(f"Fetching project info for project {project_id}")
         # Get project information

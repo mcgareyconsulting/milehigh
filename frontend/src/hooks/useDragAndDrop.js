@@ -78,44 +78,15 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
                 await updateOrderNumber(submittalId, newOrderNumber);
             }
         } else {
-            // Case 2: reordering in the middle or end -> renumber entire group to 1, 2, 3, ...
+            // Case 2: reordering in the middle or end
+            // Let the backend handle renumbering - just set the dragged row to the target position
+            // The backend will handle renumbering all values >= 1 to be tight, while preserving
+            // decimals < 1 and leaving NULL rows unchanged
 
-            // Remove dragged row from group
-            const groupWithoutDragged = sortedGroup.filter(r => getRowId(r) !== draggedRowId);
-
-            // Find target index in the reduced group
-            const targetIndexInReduced = groupWithoutDragged.findIndex(r => getRowId(r) === targetRowId);
-
-            if (targetIndexInReduced === -1) {
-                setDraggedIndex(null);
-                setDragOverIndex(null);
-                setDraggedRow(null);
-                return;
-            }
-
-            // Determine insert position: if dragging down, insert after target; if up, before target
-            let insertPosition;
-            if (draggedPosition < targetPosition) {
-                insertPosition = targetIndexInReduced + 1;
-            } else {
-                insertPosition = targetIndexInReduced;
-            }
-
-            const clampedInsert = Math.max(0, Math.min(insertPosition, groupWithoutDragged.length));
-
-            const reorderedGroup = [
-                ...groupWithoutDragged.slice(0, clampedInsert),
-                draggedRow,
-                ...groupWithoutDragged.slice(clampedInsert),
-            ];
-
-            // Renumber group while preserving meaning of decimal "urgent" orders:
-            // - A contiguous prefix of rows whose current order < 1 keep their decimal values
-            // - Everything after that prefix is renumbered to 1, 2, 3, ... based on new order
-            let urgentPrefixLength = 0;
-
-            for (let i = 0; i < reorderedGroup.length; i++) {
-                const row = reorderedGroup[i];
+            // Count urgent rows (decimals < 1) that come before the target
+            let urgentCount = 0;
+            for (let i = 0; i < targetPosition; i++) {
+                const row = sortedGroup[i];
                 const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
                 const currentOrder = typeof currentOrderRaw === 'number'
                     ? currentOrderRaw
@@ -124,17 +95,19 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
                         : null;
 
                 if (currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
-                    urgentPrefixLength += 1;
+                    urgentCount += 1;
                 } else {
                     break;
                 }
             }
 
-            let nextIntegerOrder = 1;
-
-            for (let i = 0; i < reorderedGroup.length; i++) {
-                const row = reorderedGroup[i];
-                const rowId = getRowId(row);
+            // Count rows with order >= 1 that come before the target (excluding the dragged row)
+            let regularCountBeforeTarget = 0;
+            for (let i = 0; i < targetPosition; i++) {
+                const row = sortedGroup[i];
+                if (getRowId(row) === draggedRowId) {
+                    continue; // Skip the dragged row
+                }
                 const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
                 const currentOrder = typeof currentOrderRaw === 'number'
                     ? currentOrderRaw
@@ -142,22 +115,35 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
                         ? parseFloat(currentOrderRaw)
                         : null;
 
-                let newOrderNumber;
-
-                if (i < urgentPrefixLength && currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
-                    // Preserve existing urgent decimal orders at the top
-                    newOrderNumber = currentOrder;
-                } else {
-                    // Renumber everything after the urgent prefix as 1, 2, 3, ...
-                    newOrderNumber = nextIntegerOrder;
-                    nextIntegerOrder += 1;
+                // Only count rows with order >= 1 (not NULL, not decimals < 1)
+                if (currentOrder !== null && !isNaN(currentOrder) && currentOrder >= 1) {
+                    regularCountBeforeTarget += 1;
                 }
+            }
 
-                // Only send update if the order actually changed
-                if (rowId && currentOrder !== newOrderNumber) {
-                    // eslint-disable-next-line no-await-in-loop
-                    await updateOrderNumber(rowId, newOrderNumber);
+            // Determine insert position: if dragging down, insert after target; if up, before target
+            let insertOffset = 0;
+            if (draggedPosition < targetPosition) {
+                // Dragging down - check if target row has order >= 1
+                const targetOrderRaw = targetRow.order_number ?? targetRow['Order Number'] ?? null;
+                const targetOrder = typeof targetOrderRaw === 'number'
+                    ? targetOrderRaw
+                    : targetOrderRaw !== null && targetOrderRaw !== undefined
+                        ? parseFloat(targetOrderRaw)
+                        : null;
+
+                // If target has order >= 1, insert after it; otherwise insert before
+                if (targetOrder !== null && !isNaN(targetOrder) && targetOrder >= 1) {
+                    insertOffset = 1;
                 }
+            }
+
+            // Calculate target order number (1-based, after urgent decimals)
+            const targetOrderNumber = regularCountBeforeTarget + insertOffset + 1;
+
+            // Update the dragged row - backend will handle renumbering
+            if (submittalId) {
+                await updateOrderNumber(submittalId, targetOrderNumber);
             }
         }
 

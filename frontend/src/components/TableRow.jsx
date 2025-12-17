@@ -144,7 +144,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         >
             {/* Ellipsis indicator column - far left */}
             <td
-                className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
+                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
                 style={{ width: '32px' }}
             >
                 <div
@@ -190,7 +190,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
+                            className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
                         >
                             <input
                                 ref={inputRef}
@@ -227,7 +227,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
+                            className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
                             onClick={isEditable ? handleOrderNumberFocus : undefined}
                             title={isEditable ? "Click to edit order number" : "Order number editing disabled for multiple assignees (reviewers)"}
                         >
@@ -245,7 +245,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
                             style={{ width: '220px' }}
                         >
                             <textarea
@@ -268,7 +268,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
                             style={{ width: '220px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
@@ -299,7 +299,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
+                            className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
                             title={cellValue}
                         >
                             {href !== '#' ? (
@@ -325,7 +325,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                            className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
                             style={{ width: '90px' }}
                         >
                             <select
@@ -364,7 +364,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
                             title={fullProjectName}
                         >
                             {truncatedProjectName}
@@ -383,7 +383,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
                             style={shouldWrap ? { maxWidth: '120px' } : {}}
                             title={cellValue}
                         >
@@ -399,7 +399,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 return (
                     <td
                         key={`${row.id}-${column}`}
-                        className={`px-2 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
+                        className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
                         title={cellValue}
                     >
                         {cellValue}

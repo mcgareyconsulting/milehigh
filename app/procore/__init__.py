@@ -671,6 +671,130 @@ def webhook_payloads():
         }), 500
 
 
+@procore_bp.route("/api/webhook/submittal-data", methods=["GET"])
+def submittal_data():
+    """
+    API endpoint to view parsed submittal data from webhook processing.
+    Returns the last N parsed submittal data entries that were logged.
+    
+    Query Parameters:
+    - limit: Number of entries to return (default: 50, max: 200)
+    - project_id: Filter by project_id (optional)
+    - submittal_id: Filter by submittal_id (optional)
+    - source: Filter by source (optional, e.g., "webhook_create", "webhook_update")
+    
+    Example:
+    GET /procore/api/webhook/submittal-data?limit=100
+    GET /procore/api/webhook/submittal-data?project_id=2900844&limit=50
+    GET /procore/api/webhook/submittal-data?submittal_id=12345
+    """
+    try:
+        import json as json_lib
+        
+        # Get query parameters
+        limit = request.args.get("limit", default=50, type=int)
+        limit = min(limit, 200)  # Cap at 200 for performance
+        project_id_filter = request.args.get("project_id")
+        submittal_id_filter = request.args.get("submittal_id")
+        source_filter = request.args.get("source")
+        
+        # Read the log file
+        webhook_logs_dir = cfg.SNAPSHOTS_DIR
+        log_file = os.path.join(webhook_logs_dir, "procore_submittal_data.log")
+        
+        if not os.path.exists(log_file):
+            return jsonify({
+                "status": "success",
+                "message": "No submittal data logged yet",
+                "entries": [],
+                "total": 0
+            }), 200
+        
+        # Read and parse entries (JSON Lines format, separated by dashes)
+        entries = []
+        current_entry = []
+        
+        try:
+            with open(log_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line == "-" * 80:
+                        # End of entry, parse it
+                        if current_entry:
+                            entry_text = "\n".join(current_entry)
+                            try:
+                                entry = json_lib.loads(entry_text)
+                                
+                                # Apply filters
+                                if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
+                                    current_entry = []
+                                    continue
+                                if submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
+                                    current_entry = []
+                                    continue
+                                if source_filter and entry.get("source") != source_filter:
+                                    current_entry = []
+                                    continue
+                                
+                                entries.append(entry)
+                            except json_lib.JSONDecodeError:
+                                # Skip malformed entries
+                                pass
+                            current_entry = []
+                    elif line:
+                        current_entry.append(line)
+                
+                # Handle last entry if file doesn't end with separator
+                if current_entry:
+                    entry_text = "\n".join(current_entry)
+                    try:
+                        entry = json_lib.loads(entry_text)
+                        
+                        # Apply filters
+                        if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
+                            pass
+                        elif submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
+                            pass
+                        elif source_filter and entry.get("source") != source_filter:
+                            pass
+                        else:
+                            entries.append(entry)
+                    except json_lib.JSONDecodeError:
+                        pass
+        
+        except Exception as e:
+            logger.error(f"Error reading submittal data log: {str(e)}", exc_info=True)
+            return jsonify({
+                "status": "error",
+                "error": str(e),
+                "log_file": log_file
+            }), 500
+        
+        # Sort by timestamp (most recent first) and limit
+        entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        entries = entries[:limit]
+        
+        return jsonify({
+            "status": "success",
+            "entries": entries,
+            "total": len(entries),
+            "limit": limit,
+            "filters": {
+                "project_id": project_id_filter,
+                "submittal_id": submittal_id_filter,
+                "source": source_filter
+            },
+            "log_file": log_file
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving submittal data: {str(e)}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+
 @procore_bp.route("/api/drafting-work-load", methods=["GET"])
 def drafting_work_load():
     """Return Drafting Work Load data from the db, filtered to only show submittals with status='Open'"""
@@ -868,66 +992,130 @@ def update_submittal_order():
                     "error": "order_number must be a valid number"
                 }), 400
         
-        # If setting a number >= 1, renumber the entire ball_in_court group to be tight (1, 2, 3, ...)
-        # while preserving decimals < 1 (urgent orders)
-        if order_number is not None and order_number >= 1:
+        # Helper function to safely convert order_number to float for comparisons
+        def safe_float_order(order_val):
+            """Convert order_number to float, handling None and string values"""
+            if order_val is None:
+                return None
+            try:
+                return float(order_val)
+            except (ValueError, TypeError):
+                return None
+        
+        # Save the old order_number before updating
+        old_order_number = safe_float_order(submittal.order_number)
+        
+        # Handle setting to NULL (blank) - renumber values >= 1 that are greater than old value
+        if order_number is None:
+            # Only renumber if the old value was >= 1
+            if old_order_number is not None and old_order_number >= 1:
+                ball_in_court = submittal.ball_in_court
+                if ball_in_court:
+                    # Get all submittals in the same ball_in_court group
+                    same_group = ProcoreSubmittal.query.filter_by(ball_in_court=ball_in_court).all()
+                    
+                    # Decrease all order numbers > old_order_number by 1 (only for values >= 1)
+                    for s in same_group:
+                        if s.submittal_id == submittal_id:
+                            continue  # Skip the one we're updating
+                        s_order_val = safe_float_order(s.order_number)
+                        # Only affect integer values >= 1, not decimals < 1
+                        if s_order_val is not None and s_order_val >= 1 and s_order_val > old_order_number:
+                            s.order_number = float(s_order_val - 1)
+                            s.last_updated = datetime.utcnow()
+                
+                # Set the current submittal to NULL
+                submittal.order_number = None
+                submittal.last_updated = datetime.utcnow()
+            else:
+                # Old value was NULL or < 1, just set to NULL (no renumbering needed)
+                submittal.order_number = None
+                submittal.last_updated = datetime.utcnow()
+        
+        # Handle setting to decimal < 1 (urgent orders)
+        # If old value was >= 1, we need to renumber (decrease values > old_value by 1)
+        elif order_number < 1:
+            # If old value was >= 1, renumber values greater than old value
+            if old_order_number is not None and old_order_number >= 1:
+                ball_in_court = submittal.ball_in_court
+                if ball_in_court:
+                    # Get all submittals in the same ball_in_court group
+                    same_group = ProcoreSubmittal.query.filter_by(ball_in_court=ball_in_court).all()
+                    
+                    # Decrease all order numbers > old_order_number by 1 (only for values >= 1)
+                    for s in same_group:
+                        if s.submittal_id == submittal_id:
+                            continue  # Skip the one we're updating
+                        s_order_val = safe_float_order(s.order_number)
+                        # Only affect integer values >= 1, not decimals < 1
+                        if s_order_val is not None and s_order_val >= 1 and s_order_val > old_order_number:
+                            s.order_number = float(s_order_val - 1)
+                            s.last_updated = datetime.utcnow()
+            
+            # Set the current submittal to the decimal value
+            submittal.order_number = order_number
+            submittal.last_updated = datetime.utcnow()
+        
+        # Handle setting to number >= 1 - renumber all values >= 1 to be tight, preserve decimals < 1
+        else:  # order_number >= 1
             ball_in_court = submittal.ball_in_court
             if ball_in_court:
                 # Get all submittals in the same ball_in_court group
                 same_group = ProcoreSubmittal.query.filter_by(ball_in_court=ball_in_court).all()
                 
-                # Separate urgent (decimals < 1) from regular (>= 1 or NULL)
+                # Separate urgent (decimals < 1) from regular (>= 1) and NULLs
+                # Urgent rows keep their exact decimal values and are sorted
+                # Regular rows (>= 1) will be renumbered to be tight (1, 2, 3, ...)
+                # NULL rows stay NULL and are not included in renumbering
                 urgent_rows = []
-                regular_rows = []
+                regular_with_order = []  # Only rows with order >= 1 (excluding the one we're updating)
+                
                 for s in same_group:
                     if s.submittal_id == submittal_id:
-                        continue  # Skip the one we're updating
-                    if s.order_number is not None and 0 < s.order_number < 1:
+                        continue  # Skip the one we're updating (it will be inserted at target position)
+                    order_val = safe_float_order(s.order_number)
+                    if order_val is not None and 0 < order_val < 1:
                         urgent_rows.append(s)
-                    else:
-                        regular_rows.append(s)
+                    elif order_val is not None and order_val >= 1:
+                        regular_with_order.append(s)
+                    # NULL rows are ignored - they won't get numbers assigned
                 
-                # Sort urgent rows by order number
-                urgent_rows.sort(key=lambda s: s.order_number)
+                # Sort urgent rows by their decimal value (preserve exact values)
+                urgent_rows.sort(key=lambda s: safe_float_order(s.order_number) or 0)
                 
-                # Sort regular rows: those with order >= 1 first (by order), then NULLs (by last_updated, oldest first)
-                regular_with_order = [s for s in regular_rows if s.order_number is not None and s.order_number >= 1]
-                regular_with_order.sort(key=lambda s: s.order_number)
-                regular_nulls = [s for s in regular_rows if s.order_number is None]
-                regular_nulls.sort(key=lambda s: s.last_updated or datetime(1970, 1, 1))
+                # Sort regular rows with order >= 1 by their current order number
+                regular_with_order.sort(key=lambda s: safe_float_order(s.order_number) or 0)
                 
                 # The entered number represents desired position in the ordered section (1-based, after urgent)
                 # So position 1 = first item after urgent decimals
+                # Only count rows with order >= 1 (exclude NULLs from position calculation)
                 target_pos_in_ordered = int(order_number) - 1  # Convert to 0-based
-                target_pos_in_ordered = max(0, min(target_pos_in_ordered, len(regular_with_order) + len(regular_nulls)))
+                target_pos_in_ordered = max(0, min(target_pos_in_ordered, len(regular_with_order)))
                 
-                # Combine regular rows and insert submittal at target position
-                all_regular = regular_with_order + regular_nulls
-                reordered_regular = all_regular[:target_pos_in_ordered] + [submittal] + all_regular[target_pos_in_ordered:]
+                # Insert submittal at target position (removes it from old position if it had one >= 1)
+                reordered_regular = regular_with_order[:target_pos_in_ordered] + [submittal] + regular_with_order[target_pos_in_ordered:]
                 
-                # Final order: urgent first, then reordered regular
+                # Final order: urgent first (sorted by decimal), then reordered regular (will be renumbered to 1, 2, 3...)
                 final_order = urgent_rows + reordered_regular
                 
-                # Renumber: preserve urgent decimals, then number 1, 2, 3, ...
+                # Renumber all values >= 1 to be tight (1, 2, 3, ...)
+                # Preserve all decimals < 1 exactly as they are
                 next_integer = 1
                 for row in final_order:
-                    if row.order_number is not None and 0 < row.order_number < 1:
-                        # Preserve urgent decimal - don't update
+                    row_order_val = safe_float_order(row.order_number)
+                    if row_order_val is not None and 0 < row_order_val < 1:
+                        # Preserve urgent decimal exactly as-is - don't update
                         continue
                     else:
-                        # Assign next integer
-                        if row.order_number != next_integer:
-                            row.order_number = float(next_integer)
-                            row.last_updated = datetime.utcnow()
+                        # This is a regular row (>= 1) - renumber to next integer
+                        # Always update to ensure tight numbering (even if value appears correct)
+                        row.order_number = float(next_integer)
+                        row.last_updated = datetime.utcnow()
                         next_integer += 1
             else:
                 # No ball_in_court, just update this one
                 submittal.order_number = order_number
                 submittal.last_updated = datetime.utcnow()
-        else:
-            # Setting to NULL or decimal < 1, just update this one (no renumbering)
-            submittal.order_number = order_number
-            submittal.last_updated = datetime.utcnow()
         
         db.session.commit()
         
