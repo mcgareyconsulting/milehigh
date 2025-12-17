@@ -1,4 +1,6 @@
 import pandas as pd
+import re
+
 # Helper function to convert pandas NaT/NaN to None
 def clean_value(value):
     if pd.isna(value):
@@ -7,6 +9,14 @@ def clean_value(value):
     if isinstance(value, pd.Timestamp):
         return value.to_pydatetime() if not pd.isna(value) else None
     return value
+
+def is_email(value):
+    """Check if a string looks like an email address."""
+    if not value or not isinstance(value, str):
+        return False
+    # Simple email pattern: contains @ and has a domain with at least one dot
+    email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    return bool(re.match(email_pattern, value.strip()))
 
 def parse_ball_in_court_from_submittal(submittal_data):
     """
@@ -43,12 +53,14 @@ def parse_ball_in_court_from_submittal(submittal_data):
                 user = entry.get("user") or entry
                 if user and isinstance(user, dict):
                     name = user.get("name")
-                    if name:
+                    login = user.get("login")
+                    
+                    # Prefer name over login, but skip if either is an email
+                    if name and not is_email(name):
                         ball_in_court_users.append(name)
-                    else:
-                        login = user.get("login")
-                        if login:
-                            ball_in_court_users.append(login)
+                    elif login and not is_email(login):
+                        ball_in_court_users.append(login)
+                    # If both name and login are emails or missing, skip this user
     
     # If ball_in_court is empty, derive from approvers with pending responses
     if not ball_in_court_users and approvers:
@@ -83,12 +95,14 @@ def parse_ball_in_court_from_submittal(submittal_data):
                 user = approver.get("user")
                 if user and isinstance(user, dict):
                     name = user.get("name")
-                    if name and name not in ball_in_court_users:
+                    login = user.get("login")
+                    
+                    # Prefer name over login, but skip if either is an email
+                    if name and not is_email(name) and name not in ball_in_court_users:
                         ball_in_court_users.append(name)
-                    else:
-                        login = user.get("login")
-                        if login and login not in ball_in_court_users:
-                            ball_in_court_users.append(login)
+                    elif login and not is_email(login) and login not in ball_in_court_users:
+                        ball_in_court_users.append(login)
+                    # If both name and login are emails or missing, skip this user
     
     # Return comma-separated string if multiple users, single string if one, None if empty
     if not ball_in_court_users:

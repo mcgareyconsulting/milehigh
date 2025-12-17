@@ -13,7 +13,7 @@ from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
 from app.procore.procore import get_project_id_by_project_name, check_and_update_submittal, create_submittal_from_webhook
 
-from app.procore.helpers import clean_value
+from app.procore.helpers import clean_value, is_email
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -258,7 +258,8 @@ def procore_webhook():
                                     "Submittal created via webhook",
                                     submittal_id=resource_id,
                                     project_id=project_id,
-                                    submittal_title=record.title if record else None
+                                    submittal_title=record.title if record else None,
+                                    project_name=record.project_name if record else None
                                 )
                         current_app.logger.info(
                             f"✓ Successfully created new submittal {resource_id} from webhook create event"
@@ -338,7 +339,8 @@ def procore_webhook():
                                 project_id=project_id,
                                 old_value=old_ball_in_court,
                                 new_value=ball_in_court,
-                                submittal_title=record.title if record else None
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
                             )
                 
                 # Log status changes
@@ -357,7 +359,8 @@ def procore_webhook():
                                 project_id=project_id,
                                 old_value=old_status,
                                 new_value=status,
-                                submittal_title=record.title if record else None
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
                             )
             else:
                 current_app.logger.warning(
@@ -982,6 +985,14 @@ def drafting_workload_submittals():
 
                 # Get ball_in_court value and determine if it's multiple assignees
                 ball_in_court_value = str(safe_get(row, 'Ball In Court', '') or '').strip() or None
+                
+                # Filter out email addresses from ball_in_court (handle comma-separated values)
+                if ball_in_court_value:
+                    # Split by comma, filter out emails, then rejoin
+                    parts = [part.strip() for part in ball_in_court_value.split(',')]
+                    filtered_parts = [part for part in parts if part and not is_email(part)]
+                    ball_in_court_value = ', '.join(filtered_parts) if filtered_parts else None
+                
                 is_multiple_assignees = ball_in_court_value and ',' in ball_in_court_value
                 
                 # Insert/update in DB with cleaned values
