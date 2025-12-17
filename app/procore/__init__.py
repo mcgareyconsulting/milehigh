@@ -1109,7 +1109,9 @@ def update_submittal_order():
                 submittal.last_updated = datetime.utcnow()
         
         # Handle setting to decimal < 1 (urgent orders)
+        # This allows changing from one decimal to another (e.g., 0.3 -> 0.5) or from decimal to blank
         # If old value was >= 1, we need to renumber (decrease values > old_value by 1)
+        # If old value was already a decimal (< 1), no renumbering needed - just update the value
         elif order_number < 1:
             # If old value was >= 1, renumber values greater than old value
             if old_order_number is not None and old_order_number >= 1:
@@ -1128,7 +1130,8 @@ def update_submittal_order():
                             s.order_number = float(s_order_val - 1)
                             s.last_updated = datetime.utcnow()
             
-            # Set the current submittal to the decimal value
+            # Set the current submittal to the decimal value (or new decimal if changing from old decimal)
+            # This allows changing from 0.3 to 0.5, or from 0.3 to any other decimal, or from decimal to blank (handled above)
             submittal.order_number = order_number
             submittal.last_updated = datetime.utcnow()
         
@@ -1176,15 +1179,18 @@ def update_submittal_order():
                 
                 # Renumber all values >= 1 to be tight (1, 2, 3, ...)
                 # Preserve all decimals < 1 exactly as they are
+                # Note: The submittal being updated may have an old decimal value, but we want to update it to integer
                 next_integer = 1
                 for row in final_order:
                     row_order_val = safe_float_order(row.order_number)
-                    if row_order_val is not None and 0 < row_order_val < 1:
-                        # Preserve urgent decimal exactly as-is - don't update
+                    # Check if this is the submittal being updated - if so, always update it (even if old value was decimal)
+                    is_being_updated = row.submittal_id == submittal_id
+                    if row_order_val is not None and 0 < row_order_val < 1 and not is_being_updated:
+                        # Preserve urgent decimal exactly as-is - don't update (unless it's the one being updated)
                         continue
                     else:
-                        # This is a regular row (>= 1) - renumber to next integer
-                        # Always update to ensure tight numbering (even if value appears correct)
+                        # This is a regular row (>= 1) or the row being updated (even if it was a decimal)
+                        # Renumber to next integer
                         row.order_number = float(next_integer)
                         row.last_updated = datetime.utcnow()
                         next_integer += 1
