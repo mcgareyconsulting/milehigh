@@ -60,10 +60,25 @@ def init_scheduler(app):
 
 
 def create_app():
+    # Import config after dotenv is loaded
+    from app.config import get_config
+    from app.db_config import configure_database
+    
+    # Get the appropriate config class based on environment
+    config_class = get_config()
+    
     app = Flask(__name__)
+    app.config.from_object(config_class)
+    
+    # Configure database separately
+    configure_database(app)
+    
+    # Log the environment being used
+    logger.info(f"Starting application in {config_class.ENV} environment")
+    logger.info(f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}...")
 
    # Get allowed origins from environment variable
-    allowed_origins = os.environ.get("CORS_ORIGINS", "*")
+    allowed_origins = app.config.get("CORS_ORIGINS", "*")
     if allowed_origins != "*":
         # Parse comma-separated list if provided
         allowed_origins = [origin.strip() for origin in allowed_origins.split(",")]
@@ -104,43 +119,8 @@ def create_app():
         # Check if path starts with any API prefix
         return any(path.startswith(prefix) for prefix in API_ROUTE_PREFIXES)
     
-    # Database configuration - use environment variable for production
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        # For production databases (PostgreSQL, MySQL, etc.)
-        app.config["SQLALCHEMY_DATABASE_URI"] = database_url
-        
-        # Import pool classes
-        from sqlalchemy.pool import QueuePool
-        
-        # Use QueuePool with proper thread safety settings
-        engine_options = {
-            "pool_pre_ping": True,        # Detect and refresh dead connections before use
-            "pool_recycle": 280,          # Recycle connections slightly before Render's idle timeout (~5 min)
-            "pool_size": 5,               # Render free-tier DBs are resource-constrained; keep this modest
-            "max_overflow": 10,           # Allow some burst usage during concurrent jobs
-            "pool_timeout": 30,           # Wait up to 30s for a connection before raising
-            "pool_reset_on_return": "commit",  # Reset connections properly on return
-            "poolclass": QueuePool,       # Use QueuePool for standard threading
-            "connect_args": {
-                "sslmode": "require",     # Enforce SSL
-                "connect_timeout": 10,    # Fail fast if DB can't be reached
-                "application_name": "trello_sharepoint_app",
-                "options": "-c statement_timeout=30000"  # 30s max per SQL statement
-            },
-        }
-        
-        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_options
-
-    else:
-        # Fallback to SQLite for local development
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
-    
-    # Configure Flask-SQLAlchemy for proper session management
-    # This ensures sessions are properly scoped and closed, preventing threading issues
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SQLALCHEMY_ECHO"] = False  # Set to True for SQL query debugging
-    
+    # Database is configured by configure_database() above
+    # Initialize database
     db.init_app(app)
 
     # Initialize the database - only create tables, don't drop and reseed
