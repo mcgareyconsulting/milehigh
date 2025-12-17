@@ -1,5 +1,8 @@
+import time
 import requests
 from typing import Optional, Dict, List
+from requests.exceptions import ConnectionError, Timeout, RequestException
+from urllib3.exceptions import ProtocolError
 
 from app.config import Config as cfg
 from app.procore.procore_auth import get_access_token, get_access_token_force_refresh
@@ -28,26 +31,63 @@ class ProcoreAPI:
             "Content-Type": "application/json"
         })
 
-    def _request(self, method: str, endpoint: str, **kwargs):
+    def _request(self, method: str, endpoint: str, max_retries: int = 3, retry_delay: float = 1.0, **kwargs):
+        """
+        Make a request with retry logic for connection errors.
+        
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            max_retries: Maximum number of retries for connection errors
+            retry_delay: Initial delay between retries (exponential backoff)
+            **kwargs: Additional arguments for requests
+        """
         self._update_auth_header()
         url = f"{self.BASE_URL}{endpoint}"
-        r = self.session.request(method, url, **kwargs)
+        
+        last_exception = None
+        for attempt in range(max_retries):
+            try:
+                r = self.session.request(method, url, timeout=30, **kwargs)
+                
+                # Handle 400 errors
+                if r.status_code == 400:
+                    raise requests.HTTPError(
+                        f"400 from Procore: {r.text}",
+                        response=r
+                    )
 
-        # Handle 400 errors
-        if r.status_code == 400:
-            raise requests.HTTPError(
-                f"400 from Procore: {r.text}",
-                response=r
-            )
+                if r.status_code == 401:
+                    # Token expired or invalid, force refresh once
+                    get_access_token_force_refresh()
+                    self._update_auth_header()
+                    r = self.session.request(method, url, timeout=30, **kwargs)
 
-        if r.status_code == 401:
-            # Token expired or invalid, force refresh once
-            get_access_token_force_refresh()
-            self._update_auth_header()
-            r = self.session.request(method, url, **kwargs)
-
-        r.raise_for_status()
-        return r.json() if r.text else None
+                r.raise_for_status()
+                return r.json() if r.text else None
+                
+            except (ConnectionError, ProtocolError, Timeout) as e:
+                # Connection errors - retry with exponential backoff
+                last_exception = e
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # Max retries reached, raise the exception
+                    raise requests.ConnectionError(
+                        f"Connection error after {max_retries} attempts: {str(e)}"
+                    ) from e
+            except requests.HTTPError:
+                # HTTP errors (4xx, 5xx) - don't retry
+                raise
+            except RequestException as e:
+                # Other request exceptions - don't retry
+                raise
+        
+        # Should never reach here, but just in case
+        if last_exception:
+            raise last_exception
     
     def _get(self, endpoint: str, params: Optional[Dict] = None):
         return self._request("GET", endpoint, params=params)

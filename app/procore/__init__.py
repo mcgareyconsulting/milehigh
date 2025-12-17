@@ -8,6 +8,7 @@ from typing import Optional
 
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
+from sqlalchemy.exc import IntegrityError
 from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
 from app.procore.procore import get_project_id_by_project_name, check_and_update_submittal, create_submittal_from_webhook
@@ -119,38 +120,113 @@ def procore_webhook():
         now = datetime.utcnow()
 
         # -----------------------------------
-        # Debounce lookup
+        # Debounce lookup (only for update events)
+        # Create events are not debounced - let DB handle duplicates via unique constraint
         # -----------------------------------
-        event = ProcoreWebhookEvents.query.filter_by(
-            resource_id=resource_id,
-            project_id=project_id
-        ).first()
-
-        if event:
-            diff = (now - event.last_seen).total_seconds()
-
-            if diff < DEBOUNCE_SECONDS:
-                current_app.logger.info(
-                    f"Debounced duplicate webhook; id={resource_id}, "
-                    f"project={project_id}, seen {diff:.2f}s ago"
-                )
-                # Update timestamp so rapid bursts extend window
-                event.last_seen = now
-                db.session.commit()
-                return jsonify({"status": "debounced"}), 200
-
-            # Not debounced → update timestamp
-            event.last_seen = now
-
-        else:
-            # First time this resource/project combo has been seen
-            event = ProcoreWebhookEvents(
+        if event_type == "update":
+            # Only debounce update events
+            event = ProcoreWebhookEvents.query.filter_by(
                 resource_id=resource_id,
                 project_id=project_id,
-                last_seen=now
+                event_type=event_type
+            ).first()
+
+            if event:
+                diff = (now - event.last_seen).total_seconds()
+
+                if diff < DEBOUNCE_SECONDS:
+                    current_app.logger.info(
+                        f"Debounced duplicate update webhook; id={resource_id}, "
+                        f"project={project_id}, seen {diff:.2f}s ago"
+                    )
+                    # Update timestamp so rapid bursts extend window
+                    event.last_seen = now
+                    db.session.commit()
+                    return jsonify({"status": "debounced"}), 200
+
+                # Not debounced → update timestamp
+                event.last_seen = now
+            else:
+                # First time this resource/project/event_type combo has been seen
+                event = ProcoreWebhookEvents(
+                    resource_id=resource_id,
+                    project_id=project_id,
+                    event_type=event_type,
+                    last_seen=now
+                )
+                db.session.add(event)
+            try:
+                db.session.commit()
+            except IntegrityError as e:
+                # Handle case where old unique constraint on resource_id still exists
+                # or duplicate record exists - just update the existing record
+                db.session.rollback()
+                current_app.logger.warning(
+                    f"IntegrityError when recording update event (likely old constraint): {e}. "
+                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
+                )
+                # Try to find and update existing record
+                existing = ProcoreWebhookEvents.query.filter_by(
+                    resource_id=resource_id,
+                    project_id=project_id
+                ).first()
+                if existing:
+                    existing.event_type = event_type  # Update event_type if it changed
+                    existing.last_seen = now
+                    db.session.commit()
+                else:
+                    # If we can't find it, log and continue (tracking is non-critical)
+                    current_app.logger.warning(
+                        f"Could not find existing record to update. Continuing without tracking."
+                    )
+        else:
+            # For create events (and any other event types), record but don't debounce
+            # Still track in database for logging/auditing purposes
+            event = ProcoreWebhookEvents.query.filter_by(
+                resource_id=resource_id,
+                project_id=project_id,
+                event_type=event_type
+            ).first()
+
+            if event:
+                # Update timestamp for tracking
+                event.last_seen = now
+            else:
+                # First time this resource/project/event_type combo has been seen
+                event = ProcoreWebhookEvents(
+                    resource_id=resource_id,
+                    project_id=project_id,
+                    event_type=event_type,
+                    last_seen=now
+                )
+                db.session.add(event)
+            try:
+                db.session.commit()
+            except IntegrityError as e:
+                # Handle case where old unique constraint on resource_id still exists
+                # or duplicate record exists - just update the existing record
+                db.session.rollback()
+                current_app.logger.warning(
+                    f"IntegrityError when recording {event_type} event (likely old constraint): {e}. "
+                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
+                )
+                # Try to find and update existing record
+                existing = ProcoreWebhookEvents.query.filter_by(
+                    resource_id=resource_id,
+                    project_id=project_id
+                ).first()
+                if existing:
+                    existing.event_type = event_type  # Update event_type if it changed
+                    existing.last_seen = now
+                    db.session.commit()
+                else:
+                    # If we can't find it, log and continue (tracking is non-critical)
+                    current_app.logger.warning(
+                        f"Could not find existing record to update. Continuing without tracking."
+                    )
+            current_app.logger.info(
+                f"Processing {event_type} event immediately (not debounced); id={resource_id}, project={project_id}"
             )
-            db.session.add(event)
-        db.session.commit()
 
         # -----------------------------------
         # PROCESS ACTUAL SUBMITTAL
