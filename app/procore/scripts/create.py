@@ -26,121 +26,129 @@ from app.procore.webhook_utils import (
 
 
 def create_webhook_and_trigger(procore_client, project_id: int, project_number: Optional[str], 
-                               namespace: str = "mile-high-metal-works") -> Dict:
+                               namespace: str = "mile-high-metal-works", skip_existing_check: bool = False) -> Dict:
     """
     Create a webhook and triggers for Submittals updates and creates if they don't exist.
     Returns operation result dictionary.
+    
+    Args:
+        skip_existing_check: If True, skip checking for existing webhooks and always create a new one.
     """
     log_file = "procore_webhook_responses.log"
     required_event_types = ["update", "create"]
     
-    # Get existing webhooks for this namespace
-    try:
-        webhooks = procore_client.list_project_webhooks(project_id, namespace)
-        existing_hook_id = webhooks[0].get("id") if webhooks else None
-    except Exception as e:
-        log_operation(
-            log_file,
-            "list_webhooks_error",
-            project_id,
-            project_number,
-            {"error": str(e)},
-            "error"
-        )
-        existing_hook_id = None
-        webhooks = []
-    
-    # If webhook exists, check and create missing triggers
-    if existing_hook_id:
+    # Skip existing webhook check if requested (for single project mode)
+    if not skip_existing_check:
+        # Get existing webhooks for this namespace
         try:
-            triggers = get_webhook_triggers(procore_client, project_id, existing_hook_id)
-            
-            # Check which triggers already exist
-            existing_triggers = set()
-            for trigger in triggers:
-                if isinstance(trigger, dict):
-                    resource = trigger.get("resource_name")
-                    event_type = trigger.get("event_type")
-                    if resource == "Submittals" and event_type in required_event_types:
-                        existing_triggers.add(event_type)
-            
-            # Determine which triggers need to be created
-            missing_triggers = [et for et in required_event_types if et not in existing_triggers]
-            
-            if not missing_triggers:
-                # All triggers already exist
-                log_operation(
-                    log_file,
-                    "webhook_triggers_complete",
-                    project_id,
-                    project_number,
-                    {"hook_id": existing_hook_id, "triggers": list(existing_triggers)},
-                    "skipped"
-                )
-                return {
-                    "status": "skipped",
-                    "message": "Webhook with all required triggers already exists",
-                    "hook_id": existing_hook_id,
-                    "existing_triggers": list(existing_triggers)
-                }
-            
-            # Create missing triggers
-            created_triggers = []
-            trigger_errors = []
-            
-            for event_type in missing_triggers:
-                try:
-                    trigger_response = procore_client.create_webhook_trigger(project_id, existing_hook_id, event_type)
-                    log_operation(
-                        log_file,
-                        "create_webhook_trigger",
-                        project_id,
-                        project_number,
-                        {"hook_id": existing_hook_id, "event_type": event_type, "response": trigger_response},
-                        "success"
-                    )
-                    created_triggers.append(event_type)
-                except Exception as e:
-                    error_msg = str(e)
-                    log_operation(
-                        log_file,
-                        "create_webhook_trigger",
-                        project_id,
-                        project_number,
-                        {"hook_id": existing_hook_id, "event_type": event_type, "error": error_msg},
-                        "error"
-                    )
-                    trigger_errors.append({"event_type": event_type, "error": error_msg})
-            
-            if trigger_errors:
-                return {
-                    "status": "partial_success",
-                    "action": "some_triggers_created",
-                    "hook_id": existing_hook_id,
-                    "created_triggers": created_triggers,
-                    "errors": trigger_errors
-                }
-            
-            return {
-                "status": "success",
-                "action": "triggers_created",
-                "hook_id": existing_hook_id,
-                "created_triggers": created_triggers
-            }
-            
+            webhooks = procore_client.list_project_webhooks(project_id, namespace)
+            existing_hook_id = webhooks[0].get("id") if webhooks else None
         except Exception as e:
-            error_data = {"hook_id": existing_hook_id, "error": str(e)}
             log_operation(
                 log_file,
-                "check_triggers_error",
+                "list_webhooks_error",
                 project_id,
                 project_number,
-                error_data,
+                {"error": str(e)},
                 "error"
             )
-            # Fall through to create new webhook
+            existing_hook_id = None
+            webhooks = []
+        
+        # If webhook exists, check and create missing triggers
+        if existing_hook_id:
+            try:
+                triggers = get_webhook_triggers(procore_client, project_id, existing_hook_id)
+                
+                # Check which triggers already exist
+                existing_triggers = set()
+                for trigger in triggers:
+                    if isinstance(trigger, dict):
+                        resource = trigger.get("resource_name")
+                        event_type = trigger.get("event_type")
+                        if resource == "Submittals" and event_type in required_event_types:
+                            existing_triggers.add(event_type)
+                
+                # Determine which triggers need to be created
+                missing_triggers = [et for et in required_event_types if et not in existing_triggers]
+                
+                if not missing_triggers:
+                    # All triggers already exist
+                    log_operation(
+                        log_file,
+                        "webhook_triggers_complete",
+                        project_id,
+                        project_number,
+                        {"hook_id": existing_hook_id, "triggers": list(existing_triggers)},
+                        "skipped"
+                    )
+                    return {
+                        "status": "skipped",
+                        "message": "Webhook with all required triggers already exists",
+                        "hook_id": existing_hook_id,
+                        "existing_triggers": list(existing_triggers)
+                    }
+                
+                # Create missing triggers
+                created_triggers = []
+                trigger_errors = []
+                
+                for event_type in missing_triggers:
+                    try:
+                        trigger_response = procore_client.create_webhook_trigger(project_id, existing_hook_id, event_type)
+                        log_operation(
+                            log_file,
+                            "create_webhook_trigger",
+                            project_id,
+                            project_number,
+                            {"hook_id": existing_hook_id, "event_type": event_type, "response": trigger_response},
+                            "success"
+                        )
+                        created_triggers.append(event_type)
+                    except Exception as e:
+                        error_msg = str(e)
+                        log_operation(
+                            log_file,
+                            "create_webhook_trigger",
+                            project_id,
+                            project_number,
+                            {"hook_id": existing_hook_id, "event_type": event_type, "error": error_msg},
+                            "error"
+                        )
+                        trigger_errors.append({"event_type": event_type, "error": error_msg})
+                
+                if trigger_errors:
+                    return {
+                        "status": "partial_success",
+                        "action": "some_triggers_created",
+                        "hook_id": existing_hook_id,
+                        "created_triggers": created_triggers,
+                        "errors": trigger_errors
+                    }
+                
+                return {
+                    "status": "success",
+                    "action": "triggers_created",
+                    "hook_id": existing_hook_id,
+                    "created_triggers": created_triggers
+                }
+                
+            except Exception as e:
+                error_data = {"hook_id": existing_hook_id, "error": str(e)}
+                log_operation(
+                    log_file,
+                    "check_triggers_error",
+                    project_id,
+                    project_number,
+                    error_data,
+                    "error"
+                )
+                # Fall through to create new webhook
+    else:
+        # skip_existing_check is True, so we'll create a new webhook
+        existing_hook_id = None
     
-    # Create new webhook if none exists
+    # Create new webhook if none exists (or if skip_existing_check is True)
     try:
         webhook_response = procore_client.create_project_webhook(project_id, "Submittals Updates", "update")
         
@@ -243,7 +251,7 @@ def create_webhook_and_trigger(procore_client, project_id: int, project_number: 
 
 
 def create_single_webhook(project_id: int, namespace: str = "mile-high-metal-works"):
-    """Create a webhook for a single project."""
+    """Create a webhook for a single project. Always creates a new webhook without checking for existing ones."""
     app = create_app()
     
     with app.app_context():
@@ -251,9 +259,10 @@ def create_single_webhook(project_id: int, namespace: str = "mile-high-metal-wor
         
         print(f"Creating webhook for Project ID: {project_id}")
         print(f"Namespace: {namespace}")
+        print("Note: Skipping existing webhook check - will create a new webhook")
         print("-" * 60)
         
-        result = create_webhook_and_trigger(procore_client, project_id, None, namespace)
+        result = create_webhook_and_trigger(procore_client, project_id, None, namespace, skip_existing_check=True)
         
         print("\n" + "=" * 60)
         print("RESULT")
