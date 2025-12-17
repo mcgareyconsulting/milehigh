@@ -5,7 +5,6 @@ import pandas as pd
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 from app.trello import trello_bp
-from app.onedrive import onedrive_bp
 from app.procore import procore_bp
 from app.api import api_bp
 from app.trello.api import create_trello_card_from_excel_data
@@ -32,11 +31,8 @@ import atexit
 from apscheduler.executors.pool import ThreadPoolExecutor
 
 def init_scheduler(app):
-    """Initialize the scheduler to run the OneDrive poll every hour."""
-    from app.onedrive.utils import run_onedrive_poll
-    from app.sync_lock import sync_lock_manager
-    from app.trello import drain_trello_queue
-
+    """Initialize the scheduler (currently only heartbeat for monitoring)."""
+    
     # --- Prevent scheduler duplication in multi-worker environments ---
     # Only run the scheduler on one instance
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get("IS_RENDER_SCHEDULER"):
@@ -46,78 +42,6 @@ def init_scheduler(app):
     # --- Configure scheduler ---
     executors = {"default": ThreadPoolExecutor(3)}
     scheduler = BackgroundScheduler(executors=executors)
-
-    # --- Simple retry wrapper for transient errors ---
-    def retry_with_backoff(func, retries=3, base_delay=5):
-        for i in range(retries):
-            try:
-                return func()
-            except Exception as e:
-                if i == retries - 1:
-                    raise
-                delay = base_delay * (2 ** i)
-                logger.warning(
-                    "Retrying OneDrive poll after failure",
-                    attempt=i + 1,
-                    delay=delay,
-                    error=str(e)
-                )
-                time.sleep(delay)
-
-    # --- The actual scheduled task ---
-    def scheduled_run():
-        with app.app_context():
-            if sync_lock_manager.is_locked():
-                current_op = sync_lock_manager.get_current_operation()
-                logger.info("Skipping scheduled OneDrive poll - sync locked", current_operation=current_op)
-
-                try:
-                    drained = drain_trello_queue(max_items=3)
-                    if drained:
-                        logger.info("Drained Trello queue while OneDrive locked", drained=drained)
-                except Exception as e:
-                    logger.warning("Trello queue drain failed during skip", error=str(e))
-                return
-
-            try:
-                logger.info("Starting scheduled OneDrive poll")
-
-                # Pre-drain Trello queue
-                try:
-                    drained_pre = drain_trello_queue(max_items=2)
-                    if drained_pre:
-                        logger.info("Pre-drain Trello queue", drained=drained_pre)
-                except Exception:
-                    pass
-
-                # Run OneDrive poll with retry logic
-                retry_with_backoff(run_onedrive_poll)
-
-                # Post-drain Trello queue
-                try:
-                    drained_post = drain_trello_queue(max_items=5)
-                    if drained_post:
-                        logger.info("Post-drain Trello queue", drained=drained_post)
-                except Exception:
-                    pass
-
-                logger.info("Scheduled OneDrive poll completed successfully")
-
-            except RuntimeError as e:
-                logger.info("Scheduled OneDrive poll skipped due to runtime lock", error=str(e))
-            except Exception as e:
-                logger.error("Scheduled OneDrive poll failed", error=str(e))
-
-    # --- Add the main job (runs hourly on the hour) ---
-    scheduler.add_job(
-        func=scheduled_run,
-        trigger="cron",
-        minute="0",
-        hour="*",
-        id="onedrive_poll",
-        name="OneDrive Polling Job",
-        replace_existing=True,
-    )
 
     # --- Optional heartbeat job to confirm scheduler alive ---
     scheduler.add_job(
@@ -131,7 +55,7 @@ def init_scheduler(app):
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
-    logger.info("OneDrive polling scheduler started", schedule="every hour on the hour")
+    logger.info("Scheduler started (heartbeat only)")
     return scheduler
 
 
@@ -162,11 +86,8 @@ def create_app():
         'jobs/',  # API endpoint: /jobs (GET) - note the trailing slash
         'sync/',
         'trello/',
-        'onedrive/',
         'procore/',
         'shipping/',
-        'snapshot',
-        'snapshots/',
         'files/',
         'seed/',
         'fab-order/',
@@ -905,76 +826,6 @@ def create_app():
                 "release": release
             }), 500
 
-    # Excel Snapshot endpoints
-    @app.route("/snapshot/capture", methods=["GET", "POST"])
-    def capture_snapshot():
-        """Capture current Excel data as a snapshot."""
-        try:
-            from app.onedrive.api import capture_excel_snapshot
-            result = capture_excel_snapshot()
-            
-            if result["success"]:
-                return jsonify({
-                    "message": "Snapshot captured successfully",
-                    "snapshot_date": result["snapshot_date"],
-                    "row_count": result["row_count"]
-                }), 200
-            else:
-                return jsonify({
-                    "message": "Failed to capture snapshot",
-                    "error": result.get("error", "Unknown error")
-                }), 500
-                
-        except Exception as e:
-            logger.error("Error capturing snapshot", error=str(e))
-            return jsonify({"message": "Error capturing snapshot", "error": str(e)}), 500
-
-    @app.route("/snapshot/digest", methods=["GET", "POST"])
-    def run_snapshot_digest():
-        """Run Excel snapshot digest to find new rows."""
-        try:
-            from app.onedrive.api import run_excel_snapshot_digest
-            result = run_excel_snapshot_digest()
-            
-            if result["success"]:
-                return jsonify({
-                    "message": "Snapshot digest completed",
-                    "current_rows": result["current_rows"],
-                    "previous_rows": result["previous_rows"],
-                    "new_rows_found": result["new_rows"],
-                    "snapshot_captured": result["snapshot_captured"],
-                    "previous_snapshot_date": result["previous_snapshot_date"]
-                }), 200
-            else:
-                return jsonify({
-                    "message": "Snapshot digest failed",
-                    "error": result.get("error", "Unknown error")
-                }), 500
-                
-        except Exception as e:
-            logger.error("Error running snapshot digest", error=str(e))
-            return jsonify({"message": "Error running snapshot digest", "error": str(e)}), 500
-
-    @app.route("/snapshot/status")
-    def snapshot_status():
-        """Get snapshot status and latest snapshot info."""
-        try:
-            from app.onedrive.api import get_latest_snapshot
-            snapshot_date, df, metadata = get_latest_snapshot()
-            
-            status = {
-                "latest_snapshot": {
-                    "date": snapshot_date.isoformat() if snapshot_date else None,
-                    "row_count": len(df) if df is not None else 0
-                },
-                "snapshots_available": snapshot_date is not None
-            }
-            
-            return jsonify(status), 200
-            
-        except Exception as e:
-            logger.error("Error getting snapshot status", error=str(e))
-            return jsonify({"error": str(e)}), 500
 
     # @app.route("/seed/incremental", methods=["GET", "POST"])
     # def run_incremental_seed():
@@ -1464,196 +1315,6 @@ def create_app():
             logger.error("Error in run-one seed", error=str(e))
             return jsonify({"error": str(e)}), 500
 
-    # Snapshot routes
-    @app.route("/snapshots/list")
-    def list_snapshots():
-        """List all available snapshots with basic metadata."""
-        try:
-            from app.config import Config
-            import os
-            import glob
-            from datetime import datetime
-            
-            config = Config()
-            snapshots_dir = config.SNAPSHOTS_DIR
-            
-            # Ensure snapshots directory exists
-            os.makedirs(snapshots_dir, exist_ok=True)
-            
-            if not os.path.exists(snapshots_dir):
-                return jsonify({
-                    "snapshots": [],
-                    "total_count": 0,
-                    "snapshots_dir": snapshots_dir,
-                    "message": "No snapshots directory found"
-                }), 200
-            
-            # Get all snapshot files (both .pkl and _meta.json files)
-            snapshot_files = glob.glob(os.path.join(snapshots_dir, "snapshot_*.pkl"))
-            snapshot_files.sort(reverse=True)  # Most recent first
-            
-            # Debug: Print all files found in the directory
-            all_files = os.listdir(snapshots_dir)
-            print(f"DEBUG: All files in {snapshots_dir}: {all_files}")
-            print(f"DEBUG: Snapshot .pkl files found: {snapshot_files}")
-            
-            snapshots = []
-            for file_path in snapshot_files:
-                filename = os.path.basename(file_path)
-                # Extract date from filename (snapshot_YYYYMMDD.pkl or snapshot_YYYYMMDD_HHMMSS.pkl)
-                try:
-                    # Handle both formats: snapshot_YYYYMMDD.pkl and snapshot_YYYYMMDD_HHMMSS.pkl
-                    date_str = filename.replace("snapshot_", "").replace(".pkl", "")
-                    
-                    # Try to parse as YYYYMMDD_HHMMSS first, then YYYYMMDD
-                    try:
-                        snapshot_datetime = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
-                        snapshot_date = snapshot_datetime.date()
-                        snapshot_time = snapshot_datetime.time()
-                    except ValueError:
-                        # Fall back to YYYYMMDD format
-                        snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
-                        snapshot_time = None
-                    
-                    # Check if metadata file exists
-                    meta_file = file_path.replace(".pkl", "_meta.json")
-                    metadata = {}
-                    if os.path.exists(meta_file):
-                        import json
-                        with open(meta_file, 'r') as f:
-                            metadata = json.load(f)
-                    
-                    # Get file size
-                    file_size = os.path.getsize(file_path)
-                    
-                    snapshots.append({
-                        "filename": filename,
-                        "date": snapshot_date.isoformat(),
-                        "time": snapshot_time.isoformat() if snapshot_time else None,
-                        "file_size_bytes": file_size,
-                        "file_size_mb": round(file_size / (1024 * 1024), 2),
-                        "row_count": metadata.get("row_count", 0),
-                        "captured_at": metadata.get("captured_at"),
-                        "source_file": metadata.get("source_file")
-                    })
-                except ValueError:
-                    # Skip files that don't match expected format
-                    continue
-            
-            return jsonify({
-                "snapshots": snapshots,
-                "total_count": len(snapshots),
-                "snapshots_dir": snapshots_dir
-            }), 200
-            
-        except Exception as e:
-            logger.error("Error listing snapshots", error=str(e))
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/snapshots/compare")
-    def compare_snapshots():
-        """Compare two snapshots and return differences."""
-        try:
-            from app.onedrive.api import load_snapshot, find_new_rows_in_excel
-            from datetime import datetime
-            import pandas as pd
-            
-            # Get parameters
-            current_date_str = request.args.get('current')
-            previous_date_str = request.args.get('previous')
-            
-            if not current_date_str or not previous_date_str:
-                return jsonify({
-                    "error": "Both 'current' and 'previous' date parameters are required (format: YYYY-MM-DD)"
-                }), 400
-            
-            try:
-                current_date = datetime.strptime(current_date_str, "%Y-%m-%d").date()
-                previous_date = datetime.strptime(previous_date_str, "%Y-%m-%d").date()
-            except ValueError:
-                return jsonify({
-                    "error": "Invalid date format. Use YYYY-MM-DD"
-                }), 400
-            
-            # Load snapshots
-            current_df, current_metadata = load_snapshot(current_date)
-            previous_df, previous_metadata = load_snapshot(previous_date)
-            
-            if current_df is None:
-                return jsonify({
-                    "error": f"Current snapshot not found for date: {current_date_str}"
-                }), 404
-            
-            if previous_df is None:
-                return jsonify({
-                    "error": f"Previous snapshot not found for date: {previous_date_str}"
-                }), 404
-            
-            # Find differences
-            new_rows = find_new_rows_in_excel(current_df, previous_df)
-            
-            # Calculate basic statistics
-            current_count = len(current_df)
-            previous_count = len(previous_df)
-            new_count = len(new_rows)
-            
-            # Get column information
-            current_columns = list(current_df.columns)
-            previous_columns = list(previous_df.columns)
-            
-            # Check for column differences
-            columns_added = set(current_columns) - set(previous_columns)
-            columns_removed = set(previous_columns) - set(current_columns)
-            columns_unchanged = set(current_columns) & set(previous_columns)
-            
-            # Prepare new rows data for JSON serialization
-            new_rows_data = []
-            if not new_rows.empty:
-                # Convert DataFrame to list of dictionaries
-                new_rows_data = new_rows.to_dict(orient='records')
-                
-                # Convert any non-serializable objects
-                for row in new_rows_data:
-                    for key, value in row.items():
-                        if pd.isna(value):
-                            row[key] = None
-                        elif isinstance(value, (pd.Timestamp, datetime)):
-                            row[key] = value.isoformat()
-                        elif hasattr(value, 'item'):  # numpy types
-                            row[key] = value.item()
-            
-            return jsonify({
-                "comparison": {
-                    "current_date": current_date_str,
-                    "previous_date": previous_date_str,
-                    "current_metadata": current_metadata,
-                    "previous_metadata": previous_metadata
-                },
-                "statistics": {
-                    "current_row_count": current_count,
-                    "previous_row_count": previous_count,
-                    "new_rows_count": new_count,
-                    "rows_added": new_count,
-                    "rows_removed": previous_count - (current_count - new_count),
-                    "net_change": current_count - previous_count
-                },
-                "columns": {
-                    "current_columns": current_columns,
-                    "previous_columns": previous_columns,
-                    "columns_added": list(columns_added),
-                    "columns_removed": list(columns_removed),
-                    "columns_unchanged": list(columns_unchanged)
-                },
-                "new_rows": new_rows_data,
-                "summary": {
-                    "has_changes": new_count > 0 or len(columns_added) > 0 or len(columns_removed) > 0,
-                    "change_type": "new_rows" if new_count > 0 else "column_changes" if (columns_added or columns_removed) else "no_changes"
-                }
-            }), 200
-            
-        except Exception as e:
-            logger.error("Error comparing snapshots", error=str(e))
-            return jsonify({"error": str(e)}), 500
 
     # Persistent disk file management routes
     @app.route("/files/list")
@@ -2042,7 +1703,6 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
-    app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
     app.register_blueprint(procore_bp, url_prefix="/procore")
     app.register_blueprint(api_bp, url_prefix="/api")
 

@@ -21,7 +21,7 @@ import pandas as pd
 from app.config import Config as cfg
 from app.logging_config import get_logger
 from app.models import Job, db
-from app.onedrive.api import get_excel_dataframe, update_excel_cell
+# NOTE: Excel/OneDrive functionality removed - get_excel_dataframe and update_excel_cell no longer available
 
 logger = get_logger(__name__)
 
@@ -205,7 +205,9 @@ def enforce_shipping_excel(
 
             success = True
             if not dry_run:
-                success = update_excel_cell(cell_address, expected_value)
+                # NOTE: Excel functionality removed
+                raise NotImplementedError("Excel/OneDrive functionality has been removed. Cannot update Excel cells.")
+                # success = update_excel_cell(cell_address, expected_value)  # REMOVED
                 if success:
                     excel_updates_count += 1
                 else:

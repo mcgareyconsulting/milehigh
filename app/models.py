@@ -93,7 +93,7 @@ class SyncOperation(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     operation_id = db.Column(db.String(32), unique=True, nullable=False, index=True)
-    operation_type = db.Column(db.String(50), nullable=False, index=True)  # 'trello_webhook', 'onedrive_poll', etc.
+    operation_type = db.Column(db.String(50), nullable=False, index=True)  # 'trello_webhook', etc. (onedrive_poll removed)
     status = db.Column(db.Enum(SyncStatus), nullable=False, default=SyncStatus.PENDING)
     
     # Timing
@@ -102,7 +102,7 @@ class SyncOperation(db.Model):
     duration_seconds = db.Column(db.Float, nullable=True)
     
     # Source information
-    source_system = db.Column(db.String(20), nullable=True)  # 'trello', 'onedrive', 'system'
+    source_system = db.Column(db.String(20), nullable=True)  # 'trello', 'system' (onedrive removed)
     source_id = db.Column(db.String(100), nullable=True)  # card_id, file_id, etc.
     
     # Operation details

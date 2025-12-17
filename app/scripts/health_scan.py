@@ -14,7 +14,7 @@ Usage:
 from app.models import Job, db
 from app.trello.api import get_trello_cards_from_subset, get_trello_card_by_id, update_trello_card_name, get_expected_card_name
 from app.trello.utils import extract_identifier
-from app.onedrive.api import get_excel_dataframe
+# NOTE: Excel/OneDrive functionality removed - get_excel_dataframe no longer available
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,12 +55,15 @@ def health_scan(return_json=False):
         if not return_json:
             print(f"[INFO] Found {len(db_identifiers)} unique job identifiers in database")
         
-        # Step 2: Get all jobs from OneDrive (Excel)
+        # Step 2: Get all jobs from OneDrive (Excel) - REMOVED
         if not return_json:
             print("\n[STEP 2] Loading jobs from OneDrive (Excel)...")
+            print("⚠️  WARNING: Excel/OneDrive functionality has been removed")
         
         try:
-            df = get_excel_dataframe()
+            # NOTE: Excel functionality removed
+            raise NotImplementedError("Excel/OneDrive functionality has been removed. health_scan requires Excel data.")
+            # df = get_excel_dataframe()  # REMOVED
             df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
             
             # Filter to only rows with valid job-release identifiers

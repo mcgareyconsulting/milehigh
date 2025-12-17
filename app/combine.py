@@ -1,6 +1,5 @@
 from app.trello.api import get_trello_cards_from_subset
 from app.trello.utils import extract_identifier
-from app.onedrive.api import get_excel_dataframe
 
 from collections import defaultdict
 from typing import List, Dict, Tuple
@@ -72,19 +71,18 @@ def combine_trello_excel_data():
     """
     Combines Trello and Excel data for cards with valid identifiers.
     Returns a list of dicts with combined data.
+    
+    NOTE: Excel functionality removed - this function now only returns Trello data.
     """
     trello_map, identifiers = get_identifier_to_trello_card_map_and_list()
-    # print(trello_map)
-    df = get_excel_dataframe()
-    excel_map = get_excel_data_by_identifier(df, identifiers)
-
+    
     combined = []
     for identifier in identifiers:
         combined.append(
             {
                 "identifier": identifier,
                 "trello": trello_map.get(identifier),
-                "excel": excel_map.get(identifier),
+                "excel": None,  # Excel functionality removed
             }
         )
     return combined

@@ -166,7 +166,7 @@ def incremental_seed_missing_jobs(batch_size=50):
         print("📊 Fetching Trello cards from 5 target lists for cross-reference...")
         from app.trello.api import get_trello_cards_from_subset
         from app.trello.utils import extract_identifier
-        from app.onedrive.api import get_excel_dataframe
+        # NOTE: Excel/OneDrive functionality removed - get_excel_dataframe no longer available
         
         # Get unique cards from the 5 Trello lists
         trello_cards = get_trello_cards_from_subset()
@@ -185,9 +185,13 @@ def incremental_seed_missing_jobs(batch_size=50):
         
         print(f"🎯 Found {len(unique_trello_identifiers)} unique job identifiers in Trello lists")
         
+        # NOTE: Excel functionality removed - this function no longer works without Excel data
+        print("⚠️  WARNING: Excel functionality removed - incremental_seed_missing_jobs requires Excel data")
+        raise NotImplementedError("Excel/OneDrive functionality has been removed. This function requires Excel data.")
+        
         # Get all Excel rows (already filtered to job-release: has Job # and Release #)
         print("📊 Loading all Excel rows with job-release...")
-        df = get_excel_dataframe()
+        # df = get_excel_dataframe()  # REMOVED: Excel functionality no longer available
         
         # Create identifier column for Excel rows
         df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
@@ -589,12 +593,14 @@ def process_single_identifier(identifier: str, dry_run: bool = True):
       - If Trello card exists: create DB record with Excel data
     Returns a dict with details.
     """
-    from app.onedrive.api import get_excel_dataframe
+    # NOTE: Excel/OneDrive functionality removed - this function requires Excel data
+    raise NotImplementedError("Excel/OneDrive functionality has been removed. process_single_identifier requires Excel data.")
+    
     from app.trello.api import get_trello_cards_from_subset, create_trello_card_from_excel_data
     from app.trello.utils import extract_identifier
 
-    # Load Excel
-    df = get_excel_dataframe()
+    # Load Excel - REMOVED
+    # df = get_excel_dataframe()
     df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
 
     # Find the row
@@ -767,9 +773,11 @@ def get_trello_excel_cross_check_summary():
         dict: Detailed summary of the cross-check analysis
     """
     try:
+        # NOTE: Excel/OneDrive functionality removed
+        raise NotImplementedError("Excel/OneDrive functionality has been removed. get_trello_excel_cross_check_summary requires Excel data.")
+        
         from app.trello.api import get_trello_cards_from_subset
         from app.trello.utils import extract_identifier
-        from app.onedrive.api import get_excel_dataframe
         
         # Get unique cards from the 5 Trello lists
         print("🎯 Analyzing Trello cards from 5 target lists...")
@@ -794,9 +802,9 @@ def get_trello_excel_cross_check_summary():
                     if identifier not in trello_identifier_to_card:
                         trello_identifier_to_card[identifier] = card
         
-        # Get all Excel rows (already filtered to job-release: has Job # and Release #)
+        # Get all Excel rows (already filtered to job-release: has Job # and Release #) - REMOVED
         print("📊 Loading all Excel rows with job-release...")
-        df = get_excel_dataframe()
+        # df = get_excel_dataframe()  # REMOVED: Excel functionality no longer available
         
         # Create identifier column for Excel rows
         df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
@@ -962,7 +970,9 @@ def get_first_identifier_to_seed():
       - Does not already exist in DB
     Returns None if none found.
     """
-    from app.onedrive.api import get_excel_dataframe
+    # NOTE: Excel/OneDrive functionality removed
+    raise NotImplementedError("Excel/OneDrive functionality has been removed. get_first_identifier_to_seed requires Excel data.")
+    
     from app.trello.api import get_trello_cards_from_subset
     from app.trello.utils import extract_identifier
 
@@ -977,8 +987,8 @@ def get_first_identifier_to_seed():
         if ident:
             trello_idents.add(ident)
 
-    # Load Excel
-    df = get_excel_dataframe()
+    # Load Excel - REMOVED
+    # df = get_excel_dataframe()
     df["identifier"] = df["Job #"].astype(str) + "-" + df["Release #"].astype(str)
 
     def ship_has_x_or_t(ship_value):

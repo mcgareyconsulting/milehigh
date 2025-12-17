@@ -15,14 +15,8 @@ class Config:
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
-    ONEDRIVE_USER_EMAIL = os.environ.get("ONEDRIVE_USER_EMAIL")
-    ONEDRIVE_FILE_PATH = os.environ.get("ONEDRIVE_FILE_PATH")
     TRELLO_WEBHOOK_URL = os.environ.get("TRELLO_WEBHOOK_URL")
-    ONEDRIVE_WEBHOOK_URL = os.environ.get("ONEDRIVE_WEBHOOK_URL")
-    EXCEL_INDEX_ADJ = (
-        4  # Adjust for header rows in Excel (e.g., if data starts on row 5, this is 4)
-    )
-    SNAPSHOTS_DIR = os.environ.get("SNAPSHOTS_DIR", "excel_snapshots")  # Default to local dir, use /var/data/ in production
+    # NOTE: OneDrive/Excel functionality removed - ONEDRIVE_* and SNAPSHOTS_DIR config removed
 
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")

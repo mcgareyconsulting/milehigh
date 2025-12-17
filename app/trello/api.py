@@ -266,7 +266,6 @@ def create_job_record_from_excel_data(excel_data):
         Job object if created successfully, None otherwise
     """
     try:
-        from app.onedrive.utils import parse_excel_datetime
         
         # Extract basic identifiers with validation
         job_val = excel_data.get('Job #')

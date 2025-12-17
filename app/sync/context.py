@@ -37,8 +37,8 @@ def sync_operation_context(
     - Event logging
     
     Args:
-        operation_type: Type of sync (e.g., 'trello_webhook', 'onedrive_poll')
-        source_system: Source system name ('trello', 'onedrive')
+        operation_type: Type of sync (e.g., 'trello_webhook') - onedrive_poll removed
+        source_system: Source system name ('trello', 'system') - onedrive removed
         source_id: Identifier in source system (e.g., card_id)
         require_db: If True, raise exception if database unavailable
     

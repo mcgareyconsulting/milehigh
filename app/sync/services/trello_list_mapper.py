@@ -32,8 +32,8 @@ class TrelloListMapper:
         """
         Determine the appropriate Trello list based on database record status.
         
-        This is used when syncing from OneDrive/Excel to Trello to determine
-        where a card should be placed.
+        This is used to determine where a Trello card should be placed
+        based on database record status.
         
         Args:
             rec: Database record (Job model instance) with cut_start, fitup_comp, welded,
