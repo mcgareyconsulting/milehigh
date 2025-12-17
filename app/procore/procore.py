@@ -554,13 +554,16 @@ def create_submittal_from_webhook(project_id, submittal_id):
 def _check_submitter_pending_in_workflow(approvers):
     """
     Check if the submitter (workflow_group_number 0) appears as a pending approver
-    in a later workflow group (non-zero workflow_group_number).
+    in the next workflow group that has pending approvers.
+    The "next workflow group" is determined by finding the workflow group with the
+    smallest workflow_group_number > 0 that has at least one pending approver.
+    Only checks the next pending approver in line for urgency bump functionality.
     
     Args:
         approvers: List of approver dictionaries from submittal data
         
     Returns:
-        bool: True if submitter appears as pending in a later workflow group
+        bool: True if submitter appears as pending in the next workflow group with pending approvers
     """
     print(f"[SUBMITTER CHECK] Starting check with {len(approvers) if approvers else 0} approvers")
     logger.info(f"[SUBMITTER CHECK] Starting check with {len(approvers) if approvers else 0} approvers")
@@ -598,10 +601,9 @@ def _check_submitter_pending_in_workflow(approvers):
         logger.info(f"[SUBMITTER CHECK] No submitter found (workflow_group_number 0 not found)")
         return False
     
-    # Check if submitter appears in any non-zero workflow group with "Pending" response
-    print(f"[SUBMITTER CHECK] Checking if submitter appears as pending in later workflow groups...")
-    logger.info(f"[SUBMITTER CHECK] Checking if submitter appears as pending in later workflow groups...")
-    
+    # Find the next workflow group that has at least one pending approver
+    # First, collect all workflow groups > 0 that have pending approvers
+    pending_workflow_groups = set()
     for approver in approvers:
         if not isinstance(approver, dict):
             continue
@@ -609,6 +611,38 @@ def _check_submitter_pending_in_workflow(approvers):
         workflow_group = approver.get("workflow_group_number")
         if workflow_group is None or workflow_group == 0:
             continue  # Skip submitter or approvers without workflow_group_number
+        
+        # Check if this approver is pending
+        response = approver.get("response", {})
+        if isinstance(response, dict):
+            response_name = response.get("name", "").strip()
+            if response_name.lower() == "pending":
+                pending_workflow_groups.add(workflow_group)
+                print(f"[SUBMITTER CHECK] Found pending approver in workflow_group_number={workflow_group}")
+                logger.info(f"[SUBMITTER CHECK] Found pending approver in workflow_group_number={workflow_group}")
+    
+    if not pending_workflow_groups:
+        print(f"[SUBMITTER CHECK] No pending workflow groups found")
+        logger.info(f"[SUBMITTER CHECK] No pending workflow groups found")
+        return False
+    
+    # Find the minimum workflow group number (the next one in line)
+    next_workflow_group = min(pending_workflow_groups)
+    print(f"[SUBMITTER CHECK] Next pending workflow group to check: {next_workflow_group}")
+    logger.info(f"[SUBMITTER CHECK] Next pending workflow group to check: {next_workflow_group}")
+    
+    # Check if submitter appears as pending in the NEXT workflow group only
+    print(f"[SUBMITTER CHECK] Checking if submitter appears as pending in workflow_group_number={next_workflow_group}...")
+    logger.info(f"[SUBMITTER CHECK] Checking if submitter appears as pending in workflow_group_number={next_workflow_group}...")
+    
+    for approver in approvers:
+        if not isinstance(approver, dict):
+            continue
+        
+        workflow_group = approver.get("workflow_group_number")
+        # Only check approvers in the next workflow group
+        if workflow_group != next_workflow_group:
+            continue
         
         print(f"[SUBMITTER CHECK] Checking approver at workflow_group_number={workflow_group}")
         logger.info(f"[SUBMITTER CHECK] Checking approver at workflow_group_number={workflow_group}")
@@ -650,17 +684,14 @@ def _check_submitter_pending_in_workflow(approvers):
         print(f"[SUBMITTER CHECK]   Name match: {name_match}, Login match: {login_match}")
         logger.info(f"[SUBMITTER CHECK]   Name match: {name_match}, Login match: {login_match}")
         
-        if name_match:
+        if name_match or login_match:
             print(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('name')}' appears as pending at workflow_group_number={workflow_group}")
             logger.info(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('name')}' appears as pending at workflow_group_number={workflow_group}")
             return True
-        if login_match:
-            print(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('login')}' appears as pending at workflow_group_number={workflow_group}")
-            logger.info(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('login')}' appears as pending at workflow_group_number={workflow_group}")
-            return True
     
-    print(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in later workflow groups")
-    logger.info(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in later workflow groups")
+    # No match found in the next workflow group
+    print(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in workflow_group_number={next_workflow_group}")
+    logger.info(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in workflow_group_number={next_workflow_group}")
     return False
 
 
