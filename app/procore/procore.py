@@ -485,7 +485,7 @@ def create_submittal_from_webhook(project_id, submittal_id):
             type=submittal_type,
             ball_in_court=str(ball_in_court).strip() if ball_in_court else None,
             submittal_manager=submittal_manager,
-            submittal_drafting_status='STARTED',  # Default value
+            # submittal_drafting_status uses model default of '' (empty string)
             created_at=datetime.utcnow(),
             last_updated=datetime.utcnow()
         )
