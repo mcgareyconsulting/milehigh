@@ -4,6 +4,7 @@ import Operations from './pages/Operations';
 import History from './pages/History';
 import Logs from './pages/Logs';
 import DraftingWorkLoad from './pages/DraftingWorkLoad';
+import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 // DISABLED: Job log functionality not working yet
 // import JobLog from './pages/JobLog';
 import Navbar from './components/Navbar';
@@ -11,7 +12,7 @@ import './App.css';
 
 function AppContent() {
   const location = useLocation();
-  const showNavbar = location.pathname !== '/drafting-work-load';
+  const showNavbar = location.pathname !== '/drafting-work-load' && location.pathname !== '/drafting-work-load/admin';
 
   return (
     <div className="w-full min-h-screen" style={{ width: '100%', minWidth: '100%' }}>
@@ -21,6 +22,7 @@ function AppContent() {
         <Route path="/operations" element={<Operations />} />
         <Route path="/history" element={<History />} />
         <Route path="/drafting-work-load" element={<DraftingWorkLoad />} />
+        <Route path="/drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
         {/* DISABLED: Job log functionality not working yet */}
         {/* <Route path="/jobs" element={<JobLog />} /> */}
         {/* <Route path="/job-log" element={<JobLog />} /> */}
