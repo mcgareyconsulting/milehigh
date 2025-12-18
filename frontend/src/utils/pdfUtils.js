@@ -91,7 +91,12 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
         return;
     }
 
-    const doc = new jsPDF('landscape', 'pt', 'letter');
+    // Use 11x17 paper size (17" x 11" in landscape = 1224pt x 792pt)
+    const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: [1224, 792] // 11x17 inches in points (17" x 11" landscape)
+    });
 
     // Add title
     doc.setFontSize(18);
