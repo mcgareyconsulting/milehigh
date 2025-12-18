@@ -1034,26 +1034,715 @@ def add_procore_link_to_trello_card(job, release):
         "viewer_url": viewer_url,
     }
 
+
+def get_drafting_workload():
+    '''
+    Function to get submittals for drafting workload.
+    Returns a list of dicts with submittal_id and project_id for each submittal.
+    '''
+    # Grab procore instance
+    procore = get_procore_client()
+    # Collect projects
+    projects = procore.get_projects(cfg.PROD_PROCORE_COMPANY_ID)
+    
+    # Iterate through projects collecting open submittals
+    all_submittals = []
+    for project in projects:
+        if project['id'] == 589044:
+            continue
+        submittals = procore.get_submittals_for_drafting_workload(project['id'])
+        print(f"Submittals: {len(submittals)} for project {project['id']}")
+        
+        # Extract submittal_id and project_id for each submittal
+        for submittal in submittals:
+            if isinstance(submittal, dict) and 'id' in submittal:
+                all_submittals.append({
+                    'submittal_id': str(submittal['id']),
+                    'project_id': project['id']
+                })
+
+    print(f"Total submittals: {len(all_submittals)}")
+    return all_submittals
+
+
+def cross_reference_db_vs_api():
+    """
+    Cross-reference database submittals with Procore API response.
+    Finds submittals that exist in DB but not in the API response.
+    Filters DB submittals to match the same status and type criteria as the API call.
+    
+    Returns:
+        dict with:
+            - db_only_submittals: List of ProcoreSubmittal records in DB but not in API
+            - api_submittal_ids: Set of submittal IDs from API
+            - db_submittal_ids: Set of submittal IDs from DB (filtered)
+            - missing_in_api: Count of submittals in DB but not in API
+    """
+    logger.info("=" * 80)
+    logger.info("Starting cross-reference of DB vs API submittals")
+    logger.info("=" * 80)
+    
+    # Get submittals from API
+    logger.info("Fetching submittals from Procore API...")
+    api_submittals = get_drafting_workload()
+    api_submittal_ids = {s['submittal_id'] for s in api_submittals}
+    logger.info(f"✓ Found {len(api_submittals)} submittals from API, {len(api_submittal_ids)} unique submittal IDs")
+    
+    # Debug: Show sample API submittals
+    if api_submittals:
+        logger.info(f"DEBUG: Sample API submittals (first 5):")
+        for i, sub in enumerate(api_submittals[:5]):
+            logger.info(f"  [{i+1}] submittal_id={sub.get('submittal_id')} (type={type(sub.get('submittal_id'))}), project_id={sub.get('project_id')}")
+        logger.info(f"DEBUG: API submittal_id types: {set(type(sid).__name__ for sid in api_submittal_ids)}")
+    
+    # Filter DB submittals to match API criteria:
+    # - status: "Open" (status_id 203238 in API)
+    # - type: "Drafting Release Review" or "Submittal for GC  Approval" or "Submittal for GC Approval"
+    valid_types = [
+        "Drafting Release Review",
+        "Submittal for GC  Approval",
+        "Submittal for GC Approval",
+        "Submittal for Gc  Approval",
+        "Submittal for Gc Approval",
+        "Submittal For Gc  Approval",
+        "Submittal For Gc Approval",
+    ]
+    
+    logger.info(f"DEBUG: Filtering DB submittals with criteria:")
+    logger.info(f"  - status == 'Open'")
+    logger.info(f"  - type IN {valid_types}")
+    
+    # First, check total count in DB
+    total_db_count = ProcoreSubmittal.query.count()
+    logger.info(f"DEBUG: Total submittals in DB (no filters): {total_db_count}")
+    
+    # Check count by status
+    status_counts = db.session.query(
+        ProcoreSubmittal.status,
+        db.func.count(ProcoreSubmittal.id)
+    ).group_by(ProcoreSubmittal.status).all()
+    logger.info(f"DEBUG: DB submittals by status: {dict(status_counts)}")
+    
+    # Check count by type
+    type_counts = db.session.query(
+        ProcoreSubmittal.type,
+        db.func.count(ProcoreSubmittal.id)
+    ).group_by(ProcoreSubmittal.type).all()
+    logger.info(f"DEBUG: DB submittals by type (top 10): {dict(type_counts[:10])}")
+    
+    # Apply filters
+    db_submittals = ProcoreSubmittal.query.filter(
+        ProcoreSubmittal.status == "Open",
+        ProcoreSubmittal.type.in_(valid_types)
+    ).all()
+    
+    logger.info(f"✓ Found {len(db_submittals)} submittals in database matching API criteria")
+    
+    # Debug: Show sample DB submittals
+    if db_submittals:
+        logger.info(f"DEBUG: Sample DB submittals (first 5):")
+        for i, sub in enumerate(db_submittals[:5]):
+            logger.info(f"  [{i+1}] submittal_id={sub.submittal_id} (type={type(sub.submittal_id).__name__}), "
+                       f"project_id={sub.procore_project_id}, status={sub.status}, type={sub.type}")
+        logger.info(f"DEBUG: DB submittal_id types: {set(type(s.submittal_id).__name__ for s in db_submittals)}")
+    
+    db_submittal_ids = {s.submittal_id for s in db_submittals}
+    logger.info(f"✓ Extracted {len(db_submittal_ids)} unique submittal IDs from filtered DB records")
+    
+    # Debug: Check for type mismatches
+    api_id_types = {type(sid).__name__ for sid in api_submittal_ids}
+    db_id_types = {type(sid).__name__ for sid in db_submittal_ids}
+    logger.info(f"DEBUG: API submittal_id types: {api_id_types}")
+    logger.info(f"DEBUG: DB submittal_id types: {db_id_types}")
+    
+    if api_id_types != db_id_types:
+        logger.warning(f"⚠ Type mismatch detected! API IDs are {api_id_types}, DB IDs are {db_id_types}")
+        # Convert both to strings for comparison
+        api_submittal_ids_str = {str(sid) for sid in api_submittal_ids}
+        db_submittal_ids_str = {str(sid) for sid in db_submittal_ids}
+        logger.info(f"DEBUG: Converting both to strings for comparison...")
+        logger.info(f"DEBUG: API IDs (as strings): {len(api_submittal_ids_str)}")
+        logger.info(f"DEBUG: DB IDs (as strings): {len(db_submittal_ids_str)}")
+        
+        # Use string comparison
+        db_only_ids = db_submittal_ids_str - api_submittal_ids_str
+        logger.info(f"DEBUG: Found {len(db_only_ids)} DB-only IDs (using string comparison)")
+    else:
+        # Direct comparison
+        db_only_ids = db_submittal_ids - api_submittal_ids
+        logger.info(f"DEBUG: Found {len(db_only_ids)} DB-only IDs (direct comparison)")
+    
+    # Find submittals in DB but not in API
+    # Convert db_submittal_ids to strings if needed for matching
+    if api_id_types != db_id_types:
+        api_submittal_ids_str = {str(sid) for sid in api_submittal_ids}
+        db_only_submittals = [s for s in db_submittals if str(s.submittal_id) in db_only_ids]
+    else:
+        db_only_submittals = [s for s in db_submittals if s.submittal_id in db_only_ids]
+    
+    logger.info(f"✓ Found {len(db_only_submittals)} submittals in DB but not in API response")
+    
+    # Debug: Show sample orphaned submittals
+    if db_only_submittals:
+        logger.info(f"DEBUG: Sample orphaned submittals (first 5):")
+        for i, sub in enumerate(db_only_submittals[:5]):
+            logger.info(f"  [{i+1}] submittal_id={sub.submittal_id}, project_id={sub.procore_project_id}, "
+                       f"title={sub.title[:50] if sub.title else 'N/A'}..., status={sub.status}, type={sub.type}")
+    
+    # Group by project_id for easier analysis
+    db_only_by_project = {}
+    for submittal in db_only_submittals:
+        project_id = submittal.procore_project_id
+        if project_id not in db_only_by_project:
+            db_only_by_project[project_id] = []
+        db_only_by_project[project_id].append(submittal)
+    
+    logger.info(f"✓ DB-only submittals are in {len(db_only_by_project)} unique projects")
+    
+    # Debug: Show projects with orphaned submittals
+    if db_only_by_project:
+        logger.info(f"DEBUG: Projects with orphaned submittals:")
+        for project_id, submittals in list(db_only_by_project.items())[:10]:
+            logger.info(f"  Project {project_id}: {len(submittals)} orphaned submittals")
+    
+    # Summary
+    logger.info("=" * 80)
+    logger.info("Cross-reference Summary:")
+    logger.info(f"  API submittals: {len(api_submittal_ids)}")
+    logger.info(f"  DB submittals (filtered): {len(db_submittal_ids)}")
+    logger.info(f"  Orphaned submittals (in DB, not in API): {len(db_only_submittals)}")
+    logger.info(f"  Projects with orphaned submittals: {len(db_only_by_project)}")
+    logger.info("=" * 80)
+    
+    return {
+        'db_only_submittals': db_only_submittals,
+        'db_only_by_project': db_only_by_project,
+        'api_submittal_ids': api_submittal_ids,
+        'db_submittal_ids': db_submittal_ids,
+        'missing_in_api': len(db_only_submittals),
+        'api_count': len(api_submittal_ids),
+        'db_count': len(db_submittal_ids)
+    }
+
+
+def check_webhook_health(project_ids=None):
+    """
+    Check webhook health for specified projects or all projects with submittals in DB.
+    
+    Args:
+        project_ids: Optional list of project IDs to check. If None, checks all projects
+                     that have submittals in the database.
+    
+    Returns:
+        dict with:
+            - projects_with_webhooks: List of project IDs that have webhooks
+            - projects_without_webhooks: List of project IDs missing webhooks
+            - webhook_details: Dict mapping project_id to webhook info
+            - broken_webhooks: List of projects with webhooks that appear broken
+    """
+    logger.info("Starting webhook health check")
+    procore = get_procore_client()
+    
+    # If no project_ids provided, get all unique project IDs from DB
+    # Filter to match the same criteria as the API call (status=Open, valid types)
+    if project_ids is None:
+        valid_types = [
+            "Drafting Release Review",
+            "Submittal for GC  Approval",
+            "Submittal for GC Approval"
+        ]
+        db_projects = db.session.query(ProcoreSubmittal.procore_project_id).filter(
+            ProcoreSubmittal.status == "Open",
+            ProcoreSubmittal.type.in_(valid_types)
+        ).distinct().all()
+        project_ids = [str(p[0]) for p in db_projects if p[0]]
+        logger.info(f"Checking webhooks for {len(project_ids)} projects from database (filtered by status=Open, valid types)")
+    else:
+        # Convert to strings for consistency
+        project_ids = [str(pid) for pid in project_ids]
+        logger.info(f"Checking webhooks for {len(project_ids)} specified projects")
+    
+    projects_with_webhooks = []
+    projects_without_webhooks = []
+    webhook_details = {}
+    broken_webhooks = []
+    
+    for project_id in project_ids:
+        try:
+            # List webhooks for this project
+            webhooks = procore.list_project_webhooks(int(project_id), 'mile-high-metal-works')
+            
+            if not webhooks or len(webhooks) == 0:
+                projects_without_webhooks.append(project_id)
+                webhook_details[project_id] = {
+                    'has_webhook': False,
+                    'webhook_count': 0,
+                    'webhooks': []
+                }
+                logger.warning(f"Project {project_id} has no webhooks")
+            else:
+                projects_with_webhooks.append(project_id)
+                
+                # Check webhook details and triggers
+                webhook_info = []
+                for webhook in webhooks:
+                    hook_id = webhook.get('id')
+                    if hook_id:
+                        try:
+                            # Get webhook details
+                            details = procore.get_webhook_details(int(project_id), hook_id)
+                            triggers = procore.get_webhook_triggers(int(project_id), hook_id)
+                            
+                            # Check if webhook has the required triggers (create and update for Submittals)
+                            has_create = any(
+                                t.get('resource_name') == 'Submittals' and 
+                                t.get('event_type') == 'create'
+                                for t in triggers
+                            )
+                            has_update = any(
+                                t.get('resource_name') == 'Submittals' and 
+                                t.get('event_type') == 'update'
+                                for t in triggers
+                            )
+                            
+                            webhook_info.append({
+                                'id': hook_id,
+                                'destination_url': details.get('destination_url'),
+                                'namespace': details.get('namespace'),
+                                'has_create_trigger': has_create,
+                                'has_update_trigger': has_update,
+                                'triggers': triggers,
+                                'is_healthy': has_create and has_update
+                            })
+                            
+                            # Mark as broken if missing required triggers
+                            if not (has_create and has_update):
+                                if project_id not in broken_webhooks:
+                                    broken_webhooks.append(project_id)
+                        except Exception as e:
+                            logger.error(f"Error checking webhook {hook_id} for project {project_id}: {e}")
+                            webhook_info.append({
+                                'id': hook_id,
+                                'error': str(e)
+                            })
+                
+                webhook_details[project_id] = {
+                    'has_webhook': True,
+                    'webhook_count': len(webhooks),
+                    'webhooks': webhook_info
+                }
+                
+        except Exception as e:
+            logger.error(f"Error checking webhooks for project {project_id}: {e}")
+            projects_without_webhooks.append(project_id)
+            webhook_details[project_id] = {
+                'has_webhook': False,
+                'error': str(e)
+            }
+    
+    logger.info(f"Webhook health check complete: {len(projects_with_webhooks)} with webhooks, "
+                f"{len(projects_without_webhooks)} without, {len(broken_webhooks)} broken")
+    
+    return {
+        'projects_with_webhooks': projects_with_webhooks,
+        'projects_without_webhooks': projects_without_webhooks,
+        'broken_webhooks': broken_webhooks,
+        'webhook_details': webhook_details,
+        'total_checked': len(project_ids)
+    }
+
+
+def check_orphaned_submittals_webhooks():
+    """
+    Check webhook health for projects that have submittals in DB but not in API response.
+    This helps identify if missing webhooks are causing submittals to not appear in API.
+    
+    Returns:
+        dict combining cross-reference and webhook health check results
+    """
+    logger.info("Starting orphaned submittals webhook check")
+    
+    # First, cross-reference DB vs API
+    cross_ref = cross_reference_db_vs_api()
+    
+    # Get unique project IDs from DB-only submittals
+    orphaned_project_ids = list(cross_ref['db_only_by_project'].keys())
+    
+    if not orphaned_project_ids:
+        logger.info("No orphaned submittals found - all DB submittals are in API response")
+        return {
+            'cross_reference': cross_ref,
+            'webhook_check': None,
+            'summary': 'No orphaned submittals to check'
+        }
+    
+    logger.info(f"Checking webhooks for {len(orphaned_project_ids)} projects with orphaned submittals")
+    
+    # Check webhooks for these projects
+    webhook_check = check_webhook_health(orphaned_project_ids)
+    
+    # Combine results
+    result = {
+        'cross_reference': cross_ref,
+        'webhook_check': webhook_check,
+        'summary': {
+            'orphaned_submittals_count': cross_ref['missing_in_api'],
+            'orphaned_projects_count': len(orphaned_project_ids),
+            'orphaned_projects_without_webhooks': len([
+                pid for pid in orphaned_project_ids 
+                if pid in webhook_check['projects_without_webhooks']
+            ]),
+            'orphaned_projects_with_broken_webhooks': len([
+                pid for pid in orphaned_project_ids 
+                if pid in webhook_check['broken_webhooks']
+            ])
+        }
+    }
+    
+    logger.info(f"Orphaned submittals check complete: {result['summary']}")
+    return result
+
+
+def check_all_relevant_projects_webhooks():
+    """
+    Check webhook health for all projects that have submittals in the API response.
+    This ensures all 37 relevant projects have proper webhooks configured.
+    
+    Returns:
+        dict with webhook health check results for all relevant projects
+    """
+    logger.info("Starting webhook health check for all relevant projects")
+    
+    # Get submittals from API to identify relevant projects
+    api_submittals = get_drafting_workload()
+    
+    # Get unique project IDs from API response
+    relevant_project_ids = list(set(s['project_id'] for s in api_submittals))
+    logger.info(f"Found {len(relevant_project_ids)} relevant projects with submittals in API")
+    
+    # Check webhooks for all relevant projects
+    webhook_check = check_webhook_health(relevant_project_ids)
+    
+    # Add summary
+    webhook_check['summary'] = {
+        'total_relevant_projects': len(relevant_project_ids),
+        'projects_with_webhooks': len(webhook_check['projects_with_webhooks']),
+        'projects_without_webhooks': len(webhook_check['projects_without_webhooks']),
+        'projects_with_broken_webhooks': len(webhook_check['broken_webhooks']),
+        'coverage_percentage': round(
+            (len(webhook_check['projects_with_webhooks']) / len(relevant_project_ids) * 100) 
+            if relevant_project_ids else 0, 
+            2
+        )
+    }
+    
+    logger.info(f"Relevant projects webhook check complete: {webhook_check['summary']}")
+    return webhook_check
+
+
+def comprehensive_health_scan(skip_user_prompt=False):
+    """
+    Comprehensive health scan for orphaned submittals:
+    1. Find submittals in DB but not in API response
+    2. Check webhooks for projects with orphaned submittals
+    3. Fetch full submittal data from API for each orphaned submittal
+    4. Compare ball_in_court and status between DB and API
+    5. List all differences and provide recommendations
+    
+    Args:
+        skip_user_prompt: If True, skip the interactive user prompt for updating records.
+                          Use this when calling from API endpoints.
+    
+    Returns:
+        dict with:
+            - orphaned_submittals: List of orphaned submittal analysis
+            - webhook_status: Webhook health for orphaned projects
+            - summary: Summary statistics and recommendations
+            - differences: Detailed list of all mismatches
+            - updated_count: Number of records updated (if user confirmed)
+    """
+    logger.info("=" * 80)
+    logger.info("Starting Comprehensive Health Scan")
+    logger.info("=" * 80)
+    
+    # Step 1: Find orphaned submittals
+    logger.info("Step 1: Finding orphaned submittals (in DB but not in API response)...")
+    cross_ref = cross_reference_db_vs_api()
+    orphaned_submittals = cross_ref['db_only_submittals']
+    orphaned_by_project = cross_ref['db_only_by_project']
+    
+    if not orphaned_submittals:
+        logger.info("✓ No orphaned submittals found - all DB submittals are in API response")
+        return {
+            'orphaned_submittals': [],
+            'webhook_status': None,
+            'summary': {
+                'total_orphaned': 0,
+                'projects_with_orphans': 0,
+                'sync_issues': 0,
+                'deleted_submittals': 0,
+                'api_fetch_errors': 0,
+                'webhook_issues': 0,
+                'projects_missing_webhooks': 0
+            },
+            'differences': {
+                'sync_issues': [],
+                'deleted_submittals': [],
+                'api_fetch_errors': []
+            },
+            'updated_count': 0
+        }
+    
+    logger.info(f"✓ Found {len(orphaned_submittals)} orphaned submittals in {len(orphaned_by_project)} projects")
+    
+    # Step 2: Check webhooks for projects with orphaned submittals
+    logger.info("Step 2: Checking webhooks for projects with orphaned submittals...")
+    orphaned_project_ids = list(orphaned_by_project.keys())
+    webhook_status = check_webhook_health(orphaned_project_ids)
+    logger.info(f"✓ Webhook check complete: {len(webhook_status['projects_without_webhooks'])} projects missing webhooks")
+    
+    # Step 3 & 4: Fetch API data and compare for each orphaned submittal
+    logger.info("Step 3: Fetching full submittal data from API and comparing with DB...")
+    procore = get_procore_client()
+    differences = []
+    sync_issues = []
+    deleted_submittals = []
+    api_fetch_errors = []
+    
+    for submittal in orphaned_submittals:
+        submittal_id = submittal.submittal_id
+        project_id = submittal.procore_project_id
+        
+        try:
+            # Fetch full submittal data from API
+            api_submittal_data = get_submittal_by_id(int(project_id), int(submittal_id))
+            
+            if not api_submittal_data or not isinstance(api_submittal_data, dict):
+                # Submittal doesn't exist in API - likely deleted/archived
+                deleted_submittals.append({
+                    'submittal_id': submittal_id,
+                    'project_id': project_id,
+                    'project_name': submittal.project_name,
+                    'title': submittal.title,
+                    'db_status': submittal.status,
+                    'db_ball_in_court': submittal.ball_in_court,
+                    'recommendation': 'Consider removing from DB or marking as archived'
+                })
+                logger.warning(f"  Submittal {submittal_id} (project {project_id}) not found in API - likely deleted")
+                continue
+            
+            # Parse ball_in_court from API data
+            parsed = parse_ball_in_court_from_submittal(api_submittal_data)
+            api_ball_in_court = parsed.get("ball_in_court") if parsed else None
+            
+            # Extract status from API data
+            status_obj = api_submittal_data.get("status")
+            if isinstance(status_obj, dict):
+                api_status = status_obj.get("name")
+            elif isinstance(status_obj, str):
+                api_status = status_obj
+            else:
+                api_status = None
+            api_status = str(api_status).strip() if api_status else None
+            
+            # Compare with DB
+            db_ball_in_court = submittal.ball_in_court if submittal.ball_in_court else None
+            db_status = submittal.status if submittal.status else None
+            
+            ball_mismatch = str(db_ball_in_court or "") != str(api_ball_in_court or "")
+            status_mismatch = str(db_status or "") != str(api_status or "")
+            
+            if ball_mismatch or status_mismatch:
+                # Sync issue - submittal exists in API but values don't match
+                diff = {
+                    'submittal_id': submittal_id,
+                    'project_id': project_id,
+                    'project_name': submittal.project_name,
+                    'title': submittal.title,
+                    'ball_in_court': {
+                        'db': db_ball_in_court,
+                        'api': api_ball_in_court,
+                        'mismatch': ball_mismatch
+                    },
+                    'status': {
+                        'db': db_status,
+                        'api': api_status,
+                        'mismatch': status_mismatch
+                    },
+                    'recommendation': 'Sync issue - DB values are out of date. Webhook may not be working or submittal was updated outside of webhook flow.'
+                }
+                differences.append(diff)
+                sync_issues.append(diff)
+                logger.warning(f"  ⚠ Sync issue for submittal {submittal_id}: ball_in_court mismatch={ball_mismatch}, status mismatch={status_mismatch}")
+            else:
+                # Values match - submittal exists in API but wasn't in the filtered API response
+                # This could mean status/type changed, or it's filtered out for another reason
+                logger.info(f"  ✓ Submittal {submittal_id} exists in API with matching values (not in filtered response)")
+                
+        except Exception as e:
+            # Error fetching from API
+            api_fetch_errors.append({
+                'submittal_id': submittal_id,
+                'project_id': project_id,
+                'project_name': submittal.project_name,
+                'title': submittal.title,
+                'error': str(e),
+                'recommendation': 'Check API access and submittal permissions'
+            })
+            logger.error(f"  ✗ Error fetching submittal {submittal_id} from API: {e}")
+    
+    logger.info(f"✓ Comparison complete:")
+    logger.info(f"  - Sync issues (mismatches): {len(sync_issues)}")
+    logger.info(f"  - Deleted submittals (not in API): {len(deleted_submittals)}")
+    logger.info(f"  - API fetch errors: {len(api_fetch_errors)}")
+    
+    # Compile results
+    summary = {
+        'total_orphaned': len(orphaned_submittals),
+        'projects_with_orphans': len(orphaned_by_project),
+        'sync_issues': len(sync_issues),
+        'deleted_submittals': len(deleted_submittals),
+        'api_fetch_errors': len(api_fetch_errors),
+        'webhook_issues': len(webhook_status['projects_without_webhooks']),
+        'projects_missing_webhooks': len(webhook_status['projects_without_webhooks'])
+    }
+    
+    # Log detailed differences
+    logger.info("=" * 80)
+    logger.info("Detailed Differences:")
+    logger.info("=" * 80)
+    
+    if sync_issues:
+        logger.info(f"\n🔴 SYNC ISSUES ({len(sync_issues)} submittals with mismatches):")
+        for issue in sync_issues:
+            logger.info(f"  Submittal {issue['submittal_id']} (Project {issue['project_id']} - {issue['project_name']})")
+            logger.info(f"    Title: {issue['title']}")
+            if issue['ball_in_court']['mismatch']:
+                logger.info(f"    ⚠ ball_in_court: DB='{issue['ball_in_court']['db']}' vs API='{issue['ball_in_court']['api']}'")
+            if issue['status']['mismatch']:
+                logger.info(f"    ⚠ status: DB='{issue['status']['db']}' vs API='{issue['status']['api']}'")
+            logger.info(f"    Recommendation: {issue['recommendation']}")
+            logger.info("")
+    
+    if deleted_submittals:
+        logger.info(f"\n🟡 DELETED/ARCHIVED SUBMITTALS ({len(deleted_submittals)} submittals not found in API):")
+        for deleted in deleted_submittals:
+            logger.info(f"  Submittal {deleted['submittal_id']} (Project {deleted['project_id']} - {deleted['project_name']})")
+            logger.info(f"    Title: {deleted['title']}")
+            logger.info(f"    Last known status: {deleted['db_status']}, ball_in_court: {deleted['db_ball_in_court']}")
+            logger.info(f"    Recommendation: {deleted['recommendation']}")
+            logger.info("")
+    
+    if api_fetch_errors:
+        logger.info(f"\n🔴 API FETCH ERRORS ({len(api_fetch_errors)} submittals):")
+        for error in api_fetch_errors:
+            logger.info(f"  Submittal {error['submittal_id']} (Project {error['project_id']} - {error['project_name']})")
+            logger.info(f"    Title: {error['title']}")
+            logger.info(f"    Error: {error['error']}")
+            logger.info(f"    Recommendation: {error['recommendation']}")
+            logger.info("")
+    
+    if webhook_status['projects_without_webhooks']:
+        logger.info(f"\n🔴 PROJECTS MISSING WEBHOOKS ({len(webhook_status['projects_without_webhooks'])} projects):")
+        for project_id in webhook_status['projects_without_webhooks']:
+            logger.info(f"  Project {project_id}: No webhooks configured")
+        logger.info("")
+    
+    logger.info("=" * 80)
+    logger.info("Health Scan Summary:")
+    logger.info(f"  Total orphaned submittals: {summary['total_orphaned']}")
+    logger.info(f"  Projects with orphans: {summary['projects_with_orphans']}")
+    logger.info(f"  Sync issues (mismatches): {summary['sync_issues']}")
+    logger.info(f"  Deleted/archived submittals: {summary['deleted_submittals']}")
+    logger.info(f"  API fetch errors: {summary['api_fetch_errors']}")
+    logger.info(f"  Projects missing webhooks: {summary['projects_missing_webhooks']}")
+    logger.info("=" * 80)
+    
+    # Ask user if they want to update DB records to match API (only if not skipping prompt)
+    updated_count = 0
+    if sync_issues and not skip_user_prompt:
+        print("\n" + "=" * 80)
+        print(f"Found {len(sync_issues)} submittals with sync issues (DB values don't match API)")
+        print("=" * 80)
+        user_input = input("\nWould you like to update DB records to match API values? (yes/no): ").strip().lower()
+        
+        if user_input == 'yes':
+            logger.info("User confirmed: Updating DB records to match API values...")
+            for issue in sync_issues:
+                try:
+                    # Find the DB record
+                    db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
+                    if not db_record:
+                        logger.warning(f"  Could not find DB record for submittal {issue['submittal_id']}")
+                        continue
+                    
+                    # Update ball_in_court if there's a mismatch
+                    if issue['ball_in_court']['mismatch']:
+                        old_value = db_record.ball_in_court
+                        db_record.ball_in_court = issue['ball_in_court']['api']
+                        logger.info(f"  Updated submittal {issue['submittal_id']}: ball_in_court '{old_value}' -> '{issue['ball_in_court']['api']}'")
+                    
+                    # Update status if there's a mismatch
+                    if issue['status']['mismatch']:
+                        old_value = db_record.status
+                        db_record.status = issue['status']['api']
+                        logger.info(f"  Updated submittal {issue['submittal_id']}: status '{old_value}' -> '{issue['status']['api']}'")
+                    
+                    # Update last_updated timestamp
+                    db_record.last_updated = datetime.utcnow()
+                    updated_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"  Error updating submittal {issue['submittal_id']}: {e}")
+            
+            # Commit all changes
+            try:
+                db.session.commit()
+                logger.info(f"✓ Successfully updated {updated_count} submittal records in database")
+                print(f"\n✓ Successfully updated {updated_count} submittal records in database")
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Error committing updates to database: {e}")
+                print(f"\n✗ Error committing updates to database: {e}")
+        else:
+            logger.info("User declined to update DB records")
+            print("\nSkipping DB updates.")
+    
+    return {
+        'orphaned_submittals': orphaned_submittals,
+        'webhook_status': webhook_status,
+        'summary': summary,
+        'differences': {
+            'sync_issues': sync_issues,
+            'deleted_submittals': deleted_submittals,
+            'api_fetch_errors': api_fetch_errors
+        },
+        'updated_count': updated_count
+    }
+
+
 if __name__ == "__main__":
     from app import create_app
     app = create_app()
     # app context
     with app.app_context():
 
-        procore = get_procore_client()
-        proj = 3203976
-        sub = 64744482
-        result = handle_submittal_update(proj, sub)
-        if result is None:
-            print("Failed to parse submittal data")
-        else:
-            procore_submittal, ball_in_court, approvers, status = result
-            print(f"DB Record: {procore_submittal}")
-            print(f"Ball in Court: {ball_in_court}")
-            print(f"Status: {status}")
-            print(f"Approvers: {len(approvers) if approvers else 0} approvers")
-            if procore_submittal:
-                print(f"DB ball_in_court: {procore_submittal.ball_in_court}")
-                print(f"DB status: {procore_submittal.status}")
-                print(f"Ball in court match: {procore_submittal.ball_in_court == ball_in_court}")
-                print(f"Status match: {procore_submittal.status == status}")
+        # # Check for orphaned submittals and their webhook status
+        # result = check_orphaned_submittals_webhooks()
+        # print(f"Found {result['summary']['orphaned_submittals_count']} orphaned submittals")
+        # print(f"In {result['summary']['orphaned_projects_count']} projects")
+        # print(f"{result['summary']['orphaned_projects_without_webhooks']} projects missing webhooks")
+
+        # # Or check all relevant projects
+        # webhook_status = check_all_relevant_projects_webhooks()
+        # print(f"Webhook coverage: {webhook_status['summary']['coverage_percentage']}%")
+        # Comprehensive health scan
+        result = comprehensive_health_scan()
+        print(f"Total orphaned submittals: {result['summary']['total_orphaned']}")
+        print(f"Projects with orphans: {result['summary']['projects_with_orphans']}")
+        print(f"Sync issues (mismatches): {result['summary']['sync_issues']}")
+        print(f"Deleted/archived submittals: {result['summary']['deleted_submittals']}")
+        print(f"API fetch errors: {result['summary']['api_fetch_errors']}")
+        print(f"Projects missing webhooks: {result['summary']['projects_missing_webhooks']}")
+        if 'updated_count' in result:
+            print(f"Updated records: {result['updated_count']}")

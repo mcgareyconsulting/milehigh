@@ -11,7 +11,12 @@ from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError
 from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
 
-from app.procore.procore import get_project_id_by_project_name, check_and_update_submittal, create_submittal_from_webhook
+from app.procore.procore import (
+    get_project_id_by_project_name, 
+    check_and_update_submittal, 
+    create_submittal_from_webhook,
+    comprehensive_health_scan
+)
 
 from app.procore.helpers import clean_value, is_email
 
@@ -1317,5 +1322,216 @@ def update_submittal_drafting_status():
         db.session.rollback()
         return jsonify({
             "error": "Failed to update submittal_drafting_status",
+            "details": str(exc)
+        }), 500
+
+
+@procore_bp.route("/health-scan", methods=["GET"])
+def health_scan():
+    """
+    Run comprehensive health scan to find orphaned submittals and sync issues.
+    Returns scan results without making any changes to the database.
+    
+    Returns:
+        JSON response with:
+            - summary: Summary statistics
+            - differences: Detailed list of sync issues, deleted submittals, and errors
+            - webhook_status: Webhook health for orphaned projects
+    """
+    try:
+        logger.info("Starting comprehensive health scan via API")
+        result = comprehensive_health_scan(skip_user_prompt=True)
+        
+        # Convert result to JSON-serializable format
+        # Remove the user input prompt part since this is API-based
+        response_data = {
+            'summary': result['summary'],
+            'differences': {
+                'sync_issues': [
+                    {
+                        'submittal_id': issue['submittal_id'],
+                        'project_id': issue['project_id'],
+                        'project_name': issue['project_name'],
+                        'title': issue['title'],
+                        'ball_in_court': issue['ball_in_court'],
+                        'status': issue['status'],
+                        'recommendation': issue['recommendation']
+                    }
+                    for issue in result['differences']['sync_issues']
+                ],
+                'deleted_submittals': result['differences']['deleted_submittals'],
+                'api_fetch_errors': result['differences']['api_fetch_errors']
+            },
+            'webhook_status': {
+                'projects_with_webhooks': result['webhook_status']['projects_with_webhooks'] if result['webhook_status'] else [],
+                'projects_without_webhooks': result['webhook_status']['projects_without_webhooks'] if result['webhook_status'] else [],
+                'webhook_details': result['webhook_status']['webhook_details'] if result['webhook_status'] else {}
+            } if result['webhook_status'] else None
+        }
+        
+        return jsonify(response_data), 200
+        
+    except Exception as exc:
+        logger.error(f"Error running health scan: {exc}", exc_info=True)
+        return jsonify({
+            "error": "Failed to run health scan",
+            "details": str(exc)
+        }), 500
+
+
+@procore_bp.route("/health-scan/update", methods=["POST"])
+def health_scan_update():
+    """
+    Update DB records to match API values for submittals with sync issues.
+    Expects a list of submittal IDs to update in the request body.
+    If no submittal_ids provided, updates all submittals with sync issues from the last scan.
+    
+    Request body (optional):
+        {
+            "submittal_ids": ["123", "456"]  // Optional: specific submittals to update
+        }
+    
+    Returns:
+        JSON response with update results
+    """
+    try:
+        data = request.get_json() or {}
+        submittal_ids = data.get('submittal_ids', [])
+        
+        # Run health scan to get current sync issues
+        logger.info("Running health scan to identify sync issues for update")
+        result = comprehensive_health_scan(skip_user_prompt=True)
+        sync_issues = result['differences']['sync_issues']
+        
+        if not sync_issues:
+            return jsonify({
+                "success": True,
+                "message": "No sync issues found - all records are up to date",
+                "updated_count": 0
+            }), 200
+        
+        # Filter to specific submittal_ids if provided
+        if submittal_ids:
+            sync_issues = [issue for issue in sync_issues if issue['submittal_id'] in submittal_ids]
+            if not sync_issues:
+                return jsonify({
+                    "error": "No matching sync issues found for provided submittal_ids"
+                }), 404
+        
+        updated_count = 0
+        updated_submittals = []
+        errors = []
+        
+        for issue in sync_issues:
+            try:
+                # Find the DB record
+                db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
+                if not db_record:
+                    errors.append({
+                        'submittal_id': issue['submittal_id'],
+                        'error': 'DB record not found'
+                    })
+                    continue
+                
+                updates = {}
+                
+                # Update ball_in_court if there's a mismatch
+                if issue['ball_in_court']['mismatch']:
+                    old_value = db_record.ball_in_court
+                    db_record.ball_in_court = issue['ball_in_court']['api']
+                    updates['ball_in_court'] = {
+                        'old': old_value,
+                        'new': issue['ball_in_court']['api']
+                    }
+                
+                # Update status if there's a mismatch
+                if issue['status']['mismatch']:
+                    old_value = db_record.status
+                    db_record.status = issue['status']['api']
+                    updates['status'] = {
+                        'old': old_value,
+                        'new': issue['status']['api']
+                    }
+                
+                # Update last_updated timestamp
+                db_record.last_updated = datetime.utcnow()
+                
+                updated_submittals.append({
+                    'submittal_id': issue['submittal_id'],
+                    'project_id': issue['project_id'],
+                    'title': issue['title'],
+                    'updates': updates
+                })
+                updated_count += 1
+                
+            except Exception as e:
+                logger.error(f"Error updating submittal {issue['submittal_id']}: {e}")
+                errors.append({
+                    'submittal_id': issue['submittal_id'],
+                    'error': str(e)
+                })
+        
+        # Commit all changes
+        try:
+            db.session.commit()
+            logger.info(f"Successfully updated {updated_count} submittal records in database")
+            
+            return jsonify({
+                "success": True,
+                "updated_count": updated_count,
+                "updated_submittals": updated_submittals,
+                "errors": errors
+            }), 200
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error committing updates to database: {e}")
+            return jsonify({
+                "error": "Failed to commit updates to database",
+                "details": str(e)
+            }), 500
+        
+    except Exception as exc:
+        logger.error(f"Error updating records from health scan: {exc}", exc_info=True)
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to update records",
+            "details": str(exc)
+        }), 500
+
+
+@procore_bp.route("/admin/verify-pin", methods=["POST"])
+def verify_admin_pin():
+    """
+    Verify admin PIN for health scan admin page.
+    
+    Request body:
+        {
+            "pin": "1234"
+        }
+    
+    Returns:
+        JSON response with success status
+    """
+    try:
+        data = request.get_json() or {}
+        provided_pin = data.get('pin', '')
+        correct_pin = cfg.ADMIN_PIN
+        
+        if provided_pin == correct_pin:
+            return jsonify({
+                "success": True,
+                "message": "PIN verified"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Invalid PIN"
+            }), 401
+            
+    except Exception as exc:
+        logger.error(f"Error verifying admin PIN: {exc}", exc_info=True)
+        return jsonify({
+            "error": "Failed to verify PIN",
             "details": str(exc)
         }), 500
