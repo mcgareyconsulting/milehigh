@@ -115,6 +115,16 @@ class ProcoreAPI:
 
     def get_submittal_by_id(self, project_id: int, submittal_id: int) -> Dict:
         return self._get(f"/rest/v1.1/projects/{project_id}/submittals/{submittal_id}")
+
+    def get_sub_filters_by_project_id(self, project_id: int) -> List[Dict]:
+        return self._get(f"/rest/v1.0/projects/{project_id}/submittals/filter_options/status_id")
+
+    def get_submittals_for_drafting_workload(self, project_id: int) -> List[Dict]:
+        # Known filters for drafting workload:
+        # status: Open
+        # type: 2 = Drafting Release Review
+        # type: 3 = Submittal For Gc  Approval
+        return self._get(f"/rest/v1.1/projects/{project_id}/submittals?filters[type][]=Drafting Release Review&filters[type][]=Submittal for GC  Approval&filter[type][]=Submittal for GC Approval&filters[status_id]=203238")
     # -------------------------
     # Webhooks
     # -------------------------

@@ -42,6 +42,9 @@ class Config:
     
     # CORS configuration
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
+    
+    # Admin PIN for health scan admin page
+    ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
 
 
 class LocalConfig(Config):
