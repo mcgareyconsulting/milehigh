@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertMessage } from '../components/AlertMessage';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function DraftingWorkLoadAdmin() {
     const [pin, setPin] = useState('');
