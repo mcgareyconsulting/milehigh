@@ -10,20 +10,15 @@ import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
-// Laptop sizes are kept as default, only larger screens get adjusted widths
+// Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
 const columnWidthStyles = `
     @media (min-width: 1536px) {
-        /* Reduce column widths on very large screens to prevent bloating */
-        .dwl-col-order-number { max-width: 64px !important; width: 64px !important; }
-        .dwl-col-submittal-id { max-width: 96px !important; width: 96px !important; }
-        .dwl-col-project-number { max-width: 80px !important; width: 80px !important; }
-        .dwl-col-project-name { max-width: 260px !important; width: 260px !important; }
-        .dwl-col-title { max-width: 280px !important; width: 280px !important; }
-        .dwl-col-ball-in-court { max-width: 160px !important; width: 160px !important; }
-        .dwl-col-type { max-width: 80px !important; width: 80px !important; }
-        .dwl-col-status { max-width: 96px !important; width: 96px !important; }
-        .dwl-col-submittal-manager { max-width: 120px !important; width: 120px !important; }
-        .dwl-col-notes { max-width: 300px !important; width: 300px !important; }
+        /* Reduce column max-widths on very large screens to prevent bloating */
+        .dwl-col-project-name { max-width: 260px !important; }
+        .dwl-col-title { max-width: 280px !important; }
+        .dwl-col-ball-in-court { max-width: 160px !important; }
+        .dwl-col-submittal-manager { max-width: 120px !important; }
+        .dwl-col-notes { max-width: 300px !important; }
     }
 `;
 
@@ -238,7 +233,7 @@ function DraftingWorkLoad() {
                             {!loading && !fetchError && (
                                 <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                                     <div className="">
-                                        <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
+                                        <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%' }}>
                                             <thead className="bg-gray-100">
                                                 <tr>
                                                     {columns.map((column) => {
@@ -252,7 +247,7 @@ function DraftingWorkLoad() {
                                                                 <th
                                                                     key={column}
                                                                     className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 dwl-col-project-name"
-                                                                    style={{ maxWidth: '280px', width: '280px' }}
+                                                                    style={{ maxWidth: '280px' }}
                                                                 >
                                                                     <button
                                                                         onClick={handleProjectNameSortToggle}
@@ -279,36 +274,36 @@ function DraftingWorkLoad() {
                                                         const isProjectNumber = column === 'Project Number';
                                                         const isSubmittalManager = column === 'Submittal Manager';
 
-                                                        // Set explicit widths for all columns (perfect for laptop screens)
-                                                        // CSS media queries handle larger screens
+                                                        // Set max-widths for all columns (perfect for laptop screens)
+                                                        // CSS media queries handle larger screens to prevent bloating
                                                         let headerStyle = {};
                                                         let columnClass = '';
                                                         if (isOrderNumber) {
-                                                            headerStyle = { maxWidth: '64px', width: '64px' };
+                                                            headerStyle = { maxWidth: '64px' };
                                                             columnClass = 'dwl-col-order-number';
                                                         } else if (isSubmittalId) {
-                                                            headerStyle = { maxWidth: '96px', width: '96px' };
+                                                            headerStyle = { maxWidth: '96px' };
                                                             columnClass = 'dwl-col-submittal-id';
                                                         } else if (isProjectNumber) {
-                                                            headerStyle = { maxWidth: '80px', width: '80px' };
+                                                            headerStyle = { maxWidth: '80px' };
                                                             columnClass = 'dwl-col-project-number';
                                                         } else if (isTitle) {
-                                                            headerStyle = { maxWidth: '320px', width: '320px' };
+                                                            headerStyle = { maxWidth: '320px' };
                                                             columnClass = 'dwl-col-title';
                                                         } else if (isNotes) {
-                                                            headerStyle = { maxWidth: '350px', width: '350px' };
+                                                            headerStyle = { maxWidth: '350px' };
                                                             columnClass = 'dwl-col-notes';
                                                         } else if (isBallInCourt) {
-                                                            headerStyle = { maxWidth: '180px', width: '180px' };
+                                                            headerStyle = { maxWidth: '180px' };
                                                             columnClass = 'dwl-col-ball-in-court';
                                                         } else if (isType) {
-                                                            headerStyle = { maxWidth: '80px', width: '80px' };
+                                                            headerStyle = { maxWidth: '80px' };
                                                             columnClass = 'dwl-col-type';
                                                         } else if (isStatus) {
-                                                            headerStyle = { maxWidth: '96px', width: '96px' };
+                                                            headerStyle = { maxWidth: '96px' };
                                                             columnClass = 'dwl-col-status';
                                                         } else if (isSubmittalManager) {
-                                                            headerStyle = { maxWidth: '128px', width: '128px' };
+                                                            headerStyle = { maxWidth: '128px' };
                                                             columnClass = 'dwl-col-submittal-manager';
                                                         }
 

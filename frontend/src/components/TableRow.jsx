@@ -196,10 +196,10 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         customWidthClass = 'w-20'; // Accommodate 3-4 digit number
                         columnClass = 'dwl-col-project-number';
                     } else if (column === 'Title') {
-                        customStyle = { maxWidth: '320px', width: '320px' };
+                        customStyle = { maxWidth: '320px' };
                         columnClass = 'dwl-col-title';
                     } else if (column === 'Type') {
-                        customStyle = { maxWidth: '80px', width: '80px' };
+                        customStyle = { maxWidth: '80px' };
                         columnClass = 'dwl-col-type';
                     } else if (column === 'Submittal Manager') {
                         customWidthClass = 'w-32'; // Reduce Submittal Manager width
@@ -283,7 +283,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
-                                style={{ maxWidth: '350px', width: '350px' }}
+                                style={{ maxWidth: '350px' }}
                             >
                                 <textarea
                                     ref={notesInputRef}
@@ -306,7 +306,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
-                                style={{ maxWidth: '350px', width: '350px' }}
+                                style={{ maxWidth: '350px' }}
                                 onClick={handleNotesFocus}
                                 title="Click to edit notes"
                             >
@@ -363,7 +363,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-status`}
-                                style={{ maxWidth: '96px', width: '96px' }}
+                                style={{ maxWidth: '96px' }}
                             >
                                 <select
                                     value={currentStatus || ''}
@@ -402,7 +402,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-project-name`}
-                                style={{ maxWidth: '280px', width: '280px' }}
+                                style={{ maxWidth: '280px' }}
                                 title={fullProjectName}
                             >
                                 {truncatedProjectName}
@@ -422,7 +422,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-ball-in-court`}
-                                style={{ maxWidth: '180px', width: '180px' }}
+                                style={{ maxWidth: '180px' }}
                                 title={cellValue}
                             >
                                 {cellValue}
