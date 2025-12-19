@@ -121,23 +121,31 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
         body: tableData,
         startY: 65,
         styles: {
-            fontSize: 7,
+            fontSize: 10,
             cellPadding: 2,
+            halign: 'center',
         },
         headStyles: {
             fillColor: [100, 100, 100],
             textColor: [255, 255, 255],
             fontStyle: 'bold',
+            halign: 'center',
         },
         alternateRowStyles: {
-            fillColor: [245, 245, 245],
+            fillColor: [220, 220, 220],
         },
         columnStyles: {
-            // Make certain columns narrower
-            0: { cellWidth: 40 }, // Order Number
-            1: { cellWidth: 60 }, // Submittals Id
-            5: { cellWidth: 80 }, // Ball In Court
-            9: { cellWidth: 120 }, // Notes
+            // Explicit column widths for all columns
+            0: { cellWidth: 50, halign: 'center' }, // Order Number
+            1: { cellWidth: 100, halign: 'center' }, // Submittals Id
+            2: { cellWidth: 70, halign: 'center' }, // Project Number
+            3: { cellWidth: 210, halign: 'center' }, // Project Name
+            4: { cellWidth: 210, halign: 'center' }, // Title
+            5: { cellWidth: 90, halign: 'center' }, // Ball In Court
+            6: { cellWidth: 80, halign: 'center' }, // Type
+            7: { cellWidth: 80, halign: 'center' }, // Status
+            8: { cellWidth: 110, halign: 'center' }, // Submittal Manager
+            9: { cellWidth: 200, halign: 'center' }, // Notes
         },
         margin: { top: 65, left: 10, right: 10 },
         didParseCell: function (data) {
