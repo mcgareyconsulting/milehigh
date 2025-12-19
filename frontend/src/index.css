@@ -72,3 +72,18 @@ body>#root>div>div {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Drop indicator pulse animation */
+@keyframes dropIndicatorPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scaleY(0.8);
+  }
+}

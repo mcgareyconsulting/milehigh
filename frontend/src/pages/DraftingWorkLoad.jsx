@@ -48,6 +48,7 @@ function DraftingWorkLoad() {
         dragOverIndex,
         handleDragStart,
         handleDragOver,
+        handleDragLeave,
         handleDrop,
     } = useDragAndDrop(rows, displayRows, updateOrderNumber);
 
@@ -220,13 +221,6 @@ function DraftingWorkLoad() {
                                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
-                                                {/* Ellipsis header column - far left */}
-                                                <th
-                                                    className="px-0.5 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
-                                                    style={{ width: '32px' }}
-                                                >
-                                                    {/* Empty header for ellipsis column */}
-                                                </th>
                                                 {columns.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
@@ -289,7 +283,7 @@ function DraftingWorkLoad() {
                                             {!hasData ? (
                                                 <tr>
                                                     <td
-                                                        colSpan={tableColumnCount + 1}
+                                                        colSpan={tableColumnCount}
                                                         className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
                                                     >
                                                         No records match the selected filters.
@@ -309,6 +303,7 @@ function DraftingWorkLoad() {
                                                         rowIndex={index}
                                                         onDragStart={handleDragStart}
                                                         onDragOver={handleDragOver}
+                                                        onDragLeave={handleDragLeave}
                                                         onDrop={handleDrop}
                                                         isDragging={draggedIndex}
                                                         dragOverIndex={dragOverIndex}
