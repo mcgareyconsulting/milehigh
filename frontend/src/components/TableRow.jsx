@@ -169,12 +169,16 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                 // Custom width for Submittals Id and Project Number
                 let customWidthClass = '';
+                let customStyle = {};
                 if (isSubmittalId) {
                     customWidthClass = 'w-24'; // Accommodate 8-10 digit ID
                 } else if (column === 'Project Number') {
                     customWidthClass = 'w-20'; // Accommodate 3-4 digit number
                 } else if (column === 'Title') {
-                    customWidthClass = 'w-48'; // Give Title a fixed width to help with wrapping
+                    // Use max-width instead of fixed width for better 4K support
+                    customStyle = { maxWidth: '320px', width: '320px' };
+                } else if (column === 'Type') {
+                    customStyle = { maxWidth: '80px', width: '80px' };
                 } else if (column === 'Submittal Manager') {
                     customWidthClass = 'w-32'; // Reduce Submittal Manager width
                 }
@@ -246,7 +250,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '220px' }}
+                            style={{ maxWidth: '350px', width: '350px' }}
                         >
                             <textarea
                                 ref={notesInputRef}
@@ -269,7 +273,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                            style={{ width: '220px' }}
+                            style={{ maxWidth: '350px', width: '350px' }}
                             onClick={handleNotesFocus}
                             title="Click to edit notes"
                         >
@@ -365,6 +369,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                            style={{ maxWidth: '280px', width: '280px' }}
                             title={fullProjectName}
                         >
                             {truncatedProjectName}
@@ -384,7 +389,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         <td
                             key={`${row.id}-${column}`}
                             className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
-                            style={shouldWrap ? { maxWidth: '120px' } : {}}
+                            style={{ maxWidth: '180px', width: '180px' }}
                             title={cellValue}
                         >
                             {cellValue}
@@ -400,6 +405,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     <td
                         key={`${row.id}-${column}`}
                         className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
+                        style={customStyle}
                         title={cellValue}
                     >
                         {cellValue}
