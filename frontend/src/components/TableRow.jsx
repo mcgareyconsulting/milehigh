@@ -184,20 +184,36 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isProjectName = column === 'Project Name';
                     const isBallInCourt = column === 'Ball In Court';
 
-                    // Custom width for Submittals Id and Project Number
+                    // Custom width for columns (matching header widths - perfect for laptop screens)
+                    // CSS media queries handle larger screens
                     let customWidthClass = '';
                     let customStyle = {};
+                    let columnClass = '';
                     if (isSubmittalId) {
                         customWidthClass = 'w-24'; // Accommodate 8-10 digit ID
+                        columnClass = 'dwl-col-submittal-id';
                     } else if (column === 'Project Number') {
                         customWidthClass = 'w-20'; // Accommodate 3-4 digit number
+                        columnClass = 'dwl-col-project-number';
                     } else if (column === 'Title') {
-                        // Use max-width instead of fixed width for better 4K support
                         customStyle = { maxWidth: '320px', width: '320px' };
+                        columnClass = 'dwl-col-title';
                     } else if (column === 'Type') {
                         customStyle = { maxWidth: '80px', width: '80px' };
+                        columnClass = 'dwl-col-type';
                     } else if (column === 'Submittal Manager') {
                         customWidthClass = 'w-32'; // Reduce Submittal Manager width
+                        columnClass = 'dwl-col-submittal-manager';
+                    } else if (isOrderNumber) {
+                        columnClass = 'dwl-col-order-number';
+                    } else if (isNotes) {
+                        columnClass = 'dwl-col-notes';
+                    } else if (isStatus) {
+                        columnClass = 'dwl-col-status';
+                    } else if (isProjectName) {
+                        columnClass = 'dwl-col-project-name';
+                    } else if (isBallInCourt) {
+                        columnClass = 'dwl-col-ball-in-court';
                     }
 
                     // Apply Type truncation mapping before formatting
@@ -211,7 +227,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
+                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center dwl-col-order-number`}
                             >
                                 <input
                                     ref={inputRef}
@@ -248,7 +264,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center`}
+                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center dwl-col-order-number`}
                                 onClick={isEditable ? handleOrderNumberFocus : undefined}
                                 title={isEditable ? "Click to edit order number" : "Order number editing disabled for multiple assignees (reviewers)"}
                             >
@@ -266,7 +282,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
                                 style={{ maxWidth: '350px', width: '350px' }}
                             >
                                 <textarea
@@ -289,7 +305,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
                                 style={{ maxWidth: '350px', width: '350px' }}
                                 onClick={handleNotesFocus}
                                 title="Click to edit notes"
@@ -320,7 +336,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
+                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} ${columnClass} text-center`}
                                 title={cellValue}
                             >
                                 {href !== '#' ? (
@@ -346,8 +362,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
-                                style={{ width: '90px' }}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-status`}
+                                style={{ maxWidth: '96px', width: '96px' }}
                             >
                                 <select
                                     value={currentStatus || ''}
@@ -385,7 +401,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-project-name`}
                                 style={{ maxWidth: '280px', width: '280px' }}
                                 title={fullProjectName}
                             >
@@ -405,7 +421,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-ball-in-court`}
                                 style={{ maxWidth: '180px', width: '180px' }}
                                 title={cellValue}
                             >
@@ -421,7 +437,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} text-center`}
+                            className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} ${columnClass} text-center`}
                             style={customStyle}
                             title={cellValue}
                         >
