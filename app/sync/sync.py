@@ -146,7 +146,13 @@ def sync_from_trello(event_info):
             rec = Job.query.filter_by(trello_card_id=card_id).first()
             if rec and rec.source_of_update == "Excel":
                 time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
-                if time_diff and time_diff.total_seconds() < 120:  # 2 minutes
+                # Check if this is a list move to "Shipping completed" - always process these
+                # to ensure RS/ST values get updated to X in Excel
+                is_shipping_completed_move = (
+                    event_info.get("has_list_move", False) and 
+                    event_info.get("to") == "Shipping completed"
+                )
+                if time_diff and time_diff.total_seconds() < 120 and not is_shipping_completed_move:  # 2 minutes
                     safe_log_sync_event(
                         sync_op.operation_id,
                         "INFO",

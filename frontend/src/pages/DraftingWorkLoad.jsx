@@ -48,6 +48,7 @@ function DraftingWorkLoad() {
         dragOverIndex,
         handleDragStart,
         handleDragOver,
+        handleDragLeave,
         handleDrop,
     } = useDragAndDrop(rows, displayRows, updateOrderNumber);
 
@@ -220,23 +221,18 @@ function DraftingWorkLoad() {
                                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                                         <thead className="bg-gray-100">
                                             <tr>
-                                                {/* Ellipsis header column - far left */}
-                                                <th
-                                                    className="px-0.5 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
-                                                    style={{ width: '32px' }}
-                                                >
-                                                    {/* Empty header for ellipsis column */}
-                                                </th>
                                                 {columns.map((column) => {
                                                     const isOrderNumber = column === 'Order Number';
                                                     const isNotes = column === 'Notes';
                                                     const isProjectName = column === 'Project Name';
+                                                    const isTitle = column === 'Title';
 
                                                     if (isProjectName) {
                                                         return (
                                                             <th
                                                                 key={column}
                                                                 className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                                style={{ maxWidth: '280px', width: '280px' }}
                                                             >
                                                                 <button
                                                                     onClick={handleProjectNameSortToggle}
@@ -257,11 +253,25 @@ function DraftingWorkLoad() {
                                                     }
 
                                                     const isStatus = column === 'Status';
+                                                    const isBallInCourt = column === 'Ball In Court';
+                                                    const isType = column === 'Type';
+
+                                                    let headerStyle = {};
+                                                    if (isTitle) {
+                                                        headerStyle = { maxWidth: '320px', width: '320px' };
+                                                    } else if (isNotes) {
+                                                        headerStyle = { maxWidth: '350px', width: '350px' };
+                                                    } else if (isBallInCourt) {
+                                                        headerStyle = { maxWidth: '180px', width: '180px' };
+                                                    } else if (isType) {
+                                                        headerStyle = { maxWidth: '80px', width: '80px' };
+                                                    }
 
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isOrderNumber ? 'px-0.5 py-0.5 w-16' : 'px-1 py-0.5'} ${isNotes ? 'w-56' : ''} ${isStatus ? 'w-24' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
+                                                            className={`${isOrderNumber ? 'px-0.5 py-0.5 w-16' : 'px-1 py-0.5'} ${isStatus ? 'w-24' : ''} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
+                                                            style={headerStyle}
                                                         >
                                                             {column}
                                                         </th>
@@ -273,7 +283,7 @@ function DraftingWorkLoad() {
                                             {!hasData ? (
                                                 <tr>
                                                     <td
-                                                        colSpan={tableColumnCount + 1}
+                                                        colSpan={tableColumnCount}
                                                         className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
                                                     >
                                                         No records match the selected filters.
@@ -293,6 +303,7 @@ function DraftingWorkLoad() {
                                                         rowIndex={index}
                                                         onDragStart={handleDragStart}
                                                         onDragOver={handleDragOver}
+                                                        onDragLeave={handleDragLeave}
                                                         onDrop={handleDrop}
                                                         isDragging={draggedIndex}
                                                         dragOverIndex={dragOverIndex}

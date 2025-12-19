@@ -25,9 +25,18 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
             // Only allow drag over if same ball_in_court
             if (String(draggedBallInCourt) === String(targetBallInCourt)) {
                 setDragOverIndex(index);
+            } else {
+                setDragOverIndex(null);
             }
         }
     }, [draggedRow, displayRows]);
+
+    const handleDragLeave = useCallback((e) => {
+        // Only clear if we're actually leaving the row (not just moving between child elements)
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            setDragOverIndex(null);
+        }
+    }, []);
 
     const handleDrop = useCallback(async (e, targetIndex, targetRow) => {
         e.preventDefault();
@@ -158,6 +167,7 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
         dragOverIndex,
         handleDragStart,
         handleDragOver,
+        handleDragLeave,
         handleDrop,
     };
 }
