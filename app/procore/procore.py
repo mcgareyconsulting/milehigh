@@ -13,6 +13,7 @@ from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
 from app.procore.helpers import parse_ball_in_court_from_submittal
+from app.sync_lock import sync_lock_manager
 
 
 logger = logging.getLogger(__name__)
@@ -741,7 +742,7 @@ def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
     
     existing_urgent_orders = db.session.query(ProcoreSubmittal.order_number).filter(
         ProcoreSubmittal.ball_in_court == ball_in_court_value,
-        ProcoreSubmittal.submittal_id != submittal_id,  # Exclude current submittal
+        ProcoreSubmittal.submittal_id != str(submittal_id),  # Exclude current submittal (convert to string for comparison)
         ProcoreSubmittal.order_number < 1,
         ProcoreSubmittal.order_number.isnot(None)
     ).all()
@@ -1461,18 +1462,9 @@ def comprehensive_health_scan(skip_user_prompt=False):
             - differences: Detailed list of all mismatches
             - updated_count: Number of records updated (if user confirmed)
     """
-    logger.info("=" * 80)
-    logger.info("Starting Comprehensive Health Scan")
-    logger.info("=" * 80)
-    
-    # Step 1: Find orphaned submittals
-    logger.info("Step 1: Finding orphaned submittals (in DB but not in API response)...")
-    cross_ref = cross_reference_db_vs_api()
-    orphaned_submittals = cross_ref['db_only_submittals']
-    orphaned_by_project = cross_ref['db_only_by_project']
-    
-    if not orphaned_submittals:
-        logger.info("✓ No orphaned submittals found - all DB submittals are in API response")
+    # Prevent concurrent execution - if another health scan is already running, skip this one
+    if sync_lock_manager.is_locked() and sync_lock_manager.get_current_operation() == "Health-Scan":
+        logger.warning("Health scan already in progress, skipping duplicate execution")
         return {
             'orphaned_submittals': [],
             'webhook_status': None,
@@ -1483,7 +1475,9 @@ def comprehensive_health_scan(skip_user_prompt=False):
                 'deleted_submittals': 0,
                 'api_fetch_errors': 0,
                 'webhook_issues': 0,
-                'projects_missing_webhooks': 0
+                'projects_missing_webhooks': 0,
+                'skipped': True,
+                'reason': 'Another health scan is already in progress'
             },
             'differences': {
                 'sync_issues': [],
@@ -1493,232 +1487,290 @@ def comprehensive_health_scan(skip_user_prompt=False):
             'updated_count': 0
         }
     
-    logger.info(f"✓ Found {len(orphaned_submittals)} orphaned submittals in {len(orphaned_by_project)} projects")
-    
-    # Step 2: Check webhooks for projects with orphaned submittals
-    logger.info("Step 2: Checking webhooks for projects with orphaned submittals...")
-    orphaned_project_ids = list(orphaned_by_project.keys())
-    webhook_status = check_webhook_health(orphaned_project_ids)
-    logger.info(f"✓ Webhook check complete: {len(webhook_status['projects_without_webhooks'])} projects missing webhooks")
-    
-    # Step 3 & 4: Fetch API data and compare for each orphaned submittal
-    logger.info("Step 3: Fetching full submittal data from API and comparing with DB...")
-    procore = get_procore_client()
-    differences = []
-    sync_issues = []
-    deleted_submittals = []
-    api_fetch_errors = []
-    
-    for submittal in orphaned_submittals:
-        submittal_id = submittal.submittal_id
-        project_id = submittal.procore_project_id
-        
-        try:
-            # Fetch full submittal data from API
-            api_submittal_data = get_submittal_by_id(int(project_id), int(submittal_id))
+    # Use sync lock to prevent concurrent execution
+    try:
+        with sync_lock_manager.acquire_sync_lock("Health-Scan", timeout_seconds=300):
+            logger.info("=" * 80)
+            logger.info("Starting Comprehensive Health Scan")
+            logger.info("=" * 80)
             
-            if not api_submittal_data or not isinstance(api_submittal_data, dict):
-                # Submittal doesn't exist in API - likely deleted/archived
-                deleted_submittals.append({
-                    'submittal_id': submittal_id,
-                    'project_id': project_id,
-                    'project_name': submittal.project_name,
-                    'title': submittal.title,
-                    'db_status': submittal.status,
-                    'db_ball_in_court': submittal.ball_in_court,
-                    'recommendation': 'Consider removing from DB or marking as archived'
-                })
-                logger.warning(f"  Submittal {submittal_id} (project {project_id}) not found in API - likely deleted")
-                continue
+            # Step 1: Find orphaned submittals
+            logger.info("Step 1: Finding orphaned submittals (in DB but not in API response)...")
+            cross_ref = cross_reference_db_vs_api()
+            orphaned_submittals = cross_ref['db_only_submittals']
+            orphaned_by_project = cross_ref['db_only_by_project']
             
-            # Parse ball_in_court from API data
-            parsed = parse_ball_in_court_from_submittal(api_submittal_data)
-            api_ball_in_court = parsed.get("ball_in_court") if parsed else None
-            
-            # Extract status from API data
-            status_obj = api_submittal_data.get("status")
-            if isinstance(status_obj, dict):
-                api_status = status_obj.get("name")
-            elif isinstance(status_obj, str):
-                api_status = status_obj
-            else:
-                api_status = None
-            api_status = str(api_status).strip() if api_status else None
-            
-            # Compare with DB
-            db_ball_in_court = submittal.ball_in_court if submittal.ball_in_court else None
-            db_status = submittal.status if submittal.status else None
-            
-            ball_mismatch = str(db_ball_in_court or "") != str(api_ball_in_court or "")
-            status_mismatch = str(db_status or "") != str(api_status or "")
-            
-            if ball_mismatch or status_mismatch:
-                # Sync issue - submittal exists in API but values don't match
-                diff = {
-                    'submittal_id': submittal_id,
-                    'project_id': project_id,
-                    'project_name': submittal.project_name,
-                    'title': submittal.title,
-                    'ball_in_court': {
-                        'db': db_ball_in_court,
-                        'api': api_ball_in_court,
-                        'mismatch': ball_mismatch
+            if not orphaned_submittals:
+                logger.info("✓ No orphaned submittals found - all DB submittals are in API response")
+                return {
+                    'orphaned_submittals': [],
+                    'webhook_status': None,
+                    'summary': {
+                        'total_orphaned': 0,
+                        'projects_with_orphans': 0,
+                        'sync_issues': 0,
+                        'deleted_submittals': 0,
+                        'api_fetch_errors': 0,
+                        'webhook_issues': 0,
+                        'projects_missing_webhooks': 0
                     },
-                    'status': {
-                        'db': db_status,
-                        'api': api_status,
-                        'mismatch': status_mismatch
+                    'differences': {
+                        'sync_issues': [],
+                        'deleted_submittals': [],
+                        'api_fetch_errors': []
                     },
-                    'recommendation': 'Sync issue - DB values are out of date. Webhook may not be working or submittal was updated outside of webhook flow.'
+                    'updated_count': 0
                 }
-                differences.append(diff)
-                sync_issues.append(diff)
-                logger.warning(f"  ⚠ Sync issue for submittal {submittal_id}: ball_in_court mismatch={ball_mismatch}, status mismatch={status_mismatch}")
-            else:
-                # Values match - submittal exists in API but wasn't in the filtered API response
-                # This could mean status/type changed, or it's filtered out for another reason
-                logger.info(f"  ✓ Submittal {submittal_id} exists in API with matching values (not in filtered response)")
+            
+            logger.info(f"✓ Found {len(orphaned_submittals)} orphaned submittals in {len(orphaned_by_project)} projects")
+            
+            # Step 2: Check webhooks for projects with orphaned submittals
+            logger.info("Step 2: Checking webhooks for projects with orphaned submittals...")
+            orphaned_project_ids = list(orphaned_by_project.keys())
+            webhook_status = check_webhook_health(orphaned_project_ids)
+            logger.info(f"✓ Webhook check complete: {len(webhook_status['projects_without_webhooks'])} projects missing webhooks")
+            
+            # Step 3 & 4: Fetch API data and compare for each orphaned submittal
+            logger.info("Step 3: Fetching full submittal data from API and comparing with DB...")
+            procore = get_procore_client()
+            differences = []
+            sync_issues = []
+            deleted_submittals = []
+            api_fetch_errors = []
+            
+            for submittal in orphaned_submittals:
+                submittal_id = submittal.submittal_id
+                project_id = submittal.procore_project_id
                 
-        except Exception as e:
-            # Error fetching from API
-            api_fetch_errors.append({
-                'submittal_id': submittal_id,
-                'project_id': project_id,
-                'project_name': submittal.project_name,
-                'title': submittal.title,
-                'error': str(e),
-                'recommendation': 'Check API access and submittal permissions'
-            })
-            logger.error(f"  ✗ Error fetching submittal {submittal_id} from API: {e}")
-    
-    logger.info(f"✓ Comparison complete:")
-    logger.info(f"  - Sync issues (mismatches): {len(sync_issues)}")
-    logger.info(f"  - Deleted submittals (not in API): {len(deleted_submittals)}")
-    logger.info(f"  - API fetch errors: {len(api_fetch_errors)}")
-    
-    # Compile results
-    summary = {
-        'total_orphaned': len(orphaned_submittals),
-        'projects_with_orphans': len(orphaned_by_project),
-        'sync_issues': len(sync_issues),
-        'deleted_submittals': len(deleted_submittals),
-        'api_fetch_errors': len(api_fetch_errors),
-        'webhook_issues': len(webhook_status['projects_without_webhooks']),
-        'projects_missing_webhooks': len(webhook_status['projects_without_webhooks'])
-    }
-    
-    # Log detailed differences
-    logger.info("=" * 80)
-    logger.info("Detailed Differences:")
-    logger.info("=" * 80)
-    
-    if sync_issues:
-        logger.info(f"\n🔴 SYNC ISSUES ({len(sync_issues)} submittals with mismatches):")
-        for issue in sync_issues:
-            logger.info(f"  Submittal {issue['submittal_id']} (Project {issue['project_id']} - {issue['project_name']})")
-            logger.info(f"    Title: {issue['title']}")
-            if issue['ball_in_court']['mismatch']:
-                logger.info(f"    ⚠ ball_in_court: DB='{issue['ball_in_court']['db']}' vs API='{issue['ball_in_court']['api']}'")
-            if issue['status']['mismatch']:
-                logger.info(f"    ⚠ status: DB='{issue['status']['db']}' vs API='{issue['status']['api']}'")
-            logger.info(f"    Recommendation: {issue['recommendation']}")
-            logger.info("")
-    
-    if deleted_submittals:
-        logger.info(f"\n🟡 DELETED/ARCHIVED SUBMITTALS ({len(deleted_submittals)} submittals not found in API):")
-        for deleted in deleted_submittals:
-            logger.info(f"  Submittal {deleted['submittal_id']} (Project {deleted['project_id']} - {deleted['project_name']})")
-            logger.info(f"    Title: {deleted['title']}")
-            logger.info(f"    Last known status: {deleted['db_status']}, ball_in_court: {deleted['db_ball_in_court']}")
-            logger.info(f"    Recommendation: {deleted['recommendation']}")
-            logger.info("")
-    
-    if api_fetch_errors:
-        logger.info(f"\n🔴 API FETCH ERRORS ({len(api_fetch_errors)} submittals):")
-        for error in api_fetch_errors:
-            logger.info(f"  Submittal {error['submittal_id']} (Project {error['project_id']} - {error['project_name']})")
-            logger.info(f"    Title: {error['title']}")
-            logger.info(f"    Error: {error['error']}")
-            logger.info(f"    Recommendation: {error['recommendation']}")
-            logger.info("")
-    
-    if webhook_status['projects_without_webhooks']:
-        logger.info(f"\n🔴 PROJECTS MISSING WEBHOOKS ({len(webhook_status['projects_without_webhooks'])} projects):")
-        for project_id in webhook_status['projects_without_webhooks']:
-            logger.info(f"  Project {project_id}: No webhooks configured")
-        logger.info("")
-    
-    logger.info("=" * 80)
-    logger.info("Health Scan Summary:")
-    logger.info(f"  Total orphaned submittals: {summary['total_orphaned']}")
-    logger.info(f"  Projects with orphans: {summary['projects_with_orphans']}")
-    logger.info(f"  Sync issues (mismatches): {summary['sync_issues']}")
-    logger.info(f"  Deleted/archived submittals: {summary['deleted_submittals']}")
-    logger.info(f"  API fetch errors: {summary['api_fetch_errors']}")
-    logger.info(f"  Projects missing webhooks: {summary['projects_missing_webhooks']}")
-    logger.info("=" * 80)
-    
-    # Ask user if they want to update DB records to match API (only if not skipping prompt)
-    updated_count = 0
-    if sync_issues and not skip_user_prompt:
-        print("\n" + "=" * 80)
-        print(f"Found {len(sync_issues)} submittals with sync issues (DB values don't match API)")
-        print("=" * 80)
-        user_input = input("\nWould you like to update DB records to match API values? (yes/no): ").strip().lower()
-        
-        if user_input == 'yes':
-            logger.info("User confirmed: Updating DB records to match API values...")
-            for issue in sync_issues:
                 try:
-                    # Find the DB record
-                    db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
-                    if not db_record:
-                        logger.warning(f"  Could not find DB record for submittal {issue['submittal_id']}")
+                    # Fetch full submittal data from API
+                    api_submittal_data = get_submittal_by_id(int(project_id), int(submittal_id))
+                    
+                    if not api_submittal_data or not isinstance(api_submittal_data, dict):
+                        # Submittal doesn't exist in API - likely deleted/archived
+                        deleted_submittals.append({
+                            'submittal_id': submittal_id,
+                            'project_id': project_id,
+                            'project_name': submittal.project_name,
+                            'title': submittal.title,
+                            'db_status': submittal.status,
+                            'db_ball_in_court': submittal.ball_in_court,
+                            'recommendation': 'Consider removing from DB or marking as archived'
+                        })
+                        logger.warning(f"  Submittal {submittal_id} (project {project_id}) not found in API - likely deleted")
                         continue
                     
-                    # Update ball_in_court if there's a mismatch
-                    if issue['ball_in_court']['mismatch']:
-                        old_value = db_record.ball_in_court
-                        db_record.ball_in_court = issue['ball_in_court']['api']
-                        logger.info(f"  Updated submittal {issue['submittal_id']}: ball_in_court '{old_value}' -> '{issue['ball_in_court']['api']}'")
+                    # Parse ball_in_court from API data
+                    parsed = parse_ball_in_court_from_submittal(api_submittal_data)
+                    api_ball_in_court = parsed.get("ball_in_court") if parsed else None
                     
-                    # Update status if there's a mismatch
-                    if issue['status']['mismatch']:
-                        old_value = db_record.status
-                        db_record.status = issue['status']['api']
-                        logger.info(f"  Updated submittal {issue['submittal_id']}: status '{old_value}' -> '{issue['status']['api']}'")
+                    # Extract status from API data
+                    status_obj = api_submittal_data.get("status")
+                    if isinstance(status_obj, dict):
+                        api_status = status_obj.get("name")
+                    elif isinstance(status_obj, str):
+                        api_status = status_obj
+                    else:
+                        api_status = None
+                    api_status = str(api_status).strip() if api_status else None
                     
-                    # Update last_updated timestamp
-                    db_record.last_updated = datetime.utcnow()
-                    updated_count += 1
+                    # Compare with DB
+                    db_ball_in_court = submittal.ball_in_court if submittal.ball_in_court else None
+                    db_status = submittal.status if submittal.status else None
                     
+                    ball_mismatch = str(db_ball_in_court or "") != str(api_ball_in_court or "")
+                    status_mismatch = str(db_status or "") != str(api_status or "")
+                    
+                    if ball_mismatch or status_mismatch:
+                        # Sync issue - submittal exists in API but values don't match
+                        diff = {
+                            'submittal_id': submittal_id,
+                            'project_id': project_id,
+                            'project_name': submittal.project_name,
+                            'title': submittal.title,
+                            'ball_in_court': {
+                                'db': db_ball_in_court,
+                                'api': api_ball_in_court,
+                                'mismatch': ball_mismatch
+                            },
+                            'status': {
+                                'db': db_status,
+                                'api': api_status,
+                                'mismatch': status_mismatch
+                            },
+                            'recommendation': 'Sync issue - DB values are out of date. Webhook may not be working or submittal was updated outside of webhook flow.'
+                        }
+                        differences.append(diff)
+                        sync_issues.append(diff)
+                        logger.warning(f"  ⚠ Sync issue for submittal {submittal_id}: ball_in_court mismatch={ball_mismatch}, status mismatch={status_mismatch}")
+                    else:
+                        # Values match - submittal exists in API but wasn't in the filtered API response
+                        # This could mean status/type changed, or it's filtered out for another reason
+                        logger.info(f"  ✓ Submittal {submittal_id} exists in API with matching values (not in filtered response)")
+                        
                 except Exception as e:
-                    logger.error(f"  Error updating submittal {issue['submittal_id']}: {e}")
+                    # Error fetching from API
+                    api_fetch_errors.append({
+                        'submittal_id': submittal_id,
+                        'project_id': project_id,
+                        'project_name': submittal.project_name,
+                        'title': submittal.title,
+                        'error': str(e),
+                        'recommendation': 'Check API access and submittal permissions'
+                    })
+                    logger.error(f"  ✗ Error fetching submittal {submittal_id} from API: {e}")
             
-            # Commit all changes
-            try:
-                db.session.commit()
-                logger.info(f"✓ Successfully updated {updated_count} submittal records in database")
-                print(f"\n✓ Successfully updated {updated_count} submittal records in database")
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Error committing updates to database: {e}")
-                print(f"\n✗ Error committing updates to database: {e}")
-        else:
-            logger.info("User declined to update DB records")
-            print("\nSkipping DB updates.")
-    
-    return {
-        'orphaned_submittals': orphaned_submittals,
-        'webhook_status': webhook_status,
-        'summary': summary,
-        'differences': {
-            'sync_issues': sync_issues,
-            'deleted_submittals': deleted_submittals,
-            'api_fetch_errors': api_fetch_errors
-        },
-        'updated_count': updated_count
-    }
+            logger.info(f"✓ Comparison complete:")
+            logger.info(f"  - Sync issues (mismatches): {len(sync_issues)}")
+            logger.info(f"  - Deleted submittals (not in API): {len(deleted_submittals)}")
+            logger.info(f"  - API fetch errors: {len(api_fetch_errors)}")
+            
+            # Compile results
+            summary = {
+                'total_orphaned': len(orphaned_submittals),
+                'projects_with_orphans': len(orphaned_by_project),
+                'sync_issues': len(sync_issues),
+                'deleted_submittals': len(deleted_submittals),
+                'api_fetch_errors': len(api_fetch_errors),
+                'webhook_issues': len(webhook_status['projects_without_webhooks']),
+                'projects_missing_webhooks': len(webhook_status['projects_without_webhooks'])
+            }
+            
+            # Log detailed differences
+            logger.info("=" * 80)
+            logger.info("Detailed Differences:")
+            logger.info("=" * 80)
+            
+            if sync_issues:
+                logger.info(f"\n🔴 SYNC ISSUES ({len(sync_issues)} submittals with mismatches):")
+                for issue in sync_issues:
+                    logger.info(f"  Submittal {issue['submittal_id']} (Project {issue['project_id']} - {issue['project_name']})")
+                    logger.info(f"    Title: {issue['title']}")
+                    if issue['ball_in_court']['mismatch']:
+                        logger.info(f"    ⚠ ball_in_court: DB='{issue['ball_in_court']['db']}' vs API='{issue['ball_in_court']['api']}'")
+                    if issue['status']['mismatch']:
+                        logger.info(f"    ⚠ status: DB='{issue['status']['db']}' vs API='{issue['status']['api']}'")
+                    logger.info(f"    Recommendation: {issue['recommendation']}")
+                    logger.info("")
+            
+            if deleted_submittals:
+                logger.info(f"\n🟡 DELETED/ARCHIVED SUBMITTALS ({len(deleted_submittals)} submittals not found in API):")
+                for deleted in deleted_submittals:
+                    logger.info(f"  Submittal {deleted['submittal_id']} (Project {deleted['project_id']} - {deleted['project_name']})")
+                    logger.info(f"    Title: {deleted['title']}")
+                    logger.info(f"    Last known status: {deleted['db_status']}, ball_in_court: {deleted['db_ball_in_court']}")
+                    logger.info(f"    Recommendation: {deleted['recommendation']}")
+                    logger.info("")
+            
+            if api_fetch_errors:
+                logger.info(f"\n🔴 API FETCH ERRORS ({len(api_fetch_errors)} submittals):")
+                for error in api_fetch_errors:
+                    logger.info(f"  Submittal {error['submittal_id']} (Project {error['project_id']} - {error['project_name']})")
+                    logger.info(f"    Title: {error['title']}")
+                    logger.info(f"    Error: {error['error']}")
+                    logger.info(f"    Recommendation: {error['recommendation']}")
+                    logger.info("")
+            
+            if webhook_status['projects_without_webhooks']:
+                logger.info(f"\n🔴 PROJECTS MISSING WEBHOOKS ({len(webhook_status['projects_without_webhooks'])} projects):")
+                for project_id in webhook_status['projects_without_webhooks']:
+                    logger.info(f"  Project {project_id}: No webhooks configured")
+                logger.info("")
+            
+            logger.info("=" * 80)
+            logger.info("Health Scan Summary:")
+            logger.info(f"  Total orphaned submittals: {summary['total_orphaned']}")
+            logger.info(f"  Projects with orphans: {summary['projects_with_orphans']}")
+            logger.info(f"  Sync issues (mismatches): {summary['sync_issues']}")
+            logger.info(f"  Deleted/archived submittals: {summary['deleted_submittals']}")
+            logger.info(f"  API fetch errors: {summary['api_fetch_errors']}")
+            logger.info(f"  Projects missing webhooks: {summary['projects_missing_webhooks']}")
+            logger.info("=" * 80)
+            
+            # Ask user if they want to update DB records to match API (only if not skipping prompt)
+            updated_count = 0
+            if sync_issues and not skip_user_prompt:
+                print("\n" + "=" * 80)
+                print(f"Found {len(sync_issues)} submittals with sync issues (DB values don't match API)")
+                print("=" * 80)
+                user_input = input("\nWould you like to update DB records to match API values? (yes/no): ").strip().lower()
+                
+                if user_input == 'yes':
+                    logger.info("User confirmed: Updating DB records to match API values...")
+                    for issue in sync_issues:
+                        try:
+                            # Find the DB record
+                            db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
+                            if not db_record:
+                                logger.warning(f"  Could not find DB record for submittal {issue['submittal_id']}")
+                                continue
+                            
+                            # Update ball_in_court if there's a mismatch
+                            if issue['ball_in_court']['mismatch']:
+                                old_value = db_record.ball_in_court
+                                db_record.ball_in_court = issue['ball_in_court']['api']
+                                logger.info(f"  Updated submittal {issue['submittal_id']}: ball_in_court '{old_value}' -> '{issue['ball_in_court']['api']}'")
+                            
+                            # Update status if there's a mismatch
+                            if issue['status']['mismatch']:
+                                old_value = db_record.status
+                                db_record.status = issue['status']['api']
+                                logger.info(f"  Updated submittal {issue['submittal_id']}: status '{old_value}' -> '{issue['status']['api']}'")
+                            
+                            # Update last_updated timestamp
+                            db_record.last_updated = datetime.utcnow()
+                            updated_count += 1
+                            
+                        except Exception as e:
+                            logger.error(f"  Error updating submittal {issue['submittal_id']}: {e}")
+                    
+                    # Commit all changes
+                    try:
+                        db.session.commit()
+                        logger.info(f"✓ Successfully updated {updated_count} submittal records in database")
+                        print(f"\n✓ Successfully updated {updated_count} submittal records in database")
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.error(f"Error committing updates to database: {e}")
+                        print(f"\n✗ Error committing updates to database: {e}")
+                else:
+                    logger.info("User declined to update DB records")
+                    print("\nSkipping DB updates.")
+            
+            return {
+                'orphaned_submittals': orphaned_submittals,
+                'webhook_status': webhook_status,
+                'summary': summary,
+                'differences': {
+                    'sync_issues': sync_issues,
+                    'deleted_submittals': deleted_submittals,
+                    'api_fetch_errors': api_fetch_errors
+                },
+                'updated_count': updated_count
+            }
+    except RuntimeError as e:
+        logger.warning(f"Health scan lock acquisition failed: {e}")
+        return {
+            'orphaned_submittals': [],
+            'webhook_status': None,
+            'summary': {
+                'total_orphaned': 0,
+                'projects_with_orphans': 0,
+                'sync_issues': 0,
+                'deleted_submittals': 0,
+                'api_fetch_errors': 0,
+                'webhook_issues': 0,
+                'projects_missing_webhooks': 0,
+                'skipped': True,
+                'reason': f'Lock acquisition failed: {str(e)}'
+            },
+            'differences': {
+                'sync_issues': [],
+                'deleted_submittals': [],
+                'api_fetch_errors': []
+            },
+            'updated_count': 0
+        }
 
 
 if __name__ == "__main__":
