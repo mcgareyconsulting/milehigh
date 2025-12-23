@@ -574,9 +574,15 @@ def sync_from_onedrive(data):
 
                 # Special handling for notes
                 if excel_field == "Notes" and field_type == "text":
-                    if excel_val != db_val and excel_val and str(excel_val).strip():
+                    # Check for valid value (not None, not NaN, not empty after stripping)
+                    if (excel_val != db_val and 
+                        excel_val is not None and 
+                        not pd.isna(excel_val) and 
+                        str(excel_val).strip() and
+                        str(excel_val).strip().lower() not in ['nan', 'none']):
                         setattr(rec, db_field, excel_val)
-                        rec._pending_note = excel_val
+                        # Convert to string to avoid float/NaN issues when adding comment
+                        rec._pending_note = str(excel_val).strip()
                         record_updated = True
                     continue
 
