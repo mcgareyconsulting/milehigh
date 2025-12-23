@@ -3,6 +3,8 @@ Utility functions for the Brain
 
 Contains helper functions for processing and transforming Job log data.
 """
+from datetime import date, datetime
+
 def determine_stage_from_db_fields(job):
     """
     Determine the job stage from database fields using TrelloListMapper logic.
@@ -53,3 +55,21 @@ def determine_stage_from_db_fields(job):
     
     # If we can't determine a stage but have some values, default to 'Released'
     return 'Released'
+
+def serialize_value(value):
+    """
+    Safely serialize a value to a JSON-compatible type.
+    
+    Handles dates, datetimes, and other non-serializable types.
+    """
+    if value is None:
+        return None
+    elif isinstance(value, (date, datetime)):
+        return value.isoformat()
+    elif isinstance(value, (int, float, str, bool)):
+        return value
+    elif isinstance(value, bytes):
+        return value.decode('utf-8', errors='replace')
+    else:
+        # Fallback: convert to string
+        return str(value)

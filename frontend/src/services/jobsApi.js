@@ -11,7 +11,7 @@ class JobsApi {
     async fetchData() {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/brain/jobs`
+                `${API_BASE_URL}/brain/jobs?limit=100`
             );
 
             // Log what we get

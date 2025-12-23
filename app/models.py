@@ -326,3 +326,9 @@ class JobChangeLog(db.Model):
     
     def __repr__(self):
         return f"<JobChangeLog {self.job}-{self.release}: {self.from_value}→{self.to_value}>"
+
+class SyncCursor(db.Model):
+    __tablename__ = "sync_cursor"
+    name = db.Column(db.String, primary_key=True)  # e.g., 'jobs'
+    last_updated_at = db.Column(db.DateTime, nullable=False)
+    last_id = db.Column(db.Integer, nullable=False)
