@@ -4,9 +4,12 @@ from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
+
+# Blueprints
 from app.trello import trello_bp
 from app.procore import procore_bp
-from app.api import api_bp
+from app.brain import brain_bp
+
 from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
@@ -25,38 +28,6 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 # Import datetime utilities
 from app.datetime_utils import format_datetime_mountain
-
-import time
-import atexit
-from apscheduler.executors.pool import ThreadPoolExecutor
-
-def init_scheduler(app):
-    """Initialize the scheduler (currently only heartbeat for monitoring)."""
-    
-    # --- Prevent scheduler duplication in multi-worker environments ---
-    # Only run the scheduler on one instance
-    if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get("IS_RENDER_SCHEDULER"):
-        logger.info("Skipping scheduler startup on this worker")
-        return None
-
-    # --- Configure scheduler ---
-    executors = {"default": ThreadPoolExecutor(3)}
-    scheduler = BackgroundScheduler(executors=executors)
-
-    # --- Optional heartbeat job to confirm scheduler alive ---
-    scheduler.add_job(
-        func=lambda: logger.info("Scheduler heartbeat: alive"),
-        trigger="interval",
-        minutes=30,
-        id="heartbeat",
-        replace_existing=True,
-    )
-
-    scheduler.start()
-    atexit.register(lambda: scheduler.shutdown(wait=False))
-
-    logger.info("Scheduler started (heartbeat only)")
-    return scheduler
 
 
 def create_app():
@@ -181,12 +152,12 @@ def create_app():
 
     # Job Log route - serve React app
     # DISABLED: Job log functionality not working yet
-    # @app.route("/job-log")
-    # def job_log():
-    #     """Serve the React app for the Job Log page. Frontend will call /api/jobs for data."""
-    #     if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
-    #         return send_file(FRONTEND_BUILD_DIR / 'index.html')
-    #     return "React build not found. Run 'npm run build' in the frontend directory.", 200
+    @app.route("/job-log")
+    def job_log():
+        """Serve the React app for the Job Log page. Frontend will call /api/jobs for data."""
+        if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
+            return send_file(FRONTEND_BUILD_DIR / 'index.html')
+        return "React build not found. Run 'npm run build' in the frontend directory.", 200
 
     # Serve static assets from React build (JS, CSS, images, etc.)
     @app.route('/assets/<path:filename>')
@@ -1684,7 +1655,8 @@ def create_app():
     # Register blueprints
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(procore_bp, url_prefix="/procore")
-    app.register_blueprint(api_bp, url_prefix="/api")
+    # app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(brain_bp, url_prefix="/brain")
 
     # Global error handler to ensure CORS headers are always included
     @app.errorhandler(Exception)
@@ -1712,12 +1684,5 @@ def create_app():
         # CORS headers should be added automatically by Flask-CORS
         # but we ensure they're present
         return response
-
-
-    # # Initialize scheduler safely
-    # try:
-    #     init_scheduler(app)
-    # except Exception as e:
-    #     logger.error("Failed to start scheduler", error=str(e))
 
     return app

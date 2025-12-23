@@ -1,8 +1,11 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 load_dotenv()
 
+# Define frontend build directory
+FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
 class Config:
     """Base configuration class with common settings."""
