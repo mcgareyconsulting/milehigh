@@ -4,6 +4,7 @@ Utility functions for the Brain
 Contains helper functions for processing and transforming Job log data.
 """
 from datetime import date, datetime
+import math
 
 def determine_stage_from_db_fields(job):
     """
@@ -60,13 +61,20 @@ def serialize_value(value):
     """
     Safely serialize a value to a JSON-compatible type.
     
-    Handles dates, datetimes, and other non-serializable types.
+    Handles dates, datetimes, NaN values, and other non-serializable types.
     """
     if value is None:
         return None
     elif isinstance(value, (date, datetime)):
         return value.isoformat()
-    elif isinstance(value, (int, float, str, bool)):
+    elif isinstance(value, float):
+        # Check for NaN and infinity values which aren't valid JSON
+        if math.isnan(value):
+            return None
+        elif math.isinf(value):
+            return None
+        return value
+    elif isinstance(value, (int, str, bool)):
         return value
     elif isinstance(value, bytes):
         return value.decode('utf-8', errors='replace')

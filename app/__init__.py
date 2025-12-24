@@ -95,9 +95,9 @@ def create_app():
     db.init_app(app)
 
     # Initialize the database - only create tables, don't drop and reseed
-    # with app.app_context():
-    #     # Only create tables if they don't exist
-    #     db.create_all()
+    with app.app_context():
+        # Only create tables if they don't exist
+        db.create_all()
         
         # # Check if we need to seed the database (only if empty)
         # from app.models import Job
