@@ -290,14 +290,15 @@ def update_stage(job, release):
 #######################
 ## Operation Routes ##
 #######################
-@brain_bp.route("/operations/dates")
-def get_operation_dates():
+@brain_bp.route("/operations/filters")
+def get_operation_filters():
     """
-    Get all distinct operation dates from the database.
+    Get all distinct operation dates and types from the database.
     """
     from app.models import SyncOperation, db
     from sqlalchemy import func
     try:
+        # build dates list
         date_rows = (
             db.session.query(func.date(SyncOperation.started_at))
             .distinct()
@@ -305,9 +306,20 @@ def get_operation_dates():
             .all()
         )
         dates = [str(r[0]) for r in date_rows if r[0] is not None]
-        return jsonify({'dates': dates, 'total': len(dates)}), 200
+
+        # build types list
+        type_rows = (
+            db.session.query(SyncOperation.operation_type)
+            .distinct()
+            .filter(SyncOperation.operation_type.isnot(None))
+            .order_by(SyncOperation.operation_type)
+            .all()
+        )
+        types = [r[0] for r in type_rows]
+
+        return jsonify({'dates': dates, 'types': types, 'total': len(dates)}), 200
     except Exception as e:
-        logger.error("Error in /operations/dates endpoint", error=str(e), exc_info=True)
+        logger.error("Error in /operations/filters endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/operations/types")
@@ -330,3 +342,44 @@ def get_operation_types():
     except Exception as e:
         logger.error("Error in /operations/types endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
+@brain_bp.route("/operations")
+def sync_operations():
+        """Get sync operations filtered by date range and operation_type."""
+        from app.models import SyncOperation
+        try:
+            # Query parameters
+            limit = request.args.get('limit', 50, type=int)
+            start_date = request.args.get('start')  # YYYY-MM-DD
+            end_date = request.args.get('end')      # YYYY-MM-DD
+            operation_type = request.args.get('operation_type')  # Filter by operation type
+
+            query = SyncOperation.query
+
+            # Apply date range on started_at (inclusive)
+            if start_date:
+                start_dt = datetime.fromisoformat(start_date + "T00:00:00")
+                query = query.filter(SyncOperation.started_at >= start_dt)
+            if end_date:
+                end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
+                query = query.filter(SyncOperation.started_at <= end_dt)
+            
+            # Apply operation_type filter
+            if operation_type:
+                query = query.filter(SyncOperation.operation_type == operation_type)
+
+            operations = query.order_by(SyncOperation.started_at.desc()).limit(limit).all()
+
+            return jsonify({
+                'operations': [op.to_dict() for op in operations],
+                'total': len(operations),
+                'filters': {
+                    'limit': limit,
+                    'start': start_date,
+                    'end': end_date,
+                    'operation_type': operation_type,
+                }
+            }), 200
+        except Exception as e:
+            logger.error("Error getting sync operations", error=str(e))
+            return jsonify({"error": str(e)}), 500

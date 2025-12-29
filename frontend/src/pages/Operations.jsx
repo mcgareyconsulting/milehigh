@@ -17,31 +17,22 @@ function Operations() {
 
     useEffect(() => {
         fetchOperations();
-        fetchAvailableDates();
-        fetchAvailableOperationTypes();
+        fetchFilters();
     }, [selectedDate, limit, selectedOperationType]);
 
-    const fetchAvailableDates = async () => {
+    const fetchFilters = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/brain/operations/dates`);
+            const response = await axios.get(`${API_BASE_URL}/brain/operations/filters`);
             const dates = [...new Set(
                 response.data.dates
             )].sort().reverse();
             setAvailableDates(dates);
-        } catch (err) {
-            console.error('Error fetching dates:', err);
-        }
-    };
-
-    const fetchAvailableOperationTypes = async () => {
-        try {
-            const response = await axios.get(`${API_BASE_URL}/brain/operations/types`);
             const types = response.data.types;
             setAvailableOperationTypes(types);
         } catch (err) {
-            console.error('Error fetching operation types:', err);
+            console.error('Error fetching dates:', err);
         }
-    };
+    }
 
     const fetchOperations = async () => {
         setLoading(true);
@@ -55,7 +46,7 @@ function Operations() {
             if (selectedOperationType) {
                 params.operation_type = selectedOperationType;
             }
-            const response = await axios.get(`${API_BASE_URL}/sync/operations`, { params });
+            const response = await axios.get(`${API_BASE_URL}/brain/operations`, { params });
             setOperations(response.data.operations || []);
         } catch (err) {
             setError(err.message);
@@ -139,7 +130,17 @@ function Operations() {
                                         min="1"
                                         max="200"
                                         value={limit}
-                                        onChange={(e) => setLimit(parseInt(e.target.value))}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            if (value === '') {
+                                                setLimit(50); // Default to 50 if empty
+                                            } else {
+                                                const parsed = parseInt(value, 10);
+                                                if (!isNaN(parsed) && parsed >= 1 && parsed <= 200) {
+                                                    setLimit(parsed);
+                                                }
+                                            }
+                                        }}
                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
                                     />
                                 </div>
