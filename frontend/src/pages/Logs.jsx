@@ -53,25 +53,7 @@ function Logs() {
                 return data;
             }
 
-            // Reorder old_value and new_value to show old_value first (for better readability)
-            if (typeof data === 'object' && data !== null && 'old_value' in data && 'new_value' in data) {
-                const reordered = {};
-                const allKeys = Object.keys(data);
-
-                // Add all keys except old_value and new_value first
-                for (const key of allKeys) {
-                    if (key !== 'old_value' && key !== 'new_value') {
-                        reordered[key] = data[key];
-                    }
-                }
-
-                // Then add old_value, then new_value
-                reordered['old_value'] = data['old_value'];
-                reordered['new_value'] = data['new_value'];
-
-                return JSON.stringify(reordered, null, 2);
-            }
-
+            // Return raw JSON without any modifications - show data as-is from the API
             return JSON.stringify(data, null, 2);
         } catch {
             return String(data);

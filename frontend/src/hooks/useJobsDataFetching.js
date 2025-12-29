@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 
 export function useJobsDataFetching() {
@@ -7,6 +7,7 @@ export function useJobsDataFetching() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
+    const hasFetchedAllRef = useRef(false);
 
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -65,7 +66,11 @@ export function useJobsDataFetching() {
 
     // Fetch all jobs on mount (paginated to get complete dataset)
     useEffect(() => {
-        fetchAllData();
+        // Use ref to prevent duplicate fetches (handles React Strict Mode double-invocation)
+        if (!hasFetchedAllRef.current) {
+            hasFetchedAllRef.current = true;
+            fetchAllData();
+        }
     }, [fetchAllData]);
 
     // Poll for updates every 30 seconds, pauses when tab is not visible to save resources

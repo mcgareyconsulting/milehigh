@@ -188,62 +188,6 @@ def create_app():
         from flask import abort
         abort(404)
 
-    @app.route("/jobs")
-    def list_jobs():
-        # Check if this is a browser request (wants HTML) vs API request (wants JSON)
-        # If browser request, serve React app; if API request, return JSON
-        accept_header = request.headers.get('Accept', '')
-        is_api_request = (
-            'application/json' in accept_header or
-            request.args.get('format') == 'json' or
-            request.is_json
-        )
-        
-        # If it's a browser request, serve React app (React Router will handle /jobs route)
-        if not is_api_request:
-            if FRONTEND_BUILD_DIR.exists() and (FRONTEND_BUILD_DIR / 'index.html').exists():
-                return send_file(FRONTEND_BUILD_DIR / 'index.html')
-            return "React build not found. Run 'npm run build' in the frontend directory.", 200
-        
-        # Otherwise, return JSON data (API request)
-        from app.models import Job
-        try:
-            jobs = Job.query.all()
-            job_list = []
-            for job in jobs:
-                # Determine stage from the 5 columns
-                stage = determine_stage_from_db_fields(job)
-                
-                # Return all Excel fields (excluding Trello fields and the 5 stage columns)
-                job_data = {
-                    'id': job.id,
-                    'Job #': job.job,
-                    'Release #': job.release,
-                    'Job': job.job_name,
-                    'Description': job.description,
-                    'Fab Hrs': job.fab_hrs,
-                    'Install HRS': job.install_hrs,
-                    'Paint color': job.paint_color,
-                    'PM': job.pm,
-                    'BY': job.by,
-                    'Released': job.released.isoformat() if job.released else None,
-                    'Fab Order': job.fab_order,
-                    'Stage': stage,  # Single Stage column instead of 5 separate columns
-                    'Start install': job.start_install.isoformat() if job.start_install else None,
-                    'Comp. ETA': job.comp_eta.isoformat() if job.comp_eta else None,
-                    'Job Comp': job.job_comp,
-                    'Invoiced': job.invoiced,
-                    'Notes': job.notes,
-                }
-                job_list.append(job_data)
-            
-            return jsonify({
-                "jobs": job_list
-            }), 200
-        except Exception as e:
-            logger.error("Error in /api/jobs", error=str(e), exc_info=True)
-            return jsonify({'error': str(e)}), 500
-
     @app.route("/shipping/audit", methods=["GET", "POST"])
     def shipping_audit():
         """
