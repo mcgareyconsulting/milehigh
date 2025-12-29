@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function Operations() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [operations, setOperations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -14,11 +15,18 @@ function Operations() {
     const [selectedOperationType, setSelectedOperationType] = useState('');
     const [availableOperationTypes, setAvailableOperationTypes] = useState([]);
     const [limit, setLimit] = useState(50);
+    const [sourceId, setSourceId] = useState(searchParams.get('source_id') || '');
+
+    useEffect(() => {
+        // Update sourceId from URL params
+        const urlSourceId = searchParams.get('source_id') || '';
+        setSourceId(urlSourceId);
+    }, [searchParams]);
 
     useEffect(() => {
         fetchOperations();
         fetchFilters();
-    }, [selectedDate, limit, selectedOperationType]);
+    }, [selectedDate, limit, selectedOperationType, sourceId]);
 
     const fetchFilters = async () => {
         try {
@@ -46,6 +54,9 @@ function Operations() {
             if (selectedOperationType) {
                 params.operation_type = selectedOperationType;
             }
+            if (sourceId) {
+                params.source_id = sourceId;
+            }
             const response = await axios.get(`${API_BASE_URL}/brain/operations`, { params });
             setOperations(response.data.operations || []);
         } catch (err) {
@@ -72,6 +83,18 @@ function Operations() {
         setSelectedDate('');
         setSelectedOperationType('');
         setLimit(50);
+        setSourceId('');
+        // Clear source_id from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('source_id');
+        setSearchParams(newParams);
+    };
+
+    const clearSourceIdFilter = () => {
+        setSourceId('');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('source_id');
+        setSearchParams(newParams);
     };
 
     return (
@@ -85,6 +108,21 @@ function Operations() {
                                 <p className="text-accent-100">Monitor and track synchronization operations</p>
                             </div>
                         </div>
+                        {sourceId && (
+                            <div className="mt-4 bg-blue-500 rounded-lg px-4 py-2 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-white text-sm font-medium">
+                                        🔗 Filtered by Submittal ID: <span className="font-bold">{sourceId}</span>
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={clearSourceIdFilter}
+                                    className="text-white hover:text-blue-100 text-sm font-medium underline"
+                                >
+                                    Clear Filter
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="p-8">

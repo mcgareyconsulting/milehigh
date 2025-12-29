@@ -345,7 +345,7 @@ def get_operation_types():
 
 @brain_bp.route("/operations")
 def sync_operations():
-        """Get sync operations filtered by date range and operation_type."""
+        """Get sync operations filtered by date range, operation_type, and source_id."""
         from app.models import SyncOperation
         try:
             # Query parameters
@@ -353,6 +353,7 @@ def sync_operations():
             start_date = request.args.get('start')  # YYYY-MM-DD
             end_date = request.args.get('end')      # YYYY-MM-DD
             operation_type = request.args.get('operation_type')  # Filter by operation type
+            source_id = request.args.get('source_id')  # Filter by source_id (e.g., submittal_id)
 
             query = SyncOperation.query
 
@@ -367,6 +368,10 @@ def sync_operations():
             # Apply operation_type filter
             if operation_type:
                 query = query.filter(SyncOperation.operation_type == operation_type)
+            
+            # Apply source_id filter
+            if source_id:
+                query = query.filter(SyncOperation.source_id == str(source_id))
 
             operations = query.order_by(SyncOperation.started_at.desc()).limit(limit).all()
 
@@ -378,6 +383,7 @@ def sync_operations():
                     'start': start_date,
                     'end': end_date,
                     'operation_type': operation_type,
+                    'source_id': source_id,
                 }
             }), 200
         except Exception as e:

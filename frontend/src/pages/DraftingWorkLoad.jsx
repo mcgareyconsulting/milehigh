@@ -15,10 +15,11 @@ const columnWidthStyles = `
     @media (min-width: 1536px) {
         /* Reduce column max-widths on very large screens to prevent bloating */
         .dwl-col-project-name { max-width: 260px !important; }
-        .dwl-col-title { max-width: 280px !important; }
+        .dwl-col-title { max-width: 250px !important; }
         .dwl-col-ball-in-court { max-width: 160px !important; }
         .dwl-col-submittal-manager { max-width: 120px !important; }
         .dwl-col-notes { max-width: 300px !important; }
+        .dwl-col-submittal-id { max-width: 128px !important; }
     }
 `;
 
@@ -282,13 +283,13 @@ function DraftingWorkLoad() {
                                                             headerStyle = { maxWidth: '64px' };
                                                             columnClass = 'dwl-col-order-number';
                                                         } else if (isSubmittalId) {
-                                                            headerStyle = { maxWidth: '96px' };
+                                                            headerStyle = { maxWidth: '128px' };
                                                             columnClass = 'dwl-col-submittal-id';
                                                         } else if (isProjectNumber) {
                                                             headerStyle = { maxWidth: '80px' };
                                                             columnClass = 'dwl-col-project-number';
                                                         } else if (isTitle) {
-                                                            headerStyle = { maxWidth: '320px' };
+                                                            headerStyle = { maxWidth: '280px' };
                                                             columnClass = 'dwl-col-title';
                                                         } else if (isNotes) {
                                                             headerStyle = { maxWidth: '350px' };

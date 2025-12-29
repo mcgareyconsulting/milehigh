@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
+    const navigate = useNavigate();
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -190,13 +192,13 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     let customStyle = {};
                     let columnClass = '';
                     if (isSubmittalId) {
-                        customWidthClass = 'w-24'; // Accommodate 8-10 digit ID
+                        customWidthClass = 'w-32'; // Accommodate 8-10 digit ID + operations link icon
                         columnClass = 'dwl-col-submittal-id';
                     } else if (column === 'Project Number') {
                         customWidthClass = 'w-20'; // Accommodate 3-4 digit number
                         columnClass = 'dwl-col-project-number';
                     } else if (column === 'Title') {
-                        customStyle = { maxWidth: '320px' };
+                        customStyle = { maxWidth: '280px' };
                         columnClass = 'dwl-col-title';
                     } else if (column === 'Type') {
                         customStyle = { maxWidth: '80px' };
@@ -333,24 +335,44 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
                             : '#';
 
+                        const handleViewOperations = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (submittalId) {
+                                navigate(`/operations?source_id=${submittalId}`);
+                            }
+                        };
+
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} ${columnClass} text-center`}
                                 title={cellValue}
                             >
-                                {href !== '#' ? (
-                                    <a
-                                        href={href}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:text-blue-800 underline font-semibold inline-flex items-center gap-1 text-xs"
-                                    >
-                                        <span>{cellValue}</span>
-                                    </a>
-                                ) : (
-                                    <span className="text-gray-900 text-xs">{cellValue}</span>
-                                )}
+                                <div className="flex items-center justify-center gap-1">
+                                    {href !== '#' ? (
+                                        <a
+                                            href={href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-800 underline font-semibold text-xs"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {cellValue}
+                                        </a>
+                                    ) : (
+                                        <span className="text-gray-900 text-xs">{cellValue}</span>
+                                    )}
+                                    {submittalId && (
+                                        <button
+                                            onClick={handleViewOperations}
+                                            className="text-accent-600 hover:text-accent-800 hover:bg-accent-50 rounded px-1 py-0.5 transition-colors"
+                                            title="View operations for this submittal"
+                                        >
+                                            <span className="text-xs">🔗</span>
+                                        </button>
+                                    )}
+                                </div>
                             </td>
                         );
                     }
