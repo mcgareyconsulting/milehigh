@@ -286,3 +286,47 @@ def update_stage(job, release):
     except Exception as e:
         logger.error("Error in /update-stage endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
+#######################
+## Operation Routes ##
+#######################
+@brain_bp.route("/operations/dates")
+def get_operation_dates():
+    """
+    Get all distinct operation dates from the database.
+    """
+    from app.models import SyncOperation, db
+    from sqlalchemy import func
+    try:
+        date_rows = (
+            db.session.query(func.date(SyncOperation.started_at))
+            .distinct()
+            .order_by(func.date(SyncOperation.started_at).desc())
+            .all()
+        )
+        dates = [str(r[0]) for r in date_rows if r[0] is not None]
+        return jsonify({'dates': dates, 'total': len(dates)}), 200
+    except Exception as e:
+        logger.error("Error in /operations/dates endpoint", error=str(e), exc_info=True)
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
+@brain_bp.route("/operations/types")
+def get_operation_types():
+    """
+    Get all distinct operation types from the database.
+    """
+    from app.models import SyncOperation, db
+    try:
+        type_rows = (
+            db.session.query(SyncOperation.operation_type)
+            .distinct()
+            .filter(SyncOperation.operation_type.isnot(None))
+            .order_by(SyncOperation.operation_type)
+            .all()
+        )
+        types = [r[0] for r in type_rows]
+        
+        return jsonify({'types': types, 'total': len(types)}), 200
+    except Exception as e:
+        logger.error("Error in /operations/types endpoint", error=str(e), exc_info=True)
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500

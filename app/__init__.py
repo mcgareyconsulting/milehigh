@@ -470,12 +470,13 @@ def create_app():
     # Sync operations digest
     @app.route("/sync/operations")
     def sync_operations():
-        """Get sync operations filtered by date range only (start/end)."""
+        """Get sync operations filtered by date range and operation_type."""
         try:
             # Query parameters
             limit = request.args.get('limit', 50, type=int)
             start_date = request.args.get('start')  # YYYY-MM-DD
             end_date = request.args.get('end')      # YYYY-MM-DD
+            operation_type = request.args.get('operation_type')  # Filter by operation type
 
             query = SyncOperation.query
 
@@ -486,6 +487,10 @@ def create_app():
             if end_date:
                 end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
                 query = query.filter(SyncOperation.started_at <= end_dt)
+            
+            # Apply operation_type filter
+            if operation_type:
+                query = query.filter(SyncOperation.operation_type == operation_type)
 
             operations = query.order_by(SyncOperation.started_at.desc()).limit(limit).all()
 
@@ -496,6 +501,7 @@ def create_app():
                     'limit': limit,
                     'start': start_date,
                     'end': end_date,
+                    'operation_type': operation_type,
                 }
             }), 200
         except Exception as e:

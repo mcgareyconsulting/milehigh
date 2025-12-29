@@ -119,8 +119,8 @@ class SyncOperation(db.Model):
     # Additional metadata
     context = db.Column(db.JSON, nullable=True)
     
-    def __repr__(self):
-        return f"<SyncOperation {self.operation_id} - {self.operation_type} - {self.status}>"
+    # def __repr__(self):
+    #     return f"<SyncOperation {self.operation_id} - {self.operation_type} - {self.status}>"
     
     def to_dict(self):
         from app.datetime_utils import format_datetime_mountain

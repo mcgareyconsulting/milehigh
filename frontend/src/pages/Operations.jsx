@@ -11,27 +11,35 @@ function Operations() {
     const [error, setError] = useState(null);
     const [selectedDate, setSelectedDate] = useState('');
     const [availableDates, setAvailableDates] = useState([]);
+    const [selectedOperationType, setSelectedOperationType] = useState('');
+    const [availableOperationTypes, setAvailableOperationTypes] = useState([]);
     const [limit, setLimit] = useState(50);
 
     useEffect(() => {
         fetchOperations();
         fetchAvailableDates();
-    }, [selectedDate, limit]);
+        fetchAvailableOperationTypes();
+    }, [selectedDate, limit, selectedOperationType]);
 
     const fetchAvailableDates = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/sync/operations?limit=200`);
+            const response = await axios.get(`${API_BASE_URL}/brain/operations/dates`);
             const dates = [...new Set(
-                response.data.operations.map(op =>
-                    new Date(op.started_at).toISOString().split('T')[0]
-                )
+                response.data.dates
             )].sort().reverse();
             setAvailableDates(dates);
-            if (!selectedDate && dates.length > 0) {
-                setSelectedDate(dates[0]);
-            }
         } catch (err) {
             console.error('Error fetching dates:', err);
+        }
+    };
+
+    const fetchAvailableOperationTypes = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/operations/types`);
+            const types = response.data.types;
+            setAvailableOperationTypes(types);
+        } catch (err) {
+            console.error('Error fetching operation types:', err);
         }
     };
 
@@ -43,6 +51,9 @@ function Operations() {
             if (selectedDate) {
                 params.start = selectedDate;
                 params.end = selectedDate;
+            }
+            if (selectedOperationType) {
+                params.operation_type = selectedOperationType;
             }
             const response = await axios.get(`${API_BASE_URL}/sync/operations`, { params });
             setOperations(response.data.operations || []);
@@ -64,6 +75,12 @@ function Operations() {
             'pending': 'bg-yellow-100 text-yellow-800',
         };
         return colors[status] || 'bg-gray-100 text-gray-800';
+    };
+
+    const resetFilters = () => {
+        setSelectedDate('');
+        setSelectedOperationType('');
+        setLimit(50);
     };
 
     return (
@@ -98,6 +115,21 @@ function Operations() {
                                         ))}
                                     </select>
                                 </div>
+                                <div className="flex-1 min-w-[200px]">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        🔧 Filter by Operation Type
+                                    </label>
+                                    <select
+                                        value={selectedOperationType}
+                                        onChange={(e) => setSelectedOperationType(e.target.value)}
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                    >
+                                        <option value="">All Types</option>
+                                        {availableOperationTypes.map(type => (
+                                            <option key={type} value={type}>{type}</option>
+                                        ))}
+                                    </select>
+                                </div>
                                 <div className="min-w-[150px]">
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         🔢 Results Limit
@@ -110,6 +142,15 @@ function Operations() {
                                         onChange={(e) => setLimit(parseInt(e.target.value))}
                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
                                     />
+                                </div>
+                                <div className="flex items-end">
+                                    <button
+                                        onClick={resetFilters}
+                                        className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg text-sm transition-colors duration-150 shadow-sm hover:shadow border border-gray-300 flex items-center gap-2"
+                                    >
+                                        <span>🔄</span>
+                                        Reset Filters
+                                    </button>
                                 </div>
                             </div>
                         </div>
