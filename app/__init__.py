@@ -467,28 +467,6 @@ def create_app():
             logger.error("Error getting sync status", error=str(e))
             return jsonify({"status": "error", "message": f"Could not get status: {str(e)}"}), 500
 
-    # Sync logs for a specific operation
-    @app.route("/sync/operations/<operation_id>/logs")
-    def sync_operation_logs(operation_id):
-        """Get detailed logs for a specific sync operation."""
-        try:
-            logs = SyncLog.query.filter_by(operation_id=operation_id)\
-                              .order_by(SyncLog.timestamp.asc()).all()
-            
-            return jsonify({
-                'operation_id': operation_id,
-                'logs': [{
-                    'timestamp': format_datetime_mountain(log.timestamp),
-                    'level': log.level,
-                    'message': log.message,
-                    'data': log.data
-                } for log in logs]
-            }), 200
-            
-        except Exception as e:
-            logger.error("Error getting sync operation logs", operation_id=operation_id, error=str(e))
-            return jsonify({"error": str(e)}), 500
-
     # Sync statistics
     @app.route("/sync/stats")
     def sync_stats():
