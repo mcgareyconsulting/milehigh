@@ -229,7 +229,7 @@ function Operations() {
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-center">
                                                                 <button
-                                                                    onClick={() => navigate(`/operations/${op.operation_id}/logs`)}
+                                                                    onClick={() => navigate(`/operations/${op.operation_id}/logs`)} // This navigates to a route in the App.jsx, not to the backend endpoint
                                                                     className="inline-flex items-center px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium rounded-md transition-colors duration-150 shadow-sm hover:shadow"
                                                                 >
                                                                     📋 Logs

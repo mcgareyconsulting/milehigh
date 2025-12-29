@@ -21,7 +21,7 @@ function Logs() {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get(`${API_BASE_URL}/sync/operations/${operationId}/logs`);
+            const response = await axios.get(`${API_BASE_URL}/brain/operations/${operationId}/logs`);
             setLogs(response.data.logs || []);
         } catch (err) {
             setError(err.response?.data?.error || err.message);

@@ -383,3 +383,26 @@ def sync_operations():
         except Exception as e:
             logger.error("Error getting sync operations", error=str(e))
             return jsonify({"error": str(e)}), 500
+
+@brain_bp.route("/operations/<operation_id>/logs")
+def sync_operation_logs(operation_id):
+        """Get detailed logs for a specific sync operation."""
+        from app.models import SyncLog
+        from app.datetime_utils import format_datetime_mountain
+        try:
+            logs = SyncLog.query.filter_by(operation_id=operation_id)\
+                              .order_by(SyncLog.timestamp.asc()).all()
+            
+            return jsonify({
+                'operation_id': operation_id,
+                'logs': [{
+                    'timestamp': format_datetime_mountain(log.timestamp),
+                    'level': log.level,
+                    'message': log.message,
+                    'data': log.data
+                } for log in logs]
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error getting sync operation logs", operation_id=operation_id, error=str(e))
+            return jsonify({"error": str(e)}), 500
