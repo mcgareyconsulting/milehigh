@@ -1,6 +1,6 @@
 from app.brain import brain_bp
 from flask import jsonify, request
-from app.brain.services.dwl_ordering import SubmittalOrderingService, SubmittalOrderUpdate
+from app.brain.services.dwl_service import SubmittalOrderingService, SubmittalOrderUpdate, DraftingWorkLoadService
 from app.logging_config import get_logger
 from app.models import ProcoreSubmittal, db
 from datetime import datetime
@@ -10,14 +10,17 @@ logger = get_logger(__name__)
 @brain_bp.route('/drafting-work-load')
 def drafting_work_load():
     """Return Drafting Work Load data from the db, filtered to only show submittals with status='Open'"""
-    # Filter to only show submittals with status == 'Open'
-    # Exclude None statuses - only show submittals that are explicitly 'Open'
-    submittals = ProcoreSubmittal.query.filter(
-        ProcoreSubmittal.status == 'Open'
-    ).all()
-    return jsonify({
-        "submittals": [submittal.to_dict() for submittal in submittals]
-    }), 200
+    try:
+        submittals = DraftingWorkLoadService.get_open_submittals(ProcoreSubmittal)
+        return jsonify({
+            "submittals": [submittal.to_dict() for submittal in submittals]
+        }), 200
+    except Exception as exc:
+        logger.error("Error getting drafting work load data", error=str(exc))
+        return jsonify({
+            "error": "Failed to get drafting work load data",
+            "details": str(exc)
+        }), 500
 
 @brain_bp.route("/drafting-work-load/order", methods=["PUT"])
 def update_submittal_order():
@@ -112,12 +115,8 @@ def update_submittal_notes():
                 "error": "Submittal not found"
             }), 404
         
-        # Allow notes to be None or empty string
-        if notes is not None:
-            notes = str(notes).strip() or None
-        
-        submittal.notes = notes
-        submittal.last_updated = datetime.utcnow()
+        # Update via service layer
+        DraftingWorkLoadService.update_notes(submittal, notes)
         
         db.session.commit()
         
@@ -167,8 +166,14 @@ def update_submittal_drafting_status():
                 "error": "Submittal not found"
             }), 404
         
-        submittal.submittal_drafting_status = submittal_drafting_status
-        submittal.last_updated = datetime.utcnow()
+        # Update via service layer
+        success, error_msg = DraftingWorkLoadService.update_drafting_status(
+            submittal, 
+            submittal_drafting_status
+        )
+        
+        if not success:
+            return jsonify({"error": error_msg}), 400
         
         db.session.commit()
         

@@ -1,6 +1,7 @@
 # dwl_ordering.py
 """
-Business logic for Drafting Work Load ordering, separated from HTTP layer for easier testing.
+Service layer for Drafting Work Load operations.
+Consolidates all DWL business logic for easier testing and maintenance.
 """
 from datetime import datetime
 from typing import Optional, List, Tuple
@@ -14,6 +15,101 @@ class SubmittalOrderUpdate:
     new_order: Optional[float]
     old_order: Optional[float]
     ball_in_court: Optional[str]
+
+class DraftingWorkLoadService:
+    """Service for Drafting Work Load operations."""
+    
+    # Valid statuses for submittal_drafting_status
+    VALID_DRAFTING_STATUSES = ['', 'STARTED', 'NEED VIF', 'HOLD']
+    
+    @staticmethod
+    def get_open_submittals(submittal_model):
+        """
+        Get all submittals with status='Open'.
+        
+        Args:
+            submittal_model: The ProcoreSubmittal model class
+            
+        Returns:
+            List of submittals with status='Open'
+        """
+        return submittal_model.query.filter(
+            submittal_model.status == 'Open'
+        ).all()
+    
+    @staticmethod
+    def validate_notes(notes: Optional[str]) -> Optional[str]:
+        """
+        Validate and normalize notes.
+        
+        Args:
+            notes: Raw notes input
+            
+        Returns:
+            Normalized notes (None if empty, stripped string otherwise)
+        """
+        if notes is None:
+            return None
+        
+        cleaned = str(notes).strip()
+        return cleaned if cleaned else None
+    
+    @staticmethod
+    def validate_drafting_status(status: Optional[str]) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Validate submittal_drafting_status.
+        
+        Args:
+            status: The status to validate
+            
+        Returns:
+            (is_valid, normalized_status, error_message)
+        """
+        # None becomes empty string
+        if status is None:
+            return True, '', None
+        
+        # Check if valid
+        if status not in DraftingWorkLoadService.VALID_DRAFTING_STATUSES:
+            valid_display = ', '.join([s if s else '(blank)' 
+                                      for s in DraftingWorkLoadService.VALID_DRAFTING_STATUSES])
+            return False, None, f"submittal_drafting_status must be one of: {valid_display}"
+        
+        return True, status, None
+    
+    @staticmethod
+    def update_notes(submittal, notes: Optional[str]) -> None:
+        """
+        Update submittal notes.
+        
+        Args:
+            submittal: The submittal object to update
+            notes: New notes value
+        """
+        validated_notes = DraftingWorkLoadService.validate_notes(notes)
+        submittal.notes = validated_notes
+        submittal.last_updated = datetime.utcnow()
+    
+    @staticmethod
+    def update_drafting_status(submittal, status: Optional[str]) -> Tuple[bool, Optional[str]]:
+        """
+        Update submittal drafting status.
+        
+        Args:
+            submittal: The submittal object to update
+            status: New status value
+            
+        Returns:
+            (success, error_message)
+        """
+        is_valid, normalized_status, error = DraftingWorkLoadService.validate_drafting_status(status)
+        
+        if not is_valid:
+            return False, error
+        
+        submittal.submittal_drafting_status = normalized_status
+        submittal.last_updated = datetime.utcnow()
+        return True, None
 
 class SubmittalOrderingService:
     """Handles the business logic for submittal ordering."""
