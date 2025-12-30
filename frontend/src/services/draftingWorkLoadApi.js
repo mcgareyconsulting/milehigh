@@ -55,7 +55,7 @@ class DraftingWorkLoadApi {
      */
     async updateStatus(submittalId, status) {
         try {
-            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/submittal-drafting-status`, {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/submittal-drafting-status`, {
                 submittal_id: submittalId,
                 submittal_drafting_status: status
             });

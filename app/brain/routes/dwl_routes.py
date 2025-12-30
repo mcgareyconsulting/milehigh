@@ -133,3 +133,54 @@ def update_submittal_notes():
             "error": "Failed to update notes",
             "details": str(exc)
         }), 500
+
+@brain_bp.route("/drafting-work-load/submittal-drafting-status", methods=["PUT"])
+def update_submittal_drafting_status():
+    """Update the submittal_drafting_status for a submittal"""
+    try:
+        data = request.json
+        submittal_id = data.get('submittal_id')
+        submittal_drafting_status = data.get('submittal_drafting_status')
+        
+        if submittal_id is None:
+            return jsonify({
+                "error": "submittal_id is required"
+            }), 400
+        
+        # Allow None or empty string for blank status
+        if submittal_drafting_status is None:
+            submittal_drafting_status = ''
+        
+        # Validate status value (empty string is allowed for blank/placeholder)
+        valid_statuses = ['', 'STARTED', 'NEED VIF', 'HOLD']
+        if submittal_drafting_status not in valid_statuses:
+            return jsonify({
+                "error": f"submittal_drafting_status must be one of: (blank), {', '.join([s for s in valid_statuses if s])}"
+            }), 400
+        
+        # Ensure submittal_id is a string for proper database comparison
+        submittal_id = str(submittal_id)
+        
+        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({
+                "error": "Submittal not found"
+            }), 404
+        
+        submittal.submittal_drafting_status = submittal_drafting_status
+        submittal.last_updated = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "submittal_drafting_status": submittal_drafting_status
+        }), 200
+    except Exception as exc:
+        logger.error("Error updating submittal drafting status", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to update submittal_drafting_status",
+            "details": str(exc)
+        }), 500
