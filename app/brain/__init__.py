@@ -15,4 +15,5 @@ from app.logging_config import get_logger
 
 brain_bp = Blueprint("brain", __name__)
 
-from app.brain import routes
+from app.brain.routes import routes
+from app.brain.routes import dwl_routes
