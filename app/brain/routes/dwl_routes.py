@@ -18,7 +18,7 @@ def drafting_work_load():
     return jsonify({
         "submittals": [submittal.to_dict() for submittal in submittals]
     }), 200
-    
+
 @brain_bp.route("/drafting-work-load/order", methods=["PUT"])
 def update_submittal_order():
     """Update the order_number for a submittal (simple update, no cascading)"""
@@ -87,5 +87,49 @@ def update_submittal_order():
         db.session.rollback()
         return jsonify({
             "error": "Failed to update order",
+            "details": str(exc)
+        }), 500
+
+@brain_bp.route("/drafting-work-load/notes", methods=["PUT"])
+def update_submittal_notes():
+    """Update the notes for a submittal"""
+    try:
+        data = request.json
+        submittal_id = data.get('submittal_id')
+        notes = data.get('notes')
+        
+        if submittal_id is None:
+            return jsonify({
+                "error": "submittal_id is required"
+            }), 400
+        
+        # Ensure submittal_id is a string for proper database comparison
+        submittal_id = str(submittal_id)
+        
+        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({
+                "error": "Submittal not found"
+            }), 404
+        
+        # Allow notes to be None or empty string
+        if notes is not None:
+            notes = str(notes).strip() or None
+        
+        submittal.notes = notes
+        submittal.last_updated = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "notes": notes
+        }), 200
+    except Exception as exc:
+        logger.error("Error updating submittal notes", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to update notes",
             "details": str(exc)
         }), 500

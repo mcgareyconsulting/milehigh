@@ -40,7 +40,7 @@ class DraftingWorkLoadApi {
      */
     async updateNotes(submittalId, notes) {
         try {
-            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/notes`, {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/notes`, {
                 submittal_id: submittalId,
                 notes: notes
             });
