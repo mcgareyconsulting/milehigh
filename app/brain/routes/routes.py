@@ -17,7 +17,11 @@ logger = get_logger(__name__)
 @brain_bp.route("/jobs")
 def get_jobs():
     """
-    List all jobs from the database as JSON.
+    List jobs updated since a specific timestamp.
+    
+    Query Parameters:
+        since (string): ISO timestamp - only return jobs updated after this time
+        If not provided, returns all jobs (for initial load)
     
     Returns a JSON object with all jobs, including:
     - All Excel fields (Job #, Release #, Description, etc.)
@@ -31,40 +35,34 @@ def get_jobs():
         - 200: Success
         - 500: Server error
     """
-    from app.models import Job, SyncCursor, db
-    from sqlalchemy import or_, and_
+    from app.models import Job
+    from datetime import datetime
     
     try:        
         # Set limit
-        limit = 100
+        limit = 1000  # Higher limit since we're filtering by timestamp
 
-        # Collect SyncCursor
-        cursor = SyncCursor.query.filter_by(name='jobs').first()
-        if cursor:
-            last_updated_at = cursor.last_updated_at
-            last_id = cursor.last_id
-        else:
-            last_updated_at = None
-            last_id = 0  # default to 0 for first load
-
+        # Get since parameter from query string
+        since_param = request.args.get('since')
+        
         # Base query
         query = Job.query
 
-        # Apply cursor filter if cursor exists
-        if last_updated_at:
-            query = query.filter(
-                or_(
-                    Job.last_updated_at > last_updated_at,
-                    and_(
-                        Job.last_updated_at == last_updated_at,
-                        Job.id > last_id
-                    )
-                )
-            )
+        # Apply timestamp filter if provided
+        if since_param:
+            try:
+                since_timestamp = datetime.fromisoformat(since_param.replace('Z', '+00:00'))
+                query = query.filter(Job.last_updated_at > since_timestamp)
+                logger.info(f"[CURSOR] Filtering jobs updated after: {since_timestamp}")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"[CURSOR] Invalid since parameter: {since_param}, error: {e}. Fetching all jobs.")
+        else:
+            logger.info(f"[CURSOR] No since parameter provided - fetching all jobs (initial load)")
 
-        # Always order by last_updated_at, id for deterministic pagination, set limit
+        # Order by last_updated_at, id for deterministic results
         query = query.order_by(Job.last_updated_at.asc(), Job.id.asc())
         jobs = query.limit(limit).all()
+        logger.info(f"[CURSOR] Query returned {len(jobs)} jobs (limit={limit})")
 
         job_list = []
         warnings = []
@@ -112,27 +110,18 @@ def get_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
-        # Update cursor to the last row in this batch
+        # Build response with latest timestamp for client to store
+        latest_timestamp = None
         if jobs:
-            last_job = jobs[-1]
-            if cursor:
-                cursor.last_updated_at = last_job.last_updated_at
-                cursor.last_id = last_job.id
-            else:
-                cursor = SyncCursor(
-                    name="jobs",
-                    last_updated_at=last_job.last_updated_at,
-                    last_id=last_job.id
-                )
-                db.session.add(cursor)
-            db.session.commit()
+            latest_job = jobs[-1]
+            latest_timestamp = latest_job.last_updated_at.isoformat()
+            logger.info(f"[CURSOR] Latest job timestamp: {latest_timestamp}")
 
         # Build response
         response_data = {
             "jobs": job_list,
             "returned_count": len(job_list),
-            "batch_limit": limit,
-            "has_more": len(jobs) == limit  # if batch is full, assume more rows exist
+            "latest_timestamp": latest_timestamp,  # For client to store in localStorage
         }
         if warnings:
             response_data['warnings'] = warnings

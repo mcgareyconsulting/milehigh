@@ -50,25 +50,17 @@ class JobsApi {
         }
     }
 
-    async fetchData() {
+    async fetchData(sinceTimestamp = null) {
         try {
-            const response = await axios.get(
-                `${API_BASE_URL}/brain/jobs`
-            );
+            const params = {};
+            if (sinceTimestamp) {
+                params.since = sinceTimestamp;
+            }
 
-            // Log what we get
-            console.log('Jobs API response:', response.data);
-            console.log('Jobs API response type:', typeof response.data);
-            console.log('Jobs Object', response.data.jobs);
-            console.log('Jobs Object type:', typeof response.data.jobs);
-            console.log('Total count:', response.data.total_count);
-            // console.log('Jobs Object keys:', Object.keys(response.data.jobs));
-            // console.log('Jobs Object length:', response.data.jobs.length);
-            // console.log('Jobs Object first item:', response.data.jobs[0]);
-            // console.log('Jobs Object first item type:', typeof response.data.jobs[0]);
-            // console.log('Jobs Object first item keys:', Object.keys(response.data.jobs[0]));
-            // console.log('Jobs Object first item length:', Object.keys(response.data.jobs[0]).length);
-            // console.log('Jobs Object first item keys:', Object.keys(response.data.jobs[0]));
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/jobs`,
+                { params }
+            );
 
             return response.data;
         } catch (error) {
@@ -100,6 +92,7 @@ class JobsApi {
             throw this._handleError(error, 'Failed to release job data');
         }
     }
+
 
     /**
      * Handle API errors
