@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 
 export function useJobsDataFetching() {
@@ -7,6 +7,7 @@ export function useJobsDataFetching() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
+    const hasFetchedAllRef = useRef(false);
 
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -37,10 +38,40 @@ export function useJobsDataFetching() {
         }
     }, []);
 
-    // Fetch data on mount
+    const fetchAllData = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
+        setError(null); // Reset error
+
+        try {
+            // Fetch all jobs from API (paginated)
+            const allJobs = await jobsApi.fetchAllJobs();
+
+            // Get columns from first job if available
+            const jobColumns = allJobs.length > 0
+                ? Object.keys(allJobs[0]).filter(key => key !== 'id')
+                : [];
+
+            // Update state
+            setJobs(allJobs);
+            setColumns(jobColumns);
+            setLastUpdated(new Date().toISOString());
+
+        } catch (error) {
+            console.error('Error fetching all jobs data:', error);
+            setError(error.message);
+        } finally {
+            if (!silent) setLoading(false);
+        }
+    }, []);
+
+    // Fetch all jobs on mount (paginated to get complete dataset)
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        // Use ref to prevent duplicate fetches (handles React Strict Mode double-invocation)
+        if (!hasFetchedAllRef.current) {
+            hasFetchedAllRef.current = true;
+            fetchAllData();
+        }
+    }, [fetchAllData]);
 
     // Poll for updates every 30 seconds, pauses when tab is not visible to save resources
     useEffect(() => {
@@ -95,6 +126,7 @@ export function useJobsDataFetching() {
         error,
         lastUpdated,
         refetch: fetchData,
+        fetchAll: fetchAllData,
     };
 }
 

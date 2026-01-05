@@ -11,7 +11,7 @@ class DraftingWorkLoadApi {
     async fetchData() {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/procore/api/drafting-work-load`
+                `${API_BASE_URL}/brain/drafting-work-load`
             );
             return response.data;
         } catch (error) {
@@ -25,7 +25,7 @@ class DraftingWorkLoadApi {
      */
     async updateOrderNumber(submittalId, orderNumber) {
         try {
-            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/order`, {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/order`, {
                 submittal_id: submittalId,
                 order_number: orderNumber
             });
@@ -40,7 +40,7 @@ class DraftingWorkLoadApi {
      */
     async updateNotes(submittalId, notes) {
         try {
-            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/notes`, {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/notes`, {
                 submittal_id: submittalId,
                 notes: notes
             });
@@ -55,7 +55,7 @@ class DraftingWorkLoadApi {
      */
     async updateStatus(submittalId, status) {
         try {
-            const response = await axios.put(`${API_BASE_URL}/procore/api/drafting-work-load/submittal-drafting-status`, {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/submittal-drafting-status`, {
                 submittal_id: submittalId,
                 submittal_drafting_status: status
             });

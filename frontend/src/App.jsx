@@ -5,8 +5,7 @@ import History from './pages/History';
 import Logs from './pages/Logs';
 import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
-// DISABLED: Job log functionality not working yet
-// import JobLog from './pages/JobLog';
+import JobLog from './pages/JobLog';
 import Navbar from './components/Navbar';
 import './App.css';
 
@@ -23,9 +22,7 @@ function AppContent() {
         <Route path="/history" element={<History />} />
         <Route path="/drafting-work-load" element={<DraftingWorkLoad />} />
         <Route path="/drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
-        {/* DISABLED: Job log functionality not working yet */}
-        {/* <Route path="/jobs" element={<JobLog />} /> */}
-        {/* <Route path="/job-log" element={<JobLog />} /> */}
+        <Route path="/job-log" element={<JobLog />} />
         <Route path="/operations/:operationId/logs" element={<Logs />} />
       </Routes>
     </div>
