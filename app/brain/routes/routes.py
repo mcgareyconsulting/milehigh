@@ -243,37 +243,65 @@ def get_all_jobs():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 
-@brain_bp.route("/update-stage/<int:job>/<release>")
+@brain_bp.route("/update-stage/<int:job>/<release>", methods=["PATCH"])
 def update_stage(job, release):
     """
     Update the stage for a specific job-release combination.
+    Maps the stage name to the appropriate database status fields.
 
     Parameters:
         job: int
         release: str
 
+    Request Body:
+        {
+            "stage": "Released" | "Cut start" | "Fit Up Complete." | "Paint complete" | etc.
+        }
+
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
     from app.models import Job, db
+    from app.sync.services.trello_list_mapper import TrelloListMapper
+    from datetime import datetime
+    
     try:
-        job = Job.query.filter_by(job=job, release=release).first()
-        if not job:
+        job_record = Job.query.filter_by(job=job, release=release).first()
+        if not job_record:
             return jsonify({'error': 'Job not found'}), 404
 
         stage = request.json.get('stage')
         if not stage:
             return jsonify({'error': 'Stage is required'}), 400
 
-        job.stage = stage
-        # TODO: pass this stage change to Trello
-        print(f"Updating stage for job {job.job} {job.release} to {stage}. Need to update Trello card.")
-        job.last_updated_at = datetime.now()
-        job.source_of_update = 'Brain'
+        logger.info(f"Updating stage for job {job}-{release} to {stage}")
+
+        # Map stage name to database fields using TrelloListMapper
+        # Handle "Cut start" separately as it's not in the standard mapper
+        if stage == "Cut start":
+            # Cut start: set cut_start=X, clear other fields
+            job_record.cut_start = "X"
+            job_record.fitup_comp = ""
+            job_record.welded = ""
+            job_record.paint_comp = ""
+            job_record.ship = ""
+        else:
+            # Use TrelloListMapper for other stages
+            # This will update fitup_comp, welded, paint_comp, ship appropriately
+            TrelloListMapper.apply_trello_list_to_db(job_record, stage, "brain_stage_update")
+
+        # Update metadata
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = 'Brain'
+        
         db.session.commit()
+        
+        logger.info(f"Successfully updated stage for job {job}-{release} to {stage}")
+        
         return jsonify({'status': 'success'}), 200
     except Exception as e:
         logger.error("Error in /update-stage endpoint", error=str(e), exc_info=True)
+        db.session.rollback()
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 #######################

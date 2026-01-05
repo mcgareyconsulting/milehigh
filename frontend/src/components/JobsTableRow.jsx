@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { jobsApi } from '../services/jobsApi';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex }) {
     // Alternate row background colors with higher contrast
@@ -26,13 +27,39 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         'Shipping completed': 'bg-gray-100 text-gray-800 border-gray-300'
     };
 
-    // Local state for stage (editable but not saved to backend)
+    // Local state for stage
     const [localStage, setLocalStage] = useState(row['Stage'] || 'Released');
+    const [updatingStage, setUpdatingStage] = useState(false);
 
     // Sync local state when row data changes (e.g., on refresh)
     useEffect(() => {
         setLocalStage(row['Stage'] || 'Released');
     }, [row['Stage']]);
+
+    // Handle stage change
+    const handleStageChange = async (newStage) => {
+        const oldStage = localStage;
+        setLocalStage(newStage); // Optimistic update
+        setUpdatingStage(true);
+
+        try {
+            const jobNumber = row['Job #'];
+            const releaseNumber = row['Release #'];
+
+            console.log(`[STAGE] Updating job ${jobNumber}-${releaseNumber} from ${oldStage} to ${newStage}`);
+
+            await jobsApi.updateStage(jobNumber, releaseNumber, newStage);
+
+            console.log(`[STAGE] Successfully updated job ${jobNumber}-${releaseNumber} to ${newStage}`);
+        } catch (error) {
+            console.error(`[STAGE] Failed to update stage for job ${row['Job #']}-${row['Release #']}:`, error);
+            // Revert on error
+            setLocalStage(oldStage);
+            alert(`Failed to update stage: ${error.message}`);
+        } finally {
+            setUpdatingStage(false);
+        }
+    };
 
     return (
         <tr
@@ -74,8 +101,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         >
                             <select
                                 value={localStage}
-                                onChange={(e) => setLocalStage(e.target.value)}
-                                className={`w-full px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-colors ${currentColorClass}`}
+                                onChange={(e) => handleStageChange(e.target.value)}
+                                disabled={updatingStage}
+                                className={`w-full px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-colors ${currentColorClass} ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
                                 style={{ minWidth: '120px' }}
                             >
                                 {stageOptions.map((option) => {
