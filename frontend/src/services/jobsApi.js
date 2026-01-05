@@ -89,6 +89,18 @@ class JobsApi {
         }
     }
 
+    async releaseJobData(csvData) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/job-log/release`,
+                { csv_data: csvData }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to release job data');
+        }
+    }
+
     /**
      * Handle API errors
      */

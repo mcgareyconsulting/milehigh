@@ -17,3 +17,4 @@ brain_bp = Blueprint("brain", __name__)
 
 from app.brain.routes import routes
 from app.brain.routes import dwl_routes
+from app.brain.routes import jl_routes

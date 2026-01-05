@@ -1,10 +1,17 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { jobsApi } from '../services/jobsApi';
 
 function JobLog() {
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useJobsDataFetching();
+    const [showReleaseModal, setShowReleaseModal] = useState(false);
+    const [csvData, setCsvData] = useState('');
+    const [parsedPreview, setParsedPreview] = useState(null);
+    const [releasing, setReleasing] = useState(false);
+    const [releaseError, setReleaseError] = useState(null);
+    const [releaseSuccess, setReleaseSuccess] = useState(null);
 
     // Use the filters hook
     const {
@@ -93,6 +100,119 @@ function JobLog() {
 
     const tableColumnCount = columnHeaders.length;
 
+    const handleReleaseClick = () => {
+        setShowReleaseModal(true);
+        setCsvData('');
+        setParsedPreview(null);
+        setReleaseError(null);
+        setReleaseSuccess(null);
+    };
+
+    const handleCloseModal = () => {
+        setShowReleaseModal(false);
+        setCsvData('');
+        setParsedPreview(null);
+        setReleaseError(null);
+        setReleaseSuccess(null);
+    };
+
+    const parsePreviewData = (data) => {
+        if (!data || !data.trim()) {
+            setParsedPreview(null);
+            return;
+        }
+
+        try {
+            // Detect delimiter
+            const firstLine = data.split('\n')[0];
+            const delimiter = firstLine.includes('\t') ? '\t' : ',';
+            
+            // Parse rows
+            const lines = data.split('\n').filter(line => line.trim());
+            const expectedColumns = [
+                'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs',
+                'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'
+            ];
+
+            // Check if first row is headers
+            let startIdx = 0;
+            const firstRow = lines[0].split(delimiter);
+            if (firstRow.length === expectedColumns.length) {
+                // Check if it looks like headers
+                const firstRowLower = firstRow.map(cell => cell.toLowerCase().trim());
+                const hasHeaderKeywords = expectedColumns.some((col, idx) => 
+                    col.toLowerCase().includes(firstRowLower[idx]) || 
+                    firstRowLower[idx].includes(col.toLowerCase().split(' ')[0])
+                );
+                if (hasHeaderKeywords) {
+                    startIdx = 1;
+                }
+            }
+
+            // Parse data rows
+            const parsedRows = [];
+            for (let i = startIdx; i < lines.length; i++) {
+                const cells = lines[i].split(delimiter);
+                if (cells.length === 0 || cells.every(cell => !cell.trim())) continue;
+
+                // Pad with empty strings if needed
+                while (cells.length < expectedColumns.length) {
+                    cells.push('');
+                }
+
+                const row = {};
+                expectedColumns.forEach((col, idx) => {
+                    row[col] = cells[idx] ? cells[idx].trim() : '';
+                });
+                parsedRows.push(row);
+            }
+
+            setParsedPreview(parsedRows.length > 0 ? parsedRows : null);
+        } catch (error) {
+            console.error('Error parsing preview:', error);
+            setParsedPreview(null);
+        }
+    };
+
+    const handleCsvDataChange = (e) => {
+        const value = e.target.value;
+        setCsvData(value);
+        parsePreviewData(value);
+    };
+
+    const handleReleaseSubmit = async () => {
+        if (!csvData.trim()) {
+            setReleaseError('Please paste CSV data');
+            return;
+        }
+
+        setReleasing(true);
+        setReleaseError(null);
+        setReleaseSuccess(null);
+
+        try {
+            const result = await jobsApi.releaseJobData(csvData);
+            setReleaseSuccess({
+                processed: result.processed_count || 0,
+                created: result.created_count || 0,
+                updated: result.updated_count || 0,
+                errors: result.error_count || 0
+            });
+            
+            // Refresh the job data
+            await fetchAll();
+            
+            // Auto-close modal after 3 seconds
+            setTimeout(() => {
+                handleCloseModal();
+            }, 3000);
+        } catch (error) {
+            setReleaseError(error.message || 'Failed to release job data');
+        } finally {
+            setReleasing(false);
+        }
+    };
+
     return (
         <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-[95%] mx-auto w-full" style={{ width: '100%' }}>
@@ -108,6 +228,12 @@ function JobLog() {
                                     style={{ filter: 'brightness(0) invert(1)' }}
                                 />
                             </div>
+                            <button
+                                onClick={handleReleaseClick}
+                                className="px-4 py-2 bg-white text-accent-600 rounded-lg font-medium shadow-sm hover:bg-accent-50 transition-all flex items-center gap-2"
+                            >
+                                📋 Release
+                            </button>
                         </div>
                     </div>
 
@@ -292,6 +418,145 @@ function JobLog() {
                     </div>
                 </div>
             </div>
+
+            {/* Release Modal */}
+            {showReleaseModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+                        <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-2xl font-bold text-white">Release Job Data</h2>
+                                <button
+                                    onClick={handleCloseModal}
+                                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                                    disabled={releasing}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="p-6 flex-1 overflow-y-auto">
+                            <div className="mb-4">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Paste Data (CSV or tab-separated from Google Sheets)
+                                </label>
+                                <p className="text-xs text-gray-600 mb-2">
+                                    Expected columns: Job #, Release #, Job, Description, Fab Hrs, Install HRS, Paint color, PM, BY, Released, Fab Order
+                                </p>
+                                <textarea
+                                    value={csvData}
+                                    onChange={handleCsvDataChange}
+                                    placeholder="Paste data here (supports CSV or tab-separated from Google Sheets)..."
+                                    className="w-full h-64 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 font-mono text-sm"
+                                    disabled={releasing}
+                                />
+                            </div>
+
+                            {/* Preview Table */}
+                            {parsedPreview && parsedPreview.length > 0 && (
+                                <div className="mb-4">
+                                    <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                                        Preview ({parsedPreview.length} row{parsedPreview.length !== 1 ? 's' : ''})
+                                    </h3>
+                                    <div className="border border-gray-300 rounded-lg overflow-hidden">
+                                        <div className="overflow-x-auto max-h-96">
+                                            <table className="w-full text-xs border-collapse">
+                                                <thead className="bg-gray-100 sticky top-0">
+                                                    <tr>
+                                                        {['Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'].map((col) => (
+                                                            <th
+                                                                key={col}
+                                                                className="px-2 py-1.5 text-left font-semibold text-gray-700 border-b border-gray-300 whitespace-nowrap"
+                                                            >
+                                                                {col}
+                                                            </th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {parsedPreview.map((row, idx) => (
+                                                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                            {['Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'].map((col) => (
+                                                                <td
+                                                                    key={col}
+                                                                    className="px-2 py-1.5 border-b border-gray-200 text-gray-900 whitespace-nowrap"
+                                                                >
+                                                                    {row[col] || <span className="text-gray-400">—</span>}
+                                                                </td>
+                                                            ))}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {releaseError && (
+                                <div className="mb-4 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded">
+                                    <p className="font-semibold">Error</p>
+                                    <p className="text-sm">{releaseError}</p>
+                                </div>
+                            )}
+
+                            {releaseSuccess && (
+                                <div className="mb-4 bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded">
+                                    <p className="font-semibold">Success!</p>
+                                    <p className="text-sm">
+                                        Processed: {releaseSuccess.processed} | 
+                                        Created: {releaseSuccess.created} | 
+                                        Updated: {releaseSuccess.updated}
+                                        {releaseSuccess.trello_cards_created > 0 && ` | Trello Cards Created: ${releaseSuccess.trello_cards_created}`}
+                                        {releaseSuccess.errors > 0 && ` | Errors: ${releaseSuccess.errors}`}
+                                    </p>
+                                    {releaseSuccess.trello_errors && releaseSuccess.trello_errors.length > 0 && (
+                                        <div className="mt-2 text-xs">
+                                            <p className="font-semibold">Trello Errors:</p>
+                                            <ul className="list-disc list-inside">
+                                                {releaseSuccess.trello_errors.map((err, idx) => (
+                                                    <li key={idx}>
+                                                        Job {err.job}-{err.release}: {err.error}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                            <button
+                                onClick={handleCloseModal}
+                                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
+                                disabled={releasing}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleReleaseSubmit}
+                                disabled={releasing || !csvData.trim()}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                                    releasing || !csvData.trim()
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-accent-500 text-white hover:bg-accent-600'
+                                }`}
+                            >
+                                {releasing ? (
+                                    <>
+                                        <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                                        Releasing...
+                                    </>
+                                ) : (
+                                    'Release'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
