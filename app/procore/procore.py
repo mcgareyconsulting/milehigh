@@ -741,7 +741,7 @@ def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
     
     existing_urgent_orders = db.session.query(ProcoreSubmittal.order_number).filter(
         ProcoreSubmittal.ball_in_court == ball_in_court_value,
-        ProcoreSubmittal.submittal_id != submittal_id,  # Exclude current submittal
+        ProcoreSubmittal.submittal_id != str(submittal_id),  # Exclude current submittal
         ProcoreSubmittal.order_number < 1,
         ProcoreSubmittal.order_number.isnot(None)
     ).all()
