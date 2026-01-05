@@ -11,7 +11,7 @@ def get_procore_client():
         # Dev
         # _client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_DEV_WEBHOOK_URL)
         # Prod
-        # _client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_PROD_WEBHOOK_URL)
+        _client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_PROD_WEBHOOK_URL)
         # Sandbox
-        _client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_SANDBOX_WEBHOOK_URL)
+        # _client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_SANDBOX_WEBHOOK_URL)
     return _client
