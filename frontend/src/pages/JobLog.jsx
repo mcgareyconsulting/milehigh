@@ -4,7 +4,7 @@ import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
 
 function JobLog() {
-    const { jobs, columns, loading, error: fetchError, lastUpdated, refetch } = useJobsDataFetching();
+    const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useJobsDataFetching();
 
     // Use the filters hook
     const {

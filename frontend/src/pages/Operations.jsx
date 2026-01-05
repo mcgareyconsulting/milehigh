@@ -1,39 +1,46 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function Operations() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [operations, setOperations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedDate, setSelectedDate] = useState('');
     const [availableDates, setAvailableDates] = useState([]);
+    const [selectedOperationType, setSelectedOperationType] = useState('');
+    const [availableOperationTypes, setAvailableOperationTypes] = useState([]);
     const [limit, setLimit] = useState(50);
+    const [sourceId, setSourceId] = useState(searchParams.get('source_id') || '');
+
+    useEffect(() => {
+        // Update sourceId from URL params
+        const urlSourceId = searchParams.get('source_id') || '';
+        setSourceId(urlSourceId);
+    }, [searchParams]);
 
     useEffect(() => {
         fetchOperations();
-        fetchAvailableDates();
-    }, [selectedDate, limit]);
+        fetchFilters();
+    }, [selectedDate, limit, selectedOperationType, sourceId]);
 
-    const fetchAvailableDates = async () => {
+    const fetchFilters = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/sync/operations?limit=200`);
+            const response = await axios.get(`${API_BASE_URL}/brain/operations/filters`);
             const dates = [...new Set(
-                response.data.operations.map(op =>
-                    new Date(op.started_at).toISOString().split('T')[0]
-                )
+                response.data.dates
             )].sort().reverse();
             setAvailableDates(dates);
-            if (!selectedDate && dates.length > 0) {
-                setSelectedDate(dates[0]);
-            }
+            const types = response.data.types;
+            setAvailableOperationTypes(types);
         } catch (err) {
             console.error('Error fetching dates:', err);
         }
-    };
+    }
 
     const fetchOperations = async () => {
         setLoading(true);
@@ -44,7 +51,13 @@ function Operations() {
                 params.start = selectedDate;
                 params.end = selectedDate;
             }
-            const response = await axios.get(`${API_BASE_URL}/sync/operations`, { params });
+            if (selectedOperationType) {
+                params.operation_type = selectedOperationType;
+            }
+            if (sourceId) {
+                params.source_id = sourceId;
+            }
+            const response = await axios.get(`${API_BASE_URL}/brain/operations`, { params });
             setOperations(response.data.operations || []);
         } catch (err) {
             setError(err.message);
@@ -66,6 +79,24 @@ function Operations() {
         return colors[status] || 'bg-gray-100 text-gray-800';
     };
 
+    const resetFilters = () => {
+        setSelectedDate('');
+        setSelectedOperationType('');
+        setLimit(50);
+        setSourceId('');
+        // Clear source_id from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('source_id');
+        setSearchParams(newParams);
+    };
+
+    const clearSourceIdFilter = () => {
+        setSourceId('');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('source_id');
+        setSearchParams(newParams);
+    };
+
     return (
         <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-7xl mx-auto w-full" style={{ width: '100%', maxWidth: '1280px' }}>
@@ -77,6 +108,21 @@ function Operations() {
                                 <p className="text-accent-100">Monitor and track synchronization operations</p>
                             </div>
                         </div>
+                        {sourceId && (
+                            <div className="mt-4 bg-blue-500 rounded-lg px-4 py-2 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-white text-sm font-medium">
+                                        🔗 Filtered by Submittal ID: <span className="font-bold">{sourceId}</span>
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={clearSourceIdFilter}
+                                    className="text-white hover:text-blue-100 text-sm font-medium underline"
+                                >
+                                    Clear Filter
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="p-8">
@@ -98,6 +144,21 @@ function Operations() {
                                         ))}
                                     </select>
                                 </div>
+                                <div className="flex-1 min-w-[200px]">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        🔧 Filter by Operation Type
+                                    </label>
+                                    <select
+                                        value={selectedOperationType}
+                                        onChange={(e) => setSelectedOperationType(e.target.value)}
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                    >
+                                        <option value="">All Types</option>
+                                        {availableOperationTypes.map(type => (
+                                            <option key={type} value={type}>{type}</option>
+                                        ))}
+                                    </select>
+                                </div>
                                 <div className="min-w-[150px]">
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         🔢 Results Limit
@@ -107,9 +168,28 @@ function Operations() {
                                         min="1"
                                         max="200"
                                         value={limit}
-                                        onChange={(e) => setLimit(parseInt(e.target.value))}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            if (value === '') {
+                                                setLimit(50); // Default to 50 if empty
+                                            } else {
+                                                const parsed = parseInt(value, 10);
+                                                if (!isNaN(parsed) && parsed >= 1 && parsed <= 200) {
+                                                    setLimit(parsed);
+                                                }
+                                            }
+                                        }}
                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
                                     />
+                                </div>
+                                <div className="flex items-end">
+                                    <button
+                                        onClick={resetFilters}
+                                        className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg text-sm transition-colors duration-150 shadow-sm hover:shadow border border-gray-300 flex items-center gap-2"
+                                    >
+                                        <span>🔄</span>
+                                        Reset Filters
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -187,7 +267,7 @@ function Operations() {
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-center">
                                                                 <button
-                                                                    onClick={() => navigate(`/operations/${op.operation_id}/logs`)}
+                                                                    onClick={() => navigate(`/operations/${op.operation_id}/logs`)} // This navigates to a route in the App.jsx, not to the backend endpoint
                                                                     className="inline-flex items-center px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium rounded-md transition-colors duration-150 shadow-sm hover:shadow"
                                                                 >
                                                                     📋 Logs

@@ -8,10 +8,52 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ||
     (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
 class JobsApi {
+    async fetchAllJobs() {
+        try {
+            const allJobs = [];
+            let page = 1;
+            let hasMore = true;
+
+            // Fetch all pages until we have all the data
+            while (hasMore) {
+                const response = await axios.get(`${API_BASE_URL}/brain/get-all-jobs`, {
+                    params: { page }
+                });
+
+                // Parse response data if it's a string (sometimes axios doesn't auto-parse)
+                let data = response.data;
+                if (typeof data === 'string') {
+                    data = JSON.parse(data);
+                }
+
+                // Add jobs from this page to the accumulated array
+                if (data.jobs && Array.isArray(data.jobs)) {
+                    allJobs.push(...data.jobs);
+                }
+
+                // Check if there are more pages
+                if (data.pagination) {
+                    hasMore = data.pagination.has_more === true;
+                    console.log(`Fetched page ${page}: ${data.jobs?.length || 0} jobs (Total so far: ${allJobs.length}/${data.pagination.total_count})`);
+                } else {
+                    hasMore = false;
+                }
+
+                page++;
+            }
+
+            console.log(`Finished fetching all jobs: ${allJobs.length} total`);
+            return allJobs;
+        } catch (error) {
+            // Use the same error handling pattern as fetchData
+            throw this._handleError(error, 'Failed to fetch all jobs');
+        }
+    }
+
     async fetchData() {
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/api/jobs`
+                `${API_BASE_URL}/brain/jobs`
             );
 
             // Log what we get
@@ -38,7 +80,7 @@ class JobsApi {
     async updateStage(job, release, stage) {
         try {
             const response = await axios.patch(
-                `${API_BASE_URL}/jobs/${job}/${release}/stage`,
+                `${API_BASE_URL}/brain/update-stage/${job}/${release}`,
                 { stage }
             );
             return response.data;
