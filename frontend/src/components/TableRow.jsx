@@ -363,7 +363,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                     ) : (
                                         <span className="text-gray-900 text-xs">{cellValue}</span>
                                     )}
-                                    {submittalId && (
+                                    {/* {submittalId && (
                                         <button
                                             onClick={handleViewOperations}
                                             className="text-accent-600 hover:text-accent-800 hover:bg-accent-50 rounded px-1 py-0.5 transition-colors"
@@ -371,7 +371,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         >
                                             <span className="text-xs">🔗</span>
                                         </button>
-                                    )}
+                                    )} */}
                                 </div>
                             </td>
                         );

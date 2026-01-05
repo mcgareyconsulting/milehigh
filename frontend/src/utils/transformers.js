@@ -27,6 +27,10 @@ function transformSubmittal(submittal, index) {
  * Transform array of submittals
  */
 export function transformSubmittals(submittals) {
+    if (!submittals || !Array.isArray(submittals)) {
+        console.warn('transformSubmittals received invalid input:', submittals);
+        return [];
+    }
     return submittals.map((submittal, index) => transformSubmittal(submittal, index));
 }
 

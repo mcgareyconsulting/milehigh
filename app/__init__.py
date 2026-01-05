@@ -8,6 +8,7 @@ from app.trello import trello_bp
 from app.onedrive import onedrive_bp
 from app.procore import procore_bp
 from app.api import api_bp
+from app.brain import brain_bp
 from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
@@ -2045,6 +2046,7 @@ def create_app():
     app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
     app.register_blueprint(procore_bp, url_prefix="/procore")
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(brain_bp, url_prefix="/brain")
 
     # Global error handler to ensure CORS headers are always included
     @app.errorhandler(Exception)

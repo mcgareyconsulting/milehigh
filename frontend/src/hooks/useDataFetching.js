@@ -19,6 +19,15 @@ export function useDataFetching() {
             // Fetch data from API
             const data = await draftingWorkLoadApi.fetchData();
 
+            // Transform data - add defensive check
+            if (!data || !data.submittals) {
+                console.warn('API response missing submittals:', data);
+                setSubmittals([]);
+                setColumns([]);
+                setLastUpdated(null);
+                return;
+            }
+
             // Transform data
             const transformed = transformSubmittals(data.submittals);
 
