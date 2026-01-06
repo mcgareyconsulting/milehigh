@@ -6,9 +6,11 @@ Provides API endpoints for releasing job data from CSV clipboard data.
 from app.brain import brain_bp
 from flask import jsonify, request
 from app.logging_config import get_logger
-from app.models import Job, db
+from app.models import Job, db, JobEvents
 from datetime import datetime
 import csv
+import json 
+import hashlib
 import io
 import pandas as pd
 
@@ -216,6 +218,62 @@ def safe_string(val, max_length=None):
     return string_val
 
 
+def _detect_delimiter(csv_data):
+    """Detect delimiter (tab vs comma) from CSV data."""
+    first_line = csv_data.split('\n')[0] if '\n' in csv_data else csv_data
+    return '\t' if '\t' in first_line else ','
+
+
+def _is_header_row(row, expected_columns):
+    """Check if a row looks like a header row."""
+    if len(row) != len(expected_columns):
+        return False
+    return any(col.lower() in str(row[i]).lower() for i, col in enumerate(expected_columns))
+
+
+def _extract_row_values(row, expected_columns):
+    """Extract values from a row, padding with empty strings if needed."""
+    # Pad row to expected length
+    padded_row = row + [''] * (len(expected_columns) - len(row))
+    return {
+        'job': padded_row[0] if len(padded_row) > 0 else '',
+        'release': padded_row[1] if len(padded_row) > 1 else '',
+        'job_name': padded_row[2] if len(padded_row) > 2 else '',
+        'description': padded_row[3] if len(padded_row) > 3 else '',
+        'fab_hrs': padded_row[4] if len(padded_row) > 4 else '',
+        'install_hrs': padded_row[5] if len(padded_row) > 5 else '',
+        'paint_color': padded_row[6] if len(padded_row) > 6 else '',
+        'pm': padded_row[7] if len(padded_row) > 7 else '',
+        'by': padded_row[8] if len(padded_row) > 8 else '',
+        'released': padded_row[9] if len(padded_row) > 9 else '',
+        'fab_order': padded_row[10] if len(padded_row) > 10 else ''
+    }
+
+
+def _validate_row(row_values, row_idx, row):
+    """Validate row values and return (is_valid, error_dict)."""
+    if not row_values['job'] or str(row_values['job']).strip() == '':
+        return False, {'row': row_idx, 'error': 'Job # is required', 'data': row}
+    
+    if not row_values['release'] or str(row_values['release']).strip() == '':
+        return False, {'row': row_idx, 'error': 'Release # is required', 'data': row}
+    
+    try:
+        int(row_values['job'])
+    except (ValueError, TypeError):
+        return False, {'row': row_idx, 'error': f'Invalid Job # value: {row_values["job"]}', 'data': row}
+    
+    return True, None
+
+
+def _create_payload_hash(action, job_number, release_number, excel_data_dict):
+    """Create a hash for the payload."""
+    payload = {"data": excel_data_dict}
+    payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+    hash_string = f"{action}:{job_number}:{release_number}:{payload_json}"
+    return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
+
+
 @brain_bp.route("/job-log/release", methods=["POST"])
 def release_job_data():
     """
@@ -256,12 +314,8 @@ def release_job_data():
         if not csv_data or not csv_data.strip():
             return jsonify({'error': 'csv_data cannot be empty'}), 400
         
-        # Detect delimiter (tab vs comma)
-        # Check first line to see if it contains tabs
-        first_line = csv_data.split('\n')[0] if '\n' in csv_data else csv_data
-        delimiter = '\t' if '\t' in first_line else ','
-        
-        # Parse data with detected delimiter
+        # Detect delimiter and parse CSV data
+        delimiter = _detect_delimiter(csv_data)
         csv_reader = csv.reader(io.StringIO(csv_data), delimiter=delimiter)
         rows = list(csv_reader)
         
@@ -274,23 +328,13 @@ def release_job_data():
             'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'
         ]
         
-        # Check if first row is headers (optional - we'll skip if it matches expected columns)
-        first_row = rows[0]
-        is_header_row = False
-        if len(first_row) == len(expected_columns):
-            # Check if first row looks like headers
-            if any(col.lower() in str(first_row[i]).lower() for i, col in enumerate(expected_columns)):
-                is_header_row = True
-        
-        # Start processing from row after headers (if present)
-        start_idx = 1 if is_header_row else 0
+        # Check if first row is headers and determine start index
+        start_idx = 1 if _is_header_row(rows[0], expected_columns) else 0
         
         processed = []
         errors = []
         created_count = 0
-        updated_count = 0
         trello_cards_created = 0
-        trello_errors = []
         
         for row_idx, row in enumerate(rows[start_idx:], start=start_idx + 1):
             try:
@@ -298,175 +342,118 @@ def release_job_data():
                 if not row or all(not cell or str(cell).strip() == '' for cell in row):
                     continue
                 
-                # Ensure we have enough columns (pad with empty strings if needed)
-                while len(row) < len(expected_columns):
-                    row.append('')
-                
-                # Extract values by position
-                job_val = row[0] if len(row) > 0 else ''
-                release_val = row[1] if len(row) > 1 else ''
-                job_name_val = row[2] if len(row) > 2 else ''
-                description_val = row[3] if len(row) > 3 else ''
-                fab_hrs_val = row[4] if len(row) > 4 else ''
-                install_hrs_val = row[5] if len(row) > 5 else ''
-                paint_color_val = row[6] if len(row) > 6 else ''
-                pm_val = row[7] if len(row) > 7 else ''
-                by_val = row[8] if len(row) > 8 else ''
-                released_val = row[9] if len(row) > 9 else ''
-                fab_order_val = row[10] if len(row) > 10 else ''
-                
-                # Validate required fields
-                if not job_val or str(job_val).strip() == '':
-                    errors.append({
-                        'row': row_idx,
-                        'error': 'Job # is required',
-                        'data': row
-                    })
+                # Extract and validate row values
+                row_values = _extract_row_values(row, expected_columns)
+                is_valid, validation_error = _validate_row(row_values, row_idx, row)
+                if not is_valid:
+                    errors.append(validation_error)
                     continue
                 
-                if not release_val or str(release_val).strip() == '':
-                    errors.append({
-                        'row': row_idx,
-                        'error': 'Release # is required',
-                        'data': row
-                    })
-                    continue
+                # Parse validated values
+                job_number = int(row_values['job'])
+                release_number = str(row_values['release']).strip()
                 
-                # Parse job number
-                try:
-                    job_number = int(job_val)
-                except (ValueError, TypeError):
-                    errors.append({
-                        'row': row_idx,
-                        'error': f'Invalid Job # value: {job_val}',
-                        'data': row
-                    })
+                # Check if job already exists
+                existing_job = Job.query.filter_by(job=job_number, release=release_number).first()
+                if existing_job:
                     continue
-                
-                release_number = str(release_val).strip()
                 
                 # Prepare Excel format dictionary for Trello card creation
                 excel_data_dict = {
                     'Job #': job_number,
                     'Release #': release_number,
-                    'Job': job_name_val,
-                    'Description': description_val,
-                    'Fab Hrs': fab_hrs_val,
-                    'Install HRS': install_hrs_val,
-                    'Paint color': paint_color_val,
-                    'PM': pm_val,
-                    'BY': by_val,
-                    'Released': released_val,
-                    'Fab Order': fab_order_val
+                    'Job': row_values['job_name'],
+                    'Description': row_values['description'],
+                    'Fab Hrs': row_values['fab_hrs'],
+                    'Install HRS': row_values['install_hrs'],
+                    'Paint color': row_values['paint_color'],
+                    'PM': row_values['pm'],
+                    'BY': row_values['by'],
+                    'Released': row_values['released'],
+                    'Fab Order': row_values['fab_order']
                 }
                 
-                # Check if job already exists
-                existing_job = Job.query.filter_by(job=job_number, release=release_number).first()
+                # Create payload hash
+                action = "create"
+                payload_hash = _create_payload_hash(action, job_number, release_number, excel_data_dict)
                 
-                if existing_job:
-                    # Update existing job
-                    existing_job.job_name = safe_string(job_name_val, 128) or existing_job.job_name
-                    existing_job.description = safe_string(description_val, 256) if description_val else existing_job.description
-                    existing_job.fab_hrs = safe_float(fab_hrs_val) if fab_hrs_val else existing_job.fab_hrs
-                    existing_job.install_hrs = safe_float(install_hrs_val) if install_hrs_val else existing_job.install_hrs
-                    existing_job.paint_color = safe_string(paint_color_val, 64) if paint_color_val else existing_job.paint_color
-                    existing_job.pm = safe_string(pm_val, 16) if pm_val else existing_job.pm
-                    existing_job.by = safe_string(by_val, 16) if by_val else existing_job.by
-                    existing_job.released = to_date(released_val) if released_val else existing_job.released
-                    existing_job.fab_order = safe_float(fab_order_val) if fab_order_val else existing_job.fab_order
-                    existing_job.last_updated_at = datetime.utcnow()
-                    existing_job.source_of_update = 'Brain'
-                    
-                    # Commit the job update first
+                # Create event
+                event = JobEvents(
+                    job=job_number,
+                    release=release_number,
+                    action='created',
+                    payload=excel_data_dict,
+                    payload_hash=payload_hash,
+                    source='Brain'
+                )
+                db.session.add(event)
+                
+                # Create new job
+                new_job = Job(
+                    job=job_number,
+                    release=release_number,
+                    job_name=safe_string(row_values['job_name'], 128) or '',
+                    description=safe_string(row_values['description'], 256),
+                    fab_hrs=safe_float(row_values['fab_hrs']),
+                    install_hrs=safe_float(row_values['install_hrs']),
+                    paint_color=safe_string(row_values['paint_color'], 64),
+                    pm=safe_string(row_values['pm'], 16),
+                    by=safe_string(row_values['by'], 16),
+                    released=to_date(row_values['released']),
+                    fab_order=safe_float(row_values['fab_order']),
+                    last_updated_at=datetime.utcnow(),
+                    source_of_update='Brain'
+                )
+                db.session.add(new_job)
+                db.session.commit()
+                
+                # Create Trello card for new job
+                trello_result = create_trello_card_for_job(new_job, excel_data_dict)
+                processed_record = {
+                    'job': job_number,
+                    'release': release_number,
+                    'action': 'created'
+                }
+                
+                if trello_result and trello_result.get('success'):
+                    trello_cards_created += 1
+                    processed_record['trello_card_created'] = True
+                    processed_record['trello_card_id'] = trello_result.get('card_id')
                     db.session.commit()
-                    
-                    updated_count += 1
-                    processed.append({
-                        'job': job_number,
-                        'release': release_number,
-                        'action': 'updated'
-                    })
-                    
-                    # Create Trello card if job doesn't have one
-                    if not existing_job.trello_card_id:
-                        trello_result = create_trello_card_for_job(existing_job, excel_data_dict)
-                        if trello_result and trello_result.get('success'):
-                            trello_cards_created += 1
-                            processed[-1]['trello_card_created'] = True
-                            processed[-1]['trello_card_id'] = trello_result.get('card_id')
-                            # Commit Trello card updates to job
-                            db.session.commit()
-                        elif trello_result:
-                            trello_errors.append({
-                                'job': job_number,
-                                'release': release_number,
-                                'error': trello_result.get('error', 'Unknown error')
-                            })
                 else:
-                    # Create new job
-                    new_job = Job(
-                        job=job_number,
-                        release=release_number,
-                        job_name=safe_string(job_name_val, 128) or '',
-                        description=safe_string(description_val, 256),
-                        fab_hrs=safe_float(fab_hrs_val),
-                        install_hrs=safe_float(install_hrs_val),
-                        paint_color=safe_string(paint_color_val, 64),
-                        pm=safe_string(pm_val, 16),
-                        by=safe_string(by_val, 16),
-                        released=to_date(released_val),
-                        fab_order=safe_float(fab_order_val),
-                        last_updated_at=datetime.utcnow(),
-                        source_of_update='Brain'
-                    )
-                    
-                    db.session.add(new_job)
-                    # Commit the job first so it exists in the database
-                    db.session.commit()
-                    
-                    created_count += 1
-                    processed.append({
-                        'job': job_number,
-                        'release': release_number,
-                        'action': 'created'
+                    error_msg = trello_result.get('error', 'Unknown error') if trello_result else 'Trello card creation failed'
+                    errors.append({
+                        'row': row_idx,
+                        'error': error_msg,
+                        'data': row
                     })
-                    
-                    # Create Trello card for new job
-                    trello_result = create_trello_card_for_job(new_job, excel_data_dict)
-                    if trello_result and trello_result.get('success'):
-                        trello_cards_created += 1
-                        processed[-1]['trello_card_created'] = True
-                        processed[-1]['trello_card_id'] = trello_result.get('card_id')
-                        # Commit Trello card updates to job
-                        db.session.commit()
-                    elif trello_result:
-                        trello_errors.append({
-                            'job': job_number,
-                            'release': release_number,
-                            'error': trello_result.get('error', 'Unknown error')
-                        })
                 
-            except Exception as row_error:
+                # Update event applied_at time
+                event = JobEvents.query.filter_by(payload_hash=payload_hash).first()
+                if event:
+                    event.applied_at = datetime.utcnow()
+                    db.session.commit()
+                
+                created_count += 1
+                processed.append(processed_record)
+                
+            except Exception as e:
+                logger.error(f"Error processing row {row_idx}: {str(e)}", exc_info=True)
                 errors.append({
                     'row': row_idx,
-                    'error': str(row_error),
+                    'error': f'Unexpected error: {str(e)}',
                     'data': row
                 })
-                logger.error(f"Error processing row {row_idx}: {str(row_error)}", exc_info=True)
-                continue
-        
-        # All commits are done per-job above, so no need for a final commit here
+                db.session.rollback()
         
         return jsonify({
             'success': True,
             'processed_count': len(processed),
             'created_count': created_count,
-            'updated_count': updated_count,
             'trello_cards_created': trello_cards_created,
             'error_count': len(errors),
             'processed': processed,
-            'errors': errors if errors else None,
-            'trello_errors': trello_errors if trello_errors else None
+            'errors': errors if errors else None
         }), 200
         
     except Exception as e:

@@ -28,13 +28,15 @@ from app.trello.api import (
     card_has_link_to,
     add_procore_link,
 )
-from app.models import Job, SyncOperation, SyncLog, SyncStatus, db
+from app.models import Job, SyncOperation, SyncLog, SyncStatus, JobEvents, db
 from datetime import datetime, date, timezone, time
 from zoneinfo import ZoneInfo
 from app.sync_lock import synchronized_sync, sync_lock_manager
 from app.logging_config import get_logger, SyncContext, log_sync_operation
 import uuid
 import re
+import hashlib
+import json
 from app.config import Config as cfg
 from app.procore.procore import add_procore_link_to_trello_card
 
@@ -88,6 +90,21 @@ def as_date(val):
         return pd.to_datetime(val).date()
     except Exception:
         return None
+
+
+def _create_list_move_payload_hash(action, job_number, release_number, from_list_name, to_list_name, from_list_id, to_list_id):
+    """Create a hash for list move payload to detect duplicates."""
+    payload = {
+        "data": {
+            "from_list_name": from_list_name,
+            "to_list_name": to_list_name,
+            "from_list_id": from_list_id,
+            "to_list_id": to_list_id
+        }
+    }
+    payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+    hash_string = f"{action}:{job_number}:{release_number}:{payload_json}"
+    return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
 def sync_from_trello(event_info):
     """Sync data from Trello to database based on webhook payload."""
@@ -167,6 +184,7 @@ def sync_from_trello(event_info):
             'ship': rec.ship,
         }
         duplicate_card_id = None
+        list_move_payload_hash = None  # Store for setting applied_at later
 
         # Check for duplicate updates
         if rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
@@ -214,14 +232,89 @@ def sync_from_trello(event_info):
 
         # Handle list movement
         if event_info.get("has_list_move", False):
+            from_list_name = event_info.get("from")
+            to_list_name = rec.trello_list_name
+            from_list_id = event_info.get("list_id_before")
+            to_list_id = event_info.get("list_id_after")
+            
             safe_log_sync_event(
                 sync_op.operation_id,
                 "INFO",
                 "List move detected",
-                from_list=event_info.get("from"),
-                to_list=rec.trello_list_name
+                from_list=from_list_name,
+                to_list=to_list_name
             )
+            
+            # Capture old status values before applying list mapping
+            old_status_before_list_move = {
+                'fitup_comp': rec.fitup_comp,
+                'welded': rec.welded,
+                'paint_comp': rec.paint_comp,
+                'ship': rec.ship
+            }
+            
+            # Apply list mapping to database
             TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
+            
+            # Check if status actually changed (only create event if DB was updated)
+            status_changed = (
+                old_status_before_list_move['fitup_comp'] != rec.fitup_comp or
+                old_status_before_list_move['welded'] != rec.welded or
+                old_status_before_list_move['paint_comp'] != rec.paint_comp or
+                old_status_before_list_move['ship'] != rec.ship
+            )
+            
+            if status_changed:
+                # Create JobEvent for list movement that caused status change
+                action = "list_move"
+                payload = {
+                    "from_list_name": from_list_name,
+                    "to_list_name": to_list_name,
+                    "from_list_id": from_list_id,
+                    "to_list_id": to_list_id
+                }
+                payload_hash = _create_list_move_payload_hash(
+                    action, rec.job, rec.release,
+                    from_list_name, to_list_name,
+                    from_list_id, to_list_id
+                )
+                list_move_payload_hash = payload_hash  # Store for later
+                
+                # Check for duplicate event
+                existing_event = JobEvents.query.filter_by(
+                    job=rec.job,
+                    release=rec.release,
+                    payload_hash=payload_hash
+                ).first()
+                
+                if not existing_event:
+                    event = JobEvents(
+                        job=rec.job,
+                        release=rec.release,
+                        action=action,
+                        payload=payload,
+                        payload_hash=payload_hash,
+                        source='Trello'
+                    )
+                    db.session.add(event)
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "JobEvent created for list move",
+                        job=rec.job,
+                        release=rec.release,
+                        from_list=from_list_name,
+                        to_list=to_list_name
+                    )
+                else:
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Duplicate list move event detected, skipping",
+                        job=rec.job,
+                        release=rec.release,
+                        payload_hash=payload_hash
+                    )
             
             destination_name = event_info.get("to")
             # Temporarily disable duplicate-and-link flow for Fit Up Complete cards.
@@ -320,6 +413,25 @@ def sync_from_trello(event_info):
         # Commit DB changes
         db.session.add(rec)
         db.session.commit()
+
+        # Set applied_at for any JobEvents created during this sync (after job record is updated)
+        if list_move_payload_hash:
+            event = JobEvents.query.filter_by(
+                job=rec.job,
+                release=rec.release,
+                payload_hash=list_move_payload_hash
+            ).first()
+            
+            if event and not event.applied_at:
+                event.applied_at = datetime.utcnow()
+                db.session.commit()
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "INFO",
+                    "JobEvent applied_at set",
+                    job=rec.job,
+                    release=rec.release
+                )
 
         # NEW: Track state changes after commit
         detect_and_track_state_changes(
