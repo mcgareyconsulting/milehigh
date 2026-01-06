@@ -8,6 +8,7 @@ from flask import jsonify, request
 from app.brain.utils import determine_stage_from_db_fields, serialize_value
 from app.logging_config import get_logger
 import json
+import hashlib
 from datetime import datetime
 import sys
 
@@ -261,18 +262,49 @@ def update_stage(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Job, db
+    from app.models import Job, db, JobEvents
     from app.sync.services.trello_list_mapper import TrelloListMapper
     from datetime import datetime
     
     try:
-        job_record = Job.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            return jsonify({'error': 'Job not found'}), 404
-
         stage = request.json.get('stage')
         if not stage:
             return jsonify({'error': 'Stage is required'}), 400
+
+        # Create payload for hashing
+        action = "update_stage"
+        payload = {"to": stage}
+
+        # Normalize the payload by sorting keys and converting to JSON
+        # This ensures consistent hashing regardless of key order
+        payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+        
+        # Create hash string from action + job identifier + payload
+        hash_string = f"{action}:{job}:{release}:{payload_json}"
+
+        # Generate SHA-256 hash
+        payload_hash = hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
+
+        # Check if event already exists
+        event = JobEvents.query.filter_by(payload_hash=payload_hash).first()
+        if event:
+            return jsonify({'error': 'Event already exists'}), 400
+
+        # Create event
+        event = JobEvents(
+            job=job,
+            release=release,
+            action=action,
+            payload=payload,
+            payload_hash=payload_hash,
+            source='Brain',
+        )
+        db.session.add(event)
+
+        # Update job
+        job_record = Job.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            return jsonify({'error': 'Job not found'}), 404
 
         logger.info(f"Updating stage for job {job}-{release} to {stage}")
 
@@ -290,9 +322,10 @@ def update_stage(job, release):
             # This will update fitup_comp, welded, paint_comp, ship appropriately
             TrelloListMapper.apply_trello_list_to_db(job_record, stage, "brain_stage_update")
 
-        # Update metadata
+        # Update job and job_eventsmetadata
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
+        event.applied_at = datetime.utcnow()
         
         db.session.commit()
         

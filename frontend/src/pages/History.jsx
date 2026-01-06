@@ -313,10 +313,9 @@ function History() {
                                                                 {(searchMetadata?.searchType !== 'both') && (
                                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Job-Release</th>
                                                                 )}
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Changed At</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Change Type</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Field</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">From</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Created At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Applied At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Action</th>
                                                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">To</th>
                                                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
                                                             </tr>
@@ -343,29 +342,20 @@ function History() {
                                                                             </td>
                                                                         )}
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                                            {formatDateTime(entry.changed_at)}
+                                                                            {formatDateTime(entry.created_at)}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                            {formatDateTime(entry.applied_at)}
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getChangeTypeColor(entry.change_type)}`}>
-                                                                                {entry.change_type}
+                                                                                {entry.action}
                                                                             </span>
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                            {entry.field_name}
-                                                                        </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                            {entry.from_value ? (
-                                                                                <span className="bg-red-50 text-red-700 px-2 py-1 rounded font-medium">
-                                                                                    {entry.from_value}
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="text-gray-400">-</span>
-                                                                            )}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                            {entry.to_value ? (
+                                                                            {entry.payload.to ? (
                                                                                 <span className="bg-green-50 text-green-700 px-2 py-1 rounded font-medium">
-                                                                                    {entry.to_value}
+                                                                                    {entry.payload.to}
                                                                                 </span>
                                                                             ) : (
                                                                                 <span className="text-gray-400">-</span>

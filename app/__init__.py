@@ -290,8 +290,8 @@ def create_app():
         return _get_job_change_history(job, release)
     
     def _get_job_change_history(job, release):
-        """Internal function to retrieve job change history."""
-        from app.models import JobChangeLog, Job
+        """Internal function to retrieve job event history."""
+        from app.models import JobEvents, Job
         
         # At least one parameter must be provided
         if job is None and release is None:
@@ -307,16 +307,16 @@ def create_app():
             }), 400
         
         try:
-            # Build change log query based on provided parameters
-            log_query = JobChangeLog.query
+            # Build job events query based on provided parameters
+            events_query = JobEvents.query
             
             if job is not None:
-                log_query = log_query.filter_by(job=job)
+                events_query = events_query.filter_by(job=job)
             if release is not None:
-                log_query = log_query.filter_by(release=str(release))
+                events_query = events_query.filter_by(release=str(release))
             
             # Order by most recent first
-            change_logs = log_query.order_by(JobChangeLog.changed_at.desc()).all()
+            job_events = events_query.order_by(JobEvents.created_at.desc()).all()
             
             # Build job query to retrieve metadata for associated job-release combos
             job_query = Job.query
@@ -331,21 +331,19 @@ def create_app():
             job_releases = set()  # Track unique job-release combinations
             job_details = []
             
-            for log in change_logs:
+            for event in job_events:
                 history.append({
-                    'id': log.id,
-                    'job': log.job,
-                    'release': log.release,
-                    'change_type': log.change_type,
-                    'field_name': log.field_name,
-                    'from_value': log.from_value,
-                    'to_value': log.to_value,
-                    'changed_at': format_datetime_mountain(log.changed_at),
-                    'source': log.source,
-                    'operation_id': log.operation_id,
-                    'triggered_by': log.triggered_by
+                    'id': event.id,
+                    'job': event.job,
+                    'release': event.release,
+                    'action': event.action,
+                    'payload': event.payload,
+                    'payload_hash': event.payload_hash,
+                    'source': event.source,
+                    'created_at': format_datetime_mountain(event.created_at),
+                    'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
                 })
-                job_releases.add((log.job, log.release))
+                job_releases.add((event.job, event.release))
             
             # Collect job metadata for frontend display
             for job_row in job_records:
@@ -362,7 +360,7 @@ def create_app():
                     'viewer_url': job_row.viewer_url
                 })
             
-            # If we have no job releases from change logs, ensure we include jobs that match the query
+            # If we have no job releases from job events, ensure we include jobs that match the query
             if not job_releases and job_records:
                 job_releases = {(jr.job, jr.release) for jr in job_records}
             
@@ -394,7 +392,7 @@ def create_app():
             }), 200
             
         except Exception as e:
-            logger.error("Error getting job change history", error=str(e), job=job, release=release)
+            logger.error("Error getting job event history", error=str(e), job=job, release=release)
             return jsonify({
                 'error': 'Failed to retrieve change history',
                 'message': str(e)

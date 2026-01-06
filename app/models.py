@@ -290,6 +290,19 @@ def query_job_releases():
         ]
     )
 
+class JobEvents(db.Model):
+    '''Table to track events for jobs.'''
+    __tablename__ = 'job_events'
+    id = db.Column(db.Integer, primary_key=True)
+    job = db.Column(db.Integer, nullable=False)
+    release = db.Column(db.String(50))
+    action = db.Column(db.String(50), nullable=False)
+    payload = db.Column(db.JSON, nullable=False)
+    payload_hash = db.Column(db.String(64), nullable=False)
+    source = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    applied_at = db.Column(db.DateTime, nullable=True)
+
 class JobChangeLog(db.Model):
     """Tracks state changes and field updates for jobs over time."""
     __tablename__ = 'job_change_logs'
