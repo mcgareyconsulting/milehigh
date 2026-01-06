@@ -92,20 +92,6 @@ def as_date(val):
         return None
 
 
-def _create_list_move_payload_hash(action, job_number, release_number, from_list_name, to_list_name, from_list_id, to_list_id):
-    """Create a hash for list move payload to detect duplicates."""
-    payload = {
-        "data": {
-            "from_list_name": from_list_name,
-            "to_list_name": to_list_name,
-            "from_list_id": from_list_id,
-            "to_list_id": to_list_id
-        }
-    }
-    payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-    hash_string = f"{action}:{job_number}:{release_number}:{payload_json}"
-    return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
-
 def sync_from_trello(event_info):
     """Sync data from Trello to database based on webhook payload."""
     from app.config import Config as cfg
@@ -265,19 +251,16 @@ def sync_from_trello(event_info):
             )
             
             if status_changed:
-                # Create JobEvent for list movement that caused status change
-                action = "list_move"
-                payload = {
-                    "from_list_name": from_list_name,
-                    "to_list_name": to_list_name,
-                    "from_list_id": from_list_id,
-                    "to_list_id": to_list_id
-                }
-                payload_hash = _create_list_move_payload_hash(
-                    action, rec.job, rec.release,
-                    from_list_name, to_list_name,
-                    from_list_id, to_list_id
-                )
+                # Create JobEvent for stage update (list movement that caused status change)
+                action = "update_stage"
+                # Use to_list_name as the stage name to match frontend format
+                stage = to_list_name
+                payload = {"to": stage}
+                
+                # Create payload hash matching the frontend format
+                payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+                hash_string = f"{action}:{rec.job}:{rec.release}:{payload_json}"
+                payload_hash = hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
                 list_move_payload_hash = payload_hash  # Store for later
                 
                 # Check for duplicate event
@@ -300,17 +283,17 @@ def sync_from_trello(event_info):
                     safe_log_sync_event(
                         sync_op.operation_id,
                         "INFO",
-                        "JobEvent created for list move",
+                        "JobEvent created for stage update",
                         job=rec.job,
                         release=rec.release,
                         from_list=from_list_name,
-                        to_list=to_list_name
+                        to_stage=stage
                     )
                 else:
                     safe_log_sync_event(
                         sync_op.operation_id,
                         "INFO",
-                        "Duplicate list move event detected, skipping",
+                        "Duplicate stage update event detected, skipping",
                         job=rec.job,
                         release=rec.release,
                         payload_hash=payload_hash

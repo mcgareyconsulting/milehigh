@@ -289,6 +289,54 @@ def create_app():
         release = request.args.get('release', type=str)
         return _get_job_change_history(job, release)
     
+    def _extract_new_value_from_payload(action, payload):
+        """
+        Extract a human-readable 'new value' from the payload based on action type.
+        Returns a formatted string representing the new value for display.
+        """
+        if not payload:
+            return None
+        
+        # Handle different action types
+        if action == 'update_stage':
+            # For stage updates, extract the 'to' value
+            return payload.get('to')
+        
+        elif action == 'list_move':
+            # For list moves, show the destination list
+            to_list = payload.get('to_list_name') or payload.get('to_list_id')
+            from_list = payload.get('from_list_name') or payload.get('from_list_id')
+            if to_list and from_list:
+                return f"{to_list}"
+            elif to_list:
+                return to_list
+            return None
+        
+        elif action in ['created', 'create']:
+            # For created events, show key information
+            if isinstance(payload, dict):
+                parts = []
+                if 'Job' in payload:
+                    parts.append(f"Job: {payload['Job']}")
+                if 'Release' in payload:
+                    parts.append(f"Release: {payload['Release']}")
+                return " | ".join(parts) if parts else "Job created"
+            return "Job created"
+        
+        # For other action types, try to extract meaningful values
+        if isinstance(payload, dict):
+            # Try common keys that might indicate a new value
+            for key in ['to', 'value', 'new_value', 'status', 'stage', 'state']:
+                if key in payload:
+                    return str(payload[key])
+            # If no standard key, return a summary of the payload
+            if len(payload) == 1:
+                return str(list(payload.values())[0])
+            # For complex payloads, return a summary
+            return f"{len(payload)} fields updated"
+        
+        return str(payload) if payload else None
+    
     def _get_job_change_history(job, release):
         """Internal function to retrieve job event history."""
         from app.models import JobEvents, Job
@@ -332,12 +380,14 @@ def create_app():
             job_details = []
             
             for event in job_events:
+                new_value = _extract_new_value_from_payload(event.action, event.payload)
                 history.append({
                     'id': event.id,
                     'job': event.job,
                     'release': event.release,
                     'action': event.action,
-                    'payload': event.payload,
+                    'new_value': new_value,
+                    'payload': event.payload,  # Keep full payload for reference
                     'payload_hash': event.payload_hash,
                     'source': event.source,
                     'created_at': format_datetime_mountain(event.created_at),

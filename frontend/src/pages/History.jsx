@@ -70,13 +70,20 @@ function History() {
         return new Date(dateString).toLocaleString();
     };
 
-    const getChangeTypeColor = (changeType) => {
+    const getChangeTypeColor = (action) => {
+        if (!action) return 'bg-gray-100 text-gray-800';
+
+        const actionLower = action.toLowerCase();
         const colors = {
             'update': 'bg-blue-100 text-blue-800',
+            'update_stage': 'bg-blue-100 text-blue-800',
             'create': 'bg-green-100 text-green-800',
+            'created': 'bg-green-100 text-green-800',
             'delete': 'bg-red-100 text-red-800',
+            'list_move': 'bg-purple-100 text-purple-800',
         };
-        return colors[changeType] || 'bg-gray-100 text-gray-800';
+        // Try exact match first, then check first part of action (e.g., 'update' from 'update_stage')
+        return colors[actionLower] || colors[actionLower.split('_')[0]] || 'bg-gray-100 text-gray-800';
     };
 
     const filteredHistory = selectedJobKey
@@ -310,13 +317,10 @@ function History() {
                                                     <table className="w-full">
                                                         <thead className="bg-gradient-to-r from-gray-50 to-accent-50">
                                                             <tr>
-                                                                {(searchMetadata?.searchType !== 'both') && (
-                                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Job-Release</th>
-                                                                )}
                                                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Created At</th>
                                                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Applied At</th>
                                                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Action</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">To</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">New Value</th>
                                                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
                                                             </tr>
                                                         </thead>
@@ -334,13 +338,6 @@ function History() {
                                                                         className="hover:bg-accent-50/50 transition-colors duration-150"
                                                                         style={{ animationDelay: `${index * 30}ms` }}
                                                                     >
-                                                                        {(searchMetadata?.searchType !== 'both') && (
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                                <span className="bg-accent-100 text-accent-800 px-2 py-1 rounded font-semibold">
-                                                                                    {entry.job}-{entry.release}
-                                                                                </span>
-                                                                            </td>
-                                                                        )}
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                                                             {formatDateTime(entry.created_at)}
                                                                         </td>
@@ -348,14 +345,14 @@ function History() {
                                                                             {formatDateTime(entry.applied_at)}
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getChangeTypeColor(entry.change_type)}`}>
-                                                                                {entry.action}
+                                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getChangeTypeColor(entry.action)}`}>
+                                                                                {entry.action || 'unknown'}
                                                                             </span>
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                            {entry.payload.to ? (
-                                                                                <span className="bg-green-50 text-green-700 px-2 py-1 rounded font-medium">
-                                                                                    {entry.payload.to}
+                                                                        <td className="px-6 py-4 text-sm">
+                                                                            {entry.new_value ? (
+                                                                                <span className="bg-green-50 text-green-700 px-2 py-1 rounded font-medium whitespace-normal break-words max-w-md">
+                                                                                    {entry.new_value}
                                                                                 </span>
                                                                             ) : (
                                                                                 <span className="text-gray-400">-</span>
