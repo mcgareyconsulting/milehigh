@@ -6,6 +6,7 @@ Provides API endpoints for job data queries.
 from app.brain import brain_bp
 from flask import jsonify, request
 from app.brain.utils import determine_stage_from_db_fields, serialize_value
+from app.trello.api import get_list_by_name, update_trello_card
 from app.logging_config import get_logger
 import json
 import hashlib
@@ -322,6 +323,11 @@ def update_stage(job, release):
             # This will update fitup_comp, welded, paint_comp, ship appropriately
             TrelloListMapper.apply_trello_list_to_db(job_record, stage, "brain_stage_update")
 
+        # Update Trello card
+        new_list_id = get_list_by_name(stage)["id"]
+        if new_list_id:
+            update_trello_card(job_record.trello_card_id, new_list_id)
+
         # Update job and job_eventsmetadata
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
@@ -462,3 +468,89 @@ def sync_operation_logs(operation_id):
         except Exception as e:
             logger.error("Error getting sync operation logs", operation_id=operation_id, error=str(e))
             return jsonify({"error": str(e)}), 500
+
+#######################
+## Job Events Routes ##
+#######################
+@brain_bp.route("/events/filters")
+def get_event_filters():
+    """
+    Get all distinct event dates and sources from the database.
+    """
+    from app.models import JobEvents, db
+    from sqlalchemy import func
+    try:
+        # build dates list
+        date_rows = (
+            db.session.query(func.date(JobEvents.created_at))
+            .distinct()
+            .order_by(func.date(JobEvents.created_at).desc())
+            .all()
+        )
+        dates = [str(r[0]) for r in date_rows if r[0] is not None]
+
+        # build sources list
+        source_rows = (
+            db.session.query(JobEvents.source)
+            .distinct()
+            .filter(JobEvents.source.isnot(None))
+            .order_by(JobEvents.source)
+            .all()
+        )
+        sources = [r[0] for r in source_rows]
+
+        return jsonify({'dates': dates, 'sources': sources, 'total': len(dates)}), 200
+    except Exception as e:
+        logger.error("Error in /events/filters endpoint", error=str(e), exc_info=True)
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
+@brain_bp.route("/events")
+def get_job_events():
+    """Get job events filtered by date range and source."""
+    from app.models import JobEvents
+    from app.datetime_utils import format_datetime_mountain
+    try:
+        # Query parameters
+        limit = request.args.get('limit', 50, type=int)
+        start_date = request.args.get('start')  # YYYY-MM-DD
+        end_date = request.args.get('end')      # YYYY-MM-DD
+        source = request.args.get('source')      # Filter by source
+
+        query = JobEvents.query
+
+        # Apply date range on created_at (inclusive)
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date + "T00:00:00")
+            query = query.filter(JobEvents.created_at >= start_dt)
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
+            query = query.filter(JobEvents.created_at <= end_dt)
+        
+        # Apply source filter
+        if source:
+            query = query.filter(JobEvents.source == source)
+
+        events = query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+
+        return jsonify({
+            'events': [{
+                'id': event.id,
+                'job': event.job,
+                'release': event.release,
+                'action': event.action,
+                'payload': event.payload,
+                'source': event.source,
+                'created_at': format_datetime_mountain(event.created_at),
+                'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
+            } for event in events],
+            'total': len(events),
+            'filters': {
+                'limit': limit,
+                'start': start_date,
+                'end': end_date,
+                'source': source,
+            }
+        }), 200
+    except Exception as e:
+        logger.error("Error getting job events", error=str(e))
+        return jsonify({"error": str(e)}), 500

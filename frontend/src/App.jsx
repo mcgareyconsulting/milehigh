@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import Dashboard from './pages/Dashboard';
 import Operations from './pages/Operations';
 import History from './pages/History';
+import Events from './pages/Events';
 import Logs from './pages/Logs';
 import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
@@ -20,6 +21,7 @@ function AppContent() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/operations" element={<Operations />} />
         <Route path="/history" element={<History />} />
+        <Route path="/events" element={<Events />} />
         <Route path="/drafting-work-load" element={<DraftingWorkLoad />} />
         <Route path="/drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
         <Route path="/job-log" element={<JobLog />} />

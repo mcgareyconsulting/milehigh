@@ -44,7 +44,6 @@ from app.sync.db_operations import create_sync_operation, update_sync_operation
 from app.sync.context import sync_operation_context
 from app.sync.logging import safe_log_sync_event, safe_sync_op_call
 from app.sync.services.trello_list_mapper import TrelloListMapper
-from app.sync.state_tracker import detect_and_track_state_changes
 logger = get_logger(__name__)
 
 
@@ -163,12 +162,6 @@ def sync_from_trello(event_info):
             # Just return - not an error, card isn't tracked
             return
 
-        # CAPTURE OLD VALUES before updating
-        old_values = {
-            'fitup_comp': rec.fitup_comp,
-            'paint_comp': rec.paint_comp,
-            'ship': rec.ship,
-        }
         duplicate_card_id = None
         list_move_payload_hash = None  # Store for setting applied_at later
 
@@ -416,14 +409,6 @@ def sync_from_trello(event_info):
                     release=rec.release
                 )
 
-        # NEW: Track state changes after commit
-        detect_and_track_state_changes(
-            job_record=rec,
-            old_values=old_values,
-            operation_id=sync_op.operation_id,
-            source="Trello"
-        )
-        
         safe_log_sync_event(
             sync_op.operation_id,
             "INFO",
