@@ -505,9 +505,9 @@ def get_event_filters():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/events")
-def get_job_events():
-    """Get job events filtered by date range and source."""
-    from app.models import JobEvents
+def get_events():
+    """Get events filtered by date range and source."""
+    from app.models import JobEvents, SubmittalEvents
     from app.datetime_utils import format_datetime_mountain
     try:
         # Query parameters
@@ -516,34 +516,46 @@ def get_job_events():
         end_date = request.args.get('end')      # YYYY-MM-DD
         source = request.args.get('source')      # Filter by source
 
-        query = JobEvents.query
+        job_query = JobEvents.query
+        submittal_query = SubmittalEvents.query
 
         # Apply date range on created_at (inclusive)
         if start_date:
             start_dt = datetime.fromisoformat(start_date + "T00:00:00")
-            query = query.filter(JobEvents.created_at >= start_dt)
+            job_query = job_query.filter(JobEvents.created_at >= start_dt)
+            submittal_query = submittal_query.filter(SubmittalEvents.created_at >= start_dt)
         if end_date:
             end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
-            query = query.filter(JobEvents.created_at <= end_dt)
+            job_query = job_query.filter(JobEvents.created_at <= end_dt)
+            submittal_query = submittal_query.filter(SubmittalEvents.created_at <= end_dt)
         
         # Apply source filter
         if source:
-            query = query.filter(JobEvents.source == source)
+            job_query = job_query.filter(JobEvents.source == source)
+            submittal_query = submittal_query.filter(SubmittalEvents.source == source)
 
-        events = query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+        job_events = job_query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+        submittal_events = submittal_query.order_by(SubmittalEvents.created_at.desc()).limit(limit).all()
+        
+        # Combine and sort events
+        all_events = list(job_events) + list(submittal_events)
+        all_events.sort(key=lambda x: x.created_at, reverse=True)
+        all_events = all_events[:limit]
 
         return jsonify({
             'events': [{
                 'id': event.id,
-                'job': event.job,
-                'release': event.release,
+                'job': event.job if hasattr(event, 'job') else None,
+                'release': event.release if hasattr(event, 'release') else None,
+                'submittal_id': event.submittal_id if hasattr(event, 'submittal_id') else None,
+                'type': 'job' if hasattr(event, 'job') else 'submittal',
                 'action': event.action,
                 'payload': event.payload,
                 'source': event.source,
                 'created_at': format_datetime_mountain(event.created_at),
                 'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
-            } for event in events],
-            'total': len(events),
+            } for event in all_events],
+            'total': len(all_events),
             'filters': {
                 'limit': limit,
                 'start': start_date,

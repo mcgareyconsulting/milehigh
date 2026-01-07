@@ -6,8 +6,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 function History() {
     const [job, setJob] = useState('');
     const [release, setRelease] = useState('');
+    const [submittalId, setSubmittalId] = useState('');
     const [history, setHistory] = useState([]);
     const [jobDetails, setJobDetails] = useState([]);
+    const [submittalDetails, setSubmittalDetails] = useState(null);
     const [selectedJobKey, setSelectedJobKey] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -16,8 +18,12 @@ function History() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!job && !release) {
-            setError('Please enter at least one: Job Number or Release');
+        // Check if searching for submittal or job
+        const isSubmittalSearch = submittalId.trim() !== '';
+        const isJobSearch = job.trim() !== '' || release.trim() !== '';
+
+        if (!isSubmittalSearch && !isJobSearch) {
+            setError('Please enter at least one: Job Number/Release OR Submittal ID');
             return;
         }
 
@@ -25,38 +31,56 @@ function History() {
         setError(null);
         setSubmitted(true);
         setJobDetails([]);
+        setSubmittalDetails(null);
         setSelectedJobKey(null);
         setHistory([]);
         setSearchMetadata(null);
 
         try {
-            const params = {};
-            if (job) params.job = parseInt(job);
-            if (release) params.release = release;
+            if (isSubmittalSearch) {
+                // Search for submittal history
+                const params = { submittal_id: submittalId.trim() };
+                const response = await axios.get(`${API_BASE_URL}/api/submittals/history`, { params });
+                const historyData = response.data.history || [];
+                setHistory(historyData);
+                setSubmittalDetails(response.data.submittal_details || null);
 
-            const response = await axios.get(`${API_BASE_URL}/api/jobs/history`, { params });
-            const historyData = response.data.history || [];
-            setHistory(historyData);
+                // Store search metadata for display
+                setSearchMetadata({
+                    searchType: 'submittal',
+                    searchSubmittalId: response.data.search_submittal_id,
+                    totalChanges: response.data.total_changes ?? historyData.length,
+                });
+            } else {
+                // Search for job history
+                const params = {};
+                if (job) params.job = parseInt(job);
+                if (release) params.release = release;
 
-            const jobDetailsPayload = response.data.job_details || [];
-            setJobDetails(jobDetailsPayload);
+                const response = await axios.get(`${API_BASE_URL}/api/jobs/history`, { params });
+                const historyData = response.data.history || [];
+                setHistory(historyData);
 
-            const defaultSelection = response.data.default_selection;
-            if (defaultSelection) {
-                setSelectedJobKey(`${defaultSelection.job}-${defaultSelection.release}`);
-            } else if (jobDetailsPayload.length > 0) {
-                const first = jobDetailsPayload[0];
-                setSelectedJobKey(`${first.job}-${first.release}`);
+                const jobDetailsPayload = response.data.job_details || [];
+                setJobDetails(jobDetailsPayload);
+
+                const defaultSelection = response.data.default_selection;
+                if (defaultSelection) {
+                    setSelectedJobKey(`${defaultSelection.job}-${defaultSelection.release}`);
+                } else if (jobDetailsPayload.length > 0) {
+                    const first = jobDetailsPayload[0];
+                    setSelectedJobKey(`${first.job}-${first.release}`);
+                }
+
+                // Store search metadata for display
+                setSearchMetadata({
+                    searchType: response.data.search_type,
+                    searchJob: response.data.search_job,
+                    searchRelease: response.data.search_release,
+                    jobReleases: response.data.job_releases || [],
+                    totalChanges: response.data.total_changes ?? historyData.length,
+                });
             }
-
-            // Store search metadata for display
-            setSearchMetadata({
-                searchType: response.data.search_type,
-                searchJob: response.data.search_job,
-                searchRelease: response.data.search_release,
-                jobReleases: response.data.job_releases || [],
-                totalChanges: response.data.total_changes ?? historyData.length,
-            });
         } catch (err) {
             setError(err.response?.data?.error || err.message);
             setHistory([]);
@@ -76,6 +100,7 @@ function History() {
         const actionLower = action.toLowerCase();
         const colors = {
             'update': 'bg-blue-100 text-blue-800',
+            'updated': 'bg-blue-100 text-blue-800',
             'update_stage': 'bg-blue-100 text-blue-800',
             'create': 'bg-green-100 text-green-800',
             'created': 'bg-green-100 text-green-800',
@@ -110,6 +135,9 @@ function History() {
         if (!searchMetadata) {
             return 'No results found for your search.';
         }
+        if (searchMetadata.searchType === 'submittal' && searchMetadata.searchSubmittalId) {
+            return `No submittal found for ID ${searchMetadata.searchSubmittalId}.`;
+        }
         if (searchMetadata.searchType === 'both' && searchMetadata.searchJob && searchMetadata.searchRelease) {
             return `No job found for ${searchMetadata.searchJob}-${searchMetadata.searchRelease}.`;
         }
@@ -129,8 +157,8 @@ function History() {
                     <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-6">
                         <div className="flex justify-between items-center">
                             <div>
-                                <h1 className="text-3xl font-bold text-white mb-2">Job Search</h1>
-                                <p className="text-accent-100">Find jobs and review their change history</p>
+                                <h1 className="text-3xl font-bold text-white mb-2">History Search</h1>
+                                <p className="text-accent-100">Find jobs and submittals and review their change history</p>
                             </div>
                         </div>
                     </div>
@@ -140,49 +168,82 @@ function History() {
                         <form onSubmit={handleSubmit} className="bg-gradient-to-r from-accent-50 to-blue-50 rounded-xl p-6 mb-6 border border-accent-200 shadow-sm">
                             <div className="mb-4">
                                 <p className="text-sm text-gray-600 mb-2">
-                                    💡 <strong>Search options:</strong> Enter Job Number, Release, or both to find change history
+                                    💡 <strong>Search options:</strong> Enter Job Number/Release OR Submittal ID to find change history
                                 </p>
                             </div>
-                            <div className="flex flex-wrap gap-4 items-end">
-                                <div className="flex-1 min-w-[200px]">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        🔢 Job Number <span className="text-gray-400 font-normal">(optional)</span>
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={job}
-                                        onChange={(e) => setJob(e.target.value)}
-                                        placeholder="e.g., 123"
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
-                                    />
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap gap-4 items-end">
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            🔢 Job Number <span className="text-gray-400 font-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={job}
+                                            onChange={(e) => {
+                                                setJob(e.target.value);
+                                                if (e.target.value) setSubmittalId(''); // Clear submittal if job entered
+                                            }}
+                                            placeholder="e.g., 123"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        />
+                                    </div>
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            📦 Release <span className="text-gray-400 font-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={release}
+                                            onChange={(e) => {
+                                                setRelease(e.target.value);
+                                                if (e.target.value) setSubmittalId(''); // Clear submittal if release entered
+                                            }}
+                                            placeholder="e.g., 1"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        />
+                                    </div>
                                 </div>
-                                <div className="flex-1 min-w-[200px]">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        📦 Release <span className="text-gray-400 font-normal">(optional)</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={release}
-                                        onChange={(e) => setRelease(e.target.value)}
-                                        placeholder="e.g., 1"
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
-                                    />
+                                <div className="flex items-center gap-4">
+                                    <div className="flex-1 border-t border-gray-300"></div>
+                                    <span className="text-sm text-gray-500 font-medium">OR</span>
+                                    <div className="flex-1 border-t border-gray-300"></div>
                                 </div>
-                                <div className="min-w-[180px]">
-                                    <button
-                                        type="submit"
-                                        className="w-full px-6 py-2.5 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-md"
-                                        disabled={loading}
-                                    >
-                                        {loading ? (
-                                            <span className="flex items-center justify-center">
-                                                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
-                                                Loading...
-                                            </span>
-                                        ) : (
-                                            '🔍 View History'
-                                        )}
-                                    </button>
+                                <div className="flex flex-wrap gap-4 items-end">
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            📋 Submittal ID <span className="text-gray-400 font-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={submittalId}
+                                            onChange={(e) => {
+                                                setSubmittalId(e.target.value);
+                                                if (e.target.value) {
+                                                    setJob(''); // Clear job if submittal entered
+                                                    setRelease(''); // Clear release if submittal entered
+                                                }
+                                            }}
+                                            placeholder="e.g., 12345"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white shadow-sm transition-all"
+                                        />
+                                    </div>
+                                    <div className="min-w-[180px]">
+                                        <button
+                                            type="submit"
+                                            className="w-full px-6 py-2.5 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-md"
+                                            disabled={loading}
+                                        >
+                                            {loading ? (
+                                                <span className="flex items-center justify-center">
+                                                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                                                    Loading...
+                                                </span>
+                                            ) : (
+                                                '🔍 View History'
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </form>
@@ -203,11 +264,13 @@ function History() {
                             <>
                                 <div className="bg-gradient-to-r from-accent-50 to-blue-50 rounded-xl p-6 mb-6 border border-accent-200">
                                     <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                                        {searchMetadata?.searchType === 'both'
-                                            ? `History for Job ${searchMetadata.searchJob}-${searchMetadata.searchRelease}`
-                                            : searchMetadata?.searchType === 'job'
-                                                ? `History for Job #${searchMetadata.searchJob}`
-                                                : `History for Release ${searchMetadata.searchRelease}`
+                                        {searchMetadata?.searchType === 'submittal'
+                                            ? `History for Submittal ${searchMetadata.searchSubmittalId}`
+                                            : searchMetadata?.searchType === 'both'
+                                                ? `History for Job ${searchMetadata.searchJob}-${searchMetadata.searchRelease}`
+                                                : searchMetadata?.searchType === 'job'
+                                                    ? `History for Job #${searchMetadata.searchJob}`
+                                                    : `History for Release ${searchMetadata.searchRelease}`
                                         }
                                     </h2>
                                     <div className="flex items-center gap-4 flex-wrap">
@@ -257,7 +320,103 @@ function History() {
                                     )}
                                 </div>
 
-                                {!hasJobDetails && history.length === 0 ? (
+                                {searchMetadata?.searchType === 'submittal' ? (
+                                    // Submittal history view
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                        <div className="lg:col-span-1">
+                                            <div className="bg-white border border-accent-200 rounded-xl shadow-sm p-6 h-full">
+                                                <h3 className="text-xl font-semibold text-gray-800">
+                                                    {submittalDetails ? `Submittal ${submittalDetails.submittal_id}` : 'Submittal Details'}
+                                                </h3>
+                                                {submittalDetails ? (
+                                                    <>
+                                                        <p className="text-gray-500 mt-1">{submittalDetails.title || '—'}</p>
+                                                        <dl className="mt-6 space-y-4 text-sm text-gray-600">
+                                                            <div>
+                                                                <dt className="font-semibold text-gray-700">Status</dt>
+                                                                <dd>{submittalDetails.status || '—'}</dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt className="font-semibold text-gray-700">Type</dt>
+                                                                <dd>{submittalDetails.type || '—'}</dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt className="font-semibold text-gray-700">Ball in Court</dt>
+                                                                <dd>{submittalDetails.ball_in_court || '—'}</dd>
+                                                            </div>
+                                                            <div>
+                                                                <dt className="font-semibold text-gray-700">Project</dt>
+                                                                <dd>{submittalDetails.project_name || submittalDetails.project_number || '—'}</dd>
+                                                            </div>
+                                                        </dl>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-gray-500 mt-4 text-sm">
+                                                        Submittal details not available.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="lg:col-span-2">
+                                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full">
+                                                        <thead className="bg-gradient-to-r from-gray-50 to-accent-50">
+                                                            <tr>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Created At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Applied At</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Action</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">New Value</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                            {history.length === 0 ? (
+                                                                <tr>
+                                                                    <td colSpan={5} className="px-6 py-6 text-center text-sm text-gray-500">
+                                                                        No change history for this submittal.
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                history.map((entry, index) => (
+                                                                    <tr
+                                                                        key={`submittal-${entry.id}`}
+                                                                        className="hover:bg-accent-50/50 transition-colors duration-150"
+                                                                        style={{ animationDelay: `${index * 30}ms` }}
+                                                                    >
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                            {formatDateTime(entry.created_at)}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                            {formatDateTime(entry.applied_at)}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getChangeTypeColor(entry.action)}`}>
+                                                                                {entry.action || 'unknown'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-sm">
+                                                                            {entry.new_value ? (
+                                                                                <span className="bg-green-50 text-green-700 px-2 py-1 rounded font-medium whitespace-normal break-words max-w-md">
+                                                                                    {entry.new_value}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-gray-400">-</span>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                                            {entry.source}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : !hasJobDetails && history.length === 0 ? (
                                     <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
                                         <div className="text-gray-400 text-5xl mb-4">📭</div>
                                         <p className="text-gray-500 font-medium text-lg">No change history found</p>

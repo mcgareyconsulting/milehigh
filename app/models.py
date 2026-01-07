@@ -303,6 +303,18 @@ class JobEvents(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
+class SubmittalEvents(db.Model):
+    '''Table to track events for submittals.'''
+    __tablename__ = 'submittal_events'
+    id = db.Column(db.Integer, primary_key=True)
+    submittal_id = db.Column(db.String(255), nullable=False)
+    action = db.Column(db.String(50), nullable=False)
+    payload = db.Column(db.JSON, nullable=False)
+    payload_hash = db.Column(db.String(64), nullable=False)
+    source = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    applied_at = db.Column(db.DateTime, nullable=True)
+
 class SyncCursor(db.Model):
     __tablename__ = "sync_cursor"
     name = db.Column(db.String, primary_key=True)  # e.g., 'jobs'

@@ -2,13 +2,14 @@ import logging
 import re
 import json
 import os
+import hashlib
 import requests
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from requests.exceptions import ConnectionError, Timeout
 from urllib3.exceptions import ProtocolError
 from app.config import Config as cfg
-from app.models import db, Job, ProcoreSubmittal
+from app.models import db, Job, ProcoreSubmittal, SubmittalEvents
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
@@ -16,6 +17,29 @@ from app.procore.helpers import parse_ball_in_court_from_submittal
 
 
 logger = logging.getLogger(__name__)
+
+
+def _create_submittal_payload_hash(action, submittal_id, payload):
+    """
+    Create a hash for the submittal event payload to prevent duplicates.
+    
+    Args:
+        action: The action type (e.g., 'created', 'updated')
+        submittal_id: The submittal ID
+        payload: The payload dictionary
+        
+    Returns:
+        str: SHA-256 hash of the payload
+    """
+    # Normalize the payload by sorting keys and converting to JSON
+    # This ensures consistent hashing regardless of key order
+    payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+    
+    # Create hash string from action + submittal_id + payload
+    hash_string = f"{action}:{submittal_id}:{payload_json}"
+    
+    # Generate SHA-256 hash
+    return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
 
 def _request_json(url, headers, params=None):
@@ -518,6 +542,41 @@ def create_submittal_from_webhook(project_id, submittal_id):
             logger.error(f"Unexpected error during commit: {commit_error}", exc_info=True)
             raise
         
+        # Create submittal event for creation
+        try:
+            action = "created"
+            payload = {
+                "submittal_id": str(submittal_id),
+                "project_id": str(project_id),
+                "title": title,
+                "status": status,
+                "type": submittal_type,
+                "ball_in_court": str(ball_in_court).strip() if ball_in_court else None,
+                "submittal_manager": submittal_manager,
+                "project_name": project_info.get("name"),
+                "project_number": str(project_info.get("project_number", "")).strip() or None
+            }
+            payload_hash = _create_submittal_payload_hash(action, str(submittal_id), payload)
+            
+            # Check if event already exists
+            existing_event = SubmittalEvents.query.filter_by(payload_hash=payload_hash).first()
+            if not existing_event:
+                event = SubmittalEvents(
+                    submittal_id=str(submittal_id),
+                    action=action,
+                    payload=payload,
+                    payload_hash=payload_hash,
+                    source='Procore'
+                )
+                db.session.add(event)
+                db.session.commit()
+                logger.info(f"Created SubmittalEvent for submittal {submittal_id} creation")
+            else:
+                logger.debug(f"SubmittalEvent already exists for submittal {submittal_id} creation, skipping")
+        except Exception as event_error:
+            # Log but don't fail the creation if event creation fails
+            logger.warning(f"Failed to create SubmittalEvent for submittal {submittal_id} creation: {event_error}", exc_info=True)
+        
         logger.info(
             f"Created new submittal record: submittal_id={submittal_id}, "
             f"project_id={project_id}, title={title}"
@@ -920,48 +979,56 @@ def check_and_update_submittal(project_id, submittal_id):
             record.last_updated = datetime.utcnow()
             db.session.commit()
             
+            # Create submittal event for update
+            try:
+                action = "updated"
+                payload = {}
+                
+                if ball_updated:
+                    payload["ball_in_court"] = {
+                        "old": db_ball_value,
+                        "new": ball_in_court
+                    }
+                
+                if status_updated:
+                    payload["status"] = {
+                        "old": db_status_value,
+                        "new": status
+                    }
+                
+                if order_bumped:
+                    payload["order_bumped"] = True
+                    payload["order_number"] = record.order_number
+                
+                # Only create event if there are actual changes in payload
+                if payload:
+                    payload_hash = _create_submittal_payload_hash(action, str(submittal_id), payload)
+                    
+                    # Check if event already exists
+                    existing_event = SubmittalEvents.query.filter_by(payload_hash=payload_hash).first()
+                    if not existing_event:
+                        event = SubmittalEvents(
+                            submittal_id=str(submittal_id),
+                            action=action,
+                            payload=payload,
+                            payload_hash=payload_hash,
+                            source='Procore'
+                        )
+                        db.session.add(event)
+                        db.session.commit()
+                        logger.info(f"Created SubmittalEvent for submittal {submittal_id} update")
+                    else:
+                        logger.debug(f"SubmittalEvent already exists for submittal {submittal_id} update, skipping")
+            except Exception as event_error:
+                # Log but don't fail the update if event creation fails
+                logger.warning(f"Failed to create SubmittalEvent for submittal {submittal_id} update: {event_error}", exc_info=True)
+            
             if ball_updated:
                 logger.info(f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'")
             if status_updated:
                 logger.info(f"Updated status for submittal {submittal_id} from '{db_status_value}' to '{status}'")
             if order_bumped:
                 logger.info(f"Order number bumped for submittal {submittal_id}")
-        else:
-            logger.debug(
-                f"Ball in court and status match for submittal {submittal_id}: "
-                f"ball='{ball_in_court}', status='{status}'"
-            )
-        
-        return ball_updated, status_updated, record, ball_in_court, status
-            
-    except Exception as e:
-        logger.error(
-            f"Error checking/updating ball_in_court and status for submittal {submittal_id}: {e}",
-            exc_info=True
-        )
-        return False, False, None, None, None
-        
-        # Check and update status
-        db_status_value = record.status if record.status is not None else ""
-        webhook_status_value = status if status is not None else ""
-        
-        if db_status_value != webhook_status_value:
-            logger.info(
-                f"Status mismatch detected for submittal {submittal_id}: "
-                f"DB='{record.status}' vs Procore='{status}'"
-            )
-            record.status = status
-            status_updated = True
-        
-        # Update timestamp and commit if any changes
-        if ball_updated or status_updated:
-            record.last_updated = datetime.utcnow()
-            db.session.commit()
-            
-            if ball_updated:
-                logger.info(f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'")
-            if status_updated:
-                logger.info(f"Updated status for submittal {submittal_id} from '{db_status_value}' to '{status}'")
         else:
             logger.debug(
                 f"Ball in court and status match for submittal {submittal_id}: "

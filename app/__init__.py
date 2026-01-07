@@ -289,6 +289,19 @@ def create_app():
         release = request.args.get('release', type=str)
         return _get_job_change_history(job, release)
     
+    @app.route("/api/submittals/history")
+    def submittal_change_history():
+        """Get change history for a submittal via query parameters.
+        
+        Query parameters:
+            submittal_id (str): Submittal ID (required)
+        
+        Returns:
+            JSON object with history array and search metadata
+        """
+        submittal_id = request.args.get('submittal_id', type=str)
+        return _get_submittal_change_history(submittal_id)
+    
     def _extract_new_value_from_payload(action, payload):
         """
         Extract a human-readable 'new value' from the payload based on action type.
@@ -447,6 +460,123 @@ def create_app():
                 'error': 'Failed to retrieve change history',
                 'message': str(e)
             }), 500
+    
+    def _extract_submittal_new_value_from_payload(action, payload):
+        """
+        Extract a human-readable 'new value' from submittal event payload based on action type.
+        Returns a formatted string representing the new value for display.
+        """
+        if not payload:
+            return None
+        
+        # Handle different action types
+        if action == 'created':
+            # For created events, show key information
+            if isinstance(payload, dict):
+                parts = []
+                if 'title' in payload:
+                    parts.append(f"Title: {payload['title']}")
+                if 'status' in payload:
+                    parts.append(f"Status: {payload['status']}")
+                return " | ".join(parts) if parts else "Submittal created"
+            return "Submittal created"
+        
+        elif action == 'updated':
+            # For updated events, show what changed
+            if isinstance(payload, dict):
+                changes = []
+                if 'ball_in_court' in payload:
+                    old_val = payload['ball_in_court'].get('old', 'N/A')
+                    new_val = payload['ball_in_court'].get('new', 'N/A')
+                    changes.append(f"Ball in Court: {old_val} → {new_val}")
+                if 'status' in payload:
+                    old_val = payload['status'].get('old', 'N/A')
+                    new_val = payload['status'].get('new', 'N/A')
+                    changes.append(f"Status: {old_val} → {new_val}")
+                if 'order_bumped' in payload and payload.get('order_bumped'):
+                    changes.append(f"Order bumped to {payload.get('order_number', 'N/A')}")
+                return " | ".join(changes) if changes else "Submittal updated"
+            return "Submittal updated"
+        
+        # For other action types, try to extract meaningful values
+        if isinstance(payload, dict):
+            # Try common keys that might indicate a new value
+            for key in ['to', 'value', 'new_value', 'status', 'stage', 'state']:
+                if key in payload:
+                    return str(payload[key])
+            # If no standard key, return a summary of the payload
+            if len(payload) == 1:
+                return str(list(payload.values())[0])
+            # For complex payloads, return a summary
+            return f"{len(payload)} fields updated"
+        
+        return str(payload) if payload else None
+    
+    def _get_submittal_change_history(submittal_id):
+        """Internal function to retrieve submittal event history."""
+        from app.models import SubmittalEvents, ProcoreSubmittal
+        
+        # submittal_id is required
+        if not submittal_id:
+            return jsonify({
+                'error': 'Missing required parameter',
+                'message': 'submittal_id (str) is required',
+                'usage': {
+                    'submittal_id': '/api/submittals/history?submittal_id=<str>'
+                }
+            }), 400
+        
+        try:
+            # Build submittal events query
+            events_query = SubmittalEvents.query.filter_by(submittal_id=str(submittal_id))
+            
+            # Order by most recent first
+            submittal_events = events_query.order_by(SubmittalEvents.created_at.desc()).all()
+            
+            # Get submittal record for metadata
+            submittal_record = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+            
+            # Format the response
+            history = []
+            
+            for event in submittal_events:
+                new_value = _extract_submittal_new_value_from_payload(event.action, event.payload)
+                history.append({
+                    'id': event.id,
+                    'submittal_id': event.submittal_id,
+                    'action': event.action,
+                    'new_value': new_value,
+                    'payload': event.payload,  # Keep full payload for reference
+                    'payload_hash': event.payload_hash,
+                    'source': event.source,
+                    'created_at': format_datetime_mountain(event.created_at),
+                    'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
+                })
+            
+            # Format submittal details if record exists
+            submittal_details = None
+            if submittal_record:
+                submittal_details = {
+                    'submittal_id': submittal_record.submittal_id,
+                    'title': submittal_record.title,
+                    'status': submittal_record.status,
+                    'type': submittal_record.type,
+                    'ball_in_court': submittal_record.ball_in_court,
+                    'project_name': submittal_record.project_name,
+                    'project_number': submittal_record.project_number
+                }
+            
+            return jsonify({
+                'search_type': 'submittal',
+                'search_submittal_id': submittal_id,
+                'total_changes': len(history),
+                'history': history,
+                'submittal_details': submittal_details
+            }), 200
+            
+        except Exception as e:
+            logger.exception("Error retrieving submittal change history")
+            return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
     # Sync status route
     @app.route("/sync/status")

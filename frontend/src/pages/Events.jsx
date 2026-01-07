@@ -203,7 +203,7 @@ function Events() {
                                                 <tr>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Date</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Job-Release</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Identifier</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Action</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Payload</th>
                                                 </tr>
@@ -217,50 +217,56 @@ function Events() {
                                                         </td>
                                                     </tr>
                                                 ) : (
-                                                    events.map((event, index) => (
-                                                        <tr
-                                                            key={event.id}
-                                                            className="hover:bg-accent-50/50 transition-colors duration-150"
-                                                            style={{ animationDelay: `${index * 50}ms` }}
-                                                        >
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                                {formatDateTime(event.created_at)}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getSourceColor(event.source)}`}>
-                                                                    {event.source}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                                {event.job}-{event.release || 'N/A'}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                {event.action}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-sm">
-                                                                {expandedPayload[event.id] ? (
-                                                                    <div className="space-y-2">
-                                                                        <pre className="bg-gray-50 p-3 rounded-lg text-xs overflow-x-auto max-w-md border border-gray-200">
-                                                                            {formatPayload(event.payload)}
-                                                                        </pre>
+                                                    events.map((event, index) => {
+                                                        const uniqueKey = `${event.type}-${event.id}`;
+                                                        return (
+                                                            <tr
+                                                                key={uniqueKey}
+                                                                className="hover:bg-accent-50/50 transition-colors duration-150"
+                                                                style={{ animationDelay: `${index * 50}ms` }}
+                                                            >
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                    {formatDateTime(event.created_at)}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getSourceColor(event.source)}`}>
+                                                                        {event.source}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                    {event.type === 'job'
+                                                                        ? `${event.job}-${event.release || 'N/A'}`
+                                                                        : event.submittal_id || 'N/A'
+                                                                    }
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                                    {event.action}
+                                                                </td>
+                                                                <td className="px-6 py-4 text-sm">
+                                                                    {expandedPayload[uniqueKey] ? (
+                                                                        <div className="space-y-2">
+                                                                            <pre className="bg-gray-50 p-3 rounded-lg text-xs overflow-x-auto max-w-md border border-gray-200">
+                                                                                {formatPayload(event.payload)}
+                                                                            </pre>
+                                                                            <button
+                                                                                onClick={() => togglePayload(uniqueKey)}
+                                                                                className="text-xs text-accent-600 hover:text-accent-700 font-medium"
+                                                                            >
+                                                                                ▲ Collapse
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
                                                                         <button
-                                                                            onClick={() => togglePayload(event.id)}
+                                                                            onClick={() => togglePayload(uniqueKey)}
                                                                             className="text-xs text-accent-600 hover:text-accent-700 font-medium"
                                                                         >
-                                                                            ▲ Collapse
+                                                                            ▼ View Payload
                                                                         </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        onClick={() => togglePayload(event.id)}
-                                                                        className="text-xs text-accent-600 hover:text-accent-700 font-medium"
-                                                                    >
-                                                                        ▼ View Payload
-                                                                    </button>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    ))
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
                                                 )}
                                             </tbody>
                                         </table>

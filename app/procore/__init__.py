@@ -9,13 +9,14 @@ from typing import Optional
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError
-from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
+from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents, SubmittalEvents
 
 from app.procore.procore import (
     get_project_id_by_project_name, 
     check_and_update_submittal, 
     create_submittal_from_webhook,
-    comprehensive_health_scan
+    comprehensive_health_scan,
+    _create_submittal_payload_hash
 )
 
 from app.procore.helpers import clean_value, is_email
@@ -1165,6 +1166,29 @@ def health_scan_update():
                 
                 # Update last_updated timestamp
                 db_record.last_updated = datetime.utcnow()
+                
+                # Create submittal event for update
+                if updates:
+                    try:
+                        action = "updated"
+                        payload = updates.copy()
+                        payload_hash = _create_submittal_payload_hash(action, issue['submittal_id'], payload)
+                        
+                        # Check if event already exists
+                        existing_event = SubmittalEvents.query.filter_by(payload_hash=payload_hash).first()
+                        if not existing_event:
+                            event = SubmittalEvents(
+                                submittal_id=issue['submittal_id'],
+                                action=action,
+                                payload=payload,
+                                payload_hash=payload_hash,
+                                source='HealthScan'
+                            )
+                            db.session.add(event)
+                            logger.debug(f"Created SubmittalEvent for submittal {issue['submittal_id']} from health scan update")
+                    except Exception as event_error:
+                        # Log but don't fail the update if event creation fails
+                        logger.warning(f"Failed to create SubmittalEvent for submittal {issue['submittal_id']} from health scan: {event_error}", exc_info=True)
                 
                 updated_submittals.append({
                     'submittal_id': issue['submittal_id'],
