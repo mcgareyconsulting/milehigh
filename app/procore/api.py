@@ -110,8 +110,51 @@ class ProcoreAPI:
     # -------------------------
     # Submittals
     # -------------------------
-    def get_submittals(self, project_id: int) -> List[Dict]:
-        return self._get(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/submittals")
+    def get_submittals(self, project_id: int, per_page: int = 100) -> List[Dict]:
+        """
+        Get all submittals for a project with pagination support.
+        Returns a list of all submittals across all pages.
+        
+        Args:
+            project_id: Procore project ID
+            per_page: Number of records per page (default: 100, max typically 100)
+            
+        Returns:
+            List of all submittals
+        """
+        all_submittals = []
+        page = 1
+        
+        while True:
+            # Build endpoint with pagination parameters
+            endpoint = f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/submittals"
+            params = {"per_page": per_page, "page": page}
+            
+            response = self._get(endpoint, params=params)
+            
+            # Handle Procore API v2.0 response format which may be {"data": [...]} or a list
+            page_submittals = []
+            if isinstance(response, dict) and "data" in response:
+                page_submittals = response["data"] if response["data"] else []
+            elif isinstance(response, list):
+                page_submittals = response
+            else:
+                # If we get an unexpected format, break the loop
+                break
+            
+            # If no submittals returned, we've reached the end
+            if not page_submittals:
+                break
+            
+            all_submittals.extend(page_submittals)
+            
+            # If we got fewer than per_page results, we've reached the last page
+            if len(page_submittals) < per_page:
+                break
+            
+            page += 1
+        
+        return all_submittals
 
     def get_submittal_by_id(self, project_id: int, submittal_id: int) -> Dict:
         return self._get(f"/rest/v1.1/projects/{project_id}/submittals/{submittal_id}")
