@@ -340,7 +340,7 @@ def update_stage(job, release):
             job=job,
             release=release,
             action='update_stage',
-            source='brain',  # Lowercase for consistency
+            source='user',  # Lowercase for consistency
             payload={
                 'from': old_stage,
                 'to': stage
