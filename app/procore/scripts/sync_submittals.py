@@ -231,7 +231,7 @@ def sync_submittals_for_project(project_id):
         submittal_type = str(submittal_type).strip() if submittal_type else None
         
         # Filter: status must be 'Open' and type must NOT be 'For Construction'
-        if status == "Open" and submittal_type != "For Construction":
+        if (status == "Open" or status == "Draft")and submittal_type != "For Construction":
             filtered_submittals.append(submittal)
     
     logger.info(f"Filtered to {len(filtered_submittals)} submittals (status='Open' and type != 'For Construction')")
