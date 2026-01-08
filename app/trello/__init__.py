@@ -74,7 +74,7 @@ def trello_webhook():
         # Skip unhandled webhooks
         if not event_info.get("handled"):
             action_type = event_info.get("action_type", "unknown")
-            app.logger.info(f"Skipping unhandled webhook: {action_type}")
+            app.logger.debug(f"Skipping unhandled webhook: {action_type}")
             return "", 200
 
         # If locked, enqueue the event for later processing and return 202
