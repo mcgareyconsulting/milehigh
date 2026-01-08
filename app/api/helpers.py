@@ -3,52 +3,30 @@ Helper functions for transforming job data for API responses.
 """
 from typing import Dict, Any, Union
 from app.models import Job
-from app.sync.services.trello_list_mapper import TrelloListMapper
 
 
 def determine_stage_from_db_fields(job: Union[Job, Any]) -> str:
     """
-    Determine the stage from database fields using TrelloListMapper logic.
-    Returns the stage name or 'Released' if all fields are null/blank.
+    Get the stage from the job's stage field.
+    Returns the stage name or 'Released' if the stage field is None/empty.
     
     Args:
-        job: Job model instance or object with cut_start, fitup_comp, welded, paint_comp, ship attributes
+        job: Job model instance or object with stage attribute
     """
-    # Use TrelloListMapper to determine stage from the 5 columns
-    trello_list = TrelloListMapper.determine_trello_list_from_db(job)
-    
-    # If TrelloListMapper returns a list name, use it as the stage
-    if trello_list:
-        return trello_list
-    
-    # If all fields are null/blank, default to 'Released'
-    if (not job.cut_start or job.cut_start == '') and \
-       (not job.fitup_comp or job.fitup_comp == '') and \
-       (not job.welded or job.welded == '') and \
-       (not job.paint_comp or job.paint_comp == '') and \
-       (not job.ship or job.ship == ''):
-        return 'Released'
-    
-    # If we can't determine a stage but have some values, default to 'Released'
+    # Use stage field directly from database
+    if hasattr(job, 'stage') and job.stage:
+        return job.stage
     return 'Released'
 
 
 def determine_stage_from_job_dict(job_dict: Dict[str, Any]) -> str:
     """
-    Determine stage from a job dictionary (used when we have dict instead of Job object).
+    Get stage from a job dictionary (used when we have dict instead of Job object).
     This is a helper for transform_job_for_display.
     """
-    # Create a simple object-like structure for TrelloListMapper
-    class JobLike:
-        def __init__(self, d):
-            self.cut_start = d.get('cut_start')
-            self.fitup_comp = d.get('fitup_comp')
-            self.welded = d.get('welded')
-            self.paint_comp = d.get('paint_comp')
-            self.ship = d.get('ship')
-    
-    job_like = JobLike(job_dict)
-    return determine_stage_from_db_fields(job_like)
+    # Get stage directly from dictionary, default to 'Released' if None/empty
+    stage = job_dict.get('stage')
+    return stage if stage else 'Released'
 
 
 def transform_job_for_display(job_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -56,7 +34,7 @@ def transform_job_for_display(job_dict: Dict[str, Any]) -> Dict[str, Any]:
     Transform raw job data (from to_dict()) into display format.
     
     This includes:
-    - Determining Stage from the 5 status columns
+    - Getting Stage from the stage field
     - Formatting dates to ISO strings
     - Mapping field names to display names
     - Excluding internal fields if needed
@@ -82,7 +60,7 @@ def transform_job_for_display(job_dict: Dict[str, Any]) -> Dict[str, Any]:
     
     transformed['Fab Order'] = job_dict.get('fab_order')
     
-    # Determine Stage from the 5 status columns
+    # Get Stage from the stage field
     stage = determine_stage_from_job_dict(job_dict)
     transformed['Stage'] = stage
     

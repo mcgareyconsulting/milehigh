@@ -183,11 +183,7 @@ class Job(db.Model):
     by = db.Column(db.String(16))
     released = db.Column(db.Date)
     fab_order = db.Column(db.Float)
-    cut_start = db.Column(db.String(8))
-    fitup_comp = db.Column(db.String(8))
-    welded = db.Column(db.String(8))
-    paint_comp = db.Column(db.String(8))
-    ship = db.Column(db.String(8))  # Changed from ship_start to ship
+    stage = db.Column(db.String(128), nullable=True)
     start_install = db.Column(
         db.Date
     )  # Changed from install to start_install and Date type
@@ -235,11 +231,7 @@ class Job(db.Model):
             "by": self.by,
             "released": self.released,
             "fab_order": self.fab_order,
-            "cut_start": self.cut_start,
-            "fitup_comp": self.fitup_comp,
-            "welded": self.welded,
-            "paint_comp": self.paint_comp,
-            "ship": self.ship,
+            "stage": self.stage,
             "start_install": self.start_install,
             "start_install_formula": self.start_install_formula,
             "start_install_formulaTF": self.start_install_formulaTF,
@@ -247,6 +239,7 @@ class Job(db.Model):
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,
             "notes": self.notes,
+            "stage": self.stage,
             "trello_card_id": self.trello_card_id,
             "trello_card_name": self.trello_card_name,
             "trello_list_id": self.trello_list_id,
@@ -275,11 +268,7 @@ def query_job_releases():
                 "BY": r.by,
                 "Released": r.released,
                 "Fab Order": r.fab_order,
-                "Cut start": r.cut_start,
-                "Fitup comp": r.fitup_comp,
-                "Welded": r.welded,
-                "Paint Comp": r.paint_comp,
-                "Ship": r.ship,  # Updated field name
+                "Stage": r.stage,
                 "Start install": r.start_install,  # Updated field name
                 "Comp. ETA": r.comp_eta,
                 "Job Comp": r.job_comp,

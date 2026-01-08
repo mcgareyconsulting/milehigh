@@ -224,24 +224,14 @@ def sync_from_trello(event_info):
                 to_list=to_list_name
             )
             
-            # Capture old status values before applying list mapping
-            old_status_before_list_move = {
-                'fitup_comp': rec.fitup_comp,
-                'welded': rec.welded,
-                'paint_comp': rec.paint_comp,
-                'ship': rec.ship
-            }
+            # Capture old stage value before applying list mapping
+            old_stage_before_list_move = rec.stage
             
             # Apply list mapping to database
             TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
             
-            # Check if status actually changed (only create event if DB was updated)
-            status_changed = (
-                old_status_before_list_move['fitup_comp'] != rec.fitup_comp or
-                old_status_before_list_move['welded'] != rec.welded or
-                old_status_before_list_move['paint_comp'] != rec.paint_comp or
-                old_status_before_list_move['ship'] != rec.ship
-            )
+            # Check if stage actually changed (only create event if DB was updated)
+            status_changed = old_stage_before_list_move != rec.stage
             
             if status_changed:
                 # Create JobEvent for stage update (list movement that caused status change)

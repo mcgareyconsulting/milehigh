@@ -43,6 +43,7 @@ class TrelloListMapper:
             Trello list name, or None if no matching list is found
             
         Mapping logic:
+        - If cut_start=X and other fields are empty → "Cut start"
         - If fitup_comp=X, welded=X, paint_comp=X, ship=ST → "Store at MHMW for shipping"
         - If fitup_comp=X, welded=X, paint_comp=X, ship=RS → "Shipping planning"
         - If fitup_comp=X, welded=X, paint_comp=X, ship=O/T/""/None → "Paint complete"
@@ -50,6 +51,15 @@ class TrelloListMapper:
         - If fitup_comp=X, welded=X, paint_comp=X, ship=X → "Shipping completed"
         - Otherwise → None
         """
+        # Check for "Cut start" stage
+        if (
+            rec.cut_start == "X"
+            and (not rec.fitup_comp or rec.fitup_comp == "")
+            and (not rec.welded or rec.welded == "")
+            and (not rec.paint_comp or rec.paint_comp == "")
+            and (not rec.ship or rec.ship == "")
+        ):
+            return "Cut start"
         if (
             rec.fitup_comp == "X"
             and rec.welded == "X"
@@ -91,10 +101,10 @@ class TrelloListMapper:
     @classmethod
     def apply_trello_list_to_db(cls, job, trello_list_name: str, operation_id: str) -> None:
         """
-        Update database record status based on Trello list movement.
+        Update database record stage based on Trello list movement.
         
-        This is used when syncing from Trello to Excel/database to update
-        the status fields based on which list the card was moved to.
+        This is used when syncing from Trello to database to update
+        the stage field based on which list the card was moved to.
         
         Args:
             job: Database record (Job model instance) to update
@@ -103,72 +113,26 @@ class TrelloListMapper:
             
         Returns:
             None (modifies job in place)
-            
-        Mapping logic:
-        - "Paint complete" → fitup_comp=X, welded=X, paint_comp=X, ship=O
-        - "Store at MHMW for shipping" → fitup_comp=X, welded=X, paint_comp=X, ship=ST
-        - "Shipping planning" → fitup_comp=X, welded=X, paint_comp=X, ship=RS
-        - "Fit Up Complete." → fitup_comp=X, welded=O, paint_comp="", ship=""
-        - "Shipping completed" → fitup_comp=X, welded=X, paint_comp=X, ship=X
-        - "Released" → fitup_comp="", welded="", paint_comp="", ship=""
         """
         # Log the current state before applying changes
+        old_stage = job.stage
         logger.info(
             "Applying Trello list to database record",
             operation_id=operation_id,
             job_id=job.id,
             trello_list=trello_list_name,
-            current_status={
-                "fitup_comp": job.fitup_comp,
-                "welded": job.welded,
-                "paint_comp": job.paint_comp,
-                "ship": job.ship
-            }
+            current_stage=old_stage
         )
         
-        # Apply the mapping based on Trello list name
-        if trello_list_name == "Paint complete":
-            job.fitup_comp = "X"
-            job.welded = "X"
-            job.paint_comp = "X"
-            job.ship = "O"
-        elif trello_list_name == "Store at MHMW for shipping":
-            job.fitup_comp = "X"
-            job.welded = "X"
-            job.paint_comp = "X"
-            job.ship = "ST"
-        elif trello_list_name == "Shipping planning":
-            job.fitup_comp = "X"
-            job.welded = "X"
-            job.paint_comp = "X"
-            job.ship = "RS"
-        elif trello_list_name == "Fit Up Complete.":
-            job.fitup_comp = "X"
-            job.welded = "O"
-            job.paint_comp = ""
-            job.ship = ""
-        elif trello_list_name == "Shipping completed":
-            job.fitup_comp = "X"
-            job.welded = "X"
-            job.paint_comp = "X"
-            job.ship = "X"
-        elif trello_list_name == "Released":
-            job.fitup_comp = ""
-            job.welded = ""
-            job.paint_comp = ""
-            job.ship = ""
+        # Set the stage directly from the Trello list name
+        job.stage = trello_list_name
         
         # Log the new state after applying changes
         logger.info(
             "Applied Trello list to database record",
             operation_id=operation_id,
             job_id=job.id,
-            new_status={
-                "fitup_comp": job.fitup_comp,
-                "welded": job.welded,
-                "paint_comp": job.paint_comp,
-                "ship": job.ship
-            }
+            new_stage=job.stage
         )
     
     @classmethod

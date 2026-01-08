@@ -5,7 +5,7 @@ Provides API endpoints for job data queries.
 """
 from app.brain import brain_bp
 from flask import jsonify, request
-from app.brain.utils import determine_stage_from_db_fields, serialize_value
+from app.brain.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
@@ -38,29 +38,10 @@ def get_list_id_by_stage(stage):
         return None
 
 def update_job_stage_fields(job_record, stage):
-    """Apply stage update to job record fields"""
-    from app.sync.services.trello_list_mapper import TrelloListMapper
-    
-    logger.info(f"Updating job {job_record.job}-{job_record.release} fields for stage: {stage}")
-    
-    if stage == "Cut start":
-        # Cut start: set cut_start=X, clear other fields
-        job_record.cut_start = "X"
-        job_record.fitup_comp = ""
-        job_record.welded = ""
-        job_record.paint_comp = ""
-        job_record.ship = ""
-    else:
-        # Use TrelloListMapper for other stages
-        TrelloListMapper.apply_trello_list_to_db(
-            job_record, 
-            stage, 
-            "brain_stage_update"
-        )
-    
-    logger.debug(f"Job fields updated: cut_start={job_record.cut_start}, "
-                f"fitup_comp={job_record.fitup_comp}, welded={job_record.welded}, "
-                f"paint_comp={job_record.paint_comp}, ship={job_record.ship}")
+    """Apply stage update to job record - sets the stage field directly."""
+    logger.info(f"Updating job {job_record.job}-{job_record.release} stage to: {stage}")
+    job_record.stage = stage
+    logger.debug(f"Job stage updated to: {stage}")
 
 @brain_bp.route("/jobs")
 def get_jobs():
@@ -117,10 +98,10 @@ def get_jobs():
 
         for idx, job in enumerate(jobs):
             try:
-                # Determine stage from the 5 columns
-                stage = determine_stage_from_db_fields(job)
+                # Get stage from database field (default to 'Released' if None)
+                stage = job.stage if job.stage else 'Released'
                 
-                # Return all Excel fields (excluding Trello fields and the 5 stage columns)
+                # Return all Excel fields (excluding Trello fields)
                 job_data = {
                     'id': serialize_value(job.id),
                     'Job #': serialize_value(job.job),
@@ -134,7 +115,7 @@ def get_jobs():
                     'BY': serialize_value(job.by),
                     'Released': serialize_value(job.released),
                     'Fab Order': serialize_value(job.fab_order),
-                    'Stage': stage,  # Single Stage column computed from 5 status columns
+                    'Stage': stage,  # Stage field from database
                     'Start install': serialize_value(job.start_install),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
@@ -229,10 +210,10 @@ def get_all_jobs():
         
         for idx, job in enumerate(jobs):
             try:
-                # Determine stage from the 5 columns
-                stage = determine_stage_from_db_fields(job)
+                # Get stage from database field (default to 'Released' if None)
+                stage = job.stage if job.stage else 'Released'
                 
-                # Return all Excel fields (excluding Trello fields and the 5 stage columns)
+                # Return all Excel fields (excluding Trello fields)
                 job_data = {
                     'id': serialize_value(job.id),
                     'Job #': serialize_value(job.job),
@@ -246,7 +227,7 @@ def get_all_jobs():
                     'BY': serialize_value(job.by),
                     'Released': serialize_value(job.released),
                     'Fab Order': serialize_value(job.fab_order),
-                    'Stage': stage,  # Single Stage column computed from 5 status columns
+                    'Stage': stage,  # Stage field from database
                     'Start install': serialize_value(job.start_install),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
@@ -295,7 +276,7 @@ def get_all_jobs():
 def update_stage(job, release):
     """
     Update the stage for a specific job-release combination.
-    Maps the stage name to the appropriate database status fields.
+    Updates the stage field directly in the database.
 
     Parameters:
         job: int
@@ -311,7 +292,6 @@ def update_stage(job, release):
     """
     from app.models import Job, db, JobEvents
     from app.services.job_event_service import JobEventService
-    from app.sync.services.trello_list_mapper import TrelloListMapper
     from datetime import datetime
     
     # Log operation entry
@@ -333,7 +313,8 @@ def update_stage(job, release):
             return jsonify({'error': 'Job not found'}), 404
 
         # Capture old state for payload
-        old_stage = determine_stage_from_db_fields(job_record)
+        # Use stage field directly from database (default to 'Released' if None)
+        old_stage = job_record.stage if job_record.stage else 'Released'
 
         # Create event (handles deduplication, logging internally)
         event = JobEventService.create(

@@ -150,27 +150,12 @@ def create_app():
     # Jobs route - display all jobs in database
     def determine_stage_from_db_fields(job):
         """
-        Determine the stage from database fields using TrelloListMapper logic.
-        Returns the stage name or 'Released' if all fields are null/blank.
+        Get the stage from the job's stage field.
+        Returns the stage name or 'Released' if the stage field is None/empty.
         """
-        from app.sync.services.trello_list_mapper import TrelloListMapper
-        
-        # Use TrelloListMapper to determine stage from the 5 columns
-        trello_list = TrelloListMapper.determine_trello_list_from_db(job)
-        
-        # If TrelloListMapper returns a list name, use it as the stage
-        if trello_list:
-            return trello_list
-        
-        # If all fields are null/blank, default to 'Released'
-        if (not job.cut_start or job.cut_start == '') and \
-           (not job.fitup_comp or job.fitup_comp == '') and \
-           (not job.welded or job.welded == '') and \
-           (not job.paint_comp or job.paint_comp == '') and \
-           (not job.ship or job.ship == ''):
-            return 'Released'
-        
-        # If we can't determine a stage but have some values, default to 'Released'
+        # Use stage field directly from database
+        if hasattr(job, 'stage') and job.stage:
+            return job.stage
         return 'Released'
 
     # Index route - serve React app
