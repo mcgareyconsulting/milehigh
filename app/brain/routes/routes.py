@@ -379,45 +379,16 @@ def update_stage(job, release):
                 # Try to process immediately for live updates
                 # If it fails, the retry logic will handle it
                 try:
-                    success = OutboxService.process_item(outbox_item)
-                    if success:
+                    if OutboxService.process_item(outbox_item):
                         outbox_processed_immediately = True
-                        logger.info(
-                            f"Outbox item {outbox_item.id} processed immediately for event {event.id}",
-                            extra={'outbox_id': outbox_item.id, 'event_id': event.id}
-                        )
-                    else:
-                        # Processing failed but will retry - log but don't fail the operation
-                        logger.warning(
-                            f"Outbox item {outbox_item.id} failed immediate processing, will retry",
-                            extra={
-                                'outbox_id': outbox_item.id,
-                                'event_id': event.id,
-                                'retry_count': outbox_item.retry_count,
-                                'next_retry_at': outbox_item.next_retry_at.isoformat() if outbox_item.next_retry_at else None
-                            }
-                        )
+                        logger.info(f"Trello update processed immediately for job {job}-{release}")
                 except Exception as process_error:
-                    # Unexpected error during immediate processing - log but continue
-                    # The retry logic will handle it
-                    logger.error(
-                        f"Error during immediate processing of outbox item {outbox_item.id}: {process_error}",
-                        exc_info=True,
-                        extra={'outbox_id': outbox_item.id, 'event_id': event.id}
-                    )
+                    # Unexpected error during immediate processing - retry logic will handle it
+                    logger.error(f"Error during immediate processing of outbox {outbox_item.id}: {process_error}", exc_info=True)
                     
             except Exception as outbox_error:
                 # Failed to create outbox item - log the error but don't fail the whole operation
-                # The job update and event creation are already done, so we continue
-                logger.error(
-                    f"Failed to add outbox item for event {event.id}: {outbox_error}",
-                    exc_info=True,
-                    extra={
-                        'job': job,
-                        'release': release,
-                        'event_id': event.id
-                    }
-                )
+                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
         else:
             # Log why outbox item wasn't created
             if not new_list_id:
@@ -431,18 +402,10 @@ def update_stage(job, release):
                     extra={'job': job, 'release': release}
                 )
         
-        # Close event only if:
-        # 1. No outbox item was created (no external API call needed), OR
-        # 2. Outbox item was processed immediately and succeeded
-        # If an outbox item exists but wasn't processed immediately, it will be closed when retry processing succeeds
-        # This ensures the event's applied_at timestamp reflects when the external API call actually completed
-        if not outbox_item_created or outbox_processed_immediately:
-            if not outbox_item_created:
-                JobEventService.close(event.id)
-                logger.debug(f"Event {event.id} closed immediately (no outbox item created)")
-            else:
-                # Event was already closed by process_item() on success
-                logger.debug(f"Event {event.id} closed after immediate outbox processing")
+        # Close event only if no outbox item was created (no external API call needed)
+        # If an outbox item exists, it will be closed when processing succeeds (immediate or retry)
+        if not outbox_item_created:
+            JobEventService.close(event.id)
         
         # Commit all changes (event, job update, outbox item if created)
         db.session.commit()
