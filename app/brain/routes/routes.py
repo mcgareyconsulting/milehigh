@@ -24,10 +24,18 @@ def get_list_id_by_stage(stage):
         stage: Stage name (e.g., 'Released', 'Cut start', 'Fit Up Complete.', etc.)
     
     Returns:
-        str: Trello list ID, or None if not found
+        str: Trello list ID, or None if not found or on error
     """
-    list_info = get_list_by_name(stage)
-    return list_info['id'] if list_info else None
+    try:
+        list_info = get_list_by_name(stage)
+        if list_info and 'id' in list_info:
+            return list_info['id']
+        else:
+            logger.warning(f"Could not get list ID for stage: {stage} (list_info: {list_info})")
+            return None
+    except Exception as e:
+        logger.error(f"Error getting list ID for stage {stage}: {e}", exc_info=True)
+        return None
 
 def update_job_stage_fields(job_record, stage):
     """Apply stage update to job record fields"""
@@ -351,19 +359,92 @@ def update_stage(job, release):
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
 
-        # Add Trello update to outbox
+        # Add Trello update to outbox and process immediately (hybrid approach)
+        # This provides live updates while still having retry capability if the API call fails
+        # The event will be closed when the outbox item is successfully processed
+        outbox_item_created = False
+        outbox_processed_immediately = False
         new_list_id = get_list_id_by_stage(stage)
+        
         if new_list_id and job_record.trello_card_id:
-            OutboxService.add(
-                destination='trello',
-                action='move_card',
-                event_id=event.id
-            )
+            try:
+                # Create outbox item
+                outbox_item = OutboxService.add(
+                    destination='trello',
+                    action='move_card',
+                    event_id=event.id
+                )
+                outbox_item_created = True
+                
+                # Try to process immediately for live updates
+                # If it fails, the retry logic will handle it
+                try:
+                    success = OutboxService.process_item(outbox_item)
+                    if success:
+                        outbox_processed_immediately = True
+                        logger.info(
+                            f"Outbox item {outbox_item.id} processed immediately for event {event.id}",
+                            extra={'outbox_id': outbox_item.id, 'event_id': event.id}
+                        )
+                    else:
+                        # Processing failed but will retry - log but don't fail the operation
+                        logger.warning(
+                            f"Outbox item {outbox_item.id} failed immediate processing, will retry",
+                            extra={
+                                'outbox_id': outbox_item.id,
+                                'event_id': event.id,
+                                'retry_count': outbox_item.retry_count,
+                                'next_retry_at': outbox_item.next_retry_at.isoformat() if outbox_item.next_retry_at else None
+                            }
+                        )
+                except Exception as process_error:
+                    # Unexpected error during immediate processing - log but continue
+                    # The retry logic will handle it
+                    logger.error(
+                        f"Error during immediate processing of outbox item {outbox_item.id}: {process_error}",
+                        exc_info=True,
+                        extra={'outbox_id': outbox_item.id, 'event_id': event.id}
+                    )
+                    
+            except Exception as outbox_error:
+                # Failed to create outbox item - log the error but don't fail the whole operation
+                # The job update and event creation are already done, so we continue
+                logger.error(
+                    f"Failed to add outbox item for event {event.id}: {outbox_error}",
+                    exc_info=True,
+                    extra={
+                        'job': job,
+                        'release': release,
+                        'event_id': event.id
+                    }
+                )
+        else:
+            # Log why outbox item wasn't created
+            if not new_list_id:
+                logger.warning(
+                    f"Could not get list ID for stage '{stage}', skipping Trello update",
+                    extra={'job': job, 'release': release, 'stage': stage}
+                )
+            if not job_record.trello_card_id:
+                logger.warning(
+                    f"Job {job}-{release} has no trello_card_id, skipping Trello update",
+                    extra={'job': job, 'release': release}
+                )
         
-        # Close event (marks applied_at)
-        JobEventService.close(event.id)
+        # Close event only if:
+        # 1. No outbox item was created (no external API call needed), OR
+        # 2. Outbox item was processed immediately and succeeded
+        # If an outbox item exists but wasn't processed immediately, it will be closed when retry processing succeeds
+        # This ensures the event's applied_at timestamp reflects when the external API call actually completed
+        if not outbox_item_created or outbox_processed_immediately:
+            if not outbox_item_created:
+                JobEventService.close(event.id)
+                logger.debug(f"Event {event.id} closed immediately (no outbox item created)")
+            else:
+                # Event was already closed by process_item() on success
+                logger.debug(f"Event {event.id} closed after immediate outbox processing")
         
-        # Commit all changes
+        # Commit all changes (event, job update, outbox item if created)
         db.session.commit()
         
         logger.info(f"update_stage completed successfully", extra={

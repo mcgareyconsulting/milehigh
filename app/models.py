@@ -326,7 +326,7 @@ class Outbox(db.Model):
     __tablename__ = "outbox"
     id = db.Column(db.Integer, primary_key=True)
     event_id = db.Column(db.Integer, db.ForeignKey('job_events.id'), nullable=False, unique=True)
-    destination = db.Column(db.String(50), nullable=False)  # 'trello', 'procore'
+    destination = db.Column(db.String(50), nullable=False)  # 'trello' or 'procore'
     action = db.Column(db.String(50), nullable=False)  # 'move_card', 'update_card', etc.
     
     # Retry tracking

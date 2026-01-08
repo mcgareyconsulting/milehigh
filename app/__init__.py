@@ -99,6 +99,36 @@ def create_app():
         # Only create tables if they don't exist
         db.create_all()
         
+        # Start background thread for outbox retry processing
+        # This handles retries for outbox items that failed immediate processing
+        import threading
+        import time
+        from app.services.outbox_service import OutboxService
+        
+        def outbox_retry_worker():
+            """Background thread that continuously processes pending outbox items for retries."""
+            logger.info("Outbox retry worker thread started")
+            while True:
+                try:
+                    with app.app_context():
+                        # Process pending items that are ready for retry
+                        processed = OutboxService.process_pending_items(limit=10)
+                        if processed == 0:
+                            # No items to process, wait a bit before checking again
+                            time.sleep(2)
+                        else:
+                            # Processed some items, check again soon for more
+                            time.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"Error in outbox retry worker: {e}", exc_info=True)
+                    # Wait longer on error before retrying
+                    time.sleep(5)
+        
+        # Start the background thread as a daemon (will stop when main process stops)
+        outbox_thread = threading.Thread(target=outbox_retry_worker, daemon=True, name="outbox-retry-worker")
+        outbox_thread.start()
+        logger.info("Outbox retry worker thread started successfully")
+        
         # # Check if we need to seed the database (only if empty)
         # from app.models import Job
         # job_count = Job.query.count()
