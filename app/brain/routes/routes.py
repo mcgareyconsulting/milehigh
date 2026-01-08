@@ -7,6 +7,7 @@ from app.brain import brain_bp
 from flask import jsonify, request
 from app.brain.utils import determine_stage_from_db_fields, serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
+from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 import json
 import hashlib
@@ -15,6 +16,43 @@ import sys
 
 logger = get_logger(__name__)
 
+def get_list_id_by_stage(stage):
+    """
+    Get Trello list ID by stage name.
+    
+    Args:
+        stage: Stage name (e.g., 'Released', 'Cut start', 'Fit Up Complete.', etc.)
+    
+    Returns:
+        str: Trello list ID, or None if not found
+    """
+    list_info = get_list_by_name(stage)
+    return list_info['id'] if list_info else None
+
+def update_job_stage_fields(job_record, stage):
+    """Apply stage update to job record fields"""
+    from app.sync.services.trello_list_mapper import TrelloListMapper
+    
+    logger.info(f"Updating job {job_record.job}-{job_record.release} fields for stage: {stage}")
+    
+    if stage == "Cut start":
+        # Cut start: set cut_start=X, clear other fields
+        job_record.cut_start = "X"
+        job_record.fitup_comp = ""
+        job_record.welded = ""
+        job_record.paint_comp = ""
+        job_record.ship = ""
+    else:
+        # Use TrelloListMapper for other stages
+        TrelloListMapper.apply_trello_list_to_db(
+            job_record, 
+            stage, 
+            "brain_stage_update"
+        )
+    
+    logger.debug(f"Job fields updated: cut_start={job_record.cut_start}, "
+                f"fitup_comp={job_record.fitup_comp}, welded={job_record.welded}, "
+                f"paint_comp={job_record.paint_comp}, ship={job_record.ship}")
 
 @brain_bp.route("/jobs")
 def get_jobs():
@@ -264,84 +302,110 @@ def update_stage(job, release):
         JSON object with 'status': 'success' or 'error'
     """
     from app.models import Job, db, JobEvents
+    from app.services.job_event_service import JobEventService
     from app.sync.services.trello_list_mapper import TrelloListMapper
     from datetime import datetime
     
+    # Log operation entry
+    logger.info(f"update_stage called", extra={
+        'job': job,
+        'release': release,
+        'stage': request.json.get('stage')
+    })
+
     try:
         stage = request.json.get('stage')
         if not stage:
             return jsonify({'error': 'Stage is required'}), 400
 
-        # Create payload for hashing
-        action = "update_stage"
-        payload = {"to": stage}
-
-        # Normalize the payload by sorting keys and converting to JSON
-        # This ensures consistent hashing regardless of key order
-        payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-        
-        # Create hash string from action + job identifier + payload
-        hash_string = f"{action}:{job}:{release}:{payload_json}"
-
-        # Generate SHA-256 hash
-        payload_hash = hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
-
-        # Check if event already exists
-        event = JobEvents.query.filter_by(payload_hash=payload_hash).first()
-        if event:
-            return jsonify({'error': 'Event already exists'}), 400
-
-        # Create event
-        event = JobEvents(
-            job=job,
-            release=release,
-            action=action,
-            payload=payload,
-            payload_hash=payload_hash,
-            source='Brain',
-        )
-        db.session.add(event)
-
-        # Update job
+        # Fetch job record
         job_record = Job.query.filter_by(job=job, release=release).first()
         if not job_record:
+            logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        logger.info(f"Updating stage for job {job}-{release} to {stage}")
+        # Capture old state for payload
+        old_stage = determine_stage_from_db_fields(job_record)
 
-        # Map stage name to database fields using TrelloListMapper
-        # Handle "Cut start" separately as it's not in the standard mapper
-        if stage == "Cut start":
-            # Cut start: set cut_start=X, clear other fields
-            job_record.cut_start = "X"
-            job_record.fitup_comp = ""
-            job_record.welded = ""
-            job_record.paint_comp = ""
-            job_record.ship = ""
-        else:
-            # Use TrelloListMapper for other stages
-            # This will update fitup_comp, welded, paint_comp, ship appropriately
-            TrelloListMapper.apply_trello_list_to_db(job_record, stage, "brain_stage_update")
+        # Create event (handles deduplication, logging internally)
+        event = JobEventService.create(
+            job=job,
+            release=release,
+            action='update_stage',
+            source='brain',  # Lowercase for consistency
+            payload={
+                'from': old_stage,
+                'to': stage
+            }
+        )
 
-        # Update Trello card
-        new_list_id = get_list_by_name(stage)["id"]
-        if new_list_id:
-            update_trello_card(job_record.trello_card_id, new_list_id)
+        # Check if event was deduplicated
+        if event is None:
+            logger.info(f"Event already exists for job {job}-{release} to stage {stage}")
+            return jsonify({'error': 'Event already exists'}), 400
+        
+        # Update job fields
+        update_job_stage_fields(job_record, stage)
 
-        # Update job and job_eventsmetadata
+        # Update job metadata
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
-        event.applied_at = datetime.utcnow()
+
+        # Add Trello update to outbox
+        new_list_id = get_list_id_by_stage(stage)
+        if new_list_id and job_record.trello_card_id:
+            OutboxService.add(
+                destination='trello',
+                action='move_card',
+                event_id=event.id
+            )
         
+        # Close event (marks applied_at)
+        JobEventService.close(event.id)
+        
+        # Commit all changes
         db.session.commit()
         
-        logger.info(f"Successfully updated stage for job {job}-{release} to {stage}")
+        logger.info(f"update_stage completed successfully", extra={
+            'job': job,
+            'release': release,
+            'event_id': event.id
+        })
         
-        return jsonify({'status': 'success'}), 200
+        return jsonify({
+            'status': 'success',
+            'event_id': event.id
+        }), 200
     except Exception as e:
-        logger.error("Error in /update-stage endpoint", error=str(e), exc_info=True)
+        # Log critical failure
+        logger.error(f"update_stage failed catastrophically", exc_info=True, extra={
+            'job': job,
+            'release': release,
+            'error': str(e),
+            'error_type': type(e).__name__
+        })
+        
+        # Try to log to system_logs
+        try:
+            from app.services.system_log_service import SystemLogService
+            SystemLogService.log_error(
+                category='operation_failure',
+                operation='update_stage',
+                error=e,
+                context={
+                    'job': job,
+                    'release': release,
+                    'stage': request.json.get('stage')
+                }
+            )
+        except:
+            pass  # DB might be down, console logs are our fallback
+        
         db.session.rollback()
-        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
 
 #######################
 ## Operation Routes ##

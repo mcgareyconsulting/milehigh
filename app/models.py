@@ -320,3 +320,25 @@ class SyncCursor(db.Model):
     name = db.Column(db.String, primary_key=True)  # e.g., 'jobs'
     last_updated_at = db.Column(db.DateTime, nullable=False)
     last_id = db.Column(db.Integer, nullable=False)
+
+class Outbox(db.Model):
+    """Outbox table for tracking external API calls with retry capabilities."""
+    __tablename__ = "outbox"
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('job_events.id'), nullable=False, unique=True)
+    destination = db.Column(db.String(50), nullable=False)  # 'trello', 'procore'
+    action = db.Column(db.String(50), nullable=False)  # 'move_card', 'update_card', etc.
+    
+    # Retry tracking
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending, processing, completed, failed
+    retry_count = db.Column(db.Integer, default=0)
+    max_retries = db.Column(db.Integer, default=5)
+    next_retry_at = db.Column(db.DateTime, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    
+    # Relationship
+    event = db.relationship('JobEvents', backref='outbox_items')
