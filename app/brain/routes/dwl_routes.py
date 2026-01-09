@@ -9,9 +9,12 @@ logger = get_logger(__name__)
 
 @brain_bp.route('/drafting-work-load')
 def drafting_work_load():
-    """Return Drafting Work Load data from the db, filtered to only show submittals with status='Open'"""
+    """Return Drafting Work Load data from the db, including submittals with status='Open' or status='Draft'"""
     try:
-        submittals = DraftingWorkLoadService.get_open_submittals(ProcoreSubmittal)
+        # Get submittals with status='Open' or status='Draft'
+        submittals = ProcoreSubmittal.query.filter(
+            ProcoreSubmittal.status.in_(['Open', 'Draft'])
+        ).all()
         return jsonify({
             "submittals": [submittal.to_dict() for submittal in submittals]
         }), 200
