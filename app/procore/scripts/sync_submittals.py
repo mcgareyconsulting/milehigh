@@ -4,8 +4,7 @@ Script to sync submittals from Procore API to the database.
 Usage:
     python -m app.procore.scripts.sync_submittals --project-id <project_id>
 
-Fetches submittals from Procore API for a given project_id,
-filters for status='Open' and type != 'For Construction',
+Fetches all submittals from Procore API for a given project_id,
 checks against the database, and adds new submittals to the ProcoreSubmittals table.
 """
 
@@ -216,25 +215,14 @@ def sync_submittals_for_project(project_id):
     
     logger.info(f"Fetched {len(all_submittals)} submittals from API")
     
-    # Filter submittals: status='Open' and type != 'For Construction'
+    # Process all submittals (no filtering by status or type)
     filtered_submittals = []
     for submittal in all_submittals:
         if not isinstance(submittal, dict):
             continue
-        
-        # Extract status
-        status = extract_field_value(submittal, "status")
-        status = str(status).strip() if status else None
-        
-        # Extract type
-        submittal_type = extract_field_value(submittal, "type")
-        submittal_type = str(submittal_type).strip() if submittal_type else None
-        
-        # Filter: status must be 'Open' and type must NOT be 'For Construction'
-        if (status == "Open" or status == "Draft")and submittal_type != "For Construction":
-            filtered_submittals.append(submittal)
+        filtered_submittals.append(submittal)
     
-    logger.info(f"Filtered to {len(filtered_submittals)} submittals (status='Open' and type != 'For Construction')")
+    logger.info(f"Processing {len(filtered_submittals)} submittals (all statuses and types)")
     
     # Process each filtered submittal
     created_count = 0
@@ -330,7 +318,7 @@ Examples:
         print(f"Status: {summary['status']}")
         print(f"Message: {summary['message']}")
         print(f"Total fetched from API: {summary['total_fetched']}")
-        print(f"Filtered (Open, not 'For Construction'): {summary['filtered']}")
+        print(f"Processed (all submittals): {summary['filtered']}")
         print(f"Created: {summary['created']}")
         print(f"Skipped (already exists): {summary['skipped']}")
         print(f"Errors: {summary['errors']}")

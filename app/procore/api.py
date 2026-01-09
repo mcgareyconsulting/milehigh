@@ -6,6 +6,7 @@ from urllib3.exceptions import ProtocolError
 
 from app.config import Config as cfg
 from app.procore.procore_auth import get_access_token, get_access_token_force_refresh
+from app.logging_config import get_logger
 
 class ProcoreAPI:
     """ProcoreAPI connection layer utilizing requests session for better performance and error handling."""
@@ -90,6 +91,9 @@ class ProcoreAPI:
             raise last_exception
     
     def _get(self, endpoint: str, params: Optional[Dict] = None):
+        # Ensure params defaults to empty dict to avoid AttributeError when calling update
+        if params is None:
+            params = {}
         return self._request("GET", endpoint, params=params)
 
     def _post(self, endpoint: str, data: Dict):
@@ -111,7 +115,51 @@ class ProcoreAPI:
     # Submittals
     # -------------------------
     def get_submittals(self, project_id: int) -> List[Dict]:
-        return self._get(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/submittals")
+        """
+        Get all submittals for a project with pagination support.
+        The v2.0 API returns paginated responses in the format:
+        {"data": [...], "total": N, "per_page": M, "page": P}
+        """
+        logger = get_logger(__name__)
+        all_submittals = []
+        page = 1
+        per_page = 100  # Max items per page
+        
+        while True:
+            endpoint = f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/submittals"
+            params = {"per_page": per_page, "page": page}
+            response = self._get(endpoint, params=params)
+            
+            # Handle v2.0 API response format
+            if isinstance(response, dict):
+                # Check if it's the paginated format with "data" key
+                if "data" in response:
+                    page_submittals = response["data"] if response["data"] else []
+                    all_submittals.extend(page_submittals)
+                    
+                    # Check if there are more pages
+                    total = response.get("total", 0)
+                    current_count = len(all_submittals)
+                    
+                    if current_count >= total or len(page_submittals) < per_page:
+                        # We've fetched all submittals
+                        break
+                    
+                    page += 1
+                else:
+                    # Unexpected dict format, log and return empty list
+                    logger.error(f"Unexpected response format from get_submittals: {response}")
+                    return []
+            elif isinstance(response, list):
+                # Direct list response (shouldn't happen with v2.0, but handle it)
+                all_submittals.extend(response)
+                break
+            else:
+                # Unexpected response type
+                logger.error(f"Unexpected response type from get_submittals: {type(response)}")
+                return []
+        
+        return all_submittals
 
     def get_submittal_by_id(self, project_id: int, submittal_id: int) -> Dict:
         return self._get(f"/rest/v1.1/projects/{project_id}/submittals/{submittal_id}")

@@ -97,7 +97,6 @@ def create_app():
     # Initialize the database - only create tables, don't drop and reseed
     with app.app_context():
         # Only create tables if they don't exist
-        db.drop_all()
         db.create_all()
         
         # Start background thread for outbox retry processing
