@@ -327,18 +327,20 @@ def get_webhook_deliveries(company_id, project_id):
 
 def handle_submittal_update(project_id, submittal_id):
     """
-    Compare ball_in_court and status from submittal webhook data against DB record.
+    Compare ball_in_court, status, title, and submittal_manager from submittal webhook data against DB record.
     
     Args:
         project_id: The Procore project ID
         submittal_id: The submittal ID (resource_id from webhook)
         
     Returns:
-        tuple: (procore_submittal, ball_in_court, approvers, status) or None if parsing fails
+        tuple: (procore_submittal, ball_in_court, approvers, status, title, submittal_manager) or None if parsing fails
         - procore_submittal: ProcoreSubmittal DB record or None if not found
         - ball_in_court: str or None - User who has the ball in court
         - approvers: list - List of approver data
         - status: str or None - Status of the submittal from Procore
+        - title: str or None - Title of the submittal from Procore
+        - submittal_manager: str or None - Submittal manager from Procore
     """
     # Collect submittal data and pass to parser function
     submittal = get_submittal_by_id(project_id, submittal_id)
@@ -371,11 +373,25 @@ def handle_submittal_update(project_id, submittal_id):
     # Normalize status to string or None
     status = str(status).strip() if status else None
     
+    # Extract title
+    title = submittal.get("title")
+    title = str(title).strip() if title else None
+    
+    # Extract submittal_manager (if available)
+    submittal_manager_obj = submittal.get("submittal_manager") or submittal.get("manager")
+    if isinstance(submittal_manager_obj, dict):
+        submittal_manager = submittal_manager_obj.get("name") or submittal_manager_obj.get("login")
+    elif isinstance(submittal_manager_obj, str):
+        submittal_manager = submittal_manager_obj
+    else:
+        submittal_manager = None
+    submittal_manager = str(submittal_manager).strip() if submittal_manager else None
+    
     # Look up the DB record
     procore_submittal = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
     
     # Always return a tuple, even if procore_submittal is None
-    return procore_submittal, ball_in_court, approvers, status
+    return procore_submittal, ball_in_court, approvers, status, title, submittal_manager
 
 
 def get_project_info(project_id):
@@ -855,30 +871,32 @@ def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
 
 def check_and_update_submittal(project_id, submittal_id):
     """
-    Check if ball_in_court and status from Procore differ from DB, update if needed.
+    Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
     
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID
         
     Returns:
-        tuple: (ball_updated: bool, status_updated: bool, record: ProcoreSubmittal or None, 
-                ball_in_court: str or None, status: str or None)
+        tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool, 
+                record: ProcoreSubmittal or None, ball_in_court: str or None, status: str or None)
     """
     try:
         result = handle_submittal_update(project_id, submittal_id)
         if result is None:
             logger.warning(f"Failed to parse submittal data for submittal {submittal_id}")
-            return False, False, None, None, None
+            return False, False, False, False, None, None, None
         
-        record, ball_in_court, approvers, status = result
+        record, ball_in_court, approvers, status, title, submittal_manager = result
         
         if not record:
             logger.warning(f"No DB record found for submittal {submittal_id}")
-            return False, False, None, ball_in_court, status
+            return False, False, False, False, None, ball_in_court, status
         
         ball_updated = False
         status_updated = False
+        title_updated = False
+        manager_updated = False
         order_bumped = False
         
         # Check and update ball_in_court
@@ -974,8 +992,32 @@ def check_and_update_submittal(project_id, submittal_id):
             record.status = status
             status_updated = True
         
+        # Check and update title
+        db_title_value = record.title if record.title is not None else ""
+        webhook_title_value = title if title is not None else ""
+        
+        if db_title_value != webhook_title_value:
+            logger.info(
+                f"Title mismatch detected for submittal {submittal_id}: "
+                f"DB='{record.title}' vs Procore='{title}'"
+            )
+            record.title = title
+            title_updated = True
+        
+        # Check and update submittal_manager
+        db_manager_value = record.submittal_manager if record.submittal_manager is not None else ""
+        webhook_manager_value = submittal_manager if submittal_manager is not None else ""
+        
+        if db_manager_value != webhook_manager_value:
+            logger.info(
+                f"Submittal manager mismatch detected for submittal {submittal_id}: "
+                f"DB='{record.submittal_manager}' vs Procore='{submittal_manager}'"
+            )
+            record.submittal_manager = submittal_manager
+            manager_updated = True
+        
         # Update timestamp and commit if any changes
-        if ball_updated or status_updated or order_bumped:
+        if ball_updated or status_updated or title_updated or manager_updated or order_bumped:
             record.last_updated = datetime.utcnow()
             db.session.commit()
             
@@ -994,6 +1036,18 @@ def check_and_update_submittal(project_id, submittal_id):
                     payload["status"] = {
                         "old": db_status_value,
                         "new": status
+                    }
+                
+                if title_updated:
+                    payload["title"] = {
+                        "old": db_title_value,
+                        "new": title
+                    }
+                
+                if manager_updated:
+                    payload["submittal_manager"] = {
+                        "old": db_manager_value,
+                        "new": submittal_manager
                     }
                 
                 if order_bumped:
@@ -1027,22 +1081,26 @@ def check_and_update_submittal(project_id, submittal_id):
                 logger.info(f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'")
             if status_updated:
                 logger.info(f"Updated status for submittal {submittal_id} from '{db_status_value}' to '{status}'")
+            if title_updated:
+                logger.info(f"Updated title for submittal {submittal_id} from '{db_title_value}' to '{title}'")
+            if manager_updated:
+                logger.info(f"Updated submittal_manager for submittal {submittal_id} from '{db_manager_value}' to '{submittal_manager}'")
             if order_bumped:
                 logger.info(f"Order number bumped for submittal {submittal_id}")
         else:
             logger.debug(
-                f"Ball in court and status match for submittal {submittal_id}: "
-                f"ball='{ball_in_court}', status='{status}'"
+                f"All fields match for submittal {submittal_id}: "
+                f"ball='{ball_in_court}', status='{status}', title='{title}', manager='{submittal_manager}'"
             )
         
-        return ball_updated, status_updated, record, ball_in_court, status
+        return ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status
             
     except Exception as e:
         logger.error(
-            f"Error checking/updating ball_in_court and status for submittal {submittal_id}: {e}",
+            f"Error checking/updating submittal fields for submittal {submittal_id}: {e}",
             exc_info=True
         )
-        return False, False, None, None, None
+        return False, False, False, False, None, None, None
 
 # Add Procore Link to Trello Card
 def add_procore_link_to_trello_card(job, release):

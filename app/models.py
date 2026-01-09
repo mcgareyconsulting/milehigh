@@ -31,23 +31,6 @@ class ProcoreToken(db.Model):
         '''Get current Procore token'''
         return cls.query.order_by(cls.updated_at.desc()).first()
 
-class ProcoreWebhookEvents(db.Model):
-    '''
-    Model to store Procore webhook events
-    for purposes of handling multiple webhooks and debouncing.
-    '''
-    __tablename__ = "procore_webhook_events"
-    id = db.Column(db.Integer, primary_key=True)
-    resource_id = db.Column(db.Integer, nullable=False)
-    project_id = db.Column(db.Integer, nullable=False)
-    event_type = db.Column(db.String(50), nullable=False)  # 'create' or 'update'
-    last_seen = db.Column(db.DateTime, nullable=False)
-    
-    # Composite unique constraint on resource_id, project_id, and event_type
-    __table_args__ = (
-        db.UniqueConstraint('resource_id', 'project_id', 'event_type', name='_procore_webhook_unique'),
-    )
-    
 class ProcoreSubmittal(db.Model):
     __tablename__ = "procore_submittals"
     id = db.Column(db.Integer, primary_key=True)

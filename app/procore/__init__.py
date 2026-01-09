@@ -2,14 +2,14 @@
 import os
 import json
 from pathlib import Path
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from collections import defaultdict
 from typing import Optional
 
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError
-from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents, SubmittalEvents
+from app.models import db, ProcoreSubmittal, SubmittalEvents
 
 from app.procore.procore import (
     get_project_id_by_project_name, 
@@ -126,113 +126,43 @@ def procore_webhook():
         now = datetime.utcnow()
 
         # -----------------------------------
-        # Debounce lookup (only for update events)
-        # Create events are not debounced - let DB handle duplicates via unique constraint
+        # Debounce lookup using SubmittalEvents (similar to JobEvents pattern)
+        # Check for recent events within DEBOUNCE_SECONDS window
         # -----------------------------------
         if event_type == "update":
-            # Only debounce update events
-            event = ProcoreWebhookEvents.query.filter_by(
-                resource_id=resource_id,
-                project_id=project_id,
-                event_type=event_type
-            ).first()
+            # Check for recent update events for this submittal
+            action = "updated"
+            recent_event = SubmittalEvents.query.filter(
+                SubmittalEvents.submittal_id == str(resource_id),
+                SubmittalEvents.action == action,
+                SubmittalEvents.source == "Procore",
+                SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
+            ).order_by(SubmittalEvents.created_at.desc()).first()
 
-            if event:
-                diff = (now - event.last_seen).total_seconds()
+            if recent_event:
+                diff = (now - recent_event.created_at).total_seconds()
+                current_app.logger.info(
+                    f"Debounced duplicate update webhook; id={resource_id}, "
+                    f"project={project_id}, seen {diff:.2f}s ago"
+                )
+                return jsonify({"status": "debounced"}), 200
+        elif event_type == "create":
+            # For create events, check for recent created events
+            action = "created"
+            recent_event = SubmittalEvents.query.filter(
+                SubmittalEvents.submittal_id == str(resource_id),
+                SubmittalEvents.action == action,
+                SubmittalEvents.source == "Procore",
+                SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
+            ).order_by(SubmittalEvents.created_at.desc()).first()
 
-                if diff < DEBOUNCE_SECONDS:
-                    current_app.logger.info(
-                        f"Debounced duplicate update webhook; id={resource_id}, "
-                        f"project={project_id}, seen {diff:.2f}s ago"
-                    )
-                    # Update timestamp so rapid bursts extend window
-                    event.last_seen = now
-                    db.session.commit()
-                    return jsonify({"status": "debounced"}), 200
-
-                # Not debounced → update timestamp
-                event.last_seen = now
-            else:
-                # First time this resource/project/event_type combo has been seen
-                event = ProcoreWebhookEvents(
-                    resource_id=resource_id,
-                    project_id=project_id,
-                    event_type=event_type,
-                    last_seen=now
+            if recent_event:
+                diff = (now - recent_event.created_at).total_seconds()
+                current_app.logger.info(
+                    f"Debounced duplicate create webhook; id={resource_id}, "
+                    f"project={project_id}, seen {diff:.2f}s ago"
                 )
-                db.session.add(event)
-            try:
-                db.session.commit()
-            except IntegrityError as e:
-                # Handle case where old unique constraint on resource_id still exists
-                # or duplicate record exists - just update the existing record
-                db.session.rollback()
-                current_app.logger.warning(
-                    f"IntegrityError when recording update event (likely old constraint): {e}. "
-                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
-                )
-                # Try to find and update existing record
-                existing = ProcoreWebhookEvents.query.filter_by(
-                    resource_id=resource_id,
-                    project_id=project_id
-                ).first()
-                if existing:
-                    existing.event_type = event_type  # Update event_type if it changed
-                    existing.last_seen = now
-                    db.session.commit()
-                else:
-                    # If we can't find it, log and continue (tracking is non-critical)
-                    current_app.logger.warning(
-                        f"Could not find existing record to update. Continuing without tracking."
-                    )
-        else:
-            # For create events (and any other event types), record but don't debounce
-            # Still track in database for logging/auditing purposes
-            event = ProcoreWebhookEvents.query.filter_by(
-                resource_id=resource_id,
-                project_id=project_id,
-                event_type=event_type
-            ).first()
-
-            if event:
-                # Update timestamp for tracking
-                event.last_seen = now
-            else:
-                # First time this resource/project/event_type combo has been seen
-                event = ProcoreWebhookEvents(
-                    resource_id=resource_id,
-                    project_id=project_id,
-                    event_type=event_type,
-                    last_seen=now
-                )
-                db.session.add(event)
-            try:
-                db.session.commit()
-            except IntegrityError as e:
-                # Handle case where old unique constraint on resource_id still exists
-                # or duplicate record exists - just update the existing record
-                db.session.rollback()
-                current_app.logger.warning(
-                    f"IntegrityError when recording {event_type} event (likely old constraint): {e}. "
-                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
-                )
-                # Try to find and update existing record
-                existing = ProcoreWebhookEvents.query.filter_by(
-                    resource_id=resource_id,
-                    project_id=project_id
-                ).first()
-                if existing:
-                    existing.event_type = event_type  # Update event_type if it changed
-                    existing.last_seen = now
-                    db.session.commit()
-                else:
-                    # If we can't find it, log and continue (tracking is non-critical)
-                    current_app.logger.warning(
-                        f"Could not find existing record to update. Continuing without tracking."
-                    )
-            current_app.logger.info(
-                f"Processing {event_type} event immediately (not debounced); id={resource_id}, project={project_id}"
-            )
+                return jsonify({"status": "debounced"}), 200
 
         # -----------------------------------
         # PROCESS ACTUAL SUBMITTAL
@@ -323,8 +253,10 @@ def procore_webhook():
                 
                 old_ball_in_court = old_record.ball_in_court if old_record else None
                 old_status = old_record.status if old_record else None
+                old_title = old_record.title if old_record else None
+                old_manager = old_record.submittal_manager if old_record else None
                 
-                ball_updated, status_updated, record, ball_in_court, status = check_and_update_submittal(
+                ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status = check_and_update_submittal(
                     project_id, 
                     resource_id
                 )
@@ -365,6 +297,46 @@ def procore_webhook():
                                 project_id=project_id,
                                 old_value=old_status,
                                 new_value=status,
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
+                            )
+                
+                # Log title changes
+                if title_updated:
+                    with sync_operation_context(
+                        operation_type="procore_submittal_title",
+                        source_system="procore",
+                        source_id=str(resource_id)
+                    ) as sync_op:
+                        if sync_op:
+                            safe_log_sync_event(
+                                sync_op.operation_id,
+                                "INFO",
+                                "Submittal title updated via webhook",
+                                submittal_id=resource_id,
+                                project_id=project_id,
+                                old_value=old_title,
+                                new_value=record.title if record else None,
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
+                            )
+                
+                # Log submittal manager changes
+                if manager_updated:
+                    with sync_operation_context(
+                        operation_type="procore_submittal_manager",
+                        source_system="procore",
+                        source_id=str(resource_id)
+                    ) as sync_op:
+                        if sync_op:
+                            safe_log_sync_event(
+                                sync_op.operation_id,
+                                "INFO",
+                                "Submittal manager updated via webhook",
+                                submittal_id=resource_id,
+                                project_id=project_id,
+                                old_value=old_manager,
+                                new_value=record.submittal_manager if record else None,
                                 submittal_title=record.title if record else None,
                                 project_name=record.project_name if record else None
                             )
