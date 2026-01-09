@@ -805,10 +805,16 @@ def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
         logger.info(f"[ORDER BUMP] Order number is not an integer >= 1, cannot bump")
         return False
     
-    # Convert to urgent decimal (e.g., 6 -> 0.6)
-    target_decimal = current_order / 10.0
-    print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
-    logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
+    # Convert to urgent decimal in tenths place (e.g., 6 -> 0.6, 14 -> 0.14) - always less than 1
+    # For numbers >= 10, divide by 100; for single digits, divide by 10
+    if current_order >= 10:
+        target_decimal = current_order / 100.0
+        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
+        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
+    else:
+        target_decimal = current_order / 10.0
+        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
+        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
     
     # Find all existing order numbers for this ball_in_court that are < 1
     print(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")
