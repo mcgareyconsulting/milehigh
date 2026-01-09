@@ -70,6 +70,33 @@ class ProcoreSubmittal(db.Model):
             "created_at": self.created_at,
         }
 
+class SystemLogs(db.Model):
+    """System logs table for tracking critical errors and system events."""
+    __tablename__ = "system_logs"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    level = db.Column(db.String(10), nullable=False, index=True)  # ERROR, INFO, WARNING, DEBUG
+    category = db.Column(db.String(100), nullable=False)  # e.g., 'sync', 'api', 'database', 'auth'
+    operation = db.Column(db.String(255), nullable=False)  # e.g., 'trello_webhook', 'job_sync'
+    message = db.Column(db.Text, nullable=False)
+    context = db.Column(db.JSON, nullable=True)  # Additional structured data (stack traces, error details, etc.)
+    
+    def __repr__(self):
+        return f"<SystemLogs {self.id} - {self.level} - {self.category}/{self.operation}>"
+    
+    def to_dict(self):
+        from app.datetime_utils import format_datetime_mountain
+        return {
+            'id': self.id,
+            'timestamp': format_datetime_mountain(self.timestamp),
+            'level': self.level,
+            'category': self.category,
+            'operation': self.operation,
+            'message': self.message,
+            'context': self.context
+        }
+
 class SyncOperation(db.Model):
     """Track individual sync operations."""
     __tablename__ = "sync_operations"
@@ -286,12 +313,6 @@ class SubmittalEvents(db.Model):
     source = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
-
-class SyncCursor(db.Model):
-    __tablename__ = "sync_cursor"
-    name = db.Column(db.String, primary_key=True)  # e.g., 'jobs'
-    last_updated_at = db.Column(db.DateTime, nullable=False)
-    last_id = db.Column(db.Integer, nullable=False)
 
 class Outbox(db.Model):
     """Outbox table for tracking external API calls with retry capabilities."""

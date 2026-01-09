@@ -384,7 +384,7 @@ def release_job_data():
                     action='created',
                     payload=excel_data_dict,
                     payload_hash=payload_hash,
-                    source='Brain'
+                    source='user'
                 )
                 db.session.add(event)
                 

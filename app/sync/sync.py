@@ -33,10 +33,9 @@ from datetime import datetime, date, timezone, time
 from zoneinfo import ZoneInfo
 from app.sync_lock import synchronized_sync, sync_lock_manager
 from app.logging_config import get_logger, SyncContext, log_sync_operation
+from app.services.job_event_service import JobEventService
 import uuid
 import re
-import hashlib
-import json
 from app.config import Config as cfg
 from app.procore.procore import add_procore_link_to_trello_card
 
@@ -163,7 +162,6 @@ def sync_from_trello(event_info):
             return
 
         duplicate_card_id = None
-        list_move_payload_hash = None  # Store for setting applied_at later
 
         # Check for duplicate updates
         if rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
@@ -197,8 +195,88 @@ def sync_from_trello(event_info):
             card_name=card_data.get("name")
         )
         
-        # Save old description for comparison
+        # Save old values for comparison and event creation
         old_description = rec.trello_card_description or ""
+        old_name = rec.trello_card_name or ""
+        old_due_date = rec.trello_card_date
+        
+        # Track created events to close them after successful update
+        created_events = []
+        
+        # Create JobEvents for all changes before updating the Job record
+        change_types = event_info.get("change_types", [])
+        
+        # Handle name changes
+        if "name_change" in change_types:
+            new_name = card_data.get("name", "")
+            if new_name != old_name:
+                event = JobEventService.create(
+                    job=rec.job,
+                    release=rec.release,
+                    action="update_name",
+                    source="Trello",
+                    payload={"from": old_name, "to": new_name}
+                )
+                if event:
+                    created_events.append(event)
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "JobEvent created for name update",
+                        job=rec.job,
+                        release=rec.release,
+                        event_id=event.id
+                    )
+        
+        # Handle description changes
+        if "description_change" in change_types:
+            new_description = card_data.get("desc", "") or ""
+            if new_description != old_description:
+                event = JobEventService.create(
+                    job=rec.job,
+                    release=rec.release,
+                    action="update_description",
+                    source="Trello",
+                    payload={"from": old_description, "to": new_description}
+                )
+                if event:
+                    created_events.append(event)
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "JobEvent created for description update",
+                        job=rec.job,
+                        release=rec.release,
+                        event_id=event.id
+                    )
+        
+        # Handle due date changes
+        if "due_date_change" in change_types:
+            new_due_date = parse_trello_datetime(card_data["due"]) if card_data.get("due") else None
+            # Compare dates (convert datetime to date if needed)
+            old_date = old_due_date.date() if isinstance(old_due_date, datetime) else old_due_date
+            new_date = new_due_date.date() if isinstance(new_due_date, datetime) else new_due_date
+            if old_date != new_date:
+                event = JobEventService.create(
+                    job=rec.job,
+                    release=rec.release,
+                    action="update_due_date",
+                    source="Trello",
+                    payload={
+                        "from": old_due_date.isoformat() if old_due_date else None,
+                        "to": new_due_date.isoformat() if new_due_date else None
+                    }
+                )
+                if event:
+                    created_events.append(event)
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "JobEvent created for due date update",
+                        job=rec.job,
+                        release=rec.release,
+                        event_id=event.id
+                    )
         
         # Update Trello fields
         rec.trello_card_name = card_data.get("name")
@@ -235,34 +313,19 @@ def sync_from_trello(event_info):
             
             if status_changed:
                 # Create JobEvent for stage update (list movement that caused status change)
-                action = "update_stage"
                 # Use to_list_name as the stage name to match frontend format
                 stage = to_list_name
-                payload = {"to": stage}
-                
-                # Create payload hash matching the frontend format
-                payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-                hash_string = f"{action}:{rec.job}:{rec.release}:{payload_json}"
-                payload_hash = hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
-                list_move_payload_hash = payload_hash  # Store for later
-                
-                # Check for duplicate event
-                existing_event = JobEvents.query.filter_by(
+                # Use old_stage_before_list_move for "from" value, defaulting to None if not set
+                from_stage = old_stage_before_list_move if old_stage_before_list_move else None
+                event = JobEventService.create(
                     job=rec.job,
                     release=rec.release,
-                    payload_hash=payload_hash
-                ).first()
-                
-                if not existing_event:
-                    event = JobEvents(
-                        job=rec.job,
-                        release=rec.release,
-                        action=action,
-                        payload=payload,
-                        payload_hash=payload_hash,
-                        source='Trello'
-                    )
-                    db.session.add(event)
+                    action="update_stage",
+                    source="Trello",
+                    payload={"from": from_stage, "to": stage}
+                )
+                if event:
+                    created_events.append(event)
                     safe_log_sync_event(
                         sync_op.operation_id,
                         "INFO",
@@ -270,7 +333,8 @@ def sync_from_trello(event_info):
                         job=rec.job,
                         release=rec.release,
                         from_list=from_list_name,
-                        to_stage=stage
+                        to_stage=stage,
+                        event_id=event.id
                     )
                 else:
                     safe_log_sync_event(
@@ -278,8 +342,7 @@ def sync_from_trello(event_info):
                         "INFO",
                         "Duplicate stage update event detected, skipping",
                         job=rec.job,
-                        release=rec.release,
-                        payload_hash=payload_hash
+                        release=rec.release
                     )
             
             destination_name = event_info.get("to")
@@ -380,24 +443,23 @@ def sync_from_trello(event_info):
         db.session.add(rec)
         db.session.commit()
 
-        # Set applied_at for any JobEvents created during this sync (after job record is updated)
-        if list_move_payload_hash:
-            event = JobEvents.query.filter_by(
-                job=rec.job,
-                release=rec.release,
-                payload_hash=list_move_payload_hash
-            ).first()
-            
+        # Close all created events (mark as applied) after successful update
+        for event in created_events:
             if event and not event.applied_at:
-                event.applied_at = datetime.utcnow()
-                db.session.commit()
+                JobEventService.close(event.id)
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "INFO",
-                    "JobEvent applied_at set",
+                    "JobEvent marked as applied",
                     job=rec.job,
-                    release=rec.release
+                    release=rec.release,
+                    event_id=event.id,
+                    action=event.action
                 )
+        
+        # Commit event closures
+        if created_events:
+            db.session.commit()
 
         safe_log_sync_event(
             sync_op.operation_id,
