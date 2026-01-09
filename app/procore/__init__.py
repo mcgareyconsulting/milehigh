@@ -322,8 +322,10 @@ def procore_webhook():
                 
                 old_ball_in_court = old_record.ball_in_court if old_record else None
                 old_status = old_record.status if old_record else None
+                old_title = old_record.title if old_record else None
+                old_manager = old_record.submittal_manager if old_record else None
                 
-                ball_updated, status_updated, record, ball_in_court, status = check_and_update_submittal(
+                ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status = check_and_update_submittal(
                     project_id, 
                     resource_id
                 )
@@ -364,6 +366,46 @@ def procore_webhook():
                                 project_id=project_id,
                                 old_value=old_status,
                                 new_value=status,
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
+                            )
+                
+                # Log title changes
+                if title_updated:
+                    with sync_operation_context(
+                        operation_type="procore_submittal_title",
+                        source_system="procore",
+                        source_id=str(resource_id)
+                    ) as sync_op:
+                        if sync_op:
+                            safe_log_sync_event(
+                                sync_op.operation_id,
+                                "INFO",
+                                "Submittal title updated via webhook",
+                                submittal_id=resource_id,
+                                project_id=project_id,
+                                old_value=old_title,
+                                new_value=record.title if record else None,
+                                submittal_title=record.title if record else None,
+                                project_name=record.project_name if record else None
+                            )
+                
+                # Log submittal manager changes
+                if manager_updated:
+                    with sync_operation_context(
+                        operation_type="procore_submittal_manager",
+                        source_system="procore",
+                        source_id=str(resource_id)
+                    ) as sync_op:
+                        if sync_op:
+                            safe_log_sync_event(
+                                sync_op.operation_id,
+                                "INFO",
+                                "Submittal manager updated via webhook",
+                                submittal_id=resource_id,
+                                project_id=project_id,
+                                old_value=old_manager,
+                                new_value=record.submittal_manager if record else None,
                                 submittal_title=record.title if record else None,
                                 project_name=record.project_name if record else None
                             )
