@@ -105,7 +105,6 @@ function JobLog() {
                                     src="/bananas-svgrepo-com.svg"
                                     alt="banana"
                                     className="w-7 h-7"
-                                    style={{ filter: 'brightness(0) invert(1)' }}
                                 />
                             </div>
                         </div>

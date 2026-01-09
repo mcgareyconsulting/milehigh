@@ -110,8 +110,13 @@ function DraftingWorkLoad() {
                     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                         <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-4 py-3">
                             <div className="flex items-center justify-between">
-                                <div>
+                                <div className="flex items-center gap-3">
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
+                                    <img
+                                        src="/bananas-svgrepo-com.svg"
+                                        alt="banana"
+                                        className="w-7 h-7"
+                                    />
 
                                 </div>
                                 <div className="flex items-center gap-3">
