@@ -16,7 +16,7 @@ from sqlalchemy import asc
 from app.config import Config as cfg
 from app.logging_config import get_logger
 from app.models import Job, db
-from app.sync.services.trello_list_mapper import TrelloListMapper
+from app.trello.list_mapper import TrelloListMapper
 from app.trello.api import get_list_by_name
 
 

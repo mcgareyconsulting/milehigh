@@ -52,3 +52,4 @@ def update_sync_operation(operation_id: str, **kwargs):
         except Exception:
             pass  # Ignore rollback errors
         return None
+

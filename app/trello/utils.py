@@ -271,7 +271,7 @@ def sort_list_if_needed(list_id, fab_order_field_id, operation_id, list_type="li
         bool: True if sort was attempted and successful
     """
     from app.trello.api import sort_list_by_fab_order
-    from app.sync.logging import safe_log_sync_event
+    from app.trello.logging import safe_log_sync_event
     
     if not should_sort_list_by_fab_order(list_id):
         return False

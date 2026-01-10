@@ -15,8 +15,8 @@ from typing import Generator, Optional
 
 from app.models import SyncOperation, SyncStatus, db
 from app.logging_config import get_logger
-from app.sync.db_operations import create_sync_operation, update_sync_operation
-from .logging import safe_log_sync_event
+from app.trello.operations import create_sync_operation, update_sync_operation
+from app.trello.logging import safe_log_sync_event
 
 logger = get_logger(__name__)
 
@@ -158,3 +158,4 @@ def sync_operation_context(
         
         # Re-raise the exception
         raise
+

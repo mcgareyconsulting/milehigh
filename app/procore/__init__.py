@@ -23,8 +23,8 @@ from app.procore.helpers import clean_value, is_email
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
-from app.sync.context import sync_operation_context
-from app.sync.logging import safe_log_sync_event
+from app.trello.context import sync_operation_context
+from app.trello.logging import safe_log_sync_event
 
 logger = get_logger(__name__)
 

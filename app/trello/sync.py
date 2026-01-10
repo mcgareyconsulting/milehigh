@@ -39,10 +39,10 @@ import re
 from app.config import Config as cfg
 from app.procore.procore import add_procore_link_to_trello_card
 
-from app.sync.db_operations import create_sync_operation, update_sync_operation
-from app.sync.context import sync_operation_context
-from app.sync.logging import safe_log_sync_event, safe_sync_op_call
-from app.sync.services.trello_list_mapper import TrelloListMapper
+from app.trello.operations import create_sync_operation, update_sync_operation
+from app.trello.context import sync_operation_context
+from app.trello.logging import safe_log_sync_event, safe_sync_op_call
+from app.trello.list_mapper import TrelloListMapper
 logger = get_logger(__name__)
 
 

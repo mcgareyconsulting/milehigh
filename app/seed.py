@@ -1,8 +1,8 @@
 import pandas as pd
 from app.models import db, Job, SyncOperation, SyncStatus
 from app.combine import combine_trello_excel_data
-from app.sync.db_operations import create_sync_operation, update_sync_operation
-from app.sync.logging import safe_log_sync_event
+from app.trello.operations import create_sync_operation, update_sync_operation
+from app.trello.logging import safe_log_sync_event
 import logging
 import gc  # For garbage collection
 from sqlalchemy.exc import SQLAlchemyError

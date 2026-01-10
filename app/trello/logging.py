@@ -213,3 +213,4 @@ def safe_sync_op_call(sync_op: Optional[Any], func: callable, *args, **kwargs) -
             function_name=func.__name__ if hasattr(func, '__name__') else str(func)
         )
         return None
+
