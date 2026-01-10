@@ -222,10 +222,10 @@ function JobLog() {
     };
 
     return (
-        <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
-            <div className="max-w-[95%] mx-auto w-full" style={{ width: '100%' }}>
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-4">
+        <div className="w-full h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
+                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-4 py-3 flex-shrink-0">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <h1 className="text-3xl font-bold text-white">Job Log 2.0</h1>
@@ -245,9 +245,9 @@ function JobLog() {
                         </div>
                     </div>
 
-                    <div className="p-6 space-y-4">
-                        <div className="bg-gray-100 rounded-lg p-4 border border-gray-200">
-                            <div className="grid grid-cols-2 grid-rows-2 gap-6">
+                    <div className="p-2 flex flex-col flex-1 min-h-0 space-y-2">
+                        <div className="bg-gray-100 rounded-lg p-2 border border-gray-200 flex-shrink-0">
+                            <div className="grid grid-cols-2 grid-rows-2 gap-3">
                                 {/* Top Left: Project Name */}
                                 <div>
                                     <label className="block text-sm font-bold text-gray-800 mb-2">
@@ -415,10 +415,10 @@ function JobLog() {
                         )}
 
                         {!loading && !fetchError && (
-                            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                <div className="overflow-x-auto">
+                            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                                <div className="overflow-auto flex-1">
                                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
-                                        <thead className="bg-gray-100">
+                                        <thead className="sticky top-0 z-10">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
@@ -427,7 +427,7 @@ function JobLog() {
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300`}
+                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 shadow-sm`}
                                                         >
                                                             {displayHeader}
                                                         </th>

@@ -12,7 +12,7 @@ import './App.css';
 
 function AppContent() {
   const location = useLocation();
-  const showNavbar = location.pathname !== '/drafting-work-load' && location.pathname !== '/drafting-work-load/admin';
+  const showNavbar = location.pathname !== '/drafting-work-load' && location.pathname !== '/drafting-work-load/admin' && location.pathname !== '/job-log';
 
   return (
     <div className="w-full min-h-screen" style={{ width: '100%', minWidth: '100%' }}>
