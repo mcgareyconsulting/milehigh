@@ -24,6 +24,14 @@ function JobLog() {
         setJobNumberSearch,
         setReleaseNumberSearch,
         projectNameOptions,
+        sortBy,
+        showNotComplete,
+        showNotShippingComplete,
+        showBeforePaintComplete,
+        setSortBy,
+        setShowNotComplete,
+        setShowNotShippingComplete,
+        setShowBeforePaintComplete,
         stageOptions,
         stageColors,
         displayJobs,
@@ -126,7 +134,7 @@ function JobLog() {
             // Detect delimiter
             const firstLine = data.split('\n')[0];
             const delimiter = firstLine.includes('\t') ? '\t' : ',';
-            
+
             // Parse rows
             const lines = data.split('\n').filter(line => line.trim());
             const expectedColumns = [
@@ -140,8 +148,8 @@ function JobLog() {
             if (firstRow.length === expectedColumns.length) {
                 // Check if it looks like headers
                 const firstRowLower = firstRow.map(cell => cell.toLowerCase().trim());
-                const hasHeaderKeywords = expectedColumns.some((col, idx) => 
-                    col.toLowerCase().includes(firstRowLower[idx]) || 
+                const hasHeaderKeywords = expectedColumns.some((col, idx) =>
+                    col.toLowerCase().includes(firstRowLower[idx]) ||
                     firstRowLower[idx].includes(col.toLowerCase().split(' ')[0])
                 );
                 if (hasHeaderKeywords) {
@@ -198,10 +206,10 @@ function JobLog() {
                 updated: result.updated_count || 0,
                 errors: result.error_count || 0
             });
-            
+
             // Refresh the job data
             await fetchAll();
-            
+
             // Auto-close modal after 3 seconds
             setTimeout(() => {
                 handleCloseModal();
@@ -239,75 +247,116 @@ function JobLog() {
 
                     <div className="p-6 space-y-4">
                         <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-4 border border-gray-200 shadow-sm">
-                            <div className="flex flex-col gap-3">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                                            Project Name
-                                        </label>
-                                        <div className="grid grid-cols-10 gap-0.5">
+                            <div className="grid grid-cols-2 grid-rows-2 gap-6">
+                                {/* Top Left: Project Name */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                        Project Name
+                                    </label>
+                                    <div className="grid grid-cols-10 gap-0.5">
+                                        <button
+                                            onClick={() => setSelectedProjectName(ALL_OPTION_VALUE)}
+                                            className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate ${selectedProjectName === ALL_OPTION_VALUE
+                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                }`}
+                                            title="All"
+                                        >
+                                            All
+                                        </button>
+                                        {projectNameOptions.map((option) => (
                                             <button
-                                                onClick={() => setSelectedProjectName(ALL_OPTION_VALUE)}
-                                                className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate ${selectedProjectName === ALL_OPTION_VALUE
+                                                key={option}
+                                                onClick={() => setSelectedProjectName(option)}
+                                                className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate ${selectedProjectName === option
                                                     ? 'bg-accent-500 text-white hover:bg-accent-600'
                                                     : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
                                                     }`}
-                                                title="All"
+                                                title={option}
                                             >
-                                                All
+                                                {option.length > 8 ? option.substring(0, 8) + '...' : option}
                                             </button>
-                                            {projectNameOptions.map((option) => (
-                                                <button
-                                                    key={option}
-                                                    onClick={() => setSelectedProjectName(option)}
-                                                    className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate ${selectedProjectName === option
-                                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                        }`}
-                                                    title={option}
-                                                >
-                                                    {option.length > 8 ? option.substring(0, 8) + '...' : option}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                                            Stage
-                                        </label>
-                                        <div className="grid grid-cols-8 gap-0.5">
-                                            <button
-                                                onClick={() => setSelectedStages([])}
-                                                className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate ${selectedStages.length === 0
-                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
-                                                    }`}
-                                                title="All"
-                                            >
-                                                All
-                                            </button>
-                                            {stageOptions.map((option) => {
-                                                const isSelected = selectedStages.includes(option.value);
-                                                const colors = stageColors[option.value] || { unselected: 'bg-white border-gray-300 text-gray-700', selected: 'bg-gray-600 text-white border-gray-700' };
-                                                const colorClass = isSelected ? colors.selected : colors.unselected;
-                                                return (
-                                                    <button
-                                                        key={option.value}
-                                                        onClick={() => toggleStage(option.value)}
-                                                        className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate border ${colorClass}`}
-                                                        title={option.value}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                        ))}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 pt-2 flex-wrap">
+
+                                {/* Top Right: Status Filters */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                        Filters
+                                    </label>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <button
+                                            onClick={() => setSortBy(sortBy === 'fab_order_asc' ? 'default' : 'fab_order_asc')}
+                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${sortBy === 'fab_order_asc'
+                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                }`}
+                                        >
+                                            Sort by Fab Order {sortBy === 'fab_order_asc' && '↑'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const newValue = !showNotComplete;
+                                                setShowNotComplete(newValue);
+                                                // When activating, turn off other status filters and sort by fab order ascending
+                                                if (newValue) {
+                                                    setShowNotShippingComplete(false);
+                                                    setShowBeforePaintComplete(false);
+                                                    setSortBy('fab_order_asc');
+                                                }
+                                            }}
+                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${showNotComplete
+                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                }`}
+                                        >
+                                            All Not Complete
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const newValue = !showNotShippingComplete;
+                                                setShowNotShippingComplete(newValue);
+                                                // When activating, turn off other status filters and sort by fab order ascending
+                                                if (newValue) {
+                                                    setShowNotComplete(false);
+                                                    setShowBeforePaintComplete(false);
+                                                    setSortBy('fab_order_asc');
+                                                }
+                                            }}
+                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${showNotShippingComplete
+                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                }`}
+                                        >
+                                            Not Shipping Complete
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const newValue = !showBeforePaintComplete;
+                                                setShowBeforePaintComplete(newValue);
+                                                // When activating, turn off other status filters and sort by fab order ascending
+                                                if (newValue) {
+                                                    setShowNotComplete(false);
+                                                    setShowNotShippingComplete(false);
+                                                    setSortBy('fab_order_asc');
+                                                }
+                                            }}
+                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${showBeforePaintComplete
+                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                }`}
+                                        >
+                                            Before Paint Complete
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Bottom Left: Reset Filters, Job #, Release # */}
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <button
                                         onClick={resetFilters}
-                                        className="px-2 py-1 bg-white border border-accent-300 text-accent-700 rounded text-xs font-medium shadow-sm hover:bg-accent-50 transition-all"
+                                        className="px-3 py-1.5 bg-white border border-accent-300 text-accent-700 rounded text-xs font-medium shadow-sm hover:bg-accent-50 transition-all whitespace-nowrap"
                                     >
                                         Reset Filters
                                     </button>
@@ -335,15 +384,21 @@ function JobLog() {
                                             className="w-24 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 bg-white text-gray-900"
                                         />
                                     </div>
+                                </div>
+
+                                {/* Bottom Right: Total records and Last updated */}
+                                <div className="flex items-center justify-end gap-4">
                                     <div className="px-2 py-1 bg-white border border-gray-200 text-gray-600 rounded text-xs font-medium shadow-sm">
                                         Total: <span className="text-gray-900">{displayJobs.length}</span> records
                                     </div>
-                                    <div className="text-xs text-gray-500 ml-auto">
+                                    <div className="text-xs text-gray-500">
                                         Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+
 
                         {loading && (
                             <div className="text-center py-12">
@@ -435,7 +490,7 @@ function JobLog() {
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div className="p-6 flex-1 overflow-y-auto">
                             <div className="mb-4">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -505,8 +560,8 @@ function JobLog() {
                                 <div className="mb-4 bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded">
                                     <p className="font-semibold">Success!</p>
                                     <p className="text-sm">
-                                        Processed: {releaseSuccess.processed} | 
-                                        Created: {releaseSuccess.created} | 
+                                        Processed: {releaseSuccess.processed} |
+                                        Created: {releaseSuccess.created} |
                                         Updated: {releaseSuccess.updated}
                                         {releaseSuccess.trello_cards_created > 0 && ` | Trello Cards Created: ${releaseSuccess.trello_cards_created}`}
                                         {releaseSuccess.errors > 0 && ` | Errors: ${releaseSuccess.errors}`}
@@ -538,11 +593,10 @@ function JobLog() {
                             <button
                                 onClick={handleReleaseSubmit}
                                 disabled={releasing || !csvData.trim()}
-                                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                    releasing || !csvData.trim()
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        : 'bg-accent-500 text-white hover:bg-accent-600'
-                                }`}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all ${releasing || !csvData.trim()
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-accent-500 text-white hover:bg-accent-600'
+                                    }`}
                             >
                                 {releasing ? (
                                     <>

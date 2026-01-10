@@ -13,6 +13,10 @@ export function useJobsFilters(jobs = []) {
     const [selectedStages, setSelectedStages] = useState([]); // Array of selected stage values
     const [jobNumberSearch, setJobNumberSearch] = useState('');
     const [releaseNumberSearch, setReleaseNumberSearch] = useState('');
+    const [sortBy, setSortBy] = useState('default'); // 'default' or 'fab_order_asc'
+    const [showNotComplete, setShowNotComplete] = useState(false); // Filter to show only incomplete jobs
+    const [showNotShippingComplete, setShowNotShippingComplete] = useState(false); // Filter to exclude Shipping completed stage
+    const [showBeforePaintComplete, setShowBeforePaintComplete] = useState(false); // Filter to show only Released, Cut start, Fit Up Complete.
 
     /**
      * Check if a job matches all selected filters
@@ -53,13 +57,56 @@ export function useJobsFilters(jobs = []) {
             }
         }
 
+        // Filter by completion status - exclude jobs with 'X' in Job Comp
+        if (showNotComplete) {
+            const jobComp = String(job['Job Comp'] ?? '').trim().toUpperCase();
+            if (jobComp === 'X') {
+                return false;
+            }
+        }
+
+        // Filter by stage - exclude jobs with 'Shipping completed' stage
+        if (showNotShippingComplete) {
+            const jobStage = String(job['Stage'] ?? '').trim();
+            if (jobStage === 'Shipping completed') {
+                return false;
+            }
+        }
+
+        // Filter by stage - only show Released, Cut start, Fit Up Complete.
+        if (showBeforePaintComplete) {
+            const jobStage = String(job['Stage'] ?? '').trim();
+            const allowedStages = ['Released', 'Cut start', 'Fit Up Complete.'];
+            if (!allowedStages.includes(jobStage)) {
+                return false;
+            }
+        }
+
         return true;
-    }, [selectedProjectName, jobNumberSearch, releaseNumberSearch, selectedStages]);
+    }, [selectedProjectName, jobNumberSearch, releaseNumberSearch, selectedStages, showNotComplete, showNotShippingComplete, showBeforePaintComplete]);
 
     /**
-     * Sort jobs by Job # ascending, then Release # ascending
+     * Sort jobs based on current sortBy state
      */
     const sortJobs = useCallback((filteredJobs) => {
+        if (sortBy === 'fab_order_asc') {
+            return filteredJobs.sort((a, b) => {
+                const fabOrderA = a['Fab Order'];
+                const fabOrderB = b['Fab Order'];
+                // Handle null/undefined values - put them at the end
+                if (fabOrderA == null && fabOrderB == null) return 0;
+                if (fabOrderA == null) return 1;
+                if (fabOrderB == null) return -1;
+                // Compare as numbers if possible, otherwise as strings
+                const numA = Number(fabOrderA);
+                const numB = Number(fabOrderB);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return numA - numB;
+                }
+                return String(fabOrderA).localeCompare(String(fabOrderB));
+            });
+        }
+        // Default sort: Job # ascending, then Release # ascending
         return filteredJobs.sort((a, b) => {
             // First sort by Job #
             if (a['Job #'] !== b['Job #']) {
@@ -70,7 +117,7 @@ export function useJobsFilters(jobs = []) {
             const releaseB = String(b['Release #'] || '').toLowerCase();
             return releaseA.localeCompare(releaseB);
         });
-    }, []);
+    }, [sortBy]);
 
     /**
      * Filtered and sorted jobs for display
@@ -163,6 +210,10 @@ export function useJobsFilters(jobs = []) {
         setSelectedStages([]);
         setJobNumberSearch('');
         setReleaseNumberSearch('');
+        setSortBy('default');
+        setShowNotComplete(false);
+        setShowNotShippingComplete(false);
+        setShowBeforePaintComplete(false);
     }, []);
 
     return {
@@ -171,12 +222,20 @@ export function useJobsFilters(jobs = []) {
         selectedStages,
         jobNumberSearch,
         releaseNumberSearch,
+        sortBy,
+        showNotComplete,
+        showNotShippingComplete,
+        showBeforePaintComplete,
 
         // Filter setters
         setSelectedProjectName,
         setSelectedStages,
         setJobNumberSearch,
         setReleaseNumberSearch,
+        setSortBy,
+        setShowNotComplete,
+        setShowNotShippingComplete,
+        setShowBeforePaintComplete,
 
         // Filter options
         projectNameOptions,
@@ -194,4 +253,3 @@ export function useJobsFilters(jobs = []) {
         ALL_OPTION_VALUE,
     };
 }
-
