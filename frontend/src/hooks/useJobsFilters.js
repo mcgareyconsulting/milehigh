@@ -181,11 +181,11 @@ export function useJobsFilters(jobs = []) {
             selected: 'bg-orange-600 text-white border-orange-700'
         },
         'Shipping planning': {
-            unselected: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-            selected: 'bg-indigo-600 text-white border-indigo-700'
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
         },
         'Shipping completed': {
-            unselected: 'bg-gray-100 text-gray-800 border-gray-300',
+            unselected: 'bg-white text-gray-700 border-gray-400',
             selected: 'bg-gray-600 text-white border-gray-700'
         },
         'Complete': {

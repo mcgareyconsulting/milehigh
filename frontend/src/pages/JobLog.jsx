@@ -246,21 +246,20 @@ function JobLog() {
                     </div>
 
                     <div className="p-6 space-y-4">
-                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-4 border border-gray-200 shadow-sm">
+                        <div className="bg-gray-100 rounded-lg p-4 border border-gray-200">
                             <div className="grid grid-cols-2 grid-rows-2 gap-6">
                                 {/* Top Left: Project Name */}
                                 <div>
-                                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                    <label className="block text-sm font-bold text-gray-800 mb-2">
                                         Project Name
                                     </label>
-                                    <div className="grid grid-cols-10 gap-0.5">
+                                    <div className="flex gap-1.5">
                                         <button
                                             onClick={() => setSelectedProjectName(ALL_OPTION_VALUE)}
-                                            className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate ${selectedProjectName === ALL_OPTION_VALUE
-                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${selectedProjectName === ALL_OPTION_VALUE
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
-                                            title="All"
                                         >
                                             All
                                         </button>
@@ -268,29 +267,28 @@ function JobLog() {
                                             <button
                                                 key={option}
                                                 onClick={() => setSelectedProjectName(option)}
-                                                className={`px-0.5 py-0.5 rounded text-[9px] font-medium shadow-sm transition-all truncate ${selectedProjectName === option
-                                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${selectedProjectName === option
+                                                    ? 'bg-blue-700 text-white'
+                                                    : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                     }`}
-                                                title={option}
                                             >
-                                                {option.length > 8 ? option.substring(0, 8) + '...' : option}
+                                                {option}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* Top Right: Status Filters */}
+                                {/* Top Right: Filters */}
                                 <div>
-                                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                    <label className="block text-sm font-bold text-gray-800 mb-2">
                                         Filters
                                     </label>
-                                    <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="flex flex-wrap gap-1.5">
                                         <button
                                             onClick={() => setSortBy(sortBy === 'fab_order_asc' ? 'default' : 'fab_order_asc')}
-                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${sortBy === 'fab_order_asc'
-                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${sortBy === 'fab_order_asc'
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
                                             Sort by Fab Order {sortBy === 'fab_order_asc' && '↑'}
@@ -299,16 +297,15 @@ function JobLog() {
                                             onClick={() => {
                                                 const newValue = !showNotComplete;
                                                 setShowNotComplete(newValue);
-                                                // When activating, turn off other status filters and sort by fab order ascending
                                                 if (newValue) {
                                                     setShowNotShippingComplete(false);
                                                     setShowBeforePaintComplete(false);
                                                     setSortBy('fab_order_asc');
                                                 }
                                             }}
-                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${showNotComplete
-                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${showNotComplete
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
                                             All Not Complete
@@ -317,16 +314,15 @@ function JobLog() {
                                             onClick={() => {
                                                 const newValue = !showNotShippingComplete;
                                                 setShowNotShippingComplete(newValue);
-                                                // When activating, turn off other status filters and sort by fab order ascending
                                                 if (newValue) {
                                                     setShowNotComplete(false);
                                                     setShowBeforePaintComplete(false);
                                                     setSortBy('fab_order_asc');
                                                 }
                                             }}
-                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${showNotShippingComplete
-                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${showNotShippingComplete
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
                                             Not Shipping Complete
@@ -335,16 +331,15 @@ function JobLog() {
                                             onClick={() => {
                                                 const newValue = !showBeforePaintComplete;
                                                 setShowBeforePaintComplete(newValue);
-                                                // When activating, turn off other status filters and sort by fab order ascending
                                                 if (newValue) {
                                                     setShowNotComplete(false);
                                                     setShowNotShippingComplete(false);
                                                     setSortBy('fab_order_asc');
                                                 }
                                             }}
-                                            className={`px-3 py-1.5 rounded text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[140px] text-center ${showBeforePaintComplete
-                                                ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${showBeforePaintComplete
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
                                             Before Paint Complete
@@ -352,15 +347,15 @@ function JobLog() {
                                     </div>
                                 </div>
 
-                                {/* Bottom Left: Reset Filters, Job #, Release # */}
-                                <div className="flex items-center gap-2 flex-wrap">
+                                {/* Bottom Left: Reset Filters, Job #, Release #, Total */}
+                                <div className="flex items-center gap-3 flex-wrap">
                                     <button
                                         onClick={resetFilters}
-                                        className="px-3 py-1.5 bg-white border border-accent-300 text-accent-700 rounded text-xs font-medium shadow-sm hover:bg-accent-50 transition-all whitespace-nowrap"
+                                        className="px-2.5 py-1 bg-white border border-gray-400 text-gray-700 rounded text-xs font-semibold hover:bg-gray-50 transition-all whitespace-nowrap"
                                     >
                                         Reset Filters
                                     </button>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5">
                                         <label className="text-xs font-semibold text-gray-700 whitespace-nowrap">
                                             Job #:
                                         </label>
@@ -369,10 +364,10 @@ function JobLog() {
                                             value={jobNumberSearch}
                                             onChange={(e) => setJobNumberSearch(e.target.value)}
                                             placeholder="Job #..."
-                                            className="w-24 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 bg-white text-gray-900"
+                                            className="w-28 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                                         />
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5">
                                         <label className="text-xs font-semibold text-gray-700 whitespace-nowrap">
                                             Release #:
                                         </label>
@@ -381,18 +376,18 @@ function JobLog() {
                                             value={releaseNumberSearch}
                                             onChange={(e) => setReleaseNumberSearch(e.target.value)}
                                             placeholder="Release #..."
-                                            className="w-24 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 bg-white text-gray-900"
+                                            className="w-28 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                                         />
+                                    </div>
+                                    <div className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs font-semibold">
+                                        Total: <span className="text-gray-900 font-bold">{displayJobs.length}</span> records
                                     </div>
                                 </div>
 
-                                {/* Bottom Right: Total records and Last updated */}
-                                <div className="flex items-center justify-end gap-4">
-                                    <div className="px-2 py-1 bg-white border border-gray-200 text-gray-600 rounded text-xs font-medium shadow-sm">
-                                        Total: <span className="text-gray-900">{displayJobs.length}</span> records
-                                    </div>
-                                    <div className="text-xs text-gray-500">
-                                        Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
+                                {/* Bottom Right: Last updated */}
+                                <div className="flex items-center justify-end">
+                                    <div className="text-xs text-gray-600 whitespace-nowrap">
+                                        Last updated: <span className="font-semibold text-gray-800">{formattedLastUpdated}</span>
                                     </div>
                                 </div>
                             </div>
