@@ -151,7 +151,8 @@ export function useJobsFilters(jobs = []) {
         { value: 'Paint complete', label: 'Paint comp' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
         { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' }
+        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Complete', label: 'Complete' }
     ];
 
     /**
@@ -186,6 +187,10 @@ export function useJobsFilters(jobs = []) {
         'Shipping completed': {
             unselected: 'bg-gray-100 text-gray-800 border-gray-300',
             selected: 'bg-gray-600 text-white border-gray-700'
+        },
+        'Complete': {
+            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            selected: 'bg-emerald-600 text-white border-emerald-700'
         }
     };
 

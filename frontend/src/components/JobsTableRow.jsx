@@ -13,7 +13,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         { value: 'Paint complete', label: 'Paint comp' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
         { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' }
+        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Complete', label: 'Complete' }
     ];
 
     // Color mapping for each stage (using full value names)
@@ -24,7 +25,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         'Paint complete': 'bg-yellow-100 text-yellow-800 border-yellow-300',
         'Store at MHMW for shipping': 'bg-orange-100 text-orange-800 border-orange-300',
         'Shipping planning': 'bg-indigo-100 text-indigo-800 border-indigo-300',
-        'Shipping completed': 'bg-gray-100 text-gray-800 border-gray-300'
+        'Shipping completed': 'bg-gray-100 text-gray-800 border-gray-300',
+        'Complete': 'bg-emerald-100 text-emerald-800 border-emerald-300'
     };
 
     // Local state for stage

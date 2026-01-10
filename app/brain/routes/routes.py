@@ -25,7 +25,14 @@ def get_list_id_by_stage(stage):
     
     Returns:
         str: Trello list ID, or None if not found or on error
+        Returns None for stages that Trello doesn't track ('Complete' and 'Cut start')
     """
+    # Stages that Trello does not track - return None to prevent outbox creation
+    stages_not_tracked_by_trello = ['Complete', 'Cut start']
+    if stage in stages_not_tracked_by_trello:
+        logger.info(f"Stage '{stage}' is not tracked by Trello, skipping outbox creation")
+        return None
+    
     try:
         list_info = get_list_by_name(stage)
         if list_info and 'id' in list_info:
