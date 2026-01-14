@@ -43,6 +43,7 @@ def create_submittal_from_api_data(project_id, submittal_data):
     Returns:
         tuple: (created: bool, record: ProcoreSubmittal or None, error_message: str or None)
     """
+    print(f"submittal_data: {submittal_data}")
     try:
         submittal_id = submittal_data.get("id")
         if not submittal_id:
@@ -104,6 +105,7 @@ def create_submittal_from_api_data(project_id, submittal_data):
         # Extract created_at from Procore API if available
         procore_created_at = None
         created_at_str = submittal_data.get("created_at")
+        print(f"created_at_str from API: {created_at_str}")
         if created_at_str:
             try:
                 # Parse ISO format timestamp (handles Z suffix and timezone offsets)
@@ -111,12 +113,14 @@ def create_submittal_from_api_data(project_id, submittal_data):
                 # Convert to naive datetime (remove timezone info)
                 if procore_created_at.tzinfo:
                     procore_created_at = procore_created_at.replace(tzinfo=None)
+                print(f"Parsed procore_created_at: {procore_created_at}")
             except (ValueError, AttributeError) as e:
                 logger.warning(f"Could not parse created_at '{created_at_str}' from Procore API: {e}")
                 procore_created_at = None
         
         # Fallback to current time if not available from API
         if not procore_created_at:
+            print(f"Using fallback datetime.utcnow() because procore_created_at is None")
             procore_created_at = datetime.utcnow()
         
         # Double-check it doesn't exist (race condition protection)
@@ -142,7 +146,7 @@ def create_submittal_from_api_data(project_id, submittal_data):
             order_number=order_number,
             notes=notes,
             submittal_drafting_status='',  # Default empty string
-            created_at=datetime.utcnow(),
+            created_at=procore_created_at,
             last_updated=datetime.utcnow()
         )
         

@@ -507,6 +507,7 @@ def create_submittal_from_webhook(project_id, submittal_id):
         # Extract created_at from Procore API if available
         procore_created_at = None
         created_at_str = submittal_data.get("created_at")
+        logger.info(f"Extracting created_at from API: {created_at_str}")
         if created_at_str:
             try:
                 # Parse ISO format timestamp (handles Z suffix and timezone offsets)
@@ -514,12 +515,14 @@ def create_submittal_from_webhook(project_id, submittal_id):
                 # Convert to naive datetime (remove timezone info)
                 if procore_created_at.tzinfo:
                     procore_created_at = procore_created_at.replace(tzinfo=None)
+                logger.info(f"Parsed procore_created_at: {procore_created_at}")
             except (ValueError, AttributeError) as e:
                 logger.warning(f"Could not parse created_at '{created_at_str}' from Procore API: {e}")
                 procore_created_at = None
         
         # Fallback to current time if not available from API
         if not procore_created_at:
+            logger.warning(f"Using fallback datetime.utcnow() because procore_created_at is None")
             procore_created_at = datetime.utcnow()
         
         # Double-check it doesn't exist (race condition protection)
@@ -544,7 +547,7 @@ def create_submittal_from_webhook(project_id, submittal_id):
             ball_in_court=str(ball_in_court).strip() if ball_in_court else None,
             submittal_manager=submittal_manager,
             # submittal_drafting_status uses model default of '' (empty string)
-            created_at=datetime.utcnow(),
+            created_at=procore_created_at,
             last_updated=datetime.utcnow()
         )
         
