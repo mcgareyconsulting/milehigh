@@ -128,6 +128,8 @@ def get_jobs():
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
                     'Notes': serialize_value(job.notes),
+                    'last_updated_at': serialize_value(job.last_updated_at),
+                    'source_of_update': serialize_value(job.source_of_update),
                 }
                 # Validate the job data
                 json.dumps(job_data)
@@ -240,6 +242,8 @@ def get_all_jobs():
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
                     'Notes': serialize_value(job.notes),
+                    'last_updated_at': serialize_value(job.last_updated_at),
+                    'source_of_update': serialize_value(job.source_of_update),
                 }
                 # Validate the job data
                 json.dumps(job_data)
@@ -612,6 +616,8 @@ def get_events():
         end_date = request.args.get('end')      # YYYY-MM-DD
         source = request.args.get('source')      # Filter by source
         submittal_id = request.args.get('submittal_id')  # Filter by submittal_id
+        job = request.args.get('job', type=int)  # Filter by job number
+        release = request.args.get('release')  # Filter by release
 
         job_query = JobEvents.query
         submittal_query = SubmittalEvents.query
@@ -639,10 +645,20 @@ def get_events():
             submittal_query = submittal_query.filter(SubmittalEvents.submittal_id == submittal_id_normalized)
             # Don't include job events when filtering by submittal_id
             job_events = []
+            submittal_events = submittal_query.order_by(SubmittalEvents.created_at.desc()).limit(limit).all()
+        # Apply job and release filters (only applies to job events)
+        # When filtering by job/release, exclude submittal events entirely
+        elif job is not None or release:
+            if job is not None:
+                job_query = job_query.filter(JobEvents.job == job)
+            if release:
+                job_query = job_query.filter(JobEvents.release == str(release).strip())
+            # Don't include submittal events when filtering by job/release
+            job_events = job_query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+            submittal_events = []
         else:
             job_events = job_query.order_by(JobEvents.created_at.desc()).limit(limit).all()
-        
-        submittal_events = submittal_query.order_by(SubmittalEvents.created_at.desc()).limit(limit).all()
+            submittal_events = submittal_query.order_by(SubmittalEvents.created_at.desc()).limit(limit).all()
         
         # Combine and sort events
         all_events = list(job_events) + list(submittal_events)
@@ -669,6 +685,8 @@ def get_events():
                 'end': end_date,
                 'source': source,
                 'submittal_id': submittal_id,
+                'job': job,
+                'release': release,
             }
         }), 200
     except Exception as e:

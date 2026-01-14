@@ -16,17 +16,23 @@ function Events() {
     const [limit, setLimit] = useState(50);
     const [expandedPayload, setExpandedPayload] = useState({});
     const [submittalId, setSubmittalId] = useState(searchParams.get('submittal_id') || '');
+    const [jobFilter, setJobFilter] = useState(searchParams.get('job') || '');
+    const [releaseFilter, setReleaseFilter] = useState(searchParams.get('release') || '');
 
     useEffect(() => {
-        // Update submittalId from URL params
+        // Update filters from URL params
         const urlSubmittalId = searchParams.get('submittal_id') || '';
+        const urlJob = searchParams.get('job') || '';
+        const urlRelease = searchParams.get('release') || '';
         setSubmittalId(urlSubmittalId);
+        setJobFilter(urlJob);
+        setReleaseFilter(urlRelease);
     }, [searchParams]);
 
     useEffect(() => {
         fetchEvents();
         fetchFilters();
-    }, [selectedDate, limit, selectedSource, submittalId]);
+    }, [selectedDate, limit, selectedSource, submittalId, jobFilter, releaseFilter]);
 
     const fetchFilters = async () => {
         try {
@@ -56,6 +62,12 @@ function Events() {
             }
             if (submittalId) {
                 params.submittal_id = String(submittalId).trim();
+            }
+            if (jobFilter) {
+                params.job = parseInt(jobFilter, 10);
+            }
+            if (releaseFilter) {
+                params.release = String(releaseFilter).trim();
             }
             const response = await axios.get(`${API_BASE_URL}/brain/events`, { params });
             setEvents(response.data.events || []);
@@ -105,9 +117,13 @@ function Events() {
         setSelectedSource('');
         setLimit(50);
         setSubmittalId('');
-        // Clear submittal_id from URL
+        setJobFilter('');
+        setReleaseFilter('');
+        // Clear all filters from URL
         const newParams = new URLSearchParams(searchParams);
         newParams.delete('submittal_id');
+        newParams.delete('job');
+        newParams.delete('release');
         setSearchParams(newParams);
     };
 
@@ -115,6 +131,15 @@ function Events() {
         setSubmittalId('');
         const newParams = new URLSearchParams(searchParams);
         newParams.delete('submittal_id');
+        setSearchParams(newParams);
+    };
+
+    const clearJobReleaseFilter = () => {
+        setJobFilter('');
+        setReleaseFilter('');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('job');
+        newParams.delete('release');
         setSearchParams(newParams);
     };
 
@@ -207,6 +232,22 @@ function Events() {
                                     <button
                                         onClick={clearSubmittalIdFilter}
                                         className="text-blue-700 hover:text-blue-900 font-medium text-sm underline"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            )}
+                            {(jobFilter || releaseFilter) && (
+                                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-green-700 font-semibold">Filtered by Job:</span>
+                                        <span className="text-green-900 font-mono text-sm">
+                                            {jobFilter}{releaseFilter ? `-${releaseFilter}` : ''}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={clearJobReleaseFilter}
+                                        className="text-green-700 hover:text-green-900 font-medium text-sm underline"
                                     >
                                         Clear
                                     </button>

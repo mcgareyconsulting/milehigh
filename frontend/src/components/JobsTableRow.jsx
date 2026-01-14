@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
+import { JobDetailsModal } from './JobDetailsModal';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex }) {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    
     // Alternate row background colors with higher contrast
     const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
 
@@ -128,6 +131,38 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 // For Job and Description, show full value in tooltip
                 const tooltipValue = shouldWrapAndTruncate ? rawValue : rawValue;
 
+                // Handle Job column - make it clickable to open modal
+                if (column === 'Job') {
+                    return (
+                        <td
+                            key={`${row.id}-${column}`}
+                            className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center cursor-pointer hover:bg-accent-50 transition-colors`}
+                            title={`${tooltipValue} - Click to view details`}
+                            onClick={() => setIsModalOpen(true)}
+                            style={{
+                                maxWidth: '120px',
+                                width: '120px'
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    lineHeight: '1.2',
+                                    textAlign: 'center'
+                                }}
+                            >
+                                <span className="text-blue-600 hover:text-blue-800 hover:underline">
+                                    {rawValue}
+                                </span>
+                            </div>
+                        </td>
+                    );
+                }
+
                 return (
                     <td
                         key={`${row.id}-${column}`}
@@ -161,6 +196,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     </td>
                 );
             })}
+            <JobDetailsModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                job={row}
+            />
         </tr>
     );
 }
