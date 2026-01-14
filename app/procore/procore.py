@@ -503,6 +503,24 @@ def create_submittal_from_webhook(project_id, submittal_id):
         submittal_manager = str(submittal_manager).strip() if submittal_manager else None
         
         logger.info(f"Creating new ProcoreSubmittal record with title: {title}")
+
+        # Extract created_at from Procore API if available
+        procore_created_at = None
+        created_at_str = submittal_data.get("created_at")
+        if created_at_str:
+            try:
+                # Parse ISO format timestamp (handles Z suffix and timezone offsets)
+                procore_created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                # Convert to naive datetime (remove timezone info)
+                if procore_created_at.tzinfo:
+                    procore_created_at = procore_created_at.replace(tzinfo=None)
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Could not parse created_at '{created_at_str}' from Procore API: {e}")
+                procore_created_at = None
+        
+        # Fallback to current time if not available from API
+        if not procore_created_at:
+            procore_created_at = datetime.utcnow()
         
         # Double-check it doesn't exist (race condition protection)
         # Another thread/request might have created it between our initial check and now
@@ -805,16 +823,10 @@ def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
         logger.info(f"[ORDER BUMP] Order number is not an integer >= 1, cannot bump")
         return False
     
-    # Convert to urgent decimal in tenths place (e.g., 6 -> 0.6, 14 -> 0.14) - always less than 1
-    # For numbers >= 10, divide by 100; for single digits, divide by 10
-    if current_order >= 10:
-        target_decimal = current_order / 100.0
-        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
-        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
-    else:
-        target_decimal = current_order / 10.0
-        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
-        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
+    # Convert to urgent decimal (e.g., 6 -> 0.6)
+    target_decimal = current_order / 10.0
+    print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
+    logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
     
     # Find all existing order numbers for this ball_in_court that are < 1
     print(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")

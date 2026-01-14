@@ -100,6 +100,24 @@ def create_submittal_from_api_data(project_id, submittal_data):
         # Extract notes if available
         notes = submittal_data.get("notes")
         notes = str(notes).strip() if notes else None
+
+        # Extract created_at from Procore API if available
+        procore_created_at = None
+        created_at_str = submittal_data.get("created_at")
+        if created_at_str:
+            try:
+                # Parse ISO format timestamp (handles Z suffix and timezone offsets)
+                procore_created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                # Convert to naive datetime (remove timezone info)
+                if procore_created_at.tzinfo:
+                    procore_created_at = procore_created_at.replace(tzinfo=None)
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Could not parse created_at '{created_at_str}' from Procore API: {e}")
+                procore_created_at = None
+        
+        # Fallback to current time if not available from API
+        if not procore_created_at:
+            procore_created_at = datetime.utcnow()
         
         # Double-check it doesn't exist (race condition protection)
         existing_check = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id_str).first()
