@@ -19,6 +19,10 @@ function transformSubmittal(submittal, index) {
         'Ball In Court': submittal.ball_in_court,
         'Order Number': submittal.order_number,
         'Notes': submittal.notes,
+        'Created At': submittal.created_at,
+        // Include ball_in_court tracking fields
+        last_ball_in_court_update: submittal.last_ball_in_court_update,
+        time_since_ball_in_court_update_seconds: submittal.time_since_ball_in_court_update_seconds,
         id: String(rawId)
     };
 }

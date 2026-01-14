@@ -611,6 +611,7 @@ def get_events():
         start_date = request.args.get('start')  # YYYY-MM-DD
         end_date = request.args.get('end')      # YYYY-MM-DD
         source = request.args.get('source')      # Filter by source
+        submittal_id = request.args.get('submittal_id')  # Filter by submittal_id
 
         job_query = JobEvents.query
         submittal_query = SubmittalEvents.query
@@ -629,8 +630,18 @@ def get_events():
         if source:
             job_query = job_query.filter(JobEvents.source == source)
             submittal_query = submittal_query.filter(SubmittalEvents.source == source)
-
-        job_events = job_query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+        
+        # Apply submittal_id filter (only applies to submittal events)
+        # When filtering by submittal_id, exclude job events entirely
+        if submittal_id:
+            # Normalize submittal_id to string and strip whitespace
+            submittal_id_normalized = str(submittal_id).strip()
+            submittal_query = submittal_query.filter(SubmittalEvents.submittal_id == submittal_id_normalized)
+            # Don't include job events when filtering by submittal_id
+            job_events = []
+        else:
+            job_events = job_query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+        
         submittal_events = submittal_query.order_by(SubmittalEvents.created_at.desc()).limit(limit).all()
         
         # Combine and sort events
@@ -657,6 +668,7 @@ def get_events():
                 'start': start_date,
                 'end': end_date,
                 'source': source,
+                'submittal_id': submittal_id,
             }
         }), 200
     except Exception as e:

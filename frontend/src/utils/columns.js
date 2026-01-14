@@ -3,7 +3,6 @@
  */
 export const DESIRED_COLUMN_ORDER = [
     'Order Number',
-    'Submittals Id',
     'Project Number',
     'Project Name',
     'Title',

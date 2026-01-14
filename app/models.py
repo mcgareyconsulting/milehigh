@@ -50,7 +50,49 @@ class ProcoreSubmittal(db.Model):
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def get_last_ball_in_court_update_time(self):
+        """
+        Get the timestamp of the last 'updated' event from source 'Procore' 
+        where the payload contains 'ball_in_court'.
+        
+        Returns:
+            datetime or None: The created_at timestamp of the last ball_in_court update event, 
+                            or None if no such event exists
+        """
+        from app.models import SubmittalEvents
+        
+        # Query for all updated events from Procore for this submittal
+        # Order by most recent first, then filter in Python for ball_in_court in payload
+        # This approach works with both SQLite and PostgreSQL
+        events = SubmittalEvents.query.filter(
+            SubmittalEvents.submittal_id == str(self.submittal_id),
+            SubmittalEvents.action == 'updated',
+            SubmittalEvents.source == 'Procore'
+        ).order_by(SubmittalEvents.created_at.desc()).all()
+        
+        # Filter for events where payload contains 'ball_in_court' key
+        for event in events:
+            if event.payload and isinstance(event.payload, dict) and 'ball_in_court' in event.payload:
+                return event.created_at
+        
+        return None
+    
+    def get_time_since_ball_in_court_update(self):
+        """
+        Calculate the time elapsed since the last ball_in_court update.
+        
+        Returns:
+            timedelta or None: The time difference from now, or None if no update event exists
+        """
+        last_update = self.get_last_ball_in_court_update_time()
+        if last_update:
+            return datetime.utcnow() - last_update
+        return None
+
     def to_dict(self):
+        last_ball_update = self.get_last_ball_in_court_update_time()
+        time_since_update = self.get_time_since_ball_in_court_update()
+        
         return {
             "id": self.id,
             "submittal_id": self.submittal_id,
@@ -68,6 +110,8 @@ class ProcoreSubmittal(db.Model):
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": self.last_updated,
             "created_at": self.created_at,
+            "last_ball_in_court_update": last_ball_update.isoformat() if last_ball_update else None,
+            "time_since_ball_in_court_update_seconds": time_since_update.total_seconds() if time_since_update else None,
         }
 
 class SystemLogs(db.Model):

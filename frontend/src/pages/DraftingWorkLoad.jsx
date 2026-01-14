@@ -119,7 +119,8 @@ function DraftingWorkLoad() {
     );
 
     const hasData = displayRows.length > 0;
-    const tableColumnCount = columns.length;
+    const visibleColumns = columns.filter(column => column !== 'Submittals Id');
+    const tableColumnCount = visibleColumns.length;
 
     return (
         <>
@@ -279,7 +280,7 @@ function DraftingWorkLoad() {
                                         <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%' }}>
                                             <thead className="bg-gray-100">
                                                 <tr>
-                                                    {columns.map((column) => {
+                                                    {visibleColumns.map((column) => {
                                                         const isOrderNumber = column === 'Order Number';
                                                         const isNotes = column === 'Notes';
                                                         const isProjectName = column === 'Project Name';

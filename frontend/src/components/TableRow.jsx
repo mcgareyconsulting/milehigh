@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 
 export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
     const navigate = useNavigate();
@@ -7,6 +8,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
     const [notesValue, setNotesValue] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
 
@@ -185,6 +187,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isStatus = column === 'Status';
                     const isProjectName = column === 'Project Name';
                     const isBallInCourt = column === 'Ball In Court';
+                    
+                    // Skip rendering the Submittals Id column
+                    if (isSubmittalId) {
+                        return null;
+                    }
 
                     // Custom width for columns (matching header widths - perfect for laptop screens)
                     // CSS media queries handle larger screens
@@ -328,54 +335,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    if (isSubmittalId && cellValue !== '—') {
-                        const projectId = row['Project Id'] ?? row.procore_project_id ?? '';
-                        const submittalId = row['Submittals Id'] ?? row.submittal_id ?? '';
-                        const href = projectId && submittalId
-                            ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
-                            : '#';
-
-                        const handleViewOperations = (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (submittalId) {
-                                navigate(`/operations?source_id=${submittalId}`);
-                            }
-                        };
-
-                        return (
-                            <td
-                                key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${rowBgClass} border-r border-gray-300 ${customWidthClass} ${columnClass} text-center`}
-                                title={cellValue}
-                            >
-                                <div className="flex items-center justify-center gap-1">
-                                    {href !== '#' ? (
-                                        <a
-                                            href={href}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800 underline font-semibold text-xs"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {cellValue}
-                                        </a>
-                                    ) : (
-                                        <span className="text-gray-900 text-xs">{cellValue}</span>
-                                    )}
-                                    {submittalId && (
-                                        <button
-                                            onClick={handleViewOperations}
-                                            className="text-accent-600 hover:text-accent-800 hover:bg-accent-50 rounded px-1 py-0.5 transition-colors"
-                                            title="View operations for this submittal"
-                                        >
-                                            <span className="text-xs">🔗</span>
-                                        </button>
-                                    )}
-                                </div>
-                            </td>
-                        );
-                    }
 
                     if (isStatus) {
                         const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? '';
@@ -452,8 +411,28 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
+                    // Handle Title column - make it clickable to open modal
+                    if (column === 'Title') {
+                        const shouldWrap = true;
+                        const whitespaceClass = 'whitespace-normal';
+                        
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${columnClass} text-center cursor-pointer hover:bg-accent-50 transition-colors`}
+                                style={customStyle}
+                                title={`${cellValue} - Click to view details`}
+                                onClick={() => setIsModalOpen(true)}
+                            >
+                                <span className="text-blue-600 hover:text-blue-800 hover:underline">
+                                    {cellValue}
+                                </span>
+                            </td>
+                        );
+                    }
+
                     // Determine if this column should allow text wrapping
-                    const shouldWrap = column === 'Title' || column === 'Notes';
+                    const shouldWrap = column === 'Notes';
                     const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                     return (
@@ -468,6 +447,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     );
                 })}
             </tr>
+            <SubmittalDetailsModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                submittal={row}
+            />
         </>
     );
 }

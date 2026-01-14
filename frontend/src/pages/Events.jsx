@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function Events() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -13,11 +15,18 @@ function Events() {
     const [availableSources, setAvailableSources] = useState([]);
     const [limit, setLimit] = useState(50);
     const [expandedPayload, setExpandedPayload] = useState({});
+    const [submittalId, setSubmittalId] = useState(searchParams.get('submittal_id') || '');
+
+    useEffect(() => {
+        // Update submittalId from URL params
+        const urlSubmittalId = searchParams.get('submittal_id') || '';
+        setSubmittalId(urlSubmittalId);
+    }, [searchParams]);
 
     useEffect(() => {
         fetchEvents();
         fetchFilters();
-    }, [selectedDate, limit, selectedSource]);
+    }, [selectedDate, limit, selectedSource, submittalId]);
 
     const fetchFilters = async () => {
         try {
@@ -44,6 +53,9 @@ function Events() {
             }
             if (selectedSource) {
                 params.source = selectedSource;
+            }
+            if (submittalId) {
+                params.submittal_id = String(submittalId).trim();
             }
             const response = await axios.get(`${API_BASE_URL}/brain/events`, { params });
             setEvents(response.data.events || []);
@@ -92,6 +104,18 @@ function Events() {
         setSelectedDate('');
         setSelectedSource('');
         setLimit(50);
+        setSubmittalId('');
+        // Clear submittal_id from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('submittal_id');
+        setSearchParams(newParams);
+    };
+
+    const clearSubmittalIdFilter = () => {
+        setSubmittalId('');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('submittal_id');
+        setSearchParams(newParams);
     };
 
     return (
@@ -174,6 +198,20 @@ function Events() {
                                     </button>
                                 </div>
                             </div>
+                            {submittalId && (
+                                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-blue-700 font-semibold">Filtered by Submittal ID:</span>
+                                        <span className="text-blue-900 font-mono text-sm">{submittalId}</span>
+                                    </div>
+                                    <button
+                                        onClick={clearSubmittalIdFilter}
+                                        className="text-blue-700 hover:text-blue-900 font-medium text-sm underline"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {loading && (
