@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
@@ -29,11 +29,6 @@ function DraftingWorkLoad() {
         updateOrderNumber,
         updateNotes,
         updateStatus,
-        uploadFile,
-        uploading,
-        uploadError,
-        uploadSuccess,
-        clearUploadSuccess,
     } = useMutations(refetch);
 
     // Tab state: 'open' or 'draft'
@@ -90,28 +85,6 @@ function DraftingWorkLoad() {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
     }, [displayRows, columns, lastUpdated]);
 
-    const handleFileUpload = async (event) => {
-        const file = event.target.files[0];
-        if (!file) {
-            return;
-        }
-
-        await uploadFile(file);
-
-        // Reset file input
-        event.target.value = '';
-    };
-
-    // Clear upload success message after 3 seconds
-    useEffect(() => {
-        if (uploadSuccess) {
-            const timer = setTimeout(() => {
-                clearUploadSuccess();
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [uploadSuccess, clearUploadSuccess]);
-
 
     const formattedLastUpdated = useMemo(
         () => lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown',
@@ -146,31 +119,6 @@ function DraftingWorkLoad() {
                                     >
                                         🖨️ Print/PDF
                                     </button>
-                                    <label className="relative cursor-pointer">
-                                        <input
-                                            type="file"
-                                            accept=".xlsx,.xls"
-                                            onChange={handleFileUpload}
-                                            disabled={uploading}
-                                            className="hidden"
-                                            id="file-upload"
-                                        />
-                                        <span className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${uploading
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
-                                            }`}>
-                                            {uploading ? (
-                                                <>
-                                                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600 mr-2"></span>
-                                                    Uploading...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    📤 Upload Excel
-                                                </>
-                                            )}
-                                        </span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -243,20 +191,6 @@ function DraftingWorkLoad() {
                                         </div>
                                     </div>
                                 </div>
-                                {uploadSuccess && (
-                                    <AlertMessage
-                                        type="success"
-                                        title="File uploaded successfully!"
-                                        message="The data has been refreshed."
-                                    />
-                                )}
-                                {uploadError && (
-                                    <AlertMessage
-                                        type="error"
-                                        title="Upload failed"
-                                        message={uploadError}
-                                    />
-                                )}
                             </div>
 
                             {loading && (

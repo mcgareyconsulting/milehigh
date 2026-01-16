@@ -66,39 +66,6 @@ class DraftingWorkLoadApi {
     }
 
     /**
-     * Upload Excel file for drafting workload submittals
-     */
-    async uploadFile(file) {
-        // Validate file type
-        if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
-            throw new Error('Please select an Excel file (.xlsx or .xls)');
-        }
-
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await axios.post(
-                `${API_BASE_URL}/procore/api/upload/drafting-workload-submittals`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
-                }
-            );
-
-            if (!response.data.success) {
-                throw new Error(response.data.error || 'Upload failed');
-            }
-
-            return response.data;
-        } catch (error) {
-            throw this._handleError(error, 'Failed to upload file');
-        }
-    }
-
-    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

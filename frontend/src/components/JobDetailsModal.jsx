@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 export function JobDetailsModal({ isOpen, onClose, job }) {
     const navigate = useNavigate();
-    
+
     if (!isOpen || !job) return null;
 
     const jobNumber = job['Job #'] || job.job;
