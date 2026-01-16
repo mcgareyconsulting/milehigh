@@ -20,6 +20,8 @@ const columnWidthStyles = `
         .dwl-col-submittal-manager { max-width: 120px !important; }
         .dwl-col-notes { max-width: 300px !important; }
         .dwl-col-submittal-id { max-width: 128px !important; }
+        .dwl-col-last-bic { max-width: 100px !important; }
+        .dwl-col-creation-date { max-width: 120px !important; }
     }
 `;
 
@@ -251,6 +253,8 @@ function DraftingWorkLoad() {
                                                         const isSubmittalId = column === 'Submittals Id';
                                                         const isProjectNumber = column === 'Project Number';
                                                         const isSubmittalManager = column === 'Submittal Manager';
+                                                        const isLastBIC = column === 'Last BIC';
+                                                        const isCreationDate = column === 'Creation Date';
 
                                                         // Set max-widths for all columns (perfect for laptop screens)
                                                         // CSS media queries handle larger screens to prevent bloating
@@ -283,6 +287,12 @@ function DraftingWorkLoad() {
                                                         } else if (isSubmittalManager) {
                                                             headerStyle = { maxWidth: '128px' };
                                                             columnClass = 'dwl-col-submittal-manager';
+                                                        } else if (isLastBIC) {
+                                                            headerStyle = { maxWidth: '100px' };
+                                                            columnClass = 'dwl-col-last-bic';
+                                                        } else if (isCreationDate) {
+                                                            headerStyle = { maxWidth: '120px' };
+                                                            columnClass = 'dwl-col-creation-date';
                                                         }
 
                                                         return (

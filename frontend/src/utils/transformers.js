@@ -20,6 +20,8 @@ function transformSubmittal(submittal, index) {
         'Order Number': submittal.order_number,
         'Notes': submittal.notes,
         'Created At': submittal.created_at,
+        'Last BIC': submittal.days_since_ball_in_court_update,
+        'Creation Date': submittal.created_at,
         // Include ball_in_court tracking fields
         last_ball_in_court_update: submittal.last_ball_in_court_update,
         time_since_ball_in_court_update_seconds: submittal.time_since_ball_in_court_update_seconds,

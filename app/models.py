@@ -93,6 +93,11 @@ class ProcoreSubmittal(db.Model):
         last_ball_update = self.get_last_ball_in_court_update_time()
         time_since_update = self.get_time_since_ball_in_court_update()
         
+        # Calculate days since last ball in court update (aging report)
+        days_since_ball_update = None
+        if time_since_update:
+            days_since_ball_update = int(time_since_update.total_seconds() / 86400)  # Convert seconds to days
+        
         return {
             "id": self.id,
             "submittal_id": self.submittal_id,
@@ -108,10 +113,11 @@ class ProcoreSubmittal(db.Model):
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
             "was_multiple_assignees": self.was_multiple_assignees,
-            "last_updated": self.last_updated,
-            "created_at": self.created_at,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_ball_in_court_update": last_ball_update.isoformat() if last_ball_update else None,
             "time_since_ball_in_court_update_seconds": time_since_update.total_seconds() if time_since_update else None,
+            "days_since_ball_in_court_update": days_since_ball_update,
         }
 
 class SystemLogs(db.Model):

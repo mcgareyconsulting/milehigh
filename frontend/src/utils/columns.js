@@ -10,6 +10,8 @@ export const DESIRED_COLUMN_ORDER = [
     'Type',
     'Status',
     'Submittal Manager',
+    'Last BIC',
+    'Creation Date',
     'Notes'
 ];
 

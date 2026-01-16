@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 
 export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
-    const navigate = useNavigate();
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
     const [notesValue, setNotesValue] = useState('');
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
 
@@ -187,7 +183,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isStatus = column === 'Status';
                     const isProjectName = column === 'Project Name';
                     const isBallInCourt = column === 'Ball In Court';
-                    
+                    const isLastBIC = column === 'Last BIC';
+                    const isCreationDate = column === 'Creation Date';
+
                     // Skip rendering the Submittals Id column
                     if (isSubmittalId) {
                         return null;
@@ -223,6 +221,12 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         columnClass = 'dwl-col-project-name';
                     } else if (isBallInCourt) {
                         columnClass = 'dwl-col-ball-in-court';
+                    } else if (isLastBIC) {
+                        customStyle = { maxWidth: '100px' };
+                        columnClass = 'dwl-col-last-bic';
+                    } else if (isCreationDate) {
+                        customStyle = { maxWidth: '120px' };
+                        columnClass = 'dwl-col-creation-date';
                     }
 
                     // Apply Type truncation mapping before formatting
@@ -411,22 +415,72 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle Title column - make it clickable to open modal
-                    if (column === 'Title') {
-                        const shouldWrap = true;
-                        const whitespaceClass = 'whitespace-normal';
-                        
+                    // Handle Last BIC column - show days since last ball in court update
+                    if (isLastBIC) {
+                        const daysSinceUpdate = row['Last BIC'] ?? row.days_since_ball_in_court_update;
+                        const displayValue = daysSinceUpdate !== null && daysSinceUpdate !== undefined
+                            ? `${daysSinceUpdate} days`
+                            : '—';
+
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${columnClass} text-center cursor-pointer hover:bg-accent-50 transition-colors`}
-                                style={customStyle}
-                                title={`${cellValue} - Click to view details`}
-                                onClick={() => setIsModalOpen(true)}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-last-bic`}
+                                style={{ maxWidth: '100px' }}
+                                title={daysSinceUpdate !== null && daysSinceUpdate !== undefined ? `${daysSinceUpdate} days` : 'No ball in court update recorded'}
                             >
-                                <span className="text-blue-600 hover:text-blue-800 hover:underline">
-                                    {cellValue}
-                                </span>
+                                {displayValue}
+                            </td>
+                        );
+                    }
+
+                    // Handle Creation Date column - format the date nicely
+                    if (isCreationDate) {
+                        const creationDateValue = row['Creation Date'] ?? row.created_at;
+                        const formattedDate = formatDate(creationDateValue);
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-creation-date`}
+                                style={{ maxWidth: '120px' }}
+                                title={creationDateValue ? new Date(creationDateValue).toLocaleString() : 'N/A'}
+                            >
+                                {formattedDate}
+                            </td>
+                        );
+                    }
+
+                    // Handle Title column - make it a link to Procore
+                    if (column === 'Title') {
+                        const shouldWrap = true;
+                        const whitespaceClass = 'whitespace-normal';
+                        const submittalId = row.submittal_id || row['Submittals Id'] || '';
+                        const projectId = row.procore_project_id || row['Project Id'] || '';
+                        const procoreUrl = projectId && submittalId
+                            ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
+                            : null;
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${columnClass} text-center`}
+                                style={customStyle}
+                                title={cellValue}
+                            >
+                                {procoreUrl ? (
+                                    <a
+                                        href={procoreUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {cellValue}
+                                    </a>
+                                ) : (
+                                    <span>{cellValue}</span>
+                                )}
                             </td>
                         );
                     }
@@ -447,11 +501,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     );
                 })}
             </tr>
-            <SubmittalDetailsModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                submittal={row}
-            />
         </>
     );
 }
