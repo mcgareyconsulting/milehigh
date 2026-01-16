@@ -60,6 +60,7 @@ function DraftingWorkLoad() {
         selectedSubmittalManager,
         selectedProjectName,
         projectNameSortMode,
+        columnSort,
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,
@@ -69,6 +70,7 @@ function DraftingWorkLoad() {
         displayRows,
         resetFilters,
         handleProjectNameSortToggle,
+        handleColumnSort,
         ALL_OPTION_VALUE,
     } = useFilters(rows);
 
@@ -221,32 +223,6 @@ function DraftingWorkLoad() {
                                                         const isNotes = column === 'Notes';
                                                         const isProjectName = column === 'Project Name';
                                                         const isTitle = column === 'Title';
-
-                                                        if (isProjectName) {
-                                                            return (
-                                                                <th
-                                                                    key={column}
-                                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 dwl-col-project-name"
-                                                                    style={{ maxWidth: '280px' }}
-                                                                >
-                                                                    <button
-                                                                        onClick={handleProjectNameSortToggle}
-                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
-                                                                        title={
-                                                                            projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
-                                                                                projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
-                                                                                    'Click to sort by Order Number'
-                                                                        }
-                                                                    >
-                                                                        <span>{column}</span>
-                                                                        {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
-                                                                        {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
-                                                                        {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
-                                                                    </button>
-                                                                </th>
-                                                            );
-                                                        }
-
                                                         const isStatus = column === 'Status';
                                                         const isBallInCourt = column === 'Ball In Court';
                                                         const isType = column === 'Type';
@@ -300,6 +276,66 @@ function DraftingWorkLoad() {
                                                         const isProjectNumberHeader = column === 'Project Number';
                                                         const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isCreationDateHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
+                                                        // Determine if this column is sortable
+                                                        // Order Number, Notes, and Status are not sortable (they're interactive)
+                                                        const isNotSortable = isOrderNumber || isNotes || isStatus;
+
+                                                        // Get sort state for this column
+                                                        const isSorted = columnSort.column === column;
+                                                        const sortDirection = isSorted ? columnSort.direction : null;
+
+                                                        if (isProjectName) {
+                                                            return (
+                                                                <th
+                                                                    key={column}
+                                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 dwl-col-project-name"
+                                                                    style={{ maxWidth: '280px' }}
+                                                                >
+                                                                    <button
+                                                                        onClick={handleProjectNameSortToggle}
+                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                        title={
+                                                                            projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
+                                                                                projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
+                                                                                    'Click to sort by Order Number'
+                                                                        }
+                                                                    >
+                                                                        <span>{column}</span>
+                                                                        {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
+                                                                        {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
+                                                                        {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
+                                                                    </button>
+                                                                </th>
+                                                            );
+                                                        }
+
+                                                        // Render sortable column header
+                                                        if (!isNotSortable) {
+                                                            return (
+                                                                <th
+                                                                    key={column}
+                                                                    className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
+                                                                    style={headerStyle}
+                                                                >
+                                                                    <button
+                                                                        onClick={() => handleColumnSort(column)}
+                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                        title={
+                                                                            sortDirection === null ? 'Click to sort ascending' :
+                                                                                sortDirection === 'asc' ? 'Click to sort descending' :
+                                                                                    'Click to remove sort'
+                                                                        }
+                                                                    >
+                                                                        <span>{column}</span>
+                                                                        {sortDirection === 'asc' && <span className="text-xs">↑</span>}
+                                                                        {sortDirection === 'desc' && <span className="text-xs">↓</span>}
+                                                                        {sortDirection === null && <span className="text-xs text-gray-400">↕</span>}
+                                                                    </button>
+                                                                </th>
+                                                            );
+                                                        }
+
+                                                        // Non-sortable column (Order Number, Notes, Status)
                                                         return (
                                                             <th
                                                                 key={column}

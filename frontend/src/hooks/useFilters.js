@@ -3,6 +3,66 @@ import { useState, useMemo, useCallback } from 'react';
 const ALL_OPTION_VALUE = '__ALL__';
 
 /**
+ * Get value from row by column name (handles both database field names and display names)
+ */
+const getColumnValue = (row, column) => {
+    // Map display column names to database field names
+    const columnMap = {
+        'Order Number': 'order_number',
+        'Project Number': 'project_number',
+        'Project Name': 'project_name',
+        'Title': 'title',
+        'Ball In Court': 'ball_in_court',
+        'Type': 'type',
+        'Status': 'submittal_drafting_status',
+        'Submittal Manager': 'submittal_manager',
+        'Last BIC': 'days_since_ball_in_court_update',
+        'Creation Date': 'created_at',
+        'Notes': 'notes',
+    };
+
+    const fieldName = columnMap[column] || column.toLowerCase().replace(/\s+/g, '_');
+    
+    // Try both the mapped field name and the display column name
+    return row[fieldName] ?? row[column] ?? null;
+};
+
+/**
+ * Compare two values for sorting (handles text, numbers, dates, nulls)
+ */
+const compareValues = (a, b, direction = 'asc') => {
+    // Handle null/undefined values - put them at the end
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+
+    // Try to parse as number
+    const numA = typeof a === 'number' ? a : parseFloat(a);
+    const numB = typeof b === 'number' ? b : parseFloat(b);
+    
+    if (!isNaN(numA) && !isNaN(numB)) {
+        // Both are numbers
+        const result = numA - numB;
+        return direction === 'asc' ? result : -result;
+    }
+
+    // Try to parse as date
+    const dateA = new Date(a);
+    const dateB = new Date(b);
+    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+        // Both are valid dates
+        const result = dateA - dateB;
+        return direction === 'asc' ? result : -result;
+    }
+
+    // String comparison
+    const strA = String(a).trim().toLowerCase();
+    const strB = String(b).trim().toLowerCase();
+    const result = strA.localeCompare(strB);
+    return direction === 'asc' ? result : -result;
+};
+
+/**
  * Custom hook for managing filters and sorting in DraftingWorkLoad
  * @param {Array} rows - The raw rows/submittals data to filter and sort
  * @returns {Object} Filter state, options, handlers, and filtered/sorted rows
@@ -12,7 +72,10 @@ export function useFilters(rows = []) {
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
     const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
     const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
-    const [projectNameSortMode, setProjectNameSortMode] = useState('normal'); // 'normal', 'a-z', 'z-a'
+    
+    // General column sorting: { column: 'Project Name', direction: 'asc' | 'desc' | null }
+    // For Project Name, we maintain backward compatibility with the existing 'normal' mode
+    const [columnSort, setColumnSort] = useState({ column: null, direction: null });
 
     /**
      * Check if a row matches all selected filters
@@ -48,169 +111,43 @@ export function useFilters(rows = []) {
     }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName]);
 
     /**
-     * Sort rows based on projectNameSortMode
+     * Sort rows based on columnSort state
      */
     const sortRows = useCallback((filteredRows) => {
-        if (projectNameSortMode === 'a-z') {
-            return filteredRows.sort((a, b) => {
-                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
-                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
-                if (projectA !== projectB) {
-                    return projectA.localeCompare(projectB);
-                }
-                // Secondary sort: multi-assignee rows go to bottom within same project
-                const ballA = (a.ball_in_court ?? '').toString();
-                const ballB = (b.ball_in_court ?? '').toString();
-                const hasMultipleA = ballA.includes(',');
-                const hasMultipleB = ballB.includes(',');
+        const { column, direction } = columnSort;
 
-                // Multi-assignee rows should go to the bottom
-                if (hasMultipleA && !hasMultipleB) {
-                    return 1; // A goes after B
-                }
-                if (!hasMultipleA && hasMultipleB) {
-                    return -1; // A goes before B
-                }
-
-                // If both have multiple or both are single, sort by order_number or submittal_id
-                if (hasMultipleA && hasMultipleB) {
-                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-                }
-
-                // Sort by order number (ordered items first, then unordered by last_updated)
-                const orderA = a.order_number ?? a['Order Number'];
-                const orderB = b.order_number ?? b['Order Number'];
-
-                const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
-                const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
-
-                if (hasOrderA && !hasOrderB) return -1;
-                if (!hasOrderA && hasOrderB) return 1;
-
-                if (hasOrderA && hasOrderB) {
-                    const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
-                    const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
-                    if (!isNaN(numA) && !isNaN(numB)) {
-                        return numA - numB;
-                    }
-                }
-
-                // Both unordered - sort by last_updated (oldest first)
-                const lastUpdatedA = a.last_updated ?? a['Last Updated'];
-                const lastUpdatedB = b.last_updated ?? b['Last Updated'];
-                if (lastUpdatedA && lastUpdatedB) {
-                    const dateA = new Date(lastUpdatedA);
-                    const dateB = new Date(lastUpdatedB);
-                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-                        return dateA - dateB;
-                    }
-                }
-
-                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-            });
-        } else if (projectNameSortMode === 'z-a') {
-            return filteredRows.sort((a, b) => {
-                const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
-                const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
-                if (projectA !== projectB) {
-                    return projectB.localeCompare(projectA);
-                }
-                // Secondary sort: multi-assignee rows go to bottom within same project
-                const ballA = (a.ball_in_court ?? '').toString();
-                const ballB = (b.ball_in_court ?? '').toString();
-                const hasMultipleA = ballA.includes(',');
-                const hasMultipleB = ballB.includes(',');
-
-                // Multi-assignee rows should go to the bottom
-                if (hasMultipleA && !hasMultipleB) {
-                    return 1; // A goes after B
-                }
-                if (!hasMultipleA && hasMultipleB) {
-                    return -1; // A goes before B
-                }
-
-                // If both have multiple or both are single, sort by order_number or submittal_id
-                if (hasMultipleA && hasMultipleB) {
-                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-                }
-
-                // Sort by order number (ordered items first, then unordered by last_updated)
-                const orderA = a.order_number ?? a['Order Number'];
-                const orderB = b.order_number ?? b['Order Number'];
-
-                const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
-                const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
-
-                if (hasOrderA && !hasOrderB) return -1;
-                if (!hasOrderA && hasOrderB) return 1;
-
-                if (hasOrderA && hasOrderB) {
-                    const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
-                    const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
-                    if (!isNaN(numA) && !isNaN(numB)) {
-                        return numA - numB;
-                    }
-                }
-
-                // Both unordered - sort by last_updated (oldest first)
-                const lastUpdatedA = a.last_updated ?? a['Last Updated'];
-                const lastUpdatedB = b.last_updated ?? b['Last Updated'];
-                if (lastUpdatedA && lastUpdatedB) {
-                    const dateA = new Date(lastUpdatedA);
-                    const dateB = new Date(lastUpdatedB);
-                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-                        return dateA - dateB;
-                    }
-                }
-
-                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-            });
-        } else {
-            // Normal sort: by Ball In Court, then by order_number (as float)
-            // Multi-assignee cases (comma-separated = reviewers) sort to the bottom
+        // If no column is being sorted, use default sort (by Ball In Court, then order_number)
+        if (!column || !direction) {
             return filteredRows.sort((a, b) => {
                 const ballA = (a.ball_in_court ?? '').toString();
                 const ballB = (b.ball_in_court ?? '').toString();
 
-                // Check if either has multiple assignees (comma indicates reviewers)
                 const hasMultipleA = ballA.includes(',');
                 const hasMultipleB = ballB.includes(',');
 
-                // Multi-assignee rows should go to the bottom
-                // If one has multiple and the other doesn't, single assignee comes first
-                if (hasMultipleA && !hasMultipleB) {
-                    return 1; // A goes after B (A has multiple, B doesn't)
-                }
-                if (!hasMultipleA && hasMultipleB) {
-                    return -1; // A goes before B (A doesn't have multiple, B does)
-                }
+                if (hasMultipleA && !hasMultipleB) return 1;
+                if (!hasMultipleA && hasMultipleB) return -1;
 
-                // If both have multiple assignees, sort them together alphabetically
                 if (hasMultipleA && hasMultipleB) {
                     if (ballA !== ballB) {
                         return ballA.localeCompare(ballB);
                     }
-                    // Tiebreaker: sort by submittal_id
                     return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
                 }
 
-                // Both are single assignees: sort alphabetically by ball_in_court
                 if (ballA !== ballB) {
                     return ballA.localeCompare(ballB);
                 }
 
-                // Same ball_in_court: sort by order_number (ordered items first, then unordered by last_updated)
                 const orderA = a.order_number ?? a['Order Number'];
                 const orderB = b.order_number ?? b['Order Number'];
 
                 const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
                 const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
 
-                // If one has order and the other doesn't, ordered item comes first
                 if (hasOrderA && !hasOrderB) return -1;
                 if (!hasOrderA && hasOrderB) return 1;
 
-                // Both have orders - sort by order number
                 if (hasOrderA && hasOrderB) {
                     const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
                     const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
@@ -219,7 +156,6 @@ export function useFilters(rows = []) {
                     }
                 }
 
-                // Both are unordered - sort by last_updated (oldest first)
                 const lastUpdatedA = a.last_updated ?? a['Last Updated'];
                 const lastUpdatedB = b.last_updated ?? b['Last Updated'];
 
@@ -234,7 +170,54 @@ export function useFilters(rows = []) {
                 return 0;
             });
         }
-    }, [projectNameSortMode]);
+
+        // Sort by the selected column
+        return filteredRows.sort((a, b) => {
+            const valueA = getColumnValue(a, column);
+            const valueB = getColumnValue(b, column);
+
+            // Primary sort by the selected column
+            const comparison = compareValues(valueA, valueB, direction);
+            if (comparison !== 0) {
+                return comparison;
+            }
+
+            // Secondary sort: keep multi-assignee rows at the bottom when sorting by Project Name
+            if (column === 'Project Name') {
+                const ballA = (a.ball_in_court ?? '').toString();
+                const ballB = (b.ball_in_court ?? '').toString();
+                const hasMultipleA = ballA.includes(',');
+                const hasMultipleB = ballB.includes(',');
+
+                if (hasMultipleA && !hasMultipleB) return 1;
+                if (!hasMultipleA && hasMultipleB) return -1;
+
+                if (hasMultipleA && hasMultipleB) {
+                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
+                }
+
+                // For single assignees, sort by order number as secondary
+                const orderA = a.order_number ?? a['Order Number'];
+                const orderB = b.order_number ?? b['Order Number'];
+                const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
+                const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
+
+                if (hasOrderA && !hasOrderB) return -1;
+                if (!hasOrderA && hasOrderB) return 1;
+
+                if (hasOrderA && hasOrderB) {
+                    const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
+                    const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return numA - numB;
+                    }
+                }
+            }
+
+            // Default secondary sort: by Submittal ID
+            return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
+        });
+    }, [columnSort]);
 
     /**
      * Filtered and sorted rows for display
@@ -259,11 +242,10 @@ export function useFilters(rows = []) {
         const values = new Set();
         rows.forEach((row) => {
             const type = row.type ?? row['Type'] ?? '';
-            if (type === 'For Construction') return; // Skip 'For Construction' rows
+            if (type === 'For Construction') return;
 
             const value = row.ball_in_court;
             if (value !== null && value !== undefined && String(value).trim() !== '') {
-                // Extract individual names from comma-separated values
                 const names = String(value).split(',').map(name => name.trim()).filter(name => name !== '');
                 names.forEach(name => values.add(name));
             }
@@ -279,7 +261,7 @@ export function useFilters(rows = []) {
         const values = new Set();
         rows.forEach((row) => {
             const type = row.type ?? row['Type'] ?? '';
-            if (type === 'For Construction') return; // Skip 'For Construction' rows
+            if (type === 'For Construction') return;
 
             const value = row.submittal_manager ?? row['Submittal Manager'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
@@ -297,7 +279,7 @@ export function useFilters(rows = []) {
         const values = new Set();
         rows.forEach((row) => {
             const type = row.type ?? row['Type'] ?? '';
-            if (type === 'For Construction') return; // Skip 'For Construction' rows
+            if (type === 'For Construction') return;
 
             const value = row.project_name ?? row['Project Name'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
@@ -314,28 +296,50 @@ export function useFilters(rows = []) {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
         setSelectedSubmittalManager(ALL_OPTION_VALUE);
         setSelectedProjectName(ALL_OPTION_VALUE);
-        setProjectNameSortMode('normal');
+        setColumnSort({ column: null, direction: null });
     }, []);
 
     /**
-     * Toggle project name sort mode: normal -> a-z -> z-a -> normal
+     * Handle column sort toggle: null -> asc -> desc -> null (cycle)
      */
+    const handleColumnSort = useCallback((column) => {
+        setColumnSort((current) => {
+            // If clicking the same column, cycle: null -> asc -> desc -> null
+            if (current.column === column) {
+                if (current.direction === null) {
+                    return { column, direction: 'asc' };
+                } else if (current.direction === 'asc') {
+                    return { column, direction: 'desc' };
+                } else {
+                    return { column: null, direction: null };
+                }
+            }
+            // If clicking a different column, start with asc
+            return { column, direction: 'asc' };
+        });
+    }, []);
+
+    // Backward compatibility: handleProjectNameSortToggle for Project Name column
+    // Maps 'normal' -> null, 'a-z' -> asc, 'z-a' -> desc
     const handleProjectNameSortToggle = useCallback(() => {
-        if (projectNameSortMode === 'normal') {
-            setProjectNameSortMode('a-z');
-        } else if (projectNameSortMode === 'a-z') {
-            setProjectNameSortMode('z-a');
-        } else {
-            setProjectNameSortMode('normal');
-        }
-    }, [projectNameSortMode]);
+        handleColumnSort('Project Name');
+    }, [handleColumnSort]);
+
+    // Get current sort state for Project Name (for backward compatibility)
+    const projectNameSortMode = useMemo(() => {
+        if (columnSort.column !== 'Project Name') return 'normal';
+        if (columnSort.direction === 'asc') return 'a-z';
+        if (columnSort.direction === 'desc') return 'z-a';
+        return 'normal';
+    }, [columnSort]);
 
     return {
         // Filter state
         selectedBallInCourt,
         selectedSubmittalManager,
         selectedProjectName,
-        projectNameSortMode,
+        columnSort, // New general column sort state
+        projectNameSortMode, // Backward compatibility
 
         // Filter setters
         setSelectedBallInCourt,
@@ -352,10 +356,10 @@ export function useFilters(rows = []) {
 
         // Actions
         resetFilters,
-        handleProjectNameSortToggle,
+        handleColumnSort, // New general column sort handler
+        handleProjectNameSortToggle, // Backward compatibility
 
         // Constants
         ALL_OPTION_VALUE,
     };
 }
-
