@@ -102,12 +102,51 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     // Alternate row background colors
     const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
 
+    // Prevent drag start from protected cells
+    const handleProtectedCellMouseDown = (e) => {
+        e.stopPropagation();
+        // Prevent drag from starting on these cells
+        e.preventDefault();
+    };
+
     // Drag and drop handlers
     const handleDragStart = (e) => {
         if (!isDraggable) {
             e.preventDefault();
             return;
         }
+
+        // Check if drag started from a protected cell (Order Number, Project Number, Status, Notes)
+        const target = e.target;
+        const cell = target.closest('td');
+
+        if (cell) {
+            const cellClasses = cell.className || '';
+            const isOrderNumberCell = cellClasses.includes('dwl-col-order-number');
+            const isProjectNumberCell = cellClasses.includes('dwl-col-project-number');
+            const isStatusCell = cellClasses.includes('dwl-col-status');
+            const isNotesCell = cellClasses.includes('dwl-col-notes');
+
+            // Also check if clicking on inputs, textareas, selects, links, or buttons anywhere
+            const isInputElement = target.tagName === 'INPUT' ||
+                target.tagName === 'TEXTAREA' ||
+                target.tagName === 'SELECT' ||
+                target.tagName === 'A' ||
+                target.tagName === 'BUTTON' ||
+                target.closest('input') ||
+                target.closest('textarea') ||
+                target.closest('select') ||
+                target.closest('a') ||
+                target.closest('button');
+
+            if (isOrderNumberCell || isProjectNumberCell || isStatusCell || isNotesCell || isInputElement) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return false;
+            }
+        }
+
         if (onDragStart) {
             onDragStart(e, rowIndex, row);
         }
@@ -242,6 +281,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center dwl-col-order-number`}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
                                     ref={inputRef}
@@ -279,7 +320,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center dwl-col-order-number`}
+                                draggable={false}
                                 onClick={isEditable ? handleOrderNumberFocus : undefined}
+                                onMouseDown={handleProtectedCellMouseDown}
                                 title={isEditable ? "Click to edit order number" : "Order number editing disabled for multiple assignees (reviewers)"}
                             >
                                 <div className={`px-0.5 py-0 text-xs border rounded-sm font-medium min-w-[20px] max-w-[50px] inline-block transition-colors ${isEditable
@@ -298,6 +341,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <textarea
                                     ref={notesInputRef}
@@ -321,7 +366,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
+                                draggable={false}
                                 onClick={handleNotesFocus}
+                                onMouseDown={handleProtectedCellMouseDown}
                                 title="Click to edit notes"
                             >
                                 <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all cursor-text min-h-[10px] text-center ${hasNotes
@@ -350,6 +397,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-status`}
                                 style={{ maxWidth: '96px' }}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <select
                                     value={currentStatus || ''}
@@ -462,10 +511,26 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle Title column - make it a link to Procore
+                    // Handle Title column - plain text display
                     if (column === 'Title') {
                         const shouldWrap = true;
                         const whitespaceClass = 'whitespace-normal';
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${columnClass} text-center`}
+                                style={customStyle}
+                                title={cellValue}
+                            >
+                                {cellValue}
+                            </td>
+                        );
+                    }
+
+                    // Handle Project Number column - make it a link to Procore
+                    const isProjectNumber = column === 'Project Number';
+                    if (isProjectNumber) {
                         const submittalId = row.submittal_id || row['Submittals Id'] || '';
                         const projectId = row.procore_project_id || row['Project Id'] || '';
                         const procoreUrl = projectId && submittalId
@@ -475,9 +540,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${columnClass} text-center`}
-                                style={customStyle}
-                                title={cellValue}
+                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-project-number`}
+                                style={{ maxWidth: '65px' }}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
+                                title={procoreUrl ? `${cellValue} - Click to open in Procore` : cellValue}
                             >
                                 {procoreUrl ? (
                                     <a
@@ -492,21 +559,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 ) : (
                                     <span>{cellValue}</span>
                                 )}
-                            </td>
-                        );
-                    }
-
-                    // Handle Project Number column - reduce padding for compact display
-                    const isProjectNumber = column === 'Project Number';
-                    if (isProjectNumber) {
-                        return (
-                            <td
-                                key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-project-number`}
-                                style={{ maxWidth: '65px' }}
-                                title={cellValue}
-                            >
-                                {cellValue}
                             </td>
                         );
                     }
