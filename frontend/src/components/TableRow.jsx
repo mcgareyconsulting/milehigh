@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { formatDate, formatDateShort } from '../utils/formatters';
 
 export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
@@ -422,10 +423,20 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             ? `${daysSinceUpdate} days`
                             : '—';
 
+                        // Determine background color based on days
+                        let bgColorClass = '';
+                        if (daysSinceUpdate !== null && daysSinceUpdate !== undefined) {
+                            if (daysSinceUpdate >= 5) {
+                                bgColorClass = 'bg-red-200'; // Red for 5+ days
+                            } else if (daysSinceUpdate >= 3) {
+                                bgColorClass = 'bg-yellow-200'; // Yellow for 3-4 days
+                            }
+                        }
+
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-last-bic`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${bgColorClass || cellBgClass} border-r border-gray-300 text-center dwl-col-last-bic`}
                                 style={{ maxWidth: '100px' }}
                                 title={daysSinceUpdate !== null && daysSinceUpdate !== undefined ? `${daysSinceUpdate} days` : 'No ball in court update recorded'}
                             >
@@ -434,16 +445,16 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle Creation Date column - format the date nicely
+                    // Handle Creation Date column - format the date nicely with 2-digit year
                     if (isCreationDate) {
                         const creationDateValue = row['Creation Date'] ?? row.created_at;
-                        const formattedDate = formatDate(creationDateValue);
+                        const formattedDate = formatDateShort(creationDateValue);
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-creation-date`}
-                                style={{ maxWidth: '120px' }}
+                                className={`px-0 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-creation-date`}
+                                style={{ maxWidth: '75px' }}
                                 title={creationDateValue ? new Date(creationDateValue).toLocaleString() : 'N/A'}
                             >
                                 {formattedDate}
@@ -481,6 +492,21 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 ) : (
                                     <span>{cellValue}</span>
                                 )}
+                            </td>
+                        );
+                    }
+
+                    // Handle Project Number column - reduce padding for compact display
+                    const isProjectNumber = column === 'Project Number';
+                    if (isProjectNumber) {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-project-number`}
+                                style={{ maxWidth: '65px' }}
+                                title={cellValue}
+                            >
+                                {cellValue}
                             </td>
                         );
                     }

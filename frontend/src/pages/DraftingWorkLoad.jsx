@@ -21,7 +21,7 @@ const columnWidthStyles = `
         .dwl-col-notes { max-width: 300px !important; }
         .dwl-col-submittal-id { max-width: 128px !important; }
         .dwl-col-last-bic { max-width: 100px !important; }
-        .dwl-col-creation-date { max-width: 120px !important; }
+        .dwl-col-creation-date { max-width: 75px !important; }
     }
 `;
 
@@ -267,7 +267,7 @@ function DraftingWorkLoad() {
                                                             headerStyle = { maxWidth: '128px' };
                                                             columnClass = 'dwl-col-submittal-id';
                                                         } else if (isProjectNumber) {
-                                                            headerStyle = { maxWidth: '80px' };
+                                                            headerStyle = { maxWidth: '65px' };
                                                             columnClass = 'dwl-col-project-number';
                                                         } else if (isTitle) {
                                                             headerStyle = { maxWidth: '280px' };
@@ -291,14 +291,19 @@ function DraftingWorkLoad() {
                                                             headerStyle = { maxWidth: '100px' };
                                                             columnClass = 'dwl-col-last-bic';
                                                         } else if (isCreationDate) {
-                                                            headerStyle = { maxWidth: '120px' };
+                                                            headerStyle = { maxWidth: '75px' };
                                                             columnClass = 'dwl-col-creation-date';
                                                         }
+
+                                                        // Reduce padding for specific columns
+                                                        const isCreationDateHeader = column === 'Creation Date';
+                                                        const isProjectNumberHeader = column === 'Project Number';
+                                                        const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isCreationDateHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isOrderNumber ? 'px-0.5 py-0.5' : 'px-1 py-0.5'} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
+                                                                className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
                                                                 style={headerStyle}
                                                             >
                                                                 {column}
