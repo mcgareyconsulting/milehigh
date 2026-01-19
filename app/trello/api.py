@@ -178,6 +178,51 @@ def get_trello_cards_from_subset():
     return relevant_data
 
 
+def get_all_trello_cards():
+    """
+    Fetch all open Trello cards from the board (all lists, not just a subset).
+    
+    Returns:
+        list: List of card dictionaries with id, name, desc, idList, due, labels, and list_name
+    """
+    # Get all lists on the board
+    url_lists = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    response = requests.get(url_lists, params=params)
+    response.raise_for_status()
+    lists = response.json()
+    
+    # Build a mapping from list ID to list name
+    list_id_to_name = {lst["id"]: lst["name"] for lst in lists}
+    
+    # Get all cards on the board
+    url_cards = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/cards"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "fields": "id,name,desc,idList,due,labels",
+        "filter": "open",
+    }
+    response = requests.get(url_cards, params=params)
+    response.raise_for_status()
+    cards = response.json()
+    
+    # Add list_name to each card
+    relevant_data = [
+        {
+            "id": card["id"],
+            "name": card["name"],
+            "desc": card["desc"],
+            "list_id": card["idList"],
+            "list_name": list_id_to_name.get(card["idList"], "Unknown"),
+            "due": card.get("due"),
+            "labels": [label["name"] for label in card.get("labels", [])],
+        }
+        for card in cards
+    ]
+    return relevant_data
+
+
 def check_job_exists_in_db(job_number, release_number):
     """
     Check if a job with the given job number and release number already exists in the database.

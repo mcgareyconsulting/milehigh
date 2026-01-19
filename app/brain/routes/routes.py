@@ -694,3 +694,69 @@ def get_events():
     except Exception as e:
         logger.error("Error getting job events", error=str(e))
         return jsonify({"error": str(e)}), 500
+
+
+@brain_bp.route("/trello-scanner")
+def trello_scanner():
+    """
+    Scan and compare database jobs with Trello cards.
+    
+    Returns JSON with comparison results:
+    - summary: Counts of jobs in both, DB only, Trello only, and list mismatches
+    - in_both: Jobs that exist in both DB and Trello
+    - db_only: Jobs that exist in DB but not in Trello
+    - trello_only: Cards that exist in Trello but not in DB
+    - list_mismatches: Jobs where DB stage doesn't match Trello list
+    
+    This is a preview/scanning endpoint - no database or Trello updates are made.
+    
+    Returns:
+        JSON object with scan results
+        
+    Status Codes:
+        - 200: Success
+        - 500: Server error
+    """
+    try:
+        from app.trello.scanner import scan_trello_db_comparison
+        
+        logger.info("Trello scanner endpoint called")
+        results = scan_trello_db_comparison()
+        
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Error in Trello scanner: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@brain_bp.route("/trello-sync", methods=["POST"])
+def trello_sync():
+    """
+    Sync Trello board with database:
+    1. Delete Trello-only cards
+    2. Move cards to correct lists based on DB stage
+    3. Create cards for DB-only jobs
+    
+    Query Parameters:
+        dry_run (bool): If true, only report what would be done without making changes (default: false)
+    
+    Returns:
+        JSON object with sync results
+        
+    Status Codes:
+        - 200: Success
+        - 500: Server error
+    """
+    try:
+        from app.trello.scanner import sync_trello_with_db
+        
+        # Check for dry_run parameter
+        dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+        
+        logger.info(f"Trello sync endpoint called (dry_run={dry_run})")
+        results = sync_trello_with_db(dry_run=dry_run)
+        
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Error in Trello sync: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
