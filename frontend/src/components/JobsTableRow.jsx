@@ -13,6 +13,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         { value: 'Released', label: 'Released' },
         { value: 'Cut start', label: 'Cut start' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint complete', label: 'Paint comp' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
         { value: 'Shipping planning', label: 'Ship plan' },
@@ -25,6 +26,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         'Released': 'bg-blue-100 text-blue-800 border-blue-300',
         'Cut start': 'bg-purple-100 text-purple-800 border-purple-300',
         'Fit Up Complete.': 'bg-green-100 text-green-800 border-green-300',
+        'Welded QC': 'bg-teal-100 text-teal-800 border-teal-300',
         'Paint complete': 'bg-yellow-100 text-yellow-800 border-yellow-300',
         'Store at MHMW for shipping': 'bg-orange-100 text-orange-800 border-orange-300',
         'Shipping planning': 'bg-indigo-100 text-indigo-800 border-indigo-300',
@@ -161,6 +163,32 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             </div>
                         </td>
                     );
+                }
+
+                // Handle Release # column - make it a link to viewer_url if available
+                if (column === 'Release #') {
+                    const viewerUrl = row.viewer_url;
+                    // Check if viewer_url exists and is not empty
+                    if (viewerUrl && viewerUrl.trim() !== '') {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
+                                title={`${rawValue} - Click to open Procore viewer`}
+                            >
+                                <a
+                                    href={viewerUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    {rawValue}
+                                </a>
+                            </td>
+                        );
+                    }
+                    // If no viewer_url, render normally
                 }
 
                 return (

@@ -1123,6 +1123,86 @@ def check_and_update_submittal(project_id, submittal_id):
         )
         return False, False, False, False, None, None, None
 
+# Get Viewer URL for Job (without Trello updates)
+def get_viewer_url_for_job(job_number, release_number):
+    '''
+    Function to get procore viewer_url for a job without updating Trello.
+    This is used for backfilling viewer_urls into the database.
+    
+    Args:
+        job_number: The job number (integer)
+        release_number: The release number (string)
+    
+    Returns:
+        dict with viewer_url if found, None otherwise
+        Returns dict with error information if any step fails
+    '''
+    try:
+        # Get companies list
+        company_id = get_companies_list()
+        if not company_id:
+            return {
+                "success": False,
+                "error": "No Procore company_id returned",
+                "job": job_number,
+                "release": release_number
+            }
+
+        # Get project by company id
+        project_id = get_projects_by_company_id(company_id, job_number)
+        if not project_id:
+            return {
+                "success": False,
+                "error": f"No Procore project found for job={job_number} company_id={company_id}",
+                "job": job_number,
+                "release": release_number
+            }
+
+        # Get submittals by project id
+        identifier = f"{job_number}-{release_number}"
+        submittals = get_submittals_by_project_id(project_id, identifier)
+        if not submittals:
+            return {
+                "success": False,
+                "error": f"No Procore submittals found for project_id={project_id} identifier={identifier}",
+                "job": job_number,
+                "release": release_number
+            }
+        
+        final_pdfs = get_final_pdf_viewers(project_id, submittals)
+        if not final_pdfs:
+            return {
+                "success": False,
+                "error": f"No final PDF viewers found for project_id={project_id} identifier={identifier}",
+                "job": job_number,
+                "release": release_number
+            }
+
+        # Extract viewer urls from final pdfs
+        viewer_url = final_pdfs[0]["viewer_url"]
+
+        return {
+            "success": True,
+            "viewer_url": viewer_url,
+            "job": job_number,
+            "release": release_number
+        }
+    except Exception as e:
+        logger.error(
+            "Error getting viewer_url for job=%s release=%s: %s",
+            job_number,
+            release_number,
+            str(e),
+            exc_info=True
+        )
+        return {
+            "success": False,
+            "error": f"Exception: {str(e)}",
+            "job": job_number,
+            "release": release_number
+        }
+
+
 # Add Procore Link to Trello Card
 def add_procore_link_to_trello_card(job, release):
     '''

@@ -130,6 +130,7 @@ def get_jobs():
                     'Notes': serialize_value(job.notes),
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
+                    'viewer_url': serialize_value(job.viewer_url),
                 }
                 # Validate the job data
                 json.dumps(job_data)
@@ -244,6 +245,7 @@ def get_all_jobs():
                     'Notes': serialize_value(job.notes),
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
+                    'viewer_url': serialize_value(job.viewer_url),
                 }
                 # Validate the job data
                 json.dumps(job_data)

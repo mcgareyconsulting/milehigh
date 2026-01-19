@@ -148,6 +148,7 @@ export function useJobsFilters(jobs = []) {
         { value: 'Released', label: 'Released' },
         { value: 'Cut start', label: 'Cut start' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint complete', label: 'Paint comp' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
         { value: 'Shipping planning', label: 'Ship plan' },
@@ -171,6 +172,10 @@ export function useJobsFilters(jobs = []) {
         'Fit Up Complete.': {
             unselected: 'bg-green-100 text-green-800 border-green-300',
             selected: 'bg-green-600 text-white border-green-700'
+        },
+        'Welded QC': {
+            unselected: 'bg-teal-100 text-teal-800 border-teal-300',
+            selected: 'bg-teal-600 text-white border-teal-700'
         },
         'Paint complete': {
             unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
