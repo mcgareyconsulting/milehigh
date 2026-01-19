@@ -245,42 +245,47 @@ function JobLog() {
                         </div>
                     </div>
 
-                    <div className="p-2 flex flex-col flex-1 min-h-0 space-y-2">
-                        <div className="bg-gray-100 rounded-lg p-2 border border-gray-200 flex-shrink-0">
-                            <div className="grid grid-cols-2 grid-rows-2 gap-3">
+                    <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
+                        <div className="bg-gray-100 rounded-lg p-1.5 border border-gray-200 flex-shrink-0">
+                            <div className="grid grid-cols-2 gap-x-1.5 gap-y-1">
                                 {/* Top Left: Project Name */}
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-800 mb-2">
+                                    <label className="block text-sm font-bold text-gray-800 mb-1">
                                         Project Name
                                     </label>
-                                    <div className="flex gap-1.5">
+                                    <div className="grid grid-cols-8 gap-1">
                                         <button
                                             onClick={() => setSelectedProjectName(ALL_OPTION_VALUE)}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${selectedProjectName === ALL_OPTION_VALUE
+                                            className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectName === ALL_OPTION_VALUE
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
+                                            title="All"
                                         >
                                             All
                                         </button>
-                                        {projectNameOptions.map((option) => (
-                                            <button
-                                                key={option}
-                                                onClick={() => setSelectedProjectName(option)}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${selectedProjectName === option
-                                                    ? 'bg-blue-700 text-white'
-                                                    : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
-                                                    }`}
-                                            >
-                                                {option}
-                                            </button>
-                                        ))}
+                                        {projectNameOptions.map((option) => {
+                                            const truncated = option.length > 15 ? option.substring(0, 15) : option;
+                                            return (
+                                                <button
+                                                    key={option}
+                                                    onClick={() => setSelectedProjectName(option)}
+                                                    className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectName === option
+                                                        ? 'bg-blue-700 text-white'
+                                                        : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                    title={option}
+                                                >
+                                                    {truncated}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
                                 {/* Top Right: Filters */}
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-800 mb-2">
+                                    <label className="block text-sm font-bold text-gray-800 mb-1">
                                         Filters
                                     </label>
                                     <div className="flex flex-wrap gap-1.5">
@@ -348,10 +353,10 @@ function JobLog() {
                                 </div>
 
                                 {/* Bottom Left: Reset Filters, Job #, Release #, Total */}
-                                <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                     <button
                                         onClick={resetFilters}
-                                        className="px-2.5 py-1 bg-white border border-gray-400 text-gray-700 rounded text-xs font-semibold hover:bg-gray-50 transition-all whitespace-nowrap"
+                                        className="px-2 py-0.5 bg-white border border-gray-400 text-gray-700 rounded text-xs font-semibold hover:bg-gray-50 transition-all whitespace-nowrap"
                                     >
                                         Reset Filters
                                     </button>
@@ -364,7 +369,7 @@ function JobLog() {
                                             value={jobNumberSearch}
                                             onChange={(e) => setJobNumberSearch(e.target.value)}
                                             placeholder="Job #..."
-                                            className="w-28 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                                            className="w-28 px-2 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                                         />
                                     </div>
                                     <div className="flex items-center gap-1.5">
@@ -376,10 +381,10 @@ function JobLog() {
                                             value={releaseNumberSearch}
                                             onChange={(e) => setReleaseNumberSearch(e.target.value)}
                                             placeholder="Release #..."
-                                            className="w-28 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                                            className="w-28 px-2 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                                         />
                                     </div>
-                                    <div className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs font-semibold">
+                                    <div className="px-2 py-0.5 bg-white border border-gray-300 text-gray-700 rounded text-xs font-semibold">
                                         Total: <span className="text-gray-900 font-bold">{displayJobs.length}</span> records
                                     </div>
                                 </div>

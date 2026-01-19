@@ -6,14 +6,58 @@ from app.trello.logging import safe_log_sync_event
 import logging
 import gc  # For garbage collection
 from sqlalchemy.exc import SQLAlchemyError
+import os
+from pathlib import Path
 
 
 def to_date(val):
     """Convert a value to a date, returning None if conversion fails or value is null."""
-    if pd.isnull(val):
+    if pd.isnull(val) or val is None:
         return None
-    dt = pd.to_datetime(val)
-    return dt.date() if not pd.isnull(dt) else None
+    
+    # Convert to string and strip whitespace
+    val_str = str(val).strip()
+    if not val_str or val_str == '':
+        return None
+    
+    # Handle dates in M/D format (without year) - add year based on month
+    # Months 4-12 → 2025, Months 1-3 → 2026
+    import re
+    m_d_match = re.match(r'^(\d{1,2})/(\d{1,2})$', val_str)
+    if m_d_match:
+        month = int(m_d_match.group(1))
+        day = int(m_d_match.group(2))
+        
+        # Determine year based on month
+        if 4 <= month <= 12:
+            year = 2025
+        elif 1 <= month <= 3:
+            year = 2026
+        else:
+            # Invalid month, return None
+            return None
+        
+        # Reconstruct date string with year
+        val_str = f"{month}/{day}/{year}"
+    
+    try:
+        # Try parsing with pandas
+        # Use errors='coerce' to return NaT instead of raising
+        dt = pd.to_datetime(val_str, errors='coerce')
+        
+        if pd.isnull(dt):
+            return None
+        
+        # Check for out-of-bounds dates (pandas can sometimes create invalid dates)
+        try:
+            return dt.date()
+        except (ValueError, OverflowError):
+            # Date is out of bounds, return None
+            return None
+            
+    except (ValueError, TypeError, OverflowError) as e:
+        # If parsing fails, return None
+        return None
 
 def safe_truncate_string(value, max_length):
     """Safely truncate a string to fit within the specified length."""
@@ -28,6 +72,15 @@ def safe_truncate_string(value, max_length):
     truncated = string_value[:max_length-3] + "..."
     print(f"Truncated string from {len(string_value)} to {len(truncated)} characters")
     return truncated
+
+def safe_float(val):
+    """Safely convert a value to float, returning None if conversion fails."""
+    if val is None or pd.isna(val):
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def seed_from_combined_data(combined_data, batch_size=50):
@@ -1053,8 +1106,588 @@ def run_incremental_seed_example():
         raise
 
 
+def determine_stage_from_staging_columns(row):
+    """
+    Determine the stage based on staging columns following the priority order.
+    
+    Args:
+        row: DataFrame row or dict with staging columns
+        
+    Returns:
+        str: Stage name
+    """
+    def normalize_val(val):
+        """Normalize value: treat O, empty, null, blank as empty."""
+        if pd.isna(val) or val == '' or str(val).strip().upper() == 'O':
+            return ''
+        return str(val).strip().upper()
+    
+    # Normalize all staging values
+    job_comp = normalize_val(row.get('Job Comp', ''))
+    ship = normalize_val(row.get('Ship', ''))
+    paint_comp = normalize_val(row.get('Paint Comp', ''))
+    welded = normalize_val(row.get('Welded', ''))
+    fitup_comp = normalize_val(row.get('Fitup comp', ''))
+    cut_start = normalize_val(row.get('Cut start', ''))
+    
+    # Priority order (highest to lowest):
+    # 1. Complete - Job Comp = "X" (overrides everything)
+    if job_comp == 'X':
+        return 'Complete'
+    
+    # 2. Shipping completed - Ship = "X" (overrides other stages)
+    if ship == 'X':
+        return 'Shipping completed'
+    
+    # 3. Shipping planning - Ship = "RS" (overrides Paint Comp status)
+    if ship == 'RS':
+        return 'Shipping planning'
+    
+    # 4. Store at MHMW for shipping - Ship = "ST" (overrides Paint Comp status)
+    if ship == 'ST':
+        return 'Store at MHMW for shipping'
+    
+    # 5. Paint complete - Paint Comp = "X" AND Ship is empty/O
+    if paint_comp == 'X' and ship == '':
+        return 'Paint complete'
+    
+    # 6. Welded QC - Welded = "X" AND Paint Comp is empty/O
+    if welded == 'X' and paint_comp == '':
+        return 'Welded QC'
+    
+    # 7. Fit Up Complete. - Fitup comp = "X" AND Welded is empty/O
+    if fitup_comp == 'X' and welded == '':
+        return 'Fit Up Complete.'
+    
+    # 8. Cut start - Cut start = "X" (exactly) AND Fitup comp is empty/O
+    if cut_start == 'X' and fitup_comp == '':
+        return 'Cut start'
+    
+    # 9. Released - Default/fallback (includes Cut start with "-", "DENCOL", "HOLD", etc.)
+    return 'Released'
+
+
+def preview_csv_jobs_data(csv_file_path=None, max_rows_to_display=50, export_to_csv=None, add_stage_column=True):
+    """
+    Read CSV file and filter rows with numeric Job # and Release #.
+    Display the data in a readable format for eye-checking before DB insertion.
+    
+    Args:
+        csv_file_path: Path to CSV file. If None, looks for JL_Static_Ingestion.csv in project root.
+        max_rows_to_display: Maximum number of rows to display in preview (default 50)
+        export_to_csv: Optional path to export filtered data as CSV for easier review
+    
+    Returns:
+        dict: Summary with filtered DataFrame and statistics
+    """
+    # Default to JL_Static_Ingestion.csv in project root if not provided
+    if csv_file_path is None:
+        # Get project root (parent of app directory)
+        project_root = Path(__file__).parent.parent
+        csv_file_path = project_root / "JL_Static_Ingestion.csv"
+    
+    csv_file_path = Path(csv_file_path)
+    
+    if not csv_file_path.exists():
+        raise FileNotFoundError(f"CSV file not found: {csv_file_path}")
+    
+    print(f"📄 Reading CSV file: {csv_file_path}")
+    print(f"   (Using line 3 as column headers, skipping lines 1-2)\n")
+    
+    # Read CSV starting from line 3 (0-indexed line 2) as headers
+    # Skip first 2 rows (lines 1-2), use row 3 (index 2) as header
+    # Use low_memory=False to avoid dtype warnings for mixed types
+    df = pd.read_csv(csv_file_path, skiprows=2, header=0, low_memory=False)
+    
+    print(f"📊 Total rows in CSV (after header): {len(df)}")
+    
+    # Relevant columns to extract (as specified by user)
+    relevant_columns = [
+        "Job #", "Release #", "Job", "Description", "Fab Hrs", "Install HRS",
+        "Paint color", "PM", "BY", "Released", "Fab Order", "Cut start",
+        "Fitup comp", "Welded", "Paint Comp", "Ship", "Start install",
+        "Comp. ETA", "Job Comp", "Invoiced", "Notes"
+    ]
+    
+    # Check which columns exist in the CSV
+    available_columns = [col for col in relevant_columns if col in df.columns]
+    missing_columns = [col for col in relevant_columns if col not in df.columns]
+    
+    if missing_columns:
+        print(f"⚠️  Warning: Some expected columns not found: {missing_columns}\n")
+    
+    # Filter rows where Job # is numeric and Release # exists (can be alphanumeric like "V123")
+    print("🔍 Filtering rows with numeric Job # and valid Release # (alphanumeric allowed)...")
+    
+    def is_valid_job_release(row):
+        """Check if Job # is numeric and Release # exists (can be alphanumeric)."""
+        try:
+            job_num = row.get("Job #")
+            release_num = row.get("Release #")
+            
+            # Check if both exist and are not null/empty
+            if pd.isna(job_num) or pd.isna(release_num):
+                return False
+            
+            # Convert release to string and check it's not empty
+            release_str = str(release_num).strip()
+            if not release_str:
+                return False
+            
+            # Job # must be numeric
+            try:
+                float(job_num)
+            except (ValueError, TypeError):
+                return False
+            
+            # Release # can be alphanumeric (e.g., "V123", "627", etc.)
+            return True
+        except (ValueError, TypeError):
+            return False
+    
+    # Apply filter
+    mask = df.apply(is_valid_job_release, axis=1)
+    filtered_df = df[mask].copy()
+    
+    total_rows = len(df)
+    filtered_rows = len(filtered_df)
+    excluded_rows = total_rows - filtered_rows
+    
+    print(f"   Total rows: {total_rows}")
+    print(f"   Rows with numeric Job # and valid Release #: {filtered_rows}")
+    print(f"   Rows excluded: {excluded_rows}\n")
+    
+    if filtered_rows == 0:
+        print("❌ No rows found with numeric Job # and valid Release #")
+        return {
+            "total_rows": total_rows,
+            "filtered_rows": 0,
+            "excluded_rows": excluded_rows,
+            "dataframe": None,
+            "summary": "No valid rows found"
+        }
+    
+    # Extract only relevant columns
+    filtered_df = filtered_df[available_columns].copy()
+    
+    # Add Ship date column (null for all, will be set differently)
+    filtered_df['Ship date'] = None
+    
+    # Initialize edge_cases list for later use
+    edge_cases = []
+    
+    # Add Stage column if requested
+    if add_stage_column:
+        print("🎯 Calculating stage values from staging columns...")
+        filtered_df['Stage'] = filtered_df.apply(determine_stage_from_staging_columns, axis=1)
+        
+        # Check for collisions and edge cases
+        print("\n🔍 Checking for edge cases and collisions...")
+        edge_cases = []
+        collisions = []
+        
+        for idx, row in filtered_df.iterrows():
+            job_comp = str(row.get('Job Comp', '') or '').strip().upper()
+            ship = str(row.get('Ship', '') or '').strip().upper()
+            paint_comp = str(row.get('Paint Comp', '') or '').strip().upper()
+            welded = str(row.get('Welded', '') or '').strip().upper()
+            fitup_comp = str(row.get('Fitup comp', '') or '').strip().upper()
+            cut_start = str(row.get('Cut start', '') or '').strip().upper()
+            
+            # Normalize O to empty
+            if job_comp == 'O': job_comp = ''
+            if ship == 'O': ship = ''
+            if paint_comp == 'O': paint_comp = ''
+            if welded == 'O': welded = ''
+            if fitup_comp == 'O': fitup_comp = ''
+            if cut_start == 'O': cut_start = ''
+            
+            identifier = f"{row['Job #']}-{row['Release #']}"
+            stage = row['Stage']
+            
+            # Note: Ship values (RS, ST, X) now override Paint Comp status, so no edge cases to report
+            # This is expected behavior - if Ship has a value, it takes priority
+        
+        print("✅ Ship values (RS, ST, X) override Paint Comp status - this is expected behavior")
+        
+        # Check for stage distribution
+        stage_counts = filtered_df['Stage'].value_counts()
+        print(f"\n📊 Stage distribution:")
+        for stage, count in stage_counts.items():
+            print(f"   {stage}: {count}")
+        
+        # Drop staging columns now that we have Stage
+        staging_columns_to_drop = ['Cut start', 'Fitup comp', 'Welded', 'Paint Comp', 'Ship', 'Job Comp']
+        columns_to_drop = [col for col in staging_columns_to_drop if col in filtered_df.columns]
+        if columns_to_drop:
+            filtered_df = filtered_df.drop(columns=columns_to_drop)
+            print(f"\n🗑️  Dropped staging columns: {', '.join(columns_to_drop)}")
+            print(f"   (Stage column contains all staging information)")
+        
+        # Drop columns with all NaN values (but keep Ship date even if all null)
+        all_nan_columns = [col for col in filtered_df.columns 
+                          if filtered_df[col].notna().sum() == 0 and col != 'Ship date']
+        if all_nan_columns:
+            filtered_df = filtered_df.drop(columns=all_nan_columns)
+            print(f"🗑️  Dropped columns with all NaN values: {', '.join(all_nan_columns)}")
+        
+        # Ensure Ship date column exists (null for all)
+        if 'Ship date' not in filtered_df.columns:
+            filtered_df['Ship date'] = None
+            print(f"📅 Added Ship date column (null for all rows)")
+    
+    # Display summary statistics
+    print("=" * 80)
+    print("📋 DATA PREVIEW SUMMARY")
+    print("=" * 80)
+    print(f"Total valid rows: {filtered_rows}")
+    print(f"Columns extracted: {len(available_columns)}")
+    print(f"\nFirst few rows preview:\n")
+    
+    # Display first few rows in a readable format
+    display_df = filtered_df.head(max_rows_to_display)
+    
+    # Use pandas display options for better readability
+    with pd.option_context('display.max_columns', None, 
+                           'display.width', None,
+                           'display.max_colwidth', 50):
+        print(display_df.to_string(index=False))
+    
+    if filtered_rows > max_rows_to_display:
+        print(f"\n... ({filtered_rows - max_rows_to_display} more rows not shown)")
+    
+    print("\n" + "=" * 80)
+    print("📊 COLUMN STATISTICS")
+    print("=" * 80)
+    
+    # Show some basic stats for key columns
+    stats_columns = ["Job #", "Release #", "Fab Hrs", "Install HRS"]
+    for col in stats_columns:
+        if col in filtered_df.columns:
+            non_null = filtered_df[col].notna().sum()
+            print(f"{col}: {non_null} non-null values")
+    
+    # Optionally export to CSV for easier review
+    if export_to_csv:
+        export_path = Path(export_to_csv)
+        filtered_df.to_csv(export_path, index=False)
+        print(f"\n💾 Exported filtered data to: {export_path}")
+        print(f"   ({filtered_rows} rows, {len(available_columns)} columns)")
+    
+    print("\n" + "=" * 80)
+    print("✅ Preview complete!")
+    print("=" * 80)
+    
+    result = {
+        "total_rows": total_rows,
+        "filtered_rows": filtered_rows,
+        "excluded_rows": excluded_rows,
+        "dataframe": filtered_df,
+        "columns": available_columns,
+        "missing_columns": missing_columns,
+        "export_path": str(export_to_csv) if export_to_csv else None,
+        "summary": f"Found {filtered_rows} valid rows with numeric Job # and valid Release #"
+    }
+    
+    # Add edge cases info if stage column was added
+    if add_stage_column and 'Stage' in filtered_df.columns:
+        result['edge_cases'] = edge_cases
+        result['stage_distribution'] = filtered_df['Stage'].value_counts().to_dict()
+    
+    return result
+
+
+def seed_jobs_from_csv(csv_file_path=None, batch_size=50, require_confirmation=True):
+    """
+    Seed the jobs table from CSV file, wiping all existing records first.
+    
+    This function:
+    1. Shows the database connection info
+    2. Asks for confirmation (if require_confirmation=True)
+    3. Deletes all existing Job records
+    4. Seeds the database with data from the CSV file
+    
+    Args:
+        csv_file_path: Path to CSV file. If None, uses default JL_Static_Ingestion.csv
+        batch_size: Number of records to insert per batch (default 50)
+        require_confirmation: If True, prompts for confirmation before proceeding (default True)
+    
+    Returns:
+        dict: Summary of the operation with counts and status
+    """
+    from app import create_app
+    from datetime import datetime
+    
+    app = create_app()
+    
+    with app.app_context():
+        # Get database connection info
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'Not configured')
+        
+        # Mask sensitive parts of the URI for display
+        if db_uri != 'Not configured':
+            # Mask passwords in connection strings
+            if '@' in db_uri:
+                parts = db_uri.split('@')
+                if len(parts) == 2:
+                    user_pass = parts[0].split('://')[-1]
+                    if ':' in user_pass:
+                        user, _ = user_pass.split(':', 1)
+                        masked_uri = db_uri.replace(user_pass, f"{user}:***")
+                    else:
+                        masked_uri = db_uri
+                else:
+                    masked_uri = db_uri
+            else:
+                masked_uri = db_uri
+        else:
+            masked_uri = db_uri
+        
+        print("=" * 80)
+        print("🗄️  DATABASE SEEDING OPERATION")
+        print("=" * 80)
+        print(f"\n📊 Database Connection:")
+        print(f"   URI: {masked_uri}")
+        
+        # Count existing records
+        existing_count = Job.query.count()
+        print(f"   Current records in jobs table: {existing_count}")
+        
+        if existing_count > 0:
+            print(f"\n⚠️  WARNING: This operation will DELETE all {existing_count} existing job records!")
+            print(f"   All existing data will be permanently lost.")
+        else:
+            print(f"\nℹ️  No existing records found. Will proceed with seeding.")
+        
+        # Get CSV data preview
+        print(f"\n📄 Loading CSV data...")
+        csv_result = preview_csv_jobs_data(csv_file_path=csv_file_path, max_rows_to_display=0, add_stage_column=True)
+        
+        if csv_result['filtered_rows'] == 0:
+            print("❌ No valid rows found in CSV. Aborting.")
+            return {
+                "success": False,
+                "error": "No valid rows in CSV",
+                "existing_count": existing_count,
+                "new_count": 0
+            }
+        
+        df = csv_result['dataframe']
+        
+        # Check for and remove duplicate job-release combinations
+        initial_count = len(df)
+        duplicates = df[df.duplicated(subset=['Job #', 'Release #'], keep=False)]
+        
+        if len(duplicates) > 0:
+            print(f"\n⚠️  Found {len(duplicates)} duplicate job-release combinations:")
+            for idx, row in duplicates.iterrows():
+                print(f"   Job {row['Job #']}-{row['Release #']}: {row.get('Job', 'N/A')}")
+            
+            # Remove duplicates, keeping first occurrence
+            df = df.drop_duplicates(subset=['Job #', 'Release #'], keep='first')
+            removed_count = initial_count - len(df)
+            print(f"\n🗑️  Removed {removed_count} duplicate rows (keeping first occurrence)")
+        
+        new_count = len(df)
+        
+        print(f"\n📋 CSV Data Summary:")
+        print(f"   Valid rows to insert: {new_count}")
+        print(f"   Columns: {len(df.columns)}")
+        
+        # Confirmation prompt
+        if require_confirmation:
+            print("\n" + "=" * 80)
+            print("⚠️  CONFIRMATION REQUIRED")
+            print("=" * 80)
+            print(f"\nThis will:")
+            print(f"  1. DELETE all {existing_count} existing job records")
+            print(f"  2. INSERT {new_count} new job records from CSV")
+            print(f"\nDatabase: {masked_uri}")
+            
+            response = input("\nType 'YES' to proceed, or anything else to cancel: ").strip()
+            
+            if response != 'YES':
+                print("\n❌ Operation cancelled by user.")
+                return {
+                    "success": False,
+                    "cancelled": True,
+                    "existing_count": existing_count,
+                    "new_count": new_count
+                }
+        
+        print("\n" + "=" * 80)
+        print("🚀 STARTING SEEDING OPERATION")
+        print("=" * 80)
+        
+        try:
+            # Step 1: Delete all existing records
+            if existing_count > 0:
+                print(f"\n🗑️  Deleting {existing_count} existing job records...")
+                deleted_count = Job.query.delete()
+                db.session.commit()
+                print(f"   ✓ Deleted {deleted_count} records")
+            else:
+                print(f"\n✓ No existing records to delete")
+            
+            # Step 2: Insert new records in batches
+            print(f"\n📥 Inserting {new_count} new records in batches of {batch_size}...")
+            
+            total_created = 0
+            batch_count = 0
+            errors = []
+            
+            for i in range(0, len(df), batch_size):
+                batch_df = df.iloc[i:i + batch_size]
+                batch_count += 1
+                jobs_to_add = []
+                
+                print(f"\n   Processing batch {batch_count} (rows {i+1}-{min(i+batch_size, len(df))})...")
+                
+                for idx, row in batch_df.iterrows():
+                    try:
+                        # Map CSV columns to Job model fields
+                        job_record = Job(
+                            job=int(row['Job #']),
+                            release=str(row['Release #']).strip(),
+                            job_name=safe_truncate_string(row.get('Job'), 128),
+                            description=safe_truncate_string(row.get('Description'), 256),
+                            fab_hrs=safe_float(row.get('Fab Hrs')),
+                            install_hrs=safe_float(row.get('Install HRS')),
+                            paint_color=safe_truncate_string(row.get('Paint color'), 64),
+                            pm=safe_truncate_string(row.get('PM'), 16),
+                            by=safe_truncate_string(row.get('BY'), 16),
+                            released=to_date(row.get('Released')),
+                            fab_order=safe_float(row.get('Fab Order')),
+                            stage=safe_truncate_string(row.get('Stage'), 128),
+                            start_install=to_date(row.get('Start install')),
+                            comp_eta=to_date(row.get('Comp. ETA')),
+                            invoiced=safe_truncate_string(row.get('Invoiced'), 8),
+                            notes=safe_truncate_string(row.get('Notes'), 256),
+                            ship_date=to_date(row.get('Ship date')),  # Will be None for all rows initially
+                            last_updated_at=datetime.utcnow(),
+                            source_of_update="CSV"
+                        )
+                        
+                        jobs_to_add.append(job_record)
+                        
+                    except Exception as e:
+                        identifier = f"{row.get('Job #', '?')}-{row.get('Release #', '?')}"
+                        error_msg = f"Error processing row {identifier}: {str(e)}"
+                        errors.append(error_msg)
+                        logging.error(error_msg)
+                        continue
+                
+                # Commit this batch
+                if not jobs_to_add:
+                    print(f"      ⚠️  No valid records in batch {batch_count}")
+                    continue
+                
+                try:
+                    db.session.bulk_save_objects(jobs_to_add)
+                    db.session.commit()
+                    total_created += len(jobs_to_add)
+                    print(f"      ✓ Batch {batch_count}: {len(jobs_to_add)} records inserted")
+                    
+                except SQLAlchemyError as e:
+                    db.session.rollback()
+                    error_str = str(e)
+                    
+                    # Check if it's a unique constraint violation (duplicate)
+                    if "UNIQUE constraint" in error_str or "duplicate" in error_str.lower():
+                        # Try inserting records one by one to identify the duplicate
+                        print(f"      ⚠️  Batch {batch_count} has duplicate(s), inserting individually...")
+                        batch_created = 0
+                        for job_record in jobs_to_add:
+                            try:
+                                db.session.add(job_record)
+                                db.session.commit()
+                                batch_created += 1
+                            except SQLAlchemyError as dup_error:
+                                db.session.rollback()
+                                identifier = f"{job_record.job}-{job_record.release}"
+                                error_msg = f"Duplicate skipped: {identifier}"
+                                errors.append(error_msg)
+                                logging.warning(error_msg)
+                        
+                        total_created += batch_created
+                        skipped = len(jobs_to_add) - batch_created
+                        if skipped > 0:
+                            print(f"      ✓ Batch {batch_count}: {batch_created} inserted, {skipped} duplicates skipped")
+                        else:
+                            print(f"      ✓ Batch {batch_count}: {batch_created} records inserted")
+                    else:
+                        # Other database error
+                        error_msg = f"Database error in batch {batch_count}: {error_str}"
+                        errors.append(error_msg)
+                        logging.error(error_msg)
+                        print(f"      ✗ Batch {batch_count} failed: {error_str}")
+                finally:
+                    # Memory cleanup
+                    db.session.expunge_all()
+                    gc.collect()
+            
+            # Final summary
+            print("\n" + "=" * 80)
+            print("✅ SEEDING OPERATION COMPLETE")
+            print("=" * 80)
+            print(f"\n📊 Summary:")
+            print(f"   Records deleted: {existing_count}")
+            print(f"   Records inserted: {total_created}")
+            print(f"   Errors: {len(errors)}")
+            
+            if errors:
+                print(f"\n⚠️  Errors encountered:")
+                for error in errors[:10]:  # Show first 10 errors
+                    print(f"   - {error}")
+                if len(errors) > 10:
+                    print(f"   ... and {len(errors) - 10} more errors")
+            
+            return {
+                "success": True,
+                "existing_count": existing_count,
+                "new_count": total_created,
+                "errors": errors,
+                "database_uri": masked_uri
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            error_msg = f"Fatal error during seeding: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            print(f"\n❌ {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "existing_count": existing_count,
+                "new_count": 0
+            }
+
+
 if __name__ == "__main__":
     # This allows you to run the seeding directly from command line
     # python -m app.seed
-    print("Running incremental seeding example...")
-    run_incremental_seed_example()
+    import sys
+    
+    # Check if user wants to preview CSV data
+    if len(sys.argv) > 1 and sys.argv[1] == "preview":
+        print("=" * 80)
+        print("📋 CSV JOBS DATA PREVIEW")
+        print("=" * 80)
+        export_path = sys.argv[2] if len(sys.argv) > 2 else None
+        preview_csv_jobs_data(export_to_csv=export_path)
+    elif len(sys.argv) > 1 and sys.argv[1] == "seed":
+        # Run the seed function
+        print("=" * 80)
+        print("🌱 CSV TO DATABASE SEEDING")
+        print("=" * 80)
+        csv_path = sys.argv[2] if len(sys.argv) > 2 else None
+        no_confirm = len(sys.argv) > 3 and sys.argv[3] == "--no-confirm"
+        result = seed_jobs_from_csv(csv_file_path=csv_path, require_confirmation=not no_confirm)
+        if not result.get("success"):
+            sys.exit(1)
+    else:
+        print("Usage:")
+        print("  Preview CSV: python -m app.seed preview [output.csv]")
+        print("  Seed database: python -m app.seed seed [csv_path] [--no-confirm]")
+        print("\nRunning incremental seeding example...")
+        run_incremental_seed_example()
