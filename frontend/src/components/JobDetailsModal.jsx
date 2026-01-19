@@ -124,21 +124,40 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                 </div>
 
                 <div className="bg-gray-50 px-6 py-4 rounded-b-xl border-t border-gray-200 space-y-3">
-                    {jobNumber && releaseNumber ? (
-                        <button
-                            onClick={handleEventsClick}
-                            className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg font-medium hover:bg-accent-700 transition-colors"
-                        >
-                            Events
-                        </button>
-                    ) : (
-                        <button
-                            disabled
-                            className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed"
-                        >
-                            Events
-                        </button>
-                    )}
+                    <div className="flex gap-3">
+                        {jobNumber && releaseNumber ? (
+                            <button
+                                onClick={handleEventsClick}
+                                className="flex-1 px-4 py-2 bg-accent-600 text-white rounded-lg font-medium hover:bg-accent-700 transition-colors"
+                            >
+                                Events
+                            </button>
+                        ) : (
+                            <button
+                                disabled
+                                className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed"
+                            >
+                                Events
+                            </button>
+                        )}
+                        {job.trello_card_id ? (
+                            <a
+                                href={`https://trello.com/c/${job.trello_card_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
+                            >
+                                Trello
+                            </a>
+                        ) : (
+                            <button
+                                disabled
+                                className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed"
+                            >
+                                Trello
+                            </button>
+                        )}
+                    </div>
                     <button
                         onClick={onClose}
                         className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"

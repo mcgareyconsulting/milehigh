@@ -131,6 +131,7 @@ def get_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'trello_card_id': serialize_value(job.trello_card_id),
                 }
                 # Validate the job data
                 json.dumps(job_data)
@@ -246,6 +247,7 @@ def get_all_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'trello_card_id': serialize_value(job.trello_card_id),
                 }
                 # Validate the job data
                 json.dumps(job_data)
