@@ -341,7 +341,14 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
     Returns:
         Dictionary with success status and card info
     """
-    from app.trello.api import get_list_by_name, update_job_record_with_trello_data
+    from app.trello.api import (
+        get_list_by_name, 
+        update_job_record_with_trello_data,
+        copy_trello_card,
+        link_cards,
+        card_has_link_to,
+        update_trello_card
+    )
     from app.config import Config as cfg
     import requests
     
@@ -411,13 +418,35 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
         else:
             logger.error(f"Failed to update database record with Trello data")
         
+        # Create mirror card in unassigned list if configured
+        mirror_card_id = None
+        if cfg.UNASSIGNED_CARDS_LIST_ID:
+            try:
+                # Check if card already has a link (to avoid duplicates)
+                if not card_has_link_to(card_data['id']):
+                    logger.info(f"Creating mirror card in unassigned list for {job.job}-{job.release}")
+                    cloned = copy_trello_card(card_data['id'], cfg.UNASSIGNED_CARDS_LIST_ID, pos="bottom")
+                    mirror_card_id = cloned["id"]
+                    link_cards(card_data['id'], mirror_card_id)
+                    # Clear due dates on both cards
+                    update_trello_card(card_data['id'], clear_due_date=True)
+                    update_trello_card(mirror_card_id, clear_due_date=True)
+                    logger.info(f"Mirror card created and linked: {mirror_card_id}")
+                else:
+                    logger.info(f"Card {card_data['id']} already has a link, skipping mirror card creation")
+            except Exception as mirror_err:
+                logger.warning(f"Failed to create mirror card for {job.job}-{job.release}: {mirror_err}")
+        else:
+            logger.debug("UNASSIGNED_CARDS_LIST_ID not configured, skipping mirror card creation")
+        
         return {
             "success": True,
             "card_id": card_data['id'],
             "card_name": card_data.get('name', ''),
             "list_name": list_name,
             "job": job.job,
-            "release": job.release
+            "release": job.release,
+            "mirror_card_id": mirror_card_id
         }
         
     except Exception as err:
