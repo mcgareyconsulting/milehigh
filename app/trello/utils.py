@@ -245,7 +245,7 @@ def add_business_days(start_date, business_days):
 def should_sort_list_by_fab_order(list_id):
     """
     Check if a list should be sorted by Fab Order.
-    Only sorts 'Fit Up Complete' and 'Released' lists.
+    Sorts 'Released' and 'Fit Up Complete.'lists.
     
     Args:
         list_id: Trello list ID to check
@@ -254,7 +254,25 @@ def should_sort_list_by_fab_order(list_id):
         bool: True if list should be sorted
     """
     from app.config import Config as cfg
-    return list_id in (cfg.FIT_UP_COMPLETE_LIST_ID, cfg.NEW_TRELLO_CARD_LIST_ID)
+    from app.trello.api import get_list_name_by_id
+    
+    # Target list names that should be sorted by Fab Order
+    target_list_names = ["Released", "Fit Up Complete."]
+    
+    # First check config IDs for backward compatibility
+    if list_id in (cfg.FIT_UP_COMPLETE_LIST_ID, cfg.NEW_TRELLO_CARD_LIST_ID):
+        return True
+    
+    # Also check by list name to handle cases where config IDs might not be set
+    try:
+        list_name = get_list_name_by_id(list_id)
+        if list_name in target_list_names:
+            return True
+    except Exception:
+        # If we can't get the list name, fall back to config ID check only
+        pass
+    
+    return False
 
 
 def sort_list_if_needed(list_id, fab_order_field_id, operation_id, list_type="list"):

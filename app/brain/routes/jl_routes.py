@@ -22,7 +22,7 @@ def create_trello_card_for_job(job, excel_data_dict):
     Create a Trello card for an existing job.
     
     Args:
-        job: Job database object
+        job: Job database object (may be newly created)
         excel_data_dict: Dictionary with job data in Excel format
     
     Returns:
@@ -35,94 +35,76 @@ def create_trello_card_for_job(job, excel_data_dict):
             return None
         
         # Import Trello functions
-        from app.trello.api import (
-            get_list_by_name, update_job_record_with_trello_data,
-            calculate_installation_duration, add_comment_to_trello_card,
-            update_card_custom_field_number, add_procore_link
+        from app.trello.api import get_list_by_name, update_job_record_with_trello_data
+        from app.trello.card_creation import (
+            build_card_title,
+            build_card_description,
+            create_trello_card_core,
+            apply_card_post_creation_features
         )
         from app.config import Config as cfg
-        import requests
-        import math
         
-        # Determine Trello list to create the card in (default to "Released" list)
+        # jl_routes always uses "Released" list
         list_name = "Released"
         target_list = get_list_by_name(list_name)
         if not target_list:
             # Fall back to configured new-card list
             list_id = cfg.NEW_TRELLO_CARD_LIST_ID
+            logger.warning(f"List '{list_name}' not found, using default list")
         else:
             list_id = target_list["id"]
         
-        # Format card title
+        # Get values from excel_data_dict with fallback to job
         job_number = excel_data_dict.get('Job #', job.job)
         release_number = excel_data_dict.get('Release #', job.release)
         job_name = excel_data_dict.get('Job', job.job_name or 'Unknown Job')
         job_description = excel_data_dict.get('Description', job.description or 'Unknown Description')
-        card_title = f"{job_number}-{release_number} {job_name} {job_description}"
         
-        # Format card description with bold field names
-        description_parts = []
+        # Build card title and description using shared functions
+        card_title = build_card_title(
+            job_number,
+            release_number,
+            job_name,
+            job_description
+        )
         
-        # Job description (first line)
-        if excel_data_dict.get('Description') or job.description:
-            desc = excel_data_dict.get('Description') or job.description
-            description_parts.append(f"**Description:** {desc}")
-        
-        # Add field details with bold formatting
         install_hrs = excel_data_dict.get('Install HRS') or job.install_hrs
-        if install_hrs:
-            description_parts.append(f"**Install HRS:** {install_hrs}")
-            # Number of Guys
-            num_guys = 2
-            description_parts.append(f"**Number of Guys:** {num_guys}")
-            
-            # Installation Duration calculation
-            installation_duration = calculate_installation_duration(install_hrs, num_guys)
-            if installation_duration is not None:
-                description_parts.append(f"**Installation Duration:** {installation_duration} days")
-        
-        # Paint Color
         paint_color = excel_data_dict.get('Paint color') or job.paint_color
-        if paint_color:
-            description_parts.append(f"**Paint color:** {paint_color}")
-        
-        # Team
         pm = excel_data_dict.get('PM') or job.pm
         by = excel_data_dict.get('BY') or job.by
-        if pm and by:
-            description_parts.append(f"**Team:** PM: {pm} / BY: {by}")
-        
-        # Released
         released = excel_data_dict.get('Released') or job.released
-        if released:
-            if isinstance(released, str):
-                released_date = to_date(released)
-            else:
-                released_date = released
-            if released_date:
-                description_parts.append(f"**Released:** {released_date}")
         
-        # Join all description parts with newlines
-        card_description = "\n".join(description_parts)
+        # Handle released date conversion
+        if released and isinstance(released, str):
+            released_date = to_date(released)
+        else:
+            released_date = released
         
-        # Create the card
-        url = "https://api.trello.com/1/cards"
+        card_description = build_card_description(
+            description=job_description,
+            install_hrs=install_hrs,
+            paint_color=paint_color,
+            pm=pm,
+            by=by,
+            released=released_date
+        )
         
-        payload = {
-            "key": cfg.TRELLO_API_KEY,
-            "token": cfg.TRELLO_TOKEN,
-            "name": card_title,
-            "desc": card_description,
-            "idList": list_id,
-            "pos": "top"  # Add to top of list
-        }
+        # Create the card using shared core function
+        create_result = create_trello_card_core(
+            card_title=card_title,
+            card_description=card_description,
+            list_id=list_id,
+            position="top"
+        )
         
-        logger.info(f"Creating Trello card for job {job.job}-{job.release}")
-        response = requests.post(url, params=payload)
-        response.raise_for_status()
+        if not create_result["success"]:
+            return {
+                "success": False,
+                "error": create_result.get("error", "Failed to create card")
+            }
         
-        card_data = response.json()
-        logger.info(f"Trello card created successfully: {card_data['id']}")
+        card_data = create_result["card_data"]
+        card_id = create_result["card_id"]
         
         # Update the job record with Trello card data
         success = update_job_record_with_trello_data(job, card_data)
@@ -132,64 +114,29 @@ def create_trello_card_for_job(job, excel_data_dict):
         else:
             logger.error(f"Failed to update database record with Trello data")
         
-        # Handle Fab Order custom field
+        # Get values for post-creation features
         fab_order_value = excel_data_dict.get('Fab Order') or job.fab_order
-        if fab_order_value is not None and not pd.isna(fab_order_value):
-            try:
-                # Convert to int (round up if float)
-                if isinstance(fab_order_value, float):
-                    fab_order_int = math.ceil(fab_order_value)
-                else:
-                    fab_order_int = int(fab_order_value)
-                
-                # Update Trello custom field
-                if cfg.FAB_ORDER_FIELD_ID:
-                    from app.trello.api import update_card_custom_field_number
-                    fab_order_success = update_card_custom_field_number(
-                        card_data["id"],
-                        cfg.FAB_ORDER_FIELD_ID,
-                        fab_order_int
-                    )
-                    if fab_order_success:
-                        logger.info(f"Successfully set Fab Order custom field to {fab_order_int}")
-                        
-                        # Sort the list if needed
-                        from app.trello.utils import sort_list_if_needed
-                        sort_list_if_needed(
-                            list_id,
-                            cfg.FAB_ORDER_FIELD_ID,
-                            None,
-                            "list"
-                        )
-            except (ValueError, TypeError) as e:
-                logger.error(f"Could not convert Fab Order '{fab_order_value}' to int: {e}")
-        
-        # Handle notes field - append as comment if not empty
         notes_value = excel_data_dict.get('Notes') or job.notes
-        if (notes_value is not None and 
-            not pd.isna(notes_value) and 
-            str(notes_value).strip() and
-            str(notes_value).strip().lower() not in ['nan', 'none']):
-            comment_success = add_comment_to_trello_card(card_data["id"], str(notes_value).strip())
-            if comment_success:
-                logger.info(f"Successfully added notes as comment to Trello card")
         
-        # Add FC Drawing link if viewer_url exists
-        if job.viewer_url:
-            try:
-                link_result = add_procore_link(card_data["id"], job.viewer_url, link_name="FC Drawing")
-                if link_result.get("success"):
-                    logger.info(f"Added FC Drawing link to card {card_data['id']}")
-                else:
-                    logger.warning(f"Failed to add FC Drawing link: {link_result.get('error')}")
-            except Exception as link_err:
-                logger.warning(f"Error adding FC Drawing link for {job.job}-{job.release}: {link_err}")
+        # Apply post-creation features (Fab Order, FC Drawing, notes, mirror card)
+        # jl_routes now works identically to scanner - creates mirror cards
+        post_creation_results = apply_card_post_creation_features(
+            card_id=card_id,
+            list_id=list_id,
+            job_record=job,
+            fab_order=fab_order_value if fab_order_value is not None and not pd.isna(fab_order_value) else None,
+            notes=notes_value,
+            create_mirror=True,  # jl_routes now creates mirror cards like scanner
+            operation_id=None
+        )
         
         return {
             "success": True,
             "card_id": card_data["id"],
             "card_name": card_data["name"],
-            "card_url": card_data["url"]
+            "card_url": card_data["url"],
+            "list_name": list_name,
+            "mirror_card_id": post_creation_results.get("mirror_card_id")
         }
         
     except Exception as e:

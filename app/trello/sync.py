@@ -309,42 +309,56 @@ def sync_from_trello(event_info):
             # Apply list mapping to database
             TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
             
-            # Check if stage actually changed (only create event if DB was updated)
-            status_changed = old_stage_before_list_move != rec.stage
+            # Always create JobEvent for list moves - the webhook confirms the move happened
+            # Use to_list_name as the stage name to match frontend format
+            stage = to_list_name
+            # Use from_list_name from webhook for "from" value (more reliable than DB stage)
+            # Fall back to old_stage_before_list_move if from_list_name is not available
+            from_stage = from_list_name if from_list_name else (old_stage_before_list_move if old_stage_before_list_move else None)
             
-            if status_changed:
-                # Create JobEvent for stage update (list movement that caused status change)
-                # Use to_list_name as the stage name to match frontend format
-                stage = to_list_name
-                # Use old_stage_before_list_move for "from" value, defaulting to None if not set
-                from_stage = old_stage_before_list_move if old_stage_before_list_move else None
-                event = JobEventService.create(
+            safe_log_sync_event(
+                sync_op.operation_id,
+                "INFO",
+                "Creating stage update event for list move",
+                job=rec.job,
+                release=rec.release,
+                from_list=from_list_name,
+                to_list=to_list_name,
+                old_stage=old_stage_before_list_move,
+                new_stage=stage
+            )
+            
+            event = JobEventService.create(
+                job=rec.job,
+                release=rec.release,
+                action="update_stage",
+                source="Trello",
+                payload={"from": from_stage, "to": stage}
+            )
+            if event:
+                created_events.append(event)
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "INFO",
+                    "JobEvent created for stage update",
                     job=rec.job,
                     release=rec.release,
-                    action="update_stage",
-                    source="Trello",
-                    payload={"from": from_stage, "to": stage}
+                    from_list=from_list_name,
+                    to_stage=stage,
+                    event_id=event.id
                 )
-                if event:
-                    created_events.append(event)
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "JobEvent created for stage update",
-                        job=rec.job,
-                        release=rec.release,
-                        from_list=from_list_name,
-                        to_stage=stage,
-                        event_id=event.id
-                    )
-                else:
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Duplicate stage update event detected, skipping",
-                        job=rec.job,
-                        release=rec.release
-                    )
+            else:
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "WARNING",
+                    "Duplicate stage update event detected, skipping",
+                    job=rec.job,
+                    release=rec.release,
+                    from_list=from_list_name,
+                    to_list=to_list_name,
+                    payload_from=from_stage,
+                    payload_to=stage
+                )
             
             destination_name = event_info.get("to")
             # Temporarily disable duplicate-and-link flow for Fit Up Complete cards.

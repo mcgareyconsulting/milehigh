@@ -762,3 +762,44 @@ def trello_sync():
     except Exception as e:
         logger.error(f"Error in Trello sync: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@brain_bp.route("/trello-scan-create", methods=["POST"])
+def trello_scan_create():
+    """
+    Scan all jobs in the database and create Trello cards for jobs that don't have them.
+    
+    This endpoint:
+    - Queries all jobs from the database
+    - Filters out jobs that already have trello_card_id (duplicates)
+    - Determines the appropriate list for each job based on stage
+    - Creates cards with all standard features (notes, fab order, FC drawing, num guys, etc.)
+    - Works across all tracked lists (Released, Fit Up Complete., Paint complete, etc.)
+    
+    Query Parameters:
+        dry_run (bool): If true, only report what would be created without making changes (default: false)
+        limit (int): Maximum number of jobs to process (optional, processes all if not provided)
+    
+    Returns:
+        JSON object with scan and creation results
+        
+    Status Codes:
+        - 200: Success
+        - 500: Server error
+    """
+    try:
+        from app.trello.scanner import scan_and_create_cards_for_all_jobs
+        
+        # Check for dry_run parameter
+        dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+        
+        # Check for limit parameter
+        limit = request.args.get('limit', type=int)
+        
+        logger.info(f"Trello scan and create endpoint called (dry_run={dry_run}, limit={limit})")
+        results = scan_and_create_cards_for_all_jobs(dry_run=dry_run, limit=limit)
+        
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Error in Trello scan and create: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500

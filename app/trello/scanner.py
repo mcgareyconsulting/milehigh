@@ -341,17 +341,14 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
     Returns:
         Dictionary with success status and card info
     """
-    from app.trello.api import (
-        get_list_by_name, 
-        update_job_record_with_trello_data,
-        copy_trello_card,
-        link_cards,
-        card_has_link_to,
-        update_trello_card,
-        add_procore_link
+    from app.trello.api import get_list_by_name, update_job_record_with_trello_data
+    from app.trello.card_creation import (
+        build_card_title,
+        build_card_description,
+        create_trello_card_core,
+        apply_card_post_creation_features
     )
     from app.config import Config as cfg
-    import requests
     
     try:
         # Skip if job already has a Trello card
@@ -374,52 +371,41 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
         else:
             list_id = target_list["id"]
         
-        # Format card title
-        job_name = job.job_name or 'Unknown Job'
-        job_description = job.description or 'Unknown Description'
-        card_title = f"{job.job}-{job.release} {job_name} {job_description}"
+        # Build card title and description using shared functions
+        card_title = build_card_title(
+            job.job,
+            job.release,
+            job.job_name,
+            job.description
+        )
         
-        # Format card description
-        description_parts = []
-        if job.description:
-            description_parts.append(f"**Description:** {job.description}")
-        if job.install_hrs:
-            description_parts.append(f"**Install HRS:** {job.install_hrs}")
-            # Number of Guys
-            num_guys = 2
-            description_parts.append(f"**Number of Guys:** {num_guys}")
-            
-            # Installation Duration calculation
-            from app.trello.api import calculate_installation_duration
-            installation_duration = calculate_installation_duration(job.install_hrs, num_guys)
-            if installation_duration is not None:
-                description_parts.append(f"**Installation Duration:** {installation_duration} days")
-        if job.paint_color:
-            description_parts.append(f"**Paint color:** {job.paint_color}")
-        if job.pm and job.by:
-            description_parts.append(f"**Team:** PM: {job.pm} / BY: {job.by}")
-        if job.released:
-            description_parts.append(f"**Released:** {job.released}")
+        card_description = build_card_description(
+            description=job.description,
+            install_hrs=job.install_hrs,
+            paint_color=job.paint_color,
+            pm=job.pm,
+            by=job.by,
+            released=job.released
+        )
         
-        card_description = "\n".join(description_parts) if description_parts else ""
+        # Create the card using shared core function
+        create_result = create_trello_card_core(
+            card_title=card_title,
+            card_description=card_description,
+            list_id=list_id,
+            position="top"
+        )
         
-        # Create the card
-        url = "https://api.trello.com/1/cards"
-        payload = {
-            "key": cfg.TRELLO_API_KEY,
-            "token": cfg.TRELLO_TOKEN,
-            "name": card_title,
-            "desc": card_description,
-            "idList": list_id,
-            "pos": "top"
-        }
+        if not create_result["success"]:
+            return {
+                "success": False,
+                "job": job.job,
+                "release": job.release,
+                "error": create_result.get("error", "Failed to create card")
+            }
         
-        logger.info(f"Creating Trello card for job {job.job}-{job.release} in list '{list_name}'")
-        response = requests.post(url, params=payload)
-        response.raise_for_status()
-        
-        card_data = response.json()
-        logger.info(f"Trello card created successfully: {card_data['id']}")
+        card_data = create_result["card_data"]
+        card_id = create_result["card_id"]
         
         # Update the job record with Trello card data
         success = update_job_record_with_trello_data(job, card_data)
@@ -428,46 +414,24 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
         else:
             logger.error(f"Failed to update database record with Trello data")
         
-        # Add FC Drawing link if viewer_url exists
-        if job.viewer_url:
-            try:
-                link_result = add_procore_link(card_data['id'], job.viewer_url, link_name="FC Drawing")
-                if link_result.get("success"):
-                    logger.info(f"Added FC Drawing link to card {card_data['id']}")
-                else:
-                    logger.warning(f"Failed to add FC Drawing link: {link_result.get('error')}")
-            except Exception as link_err:
-                logger.warning(f"Error adding FC Drawing link for {job.job}-{job.release}: {link_err}")
-        
-        # Create mirror card in unassigned list if configured
-        mirror_card_id = None
-        if cfg.UNASSIGNED_CARDS_LIST_ID:
-            try:
-                # Check if card already has a link (to avoid duplicates)
-                if not card_has_link_to(card_data['id']):
-                    logger.info(f"Creating mirror card in unassigned list for {job.job}-{job.release}")
-                    cloned = copy_trello_card(card_data['id'], cfg.UNASSIGNED_CARDS_LIST_ID, pos="bottom")
-                    mirror_card_id = cloned["id"]
-                    link_cards(card_data['id'], mirror_card_id)
-                    # Clear due dates on both cards
-                    update_trello_card(card_data['id'], clear_due_date=True)
-                    update_trello_card(mirror_card_id, clear_due_date=True)
-                    logger.info(f"Mirror card created and linked: {mirror_card_id}")
-                else:
-                    logger.info(f"Card {card_data['id']} already has a link, skipping mirror card creation")
-            except Exception as mirror_err:
-                logger.warning(f"Failed to create mirror card for {job.job}-{job.release}: {mirror_err}")
-        else:
-            logger.debug("UNASSIGNED_CARDS_LIST_ID not configured, skipping mirror card creation")
+        # Apply post-creation features (Fab Order, FC Drawing, notes, mirror card)
+        post_creation_results = apply_card_post_creation_features(
+            card_id=card_id,
+            list_id=list_id,
+            job_record=job,
+            notes=job.notes,  # Scanner also handles notes as comments
+            create_mirror=True,  # Scanner creates mirror cards
+            operation_id=None
+        )
         
         return {
             "success": True,
-            "card_id": card_data['id'],
+            "card_id": card_id,
             "card_name": card_data.get('name', ''),
             "list_name": list_name,
             "job": job.job,
             "release": job.release,
-            "mirror_card_id": mirror_card_id
+            "mirror_card_id": post_creation_results.get("mirror_card_id")
         }
         
     except Exception as err:
@@ -628,4 +592,140 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
                 f"created={results['summary']['created_count']}")
     
     return results
+
+
+def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[int] = None) -> Dict:
+    """
+    Scan all jobs in the database and create Trello cards for jobs that don't have them.
+    
+    This function:
+    - Queries all jobs from the database
+    - Filters out jobs that already have trello_card_id (duplicates)
+    - Determines the appropriate list for each job based on stage
+    - Creates cards with all standard features (notes, fab order, FC drawing, num guys, etc.)
+    - Works across all tracked lists
+    
+    Args:
+        dry_run: If True, only report what would be created without making changes
+        limit: Maximum number of jobs to process (None for all)
+    
+    Returns:
+        Dictionary with scan and creation results
+    """
+    logger.info(f"Starting scan and create cards for all jobs (dry_run={dry_run})")
+    
+    try:
+        # Query all jobs that don't have Trello cards
+        query = Job.query.filter(Job.trello_card_id.is_(None))
+        
+        if limit:
+            query = query.limit(limit)
+        
+        jobs_without_cards = query.all()
+        
+        logger.info(f"Found {len(jobs_without_cards)} jobs without Trello cards")
+        
+        if len(jobs_without_cards) == 0:
+            return {
+                "success": True,
+                "total_jobs": 0,
+                "created": 0,
+                "failed": 0,
+                "skipped": 0,
+                "dry_run": dry_run,
+                "created_details": [],
+                "failed_details": []
+            }
+        
+        results = {
+            "success": True,
+            "total_jobs": len(jobs_without_cards),
+            "created": 0,
+            "failed": 0,
+            "skipped": 0,
+            "dry_run": dry_run,
+            "created_details": [],
+            "failed_details": []
+        }
+        
+        # Process each job
+        for idx, job in enumerate(jobs_without_cards, 1):
+            job_id = f"{job.job}-{job.release}"
+            
+            try:
+                # Determine expected list from stage
+                expected_list = get_expected_trello_list_from_stage(job.stage)
+                if not expected_list:
+                    expected_list = "Released"  # Default fallback
+                
+                if dry_run:
+                    logger.info(f"[DRY RUN] Would create card for {job_id} in list '{expected_list}'")
+                    results["created"] += 1
+                    results["created_details"].append({
+                        "job": job.job,
+                        "release": job.release,
+                        "identifier": job_id,
+                        "expected_list": expected_list,
+                        "stage": job.stage
+                    })
+                else:
+                    logger.info(f"[{idx}/{len(jobs_without_cards)}] Creating card for {job_id} in list '{expected_list}'")
+                    
+                    # Create card using the standard function (handles all features)
+                    create_result = create_trello_card_for_db_job(job, list_name=expected_list)
+                    
+                    if create_result.get("success"):
+                        results["created"] += 1
+                        results["created_details"].append({
+                            "job": job.job,
+                            "release": job.release,
+                            "identifier": job_id,
+                            "card_id": create_result.get("card_id"),
+                            "mirror_card_id": create_result.get("mirror_card_id"),
+                            "list_name": create_result.get("list_name"),
+                            "stage": job.stage
+                        })
+                        logger.info(f"Successfully created card for {job_id}")
+                    else:
+                        error = create_result.get("error", "Unknown error")
+                        if "already exists" in error.lower():
+                            results["skipped"] += 1
+                            logger.info(f"Skipped {job_id}: {error}")
+                        else:
+                            results["failed"] += 1
+                            results["failed_details"].append({
+                                "job": job.job,
+                                "release": job.release,
+                                "identifier": job_id,
+                                "error": error,
+                                "stage": job.stage
+                            })
+                            logger.error(f"Failed to create card for {job_id}: {error}")
+            
+            except Exception as err:
+                error_msg = str(err)
+                logger.error(f"Error processing {job_id}: {error_msg}", exc_info=True)
+                results["failed"] += 1
+                results["failed_details"].append({
+                    "job": job.job,
+                    "release": job.release,
+                    "identifier": job_id,
+                    "error": error_msg,
+                    "stage": job.stage if hasattr(job, 'stage') else None
+                })
+        
+        logger.info(f"Scan and create complete: created={results['created']}, "
+                   f"failed={results['failed']}, skipped={results['skipped']}")
+        
+        return results
+        
+    except Exception as e:
+        error_msg = f"Scan and create failed: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "success": False,
+            "error": error_msg,
+            "error_type": type(e).__name__,
+            "dry_run": dry_run
+        }
 
