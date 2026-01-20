@@ -385,6 +385,15 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
             description_parts.append(f"**Description:** {job.description}")
         if job.install_hrs:
             description_parts.append(f"**Install HRS:** {job.install_hrs}")
+            # Number of Guys
+            num_guys = 2
+            description_parts.append(f"**Number of Guys:** {num_guys}")
+            
+            # Installation Duration calculation
+            from app.trello.api import calculate_installation_duration
+            installation_duration = calculate_installation_duration(job.install_hrs, num_guys)
+            if installation_duration is not None:
+                description_parts.append(f"**Installation Duration:** {installation_duration} days")
         if job.paint_color:
             description_parts.append(f"**Paint color:** {job.paint_color}")
         if job.pm and job.by:

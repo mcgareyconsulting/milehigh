@@ -20,6 +20,7 @@ from app.trello.api import (
     update_mirror_card_date_range,
     parse_num_guys_from_description,
     update_installation_duration_in_description,
+    update_num_guys_in_description,
     parse_installation_duration,
     update_trello_card_description,
     update_card_custom_field_number,
@@ -413,10 +414,30 @@ def sync_from_trello(event_info):
                         new_card_id=duplicate_card_id,
                     )
         
-        # Handle description changes - recalculate installation duration if needed
+        # Handle description changes - update Number of Guys and recalculate installation duration if needed
         if event_info.get("has_description_change", False):
             new_description = card_data.get("desc", "") or ""
             
+            # First, ensure Number of Guys field exists if we have install hours
+            if rec.install_hrs:
+                updated_description = update_num_guys_in_description(
+                    new_description,
+                    rec.install_hrs,
+                    default_num_guys=2
+                )
+                
+                # If Number of Guys was added/updated, update the card
+                if updated_description != new_description:
+                    update_trello_card_description(card_id, updated_description)
+                    new_description = updated_description  # Use updated description for duration calculation
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "Number of Guys field added/updated",
+                        install_hrs=rec.install_hrs
+                    )
+            
+            # Now check if Number of Guys exists and recalculate duration
             if "Number of Guys:" in new_description:
                 num_guys = parse_num_guys_from_description(new_description)
                 

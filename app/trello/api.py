@@ -1322,6 +1322,64 @@ def update_installation_duration_in_description(description, install_hrs, num_gu
     return description
 
 
+def update_num_guys_in_description(description, install_hrs, default_num_guys=2):
+    """
+    Update or add the 'Number of Guys' field in a description string.
+    If install_hrs exists but Number of Guys is missing, add it with default value.
+    If Number of Guys exists, ensure it's properly formatted.
+    
+    Args:
+        description (str): The current card description
+        install_hrs (float): Installation hours from database
+        default_num_guys (float): Default number of guys if missing (default: 2)
+        
+    Returns:
+        str: Updated description with Number of Guys field, or original if update fails
+    """
+    if not description:
+        return description
+    
+    # Check if install_hrs exists - if not, we don't need to add Number of Guys
+    if not install_hrs or str(install_hrs).lower() in ['nan', 'none', '']:
+        return description
+    
+    # Check if Number of Guys already exists
+    num_guys_pattern = r'(\*\*Number\s+of\s+Guys:\*\*\s*)(\d+(?:\.\d+)?)'
+    match = re.search(num_guys_pattern, description, re.IGNORECASE)
+    
+    if match:
+        # Number of Guys exists - ensure it's properly formatted with **
+        current_num_guys_str = match.group(2)
+        try:
+            current_num_guys = float(current_num_guys_str)
+            # If it's already there and formatted correctly, return as-is
+            # (we'll let the caller decide if they want to update the value)
+            return description
+        except (ValueError, TypeError):
+            # Invalid format, replace it
+            def replace_num_guys(m):
+                return f'{m.group(1)}{default_num_guys}'
+            updated_description = re.sub(num_guys_pattern, replace_num_guys, description, flags=re.IGNORECASE)
+            print(f"[DEBUG] update_num_guys_in_description: Fixed invalid Number of Guys format")
+            return updated_description
+    else:
+        # Number of Guys doesn't exist - add it after Install HRS
+        install_hrs_pattern = r'(\*\*Install\s+HRS:\*\*\s*\d+(?:\.\d+)?)'
+        install_match = re.search(install_hrs_pattern, description, re.IGNORECASE)
+        
+        if install_match:
+            # Add Number of Guys after Install HRS
+            def add_num_guys(m):
+                return f'{m.group(1)}\n**Number of Guys:** {default_num_guys}'
+            updated_description = re.sub(install_hrs_pattern, add_num_guys, description, flags=re.IGNORECASE)
+            print(f"[DEBUG] update_num_guys_in_description: Added Number of Guys field with value {default_num_guys}")
+            return updated_description
+        else:
+            # Install HRS not found, can't determine where to add Number of Guys
+            print(f"[DEBUG] update_num_guys_in_description: Install HRS not found, cannot add Number of Guys")
+            return description
+
+
 def parse_installation_duration(description):
     """
     Parse the '**Installation Duration:** X days' value from a Trello card description.
