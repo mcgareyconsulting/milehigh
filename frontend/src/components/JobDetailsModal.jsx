@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 export function JobDetailsModal({ isOpen, onClose, job }) {
@@ -63,7 +64,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
         }
     };
 
-    return (
+    const modalContent = (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity"
             onClick={onClose}
@@ -168,5 +169,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
             </div>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 }
 
