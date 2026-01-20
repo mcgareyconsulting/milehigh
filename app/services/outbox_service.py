@@ -150,6 +150,178 @@ class OutboxService:
                     
                     db.session.commit()
                     return False
+                    
+            elif outbox_item.destination == 'trello' and outbox_item.action == 'update_fab_order':
+                # Get card_id from job record
+                card_id = job_record.trello_card_id
+                if not card_id:
+                    logger.warning(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} has no trello_card_id")
+                    outbox_item.status = 'failed'
+                    outbox_item.error_message = "Job has no trello_card_id"
+                    db.session.commit()
+                    return False
+                
+                # Derive fab_order from event payload
+                fab_order = event.payload.get('to')
+                # Allow None to clear the field
+                
+                # Execute the Trello API call
+                try:
+                    from app.trello.api import update_card_custom_field_number
+                    from app.config import Config as cfg
+                    from app.trello.utils import sort_list_if_needed
+                    import math
+                    
+                    if cfg.FAB_ORDER_FIELD_ID:
+                        # Convert fab_order to int if it's not None
+                        if fab_order is not None:
+                            if isinstance(fab_order, float):
+                                fab_order_int = math.ceil(fab_order)
+                            else:
+                                fab_order_int = int(fab_order)
+                            
+                            # Update custom field
+                            success = update_card_custom_field_number(
+                                card_id,
+                                cfg.FAB_ORDER_FIELD_ID,
+                                fab_order_int
+                            )
+                            
+                            if success:
+                                # Get list_id from job record to check if sorting is needed
+                                list_id = job_record.trello_list_id
+                                if list_id:
+                                    # Sort the list if it's one of the target lists
+                                    sort_list_if_needed(
+                                        list_id,
+                                        cfg.FAB_ORDER_FIELD_ID,
+                                        None,  # No operation_id for outbox processing
+                                        "list"
+                                    )
+                                
+                                # Success! Mark outbox item as completed
+                                outbox_item.status = 'completed'
+                                outbox_item.completed_at = datetime.utcnow()
+                                outbox_item.error_message = None
+                                db.session.commit()
+                                
+                                # Close the associated event now that external API call succeeded
+                                JobEventService.close(event.id)
+                                db.session.commit()
+                                
+                                logger.info(f"Outbox {outbox_item.id} completed successfully (fab_order update)")
+                                return True
+                            else:
+                                raise Exception("Failed to update Trello custom field")
+                        else:
+                            # fab_order is None - we could clear the field, but for now just mark as success
+                            # (Trello API doesn't have a clear way to remove custom field values)
+                            outbox_item.status = 'completed'
+                            outbox_item.completed_at = datetime.utcnow()
+                            outbox_item.error_message = None
+                            db.session.commit()
+                            
+                            JobEventService.close(event.id)
+                            db.session.commit()
+                            
+                            logger.info(f"Outbox {outbox_item.id} completed (fab_order cleared)")
+                            return True
+                    else:
+                        raise Exception("FAB_ORDER_FIELD_ID not configured")
+                    
+                except Exception as api_error:
+                    # API call failed - handle retry logic
+                    outbox_item.retry_count += 1
+                    outbox_item.error_message = str(api_error)
+                    
+                    if outbox_item.retry_count < outbox_item.max_retries:
+                        delay_seconds = 2 ** outbox_item.retry_count
+                        outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+                        outbox_item.status = 'pending'
+                        
+                        logger.warning(
+                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        )
+                    else:
+                        outbox_item.status = 'failed'
+                        logger.error(
+                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
+                            exc_info=True
+                        )
+                    
+                    db.session.commit()
+                    return False
+                    
+            elif outbox_item.destination == 'trello' and outbox_item.action == 'update_notes':
+                # Get card_id from job record
+                card_id = job_record.trello_card_id
+                if not card_id:
+                    logger.warning(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} has no trello_card_id")
+                    outbox_item.status = 'failed'
+                    outbox_item.error_message = "Job has no trello_card_id"
+                    db.session.commit()
+                    return False
+                
+                # Derive notes from event payload
+                notes = event.payload.get('to', '')
+                if not notes:
+                    # Empty notes - nothing to do in Trello (comments can't be deleted via API easily)
+                    outbox_item.status = 'completed'
+                    outbox_item.completed_at = datetime.utcnow()
+                    outbox_item.error_message = None
+                    db.session.commit()
+                    
+                    JobEventService.close(event.id)
+                    db.session.commit()
+                    
+                    logger.info(f"Outbox {outbox_item.id} completed (notes empty, skipping Trello)")
+                    return True
+                
+                # Execute the Trello API call
+                try:
+                    from app.trello.api import add_comment_to_trello_card
+                    
+                    # Add comment to Trello card
+                    success = add_comment_to_trello_card(card_id, str(notes))
+                    
+                    if success:
+                        # Success! Mark outbox item as completed
+                        outbox_item.status = 'completed'
+                        outbox_item.completed_at = datetime.utcnow()
+                        outbox_item.error_message = None
+                        db.session.commit()
+                        
+                        # Close the associated event now that external API call succeeded
+                        JobEventService.close(event.id)
+                        db.session.commit()
+                        
+                        logger.info(f"Outbox {outbox_item.id} completed successfully (notes update)")
+                        return True
+                    else:
+                        raise Exception("Failed to add comment to Trello card")
+                    
+                except Exception as api_error:
+                    # API call failed - handle retry logic
+                    outbox_item.retry_count += 1
+                    outbox_item.error_message = str(api_error)
+                    
+                    if outbox_item.retry_count < outbox_item.max_retries:
+                        delay_seconds = 2 ** outbox_item.retry_count
+                        outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+                        outbox_item.status = 'pending'
+                        
+                        logger.warning(
+                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        )
+                    else:
+                        outbox_item.status = 'failed'
+                        logger.error(
+                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
+                            exc_info=True
+                        )
+                    
+                    db.session.commit()
+                    return False
             else:
                 # Unsupported destination/action combination
                 logger.error(f"Outbox {outbox_item.id}: Unsupported {outbox_item.destination}/{outbox_item.action}")

@@ -81,6 +81,30 @@ class JobsApi {
         }
     }
 
+    async updateFabOrder(job, release, fabOrder) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-fab-order/${job}/${release}`,
+                { fab_order: fabOrder }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update fab order');
+        }
+    }
+
+    async updateNotes(job, release, notes) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-notes/${job}/${release}`,
+                { notes }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update notes');
+        }
+    }
+
     async releaseJobData(csvData) {
         try {
             const response = await axios.post(

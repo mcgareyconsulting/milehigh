@@ -38,10 +38,24 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [localStage, setLocalStage] = useState(row['Stage'] || 'Released');
     const [updatingStage, setUpdatingStage] = useState(false);
 
+    // Local state for fab order
+    const [localFabOrder, setLocalFabOrder] = useState(row['Fab Order'] ?? '');
+    const [updatingFabOrder, setUpdatingFabOrder] = useState(false);
+    const [fabOrderInputValue, setFabOrderInputValue] = useState(row['Fab Order'] ?? '');
+
+    // Local state for notes
+    const [localNotes, setLocalNotes] = useState(row['Notes'] ?? '');
+    const [updatingNotes, setUpdatingNotes] = useState(false);
+    const [notesInputValue, setNotesInputValue] = useState(row['Notes'] ?? '');
+
     // Sync local state when row data changes (e.g., on refresh)
     useEffect(() => {
         setLocalStage(row['Stage'] || 'Released');
-    }, [row['Stage']]);
+        setLocalFabOrder(row['Fab Order'] ?? '');
+        setFabOrderInputValue(row['Fab Order'] ?? '');
+        setLocalNotes(row['Notes'] ?? '');
+        setNotesInputValue(row['Notes'] ?? '');
+    }, [row['Stage'], row['Fab Order'], row['Notes']]);
 
     // Handle stage change
     const handleStageChange = async (newStage) => {
@@ -65,6 +79,63 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             alert(`Failed to update stage: ${error.message}`);
         } finally {
             setUpdatingStage(false);
+        }
+    };
+
+    // Handle fab order change
+    const handleFabOrderChange = async (newValue) => {
+        const oldValue = localFabOrder;
+        const parsedValue = newValue === '' ? null : parseFloat(newValue);
+        
+        // Optimistic update
+        setLocalFabOrder(parsedValue);
+        setUpdatingFabOrder(true);
+
+        try {
+            const jobNumber = row['Job #'];
+            const releaseNumber = row['Release #'];
+
+            console.log(`[FAB_ORDER] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${parsedValue}`);
+
+            await jobsApi.updateFabOrder(jobNumber, releaseNumber, parsedValue);
+
+            console.log(`[FAB_ORDER] Successfully updated job ${jobNumber}-${releaseNumber} to ${parsedValue}`);
+        } catch (error) {
+            console.error(`[FAB_ORDER] Failed to update fab order for job ${row['Job #']}-${row['Release #']}:`, error);
+            // Revert on error
+            setLocalFabOrder(oldValue);
+            setFabOrderInputValue(oldValue === null || oldValue === undefined ? '' : String(oldValue));
+            alert(`Failed to update fab order: ${error.message}`);
+        } finally {
+            setUpdatingFabOrder(false);
+        }
+    };
+
+    // Handle notes change
+    const handleNotesChange = async (newValue) => {
+        const oldValue = localNotes;
+        
+        // Optimistic update
+        setLocalNotes(newValue);
+        setUpdatingNotes(true);
+
+        try {
+            const jobNumber = row['Job #'];
+            const releaseNumber = row['Release #'];
+
+            console.log(`[NOTES] Updating job ${jobNumber}-${releaseNumber}`);
+
+            await jobsApi.updateNotes(jobNumber, releaseNumber, newValue);
+
+            console.log(`[NOTES] Successfully updated job ${jobNumber}-${releaseNumber}`);
+        } catch (error) {
+            console.error(`[NOTES] Failed to update notes for job ${row['Job #']}-${row['Release #']}:`, error);
+            // Revert on error
+            setLocalNotes(oldValue);
+            setNotesInputValue(oldValue ?? '');
+            alert(`Failed to update notes: ${error.message}`);
+        } finally {
+            setUpdatingNotes(false);
         }
     };
 
@@ -127,6 +198,91 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         );
                                     })}
                                 </select>
+                            </td>
+                        );
+                    }
+
+                    // Handle Fab Order column with editable input
+                    if (column === 'Fab Order') {
+                        const displayValue = localFabOrder === null || localFabOrder === undefined ? '—' : formatCellValue(localFabOrder, column);
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
+                            >
+                                <input
+                                    type="number"
+                                    value={fabOrderInputValue}
+                                    onChange={(e) => setFabOrderInputValue(e.target.value)}
+                                    onBlur={(e) => {
+                                        const newValue = e.target.value.trim();
+                                        if (newValue === '') {
+                                            // User cleared the field
+                                            if (localFabOrder !== null && localFabOrder !== undefined) {
+                                                handleFabOrderChange('');
+                                            } else {
+                                                // Already empty, just sync the input
+                                                setFabOrderInputValue('');
+                                            }
+                                        } else {
+                                            const parsedValue = parseFloat(newValue);
+                                            if (!isNaN(parsedValue)) {
+                                                // Valid number - check if it changed
+                                                const currentValue = localFabOrder === null || localFabOrder === undefined ? null : localFabOrder;
+                                                if (parsedValue !== currentValue) {
+                                                    handleFabOrderChange(newValue);
+                                                }
+                                            } else {
+                                                // Invalid input, revert
+                                                setFabOrderInputValue(localFabOrder === null || localFabOrder === undefined ? '' : String(localFabOrder));
+                                            }
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.target.blur();
+                                        } else if (e.key === 'Escape') {
+                                            setFabOrderInputValue(localFabOrder === null || localFabOrder === undefined ? '' : String(localFabOrder));
+                                            e.target.blur();
+                                        }
+                                    }}
+                                    disabled={updatingFabOrder}
+                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''}`}
+                                    placeholder="—"
+                                    style={{ minWidth: '60px' }}
+                                />
+                            </td>
+                        );
+                    }
+
+                    // Handle Notes column with editable textarea
+                    if (column === 'Notes') {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center whitespace-normal`}
+                            >
+                                <textarea
+                                    value={notesInputValue}
+                                    onChange={(e) => setNotesInputValue(e.target.value)}
+                                    onBlur={(e) => {
+                                        const newValue = e.target.value.trim();
+                                        if (newValue !== (localNotes ?? '')) {
+                                            handleNotesChange(newValue);
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Escape') {
+                                            setNotesInputValue(localNotes ?? '');
+                                            e.target.blur();
+                                        }
+                                    }}
+                                    disabled={updatingNotes}
+                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
+                                    placeholder="—"
+                                    rows={2}
+                                    style={{ minWidth: '120px' }}
+                                />
                             </td>
                         );
                     }
