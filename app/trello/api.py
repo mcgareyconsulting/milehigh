@@ -606,6 +606,17 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         else:
             print(f"[DEBUG] No notes field, empty notes, NaN value, or 'nan'/'none' string, skipping comment addition")
         
+        # Add FC Drawing link if viewer_url exists on the job
+        if new_job.viewer_url:
+            try:
+                link_result = add_procore_link(card_data["id"], new_job.viewer_url, link_name="FC Drawing")
+                if link_result.get("success"):
+                    print(f"[DEBUG] Added FC Drawing link to card {card_data['id']}")
+                else:
+                    print(f"[WARNING] Failed to add FC Drawing link: {link_result.get('error')}")
+            except Exception as link_err:
+                print(f"[WARNING] Error adding FC Drawing link: {link_err}")
+        
         return {
             "success": True,
             "card_id": card_data["id"],

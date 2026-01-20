@@ -38,7 +38,7 @@ def create_trello_card_for_job(job, excel_data_dict):
         from app.trello.api import (
             get_list_by_name, update_job_record_with_trello_data,
             calculate_installation_duration, add_comment_to_trello_card,
-            update_card_custom_field_number
+            update_card_custom_field_number, add_procore_link
         )
         from app.config import Config as cfg
         import requests
@@ -173,6 +173,17 @@ def create_trello_card_for_job(job, excel_data_dict):
             comment_success = add_comment_to_trello_card(card_data["id"], str(notes_value).strip())
             if comment_success:
                 logger.info(f"Successfully added notes as comment to Trello card")
+        
+        # Add FC Drawing link if viewer_url exists
+        if job.viewer_url:
+            try:
+                link_result = add_procore_link(card_data["id"], job.viewer_url, link_name="FC Drawing")
+                if link_result.get("success"):
+                    logger.info(f"Added FC Drawing link to card {card_data['id']}")
+                else:
+                    logger.warning(f"Failed to add FC Drawing link: {link_result.get('error')}")
+            except Exception as link_err:
+                logger.warning(f"Error adding FC Drawing link for {job.job}-{job.release}: {link_err}")
         
         return {
             "success": True,

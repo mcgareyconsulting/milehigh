@@ -347,7 +347,8 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
         copy_trello_card,
         link_cards,
         card_has_link_to,
-        update_trello_card
+        update_trello_card,
+        add_procore_link
     )
     from app.config import Config as cfg
     import requests
@@ -417,6 +418,17 @@ def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> 
             logger.info(f"Successfully updated database record with Trello data")
         else:
             logger.error(f"Failed to update database record with Trello data")
+        
+        # Add FC Drawing link if viewer_url exists
+        if job.viewer_url:
+            try:
+                link_result = add_procore_link(card_data['id'], job.viewer_url, link_name="FC Drawing")
+                if link_result.get("success"):
+                    logger.info(f"Added FC Drawing link to card {card_data['id']}")
+                else:
+                    logger.warning(f"Failed to add FC Drawing link: {link_result.get('error')}")
+            except Exception as link_err:
+                logger.warning(f"Error adding FC Drawing link for {job.job}-{job.release}: {link_err}")
         
         # Create mirror card in unassigned list if configured
         mirror_card_id = None
