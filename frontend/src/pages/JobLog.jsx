@@ -24,19 +24,13 @@ function JobLog() {
         setJobNumberSearch,
         setReleaseNumberSearch,
         projectNameOptions,
-        sortBy,
-        showNotComplete,
-        showNotShippingComplete,
-        showBeforePaintComplete,
-        setSortBy,
-        setShowNotComplete,
-        setShowNotShippingComplete,
-        setShowBeforePaintComplete,
         stageOptions,
         stageColors,
         displayJobs,
         resetFilters,
         toggleStage,
+        selectedSubset,
+        setSelectedSubset,
         ALL_OPTION_VALUE,
     } = useJobsFilters(jobs);
 
@@ -290,64 +284,31 @@ function JobLog() {
                                     </label>
                                     <div className="flex flex-wrap gap-1.5">
                                         <button
-                                            onClick={() => setSortBy(sortBy === 'fab_order_asc' ? 'default' : 'fab_order_asc')}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${sortBy === 'fab_order_asc'
+                                            onClick={() => setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order')}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
-                                            Sort by Fab Order {sortBy === 'fab_order_asc' && '↑'}
+                                            Job Order
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                const newValue = !showNotComplete;
-                                                setShowNotComplete(newValue);
-                                                if (newValue) {
-                                                    setShowNotShippingComplete(false);
-                                                    setShowBeforePaintComplete(false);
-                                                    setSortBy('fab_order_asc');
-                                                }
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${showNotComplete
+                                            onClick={() => setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship')}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
-                                            All Not Complete
+                                            Ready to Ship
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                const newValue = !showNotShippingComplete;
-                                                setShowNotShippingComplete(newValue);
-                                                if (newValue) {
-                                                    setShowNotComplete(false);
-                                                    setShowBeforePaintComplete(false);
-                                                    setSortBy('fab_order_asc');
-                                                }
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${showNotShippingComplete
+                                            onClick={() => setSelectedSubset(selectedSubset === 'fab' ? null : 'fab')}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
-                                            Not Shipping Complete
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                const newValue = !showBeforePaintComplete;
-                                                setShowBeforePaintComplete(newValue);
-                                                if (newValue) {
-                                                    setShowNotComplete(false);
-                                                    setShowNotShippingComplete(false);
-                                                    setSortBy('fab_order_asc');
-                                                }
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${showBeforePaintComplete
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            Before Paint Complete
+                                            Fab
                                         </button>
                                     </div>
                                 </div>
