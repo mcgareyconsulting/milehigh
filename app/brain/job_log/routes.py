@@ -681,8 +681,9 @@ def update_fab_order(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Job, db, JobEvents
-    from app.services.job_event_service import JobEventService
+    from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+    from app.services.system_log_service import SystemLogService
+    from app.models import db
     
     logger.info(f"update_fab_order called", extra={
         'job': job,
@@ -691,91 +692,47 @@ def update_fab_order(job, release):
     })
 
     try:
+        # Extract and validate fab_order from request
         fab_order = request.json.get('fab_order')
         # Allow None/null to clear the value
         if fab_order is not None:
             try:
-                # Convert to float, then we'll handle int conversion later
+                # Convert to float
                 fab_order = float(fab_order)
             except (ValueError, TypeError):
                 return jsonify({'error': 'fab_order must be a number'}), 400
 
-        # Fetch job record
-        job_record = Job.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            logger.warning(f"Job not found: {job}-{release}")
-            return jsonify({'error': 'Job not found'}), 404
-
-        # Capture old state for payload
-        old_fab_order = job_record.fab_order
-
-        # Create event (handles deduplication, logging internally)
-        event = JobEventService.create(
-            job=job,
+        # Execute command using the feature module
+        command = UpdateFabOrderCommand(
+            job_id=job,
             release=release,
-            action='update_fab_order',
-            source='user',
-            payload={
-                'from': old_fab_order,
-                'to': fab_order
-            }
+            fab_order=fab_order
+            # source defaults to "user" and source_of_update defaults to "Brain"
         )
-
-        # Check if event was deduplicated
-        if event is None:
-            logger.info(f"Event already exists for job {job}-{release} fab_order update")
-            return jsonify({'error': 'Event already exists'}), 400
         
-        # Update job fields
-        job_record.fab_order = fab_order
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
-
-        # Add Trello update to outbox and process immediately
-        outbox_item_created = False
+        result = command.execute()
         
-        if job_record.trello_card_id:
-            try:
-                # Create outbox item
-                outbox_item = OutboxService.add(
-                    destination='trello',
-                    action='update_fab_order',
-                    event_id=event.id
-                )
-                outbox_item_created = True
-                
-                # Try to process immediately for live updates
-                try:
-                    if OutboxService.process_item(outbox_item):
-                        logger.info(f"Trello fab_order update processed immediately for job {job}-{release}")
-                except Exception as process_error:
-                    logger.error(f"Error during immediate processing of outbox {outbox_item.id}: {process_error}", exc_info=True)
-                    
-            except Exception as outbox_error:
-                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
-        else:
-            logger.warning(
-                f"Job {job}-{release} has no trello_card_id, skipping Trello update",
-                extra={'job': job, 'release': release}
-            )
+        # Return response in the same format as before
+        return jsonify({
+            'status': 'success',
+            'event_id': result.event_id
+        }), 200
         
-        # Close event only if no outbox item was created
-        if not outbox_item_created:
-            JobEventService.close(event.id)
+    except ValueError as e:
+        # Handle business logic errors (job not found, event already exists, etc.)
+        error_msg = str(e)
+        status_code = 404 if 'not found' in error_msg.lower() else 400
         
-        # Commit all changes
-        db.session.commit()
-        
-        logger.info(f"update_fab_order completed successfully", extra={
+        logger.warning(f"update_fab_order validation error: {error_msg}", extra={
             'job': job,
-            'release': release,
-            'event_id': event.id
+            'release': release
         })
         
         return jsonify({
-            'status': 'success',
-            'event_id': event.id
-        }), 200
+            'error': error_msg,
+            'error_type': 'ValueError'
+        }), status_code
+        
     except Exception as e:
         logger.error(f"update_fab_order failed", exc_info=True, extra={
             'job': job,
@@ -785,7 +742,6 @@ def update_fab_order(job, release):
         })
         
         try:
-            from app.services.system_log_service import SystemLogService
             SystemLogService.log_error(
                 category='operation_failure',
                 operation='update_fab_order',
