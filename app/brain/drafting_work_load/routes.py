@@ -192,3 +192,4 @@ def update_submittal_drafting_status():
             "error": "Failed to update submittal_drafting_status",
             "details": str(exc)
         }), 500
+

@@ -55,3 +55,4 @@ def serialize_value(value):
     else:
         # Fallback: convert to string
         return str(value)
+
