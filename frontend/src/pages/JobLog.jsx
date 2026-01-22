@@ -1,6 +1,7 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
+import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
 
@@ -33,6 +34,23 @@ function JobLog() {
         setSelectedSubset,
         ALL_OPTION_VALUE,
     } = useJobsFilters(jobs);
+
+    // Update fab order handler
+    const updateFabOrder = useCallback(async (job, release, fabOrder) => {
+        await jobsApi.updateFabOrder(job, release, fabOrder);
+        // Refetch data after update
+        await refetch();
+    }, [refetch]);
+
+    // Drag and drop functionality
+    const {
+        draggedIndex,
+        dragOverIndex,
+        handleDragStart,
+        handleDragOver,
+        handleDragLeave,
+        handleDrop,
+    } = useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSubset);
 
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
@@ -423,6 +441,12 @@ function JobLog() {
                                                         formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
                                                         formatDate={formatDate}
                                                         rowIndex={index}
+                                                        onDragStart={handleDragStart}
+                                                        onDragOver={handleDragOver}
+                                                        onDragLeave={handleDragLeave}
+                                                        onDrop={handleDrop}
+                                                        isDragging={draggedIndex}
+                                                        dragOverIndex={dragOverIndex}
                                                     />
                                                 ))
                                             )}

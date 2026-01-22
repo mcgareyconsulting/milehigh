@@ -79,6 +79,7 @@ def create_app():
         'fab-order/',
         'fix-trello-list/',
         'name-check/',
+        'db-comparison',
     ]
 
     def is_api_route(path):
@@ -1567,6 +1568,43 @@ def create_app():
         except Exception as e:
             logger.error("Error reading pkl file", error=str(e), file=file_path)
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/db-comparison", methods=["GET"])
+    def db_comparison():
+        """
+        Compare sandbox and production databases to find jobs that exist in one but not the other.
+        
+        Returns:
+            JSON response with:
+            - summary: Counts of jobs in each database and differences
+            - only_in_sandbox: List of jobs that exist in sandbox but not production
+            - only_in_production: List of jobs that exist in production but not sandbox
+            - only_in_sandbox_identifiers: Simple list of job-release identifiers (e.g., "1234-1")
+            - only_in_production_identifiers: Simple list of job-release identifiers
+        """
+        try:
+            from app.scripts.db_comparison import compare_databases
+            
+            logger.info("Running database comparison: sandbox vs production")
+            result = compare_databases(return_json=True)
+            
+            if "error" in result:
+                return jsonify({
+                    "message": "Database comparison failed",
+                    "error": result["error"]
+                }), 500
+            
+            return jsonify({
+                "message": "Database comparison completed",
+                "comparison": result
+            }), 200
+            
+        except Exception as e:
+            logger.error("Error running database comparison", error=str(e), exc_info=True)
+            return jsonify({
+                "message": "Database comparison failed",
+                "error": str(e)
+            }), 500
 
     # Catch-all route for React Router (must be last, after all API routes)
     # This handles direct URL access to React routes like /history, /operations, etc.
