@@ -9,6 +9,11 @@ FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
 class Config:
     """Base configuration class with common settings."""
+    # Flask session configuration
+    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    
     # Trello configuration
     TRELLO_API_KEY = os.environ.get("TRELLO_API_KEY")
     TRELLO_TOKEN = os.environ.get("TRELLO_TOKEN")

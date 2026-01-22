@@ -100,6 +100,13 @@ def sync_from_trello(event_info):
     # Extract card id and event time from event info
     card_id = event_info["card_id"]
     event_time = parse_trello_datetime(event_info.get("time"))
+    username = event_info.get("username")
+    
+    # Format source with username
+    if username:
+        trello_source = f"Trello - {username}"
+    else:
+        trello_source = "Trello"
     
     # Use context manager - it handles everything!
     with sync_operation_context("trello_webhook", "trello", card_id) as sync_op:
@@ -215,7 +222,7 @@ def sync_from_trello(event_info):
                     job=rec.job,
                     release=rec.release,
                     action="update_name",
-                    source="Trello",
+                    source=trello_source,
                     payload={"from": old_name, "to": new_name}
                 )
                 if event:
@@ -237,7 +244,7 @@ def sync_from_trello(event_info):
                     job=rec.job,
                     release=rec.release,
                     action="update_description",
-                    source="Trello",
+                    source=trello_source,
                     payload={"from": old_description, "to": new_description}
                 )
                 if event:
@@ -262,7 +269,7 @@ def sync_from_trello(event_info):
                     job=rec.job,
                     release=rec.release,
                     action="update_due_date",
-                    source="Trello",
+                    source=trello_source,
                     payload={
                         "from": old_due_date.isoformat() if old_due_date else None,
                         "to": new_due_date.isoformat() if new_due_date else None
@@ -332,7 +339,7 @@ def sync_from_trello(event_info):
                 job=rec.job,
                 release=rec.release,
                 action="update_stage",
-                source="Trello",
+                source=trello_source,
                 payload={"from": from_stage, "to": stage}
             )
             if event:

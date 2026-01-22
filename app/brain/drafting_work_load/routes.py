@@ -3,11 +3,13 @@ from flask import jsonify, request
 from app.brain.services.dwl_service import SubmittalOrderingService, SubmittalOrderUpdate, DraftingWorkLoadService
 from app.logging_config import get_logger
 from app.models import ProcoreSubmittal, db
+from app.auth.utils import login_required
 from datetime import datetime
 
 logger = get_logger(__name__)
 
 @brain_bp.route('/drafting-work-load')
+@login_required
 def drafting_work_load():
     """Return Drafting Work Load data from the db, including submittals with status='Open' or status='Draft'"""
     try:
@@ -26,6 +28,7 @@ def drafting_work_load():
         }), 500
 
 @brain_bp.route("/drafting-work-load/order", methods=["PUT"])
+@login_required
 def update_submittal_order():
     """Update the order_number for a submittal (simple update, no cascading)"""
     try:
@@ -97,6 +100,7 @@ def update_submittal_order():
         }), 500
 
 @brain_bp.route("/drafting-work-load/notes", methods=["PUT"])
+@login_required
 def update_submittal_notes():
     """Update the notes for a submittal"""
     try:
@@ -137,6 +141,7 @@ def update_submittal_notes():
         }), 500
 
 @brain_bp.route("/drafting-work-load/submittal-drafting-status", methods=["PUT"])
+@login_required
 def update_submittal_drafting_status():
     """Update the submittal_drafting_status for a submittal"""
     try:

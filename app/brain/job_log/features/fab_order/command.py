@@ -29,7 +29,7 @@ class UpdateFabOrderCommand:
     job_id: int
     release: str
     fab_order: Optional[float]
-    source: str = "user"  # Matches route default ('user' for Brain API)
+    source: str = "Brain"  # Will be formatted as 'Brain:username' automatically
     source_of_update: str = "Brain"  # Matches route's hardcoded value
 
     def execute(self) -> FabOrderUpdateResult:

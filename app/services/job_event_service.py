@@ -1,5 +1,7 @@
 from datetime import datetime
 from app.logging_config import get_logger
+from app.auth.utils import format_source_with_user, get_current_user
+
 logger = get_logger(__name__)
 
 class JobEventService:
@@ -10,6 +12,13 @@ class JobEventService:
         """
         Create a new job event with deduplication.
         
+        Args:
+            job: Job number
+            release: Release string
+            action: Action string
+            source: Base source string (e.g., 'Brain', 'Procore')
+            payload: Event payload dict
+        
         Returns:
             JobEvents object if created
             None if duplicate detected
@@ -17,6 +26,21 @@ class JobEventService:
         from app.models import JobEvents, db
         import json
         import hashlib
+        
+        # Get current user and format source with username
+        # Only get user for Brain-specific updates (external sources like Trello handle their own formatting)
+        if " - " in source:
+            # Source is already formatted (e.g., "Trello - username"), use as-is
+            user = None
+            formatted_source = source
+        elif source == "Brain":
+            # Brain updates: get user from session and format
+            user = get_current_user()
+            formatted_source = format_source_with_user(source, user)
+        else:
+            # External sources (Trello, Procore, etc.) - don't get user, use source as-is
+            user = None
+            formatted_source = source
         
         # Generate payload hash for deduplication
         payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
@@ -39,7 +63,7 @@ class JobEventService:
             'job': job,
             'release': release,
             'action': action,
-            'source': source
+            'source': formatted_source
         })
         
         event = JobEvents(
@@ -48,7 +72,8 @@ class JobEventService:
             action=action,
             payload=payload,
             payload_hash=payload_hash,
-            source=source,
+            source=formatted_source,
+            user_id=user.id if user else None,
             created_at=datetime.utcnow()
         )
         

@@ -12,6 +12,24 @@ class SyncStatus(Enum):
     FAILED = "failed"
     SKIPPED = "skipped"
 
+class User(db.Model):
+    """User model for authentication and authorization."""
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime, nullable=True)
+    
+    # Relationships
+    job_events = db.relationship('JobEvents', backref='user', lazy='dynamic')
+    submittal_events = db.relationship('SubmittalEvents', backref='user', lazy='dynamic')
+    
+    def __repr__(self):
+        return f"<User {self.username}>"
+
 class ProcoreToken(db.Model):
     '''Model to store Procore access token metadata for client credentials flow.
     
@@ -262,7 +280,6 @@ class Job(db.Model):
     trello_card_description = db.Column(db.String(512), nullable=True)
     trello_card_date = db.Column(db.Date, nullable=True)
     viewer_url = db.Column(db.String(512), nullable=True)
-    ship_date = db.Column(db.Date, nullable=True)
 
     # Changelog tracking
     last_updated_at = db.Column(db.DateTime, nullable=True)
@@ -308,7 +325,6 @@ class Job(db.Model):
             "trello_card_description": self.trello_card_description,
             "trello_card_date": self.trello_card_date,
             "viewer_url": self.viewer_url,
-            "ship_date": self.ship_date,
             "last_updated_at": self.last_updated_at,
             "source_of_update": self.source_of_update,
         }
@@ -351,6 +367,7 @@ class JobEvents(db.Model):
     payload = db.Column(db.JSON, nullable=False)
     payload_hash = db.Column(db.String(64), nullable=False)
     source = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
@@ -363,6 +380,7 @@ class SubmittalEvents(db.Model):
     payload = db.Column(db.JSON, nullable=False)
     payload_hash = db.Column(db.String(64), nullable=False)
     source = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 

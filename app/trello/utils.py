@@ -16,6 +16,10 @@ def parse_webhook_data(data):
         card_id = card_info.get("id")
         card_name = card_info.get("name")
         event_time = action.get("date")
+        
+        # Extract username from memberCreator (prefer fullName, fallback to username)
+        member_creator = action.get("memberCreator", {})
+        username = member_creator.get("fullName") or member_creator.get("username") or None
 
         # Card created
         if action_type == "createCard":
@@ -31,6 +35,7 @@ def parse_webhook_data(data):
                 "list_id": list_id,
                 "list_name": list_name,
                 "time": event_time,
+                "username": username,
             }
 
         # Card update - check for list move, due date change, description change, and combinations
@@ -71,6 +76,7 @@ def parse_webhook_data(data):
                     "card_name": card_name,
                     "time": event_time,
                     "change_types": change_types,
+                    "username": username,
                 }
                 
                 # Add specific flags for easier handling

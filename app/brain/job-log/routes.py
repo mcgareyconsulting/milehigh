@@ -10,7 +10,6 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 from app.models import Job, db, JobEvents
-from app.auth.utils import login_required, format_source_with_user, get_current_user
 from datetime import datetime
 import json
 import hashlib
@@ -269,7 +268,6 @@ def _create_payload_hash(action, job_number, release_number, excel_data_dict):
 # ==============================================================================
 
 @brain_bp.route("/jobs")
-@login_required
 def get_jobs():
     """
     List jobs updated since a specific timestamp.
@@ -392,7 +390,6 @@ def get_jobs():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/get-all-jobs")
-@login_required
 def get_all_jobs():
     """
     Get all jobs from the database using simple offset-based pagination.
@@ -507,7 +504,6 @@ def get_all_jobs():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/update-stage/<int:job>/<release>", methods=["PATCH"])
-@login_required
 def update_stage(job, release):
     """
     Update the stage for a specific job-release combination.
@@ -556,7 +552,7 @@ def update_stage(job, release):
             job=job,
             release=release,
             action='update_stage',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
+            source='user',  # Lowercase for consistency
             payload={
                 'from': old_stage,
                 'to': stage
@@ -668,7 +664,6 @@ def update_stage(job, release):
         }), 500
 
 @brain_bp.route("/update-fab-order/<int:job>/<release>", methods=["PATCH"])
-@login_required
 def update_fab_order(job, release):
     """
     Update the fab_order for a specific job-release combination.
@@ -686,9 +681,8 @@ def update_fab_order(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-    from app.services.system_log_service import SystemLogService
-    from app.models import db
+    from app.models import Job, db, JobEvents
+    from app.services.job_event_service import JobEventService
     
     logger.info(f"update_fab_order called", extra={
         'job': job,
@@ -697,47 +691,91 @@ def update_fab_order(job, release):
     })
 
     try:
-        # Extract and validate fab_order from request
         fab_order = request.json.get('fab_order')
         # Allow None/null to clear the value
         if fab_order is not None:
             try:
-                # Convert to float
+                # Convert to float, then we'll handle int conversion later
                 fab_order = float(fab_order)
             except (ValueError, TypeError):
                 return jsonify({'error': 'fab_order must be a number'}), 400
 
-        # Execute command using the feature module
-        command = UpdateFabOrderCommand(
-            job_id=job,
+        # Fetch job record
+        job_record = Job.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            logger.warning(f"Job not found: {job}-{release}")
+            return jsonify({'error': 'Job not found'}), 404
+
+        # Capture old state for payload
+        old_fab_order = job_record.fab_order
+
+        # Create event (handles deduplication, logging internally)
+        event = JobEventService.create(
+            job=job,
             release=release,
-            fab_order=fab_order
-            # source defaults to "user" and source_of_update defaults to "Brain"
+            action='update_fab_order',
+            source='user',
+            payload={
+                'from': old_fab_order,
+                'to': fab_order
+            }
         )
+
+        # Check if event was deduplicated
+        if event is None:
+            logger.info(f"Event already exists for job {job}-{release} fab_order update")
+            return jsonify({'error': 'Event already exists'}), 400
         
-        result = command.execute()
+        # Update job fields
+        job_record.fab_order = fab_order
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = 'Brain'
+
+        # Add Trello update to outbox and process immediately
+        outbox_item_created = False
         
-        # Return response in the same format as before
-        return jsonify({
-            'status': 'success',
-            'event_id': result.event_id
-        }), 200
+        if job_record.trello_card_id:
+            try:
+                # Create outbox item
+                outbox_item = OutboxService.add(
+                    destination='trello',
+                    action='update_fab_order',
+                    event_id=event.id
+                )
+                outbox_item_created = True
+                
+                # Try to process immediately for live updates
+                try:
+                    if OutboxService.process_item(outbox_item):
+                        logger.info(f"Trello fab_order update processed immediately for job {job}-{release}")
+                except Exception as process_error:
+                    logger.error(f"Error during immediate processing of outbox {outbox_item.id}: {process_error}", exc_info=True)
+                    
+            except Exception as outbox_error:
+                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
+        else:
+            logger.warning(
+                f"Job {job}-{release} has no trello_card_id, skipping Trello update",
+                extra={'job': job, 'release': release}
+            )
         
-    except ValueError as e:
-        # Handle business logic errors (job not found, event already exists, etc.)
-        error_msg = str(e)
-        status_code = 404 if 'not found' in error_msg.lower() else 400
+        # Close event only if no outbox item was created
+        if not outbox_item_created:
+            JobEventService.close(event.id)
         
-        logger.warning(f"update_fab_order validation error: {error_msg}", extra={
+        # Commit all changes
+        db.session.commit()
+        
+        logger.info(f"update_fab_order completed successfully", extra={
             'job': job,
-            'release': release
+            'release': release,
+            'event_id': event.id
         })
         
         return jsonify({
-            'error': error_msg,
-            'error_type': 'ValueError'
-        }), status_code
-        
+            'status': 'success',
+            'event_id': event.id
+        }), 200
     except Exception as e:
         logger.error(f"update_fab_order failed", exc_info=True, extra={
             'job': job,
@@ -747,6 +785,7 @@ def update_fab_order(job, release):
         })
         
         try:
+            from app.services.system_log_service import SystemLogService
             SystemLogService.log_error(
                 category='operation_failure',
                 operation='update_fab_order',
@@ -767,7 +806,6 @@ def update_fab_order(job, release):
         }), 500
 
 @brain_bp.route("/update-notes/<int:job>/<release>", methods=["PATCH"])
-@login_required
 def update_notes(job, release):
     """
     Update the notes for a specific job-release combination.
@@ -816,7 +854,7 @@ def update_notes(job, release):
             job=job,
             release=release,
             action='update_notes',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
+            source='user',
             payload={
                 'from': old_notes,
                 'to': notes
@@ -915,7 +953,6 @@ def update_notes(job, release):
 # ==============================================================================
 
 @brain_bp.route("/job-log/release", methods=["POST"])
-@login_required
 def release_job_data():
     """
     Release job data from clipboard data (CSV or tab-separated from Google Sheets).
@@ -1018,10 +1055,6 @@ def release_job_data():
                 action = "create"
                 payload_hash = _create_payload_hash(action, job_number, release_number, excel_data_dict)
                 
-                # Get current user and format source with username
-                user = get_current_user()
-                formatted_source = format_source_with_user('Brain', user)
-                
                 # Create event
                 event = JobEvents(
                     job=job_number,
@@ -1029,8 +1062,7 @@ def release_job_data():
                     action='created',
                     payload=excel_data_dict,
                     payload_hash=payload_hash,
-                    source=formatted_source,
-                    user_id=user.id if user else None
+                    source='user'
                 )
                 db.session.add(event)
                 
@@ -1115,7 +1147,6 @@ def release_job_data():
 # ==============================================================================
 
 @brain_bp.route("/operations/filters")
-@login_required
 def get_operation_filters():
     """
     Get all distinct operation dates and types from the database.
@@ -1148,7 +1179,6 @@ def get_operation_filters():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/operations/types")
-@login_required
 def get_operation_types():
     """
     Get all distinct operation types from the database.
@@ -1170,7 +1200,6 @@ def get_operation_types():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/operations")
-@login_required
 def sync_operations():
         """Get sync operations filtered by date range, operation_type, and source_id."""
         from app.models import SyncOperation
@@ -1218,7 +1247,6 @@ def sync_operations():
             return jsonify({"error": str(e)}), 500
 
 @brain_bp.route("/operations/<operation_id>/logs")
-@login_required
 def sync_operation_logs(operation_id):
         """Get detailed logs for a specific sync operation."""
         from app.models import SyncLog
@@ -1246,7 +1274,6 @@ def sync_operation_logs(operation_id):
 # ==============================================================================
 
 @brain_bp.route("/events/filters")
-@login_required
 def get_event_filters():
     """
     Get all distinct event dates and sources from the database.
@@ -1279,7 +1306,6 @@ def get_event_filters():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/events")
-@login_required
 def get_events():
     """Get events filtered by date range and source."""
     from app.models import JobEvents, SubmittalEvents
@@ -1373,7 +1399,6 @@ def get_events():
 # ==============================================================================
 
 @brain_bp.route("/trello-scanner")
-@login_required
 def trello_scanner():
     """
     Scan and compare database jobs with Trello cards.
@@ -1406,7 +1431,6 @@ def trello_scanner():
         return jsonify({"error": str(e)}), 500
 
 @brain_bp.route("/trello-sync", methods=["POST"])
-@login_required
 def trello_sync():
     """
     Sync Trello board with database:
@@ -1439,7 +1463,6 @@ def trello_sync():
         return jsonify({"error": str(e)}), 500
 
 @brain_bp.route("/trello-scan-create", methods=["POST"])
-@login_required
 def trello_scan_create():
     """
     Scan all jobs in the database and create Trello cards for jobs that don't have them.

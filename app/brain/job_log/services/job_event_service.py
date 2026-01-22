@@ -7,6 +7,7 @@ from typing import Optional
 from app.models import JobEvents, db  # your actual SQLAlchemy model
 from app.brain.job_log.job_events import JobEvent
 from app.logging_config import get_logger
+from app.auth.utils import format_source_with_user, get_current_user
 
 logger = get_logger(__name__)
 
@@ -29,7 +30,18 @@ class JobEventService:
         """
         Create a new JobEvent with deduplication.
         Returns JobEvent dataclass if created, None if duplicate.
+        
+        Args:
+            job: Job number
+            release: Release string
+            action: Action string
+            source: Base source string (e.g., 'Brain', 'Procore')
+            payload: Event payload dict
         """
+
+        # Get current user and format source with username
+        user = get_current_user()
+        formatted_source = format_source_with_user(source, user)
 
         # 1️⃣ Generate payload hash for deduplication
         payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
@@ -52,9 +64,10 @@ class JobEventService:
             job=job,
             release=release,
             action=action,
-            source=source,
+            source=formatted_source,
             payload=payload,
             payload_hash=payload_hash,
+            user_id=user.id if user else None,
             created_at=datetime.utcnow()
         )
 
@@ -62,7 +75,7 @@ class JobEventService:
         self.session.flush()  # assign ID
 
         self.logger.info(f"Job event created: {db_event.id}", extra={
-            "job": job, "release": release, "action": action
+            "job": job, "release": release, "action": action, "source": formatted_source
         })
 
         # 4️⃣ Return domain dataclass
