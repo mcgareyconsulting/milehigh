@@ -15,6 +15,9 @@ function JobLog() {
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
     const [showGanttModal, setShowGanttModal] = useState(false);
+    const [recalculating, setRecalculating] = useState(false);
+    const [recalculateError, setRecalculateError] = useState(null);
+    const [recalculateSuccess, setRecalculateSuccess] = useState(null);
 
     // Use the filters hook
     const {
@@ -235,6 +238,40 @@ function JobLog() {
         }
     };
 
+    const handleRecalculateScheduling = async () => {
+        if (!window.confirm('Recalculate scheduling for all jobs? This will update start_install and comp_eta fields.')) {
+            return;
+        }
+
+        setRecalculating(true);
+        setRecalculateError(null);
+        setRecalculateSuccess(null);
+
+        try {
+            const result = await jobsApi.recalculateScheduling();
+            setRecalculateSuccess({
+                total_jobs: result.total_jobs || 0,
+                updated: result.updated || 0,
+                errors: result.errors || []
+            });
+
+            // Refresh the job data
+            await fetchAll();
+
+            // Clear success message after 5 seconds
+            setTimeout(() => {
+                setRecalculateSuccess(null);
+            }, 5000);
+        } catch (error) {
+            setRecalculateError(error.message || 'Failed to recalculate scheduling');
+            setTimeout(() => {
+                setRecalculateError(null);
+            }, 5000);
+        } finally {
+            setRecalculating(false);
+        }
+    };
+
     return (
         <div className="w-full h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
@@ -263,9 +300,45 @@ function JobLog() {
                                 >
                                     📋 Release
                                 </button>
+                                <button
+                                    onClick={handleRecalculateScheduling}
+                                    disabled={recalculating}
+                                    className={`px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 ${recalculating
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-white text-accent-600 hover:bg-accent-50'
+                                        }`}
+                                >
+                                    {recalculating ? (
+                                        <>
+                                            <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600"></span>
+                                            Calculating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            ⏱️ Refresh Schedule
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         </div>
                     </div>
+
+                    {/* Success/Error Messages */}
+                    {recalculateSuccess && (
+                        <div className="mx-2 mb-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-green-800 text-sm">
+                                ✓ Scheduling updated: {recalculateSuccess.updated} of {recalculateSuccess.total_jobs} jobs updated
+                                {recalculateSuccess.errors && recalculateSuccess.errors.length > 0 && (
+                                    <span className="text-orange-600"> ({recalculateSuccess.errors.length} errors)</span>
+                                )}
+                            </p>
+                        </div>
+                    )}
+                    {recalculateError && (
+                        <div className="mx-2 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-red-800 text-sm">✗ {recalculateError}</p>
+                        </div>
+                    )}
 
                     <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
                         <div className="bg-gray-100 rounded-lg p-1.5 border border-gray-200 flex-shrink-0">

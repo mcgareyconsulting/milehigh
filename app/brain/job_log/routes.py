@@ -369,6 +369,28 @@ def get_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
+        # Add scheduling fields to all jobs
+        # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
+        from app.api.helpers import add_scheduling_fields_to_jobs
+        try:
+            # Fetch all jobs for queue calculation (regardless of filter/pagination)
+            all_jobs_for_queue = Job.query.all()
+            all_jobs_dicts = []
+            for j in all_jobs_for_queue:
+                all_jobs_dicts.append({
+                    'Fab Hrs': serialize_value(j.fab_hrs),
+                    'Install HRS': serialize_value(j.install_hrs),
+                    'Fab Order': serialize_value(j.fab_order),
+                    'Stage': j.stage if j.stage else 'Released',
+                })
+            job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
+        except Exception as scheduling_error:
+            logger.warning(
+                f"Error calculating scheduling fields: {scheduling_error}",
+                exc_info=True
+            )
+            # Continue without scheduling fields if calculation fails
+
         # Build response with latest timestamp for client to store
         latest_timestamp = None
         if jobs:
@@ -485,6 +507,28 @@ def get_all_jobs():
                 })
                 logger.warning(error_msg, exc_info=True)
                 continue
+        
+        # Add scheduling fields to all jobs
+        # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
+        from app.api.helpers import add_scheduling_fields_to_jobs
+        try:
+            # Fetch all jobs for queue calculation (regardless of pagination)
+            all_jobs_for_queue = Job.query.all()
+            all_jobs_dicts = []
+            for j in all_jobs_for_queue:
+                all_jobs_dicts.append({
+                    'Fab Hrs': serialize_value(j.fab_hrs),
+                    'Install HRS': serialize_value(j.install_hrs),
+                    'Fab Order': serialize_value(j.fab_order),
+                    'Stage': j.stage if j.stage else 'Released',
+                })
+            job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
+        except Exception as scheduling_error:
+            logger.warning(
+                f"Error calculating scheduling fields: {scheduling_error}",
+                exc_info=True
+            )
+            # Continue without scheduling fields if calculation fails
         
         # Build response
         response_data = {
@@ -1516,6 +1560,122 @@ def trello_scanner():
     except Exception as e:
         logger.error(f"Error in Trello scanner: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+@brain_bp.route("/preview-scheduling", methods=["GET"])
+@login_required
+def preview_scheduling():
+    """
+    Preview scheduling changes without updating the database.
+    
+    This endpoint shows what changes would be made to start_install and comp_eta
+    fields if scheduling were recalculated, without actually making any changes.
+    
+    Query Parameters:
+        reference_date (string, optional): ISO date string for reference date (defaults to today)
+        show_all (bool, optional): Show all jobs, not just those with changes (default: false)
+        
+    Returns:
+        JSON object with:
+        - total_jobs: Total number of jobs
+        - jobs_with_changes: Number of jobs that would have changes
+        - jobs: List of jobs with current vs computed values
+        - summary: Summary statistics
+        
+    Status Codes:
+        - 200: Success
+        - 500: Server error
+    """
+    from datetime import datetime
+    from app.brain.job_log.scheduling.preview import preview_scheduling_changes
+    
+    try:
+        # Get optional parameters
+        reference_date_str = request.args.get('reference_date')
+        show_all = request.args.get('show_all', 'false').lower() == 'true'
+        
+        reference_date = None
+        if reference_date_str:
+            try:
+                reference_date = datetime.fromisoformat(reference_date_str.replace('Z', '+00:00')).date()
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid reference_date parameter: {reference_date_str}, using today")
+        
+        logger.info(f"Preview scheduling endpoint called (reference_date={reference_date}, show_all={show_all})")
+        
+        preview_results = preview_scheduling_changes(
+            reference_date=reference_date,
+            show_all=show_all,
+            show_summary=True
+        )
+        
+        # Format dates for JSON serialization
+        for job_data in preview_results.get('jobs', []):
+            # Convert date objects to ISO strings
+            for key in ['current_start_install', 'computed_start_install', 
+                       'current_comp_eta', 'computed_comp_eta', 
+                       'projected_fab_complete_date']:
+                if job_data.get(key) is not None:
+                    job_data[key] = job_data[key].isoformat()
+        
+        return jsonify(preview_results), 200
+        
+    except Exception as e:
+        logger.error(f"Error in preview scheduling: {e}", exc_info=True)
+        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
+
+@brain_bp.route("/recalculate-scheduling", methods=["POST"])
+@login_required
+def recalculate_scheduling():
+    """
+    Recalculate and update scheduling fields (start_install, comp_eta) for all jobs.
+    
+    This endpoint:
+    - Fetches all jobs from the database
+    - Calculates scheduling fields based on fab_order, stage, fab_hrs, install_hrs
+    - Updates start_install and comp_eta fields in the database
+    - Commits changes in batches
+    
+    Query Parameters:
+        reference_date (string, optional): ISO date string for reference date (defaults to today)
+        batch_size (int, optional): Number of jobs to commit per batch (default: 100)
+    
+    Returns:
+        JSON object with:
+        - total_jobs: Total number of jobs processed
+        - updated: Number of jobs that had changes
+        - errors: List of any errors encountered
+        
+    Status Codes:
+        - 200: Success
+        - 500: Server error
+    """
+    from datetime import datetime
+    from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+    
+    try:
+        # Get optional parameters
+        reference_date_str = request.args.get('reference_date')
+        batch_size = request.args.get('batch_size', 100, type=int)
+        
+        reference_date = None
+        if reference_date_str:
+            try:
+                reference_date = datetime.fromisoformat(reference_date_str.replace('Z', '+00:00')).date()
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid reference_date parameter: {reference_date_str}, using today")
+        
+        logger.info(f"Recalculate scheduling endpoint called (reference_date={reference_date}, batch_size={batch_size})")
+        
+        result = recalculate_all_jobs_scheduling(
+            reference_date=reference_date,
+            batch_size=batch_size
+        )
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in recalculate scheduling: {e}", exc_info=True)
+        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
 
 @brain_bp.route("/trello-sync", methods=["POST"])
 @login_required
