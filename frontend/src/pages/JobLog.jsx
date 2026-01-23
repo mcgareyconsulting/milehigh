@@ -4,6 +4,7 @@ import { useJobsFilters } from '../hooks/useJobsFilters';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
+import GanttChart from '../components/GanttChart';
 
 function JobLog() {
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useJobsDataFetching();
@@ -13,6 +14,7 @@ function JobLog() {
     const [releasing, setReleasing] = useState(false);
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
+    const [showGanttModal, setShowGanttModal] = useState(false);
 
     // Use the filters hook
     const {
@@ -248,12 +250,20 @@ function JobLog() {
                                     style={{ filter: 'brightness(0) invert(1)' }}
                                 />
                             </div>
-                            <button
-                                onClick={handleReleaseClick}
-                                className="px-4 py-2 bg-white text-accent-600 rounded-lg font-medium shadow-sm hover:bg-accent-50 transition-all flex items-center gap-2"
-                            >
-                                📋 Release
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowGanttModal(true)}
+                                    className="px-4 py-2 bg-white text-accent-600 rounded-lg font-medium shadow-sm hover:bg-accent-50 transition-all flex items-center gap-2"
+                                >
+                                    📊 Gantt Chart
+                                </button>
+                                <button
+                                    onClick={handleReleaseClick}
+                                    className="px-4 py-2 bg-white text-accent-600 rounded-lg font-medium shadow-sm hover:bg-accent-50 transition-all flex items-center gap-2"
+                                >
+                                    📋 Release
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -595,6 +605,13 @@ function JobLog() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Gantt Chart Modal */}
+            {showGanttModal && (
+                <GanttChart
+                    onClose={() => setShowGanttModal(false)}
+                />
             )}
         </div>
     );

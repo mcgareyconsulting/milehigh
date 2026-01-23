@@ -506,6 +506,118 @@ def get_all_jobs():
         logger.error("Error in /get-all-jobs endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
+@brain_bp.route("/gantt-data")
+@login_required
+def get_gantt_data():
+    """
+    Get Gantt chart data grouped by project (job number).
+    
+    Returns:
+        JSON object with projects array, each containing:
+        - project: job number
+        - projectName: job name (from first release)
+        - startDate: earliest start_install across all releases
+        - endDate: latest comp_eta across all releases (or calculated)
+        - releases: array of release bars with start/end dates
+        - color: assigned color for this project
+        
+    Status Codes:
+        - 200: Success
+        - 500: Server error
+    """
+    from app.models import Job
+    from app.trello.utils import add_business_days
+    from datetime import date
+    from collections import defaultdict
+    
+    try:
+        # Get all jobs that have start_install dates (required for rendering)
+        jobs = Job.query.filter(Job.start_install.isnot(None)).all()
+        
+        # Group jobs by project (job number)
+        projects_dict = defaultdict(lambda: {
+            'releases': [],
+            'start_dates': [],
+            'end_dates': []
+        })
+        
+        for job in jobs:
+            project_key = job.job
+            start_install = job.start_install
+            
+            # Calculate comp_eta: use existing if present, otherwise add 2 business days
+            if job.comp_eta:
+                comp_eta = job.comp_eta
+            else:
+                comp_eta = add_business_days(start_install, 2)
+            
+            # Store release data
+            release_data = {
+                'job': job.job,
+                'release': job.release,
+                'jobName': job.job_name,
+                'description': job.description or '',
+                'startDate': start_install.isoformat() if start_install else None,
+                'endDate': comp_eta.isoformat() if comp_eta else None,
+                'pm': job.pm or '',
+                'by': job.by or ''
+            }
+            
+            projects_dict[project_key]['releases'].append(release_data)
+            projects_dict[project_key]['start_dates'].append(start_install)
+            projects_dict[project_key]['end_dates'].append(comp_eta)
+        
+        # Convert to list format and calculate project-level dates
+        projects = []
+        # Color palette for projects (distinct colors)
+        colors = [
+            '#3B82F6',  # blue
+            '#10B981',  # green
+            '#F59E0B',  # amber
+            '#EF4444',  # red
+            '#8B5CF6',  # purple
+            '#EC4899',  # pink
+            '#06B6D4',  # cyan
+            '#F97316',  # orange
+            '#84CC16',  # lime
+            '#6366F1',  # indigo
+            '#14B8A6',  # teal
+            '#F43F5E',  # rose
+        ]
+        
+        for idx, (project_key, project_data) in enumerate(sorted(projects_dict.items())):
+            # Get project name from first release
+            first_release = project_data['releases'][0]
+            project_name = first_release['jobName']
+            
+            # Calculate project-level dates
+            project_start = min(project_data['start_dates'])
+            project_end = max(project_data['end_dates'])
+            
+            # Sort releases by start date
+            sorted_releases = sorted(project_data['releases'], 
+                                   key=lambda r: r['startDate'] or '')
+            
+            projects.append({
+                'project': project_key,
+                'projectName': project_name,
+                'startDate': project_start.isoformat() if project_start else None,
+                'endDate': project_end.isoformat() if project_end else None,
+                'releases': sorted_releases,
+                'color': colors[idx % len(colors)]  # Cycle through colors
+            })
+        
+        # Sort projects by start date
+        projects.sort(key=lambda p: p['startDate'] or '')
+        
+        return jsonify({
+            'projects': projects
+        }), 200
+        
+    except Exception as e:
+        logger.error("Error in /gantt-data endpoint", error=str(e), exc_info=True)
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
 @brain_bp.route("/update-stage/<int:job>/<release>", methods=["PATCH"])
 @login_required
 def update_stage(job, release):

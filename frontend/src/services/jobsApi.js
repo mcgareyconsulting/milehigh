@@ -114,6 +114,17 @@ class JobsApi {
         }
     }
 
+    async fetchGanttData() {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/gantt-data`
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch Gantt chart data');
+        }
+    }
+
 
     /**
      * Handle API errors
