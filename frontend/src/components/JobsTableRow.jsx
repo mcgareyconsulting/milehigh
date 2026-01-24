@@ -4,10 +4,10 @@ import { JobDetailsModal } from './JobDetailsModal';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
-    
+
     // Alternate row background colors with higher contrast
     const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
-    
+
     // Row is draggable (all jobs can be dragged)
     const isDraggable = true;
 
@@ -24,19 +24,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         { value: 'Complete', label: 'Complete' }
     ];
 
-    // Get stage progress percentage (0-100) based on position in workflow
-    const getStageProgress = (stage) => {
-        const stageIndex = stageOptions.findIndex(opt => opt.value === stage);
-        if (stageIndex === -1) return 0;
-        // Calculate percentage: (index + 1) / total stages * 100
-        // But we want it to fill more, so we'll use index / (total - 1) * 100
-        const totalStages = stageOptions.length;
-        return Math.round((stageIndex / (totalStages - 1)) * 100);
-    };
-
-    // Color mapping for each stage (with RGB values for gradients)
+    // Color mapping for each stage
     const stageColors = {
-        'Released': { 
+        'Released': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600
@@ -44,31 +34,31 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Cut start': { 
-            light: 'rgb(243 232 255)', // purple-100
-            base: 'rgb(168 85 247)', // purple-500
-            dark: 'rgb(147 51 234)', // purple-600
-            text: 'rgb(107 33 168)', // purple-800
-            border: 'rgb(196 181 253)', // purple-300
-            className: 'bg-purple-100 text-purple-800 border-purple-300'
+        'Cut start': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Fit Up Complete.': { 
-            light: 'rgb(220 252 231)', // green-100
-            base: 'rgb(34 197 94)', // green-500
-            dark: 'rgb(22 163 74)', // green-600
-            text: 'rgb(22 101 52)', // green-800
-            border: 'rgb(134 239 172)', // green-300
-            className: 'bg-green-100 text-green-800 border-green-300'
+        'Fit Up Complete.': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Welded QC': { 
-            light: 'rgb(204 251 241)', // teal-100
-            base: 'rgb(20 184 166)', // teal-500
-            dark: 'rgb(15 118 110)', // teal-600
-            text: 'rgb(17 94 89)', // teal-800
-            border: 'rgb(94 234 212)', // teal-300
-            className: 'bg-teal-100 text-teal-800 border-teal-300'
+        'Welded QC': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Paint complete': { 
+        'Paint complete': {
             light: 'rgb(254 249 195)', // yellow-100
             base: 'rgb(234 179 8)', // yellow-500
             dark: 'rgb(202 138 4)', // yellow-600
@@ -76,31 +66,31 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(253 224 71)', // yellow-300
             className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
         },
-        'Store at MHMW for shipping': { 
-            light: 'rgb(255 237 213)', // orange-100
-            base: 'rgb(249 115 22)', // orange-500
-            dark: 'rgb(234 88 12)', // orange-600
-            text: 'rgb(154 52 18)', // orange-800
-            border: 'rgb(253 186 116)', // orange-300
-            className: 'bg-orange-100 text-orange-800 border-orange-300'
+        'Store at MHMW for shipping': {
+            light: 'rgb(254 249 195)', // yellow-100
+            base: 'rgb(234 179 8)', // yellow-500
+            dark: 'rgb(202 138 4)', // yellow-600
+            text: 'rgb(133 77 14)', // yellow-800
+            border: 'rgb(253 224 71)', // yellow-300
+            className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
         },
-        'Shipping planning': { 
-            light: 'rgb(224 231 255)', // indigo-100
-            base: 'rgb(99 102 241)', // indigo-500
-            dark: 'rgb(79 70 229)', // indigo-600
-            text: 'rgb(55 48 163)', // indigo-800
-            border: 'rgb(165 180 252)', // indigo-300
-            className: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+        'Shipping planning': {
+            light: 'rgb(254 249 195)', // yellow-100
+            base: 'rgb(234 179 8)', // yellow-500
+            dark: 'rgb(202 138 4)', // yellow-600
+            text: 'rgb(133 77 14)', // yellow-800
+            border: 'rgb(253 224 71)', // yellow-300
+            className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
         },
-        'Shipping completed': { 
-            light: 'rgb(243 244 246)', // gray-100
-            base: 'rgb(107 114 128)', // gray-500
-            dark: 'rgb(75 85 99)', // gray-600
-            text: 'rgb(31 41 55)', // gray-800
-            border: 'rgb(209 213 219)', // gray-300
-            className: 'bg-gray-100 text-gray-800 border-gray-300'
+        'Shipping completed': {
+            light: 'rgb(209 250 229)', // emerald-100
+            base: 'rgb(16 185 129)', // emerald-500
+            dark: 'rgb(5 150 105)', // emerald-600
+            text: 'rgb(6 95 70)', // emerald-800
+            border: 'rgb(110 231 183)', // emerald-300
+            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Complete': { 
+        'Complete': {
             light: 'rgb(209 250 229)', // emerald-100
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -162,7 +152,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const handleFabOrderChange = async (newValue) => {
         const oldValue = localFabOrder;
         const parsedValue = newValue === '' ? null : parseFloat(newValue);
-        
+
         // Optimistic update
         setLocalFabOrder(parsedValue);
         setUpdatingFabOrder(true);
@@ -190,7 +180,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Handle notes change
     const handleNotesChange = async (newValue) => {
         const oldValue = localNotes;
-        
+
         // Optimistic update
         setLocalNotes(newValue);
         setUpdatingNotes(true);
@@ -362,18 +352,13 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // Handle Stage column with editable color-coded dropdown
                     if (column === 'Stage') {
                         const currentStageColors = stageColors[localStage] || stageColors['Released'];
-                        const progress = getStageProgress(localStage);
                         // Get display label for current stage
                         const currentOption = stageOptions.find(opt => opt.value === localStage);
                         const currentLabel = currentOption ? currentOption.label : localStage;
 
-                        // Create gradient style: fill from left to right based on progress
-                        // The gradient shows the base color up to progress%, then fades to light color
-                        const gradientStyle = {
-                            background: `linear-gradient(to right, 
-                                ${currentStageColors.base} ${progress}%, 
-                                ${currentStageColors.light} ${progress}%
-                            )`,
+                        // Solid color style (no gradient)
+                        const solidStyle = {
+                            backgroundColor: currentStageColors.light,
                             color: currentStageColors.text,
                             borderColor: currentStageColors.border
                         };
@@ -391,23 +376,19 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     onChange={(e) => handleStageChange(e.target.value)}
                                     disabled={updatingStage}
                                     className={`w-full px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-all relative overflow-hidden ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
-                                    style={{ 
+                                    style={{
                                         minWidth: '120px',
-                                        ...gradientStyle
+                                        ...solidStyle
                                     }}
                                 >
                                     {stageOptions.map((option) => {
                                         const optionColors = stageColors[option.value] || stageColors['Released'];
-                                        const optionProgress = getStageProgress(option.value);
                                         return (
                                             <option
                                                 key={option.value}
                                                 value={option.value}
                                                 style={{
-                                                    background: `linear-gradient(to right, 
-                                                        ${optionColors.base} ${optionProgress}%, 
-                                                        ${optionColors.light} ${optionProgress}%
-                                                    )`,
+                                                    backgroundColor: optionColors.light,
                                                     color: optionColors.text
                                                 }}
                                             >
