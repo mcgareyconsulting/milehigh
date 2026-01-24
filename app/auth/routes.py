@@ -155,3 +155,4 @@ def register():
         db.session.rollback()
         return jsonify({'error': 'An error occurred while registering user'}), 500
 
+

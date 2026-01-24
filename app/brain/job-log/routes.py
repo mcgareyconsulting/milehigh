@@ -1502,3 +1502,4 @@ def trello_scan_create():
         logger.error(f"Error in Trello scan and create: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
+

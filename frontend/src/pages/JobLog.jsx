@@ -304,8 +304,8 @@ function JobLog() {
                                     onClick={handleRecalculateScheduling}
                                     disabled={recalculating}
                                     className={`px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 ${recalculating
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-white text-accent-600 hover:bg-accent-50'
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-white text-accent-600 hover:bg-accent-50'
                                         }`}
                                 >
                                     {recalculating ? (
