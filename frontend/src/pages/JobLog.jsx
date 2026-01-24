@@ -40,12 +40,12 @@ function JobLog() {
         ALL_OPTION_VALUE,
     } = useJobsFilters(jobs);
 
-    // Update fab order handler
+    // Update fab order handler (for drag and drop - no refetch to avoid page reload)
     const updateFabOrder = useCallback(async (job, release, fabOrder) => {
         await jobsApi.updateFabOrder(job, release, fabOrder);
-        // Refetch data after update
-        await refetch();
-    }, [refetch]);
+        // Don't refetch to avoid unnecessary page reloads
+        // The fab order update will be reflected when the next data sync occurs
+    }, []);
 
     // Drag and drop functionality
     const {
