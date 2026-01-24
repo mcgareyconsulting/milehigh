@@ -262,6 +262,7 @@ class Job(db.Model):
     released = db.Column(db.Date)
     fab_order = db.Column(db.Float)
     stage = db.Column(db.String(128), nullable=True)
+    stage_group = db.Column(db.String(64), nullable=True)
     start_install = db.Column(
         db.Date
     )  # Changed from install to start_install and Date type
@@ -310,6 +311,7 @@ class Job(db.Model):
             "released": self.released,
             "fab_order": self.fab_order,
             "stage": self.stage,
+            "stage_group": self.stage_group,
             "start_install": self.start_install,
             "start_install_formula": self.start_install_formula,
             "start_install_formulaTF": self.start_install_formulaTF,

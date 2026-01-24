@@ -1,25 +1,24 @@
 import { useState, useCallback } from 'react';
 
 /**
- * Get the staging subset that a job belongs to based on its stage
+ * Get the staging subset that a job belongs to based on its stage_group
  * @param {Object} job - The job object
  * @returns {string} - 'job_order', 'ready_to_ship', 'fab', or null
  */
 function getJobStagingSubset(job) {
-    const jobStage = String(job['Stage'] ?? '').trim();
-    const fabStages = ['Welded QC', 'Fit Up Complete.', 'Cut start', 'Released'];
-    
-    // Fab subset: specific stages
-    if (fabStages.includes(jobStage)) {
+    const stageGroup = String(job['Stage Group'] ?? '').trim();
+
+    // Fab subset: FABRICATION stage_group
+    if (stageGroup === 'FABRICATION') {
         return 'fab';
     }
-    
-    // Ready to Ship: all except Complete and Shipping completed
-    if (jobStage !== 'Complete' && jobStage !== 'Shipping completed') {
+
+    // Ready to Ship: READY_TO_SHIP stage_group
+    if (stageGroup === 'READY_TO_SHIP') {
         return 'ready_to_ship';
     }
-    
-    // Job Order: all jobs (fallback)
+
+    // Job Order: all jobs (fallback, includes COMPLETE and any unmapped jobs)
     return 'job_order';
 }
 
@@ -45,32 +44,32 @@ function parseFabOrder(job, fallback = 999999) {
  */
 function calculateTopFabOrder(draggedJob, allJobs, selectedSubset) {
     const draggedSubset = selectedSubset || getJobStagingSubset(draggedJob);
-    
+
     // Filter jobs to only those in the same staging subset
     const sameSubsetJobs = allJobs.filter(job => {
         const jobSubset = selectedSubset || getJobStagingSubset(job);
         return jobSubset === draggedSubset;
     });
-    
+
     if (sameSubsetJobs.length === 0) {
         return 0.5;
     }
-    
+
     // Sort by current fab order
     const sortedJobs = [...sameSubsetJobs].sort((a, b) => {
         const orderA = parseFabOrder(a);
         const orderB = parseFabOrder(b);
         return orderA - orderB;
     });
-    
+
     const first = sortedJobs[0];
     const firstOrder = parseFabOrder(first, 1);
-    
+
     // If the first order is an integer >= 1, just use 0.5
     if (firstOrder >= 1) {
         return 0.5;
     }
-    
+
     // Otherwise, find the smallest positive order and halve it
     let minPositive = Infinity;
     for (const job of sortedJobs) {
@@ -79,10 +78,10 @@ function calculateTopFabOrder(draggedJob, allJobs, selectedSubset) {
             minPositive = val;
         }
     }
-    
+
     const base = minPositive === Infinity ? 1 : minPositive;
     const newOrder = base / 2;
-    
+
     // Round to reasonable precision (4 decimal places)
     return Math.round(newOrder * 10000) / 10000;
 }

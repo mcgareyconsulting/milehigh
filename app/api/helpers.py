@@ -5,6 +5,56 @@ from typing import Dict, Any, Union, List, Optional
 from datetime import date
 from app.models import Job
 
+# Stage to stage_group mapping
+# Includes both user-provided names and actual stage names used in the codebase
+STAGE_TO_GROUP = {
+    # FABRICATION group
+    "Released": "FABRICATION",
+    "Cut Start": "FABRICATION",
+    "Cut start": "FABRICATION",  # Actual name used in codebase
+    "Fitup Complete": "FABRICATION",
+    "Fit Up Complete.": "FABRICATION",  # Actual name used in codebase
+    "Welded QC": "FABRICATION",
+    
+    # READY_TO_SHIP group
+    "Paint Complete": "READY_TO_SHIP",
+    "Paint complete": "READY_TO_SHIP",  # Actual name used in codebase
+    "Store at Shop": "READY_TO_SHIP",
+    "Store at MHMW for shipping": "READY_TO_SHIP",  # Actual name used in codebase
+    "Shipping Planning": "READY_TO_SHIP",
+    "Shipping planning": "READY_TO_SHIP",  # Actual name used in codebase
+    
+    # COMPLETE group
+    "Shipping Complete": "COMPLETE",
+    "Shipping completed": "COMPLETE",  # Actual name used in codebase
+    "Complete": "COMPLETE",
+}
+
+
+def get_stage_group_from_stage(stage: Optional[str]) -> Optional[str]:
+    """
+    Map a stage name to its corresponding stage_group.
+    
+    Handles both user-provided stage names and actual stage names used in the codebase.
+    
+    Args:
+        stage: Stage name (e.g., 'Released', 'Cut Start', 'Cut start', 'Paint Complete', etc.)
+        
+    Returns:
+        Stage group name (e.g., 'FABRICATION', 'READY_TO_SHIP', 'COMPLETE') or None if stage is not mapped
+    """
+    if not stage:
+        return None
+    # Try exact match first
+    if stage in STAGE_TO_GROUP:
+        return STAGE_TO_GROUP[stage]
+    # Try case-insensitive match as fallback
+    stage_lower = stage.lower()
+    for key, value in STAGE_TO_GROUP.items():
+        if key.lower() == stage_lower:
+            return value
+    return None
+
 
 def determine_stage_from_db_fields(job: Union[Job, Any]) -> str:
     """

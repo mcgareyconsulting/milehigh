@@ -127,6 +127,10 @@ class TrelloListMapper:
         # Set the stage directly from the Trello list name
         job.stage = trello_list_name
         
+        # Update stage_group based on stage
+        from app.api.helpers import get_stage_group_from_stage
+        job.stage_group = get_stage_group_from_stage(trello_list_name)
+        
         # Log the new state after applying changes
         logger.info(
             "Applied Trello list to database record",

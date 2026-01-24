@@ -53,10 +53,13 @@ def get_list_id_by_stage(stage):
         return None
 
 def update_job_stage_fields(job_record, stage):
-    """Apply stage update to job record - sets the stage field directly."""
+    """Apply stage update to job record - sets the stage field directly and updates stage_group."""
+    from app.api.helpers import get_stage_group_from_stage
+    
     logger.info(f"Updating job {job_record.job}-{job_record.release} stage to: {stage}")
     job_record.stage = stage
-    logger.debug(f"Job stage updated to: {stage}")
+    job_record.stage_group = get_stage_group_from_stage(stage)
+    logger.debug(f"Job stage updated to: {stage}, stage_group updated to: {job_record.stage_group}")
 
 def create_trello_card_for_job(job, excel_data_dict):
     """
@@ -342,6 +345,7 @@ def get_jobs():
                     'Released': serialize_value(job.released),
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
+                    'Stage Group': serialize_value(job.stage_group),  # Stage group field from database
                     'Start install': serialize_value(job.start_install),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
@@ -481,6 +485,7 @@ def get_all_jobs():
                     'Released': serialize_value(job.released),
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
+                    'Stage Group': serialize_value(job.stage_group),  # Stage group field from database
                     'Start install': serialize_value(job.start_install),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),

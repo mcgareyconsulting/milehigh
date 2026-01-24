@@ -1546,6 +1546,10 @@ def seed_jobs_from_csv(csv_file_path=None, batch_size=50, require_confirmation=T
                 for idx, row in batch_df.iterrows():
                     try:
                         # Map CSV columns to Job model fields
+                        stage_value = safe_truncate_string(row.get('Stage'), 128)
+                        from app.api.helpers import get_stage_group_from_stage
+                        stage_group_value = get_stage_group_from_stage(stage_value) if stage_value else None
+                        
                         job_record = Job(
                             job=int(row['Job #']),
                             release=str(row['Release #']).strip(),
@@ -1558,7 +1562,8 @@ def seed_jobs_from_csv(csv_file_path=None, batch_size=50, require_confirmation=T
                             by=safe_truncate_string(row.get('BY'), 16),
                             released=to_date(row.get('Released')),
                             fab_order=safe_float(row.get('Fab Order')),
-                            stage=safe_truncate_string(row.get('Stage'), 128),
+                            stage=stage_value,
+                            stage_group=stage_group_value,
                             start_install=to_date(row.get('Start install')),
                             comp_eta=to_date(row.get('Comp. ETA')),
                             invoiced=safe_truncate_string(row.get('Invoiced'), 8),

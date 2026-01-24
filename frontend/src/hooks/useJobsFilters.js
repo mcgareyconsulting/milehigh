@@ -102,24 +102,23 @@ export function useJobsFilters(jobs = []) {
     }, [sortByFabOrder]);
 
     /**
-     * Filter jobs into Ready to Ship subset (all except Complete and Shipping completed)
+     * Filter jobs into Ready to Ship subset (READY_TO_SHIP stage_group)
      */
     const getReadyToShipSubset = useCallback((jobsToFilter) => {
         const filtered = jobsToFilter.filter(job => {
-            const jobStage = String(job['Stage'] ?? '').trim();
-            return jobStage !== 'Complete' && jobStage !== 'Shipping completed';
+            const stageGroup = String(job['Stage Group'] ?? '').trim();
+            return stageGroup === 'READY_TO_SHIP';
         });
         return sortByFabOrder(filtered);
     }, [sortByFabOrder]);
 
     /**
-     * Filter jobs into Fab subset (Welded QC, Fit Up Complete., Cut start, Released)
+     * Filter jobs into Fab subset (FABRICATION stage_group)
      */
     const getFabSubset = useCallback((jobsToFilter) => {
-        const fabStages = ['Welded QC', 'Fit Up Complete.', 'Cut start', 'Released'];
         const filtered = jobsToFilter.filter(job => {
-            const jobStage = String(job['Stage'] ?? '').trim();
-            return fabStages.includes(jobStage);
+            const stageGroup = String(job['Stage Group'] ?? '').trim();
+            return stageGroup === 'FABRICATION';
         });
         return sortByFabOrder(filtered);
     }, [sortByFabOrder]);
@@ -143,18 +142,12 @@ export function useJobsFilters(jobs = []) {
             // Job Order: All jobs
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'ready_to_ship') {
-            // Ready to Ship: Ready to Ship subset (excluding Fab jobs) + Fab subset below
-            const fabStages = ['Welded QC', 'Fit Up Complete.', 'Cut start', 'Released'];
-            const readyToShipNonFab = baseFiltered.filter(job => {
-                const jobStage = String(job['Stage'] ?? '').trim();
-                return jobStage !== 'Complete' &&
-                    jobStage !== 'Shipping completed' &&
-                    !fabStages.includes(jobStage);
-            });
+            // Ready to Ship: READY_TO_SHIP stage_group + FABRICATION stage_group (Fab subset) below
+            const readyToShipJobs = getReadyToShipSubset(baseFiltered);
             const fabJobs = getFabSubset(baseFiltered);
-            result = [...sortByFabOrder(readyToShipNonFab), ...fabJobs];
+            result = [...readyToShipJobs, ...fabJobs];
         } else if (selectedSubset === 'fab') {
-            // Fab: Only Fab subset
+            // Fab: Only FABRICATION stage_group
             result = getFabSubset(baseFiltered);
         }
 
