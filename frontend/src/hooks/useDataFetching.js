@@ -61,15 +61,19 @@ export function useDataFetching() {
         let visibilityChangeHandler = null;
 
         const startPolling = () => {
+            // Only start polling if tab is visible
+            if (document.hidden) {
+                return;
+            }
+
             // Clear any existing interval
             if (intervalId) {
                 clearInterval(intervalId);
             }
 
+            // Poll every 30 seconds - interval only runs when tab is active
             intervalId = setInterval(() => {
-                if (!document.hidden) {
-                    fetchData(true);
-                }
+                fetchData(true);
             }, 30000);
         }
 
@@ -82,15 +86,19 @@ export function useDataFetching() {
 
         visibilityChangeHandler = () => {
             if (document.hidden) {
+                // Tab became hidden - stop polling
                 stopPolling();
             } else {
+                // Tab became visible - start polling and fetch immediately
                 startPolling();
-                fetchData(true); // Immediately fetch when tab becomes visible
+                fetchData(true);
             }
         };
 
-        // Start polling
-        startPolling();
+        // Start polling only if tab is visible
+        if (!document.hidden) {
+            startPolling();
+        }
 
         document.addEventListener('visibilitychange', visibilityChangeHandler);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
@@ -36,7 +36,26 @@ function DraftingWorkLoad() {
         clearUploadSuccess,
     } = useMutations(refetch);
 
-    const rows = submittals; // now that submittals is clean, we alias
+    // Tab state: 'open' or 'draft'
+    const [selectedTab, setSelectedTab] = useState('open');
+
+    // Filter rows based on selected tab before passing to useFilters
+    const filteredRowsByTab = useMemo(() => {
+        return submittals.filter((row) => {
+            // Filter on status field from the database
+            const rowStatus = row.status ?? '';
+
+            if (selectedTab === 'draft') {
+                // Draft tab: only show submittals with status = "Draft"
+                return rowStatus === 'Draft';
+            } else {
+                // Open tab: show all submittals except those with status = "Draft"
+                return rowStatus !== 'Draft';
+            }
+        });
+    }, [submittals, selectedTab]);
+
+    const rows = filteredRowsByTab; // now that submittals is clean, we alias
 
     // Use the filters hook
     const {
@@ -108,10 +127,15 @@ function DraftingWorkLoad() {
             <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%' }}>
                 <div className="max-w-full mx-auto w-full" style={{ width: '100%' }}>
                     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                        <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-4 py-3">
+                        <div className={`px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
                             <div className="flex items-center justify-between">
-                                <div>
+                                <div className="flex items-center gap-3">
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
+                                    <img
+                                        src="/bananas-svgrepo-com.svg"
+                                        alt="banana"
+                                        className="w-7 h-7"
+                                    />
 
                                 </div>
                                 <div className="flex items-center gap-3">
@@ -156,7 +180,30 @@ function DraftingWorkLoad() {
                         </div>
 
                         <div className="p-2 space-y-2">
-                            <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-2 border border-gray-200 shadow-sm">
+                            {/* Tab Selection */}
+                            <div className="bg-white rounded-xl p-2 border border-gray-200 shadow-sm">
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setSelectedTab('open')}
+                                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${selectedTab === 'open'
+                                            ? 'bg-gradient-to-r from-accent-500 to-accent-600 text-white shadow-md'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                    >
+                                        Open
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedTab('draft')}
+                                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${selectedTab === 'draft'
+                                            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                    >
+                                        Draft
+                                    </button>
+                                </div>
+                            </div>
+                            <div className={`rounded-xl p-2 border border-gray-200 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50' : 'bg-gradient-to-r from-gray-50 to-accent-50'}`}>
                                 <div className="flex flex-col gap-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="flex flex-col gap-3">
