@@ -17,6 +17,7 @@ import hashlib
 import csv
 import io
 import pandas as pd
+import math
 
 logger = get_logger(__name__)
 
@@ -787,6 +788,10 @@ def update_stage(job, release):
         # If we calculated a new fab_order, set it now
         if fab_order_to_set is not None:
             
+            # Ensure payload values are valid (not NaN) - convert to None if needed
+            payload_from = None if (isinstance(old_fab_order_for_update, float) and math.isnan(old_fab_order_for_update)) else old_fab_order_for_update
+            payload_to = None if (isinstance(fab_order_to_set, float) and math.isnan(fab_order_to_set)) else fab_order_to_set
+            
             # Create event for fab_order update
             fab_order_event = JobEventService.create(
                 job=job,
@@ -794,8 +799,8 @@ def update_stage(job, release):
                 action='update_fab_order',
                 source='Brain',
                 payload={
-                    'from': old_fab_order_for_update,
-                    'to': fab_order_to_set,
+                    'from': payload_from,
+                    'to': payload_to,
                     'reason': 'stage_change_fab_to_ready_to_ship'
                 }
             )
