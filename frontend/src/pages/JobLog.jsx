@@ -285,6 +285,176 @@ function JobLog() {
         }
     };
 
+    const handlePrint = () => {
+        // First, sort all jobs by Job # first, then PM
+        const sortedJobs = [...displayJobs].sort((a, b) => {
+            // First sort by Job #
+            const jobA = a['Job #'] || 0;
+            const jobB = b['Job #'] || 0;
+            if (jobA !== jobB) {
+                return jobA - jobB;
+            }
+            // Then sort by PM (treat null/empty as empty string for sorting)
+            const pmA = (a['PM'] || '').toString().toLowerCase();
+            const pmB = (b['PM'] || '').toString().toLowerCase();
+            return pmA.localeCompare(pmB);
+        });
+
+        // Group jobs by PM, maintaining the sorted order within each PM group
+        const jobsByPM = {};
+        sortedJobs.forEach(job => {
+            const pm = job['PM'] || 'No PM';
+            if (!jobsByPM[pm]) {
+                jobsByPM[pm] = [];
+            }
+            jobsByPM[pm].push(job);
+        });
+
+        // Sort each PM group by Job # to ensure proper ordering
+        Object.keys(jobsByPM).forEach(pm => {
+            jobsByPM[pm].sort((a, b) => {
+                const jobA = a['Job #'] || 0;
+                const jobB = b['Job #'] || 0;
+                return jobA - jobB;
+            });
+        });
+
+        // Create printable HTML
+        let printHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Log - Print</title>
+    <style>
+        @media print {
+            @page {
+                size: letter;
+                margin: 0.5in;
+            }
+            .pm-group {
+                page-break-after: always;
+            }
+            .pm-group:last-child {
+                page-break-after: auto;
+            }
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .pm-header {
+            font-size: 14px;
+            font-weight: bold;
+            margin: 20px 0 10px 0;
+            padding: 8px;
+            background-color: #f0f0f0;
+            border-bottom: 2px solid #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th {
+            background-color: #e0e0e0;
+            border: 1px solid #999;
+            padding: 6px 4px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 9px;
+            white-space: nowrap;
+        }
+        td {
+            border: 1px solid #ccc;
+            padding: 4px;
+            text-align: center;
+            font-size: 9px;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .no-data {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Job Log - Printed ${new Date().toLocaleString()}</h1>
+`;
+
+        // Generate table for each PM group
+        Object.keys(jobsByPM).sort().forEach((pm, pmIndex, pmArray) => {
+            const pmJobs = jobsByPM[pm];
+            const isLastPM = pmIndex === pmArray.length - 1;
+
+            printHTML += `
+    <div class="pm-group"${isLastPM ? '' : ' style="page-break-after: always;"'}>
+        <div class="pm-header">PM: ${pm}</div>
+        <table>
+            <thead>
+                <tr>
+                    ${columnHeaders.map(col => {
+                const displayHeader = col === 'Release #' ? 'rel. #' : col;
+                return `<th>${displayHeader}</th>`;
+            }).join('')}
+                </tr>
+            </thead>
+            <tbody>
+`;
+
+            pmJobs.forEach(job => {
+                printHTML += '<tr>';
+                columnHeaders.forEach(column => {
+                    let value = job[column];
+
+                    // Format date columns
+                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
+                        value = formatDate(value);
+                    } else {
+                        value = formatCellValue(value, column);
+                    }
+
+                    // Escape HTML
+                    const displayValue = String(value || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    printHTML += `<td>${displayValue}</td>`;
+                });
+                printHTML += '</tr>';
+            });
+
+            printHTML += `
+            </tbody>
+        </table>
+    </div>
+`;
+        });
+
+        printHTML += `
+</body>
+</html>
+`;
+
+        // Open print window
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(printHTML);
+        printWindow.document.close();
+
+        // Wait for content to load, then trigger print
+        printWindow.onload = () => {
+            setTimeout(() => {
+                printWindow.print();
+            }, 250);
+        };
+    };
+
     return (
         <div className="w-full h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
@@ -301,6 +471,16 @@ function JobLog() {
                                 />
                             </div>
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handlePrint}
+                                    disabled={!hasData || loading}
+                                    className={`px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 ${!hasData || loading
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-white text-accent-600 hover:bg-accent-50'
+                                        }`}
+                                >
+                                    🖨️ Print
+                                </button>
                                 <button
                                     onClick={() => setShowGanttModal(true)}
                                     className="px-4 py-2 bg-white text-accent-600 rounded-lg font-medium shadow-sm hover:bg-accent-50 transition-all flex items-center gap-2"
