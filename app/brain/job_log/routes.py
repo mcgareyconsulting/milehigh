@@ -729,42 +729,109 @@ def update_stage(job, release):
             logger.info(f"Event already exists for job {job}-{release} to stage {stage}")
             return jsonify({'error': 'Event already exists'}), 400
         
-        # Update job fields
+        # Capture old stage_group before updating (needed for fab_order logic)
+        from app.api.helpers import get_stage_group_from_stage
+        old_stage_group = job_record.stage_group
+        new_stage_group = get_stage_group_from_stage(stage)
+        
+        logger.info(
+            f"Stage change for job {job}-{release}: "
+            f"old_stage_group={old_stage_group}, new_stage_group={new_stage_group}, "
+            f"old_stage={old_stage}, new_stage={stage}"
+        )
+        
+        # If moving FROM FABRICATION TO READY_TO_SHIP, set fab_order to max+1 in READY_TO_SHIP group
+        # This only applies to FABRICATION -> READY_TO_SHIP transitions
+        # COMPLETE stages get absolute values (not relative to max)
+        fab_order_to_set = None
+        old_fab_order_for_update = None
+        if old_stage_group == 'FABRICATION' and new_stage_group == 'READY_TO_SHIP':
+            from sqlalchemy import func, or_
+            old_fab_order_for_update = job_record.fab_order
+            
+            # Find the maximum fab_order in the READY_TO_SHIP group (excluding current job)
+            # Query the database BEFORE updating stage_group in memory
+            # Use or_ to exclude current job: (job != current) OR (release != current)
+            max_fab_order = db.session.query(func.max(Job.fab_order)).filter(
+                Job.stage_group == 'READY_TO_SHIP',
+                Job.fab_order.isnot(None),
+                or_(
+                    Job.job != job,
+                    Job.release != release
+                )
+            ).scalar()
+            
+            # Calculate new fab_order (max + 1, or 1 if no jobs exist)
+            fab_order_to_set = (max_fab_order + 1) if max_fab_order is not None else 1
+            
+            logger.info(
+                f"Job {job}-{release} moving from FABRICATION to READY_TO_SHIP. "
+                f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set} "
+                f"(max in READY_TO_SHIP group: {max_fab_order})"
+            )
+        
+        # Update job fields (this will update stage_group)
         update_job_stage_fields(job_record, stage)
 
         # Update job metadata
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
+        
+        # If we calculated a new fab_order, set it now
+        if fab_order_to_set is not None:
+            
+            # Create event for fab_order update
+            fab_order_event = JobEventService.create(
+                job=job,
+                release=release,
+                action='update_fab_order',
+                source='Brain',
+                payload={
+                    'from': old_fab_order_for_update,
+                    'to': fab_order_to_set,
+                    'reason': 'stage_change_fab_to_ready_to_ship'
+                }
+            )
+            
+            if fab_order_event is None:
+                logger.warning(f"Event already exists for fab_order update on job {job}-{release}")
+            else:
+                # Update fab_order
+                job_record.fab_order = fab_order_to_set
+                
+                # Create outbox item for fab_order update if job has Trello card
+                if job_record.trello_card_id:
+                    try:
+                        OutboxService.add(
+                            destination='trello',
+                            action='update_fab_order',
+                            event_id=fab_order_event.id
+                        )
+                        logger.info(f"Outbox item created for fab_order update (job {job}-{release})")
+                    except Exception as outbox_error:
+                        logger.error(f"Failed to create outbox for fab_order event {fab_order_event.id}: {outbox_error}", exc_info=True)
+                else:
+                    # Close event if no outbox item was created
+                    JobEventService.close(fab_order_event.id)
 
-        # Add Trello update to outbox and process immediately (hybrid approach)
-        # This provides live updates while still having retry capability if the API call fails
-        # The event will be closed when the outbox item is successfully processed
+        # Add Trello update to outbox (async - will be processed by outbox service)
+        # DB changes are committed first, then outbox handles Trello updates asynchronously
+        # This ensures DB changes are never lost due to Trello API failures
         outbox_item_created = False
-        outbox_processed_immediately = False
         new_list_id = get_list_id_by_stage(stage)
         
         if new_list_id and job_record.trello_card_id:
             try:
-                # Create outbox item
-                outbox_item = OutboxService.add(
+                # Create outbox item - will be processed asynchronously by outbox service
+                OutboxService.add(
                     destination='trello',
                     action='move_card',
                     event_id=event.id
                 )
                 outbox_item_created = True
-                
-                # Try to process immediately for live updates
-                # If it fails, the retry logic will handle it
-                try:
-                    if OutboxService.process_item(outbox_item):
-                        outbox_processed_immediately = True
-                        logger.info(f"Trello update processed immediately for job {job}-{release}")
-                except Exception as process_error:
-                    # Unexpected error during immediate processing - retry logic will handle it
-                    logger.error(f"Error during immediate processing of outbox {outbox_item.id}: {process_error}", exc_info=True)
-                    
+                logger.info(f"Outbox item created for Trello stage update (job {job}-{release})")
             except Exception as outbox_error:
-                # Failed to create outbox item - log the error but don't fail the whole operation
+                # Log error but don't fail the operation - DB update is more important
                 logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
         else:
             # Log why outbox item wasn't created
@@ -780,11 +847,11 @@ def update_stage(job, release):
                 )
         
         # Close event only if no outbox item was created (no external API call needed)
-        # If an outbox item exists, it will be closed when processing succeeds (immediate or retry)
+        # If an outbox item exists, it will be closed when processing succeeds
         if not outbox_item_created:
             JobEventService.close(event.id)
         
-        # Commit all changes (event, job update, outbox item if created)
+        # Commit all DB changes first (this is the critical operation)
         db.session.commit()
         
         logger.info(f"update_stage completed successfully", extra={
@@ -994,27 +1061,23 @@ def update_notes(job, release):
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
 
-        # Add Trello update to outbox and process immediately (only if notes is not empty)
+        # Add Trello update to outbox (async - will be processed by outbox service)
+        # DB changes are committed first, then outbox handles Trello updates asynchronously
+        # This ensures DB changes are never lost due to Trello API failures
         outbox_item_created = False
         
         if job_record.trello_card_id and notes:
             try:
-                # Create outbox item
-                outbox_item = OutboxService.add(
+                # Create outbox item - will be processed asynchronously by outbox service
+                OutboxService.add(
                     destination='trello',
                     action='update_notes',
                     event_id=event.id
                 )
                 outbox_item_created = True
-                
-                # Try to process immediately for live updates
-                try:
-                    if OutboxService.process_item(outbox_item):
-                        logger.info(f"Trello notes update processed immediately for job {job}-{release}")
-                except Exception as process_error:
-                    logger.error(f"Error during immediate processing of outbox {outbox_item.id}: {process_error}", exc_info=True)
-                    
+                logger.info(f"Outbox item created for Trello notes update (job {job}-{release})")
             except Exception as outbox_error:
+                # Log error but don't fail the operation - DB update is more important
                 logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
         else:
             if not job_record.trello_card_id:
@@ -1029,7 +1092,7 @@ def update_notes(job, release):
         if not outbox_item_created:
             JobEventService.close(event.id)
         
-        # Commit all changes
+        # Commit all DB changes first (this is the critical operation)
         db.session.commit()
         
         logger.info(f"update_notes completed successfully", extra={

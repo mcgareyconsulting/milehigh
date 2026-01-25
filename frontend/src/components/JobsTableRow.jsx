@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { JobDetailsModal } from './JobDetailsModal';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     // Alternate row background colors with higher contrast
     const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
 
-    // Row is draggable (all jobs can be dragged)
-    const isDraggable = true;
+    // Row is draggable (disabled for now)
+    const isDraggable = false;
 
     // Stage options with simplified names for display (in progression order)
     const stageOptions = [
@@ -138,6 +138,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             await jobsApi.updateStage(jobNumber, releaseNumber, newStage);
 
             console.log(`[STAGE] Successfully updated job ${jobNumber}-${releaseNumber} to ${newStage}`);
+
+            // Trigger refetch to show latest state
+            if (onUpdate) {
+                onUpdate();
+            }
         } catch (error) {
             console.error(`[STAGE] Failed to update stage for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
@@ -166,6 +171,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             await jobsApi.updateFabOrder(jobNumber, releaseNumber, parsedValue);
 
             console.log(`[FAB_ORDER] Successfully updated job ${jobNumber}-${releaseNumber} to ${parsedValue}`);
+
+            // Trigger refetch to show collision detection changes and latest state
+            if (onUpdate) {
+                onUpdate();
+            }
         } catch (error) {
             console.error(`[FAB_ORDER] Failed to update fab order for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
@@ -194,6 +204,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             await jobsApi.updateNotes(jobNumber, releaseNumber, newValue);
 
             console.log(`[NOTES] Successfully updated job ${jobNumber}-${releaseNumber}`);
+
+            // Trigger refetch to show latest state
+            if (onUpdate) {
+                onUpdate();
+            }
         } catch (error) {
             console.error(`[NOTES] Failed to update notes for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
@@ -207,19 +222,24 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
     // Prevent drag start from protected cells
     const handleProtectedCellMouseDown = (e) => {
-        // Allow select elements to work normally (don't prevent default)
         const target = e.target;
-        const isSelectElement = target.tagName === 'SELECT' ||
+
+        // Allow input, textarea, select elements to work normally (don't prevent default)
+        const isInputElement = target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.closest('input') !== null ||
+            target.closest('textarea') !== null ||
             target.closest('select') !== null;
 
-        if (isSelectElement) {
-            // Don't prevent default for select elements - let them open normally
+        if (isInputElement) {
+            // Don't prevent default for input elements - let them work normally
             e.stopPropagation();
             return;
         }
 
         e.stopPropagation();
-        // Prevent drag from starting on these cells
+        // Prevent drag from starting on these cells (but not on input elements)
         e.preventDefault();
     };
 
@@ -236,7 +256,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
         if (cell) {
             const cellClasses = cell.className || '';
-            const isFabOrderCell = cell.querySelector('input[type="number"]') !== null;
+            const isFabOrderCell = cell.querySelector('input[type="text"]') !== null ||
+                cell.querySelector('input[type="number"]') !== null;
             const isStageCell = cell.querySelector('select') !== null;
             const isNotesCell = cell.querySelector('textarea') !== null;
 
@@ -412,7 +433,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
-                                    type="number"
+                                    type="text"
+                                    inputMode="numeric"
                                     value={fabOrderInputValue}
                                     onChange={(e) => setFabOrderInputValue(e.target.value)}
                                     onBlur={(e) => {
@@ -427,7 +449,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                             }
                                         } else {
                                             const parsedValue = parseFloat(newValue);
-                                            if (!isNaN(parsedValue)) {
+                                            if (!isNaN(parsedValue) && isFinite(parsedValue)) {
                                                 // Valid number - check if it changed
                                                 const currentValue = localFabOrder === null || localFabOrder === undefined ? null : localFabOrder;
                                                 if (parsedValue !== currentValue) {

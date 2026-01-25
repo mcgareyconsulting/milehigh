@@ -40,22 +40,35 @@ function JobLog() {
         ALL_OPTION_VALUE,
     } = useJobsFilters(jobs);
 
-    // Update fab order handler (for drag and drop - no refetch to avoid page reload)
+    // Update fab order handler (refetch after update to show collision detection changes)
     const updateFabOrder = useCallback(async (job, release, fabOrder) => {
-        await jobsApi.updateFabOrder(job, release, fabOrder);
-        // Don't refetch to avoid unnecessary page reloads
-        // The fab order update will be reflected when the next data sync occurs
-    }, []);
+        try {
+            await jobsApi.updateFabOrder(job, release, fabOrder);
+            // Refetch immediately to show collision detection changes and latest state
+            await refetch(true);
+        } catch (error) {
+            // Error is already handled in the component, just rethrow
+            throw error;
+        }
+    }, [refetch]);
 
-    // Drag and drop functionality
-    const {
-        draggedIndex,
-        dragOverIndex,
-        handleDragStart,
-        handleDragOver,
-        handleDragLeave,
-        handleDrop,
-    } = useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSubset);
+    // Drag and drop functionality (disabled for now)
+    // const {
+    //     draggedIndex,
+    //     dragOverIndex,
+    //     handleDragStart,
+    //     handleDragOver,
+    //     handleDragLeave,
+    //     handleDrop,
+    // } = useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSubset);
+
+    // Disabled drag and drop - set to null/empty handlers
+    const draggedIndex = null;
+    const dragOverIndex = null;
+    const handleDragStart = () => { };
+    const handleDragOver = () => { };
+    const handleDragLeave = () => { };
+    const handleDrop = () => { };
 
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
@@ -530,6 +543,7 @@ function JobLog() {
                                                         onDrop={handleDrop}
                                                         isDragging={draggedIndex}
                                                         dragOverIndex={dragOverIndex}
+                                                        onUpdate={() => refetch(true)}
                                                     />
                                                 ))
                                             )}

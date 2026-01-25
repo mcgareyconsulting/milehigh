@@ -151,6 +151,7 @@ export function useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSu
             return jobSubset === draggedSubset;
         });
 
+        // Sort by fab order (nulls at end)
         const sortedGroup = [...sameSubsetJobs].sort((a, b) => {
             const orderA = parseFabOrder(a);
             const orderB = parseFabOrder(b);
@@ -167,73 +168,64 @@ export function useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSu
             return;
         }
 
-        // Case 1: moving above the current first item -> use decimal bumping
-        if (targetPosition === 0 && draggedPosition !== 0) {
-            const newFabOrder = calculateTopFabOrder(draggedJob, jobs, selectedSubset);
-            await updateFabOrder(draggedJob['Job #'], draggedJob['Release #'], newFabOrder);
+        // Remove dragged job from sorted list to calculate new position
+        const groupWithoutDragged = sortedGroup.filter(j => getJobId(j) !== draggedJobId);
+
+        // Determine where to insert based on drag direction
+        let insertIndex;
+        if (draggedPosition < targetPosition) {
+            // Dragging down - insert after target (target position stays same after removing dragged)
+            insertIndex = targetPosition;
         } else {
-            // Case 2: reordering in the middle or end
-            // Count urgent rows (decimals < 1) that come before the target
-            let urgentCount = 0;
-            for (let i = 0; i < targetPosition; i++) {
-                const job = sortedGroup[i];
-                const currentOrderRaw = job['Fab Order'];
-                const currentOrder = typeof currentOrderRaw === 'number'
-                    ? currentOrderRaw
-                    : currentOrderRaw !== null && currentOrderRaw !== undefined
-                        ? parseFloat(currentOrderRaw)
-                        : null;
-
-                if (currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
-                    urgentCount += 1;
-                } else {
-                    break;
-                }
-            }
-
-            // Count rows with order >= 1 that come before the target (excluding the dragged row)
-            let regularCountBeforeTarget = 0;
-            for (let i = 0; i < targetPosition; i++) {
-                const job = sortedGroup[i];
-                if (getJobId(job) === draggedJobId) {
-                    continue; // Skip the dragged row
-                }
-                const currentOrderRaw = job['Fab Order'];
-                const currentOrder = typeof currentOrderRaw === 'number'
-                    ? currentOrderRaw
-                    : currentOrderRaw !== null && currentOrderRaw !== undefined
-                        ? parseFloat(currentOrderRaw)
-                        : null;
-
-                // Only count rows with order >= 1 (not NULL, not decimals < 1)
-                if (currentOrder !== null && !isNaN(currentOrder) && currentOrder >= 1) {
-                    regularCountBeforeTarget += 1;
-                }
-            }
-
-            // Determine insert position: if dragging down, insert after target; if up, before target
-            let insertOffset = 0;
-            if (draggedPosition < targetPosition) {
-                // Dragging down - check if target row has order >= 1
-                const targetOrderRaw = targetJob['Fab Order'];
-                const targetOrder = typeof targetOrderRaw === 'number'
-                    ? targetOrderRaw
-                    : targetOrderRaw !== null && targetOrderRaw !== undefined
-                        ? parseFloat(targetOrderRaw)
-                        : null;
-
-                // If target has order >= 1, insert after it; otherwise insert before
-                if (targetOrder !== null && !isNaN(targetOrder) && targetOrder >= 1) {
-                    insertOffset = 1;
-                }
-            }
-
-            // Calculate target fab order number (1-based, after urgent decimals)
-            const targetFabOrder = regularCountBeforeTarget + insertOffset + 1;
-
-            // Update the dragged job
-            await updateFabOrder(draggedJob['Job #'], draggedJob['Release #'], targetFabOrder);
+            // Dragging up - insert before target (target position stays same after removing dragged)
+            insertIndex = targetPosition;
         }
+
+        // Insert dragged job at the calculated position
+        const newSortedGroup = [
+            ...groupWithoutDragged.slice(0, insertIndex),
+            draggedJob,
+            ...groupWithoutDragged.slice(insertIndex)
+        ];
+
+        // Calculate new fab order based on position in the new sorted group
+        let newFabOrder;
+
+        // Check if we're inserting at the top (position 0)
+        if (insertIndex === 0) {
+            // If there are jobs with decimal orders (< 1) at the top, use decimal bumping
+            const firstJob = newSortedGroup.length > 1 ? newSortedGroup[1] : null;
+            if (firstJob) {
+                const firstOrder = parseFabOrder(firstJob, 1);
+                if (firstOrder < 1) {
+                    // Use decimal bumping
+                    newFabOrder = calculateTopFabOrder(draggedJob, jobs, selectedSubset);
+                } else {
+                    // First job has order >= 1, so we become #1
+                    newFabOrder = 1;
+                }
+            } else {
+                // No other jobs, become #1
+                newFabOrder = 1;
+            }
+        } else {
+            // Inserting in middle or end
+            // Count how many jobs with order >= 1 come before this position in the new sorted group
+            let countBefore = 0;
+            for (let i = 0; i < insertIndex; i++) {
+                const job = newSortedGroup[i];
+                const order = parseFabOrder(job, 999999);
+                // Only count jobs with integer orders >= 1 (not decimals, not null)
+                if (order >= 1 && order < 999999) {
+                    countBefore += 1;
+                }
+            }
+            // The new fab order is countBefore + 1
+            newFabOrder = countBefore + 1;
+        }
+
+        // Update the dragged job
+        await updateFabOrder(draggedJob['Job #'], draggedJob['Release #'], newFabOrder);
 
         // Reset drag state
         setDraggedIndex(null);
