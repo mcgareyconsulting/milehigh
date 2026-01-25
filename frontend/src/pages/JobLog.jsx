@@ -1,12 +1,13 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
-import GanttChart from '../components/GanttChart';
 
 function JobLog() {
+    const navigate = useNavigate();
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useJobsDataFetching();
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [csvData, setCsvData] = useState('');
@@ -14,7 +15,6 @@ function JobLog() {
     const [releasing, setReleasing] = useState(false);
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
-    const [showGanttModal, setShowGanttModal] = useState(false);
     const [recalculating, setRecalculating] = useState(false);
     const [recalculateError, setRecalculateError] = useState(null);
     const [recalculateSuccess, setRecalculateSuccess] = useState(null);
@@ -482,10 +482,10 @@ function JobLog() {
                                     🖨️ Print
                                 </button>
                                 <button
-                                    onClick={() => setShowGanttModal(true)}
+                                    onClick={() => navigate('/pm-board')}
                                     className="px-4 py-2 bg-white text-accent-600 rounded-lg font-medium shadow-sm hover:bg-accent-50 transition-all flex items-center gap-2"
                                 >
-                                    📊 Gantt Chart
+                                    📋 PM Board
                                 </button>
                                 <button
                                     onClick={handleReleaseClick}
@@ -874,12 +874,6 @@ function JobLog() {
                 </div>
             )}
 
-            {/* Gantt Chart Modal */}
-            {showGanttModal && (
-                <GanttChart
-                    onClose={() => setShowGanttModal(false)}
-                />
-            )}
         </div>
     );
 }

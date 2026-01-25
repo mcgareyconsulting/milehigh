@@ -8,6 +8,7 @@ import Logs from './pages/Logs';
 import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import JobLog from './pages/JobLog';
+import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
 import Navbar from './components/Navbar';
 import { checkAuth } from './utils/auth';
@@ -45,6 +46,7 @@ function AppContent() {
   const showNavbar = location.pathname !== '/drafting-work-load' && 
                      location.pathname !== '/drafting-work-load/admin' && 
                      location.pathname !== '/job-log' &&
+                     location.pathname !== '/pm-board' &&
                      location.pathname !== '/login';
 
   return (
@@ -58,6 +60,7 @@ function AppContent() {
         <Route path="/drafting-work-load" element={<DraftingWorkLoad />} />
         <Route path="/drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
         <Route path="/job-log" element={<JobLog />} />
+        <Route path="/pm-board" element={<PMBoard />} />
         <Route path="/operations/:operationId/logs" element={<Logs />} />
         <Route path="/login" element={<Login onLogin={verifyAuth} />} />
       </Routes>

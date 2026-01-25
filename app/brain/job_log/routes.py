@@ -580,8 +580,11 @@ def get_gantt_data():
     from collections import defaultdict
     
     try:
-        # Get all jobs that have start_install dates (required for rendering)
-        jobs = Job.query.filter(Job.start_install.isnot(None)).all()
+        # Get all jobs that have start_install dates and are in FABRICATION or READY_TO_SHIP stage_group
+        jobs = Job.query.filter(
+            Job.start_install.isnot(None),
+            Job.stage_group.in_(['FABRICATION', 'READY_TO_SHIP'])
+        ).all()
         
         # Group jobs by project (job number)
         projects_dict = defaultdict(lambda: {
