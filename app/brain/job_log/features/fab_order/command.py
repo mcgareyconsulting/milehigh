@@ -49,15 +49,23 @@ class UpdateFabOrderCommand:
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         # Capture old state for payload
+        import math
         old_fab_order = job_record.fab_order
+        
+        # Ensure old_fab_order is not NaN for JSON serialization
+        if isinstance(old_fab_order, float) and math.isnan(old_fab_order):
+            logger.warning(f"Job {self.job_id}-{self.release} has NaN fab_order, converting to None")
+            old_fab_order = None
 
         # 2️⃣ Collision detection: Cascade bump - shift all jobs with fab_order >= target value up by 1
         if self.fab_order is not None:
-            from sqlalchemy import or_, and_
+            from sqlalchemy import or_
             # Find all jobs in the same stage_group with fab_order >= target value (excluding current job)
             # We need to bump these jobs up by 1 to make room for the new value
+            # Exclude None and ensure we only get valid numeric values
             jobs_to_bump = Job.query.filter(
                 Job.stage_group == job_record.stage_group,
+                Job.fab_order.isnot(None),
                 Job.fab_order >= self.fab_order,
                 or_(
                     Job.job != self.job_id,
@@ -74,7 +82,33 @@ class UpdateFabOrderCommand:
                 # Process each job that needs to be bumped, starting from highest to lowest
                 for job_to_bump in jobs_to_bump:
                     old_bump_value = job_to_bump.fab_order
+                    
+                    # Handle None or NaN values - convert to None for JSON serialization
+                    if old_bump_value is None:
+                        # Skip jobs with None fab_order (they shouldn't be in the bump list anyway)
+                        logger.warning(
+                            f"Skipping bump for job {job_to_bump.job}-{job_to_bump.release} "
+                            f"because fab_order is None"
+                        )
+                        continue
+                    
+                    # Check for NaN
+                    if isinstance(old_bump_value, float) and math.isnan(old_bump_value):
+                        logger.warning(
+                            f"Skipping bump for job {job_to_bump.job}-{job_to_bump.release} "
+                            f"because fab_order is NaN"
+                        )
+                        continue
+                    
                     new_bump_value = old_bump_value + 1
+                    
+                    # Ensure new_bump_value is not NaN
+                    if isinstance(new_bump_value, float) and math.isnan(new_bump_value):
+                        logger.error(
+                            f"Calculated NaN for new_bump_value for job {job_to_bump.job}-{job_to_bump.release}. "
+                            f"old_bump_value: {old_bump_value}"
+                        )
+                        continue
                     
                     logger.debug(
                         f"Bumping job {job_to_bump.job}-{job_to_bump.release} "
@@ -82,14 +116,18 @@ class UpdateFabOrderCommand:
                     )
                     
                     # Create event for the bumped job
+                    # Ensure payload values are valid (not NaN) - convert to None if needed
+                    payload_from = None if (isinstance(old_bump_value, float) and math.isnan(old_bump_value)) else old_bump_value
+                    payload_to = None if (isinstance(new_bump_value, float) and math.isnan(new_bump_value)) else new_bump_value
+                    
                     bump_event = JobEventService.create(
                         job=job_to_bump.job,
                         release=job_to_bump.release,
                         action='update_fab_order',
                         source=self.source,
                         payload={
-                            'from': old_bump_value,
-                            'to': new_bump_value,
+                            'from': payload_from,
+                            'to': payload_to,
                             'reason': 'collision_resolution_cascade'
                         }
                     )
@@ -118,14 +156,18 @@ class UpdateFabOrderCommand:
                             JobEventService.close(bump_event.id)
 
         # 3️⃣ Create event for the current job (handles deduplication, logging internally)
+        # Ensure payload values are valid (not NaN) - convert to None if needed
+        payload_from = None if (isinstance(old_fab_order, float) and math.isnan(old_fab_order)) else old_fab_order
+        payload_to = None if (self.fab_order is not None and isinstance(self.fab_order, float) and math.isnan(self.fab_order)) else self.fab_order
+        
         event = JobEventService.create(
             job=self.job_id,
             release=self.release,
             action='update_fab_order',
             source=self.source,
             payload={
-                'from': old_fab_order,
-                'to': self.fab_order
+                'from': payload_from,
+                'to': payload_to
             }
         )
 
