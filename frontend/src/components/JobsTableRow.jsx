@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { JobDetailsModal } from './JobDetailsModal';
+import { StartInstallDateModal } from './StartInstallDateModal';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
 
     // Alternate row background colors with higher contrast
     const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
@@ -114,6 +116,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [updatingNotes, setUpdatingNotes] = useState(false);
     const [notesInputValue, setNotesInputValue] = useState(row['Notes'] ?? '');
 
+    // Local state for start install
+    const [localStartInstall, setLocalStartInstall] = useState(row['Start install'] ?? null);
+    const [updatingStartInstall, setUpdatingStartInstall] = useState(false);
+
     // Sync local state when row data changes (e.g., on refresh)
     useEffect(() => {
         setLocalStage(row['Stage'] || 'Released');
@@ -121,7 +127,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setFabOrderInputValue(row['Fab Order'] ?? '');
         setLocalNotes(row['Notes'] ?? '');
         setNotesInputValue(row['Notes'] ?? '');
-    }, [row['Stage'], row['Fab Order'], row['Notes']]);
+        setLocalStartInstall(row['Start install'] ?? null);
+    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install']]);
 
     // Handle stage change
     const handleStageChange = async (newStage) => {
@@ -220,6 +227,47 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
+    // Handle start install change from modal
+    const handleStartInstallSave = async (dateValue, isHardDate) => {
+        if (!isHardDate) {
+            // Not a hard date, just close modal
+            setIsStartInstallModalOpen(false);
+            return;
+        }
+
+        const oldValue = localStartInstall;
+
+        // Optimistic update
+        setLocalStartInstall(dateValue);
+        setUpdatingStartInstall(true);
+
+        try {
+            const jobNumber = row['Job #'];
+            const releaseNumber = row['Release #'];
+
+            console.log(`[START_INSTALL] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${dateValue} (hard date: ${isHardDate})`);
+
+            await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue, isHardDate);
+
+            console.log(`[START_INSTALL] Successfully updated job ${jobNumber}-${releaseNumber} to ${dateValue}`);
+
+            // Close modal
+            setIsStartInstallModalOpen(false);
+
+            // Trigger refetch to show latest state
+            if (onUpdate) {
+                onUpdate();
+            }
+        } catch (error) {
+            console.error(`[START_INSTALL] Failed to update start install for job ${row['Job #']}-${row['Release #']}:`, error);
+            // Revert on error
+            setLocalStartInstall(oldValue);
+            alert(`Failed to update start install: ${error.message}`);
+        } finally {
+            setUpdatingStartInstall(false);
+        }
+    };
+
     // Prevent drag start from protected cells
     const handleProtectedCellMouseDown = (e) => {
         const target = e.target;
@@ -250,7 +298,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             return;
         }
 
-        // Check if drag started from a protected cell (Fab Order, Stage, Notes)
+        // Check if drag started from a protected cell (Fab Order, Stage, Notes, Start install)
         const target = e.target;
         const cell = target.closest('td');
 
@@ -258,6 +306,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             const cellClasses = cell.className || '';
             const isFabOrderCell = cell.querySelector('input[type="text"]') !== null ||
                 cell.querySelector('input[type="number"]') !== null;
+            const isStartInstallCell = cell.querySelector('input[type="date"]') !== null;
             const isStageCell = cell.querySelector('select') !== null;
             const isNotesCell = cell.querySelector('textarea') !== null;
 
@@ -273,7 +322,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 target.closest('a') ||
                 target.closest('button');
 
-            if (isFabOrderCell || isStageCell || isNotesCell || isInputElement) {
+            if (isFabOrderCell || isStartInstallCell || isStageCell || isNotesCell || isInputElement) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -512,6 +561,30 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
+                    // Handle Start install column with clickable cell that opens modal
+                    if (column === 'Start install') {
+                        const displayValue = formatDate(localStartInstall);
+                        const isFormulaDate = row['start_install_formulaTF'] || (row['start_install_formula'] && row['start_install_formula'].startsWith('='));
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center cursor-pointer hover:bg-accent-50 transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
+                                onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
+                                title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
+                            >
+                                <div className="flex items-center justify-center gap-1">
+                                    <span>{displayValue}</span>
+                                    {isFormulaDate && (
+                                        <span className="text-[8px] text-gray-500" title="Formula-driven date">
+                                            📐
+                                        </span>
+                                    )}
+                                </div>
+                            </td>
+                        );
+                    }
+
                     // For Job and Description, show full value in tooltip
                     const tooltipValue = shouldWrapAndTruncate ? rawValue : rawValue;
 
@@ -611,6 +684,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 job={row}
+            />
+            <StartInstallDateModal
+                isOpen={isStartInstallModalOpen}
+                onClose={() => setIsStartInstallModalOpen(false)}
+                currentDate={localStartInstall}
+                onSave={handleStartInstallSave}
+                jobNumber={row['Job #']}
+                releaseNumber={row['Release #']}
             />
         </>
     );

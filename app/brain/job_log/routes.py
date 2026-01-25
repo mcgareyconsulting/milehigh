@@ -347,6 +347,8 @@ def get_jobs():
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(job.stage_group),  # Stage group field from database
                     'Start install': serialize_value(job.start_install),
+                    'start_install_formula': serialize_value(job.start_install_formula),
+                    'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -487,6 +489,8 @@ def get_all_jobs():
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(job.stage_group),  # Stage group field from database
                     'Start install': serialize_value(job.start_install),
+                    'start_install_formula': serialize_value(job.start_install_formula),
+                    'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -1126,6 +1130,154 @@ def update_notes(job, release):
                     'job': job,
                     'release': release,
                     'has_notes': bool(request.json.get('notes'))
+                }
+            )
+        except:
+            pass
+        
+        db.session.rollback()
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+@brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
+@login_required
+def update_start_install(job, release):
+    """
+    Update the start_install for a specific job-release combination.
+    Updates the start_install field in the database and updates Trello card due date.
+
+    Parameters:
+        job: int
+        release: str
+
+    Request Body:
+        {
+            "start_install": str (optional, YYYY-MM-DD format, can be null to clear),
+            "is_hard_date": bool (optional, default True - if True, clears formula fields)
+        }
+
+    Returns:
+        JSON object with 'status': 'success' or 'error'
+    """
+    from app.models import Job, db
+    from app.services.job_event_service import JobEventService
+    from datetime import datetime, date
+    
+    logger.info(f"update_start_install called", extra={
+        'job': job,
+        'release': release,
+        'start_install': request.json.get('start_install')
+    })
+
+    try:
+        start_install_str = request.json.get('start_install')
+        is_hard_date = request.json.get('is_hard_date', True)  # Default to True for backward compatibility
+        start_install_date = None
+        
+        # Parse date string if provided
+        if start_install_str and start_install_str.strip():
+            try:
+                # Parse YYYY-MM-DD format
+                start_install_date = datetime.strptime(start_install_str.strip(), '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'error': 'Invalid date format. Expected YYYY-MM-DD'}), 400
+
+        # Only proceed if it's a hard date
+        if not is_hard_date:
+            logger.info(f"Skipping update for job {job}-{release} - not a hard date")
+            return jsonify({
+                'status': 'skipped',
+                'message': 'Not a hard date - formula-driven dates are not updated manually'
+            }), 200
+
+        # Fetch job record
+        job_record = Job.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            logger.warning(f"Job not found: {job}-{release}")
+            return jsonify({'error': 'Job not found'}), 404
+
+        # Capture old state for payload
+        old_start_install = job_record.start_install
+
+        # Create event (handles deduplication, logging internally)
+        event = JobEventService.create(
+            job=job,
+            release=release,
+            action='update_start_install',
+            source='Brain',  # Will be formatted as 'Brain:username' automatically
+            payload={
+                'from': old_start_install.isoformat() if old_start_install else None,
+                'to': start_install_date.isoformat() if start_install_date else None,
+                'is_hard_date': is_hard_date
+            }
+        )
+
+        # Check if event was deduplicated
+        if event is None:
+            logger.info(f"Event already exists for job {job}-{release} start_install update")
+            return jsonify({'error': 'Event already exists'}), 400
+        
+        # Update job fields
+        job_record.start_install = start_install_date
+        # Clear formula fields when setting a hard date
+        job_record.start_install_formula = None
+        job_record.start_install_formulaTF = False
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = 'Brain'
+
+        # Update Trello card due date if card exists
+        if job_record.trello_card_id:
+            try:
+                # Update Trello card due date to match start_install
+                update_trello_card(
+                    card_id=job_record.trello_card_id,
+                    new_due_date=start_install_date,
+                    clear_due_date=(start_install_date is None)
+                )
+                logger.info(f"Trello card due date updated for job {job}-{release}")
+            except Exception as trello_error:
+                # Log error but don't fail the operation - DB update is more important
+                logger.error(f"Failed to update Trello card due date for job {job}-{release}: {trello_error}", exc_info=True)
+        else:
+            logger.warning(
+                f"Job {job}-{release} has no trello_card_id, skipping Trello update",
+                extra={'job': job, 'release': release}
+            )
+        
+        # Commit all DB changes
+        db.session.commit()
+        
+        logger.info(f"update_start_install completed successfully", extra={
+            'job': job,
+            'release': release,
+            'event_id': event.id
+        })
+        
+        return jsonify({
+            'status': 'success',
+            'event_id': event.id
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"update_start_install failed", exc_info=True, extra={
+            'job': job,
+            'release': release,
+            'error': str(e),
+            'error_type': type(e).__name__
+        })
+        
+        try:
+            from app.services.system_log_service import SystemLogService
+            SystemLogService.log_error(
+                category='operation_failure',
+                operation='update_start_install',
+                error=e,
+                context={
+                    'job': job,
+                    'release': release,
+                    'start_install': request.json.get('start_install')
                 }
             )
         except:

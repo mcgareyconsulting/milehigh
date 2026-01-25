@@ -102,6 +102,21 @@ class JobsApi {
         }
     }
 
+    async updateStartInstall(job, release, startInstall, isHardDate = true) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
+                { 
+                    start_install: startInstall,
+                    is_hard_date: isHardDate
+                }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update start install');
+        }
+    }
+
     async releaseJobData(csvData) {
         try {
             const response = await axios.post(
