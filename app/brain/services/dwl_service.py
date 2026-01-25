@@ -85,10 +85,13 @@ class DraftingWorkLoadService:
         Args:
             submittal: The submittal object to update
             notes: New notes value
+        
+        Note: Does not update last_updated to preserve ordering for unordered submittals.
+        Only order_number and submittal_drafting_status updates should change last_updated.
         """
         validated_notes = DraftingWorkLoadService.validate_notes(notes)
         submittal.notes = validated_notes
-        submittal.last_updated = datetime.utcnow()
+        # Do NOT update last_updated here - notes changes should not affect submittal ordering
     
     @staticmethod
     def update_drafting_status(submittal, status: Optional[str]) -> Tuple[bool, Optional[str]]:
