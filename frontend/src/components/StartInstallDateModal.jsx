@@ -11,14 +11,29 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, jo
             // Format current date for display (MM/DD/YYYY)
             if (currentDate) {
                 try {
-                    const date = new Date(currentDate);
-                    if (!isNaN(date.getTime())) {
-                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                        const day = String(date.getDate()).padStart(2, '0');
-                        const year = date.getFullYear();
-                        setDateInput(`${month}/${day}/${year}`);
+                    // Handle ISO date strings (YYYY-MM-DD) - parse directly to avoid timezone issues
+                    if (typeof currentDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(currentDate)) {
+                        // Extract date parts directly from ISO string to avoid timezone conversion
+                        const parts = currentDate.split('T')[0].split('-');
+                        if (parts.length === 3) {
+                            const year = parts[0];
+                            const month = parts[1];
+                            const day = parts[2];
+                            setDateInput(`${month}/${day}/${year}`);
+                        } else {
+                            setDateInput('');
+                        }
                     } else {
-                        setDateInput('');
+                        // Fallback to Date object parsing for other formats
+                        const date = new Date(currentDate);
+                        if (!isNaN(date.getTime())) {
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const year = date.getFullYear();
+                            setDateInput(`${month}/${day}/${year}`);
+                        } else {
+                            setDateInput('');
+                        }
                     }
                 } catch (e) {
                     setDateInput('');

@@ -73,6 +73,19 @@ function JobLog() {
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
         try {
+            // Handle ISO date strings (YYYY-MM-DD) - parse directly to avoid timezone issues
+            if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
+                // Extract date parts directly from ISO string to avoid timezone conversion
+                const parts = dateValue.split('T')[0].split('-');
+                if (parts.length === 3) {
+                    const year = parts[0];
+                    const month = parts[1];
+                    const day = parts[2];
+                    // Return in MM/DD/YY format
+                    return `${month}/${day}/${year.slice(-2)}`;
+                }
+            }
+            // Fallback to Date object parsing for other formats
             const date = new Date(dateValue);
             if (isNaN(date.getTime())) return '—';
             const month = String(date.getMonth() + 1).padStart(2, '0');
