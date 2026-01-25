@@ -95,22 +95,30 @@ export function useJobsFilters(jobs = []) {
     }, []);
 
     /**
-     * Filter jobs into Job Order subset (all jobs)
+     * Filter and sort jobs by stage_group independently
+     * Each stage_group is sorted separately by fab_order, then combined in order
      */
-    const getJobOrderSubset = useCallback((jobsToFilter) => {
-        return sortByFabOrder([...jobsToFilter]);
+    const filterAndSortByStageGroups = useCallback((jobsToFilter, stageGroups) => {
+        const result = [];
+        // Process each stage_group independently in order
+        for (const stageGroup of stageGroups) {
+            const filtered = jobsToFilter.filter(job => {
+                const jobStageGroup = String(job['Stage Group'] ?? '').trim();
+                return jobStageGroup === stageGroup;
+            });
+            const sorted = sortByFabOrder(filtered);
+            result.push(...sorted);
+        }
+        return result;
     }, [sortByFabOrder]);
 
     /**
-     * Filter jobs into Ready to Ship subset (READY_TO_SHIP stage_group)
+     * Filter jobs into Job Order subset (COMPLETE, READY_TO_SHIP, FABRICATION stage_groups)
+     * Each stage_group is sorted independently by fab_order
      */
-    const getReadyToShipSubset = useCallback((jobsToFilter) => {
-        const filtered = jobsToFilter.filter(job => {
-            const stageGroup = String(job['Stage Group'] ?? '').trim();
-            return stageGroup === 'READY_TO_SHIP';
-        });
-        return sortByFabOrder(filtered);
-    }, [sortByFabOrder]);
+    const getJobOrderSubset = useCallback((jobsToFilter) => {
+        return filterAndSortByStageGroups(jobsToFilter, ['COMPLETE', 'READY_TO_SHIP', 'FABRICATION']);
+    }, [filterAndSortByStageGroups]);
 
     /**
      * Filter jobs into Fab subset (FABRICATION stage_group)
@@ -139,20 +147,19 @@ export function useJobsFilters(jobs = []) {
         let result = [];
 
         if (selectedSubset === 'job_order') {
-            // Job Order: All jobs
+            // Job Order: COMPLETE, READY_TO_SHIP, and FABRICATION stage_groups
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'ready_to_ship') {
-            // Ready to Ship: READY_TO_SHIP stage_group + FABRICATION stage_group (Fab subset) below
-            const readyToShipJobs = getReadyToShipSubset(baseFiltered);
-            const fabJobs = getFabSubset(baseFiltered);
-            result = [...readyToShipJobs, ...fabJobs];
+            // Ready to Ship: READY_TO_SHIP stage_group + FABRICATION stage_group (trailing filter)
+            // Each stage_group is sorted independently by fab_order
+            result = filterAndSortByStageGroups(baseFiltered, ['READY_TO_SHIP', 'FABRICATION']);
         } else if (selectedSubset === 'fab') {
             // Fab: Only FABRICATION stage_group
             result = getFabSubset(baseFiltered);
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getReadyToShipSubset, getFabSubset, sortByFabOrder]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterAndSortByStageGroups]);
 
     /**
      * Extract unique project name (Job) options from jobs
