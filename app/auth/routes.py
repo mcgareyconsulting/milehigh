@@ -156,3 +156,4 @@ def register():
         return jsonify({'error': 'An error occurred while registering user'}), 500
 
 
+
