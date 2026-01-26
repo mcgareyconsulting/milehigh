@@ -101,6 +101,13 @@ export function useMutations(refetch) {
         setUploadSuccess(false);
     }, []);
 
+    const reorderGroup = useCallback(async (ballInCourt) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.reorderGroup(ballInCourt),
+            `Failed to reorder group for ${ballInCourt}`
+        );
+    }, [executeMutation]);
+
     return {
         // Order number mutation
         updateOrderNumber,
@@ -120,5 +127,8 @@ export function useMutations(refetch) {
         uploadError,
         uploadSuccess,
         clearUploadSuccess,
+
+        // Reorder mutation
+        reorderGroup,
     };
 }

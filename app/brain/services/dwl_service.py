@@ -268,3 +268,48 @@ class SubmittalOrderingService:
             return SubmittalOrderingService.handle_set_to_urgent(submittal, new_order, all_group_submittals)
         else:
             return SubmittalOrderingService.handle_set_to_regular(submittal, new_order, all_group_submittals)
+    
+    @staticmethod
+    def reorder_group_to_start_from_one(all_group_submittals: List) -> List:
+        """
+        Reorder all items in a group so that the lowest order_number >= 1 becomes 1,
+        and all subsequent items are renumbered sequentially (2, 3, 4...) while preserving
+        their relative order. Ignores decimal values (0 < order < 1) and NULL values.
+        
+        Example: If group has items with orders [11, 12, 13, 14], they become [1, 2, 3, 4].
+        The item with order 11 (lowest) becomes 1, 12 becomes 2, etc.
+        
+        Args:
+            all_group_submittals: List of all submittals in the same ball_in_court group
+            
+        Returns:
+            List of (submittal, new_order_value) tuples for items that need updates
+        """
+        updates = []
+        
+        # Step 1: Get all items with order_number >= 1 (ignore decimals and NULL)
+        regular_items = []
+        for s in all_group_submittals:
+            order_val = SubmittalOrderingService.safe_float_order(s.order_number)
+            if order_val is not None and order_val >= 1:
+                regular_items.append(s)
+        
+        # Step 2: Sort by current order number (ascending) to find the lowest
+        # This ensures the lowest order number will be first in the list
+        regular_items.sort(key=lambda s: SubmittalOrderingService.safe_float_order(s.order_number) or 0)
+        
+        # If no items to reorder, return empty list
+        if not regular_items:
+            return updates
+        
+        # Step 3: Renumber sequentially starting from 1, preserving relative order
+        # The first item (lowest order) becomes 1, second becomes 2, etc.
+        new_order = 1
+        for submittal in regular_items:
+            old_order = SubmittalOrderingService.safe_float_order(submittal.order_number)
+            # Only add to updates if the order actually changes
+            if old_order != new_order:
+                updates.append((submittal, float(new_order)))
+            new_order += 1
+        
+        return updates

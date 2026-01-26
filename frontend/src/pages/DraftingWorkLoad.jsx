@@ -34,10 +34,15 @@ function DraftingWorkLoad() {
         uploadError,
         uploadSuccess,
         clearUploadSuccess,
+        reorderGroup,
+        updating,
     } = useMutations(refetch);
 
     // Tab state: 'open' or 'draft'
     const [selectedTab, setSelectedTab] = useState('open');
+    
+    // Reorder confirmation dialog state
+    const [showReorderConfirm, setShowReorderConfirm] = useState(false);
 
     // Filter rows based on selected tab before passing to useFilters
     const filteredRowsByTab = useMemo(() => {
@@ -102,6 +107,38 @@ function DraftingWorkLoad() {
         event.target.value = '';
     };
 
+    const handleReorderClick = useCallback(() => {
+        setShowReorderConfirm(true);
+    }, []);
+
+    const handleReorderConfirm = useCallback(async () => {
+        setShowReorderConfirm(false);
+        
+        // Get all unique ball_in_court values from submittals
+        const uniqueBallInCourts = [...new Set(
+            submittals
+                .map(s => s.ball_in_court ?? s['Ball In Court'])
+                .filter(bic => bic && bic.trim() !== '')
+        )];
+
+        if (uniqueBallInCourts.length === 0) {
+            return;
+        }
+
+        // Reorder each group
+        try {
+            for (const ballInCourt of uniqueBallInCourts) {
+                await reorderGroup(ballInCourt);
+            }
+        } catch (err) {
+            console.error('Error reordering groups:', err);
+        }
+    }, [submittals, reorderGroup]);
+
+    const handleReorderCancel = useCallback(() => {
+        setShowReorderConfirm(false);
+    }, []);
+
     // Clear upload success message after 3 seconds
     useEffect(() => {
         if (uploadSuccess) {
@@ -139,6 +176,24 @@ function DraftingWorkLoad() {
 
                                 </div>
                                 <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={handleReorderClick}
+                                        disabled={!hasData || loading || updating}
+                                        className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${!hasData || loading || updating
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
+                                            }`}
+                                        title="Re-order all groups (lowest order becomes 1)"
+                                    >
+                                        {updating ? (
+                                            <>
+                                                <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600 mr-2"></span>
+                                                Re-ordering...
+                                            </>
+                                        ) : (
+                                            '🔄 Re-Order'
+                                        )}
+                                    </button>
                                     <button
                                         onClick={handleGeneratePDF}
                                         disabled={!hasData || loading}
@@ -407,6 +462,39 @@ function DraftingWorkLoad() {
                     </div>
                 </div>
             </div>
+            
+            {/* Reorder Confirmation Dialog */}
+            {showReorderConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-4">Confirm Re-Order</h2>
+                        <p className="text-gray-700 mb-6">
+                            This will reorder all items in each "Ball In Court" group so that the lowest order number (≥1) becomes 1, 
+                            and all subsequent items are renumbered sequentially (2, 3, 4...). 
+                            Decimal values (urgent items) will be ignored and remain unchanged.
+                        </p>
+                        <p className="text-gray-600 mb-6 text-sm">
+                            Example: If a group has orders [11, 12, 13, 14], they will become [1, 2, 3, 4].
+                        </p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={handleReorderCancel}
+                                disabled={updating}
+                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleReorderConfirm}
+                                disabled={updating}
+                                className="px-4 py-2 bg-accent-600 text-white rounded-lg font-medium hover:bg-accent-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {updating ? 'Re-ordering...' : 'Confirm Re-Order'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

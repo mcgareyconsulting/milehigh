@@ -66,6 +66,20 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Reorder items in a ball_in_court group so the lowest order >= 1 becomes 1
+     */
+    async reorderGroup(ballInCourt) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/reorder-group`, {
+                ball_in_court: ballInCourt
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to reorder group for ${ballInCourt}`);
+        }
+    }
+
+    /**
      * Upload Excel file for drafting workload submittals
      */
     async uploadFile(file) {
