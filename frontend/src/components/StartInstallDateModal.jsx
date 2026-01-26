@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, jobNumber, releaseNumber }) {
+export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, jobNumber, releaseNumber, startInstallFormulaTF }) {
     const [dateInput, setDateInput] = useState('');
     const [isHardDate, setIsHardDate] = useState(false);
     const [error, setError] = useState('');
@@ -41,12 +41,14 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, jo
             } else {
                 setDateInput('');
             }
-            // Default to hard date if there's a current date (likely manual)
-            // If no date, default to false (formula-driven)
-            setIsHardDate(!!currentDate);
+            // Initialize hard date checkbox based on start_install_formulaTF field
+            // If start_install_formulaTF is explicitly false and there's a date, it's a hard date
+            // Otherwise, default to false (formula-driven or no date)
+            const isCurrentlyHardDate = startInstallFormulaTF === false && currentDate;
+            setIsHardDate(isCurrentlyHardDate);
             setError('');
         }
-    }, [isOpen, currentDate]);
+    }, [isOpen, currentDate, startInstallFormulaTF]);
 
     const parseDateInput = (input) => {
         // Try to parse MM/DD/YYYY format

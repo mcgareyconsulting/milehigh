@@ -1235,13 +1235,13 @@ def update_start_install(job, release):
         # Update Trello card due date if card exists
         if job_record.trello_card_id:
             try:
-                # Update Trello card due date to match start_install
+                # Send start_install date to Trello as the due date (not start date)
                 update_trello_card(
                     card_id=job_record.trello_card_id,
                     new_due_date=start_install_date,
                     clear_due_date=(start_install_date is None)
                 )
-                logger.info(f"Trello card due date updated for job {job}-{release}")
+                logger.info(f"Trello card due date updated for job {job}-{release} (start_install sent as due date)")
             except Exception as trello_error:
                 # Log error but don't fail the operation - DB update is more important
                 logger.error(f"Failed to update Trello card due date for job {job}-{release}: {trello_error}", exc_info=True)

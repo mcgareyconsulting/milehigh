@@ -564,12 +564,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // Handle Start install column with clickable cell that opens modal
                     if (column === 'Start install') {
                         const displayValue = formatDate(localStartInstall);
-                        const isFormulaDate = row['start_install_formulaTF'] || (row['start_install_formula'] && row['start_install_formula'].startsWith('='));
+                        // Hard date is when start_install_formulaTF is explicitly false and there's a date value
+                        const isHardDate = row['start_install_formulaTF'] === false && localStartInstall;
+                        // Formula date is when start_install_formulaTF is true or formula starts with '='
+                        const isFormulaDate = row['start_install_formulaTF'] === true || (row['start_install_formula'] && row['start_install_formula'].startsWith('='));
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center cursor-pointer hover:bg-accent-50 transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''} ${isHardDate ? 'bg-red-500 text-white hover:bg-red-600 font-semibold' : 'hover:bg-accent-50'}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
                             >
@@ -692,6 +695,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 onSave={handleStartInstallSave}
                 jobNumber={row['Job #']}
                 releaseNumber={row['Release #']}
+                startInstallFormulaTF={row['start_install_formulaTF']}
             />
         </>
     );
