@@ -341,7 +341,8 @@ function JobLog() {
     <style>
         @media print {
             @page {
-                size: letter;
+                /* 11x17 tabloid in landscape orientation */
+                size: 11in 17in landscape;
                 margin: 0.5in;
             }
             .pm-group {
