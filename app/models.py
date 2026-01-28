@@ -263,6 +263,7 @@ class Job(db.Model):
     fab_order = db.Column(db.Float)
     stage = db.Column(db.String(128), nullable=True)
     stage_group = db.Column(db.String(64), nullable=True)
+    banana_color = db.Column(db.String(16), nullable=True)  # 'red', 'yellow', 'green', or None
     start_install = db.Column(
         db.Date
     )  # Changed from install to start_install and Date type
@@ -312,6 +313,7 @@ class Job(db.Model):
             "fab_order": self.fab_order,
             "stage": self.stage,
             "stage_group": self.stage_group,
+            "banana_color": self.banana_color,
             "start_install": self.start_install,
             "start_install_formula": self.start_install_formula,
             "start_install_formulaTF": self.start_install_formulaTF,

@@ -352,6 +352,7 @@ def get_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
+                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
@@ -367,7 +368,7 @@ def get_jobs():
                 # Validate the job data
                 json.dumps(job_data)
                 job_list.append(job_data)
-
+                
             except Exception as record_error:
                 # Log the problematic record but continue processing
                 job_id = f"{job.job}-{job.release}" if hasattr(job, 'job') else f"id:{job.id}"
@@ -499,6 +500,7 @@ def get_all_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
+                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
@@ -791,6 +793,11 @@ def update_stage(job, release):
         # Update job fields (this will update stage_group)
         update_job_stage_fields(job_record, stage)
 
+        # Auto-flag Hold as urgent (red banana)
+        # Do NOT clear banana_color when leaving Hold (manual control can override later)
+        if stage == 'Hold':
+            job_record.banana_color = 'red'
+
         # Update job metadata
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
@@ -911,6 +918,75 @@ def update_stage(job, release):
         except:
             pass  # DB might be down, console logs are our fallback
         
+        db.session.rollback()
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+@brain_bp.route("/update-banana-color/<int:job>/<release>", methods=["PATCH"])
+@login_required
+def update_banana_color(job, release):
+    """
+    Update the banana_color (urgency indicator) for a specific job-release combination.
+    
+    Parameters:
+        job: int
+        release: str
+    
+    Request Body:
+        {
+            "banana_color": "red" | "yellow" | "green" | null
+        }
+    
+    Returns:
+        JSON object with 'status': 'success' or 'error'
+    """
+    from app.models import Job, db
+    
+    logger.info(f"update_banana_color called", extra={
+        'job': job,
+        'release': release,
+        'banana_color': request.json.get('banana_color')
+    })
+    
+    try:
+        banana_color = request.json.get('banana_color')
+        # Validate banana_color value
+        if banana_color is not None and banana_color not in ['red', 'yellow', 'green']:
+            return jsonify({'error': 'banana_color must be "red", "yellow", "green", or null'}), 400
+        
+        # Fetch job record
+        job_record = Job.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            logger.warning(f"Job not found: {job}-{release}")
+            return jsonify({'error': 'Job not found'}), 404
+        
+        # Update banana_color
+        job_record.banana_color = banana_color if banana_color else None
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = 'Brain'
+        
+        # Commit changes
+        db.session.commit()
+        
+        logger.info(f"update_banana_color completed successfully", extra={
+            'job': job,
+            'release': release,
+            'banana_color': banana_color
+        })
+        
+        return jsonify({
+            'status': 'success',
+            'banana_color': banana_color
+        }), 200
+    except Exception as e:
+        logger.error(f"update_banana_color failed", exc_info=True, extra={
+            'job': job,
+            'release': release,
+            'error': str(e),
+            'error_type': type(e).__name__
+        })
         db.session.rollback()
         return jsonify({
             'error': str(e),
@@ -1239,6 +1315,11 @@ def update_start_install(job, release):
         # Clear formula fields when setting a hard date
         job_record.start_install_formula = None
         job_record.start_install_formulaTF = False
+        
+        # Auto-flag hard Start install dates as urgent (red banana) when a date is set
+        if start_install_date is not None:
+            job_record.banana_color = 'red'
+
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
 

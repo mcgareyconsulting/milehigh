@@ -102,6 +102,18 @@ class JobsApi {
         }
     }
 
+    async updateBananaColor(job, release, bananaColor) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-banana-color/${job}/${release}`,
+                { banana_color: bananaColor }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update banana color');
+        }
+    }
+
     async updateStartInstall(job, release, startInstall, isHardDate = true) {
         try {
             const response = await axios.patch(

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { JobDetailsModal } from './JobDetailsModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
+import { BananaIcon } from './BananaIcon';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -151,6 +152,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [localStartInstall, setLocalStartInstall] = useState(row['Start install'] ?? null);
     const [updatingStartInstall, setUpdatingStartInstall] = useState(false);
 
+    // Local state for banana color
+    const [localBananaColor, setLocalBananaColor] = useState(row['Banana Color'] || null);
+    const [updatingBananaColor, setUpdatingBananaColor] = useState(false);
+    const [showBananaDropdown, setShowBananaDropdown] = useState(false);
+
     // Sync local state when row data changes (e.g., on refresh)
     useEffect(() => {
         setLocalStage(row['Stage'] || 'Released');
@@ -159,12 +165,18 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setLocalNotes(row['Notes'] ?? '');
         setNotesInputValue(row['Notes'] ?? '');
         setLocalStartInstall(row['Start install'] ?? null);
-    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install']]);
+        setLocalBananaColor(row['Banana Color'] || null);
+    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Banana Color']]);
 
     // Handle stage change
     const handleStageChange = async (newStage) => {
         const oldStage = localStage;
+        const oldBananaColor = localBananaColor;
         setLocalStage(newStage); // Optimistic update
+        // Auto-flag Hold as urgent (red banana)
+        if (newStage === 'Hold') {
+            setLocalBananaColor('red');
+        }
         setUpdatingStage(true);
 
         try {
@@ -185,9 +197,41 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             console.error(`[STAGE] Failed to update stage for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
             setLocalStage(oldStage);
+            setLocalBananaColor(oldBananaColor);
             alert(`Failed to update stage: ${error.message}`);
         } finally {
             setUpdatingStage(false);
+        }
+    };
+
+    // Handle banana color change
+    const handleBananaColorChange = async (newColor) => {
+        const oldColor = localBananaColor;
+        setLocalBananaColor(newColor); // Optimistic update
+        setUpdatingBananaColor(true);
+        setShowBananaDropdown(false);
+
+        try {
+            const jobNumber = row['Job #'];
+            const releaseNumber = row['Release #'];
+
+            console.log(`[BANANA] Updating job ${jobNumber}-${releaseNumber} banana color from ${oldColor} to ${newColor}`);
+
+            await jobsApi.updateBananaColor(jobNumber, releaseNumber, newColor);
+
+            console.log(`[BANANA] Successfully updated job ${jobNumber}-${releaseNumber} banana color to ${newColor}`);
+
+            // Trigger refetch to show latest state
+            if (onUpdate) {
+                onUpdate();
+            }
+        } catch (error) {
+            console.error(`[BANANA] Failed to update banana color for job ${row['Job #']}-${row['Release #']}:`, error);
+            // Revert on error
+            setLocalBananaColor(oldColor);
+            alert(`Failed to update banana color: ${error.message}`);
+        } finally {
+            setUpdatingBananaColor(false);
         }
     };
 
@@ -267,9 +311,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
 
         const oldValue = localStartInstall;
+        const oldBananaColor = localBananaColor;
 
         // Optimistic update
         setLocalStartInstall(dateValue);
+        // Auto-flag hard dates as urgent (red banana) when a date is set
+        if (dateValue) {
+            setLocalBananaColor('red');
+        }
         setUpdatingStartInstall(true);
 
         try {
@@ -293,6 +342,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             console.error(`[START_INSTALL] Failed to update start install for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
             setLocalStartInstall(oldValue);
+            setLocalBananaColor(oldBananaColor);
             alert(`Failed to update start install: ${error.message}`);
         } finally {
             setUpdatingStartInstall(false);
@@ -450,7 +500,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const isReleaseNumber = column === 'Release #';
                     const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
 
-                    // Handle Stage column with editable color-coded dropdown
+
+                    // Handle Stage column with editable color-coded dropdown and banana selector
                     if (column === 'Stage') {
                         const currentStageColors = stageColors[localStage] || stageColors['Released'];
                         // Get display label for current stage
@@ -467,37 +518,105 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
-                                style={{ minWidth: '140px' }}
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center relative`}
+                                style={{ minWidth: '160px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <select
-                                    value={localStage}
-                                    onChange={(e) => handleStageChange(e.target.value)}
-                                    disabled={updatingStage}
-                                    className={`w-full px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-all relative overflow-hidden ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
-                                    style={{
-                                        minWidth: '120px',
-                                        ...solidStyle
-                                    }}
-                                >
-                                    {stageOptions.map((option) => {
-                                        const optionColors = stageColors[option.value] || stageColors['Released'];
-                                        return (
-                                            <option
-                                                key={option.value}
-                                                value={option.value}
-                                                style={{
-                                                    backgroundColor: optionColors.light,
-                                                    color: optionColors.text
-                                                }}
-                                            >
-                                                {option.label}
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+                                <div className="flex items-center justify-center gap-1">
+                                    {/* Stage dropdown */}
+                                    <select
+                                        value={localStage}
+                                        onChange={(e) => handleStageChange(e.target.value)}
+                                        disabled={updatingStage}
+                                        className={`flex-1 px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
+                                        style={{
+                                            minWidth: '100px',
+                                            ...solidStyle
+                                        }}
+                                    >
+                                        {stageOptions.map((option) => {
+                                            const optionColors = stageColors[option.value] || stageColors['Released'];
+                                            return (
+                                                <option
+                                                    key={option.value}
+                                                    value={option.value}
+                                                    style={{
+                                                        backgroundColor: optionColors.light,
+                                                        color: optionColors.text
+                                                    }}
+                                                >
+                                                    {option.label}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    
+                                    {/* Banana selector dropdown */}
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowBananaDropdown(!showBananaDropdown)}
+                                            disabled={updatingBananaColor}
+                                            className={`p-1 rounded bg-white border border-gray-300 hover:bg-gray-50 transition-all ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
+                                            title="Set urgency indicator"
+                                        >
+                                            {localBananaColor ? (
+                                                <BananaIcon color={localBananaColor} size={18} />
+                                            ) : (
+                                                <div className="w-[18px] h-[18px] bg-white rounded flex items-center justify-center">
+                                                    <BananaIcon color="outline" size={16} />
+                                                </div>
+                                            )}
+                                        </button>
+                                        
+                                        {/* Banana dropdown menu */}
+                                        {showBananaDropdown && (
+                                            <>
+                                                <div 
+                                                    className="fixed inset-0 z-10" 
+                                                    onClick={() => setShowBananaDropdown(false)}
+                                                />
+                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded shadow-lg z-20 min-w-[150px]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange(null)}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <span className="inline-flex items-center justify-center w-[18px] h-[18px] bg-white border border-gray-200 rounded">
+                                                            <BananaIcon color="outline" size={14} />
+                                                        </span>
+                                                        <span className="text-gray-600">None</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange('red')}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <BananaIcon color="red" size={16} />
+                                                        <span>Red</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange('yellow')}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <BananaIcon color="yellow" size={16} />
+                                                        <span>Yellow</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange('green')}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <BananaIcon color="green" size={16} />
+                                                        <span>Green</span>
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
                             </td>
                         );
                     }
@@ -599,11 +718,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         const isHardDate = row['start_install_formulaTF'] === false && localStartInstall;
                         // Formula date is when start_install_formulaTF is true or formula starts with '='
                         const isFormulaDate = row['start_install_formulaTF'] === true || (row['start_install_formula'] && row['start_install_formula'].startsWith('='));
+                        // IMPORTANT: avoid conflicting bg-* utilities (Tailwind utility order, not class string order,
+                        // determines the winner). If we include both rowBgClass and bg-red-500, the row bg can win,
+                        // leaving white text on a light background (looks blank until hover).
+                        const startInstallBgClass = isHardDate ? 'bg-red-500 text-white hover:bg-red-600 font-semibold' : `${rowBgClass} hover:bg-accent-50`;
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''} ${isHardDate ? 'bg-red-500 text-white hover:bg-red-600 font-semibold' : 'hover:bg-accent-50'}`}
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${startInstallBgClass} border-r border-gray-300 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
                             >
