@@ -18,14 +18,15 @@ function JobLog() {
     const [recalculating, setRecalculating] = useState(false);
     const [recalculateError, setRecalculateError] = useState(null);
     const [recalculateSuccess, setRecalculateSuccess] = useState(null);
+    const [reviewMode, setReviewMode] = useState(false);
 
     // Use the filters hook
     const {
-        selectedProjectName,
+        selectedProjectNames,
         selectedStages,
         jobNumberSearch,
         releaseNumberSearch,
-        setSelectedProjectName,
+        setSelectedProjectNames,
         setSelectedStages,
         setJobNumberSearch,
         setReleaseNumberSearch,
@@ -37,7 +38,6 @@ function JobLog() {
         toggleStage,
         selectedSubset,
         setSelectedSubset,
-        ALL_OPTION_VALUE,
     } = useJobsFilters(jobs);
 
     // Update fab order handler (refetch after update to show collision detection changes)
@@ -121,6 +121,32 @@ function JobLog() {
     // If we have jobs but displayJobs is empty, that means filters are excluding everything
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
+
+    // When Review mode is enabled, sort independently of other sort behavior:
+    // 1) group by PM (no intermixing of PMs),
+    // 2) within each PM, sort by ascending Job #,
+    // 3) PM groups ordered alphabetically by PM name.
+    const reviewDisplayJobs = useMemo(() => {
+        if (!reviewMode) return displayJobs;
+
+        const sorted = [...displayJobs];
+        sorted.sort((a, b) => {
+            const pmKeyA = (a['PM'] || 'No PM').toString();
+            const pmKeyB = (b['PM'] || 'No PM').toString();
+            const jobA = a['Job #'] || 0;
+            const jobB = b['Job #'] || 0;
+
+            // Same PM: sort by job number within the block
+            if (pmKeyA === pmKeyB) {
+                return jobA - jobB;
+            }
+
+            // Different PMs: alphabetical by PM name (case-insensitive)
+            return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
+        });
+
+        return sorted;
+    }, [displayJobs, reviewMode]);
 
     // Define column order explicitly
     const columnOrder = [
@@ -405,8 +431,11 @@ function JobLog() {
     <h1>Job Log - Printed ${new Date().toLocaleString()}</h1>
 `;
 
-        // Generate table for each PM group
-        Object.keys(jobsByPM).sort().forEach((pm, pmIndex, pmArray) => {
+        // Generate table for each PM group.
+        // PM blocks are ordered alphabetically by PM, with each block internally sorted by Job #.
+        Object.keys(jobsByPM).sort((pmA, pmB) => {
+            return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
+        }).forEach((pm, pmIndex, pmArray) => {
             const pmJobs = jobsByPM[pm];
             const isLastPM = pmIndex === pmArray.length - 1;
 
@@ -557,8 +586,8 @@ function JobLog() {
                                     </label>
                                     <div className="grid grid-cols-8 gap-1">
                                         <button
-                                            onClick={() => setSelectedProjectName(ALL_OPTION_VALUE)}
-                                            className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectName === ALL_OPTION_VALUE
+                                            onClick={() => setSelectedProjectNames([])}
+                                            className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectNames.length === 0
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
@@ -571,8 +600,14 @@ function JobLog() {
                                             return (
                                                 <button
                                                     key={option}
-                                                    onClick={() => setSelectedProjectName(option)}
-                                                    className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectName === option
+                                                    onClick={() => {
+                                                        setSelectedProjectNames(prev =>
+                                                            prev.includes(option)
+                                                                ? prev.filter(name => name !== option)
+                                                                : [...prev, option]
+                                                        );
+                                                    }}
+                                                    className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectNames.includes(option)
                                                         ? 'bg-blue-700 text-white'
                                                         : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                         }`}
@@ -592,7 +627,11 @@ function JobLog() {
                                     </label>
                                     <div className="flex flex-wrap gap-1.5">
                                         <button
-                                            onClick={() => setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order')}
+                                            onClick={() => {
+                                                // When using stage-based subsets, Review mode should be off
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
+                                            }}
                                             className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
@@ -601,7 +640,10 @@ function JobLog() {
                                             Job Order
                                         </button>
                                         <button
-                                            onClick={() => setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship')}
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
+                                            }}
                                             className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
@@ -610,7 +652,10 @@ function JobLog() {
                                             Ready to Ship
                                         </button>
                                         <button
-                                            onClick={() => setSelectedSubset(selectedSubset === 'fab' ? null : 'fab')}
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'fab' ? null : 'fab');
+                                            }}
                                             className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
@@ -618,13 +663,32 @@ function JobLog() {
                                         >
                                             Fab
                                         </button>
+                                        <button
+                                            onClick={() => {
+                                                // Review mode is independent; when it toggles on, clear stage-based subsets
+                                                const next = !reviewMode;
+                                                if (next) {
+                                                    setSelectedSubset(null);
+                                                }
+                                                setReviewMode(next);
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Review
+                                        </button>
                                     </div>
                                 </div>
 
                                 {/* Bottom Left: Reset Filters, Job #, Release #, Total */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                     <button
-                                        onClick={resetFilters}
+                                        onClick={() => {
+                                            resetFilters();
+                                            setReviewMode(false);
+                                        }}
                                         className="px-2 py-0.5 bg-white border border-gray-400 text-gray-700 rounded text-xs font-semibold hover:bg-gray-50 transition-all whitespace-nowrap"
                                     >
                                         Reset Filters
@@ -723,7 +787,7 @@ function JobLog() {
                                                     </td>
                                                 </tr>
                                             ) : (
-                                                displayJobs.map((row, index) => (
+                                                reviewDisplayJobs.map((row, index) => (
                                                     <JobsTableRow
                                                         key={row.id}
                                                         row={row}

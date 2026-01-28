@@ -1,7 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
 
-const ALL_OPTION_VALUE = '__ALL__';
-
 /**
  * Custom hook for managing filters in Jobs
  * @param {Array} jobs - The raw jobs data to filter
@@ -9,7 +7,7 @@ const ALL_OPTION_VALUE = '__ALL__';
  */
 export function useJobsFilters(jobs = []) {
     // Filter state
-    const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
+    const [selectedProjectNames, setSelectedProjectNames] = useState([]); // Multi-select; empty = all
     const [selectedStages, setSelectedStages] = useState([]); // Array of selected stage values
     const [jobNumberSearch, setJobNumberSearch] = useState('');
     const [releaseNumberSearch, setReleaseNumberSearch] = useState('');
@@ -19,10 +17,11 @@ export function useJobsFilters(jobs = []) {
      * Check if a job matches all selected filters
      */
     const matchesSelectedFilter = useCallback((job) => {
-        // Filter by project name
-        if (selectedProjectName !== ALL_OPTION_VALUE) {
+        // Filter by project name (multi-select). If none selected, show all.
+        if (selectedProjectNames.length > 0) {
             const jobName = job['Job'] ?? '';
-            if (String(jobName).trim() !== selectedProjectName) {
+            const normalized = String(jobName).trim();
+            if (!selectedProjectNames.includes(normalized)) {
                 return false;
             }
         }
@@ -55,7 +54,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return true;
-    }, [selectedProjectName, jobNumberSearch, releaseNumberSearch, selectedStages]);
+    }, [selectedProjectNames, jobNumberSearch, releaseNumberSearch, selectedStages]);
 
     /**
      * Sort jobs by fab order (for subset-specific sorting)
@@ -250,7 +249,7 @@ export function useJobsFilters(jobs = []) {
      * Reset all filters to default values
      */
     const resetFilters = useCallback(() => {
-        setSelectedProjectName(ALL_OPTION_VALUE);
+        setSelectedProjectNames([]);
         setSelectedStages([]);
         setJobNumberSearch('');
         setReleaseNumberSearch('');
@@ -259,14 +258,14 @@ export function useJobsFilters(jobs = []) {
 
     return {
         // Filter state
-        selectedProjectName,
+        selectedProjectNames,
         selectedStages,
         jobNumberSearch,
         releaseNumberSearch,
         selectedSubset,
 
         // Filter setters
-        setSelectedProjectName,
+        setSelectedProjectNames,
         setSelectedStages,
         setJobNumberSearch,
         setReleaseNumberSearch,
@@ -283,8 +282,5 @@ export function useJobsFilters(jobs = []) {
         // Actions
         resetFilters,
         toggleStage,
-
-        // Constants
-        ALL_OPTION_VALUE,
     };
 }
