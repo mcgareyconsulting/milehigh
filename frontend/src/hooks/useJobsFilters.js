@@ -180,9 +180,12 @@ export function useJobsFilters(jobs = []) {
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Cut start', label: 'Cut start' },
+        { value: 'Material Ordered', label: 'Material Ordered' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Hold', label: 'Hold' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
         { value: 'Shipping planning', label: 'Ship plan' },
         { value: 'Shipping completed', label: 'Ship comp' },
@@ -199,36 +202,48 @@ export function useJobsFilters(jobs = []) {
             selected: 'bg-blue-600 text-white border-blue-700'
         },
         'Cut start': {
-            unselected: 'bg-purple-100 text-purple-800 border-purple-300',
-            selected: 'bg-purple-600 text-white border-purple-700'
-        },
-        'Fit Up Complete.': {
-            unselected: 'bg-green-100 text-green-800 border-green-300',
-            selected: 'bg-green-600 text-white border-green-700'
-        },
-        'Welded QC': {
-            unselected: 'bg-teal-100 text-teal-800 border-teal-300',
-            selected: 'bg-teal-600 text-white border-teal-700'
-        },
-        'Paint complete': {
-            unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-            selected: 'bg-yellow-600 text-white border-yellow-700'
-        },
-        'Store at MHMW for shipping': {
-            unselected: 'bg-orange-100 text-orange-800 border-orange-300',
-            selected: 'bg-orange-600 text-white border-orange-700'
-        },
-        'Shipping planning': {
             unselected: 'bg-blue-100 text-blue-800 border-blue-300',
             selected: 'bg-blue-600 text-white border-blue-700'
         },
-        'Shipping completed': {
-            unselected: 'bg-white text-gray-700 border-gray-400',
-            selected: 'bg-gray-600 text-white border-gray-700'
+        'Fit Up Complete.': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
         },
-        'Complete': {
+        'Welded QC': {
+            unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+            selected: 'bg-yellow-600 text-white border-yellow-700'
+        },
+        'Paint complete': {
             unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
             selected: 'bg-emerald-600 text-white border-emerald-700'
+        },
+        'Store at MHMW for shipping': {
+            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            selected: 'bg-emerald-600 text-white border-emerald-700'
+        },
+        'Shipping planning': {
+            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            selected: 'bg-emerald-600 text-white border-emerald-700'
+        },
+        'Shipping completed': {
+            unselected: 'bg-violet-100 text-violet-800 border-violet-300',
+            selected: 'bg-violet-600 text-white border-violet-700'
+        },
+        'Complete': {
+            unselected: 'bg-violet-100 text-violet-800 border-violet-300',
+            selected: 'bg-violet-600 text-white border-violet-700'
+        },
+        'Hold': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
+        },
+        'Welded': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
+        },
+        'Material Ordered': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
         }
     };
 

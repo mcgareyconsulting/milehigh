@@ -34,10 +34,10 @@ def get_list_id_by_stage(stage):
     
     Returns:
         str: Trello list ID, or None if not found or on error
-        Returns None for stages that Trello doesn't track ('Complete' and 'Cut start')
+        Returns None for stages that Trello doesn't track ('Complete', 'Cut start', 'Hold', 'Welded', 'Material Ordered')
     """
     # Stages that Trello does not track - return None to prevent outbox creation
-    stages_not_tracked_by_trello = ['Complete', 'Cut start']
+    stages_not_tracked_by_trello = ['Complete', 'Cut start', 'Hold', 'Welded', 'Material Ordered']
     if stage in stages_not_tracked_by_trello:
         logger.info(f"Stage '{stage}' is not tracked by Trello, skipping outbox creation")
         return None
@@ -331,6 +331,11 @@ def get_jobs():
                 # Get stage from database field (default to 'Released' if None)
                 stage = job.stage if job.stage else 'Released'
                 
+                # Recalculate stage_group from current stage to ensure it's always correct
+                # This ensures consistency even if database has stale values
+                from app.api.helpers import get_stage_group_from_stage
+                calculated_stage_group = get_stage_group_from_stage(stage)
+                
                 # Return all Excel fields (excluding Trello fields)
                 job_data = {
                     'id': serialize_value(job.id),
@@ -346,7 +351,7 @@ def get_jobs():
                     'Released': serialize_value(job.released),
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
-                    'Stage Group': serialize_value(job.stage_group),  # Stage group field from database
+                    'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
@@ -473,6 +478,11 @@ def get_all_jobs():
                 # Get stage from database field (default to 'Released' if None)
                 stage = job.stage if job.stage else 'Released'
                 
+                # Recalculate stage_group from current stage to ensure it's always correct
+                # This ensures consistency even if database has stale values
+                from app.api.helpers import get_stage_group_from_stage
+                calculated_stage_group = get_stage_group_from_stage(stage)
+                
                 # Return all Excel fields (excluding Trello fields)
                 job_data = {
                     'id': serialize_value(job.id),
@@ -488,7 +498,7 @@ def get_all_jobs():
                     'Released': serialize_value(job.released),
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
-                    'Stage Group': serialize_value(job.stage_group),  # Stage group field from database
+                    'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),

@@ -14,15 +14,20 @@ STAGE_TO_GROUP = {
     "Cut start": "FABRICATION",  # Actual name used in codebase
     "Fitup Complete": "FABRICATION",
     "Fit Up Complete.": "FABRICATION",  # Actual name used in codebase
-    "Welded QC": "FABRICATION",
+    "Hold": "FABRICATION",  # Job log only stage
+    "Material Ordered": "FABRICATION",  # Job log only stage
+    "Welded": "FABRICATION",  # Job log only stage
+
     
     # READY_TO_SHIP group
+    "Welded QC": "READY_TO_SHIP",
     "Paint Complete": "READY_TO_SHIP",
     "Paint complete": "READY_TO_SHIP",  # Actual name used in codebase
     "Store at Shop": "READY_TO_SHIP",
     "Store at MHMW for shipping": "READY_TO_SHIP",  # Actual name used in codebase
     "Shipping Planning": "READY_TO_SHIP",
     "Shipping planning": "READY_TO_SHIP",  # Actual name used in codebase
+
     
     # COMPLETE group
     "Shipping Complete": "COMPLETE",

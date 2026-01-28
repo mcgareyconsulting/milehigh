@@ -7,8 +7,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
 
-    // Alternate row background colors with higher contrast
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
+    // Alternate row background colors - light blue for alternate rows
+    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-blue-100';
+    
+    // Check if row should be grayed out (Complete status)
+    const isComplete = row['Stage'] === 'Complete';
+    const completeRowClass = isComplete ? 'opacity-50' : '';
 
     // Row is draggable (disabled for now)
     const isDraggable = false;
@@ -17,9 +21,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Cut start', label: 'Cut start' },
+        { value: 'Material Ordered', label: 'Material Ordered' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Hold', label: 'Hold' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
         { value: 'Shipping planning', label: 'Ship plan' },
         { value: 'Shipping completed', label: 'Ship comp' },
@@ -53,6 +60,54 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
         'Welded QC': {
+            light: 'rgb(254 249 195)', // yellow-100
+            base: 'rgb(234 179 8)', // yellow-500
+            dark: 'rgb(202 138 4)', // yellow-600
+            text: 'rgb(133 77 14)', // yellow-800
+            border: 'rgb(253 224 71)', // yellow-300
+            className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
+        },
+        'Paint complete': {
+            light: 'rgb(209 250 229)', // emerald-100 (green)
+            base: 'rgb(16 185 129)', // emerald-500
+            dark: 'rgb(5 150 105)', // emerald-600
+            text: 'rgb(6 95 70)', // emerald-800
+            border: 'rgb(110 231 183)', // emerald-300
+            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+        },
+        'Store at MHMW for shipping': {
+            light: 'rgb(209 250 229)', // emerald-100 (green)
+            base: 'rgb(16 185 129)', // emerald-500
+            dark: 'rgb(5 150 105)', // emerald-600
+            text: 'rgb(6 95 70)', // emerald-800
+            border: 'rgb(110 231 183)', // emerald-300
+            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+        },
+        'Shipping planning': {
+            light: 'rgb(209 250 229)', // emerald-100 (green)
+            base: 'rgb(16 185 129)', // emerald-500
+            dark: 'rgb(5 150 105)', // emerald-600
+            text: 'rgb(6 95 70)', // emerald-800
+            border: 'rgb(110 231 183)', // emerald-300
+            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+        },
+        'Shipping completed': {
+            light: 'rgb(237 233 254)', // violet-100 (gentle purple)
+            base: 'rgb(139 92 246)', // violet-500
+            dark: 'rgb(124 58 237)', // violet-600
+            text: 'rgb(91 33 182)', // violet-800
+            border: 'rgb(196 181 253)', // violet-300
+            className: 'bg-violet-100 text-violet-800 border-violet-300'
+        },
+        'Complete': {
+            light: 'rgb(237 233 254)', // violet-100 (gentle purple)
+            base: 'rgb(139 92 246)', // violet-500
+            dark: 'rgb(124 58 237)', // violet-600
+            text: 'rgb(91 33 182)', // violet-800
+            border: 'rgb(196 181 253)', // violet-300
+            className: 'bg-violet-100 text-violet-800 border-violet-300'
+        },
+        'Hold': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600
@@ -60,45 +115,21 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Paint complete': {
-            light: 'rgb(254 249 195)', // yellow-100
-            base: 'rgb(234 179 8)', // yellow-500
-            dark: 'rgb(202 138 4)', // yellow-600
-            text: 'rgb(133 77 14)', // yellow-800
-            border: 'rgb(253 224 71)', // yellow-300
-            className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
+        'Welded': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Store at MHMW for shipping': {
-            light: 'rgb(254 249 195)', // yellow-100
-            base: 'rgb(234 179 8)', // yellow-500
-            dark: 'rgb(202 138 4)', // yellow-600
-            text: 'rgb(133 77 14)', // yellow-800
-            border: 'rgb(253 224 71)', // yellow-300
-            className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
-        },
-        'Shipping planning': {
-            light: 'rgb(254 249 195)', // yellow-100
-            base: 'rgb(234 179 8)', // yellow-500
-            dark: 'rgb(202 138 4)', // yellow-600
-            text: 'rgb(133 77 14)', // yellow-800
-            border: 'rgb(253 224 71)', // yellow-300
-            className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
-        },
-        'Shipping completed': {
-            light: 'rgb(209 250 229)', // emerald-100
-            base: 'rgb(16 185 129)', // emerald-500
-            dark: 'rgb(5 150 105)', // emerald-600
-            text: 'rgb(6 95 70)', // emerald-800
-            border: 'rgb(110 231 183)', // emerald-300
-            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
-        },
-        'Complete': {
-            light: 'rgb(209 250 229)', // emerald-100
-            base: 'rgb(16 185 129)', // emerald-500
-            dark: 'rgb(5 150 105)', // emerald-600
-            text: 'rgb(6 95 70)', // emerald-800
-            border: 'rgb(110 231 183)', // emerald-300
-            className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+        'Material Ordered': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
         }
     };
 
@@ -391,7 +422,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`${rowBgClass} hover:bg-gray-100 transition-all duration-200 border-b border-gray-300 ${isDragOver ? 'bg-blue-50' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
+                className={`${rowBgClass} ${completeRowClass} hover:bg-gray-100 transition-all duration-200 border-b border-gray-300 ${isDragOver ? 'bg-blue-50' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}

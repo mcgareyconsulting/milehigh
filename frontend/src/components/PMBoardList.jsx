@@ -6,9 +6,12 @@ function PMBoardList({ jobs, onUpdate }) {
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Cut start', label: 'Cut start' },
+        { value: 'Material Ordered', label: 'Material Ordered' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Hold', label: 'Hold' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
         { value: 'Shipping planning', label: 'Ship plan' },
         { value: 'Shipping completed', label: 'Ship comp' },
@@ -36,40 +39,58 @@ function PMBoardList({ jobs, onUpdate }) {
             border: 'rgb(147 197 253)',
         },
         'Welded QC': {
+            light: 'rgb(254 249 195)',
+            base: 'rgb(234 179 8)',
+            text: 'rgb(133 77 14)',
+            border: 'rgb(253 224 71)',
+        },
+        'Paint complete': {
+            light: 'rgb(209 250 229)',
+            base: 'rgb(16 185 129)',
+            text: 'rgb(6 95 70)',
+            border: 'rgb(110 231 183)',
+        },
+        'Store at MHMW for shipping': {
+            light: 'rgb(209 250 229)',
+            base: 'rgb(16 185 129)',
+            text: 'rgb(6 95 70)',
+            border: 'rgb(110 231 183)',
+        },
+        'Shipping planning': {
+            light: 'rgb(209 250 229)',
+            base: 'rgb(16 185 129)',
+            text: 'rgb(6 95 70)',
+            border: 'rgb(110 231 183)',
+        },
+        'Shipping completed': {
+            light: 'rgb(237 233 254)',
+            base: 'rgb(139 92 246)',
+            text: 'rgb(91 33 182)',
+            border: 'rgb(196 181 253)',
+        },
+        'Complete': {
+            light: 'rgb(237 233 254)',
+            base: 'rgb(139 92 246)',
+            text: 'rgb(91 33 182)',
+            border: 'rgb(196 181 253)',
+        },
+        'Hold': {
             light: 'rgb(219 234 254)',
             base: 'rgb(59 130 246)',
             text: 'rgb(30 64 175)',
             border: 'rgb(147 197 253)',
         },
-        'Paint complete': {
-            light: 'rgb(254 249 195)',
-            base: 'rgb(234 179 8)',
-            text: 'rgb(133 77 14)',
-            border: 'rgb(253 224 71)',
+        'Welded': {
+            light: 'rgb(219 234 254)',
+            base: 'rgb(59 130 246)',
+            text: 'rgb(30 64 175)',
+            border: 'rgb(147 197 253)',
         },
-        'Store at MHMW for shipping': {
-            light: 'rgb(254 249 195)',
-            base: 'rgb(234 179 8)',
-            text: 'rgb(133 77 14)',
-            border: 'rgb(253 224 71)',
-        },
-        'Shipping planning': {
-            light: 'rgb(254 249 195)',
-            base: 'rgb(234 179 8)',
-            text: 'rgb(133 77 14)',
-            border: 'rgb(253 224 71)',
-        },
-        'Shipping completed': {
-            light: 'rgb(209 250 229)',
-            base: 'rgb(16 185 129)',
-            text: 'rgb(6 95 70)',
-            border: 'rgb(110 231 183)',
-        },
-        'Complete': {
-            light: 'rgb(209 250 229)',
-            base: 'rgb(16 185 129)',
-            text: 'rgb(6 95 70)',
-            border: 'rgb(110 231 183)',
+        'Material Ordered': {
+            light: 'rgb(219 234 254)',
+            base: 'rgb(59 130 246)',
+            text: 'rgb(30 64 175)',
+            border: 'rgb(147 197 253)',
         }
     };
 
