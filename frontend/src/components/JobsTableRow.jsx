@@ -554,21 +554,36 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     
                                     {/* Banana selector dropdown */}
                                     <div className="relative">
+                                        {(() => {
+                                            const bananaChipClass = localBananaColor === 'red'
+                                                ? 'bg-red-100 border-red-300 ring-2 ring-red-300'
+                                                : localBananaColor === 'yellow'
+                                                    ? 'bg-yellow-100 border-yellow-300 ring-1 ring-yellow-200'
+                                                    : localBananaColor === 'green'
+                                                        ? 'bg-emerald-100 border-emerald-300 ring-1 ring-emerald-200'
+                                                        : 'bg-white border-gray-300';
+                                            const bananaHoverClass = localBananaColor
+                                                ? 'hover:brightness-[0.98]'
+                                                : 'hover:bg-gray-50';
+
+                                            return (
                                         <button
                                             type="button"
                                             onClick={() => setShowBananaDropdown(!showBananaDropdown)}
                                             disabled={updatingBananaColor}
-                                            className={`p-1 rounded bg-white border border-gray-300 hover:bg-gray-50 transition-all ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
+                                            className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
                                             title="Set urgency indicator"
                                         >
                                             {localBananaColor ? (
-                                                <BananaIcon color={localBananaColor} size={18} />
+                                                <BananaIcon color={localBananaColor} size={22} />
                                             ) : (
-                                                <div className="w-[18px] h-[18px] bg-white rounded flex items-center justify-center">
-                                                    <BananaIcon color="outline" size={16} />
+                                                <div className="w-[22px] h-[22px] bg-white rounded flex items-center justify-center">
+                                                    <BananaIcon color="outline" size={18} />
                                                 </div>
                                             )}
                                         </button>
+                                            );
+                                        })()}
                                         
                                         {/* Banana dropdown menu */}
                                         {showBananaDropdown && (
@@ -584,7 +599,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                         className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
                                                     >
                                                         <span className="inline-flex items-center justify-center w-[18px] h-[18px] bg-white border border-gray-200 rounded">
-                                                            <BananaIcon color="outline" size={14} />
+                                                            <BananaIcon color="outline" size={16} />
                                                         </span>
                                                         <span className="text-gray-600">None</span>
                                                     </button>
@@ -593,7 +608,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                         onClick={() => handleBananaColorChange('red')}
                                                         className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
                                                     >
-                                                        <BananaIcon color="red" size={16} />
+                                                        <BananaIcon color="red" size={18} />
                                                         <span>Red</span>
                                                     </button>
                                                     <button
@@ -601,7 +616,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                         onClick={() => handleBananaColorChange('yellow')}
                                                         className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
                                                     >
-                                                        <BananaIcon color="yellow" size={16} />
+                                                        <BananaIcon color="yellow" size={18} />
                                                         <span>Yellow</span>
                                                     </button>
                                                     <button
@@ -609,7 +624,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                         onClick={() => handleBananaColorChange('green')}
                                                         className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
                                                     >
-                                                        <BananaIcon color="green" size={16} />
+                                                        <BananaIcon color="green" size={18} />
                                                         <span>Green</span>
                                                     </button>
                                                 </div>
