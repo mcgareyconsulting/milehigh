@@ -192,3 +192,61 @@ def update_submittal_drafting_status():
             "error": "Failed to update submittal_drafting_status",
             "details": str(exc)
         }), 500
+
+@brain_bp.route("/drafting-work-load/reorder-group", methods=["POST"])
+def reorder_group():
+    """Reorder all items in a ball_in_court group so the lowest order >= 1 becomes 1"""
+    try:
+        data = request.json
+        ball_in_court = data.get('ball_in_court')
+        
+        if not ball_in_court:
+            return jsonify({
+                "error": "ball_in_court is required"
+            }), 400
+        
+        # Get all submittals in this group
+        all_group_submittals = ProcoreSubmittal.query.filter_by(
+            ball_in_court=ball_in_court
+        ).all()
+        
+        if not all_group_submittals:
+            return jsonify({
+                "error": f"No submittals found for ball_in_court: {ball_in_court}"
+            }), 404
+        
+        # Calculate updates - finds lowest order >= 1 and makes it 1, renumbers rest sequentially
+        updates = SubmittalOrderingService.reorder_group_to_start_from_one(all_group_submittals)
+        
+        if not updates:
+            return jsonify({
+                "success": True,
+                "message": "No items to reorder (no items with order_number >= 1)",
+                "ball_in_court": ball_in_court,
+                "items_updated": 0
+            }), 200
+        
+        # Apply updates to database records
+        # This updates the order_number field and last_updated timestamp for each submittal
+        for submittal, new_order_val in updates:
+            submittal.order_number = new_order_val
+            submittal.last_updated = datetime.utcnow()
+        
+        # Commit all changes to the database
+        db.session.commit()
+        
+        logger.info(f"Reordered {len(updates)} items for ball_in_court '{ball_in_court}'")
+        
+        return jsonify({
+            "success": True,
+            "ball_in_court": ball_in_court,
+            "items_updated": len(updates)
+        }), 200
+        
+    except Exception as exc:
+        logger.error("Error reordering group", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to reorder group",
+            "details": str(exc)
+        }), 500

@@ -60,7 +60,9 @@ def log_webhook_payload(payload: dict, headers: dict = None, hook_id: Optional[i
     except Exception as e:
         logger.error(f"Failed to log webhook payload: {str(e)}", exc_info=True)
 
-DEBOUNCE_SECONDS = 8  # 8 seconds
+# Minimal debounce for update events - tight window to catch true duplicates
+# while ensuring status updates aren't missed
+UPDATE_DEBOUNCE_SECONDS = 0.5  # 0.5 seconds - only catches rapid-fire duplicates
 
 
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
@@ -70,6 +72,10 @@ def procore_webhook():
     Handles both 'create' and 'update' event types:
     - 'create': Creates a new submittal record in the database
     - 'update': Updates existing submittal record (ball_in_court, status, etc.)
+    
+    Update events use minimal debounce (0.5s) to catch true duplicates while ensuring
+    status updates aren't missed. Processing is idempotent - check_and_update_submittal()
+    fetches fresh data from Procore API and only updates fields that actually changed.
     """
     if request.method == "HEAD":
         # Procore webhook verification request
@@ -125,11 +131,13 @@ def procore_webhook():
         now = datetime.utcnow()
 
         # -----------------------------------
-        # Debounce lookup (only for update events)
+        # Minimal debounce for update events (0.5s window)
         # Create events are not debounced - let DB handle duplicates via unique constraint
+        # 
+        # Tight debounce window catches true duplicates while ensuring status updates
+        # aren't missed. Processing is idempotent, so safe to process all events.
         # -----------------------------------
         if event_type == "update":
-            # Only debounce update events
             event = ProcoreWebhookEvents.query.filter_by(
                 resource_id=resource_id,
                 project_id=project_id,
@@ -137,19 +145,23 @@ def procore_webhook():
             ).first()
 
             if event:
-                diff = (now - event.last_seen).total_seconds()
-
-                if diff < DEBOUNCE_SECONDS:
-                    current_app.logger.info(
-                        f"Debounced duplicate update webhook; id={resource_id}, "
-                        f"project={project_id}, seen {diff:.2f}s ago"
+                time_since_seen = (now - event.last_seen).total_seconds()
+                
+                # Only debounce if seen within 0.5 seconds (catches true duplicates)
+                if time_since_seen < UPDATE_DEBOUNCE_SECONDS:
+                    current_app.logger.debug(
+                        f"Debouncing duplicate update webhook (seen {time_since_seen:.2f}s ago); "
+                        f"id={resource_id}, project={project_id}"
                     )
-                    # Update timestamp so rapid bursts extend window
                     event.last_seen = now
                     db.session.commit()
                     return jsonify({"status": "debounced"}), 200
-
-                # Not debounced → update timestamp
+                
+                # Process event - it's been >0.5s, so likely a different update
+                current_app.logger.debug(
+                    f"Processing update webhook (seen {time_since_seen:.2f}s ago); "
+                    f"id={resource_id}, project={project_id}"
+                )
                 event.last_seen = now
             else:
                 # First time this resource/project/event_type combo has been seen
@@ -293,6 +305,9 @@ def procore_webhook():
             
             # Handle update events - update existing submittal
             elif event_type == "update":
+                # NOTE: All update events are processed (no debouncing) to ensure status updates
+                # are never missed, even when status and ball_in_court updates arrive simultaneously.
+                # check_and_update_submittal() fetches fresh data from API and handles both correctly.
                 # Check if record exists first
                 old_record = ProcoreSubmittal.query.filter_by(submittal_id=str(resource_id)).first()
                 
