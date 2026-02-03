@@ -424,6 +424,8 @@ def create_submittal_from_api_data(procore_client, project_id: int, submittal_id
             return False, existing_check, None
         
         # Create new ProcoreSubmittal record
+        ball_in_court_value = str(ball_in_court).strip() if ball_in_court else None
+        now = datetime.utcnow()
         new_submittal = ProcoreSubmittal(
             submittal_id=str(submittal_id),
             procore_project_id=str(project_id),
@@ -432,11 +434,12 @@ def create_submittal_from_api_data(procore_client, project_id: int, submittal_id
             title=title,
             status=status,
             type=submittal_type,
-            ball_in_court=str(ball_in_court).strip() if ball_in_court else None,
+            ball_in_court=ball_in_court_value,
             submittal_manager=submittal_manager,
             # submittal_drafting_status uses model default of '' (empty string)
-            created_at=datetime.utcnow(),
-            last_updated=datetime.utcnow()
+            last_bic_update=now if ball_in_court_value else None,  # Set if submittal is created with ball_in_court
+            created_at=now,
+            last_updated=now
         )
         
         db.session.add(new_submittal)

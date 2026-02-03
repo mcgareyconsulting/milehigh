@@ -44,3 +44,29 @@ export function formatCellValue(value) {
     return value;
 }
 
+/**
+ * Calculate and format days since a date/time
+ * Returns the number of days as a string (e.g., "0 days", "1 day", "5 days")
+ */
+export function formatDaysAgo(dateValue) {
+    if (!dateValue) return '—';
+    
+    try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) return '—';
+        
+        const now = new Date();
+        const diffTime = now - date;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Handle edge cases
+        if (diffDays < 0) return '0 days'; // Future date, show as 0
+        if (diffDays === 0) return '0 days';
+        if (diffDays === 1) return '1 day';
+        
+        return `${diffDays} days`;
+    } catch (e) {
+        return '—';
+    }
+}
+

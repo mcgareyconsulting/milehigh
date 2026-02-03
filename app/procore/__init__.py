@@ -1043,6 +1043,7 @@ def drafting_workload_submittals():
                     ball_in_court_value = ', '.join(filtered_parts) if filtered_parts else None
                 
                 is_multiple_assignees = ball_in_court_value and ',' in ball_in_court_value
+                now = datetime.utcnow()
                 
                 # Insert/update in DB with cleaned values
                 submittal = ProcoreSubmittal(
@@ -1055,7 +1056,8 @@ def drafting_workload_submittals():
                     type=str(safe_get(row, 'Type', '') or '').strip() or None,
                     ball_in_court=ball_in_court_value,
                     submittal_manager=str(safe_get(row, 'Submittal Manager', '') or '').strip() or None,
-                    was_multiple_assignees=is_multiple_assignees
+                    was_multiple_assignees=is_multiple_assignees,
+                    last_bic_update=now if ball_in_court_value else None  # Set if submittal is created with ball_in_court
                 )
                 db.session.add(submittal)
                 inserted_count += 1
@@ -1206,6 +1208,7 @@ def health_scan_update():
                 if issue['ball_in_court']['mismatch']:
                     old_value = db_record.ball_in_court
                     db_record.ball_in_court = issue['ball_in_court']['api']
+                    db_record.last_bic_update = datetime.utcnow()  # Track when ball in court was last updated
                     updates['ball_in_court'] = {
                         'old': old_value,
                         'new': issue['ball_in_court']['api']

@@ -491,6 +491,8 @@ def create_submittal_from_webhook(project_id, submittal_id):
             return False, existing_check, None
         
         # Create new ProcoreSubmittal record
+        ball_in_court_value = str(ball_in_court).strip() if ball_in_court else None
+        now = datetime.utcnow()
         new_submittal = ProcoreSubmittal(
             submittal_id=str(submittal_id),
             procore_project_id=str(project_id),
@@ -499,11 +501,12 @@ def create_submittal_from_webhook(project_id, submittal_id):
             title=title,
             status=status,
             type=submittal_type,
-            ball_in_court=str(ball_in_court).strip() if ball_in_court else None,
+            ball_in_court=ball_in_court_value,
             submittal_manager=submittal_manager,
             # submittal_drafting_status uses model default of '' (empty string)
-            created_at=datetime.utcnow(),
-            last_updated=datetime.utcnow()
+            last_bic_update=now if ball_in_court_value else None,  # Set if submittal is created with ball_in_court
+            created_at=now,
+            last_updated=now
         )
         
         db.session.add(new_submittal)
@@ -871,6 +874,7 @@ def check_and_update_submittal(project_id, submittal_id):
                 record.was_multiple_assignees = False
             
             record.ball_in_court = ball_in_court
+            record.last_bic_update = datetime.utcnow()  # Track when ball in court was last updated
             ball_updated = True
         
         # NEW LOGIC: Check if submitter appears as pending in a later workflow group
@@ -1696,6 +1700,7 @@ def comprehensive_health_scan(skip_user_prompt=False):
                     if issue['ball_in_court']['mismatch']:
                         old_value = db_record.ball_in_court
                         db_record.ball_in_court = issue['ball_in_court']['api']
+                        db_record.last_bic_update = datetime.utcnow()  # Track when ball in court was last updated
                         logger.info(f"  Updated submittal {issue['submittal_id']}: ball_in_court '{old_value}' -> '{issue['ball_in_court']['api']}'")
                     
                     # Update status if there's a mismatch

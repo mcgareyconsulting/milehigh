@@ -65,6 +65,7 @@ class ProcoreSubmittal(db.Model):
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
+    last_bic_update = db.Column(db.DateTime, nullable=True)  # Track the date and time of the most recent ball in court update
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -85,6 +86,7 @@ class ProcoreSubmittal(db.Model):
             "submittal_drafting_status": self.submittal_drafting_status,
             "due_date": self.due_date,
             "was_multiple_assignees": self.was_multiple_assignees,
+            "last_bic_update": self.last_bic_update,
             "last_updated": self.last_updated,
             "created_at": self.created_at,
         }
