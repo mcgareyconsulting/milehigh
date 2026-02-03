@@ -51,34 +51,54 @@ function DraftingWorkLoad() {
             const rowStatus = row.status ?? '';
 
             if (selectedTab === 'draft') {
-                // Draft tab: only show submittals with status = "Draft"
-                return rowStatus === 'Draft';
+                // Draft tab: show all submittals EXCEPT 'Open' and 'Closed'
+                return rowStatus !== 'Open' && rowStatus !== 'Closed';
             } else {
-                // Open tab: show all submittals except those with status = "Draft"
-                return rowStatus !== 'Draft';
+                // Open tab: show only submittals with status = "Open"
+                return rowStatus === 'Open';
             }
         });
     }, [submittals, selectedTab]);
 
     const rows = filteredRowsByTab; // now that submittals is clean, we alias
 
+    // Filter columns based on selected tab - show "Procore Status" only in Draft tab
+    const filteredColumns = useMemo(() => {
+        if (selectedTab === 'draft') {
+            return columns; // Show all columns including "Procore Status" in Draft tab
+        } else {
+            return columns.filter(col => col !== 'Procore Status'); // Hide "Procore Status" in Open tab
+        }
+    }, [columns, selectedTab]);
+
     // Use the filters hook
     const {
         selectedBallInCourt,
         selectedSubmittalManager,
         selectedProjectName,
+        selectedProcoreStatus,
         projectNameSortMode,
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,
+        setSelectedProcoreStatus,
         ballInCourtOptions,
         submittalManagerOptions,
         projectNameOptions,
+        procoreStatusOptions,
+        availableProcoreStatuses,
         displayRows,
         resetFilters,
         handleProjectNameSortToggle,
         ALL_OPTION_VALUE,
     } = useFilters(rows);
+
+    // Reset Procore Status filter when switching tabs (since it only applies to Draft tab)
+    useEffect(() => {
+        if (selectedTab === 'open') {
+            setSelectedProcoreStatus(ALL_OPTION_VALUE);
+        }
+    }, [selectedTab, setSelectedProcoreStatus, ALL_OPTION_VALUE]);
 
     // Drag and drop functionality
     const {
@@ -92,8 +112,8 @@ function DraftingWorkLoad() {
 
 
     const handleGeneratePDF = useCallback(() => {
-        generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
-    }, [displayRows, columns, lastUpdated]);
+        generateDraftingWorkLoadPDF(displayRows, filteredColumns, lastUpdated);
+    }, [displayRows, filteredColumns, lastUpdated]);
 
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
@@ -156,7 +176,7 @@ function DraftingWorkLoad() {
     );
 
     const hasData = displayRows.length > 0;
-    const tableColumnCount = columns.length;
+    const tableColumnCount = filteredColumns.length;
 
     return (
         <>
@@ -277,7 +297,7 @@ function DraftingWorkLoad() {
                                                 allOptionValue={ALL_OPTION_VALUE}
                                             />
                                         </div>
-                                        <div>
+                                        <div className="flex flex-col gap-3">
                                             <FilterButtonGroup
                                                 label="📁 Project Name"
                                                 options={projectNameOptions}
@@ -285,6 +305,16 @@ function DraftingWorkLoad() {
                                                 onSelect={setSelectedProjectName}
                                                 allOptionValue={ALL_OPTION_VALUE}
                                             />
+                                            {selectedTab === 'draft' && (
+                                                <FilterButtonGroup
+                                                    label="📋 Procore Status"
+                                                    options={procoreStatusOptions}
+                                                    selectedValue={selectedProcoreStatus}
+                                                    onSelect={setSelectedProcoreStatus}
+                                                    allOptionValue={ALL_OPTION_VALUE}
+                                                    disabledOptions={availableProcoreStatuses}
+                                                />
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 pt-2">
@@ -339,7 +369,7 @@ function DraftingWorkLoad() {
                                         <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%' }}>
                                             <thead className="bg-gray-100">
                                                 <tr>
-                                                    {columns.map((column) => {
+                                                    {filteredColumns.map((column) => {
                                                         const isOrderNumber = column === 'Order Number';
                                                         const isNotes = column === 'Notes';
                                                         const isProjectName = column === 'Project Name';
@@ -371,6 +401,7 @@ function DraftingWorkLoad() {
                                                         }
 
                                                         const isStatus = column === 'Status';
+                                                        const isProcoreStatus = column === 'Procore Status';
                                                         const isBallInCourt = column === 'Ball In Court';
                                                         const isType = column === 'Type';
                                                         const isSubmittalId = column === 'Submittals Id';
@@ -405,6 +436,9 @@ function DraftingWorkLoad() {
                                                         } else if (isStatus) {
                                                             headerStyle = { maxWidth: '96px' };
                                                             columnClass = 'dwl-col-status';
+                                                        } else if (isProcoreStatus) {
+                                                            headerStyle = { maxWidth: '96px' };
+                                                            columnClass = 'dwl-col-procore-status';
                                                         } else if (isSubmittalManager) {
                                                             headerStyle = { maxWidth: '128px' };
                                                             columnClass = 'dwl-col-submittal-manager';
@@ -437,7 +471,7 @@ function DraftingWorkLoad() {
                                                         <TableRow
                                                             key={row.id}
                                                             row={row}
-                                                            columns={columns}
+                                                            columns={filteredColumns}
                                                             formatCellValue={formatCellValue}
                                                             formatDate={formatDate}
                                                             onOrderNumberChange={updateOrderNumber}

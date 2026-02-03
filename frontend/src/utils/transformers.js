@@ -14,6 +14,7 @@ function transformSubmittal(submittal, index) {
         'Project Number': submittal.project_number,
         'Title': submittal.title,
         'Status': submittal.submittal_drafting_status ?? submittal.status,
+        'Procore Status': submittal.status, // The actual Procore status field
         'Submittal Drafting Status': submittal.submittal_drafting_status,
         'Type': submittal.type,
         'Ball In Court': submittal.ball_in_court,
