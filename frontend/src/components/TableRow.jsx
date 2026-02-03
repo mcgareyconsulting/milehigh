@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onDueDateChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
     const navigate = useNavigate();
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
     const [notesValue, setNotesValue] = useState('');
+    const [editingDueDate, setEditingDueDate] = useState(false);
+    const [dueDateValue, setDueDateValue] = useState('');
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
+    const dueDateInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
     const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
@@ -96,6 +99,143 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             notesInputRef.current.select();
         }
     }, [editingNotes]);
+
+    // Helper function to convert date to mm/dd/yyyy format
+    // Parses dates without timezone conversion to avoid day shift issues
+    const formatDateToMMDDYYYY = (dateValue) => {
+        if (!dateValue) return '';
+        try {
+            // If it's already in mm/dd/yyyy format, return as is
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+                return dateValue;
+            }
+            // If it's in YYYY-MM-DD format, parse directly without timezone conversion
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                const [year, month, day] = dateValue.split('-');
+                return `${month}/${day}/${year}`;
+            }
+            // For other formats, try to parse as Date but use UTC methods to avoid timezone shift
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime())) return '';
+            // Use UTC methods to avoid timezone conversion
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const year = date.getUTCFullYear();
+            return `${month}/${day}/${year}`;
+        } catch (e) {
+            return '';
+        }
+    };
+
+    // Helper function to clean and format date input to mm/dd/yyyy
+    // Allows user to type freely, just enforces format
+    const cleanDateInput = (value) => {
+        // Remove all non-numeric and non-separator characters
+        const cleaned = value.replace(/[^\d\/-]/g, '');
+        
+        // Limit length to 10 characters (mm/dd/yyyy)
+        return cleaned.slice(0, 10);
+    };
+
+    // Helper function to validate date format mm/dd/yyyy or mm-dd-yyyy
+    const isValidDate = (dateString) => {
+        if (!dateString || dateString.length !== 10) return false;
+        // Accept both / and - as separators
+        const regex = /^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/;
+        const match = dateString.match(regex);
+        if (!match) return false;
+        
+        const month = parseInt(match[1], 10);
+        const day = parseInt(match[2], 10);
+        const year = parseInt(match[3], 10);
+        
+        // Basic validation
+        if (month < 1 || month > 12) return false;
+        if (day < 1 || day > 31) return false;
+        if (year < 1900 || year > 2100) return false;
+        
+        // Check if date is valid (handles leap years, etc.)
+        const date = new Date(year, month - 1, day);
+        return date.getFullYear() === year && 
+               date.getMonth() === month - 1 && 
+               date.getDate() === day;
+    };
+
+    const handleDueDateFocus = () => {
+        const currentValue = row['Due Date'] ?? row.due_date ?? '';
+        // Convert to mm/dd/yyyy format for text input
+        const dateInputValue = currentValue ? formatDateToMMDDYYYY(currentValue) : '';
+        setDueDateValue(dateInputValue);
+        setEditingDueDate(true);
+    };
+
+    const handleDueDateChange = (e) => {
+        const cleaned = cleanDateInput(e.target.value);
+        setDueDateValue(cleaned);
+    };
+
+    const handleDueDateBlur = () => {
+        setEditingDueDate(false);
+        if (submittalId && onDueDateChange) {
+            // Validate the date format
+            if (dueDateValue && dueDateValue.length === 10) {
+                if (isValidDate(dueDateValue)) {
+                    // Normalize to mm/dd/yyyy format (convert - to /)
+                    const normalizedDate = dueDateValue.replace(/-/g, '/');
+                    onDueDateChange(submittalId, normalizedDate);
+                } else {
+                    // Invalid date, revert to original value
+                    const currentValue = row['Due Date'] ?? row.due_date ?? '';
+                    const originalValue = currentValue ? formatDateToMMDDYYYY(currentValue) : '';
+                    setDueDateValue(originalValue);
+                    // Still send null to clear if user cleared it
+                    if (!dueDateValue || dueDateValue === '') {
+                        onDueDateChange(submittalId, null);
+                    }
+                }
+            } else if (!dueDateValue || dueDateValue === '') {
+                // Empty value, clear the date
+                onDueDateChange(submittalId, null);
+            } else {
+                // Incomplete date, revert to original
+                const currentValue = row['Due Date'] ?? row.due_date ?? '';
+                const originalValue = currentValue ? formatDateToMMDDYYYY(currentValue) : '';
+                setDueDateValue(originalValue);
+            }
+        }
+    };
+
+    const handleDueDateKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            const currentValue = row['Due Date'] ?? row.due_date ?? '';
+            const originalValue = currentValue ? formatDateToMMDDYYYY(currentValue) : '';
+            setDueDateValue(originalValue);
+            setEditingDueDate(false);
+        }
+        // Allow backspace, delete, tab, arrow keys, home, end
+        if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+            return;
+        }
+        // Allow numbers
+        if (/^\d$/.test(e.key)) {
+            return;
+        }
+        // Allow slash or dash as separators
+        if (e.key === '/' || e.key === '-') {
+            return;
+        }
+        // Prevent other characters
+        e.preventDefault();
+    };
+
+    useEffect(() => {
+        if (editingDueDate && dueDateInputRef.current) {
+            dueDateInputRef.current.focus();
+            dueDateInputRef.current.select();
+        }
+    }, [editingDueDate]);
 
     const rowType = row.type ?? row['Type'] ?? '';
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
@@ -189,6 +329,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isType = column === 'Type';
                     const isNotes = column === 'Notes';
                     const isStatus = column === 'Status';
+                    const isDueDate = column === 'Due Date';
                     const isProjectName = column === 'Project Name';
                     const isBallInCourt = column === 'Ball In Court';
 
@@ -412,6 +553,56 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         </option>
                                     ))}
                                 </select>
+                            </td>
+                        );
+                    }
+
+                    if (isDueDate && editingDueDate) {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300`}
+                                style={{ maxWidth: '120px' }}
+                            >
+                                <input
+                                    ref={dueDateInputRef}
+                                    type="text"
+                                    value={dueDateValue}
+                                    onChange={handleDueDateChange}
+                                    onBlur={handleDueDateBlur}
+                                    onKeyDown={handleDueDateKeyDown}
+                                    placeholder="mm/dd/yyyy"
+                                    maxLength={10}
+                                    className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900 text-center"
+                                    style={{ minWidth: '100px' }}
+                                />
+                            </td>
+                        );
+                    }
+
+                    if (isDueDate) {
+                        const dueDateRaw = row['Due Date'] ?? row.due_date;
+                        const hasDueDate = dueDateRaw && dueDateRaw !== null && dueDateRaw !== '';
+                        const formattedDueDate = hasDueDate ? formatDateToMMDDYYYY(dueDateRaw) : '—';
+                        
+                        // Red background when date is set
+                        const dueDateBgClass = hasDueDate ? 'bg-red-200' : rowBgClass;
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${dueDateBgClass} border-r border-gray-300`}
+                                style={{ maxWidth: '120px' }}
+                                onClick={handleDueDateFocus}
+                                title="Click to edit due date"
+                            >
+                                <div className={`px-1 py-0.5 text-xs border rounded-sm font-medium transition-all cursor-text min-h-[20px] text-center ${
+                                    hasDueDate
+                                        ? 'border-red-300 bg-red-200 hover:bg-red-300 hover:border-red-400 text-gray-900'
+                                        : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
+                                }`}>
+                                    {formattedDueDate}
+                                </div>
                             </td>
                         );
                     }

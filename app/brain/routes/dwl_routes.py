@@ -3,7 +3,7 @@ from flask import jsonify, request
 from app.brain.services.dwl_service import SubmittalOrderingService, SubmittalOrderUpdate, DraftingWorkLoadService
 from app.logging_config import get_logger
 from app.models import ProcoreSubmittal, db
-from datetime import datetime
+from datetime import datetime, date
 
 logger = get_logger(__name__)
 
@@ -188,6 +188,69 @@ def update_submittal_drafting_status():
         db.session.rollback()
         return jsonify({
             "error": "Failed to update submittal_drafting_status",
+            "details": str(exc)
+        }), 500
+
+@brain_bp.route("/drafting-work-load/due-date", methods=["PUT"])
+def update_submittal_due_date():
+    """Update the due_date for a submittal"""
+    try:
+        data = request.json
+        submittal_id = data.get('submittal_id')
+        due_date = data.get('due_date')
+        
+        if submittal_id is None:
+            return jsonify({
+                "error": "submittal_id is required"
+            }), 400
+        
+        # Ensure submittal_id is a string for proper database comparison
+        submittal_id = str(submittal_id)
+        
+        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({
+                "error": "Submittal not found"
+            }), 404
+        
+        # Parse due_date - can be None, empty string, or a date string (YYYY-MM-DD format)
+        parsed_date = None
+        if due_date:
+            if isinstance(due_date, str):
+                # Try to parse date string (YYYY-MM-DD format from frontend)
+                try:
+                    parsed_date = datetime.strptime(due_date, '%Y-%m-%d').date()
+                except ValueError:
+                    # Try alternative formats
+                    try:
+                        parsed_date = datetime.strptime(due_date, '%m/%d/%Y').date()
+                    except ValueError:
+                        return jsonify({
+                            "error": f"Invalid date format. Expected YYYY-MM-DD or MM/DD/YYYY, got: {due_date}"
+                        }), 400
+            elif isinstance(due_date, date):
+                parsed_date = due_date
+            else:
+                return jsonify({
+                    "error": f"Invalid date type. Expected string or date, got: {type(due_date)}"
+                }), 400
+        
+        # Update the due_date
+        submittal.due_date = parsed_date
+        submittal.last_updated = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "due_date": parsed_date.isoformat() if parsed_date else None
+        }), 200
+    except Exception as exc:
+        logger.error("Error updating submittal due date", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to update due_date",
             "details": str(exc)
         }), 500
 

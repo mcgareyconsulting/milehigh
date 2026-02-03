@@ -4,15 +4,27 @@
 
 /**
  * Format a date value for display
+ * Parses dates without timezone conversion to avoid day shift issues
  */
 export function formatDate(dateValue) {
     if (!dateValue) return '—';
     try {
+        // If it's already in mm/dd/yyyy format, return as is
+        if (typeof dateValue === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+            return dateValue;
+        }
+        // If it's in YYYY-MM-DD format, parse directly without timezone conversion
+        if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            const [year, month, day] = dateValue.split('-');
+            return `${month}/${day}/${year}`;
+        }
+        // For other formats, try to parse as Date but use UTC methods to avoid timezone shift
         const date = new Date(dateValue);
         if (isNaN(date.getTime())) return '—';
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const year = date.getFullYear();
+        // Use UTC methods to avoid timezone conversion
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const year = date.getUTCFullYear();
         return `${month}/${day}/${year}`;
     } catch (e) {
         return '—';

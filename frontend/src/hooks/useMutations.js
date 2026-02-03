@@ -78,6 +78,13 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
+    const updateDueDate = useCallback(async (submittalId, dueDate) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.updateDueDate(submittalId, dueDate),
+            `Failed to update due date for submittal ${submittalId}`
+        );
+    }, [executeMutation]);
+
     const uploadFile = useCallback(async (file) => {
         setUploading(true);
         setUploadError(null);
@@ -120,6 +127,9 @@ export function useMutations(refetch) {
 
         // Status mutation
         updateStatus,
+
+        // Due date mutation
+        updateDueDate,
 
         // Upload mutation
         uploadFile,

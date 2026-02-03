@@ -12,6 +12,7 @@ export const DESIRED_COLUMN_ORDER = [
     'Status',
     'Procore Status',
     'Submittal Manager',
+    'Due Date',
     'Notes'
 ];
 

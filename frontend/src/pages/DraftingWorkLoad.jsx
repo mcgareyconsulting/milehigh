@@ -29,6 +29,7 @@ function DraftingWorkLoad() {
         updateOrderNumber,
         updateNotes,
         updateStatus,
+        updateDueDate,
         uploadFile,
         uploading,
         uploadError,
@@ -477,6 +478,7 @@ function DraftingWorkLoad() {
                                                             onOrderNumberChange={updateOrderNumber}
                                                             onNotesChange={updateNotes}
                                                             onStatusChange={updateStatus}
+                                                            onDueDateChange={updateDueDate}
                                                             rowIndex={index}
                                                             onDragStart={handleDragStart}
                                                             onDragOver={handleDragOver}

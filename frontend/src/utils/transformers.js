@@ -19,6 +19,7 @@ function transformSubmittal(submittal, index) {
         'Type': submittal.type,
         'Ball In Court': submittal.ball_in_court,
         'Order Number': submittal.order_number,
+        'Due Date': submittal.due_date,
         'Notes': submittal.notes,
         id: String(rawId)
     };
