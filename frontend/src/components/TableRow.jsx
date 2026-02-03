@@ -100,8 +100,14 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const rowType = row.type ?? row['Type'] ?? '';
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
 
-    // Alternate row background colors
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
+    // Check if status is HOLD for yellow background
+    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? '';
+    const isHoldStatus = currentStatus === 'HOLD';
+
+    // Alternate row background colors, but use yellow for HOLD status
+    const rowBgClass = isHoldStatus 
+        ? 'bg-yellow-200' 
+        : (rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200');
 
     // Drag and drop handlers
     const handleDragStart = (e) => {
@@ -395,7 +401,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                             onStatusChange(submittalId, e.target.value);
                                         }
                                     }}
-                                    className="w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
+                                    className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center ${
+                                        isHoldStatus ? 'bg-yellow-200' : 'bg-white'
+                                    }`}
                                 >
                                     <option value="">—</option>
                                     {statusOptions.map((option) => (
