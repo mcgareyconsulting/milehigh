@@ -713,19 +713,25 @@ def _check_submitter_pending_in_workflow(approvers):
 
 def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
     """
-    Convert an integer order number to an urgent decimal (e.g., 6 -> 0.6).
-    Handles collision detection and finds the next available decimal.
+    Convert an integer order number to an urgent decimal using the ladder system.
+    Each drafter has urgency slots [0.1, 0.2, ..., 0.9]. When a submittal returns:
+    - 0.1 = MOST urgent (oldest, been waiting longest)
+    - 0.9 = LEAST urgent (newest, just arrived)
+    - New urgent submittal gets 0.9 (least urgent position)
+    - All existing urgent submittals shift DOWN by 0.1 (0.9 -> 0.8, 0.8 -> 0.7, etc.) toward 0.1
+    - If all 9 slots are filled, the one at 0.1 (oldest) gets bumped to order 1 (regular status)
+    - When bumping to regular, all regular orders (>= 1) shift DOWN by 1
     
     Args:
         record: ProcoreSubmittal DB record
         submittal_id: Submittal ID for logging
-        ball_in_court_value: Current ball_in_court value for collision detection
+        ball_in_court_value: Current ball_in_court value for grouping
         
     Returns:
         bool: True if order number was bumped, False otherwise
     """
-    print(f"[ORDER BUMP] Starting bump check for submittal {submittal_id}")
-    logger.info(f"[ORDER BUMP] Starting bump check for submittal {submittal_id}")
+    print(f"[ORDER BUMP] Starting ladder bump check for submittal {submittal_id}")
+    logger.info(f"[ORDER BUMP] Starting ladder bump check for submittal {submittal_id}")
     
     if record.order_number is None:
         print(f"[ORDER BUMP] Order number is None, cannot bump")
@@ -746,73 +752,115 @@ def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
         logger.info(f"[ORDER BUMP] Order number is not an integer >= 1, cannot bump")
         return False
     
-    # Convert to urgent decimal in tenths place (e.g., 6 -> 0.6, 14 -> 0.14) - always less than 1
-    # For numbers >= 10, divide by 100; for single digits, divide by 10
-    if current_order >= 10:
-        target_decimal = current_order / 100.0
-        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
-        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
-    else:
-        target_decimal = current_order / 10.0
-        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
-        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
+    # Find all existing urgent submittals (0 < order < 1) for this ball_in_court
+    print(f"[ORDER BUMP] Checking for existing urgent orders with ball_in_court='{ball_in_court_value}'")
+    logger.info(f"[ORDER BUMP] Checking for existing urgent orders with ball_in_court='{ball_in_court_value}'")
     
-    # Find all existing order numbers for this ball_in_court that are < 1
-    print(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")
-    logger.info(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")
-    
-    existing_urgent_orders = db.session.query(ProcoreSubmittal.order_number).filter(
+    existing_urgent_submittals = db.session.query(ProcoreSubmittal).filter(
         ProcoreSubmittal.ball_in_court == ball_in_court_value,
         ProcoreSubmittal.submittal_id != str(submittal_id),  # Exclude current submittal
         ProcoreSubmittal.order_number < 1,
+        ProcoreSubmittal.order_number > 0,  # Must be > 0 (exclude NULL and 0)
         ProcoreSubmittal.order_number.isnot(None)
     ).all()
-    existing_urgent_orders = [float(o[0]) for o in existing_urgent_orders if o[0] is not None]
     
-    print(f"[ORDER BUMP] Found {len(existing_urgent_orders)} existing urgent orders: {existing_urgent_orders}")
-    logger.info(f"[ORDER BUMP] Found {len(existing_urgent_orders)} existing urgent orders: {existing_urgent_orders}")
+    existing_urgent_orders = [float(s.order_number) for s in existing_urgent_submittals if s.order_number is not None]
     
-    # Find next available decimal that is more urgent (smaller) than any collision
-    new_order = target_decimal
-    if target_decimal in existing_urgent_orders:
-        print(f"[ORDER BUMP] Collision detected! {target_decimal} already exists")
-        logger.info(f"[ORDER BUMP] Collision detected! {target_decimal} already exists")
-        
-        # Collision detected - find next available smaller decimal
-        if existing_urgent_orders:
-            smallest_existing = min(existing_urgent_orders)
-            candidate = smallest_existing / 2.0
-            print(f"[ORDER BUMP] Starting collision resolution: smallest_existing={smallest_existing}, initial candidate={candidate}")
-            logger.info(f"[ORDER BUMP] Starting collision resolution: smallest_existing={smallest_existing}, initial candidate={candidate}")
-            
-            # Keep halving until we find a value that's not in the list
-            max_iterations = 10  # Prevent infinite loops
-            iteration = 0
-            while candidate in existing_urgent_orders and candidate > 0.001 and iteration < max_iterations:
-                candidate = candidate / 2.0
-                iteration += 1
-                print(f"[ORDER BUMP]   Iteration {iteration}: candidate={candidate}")
-                logger.info(f"[ORDER BUMP]   Iteration {iteration}: candidate={candidate}")
-            
-            # If we still have a collision after iterations, use a fixed small value
-            if candidate in existing_urgent_orders or candidate <= 0:
-                candidate = 0.01
-                print(f"[ORDER BUMP]   Using fallback value: {candidate}")
-                logger.info(f"[ORDER BUMP]   Using fallback value: {candidate}")
-            
-            new_order = candidate
-        else:
-            # No existing urgent orders, but target_decimal is somehow in the list (shouldn't happen)
-            new_order = target_decimal / 2.0
-            print(f"[ORDER BUMP] Edge case: using {new_order}")
-            logger.info(f"[ORDER BUMP] Edge case: using {new_order}")
+    print(f"[ORDER BUMP] Found {len(existing_urgent_submittals)} existing urgent submittals with orders: {existing_urgent_orders}")
+    logger.info(f"[ORDER BUMP] Found {len(existing_urgent_submittals)} existing urgent submittals with orders: {existing_urgent_orders}")
+    
+    # Check if 0.9 is already occupied
+    slot_09_occupied = 0.9 in existing_urgent_orders
+    
+    # Check if all 9 slots are filled (0.1 through 0.9)
+    has_all_slots_filled = len(existing_urgent_submittals) >= 9
+    
+    # Ladder system: only shift existing urgent orders if 0.9 is occupied
+    # Valid urgency slots are [0.1, 0.2, ..., 0.9] where 0.1 = most urgent (oldest), 0.9 = least urgent (newest)
+    # If 0.9 is NOT occupied, just assign 0.9 to new submittal without shifting others
+    # If 0.9 IS occupied but not all slots filled, shift all existing urgent orders DOWN by 0.1 (toward 0.1 = most urgent)
+    # If all 9 slots are filled, assign order 1 to new submittal and shift all regular orders up by 1
+    updates = []
+    needs_regular_shift = False
+    regular_submittals_count = 0
+    
+    if has_all_slots_filled:
+        # All 9 slots are filled - new urgent gets order 1, regular orders shift up
+        needs_regular_shift = True
+        print(f"[ORDER BUMP] All 9 urgency slots filled, assigning order 1 to new urgent submittal and shifting regular orders up")
+        logger.info(f"[ORDER BUMP] All 9 urgency slots filled, assigning order 1 to new urgent submittal and shifting regular orders up")
+    elif not slot_09_occupied:
+        # 0.9 is available - just assign it to new submittal, no need to shift existing ones
+        print(f"[ORDER BUMP] Slot 0.9 is available, assigning to new submittal without shifting existing urgent submittals")
+        logger.info(f"[ORDER BUMP] Slot 0.9 is available, assigning to new submittal without shifting existing urgent submittals")
     else:
-        print(f"[ORDER BUMP] No collision, using target decimal: {new_order}")
-        logger.info(f"[ORDER BUMP] No collision, using target decimal: {new_order}")
+        # 0.9 is occupied but not all slots filled - need to shift existing urgent submittals down to make room
+        # Sort existing urgent submittals by order (ascending) to process from lowest (0.1 = oldest) to highest (0.9 = newest)
+        sorted_urgent = sorted(existing_urgent_submittals, key=lambda s: float(s.order_number))
+        
+        # Shift all existing urgent orders DOWN by 0.1 (toward 0.1 = most urgent)
+        # Lower numbers = more urgent, so we subtract 0.1 to move toward 0.1
+        for submittal in sorted_urgent:
+            old_order = float(submittal.order_number)
+            new_order = old_order - 0.1  # Shift DOWN toward 0.1 (most urgent)
+            
+            if new_order < 0.1:
+                # This shouldn't happen if we're managing slots correctly, but handle edge case
+                # If somehow we go below 0.1, cap at 0.1
+                print(f"[ORDER BUMP] Warning: new_order {new_order} < 0.1, capping at 0.1")
+                logger.warning(f"[ORDER BUMP] Warning: new_order {new_order} < 0.1, capping at 0.1")
+                new_order = 0.1
+                updates.append((submittal, new_order))
+            else:
+                updates.append((submittal, new_order))
+                print(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
+                logger.info(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
     
-    record.order_number = new_order
-    print(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> {new_order} for submittal {submittal_id}")
-    logger.info(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> {new_order} for submittal {submittal_id}")
+    # If all slots are filled, we need to shift all regular orders (>= 1) UP by 1
+    if needs_regular_shift:
+        # Find all regular submittals (order >= 1) for this ball_in_court
+        regular_submittals = db.session.query(ProcoreSubmittal).filter(
+            ProcoreSubmittal.ball_in_court == ball_in_court_value,
+            ProcoreSubmittal.submittal_id != str(submittal_id),  # Exclude current submittal
+            ProcoreSubmittal.order_number >= 1,
+            ProcoreSubmittal.order_number.isnot(None)
+        ).all()
+        
+        regular_submittals_count = len(regular_submittals)
+        
+        # Sort by order number (descending) so we shift from highest to lowest to avoid collisions
+        regular_submittals.sort(key=lambda s: float(s.order_number) if s.order_number is not None else 0, reverse=True)
+        
+        # Shift all regular orders UP by 1 (1 -> 2, 2 -> 3, etc.)
+        for submittal in regular_submittals:
+            old_order = float(submittal.order_number)
+            new_order = old_order + 1  # Shift UP means higher numbers (less urgent)
+            updates.append((submittal, new_order))
+            print(f"[ORDER BUMP] Regular shift UP: submittal {submittal.submittal_id} {old_order} -> {new_order}")
+            logger.info(f"[ORDER BUMP] Regular shift UP: submittal {submittal.submittal_id} {old_order} -> {new_order}")
+    
+    # Apply all updates
+    for submittal, new_order_val in updates:
+        submittal.order_number = new_order_val
+    
+    # Assign order number to the new submittal
+    if needs_regular_shift:
+        # All slots filled - assign order 1 (regular status)
+        record.order_number = 1.0
+        print(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> 1.0 for submittal {submittal_id} (all slots filled, assigned to regular)")
+        logger.info(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> 1.0 for submittal {submittal_id} (all slots filled, assigned to regular)")
+        print(f"[ORDER BUMP] Shifted {regular_submittals_count} regular orders UP to make room")
+        logger.info(f"[ORDER BUMP] Shifted {regular_submittals_count} regular orders UP to make room")
+    else:
+        # Assign 0.9 to the new submittal (least urgent, newest position)
+        record.order_number = 0.9
+        print(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> 0.9 for submittal {submittal_id} (ladder system - newest at 0.9)")
+        logger.info(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> 0.9 for submittal {submittal_id} (ladder system - newest at 0.9)")
+        if updates:
+            urgent_updates_count = len([u for u in updates if u[1] < 1])
+            print(f"[ORDER BUMP] Shifted {urgent_updates_count} existing urgent submittals DOWN the ladder (toward 0.1 = most urgent)")
+            logger.info(f"[ORDER BUMP] Shifted {urgent_updates_count} existing urgent submittals DOWN the ladder (toward 0.1 = most urgent)")
+    
     return True
 
 

@@ -394,3 +394,4 @@ function History() {
 }
 
 export default History;
+export default History;
