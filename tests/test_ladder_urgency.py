@@ -294,8 +294,8 @@ class TestLadderUrgencySystem:
         assert result is True
         assert sample_record.order_number == 0.9
     
-    def test_three_urgent_items_shifting(self, mock_db_session, sample_record):
-        """Test that three urgent items (0.6, 0.7, 0.9) all shift when 0.9 is occupied."""
+    def test_three_urgent_items_one_shift(self, mock_db_session, sample_record):
+        """Test that three urgent items (0.6, 0.7, 0.9) - only 0.9 shifts to 0.8 since 0.8 is open."""
         urgent1 = Mock(spec=ProcoreSubmittal)
         urgent1.order_number = 0.6
         urgent1.submittal_id = "urgent_1"
@@ -316,9 +316,10 @@ class TestLadderUrgencySystem:
         
         assert result is True
         assert sample_record.order_number == 0.9
-        # All should shift down by 0.1 since 0.9 is occupied
-        assert urgent1.order_number == pytest.approx(0.5, abs=0.001)  # 0.6 -> 0.5
-        assert urgent2.order_number == pytest.approx(0.6, abs=0.001)  # 0.7 -> 0.6
+        # Since 0.8 is open, only the item at 0.9 needs to shift to 0.8
+        # Items at 0.6 and 0.7 don't need to shift
+        assert urgent1.order_number == pytest.approx(0.6, abs=0.001)  # Stays 0.6
+        assert urgent2.order_number == pytest.approx(0.7, abs=0.001)  # Stays 0.7
         assert urgent3.order_number == pytest.approx(0.8, abs=0.001)  # 0.9 -> 0.8
     
     def test_current_submittal_excluded_from_query(self, mock_db_session, sample_record):

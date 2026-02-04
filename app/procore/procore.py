@@ -795,23 +795,60 @@ def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
         logger.info(f"[ORDER BUMP] Slot 0.9 is available, assigning to new submittal without shifting existing urgent submittals")
     else:
         # 0.9 is occupied but not all slots filled - need to shift existing urgent submittals down to make room
-        # Sort existing urgent submittals by order (ascending) to process from lowest (0.1 = oldest) to highest (0.9 = newest)
-        sorted_urgent = sorted(existing_urgent_submittals, key=lambda s: float(s.order_number))
+        # Find available slots and only shift items that need to move to fill gaps
+        all_slots = set([round(i * 0.1, 1) for i in range(1, 10)])  # {0.1, 0.2, ..., 0.9}
+        occupied_slots = set(existing_urgent_orders)
+        available_slots = sorted(all_slots - occupied_slots, reverse=True)  # Sort descending
         
-        # Shift all existing urgent orders DOWN by 0.1 (toward 0.1 = most urgent)
-        # Lower numbers = more urgent, so we subtract 0.1 to move toward 0.1
-        for submittal in sorted_urgent:
-            old_order = float(submittal.order_number)
-            new_order = old_order - 0.1  # Shift DOWN toward 0.1 (most urgent)
+        if available_slots:
+            # Find the highest available slot below 0.9
+            # We need to shift items starting from 0.9 downward until we hit an available slot
+            highest_available_below_09 = max([s for s in available_slots if s < 0.9], default=None)
             
-            if new_order < 0.1:
-                # This shouldn't happen if we're managing slots correctly, but handle edge case
-                # If somehow we go below 0.1, cap at 0.1
-                print(f"[ORDER BUMP] Warning: new_order {new_order} < 0.1, capping at 0.1")
-                logger.warning(f"[ORDER BUMP] Warning: new_order {new_order} < 0.1, capping at 0.1")
-                new_order = 0.1
-                updates.append((submittal, new_order))
+            if highest_available_below_09 is not None:
+                # Only shift items at positions > highest_available_below_09
+                # These are the items that need to move down to fill the gap
+                # Sort existing urgent submittals by order (descending) to process from highest to lowest
+                sorted_urgent = sorted(existing_urgent_submittals, key=lambda s: float(s.order_number), reverse=True)
+                
+                for submittal in sorted_urgent:
+                    old_order = float(submittal.order_number)
+                    # Only shift items that are above the highest available slot
+                    # For example, if 0.8 is available, only shift items at 0.9
+                    if old_order > highest_available_below_09:
+                        # This item needs to shift down to make room
+                        new_order = old_order - 0.1  # Shift DOWN toward 0.1 (most urgent)
+                        
+                        if new_order < 0.1:
+                            # This shouldn't happen if we're managing slots correctly, but handle edge case
+                            print(f"[ORDER BUMP] Warning: new_order {new_order} < 0.1, capping at 0.1")
+                            logger.warning(f"[ORDER BUMP] Warning: new_order {new_order} < 0.1, capping at 0.1")
+                            new_order = 0.1
+                            updates.append((submittal, new_order))
+                        else:
+                            updates.append((submittal, new_order))
+                            print(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
+                            logger.info(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
             else:
+                # No available slots below 0.9 - this shouldn't happen if not all slots are filled
+                # Fall back to shifting all items
+                sorted_urgent = sorted(existing_urgent_submittals, key=lambda s: float(s.order_number))
+                for submittal in sorted_urgent:
+                    old_order = float(submittal.order_number)
+                    new_order = old_order - 0.1
+                    if new_order < 0.1:
+                        new_order = 0.1
+                    updates.append((submittal, new_order))
+                    print(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
+                    logger.info(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
+        else:
+            # No available slots - this shouldn't happen if not all slots are filled, but handle edge case
+            sorted_urgent = sorted(existing_urgent_submittals, key=lambda s: float(s.order_number))
+            for submittal in sorted_urgent:
+                old_order = float(submittal.order_number)
+                new_order = old_order - 0.1
+                if new_order < 0.1:
+                    new_order = 0.1
                 updates.append((submittal, new_order))
                 print(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
                 logger.info(f"[ORDER BUMP] Ladder shift DOWN: submittal {submittal.submittal_id} {old_order} -> {new_order} (toward 0.1 = most urgent)")
