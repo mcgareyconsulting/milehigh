@@ -42,10 +42,20 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         setEditingOrderNumber(true);
     };
 
-    const handleOrderNumberBlur = () => {
-        setEditingOrderNumber(false);
+    const handleOrderNumberBlur = async () => {
         if (submittalId && onOrderNumberChange) {
-            onOrderNumberChange(submittalId, orderNumberValue);
+            try {
+                await onOrderNumberChange(submittalId, orderNumberValue);
+                // Only close the input if the update was successful
+                setEditingOrderNumber(false);
+            } catch (error) {
+                // Keep the input open if validation fails
+                // The error will be displayed via the error state in useMutations
+                console.error('Order number validation error:', error.message);
+                // Don't close the input field - let user see and fix the error
+            }
+        } else {
+            setEditingOrderNumber(false);
         }
     };
 

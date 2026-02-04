@@ -131,6 +131,11 @@ class SubmittalOrderingService:
     def validate_order_number(order_number: Optional[float]) -> Tuple[bool, Optional[str]]:
         """
         Validate order number.
+        - Allows NULL (clears order number)
+        - Allows integers >= 1 (regular order numbers)
+        - Allows decimals 0.1 through 0.9 (urgency slots only)
+        - Blocks 0, negative values, decimals < 0.1, decimals between 0.1-0.9 that aren't exact slots, and decimals >= 1.0
+        
         Returns: (is_valid, error_message)
         """
         if order_number is None:
@@ -138,8 +143,35 @@ class SubmittalOrderingService:
         
         try:
             order_float = float(order_number)
+            
+            # Block 0
             if order_float == 0:
                 return False, "order_number cannot be 0"
+            
+            # Block negative values
+            if order_float < 0:
+                return False, "order_number cannot be negative"
+            
+            # Validate decimal values - only allow urgency slots 0.1 through 0.9
+            if order_float < 1:
+                # This is a decimal (urgency slot)
+                valid_urgency_slots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+                # Round to 1 decimal place to handle floating point precision issues
+                rounded_value = round(order_float, 1)
+                
+                # Check if the rounded value matches exactly one of the valid slots
+                # AND that the original value doesn't have significantly more precision than 1 decimal place
+                # (allowing for floating point precision errors)
+                difference = abs(order_float - rounded_value)
+                has_more_than_one_decimal = difference > 0.0001
+                
+                if rounded_value not in valid_urgency_slots or has_more_than_one_decimal:
+                    return False, "Decimal order numbers must be one of: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 (urgency slots only)"
+            
+            # Block decimals >= 1.0 (like 1.5, 2.3, etc.)
+            if order_float >= 1 and order_float != int(order_float):
+                return False, "Order numbers >= 1 must be whole numbers (no decimals)"
+            
             return True, None
         except (ValueError, TypeError):
             return False, "order_number must be a valid number"

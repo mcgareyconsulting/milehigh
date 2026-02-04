@@ -36,6 +36,7 @@ function DraftingWorkLoad() {
         clearUploadSuccess,
         reorderGroup,
         updating,
+        error: mutationError,
     } = useMutations(refetch);
 
     // Tab state: 'open' or 'draft'
@@ -314,6 +315,13 @@ function DraftingWorkLoad() {
                                         type="error"
                                         title="Upload failed"
                                         message={uploadError}
+                                    />
+                                )}
+                                {mutationError && (
+                                    <AlertMessage
+                                        type="error"
+                                        title="Validation error"
+                                        message={mutationError}
                                     />
                                 )}
                             </div>

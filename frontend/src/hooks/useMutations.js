@@ -48,14 +48,50 @@ export function useMutations(refetch) {
             : parseFloat(trimmedValue);
 
         if (parsedValue !== null && isNaN(parsedValue)) {
-            setError('Invalid order number');
-            return;
+            const errorMsg = 'Invalid order number';
+            setError(errorMsg);
+            throw new Error(errorMsg);
         }
 
         // Block 0 - order numbers must be > 0 or NULL
         if (parsedValue !== null && parsedValue === 0) {
-            setError('Order number cannot be 0');
-            return;
+            const errorMsg = 'Order number cannot be 0';
+            setError(errorMsg);
+            throw new Error(errorMsg);
+        }
+
+        // Block negative values
+        if (parsedValue !== null && parsedValue < 0) {
+            const errorMsg = 'Order number cannot be negative';
+            setError(errorMsg);
+            throw new Error(errorMsg);
+        }
+
+        // Validate decimal values - only allow urgency slots 0.1 through 0.9
+        if (parsedValue !== null && parsedValue < 1) {
+            // This is a decimal (urgency slot)
+            const validUrgencySlots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+            // Round to 1 decimal place to handle floating point precision issues
+            const roundedValue = Math.round(parsedValue * 10) / 10;
+            
+            // Check if the rounded value matches exactly one of the valid slots
+            // AND that the original value doesn't have significantly more precision than 1 decimal place
+            // (allowing for floating point precision errors)
+            const difference = Math.abs(parsedValue - roundedValue);
+            const hasMoreThanOneDecimal = difference > 0.0001;
+            
+            if (!validUrgencySlots.includes(roundedValue) || hasMoreThanOneDecimal) {
+                const errorMsg = 'Decimal order numbers must be one of: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 (urgency slots only)';
+                setError(errorMsg);
+                throw new Error(errorMsg);
+            }
+        }
+
+        // Block decimals >= 1.0 (like 1.5, 2.3, etc.)
+        if (parsedValue !== null && parsedValue >= 1 && parsedValue !== Math.floor(parsedValue)) {
+            const errorMsg = 'Order numbers >= 1 must be whole numbers (no decimals)';
+            setError(errorMsg);
+            throw new Error(errorMsg);
         }
 
         await executeMutation(
