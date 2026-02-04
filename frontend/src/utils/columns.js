@@ -8,9 +8,14 @@ export const DESIRED_COLUMN_ORDER = [
     'Project Name',
     'Title',
     'Ball In Court',
+    'Last BIC Update',
     'Type',
     'Status',
+    'Procore Status',
     'Submittal Manager',
+    'Lifespan',
+
+    'Due Date',
     'Notes'
 ];
 

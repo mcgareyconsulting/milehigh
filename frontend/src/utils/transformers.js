@@ -1,6 +1,8 @@
 /**
  * Transform raw API submittal data to frontend format
  */
+import { formatDaysAgo } from './formatters';
+
 function transformSubmittal(submittal, index) {
     const rawId = submittal.submittal_id ?? submittal.id ?? `row-${index}`;
 
@@ -12,12 +14,16 @@ function transformSubmittal(submittal, index) {
         'Submittal Manager': submittal.submittal_manager,
         'Project Name': submittal.project_name,
         'Project Number': submittal.project_number,
+        'Lifespan': formatDaysAgo(submittal.created_at), // Days since submittal was created
         'Title': submittal.title,
         'Status': submittal.submittal_drafting_status ?? submittal.status,
+        'Procore Status': submittal.status, // The actual Procore status field
         'Submittal Drafting Status': submittal.submittal_drafting_status,
         'Type': submittal.type,
         'Ball In Court': submittal.ball_in_court,
+        'Last BIC Update': formatDaysAgo(submittal.last_bic_update), // Convert to days ago
         'Order Number': submittal.order_number,
+        'Due Date': submittal.due_date,
         'Notes': submittal.notes,
         id: String(rawId)
     };

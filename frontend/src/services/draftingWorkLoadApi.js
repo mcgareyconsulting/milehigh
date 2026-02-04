@@ -66,6 +66,42 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Update due date for a submittal
+     */
+    async updateDueDate(submittalId, dueDate) {
+        try {
+            // Convert date to YYYY-MM-DD format if it's a Date object or mm/dd/yyyy string
+            let formattedDate = null;
+            if (dueDate) {
+                if (dueDate instanceof Date) {
+                    formattedDate = dueDate.toISOString().split('T')[0];
+                } else if (typeof dueDate === 'string') {
+                    // If it's already in YYYY-MM-DD format, use it
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+                        formattedDate = dueDate;
+                    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dueDate)) {
+                        // Convert mm/dd/yyyy to YYYY-MM-DD
+                        const [month, day, year] = dueDate.split('/');
+                        formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    } else {
+                        formattedDate = dueDate;
+                    }
+                } else {
+                    formattedDate = dueDate;
+                }
+            }
+
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/due-date`, {
+                submittal_id: submittalId,
+                due_date: formattedDate
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update due date for submittal ${submittalId}`);
+        }
+    }
+
+    /**
      * Reorder items in a ball_in_court group so the lowest order >= 1 becomes 1
      */
     async reorderGroup(ballInCourt) {

@@ -12,6 +12,7 @@ export function useFilters(rows = []) {
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
     const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
     const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
+    const [selectedProcoreStatus, setSelectedProcoreStatus] = useState(ALL_OPTION_VALUE);
     const [projectNameSortMode, setProjectNameSortMode] = useState('normal'); // 'normal', 'a-z', 'z-a'
 
     /**
@@ -44,8 +45,16 @@ export function useFilters(rows = []) {
             }
         }
 
+        // Check Procore Status filter
+        if (selectedProcoreStatus !== ALL_OPTION_VALUE) {
+            const procoreStatusValue = row.status ?? row['Procore Status'];
+            if ((procoreStatusValue ?? '').toString().trim() !== selectedProcoreStatus) {
+                return false;
+            }
+        }
+
         return true;
-    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName]);
+    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName, selectedProcoreStatus]);
 
     /**
      * Sort rows based on projectNameSortMode
@@ -308,12 +317,92 @@ export function useFilters(rows = []) {
     }, [rows]);
 
     /**
+     * Extract unique Procore Status options from all rows
+     * Excludes rows where type is 'For Construction'
+     * Excludes 'Open' and 'Closed' statuses
+     */
+    const procoreStatusOptions = useMemo(() => {
+        const values = new Set();
+        rows.forEach((row) => {
+            const type = row.type ?? row['Type'] ?? '';
+            if (type === 'For Construction') return; // Skip 'For Construction' rows
+
+            const value = row.status ?? row['Procore Status'];
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+                const statusValue = String(value).trim();
+                // Exclude 'Open' and 'Closed'
+                if (statusValue !== 'Open' && statusValue !== 'Closed') {
+                    values.add(statusValue);
+                }
+            }
+        });
+        return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }, [rows]);
+
+    /**
+     * Calculate which Procore Status values are available after other filters are applied
+     * This is used to disable buttons that have no matching submittals
+     */
+    const availableProcoreStatuses = useMemo(() => {
+        // First, filter out 'For Construction' rows
+        const withoutForConstruction = rows.filter((row) => {
+            const type = row.type ?? row['Type'] ?? '';
+            return type !== 'For Construction';
+        });
+
+        // Apply other filters (excluding Procore Status filter itself)
+        const filtered = withoutForConstruction.filter((row) => {
+            // Check Ball In Court filter
+            if (selectedBallInCourt !== ALL_OPTION_VALUE) {
+                const ballInCourtValue = (row.ball_in_court ?? '').toString().trim();
+                const ballInCourtNames = ballInCourtValue.split(',').map(name => name.trim());
+                if (!ballInCourtNames.includes(selectedBallInCourt)) {
+                    return false;
+                }
+            }
+
+            // Check Submittal Manager filter
+            if (selectedSubmittalManager !== ALL_OPTION_VALUE) {
+                const managerValue = row.submittal_manager ?? row['Submittal Manager'];
+                if ((managerValue ?? '').toString().trim() !== selectedSubmittalManager) {
+                    return false;
+                }
+            }
+
+            // Check Project Name filter
+            if (selectedProjectName !== ALL_OPTION_VALUE) {
+                const projectNameValue = row.project_name ?? row['Project Name'];
+                if ((projectNameValue ?? '').toString().trim() !== selectedProjectName) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        // Extract unique Procore Status values from filtered rows (excluding Open and Closed)
+        const availableStatuses = new Set();
+        filtered.forEach((row) => {
+            const value = row.status ?? row['Procore Status'];
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+                const statusValue = String(value).trim();
+                if (statusValue !== 'Open' && statusValue !== 'Closed') {
+                    availableStatuses.add(statusValue);
+                }
+            }
+        });
+
+        return availableStatuses;
+    }, [rows, selectedBallInCourt, selectedSubmittalManager, selectedProjectName]);
+
+    /**
      * Reset all filters to default values
      */
     const resetFilters = useCallback(() => {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
         setSelectedSubmittalManager(ALL_OPTION_VALUE);
         setSelectedProjectName(ALL_OPTION_VALUE);
+        setSelectedProcoreStatus(ALL_OPTION_VALUE);
         setProjectNameSortMode('normal');
     }, []);
 
@@ -335,17 +424,21 @@ export function useFilters(rows = []) {
         selectedBallInCourt,
         selectedSubmittalManager,
         selectedProjectName,
+        selectedProcoreStatus,
         projectNameSortMode,
 
         // Filter setters
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,
+        setSelectedProcoreStatus,
 
         // Filter options
         ballInCourtOptions,
         submittalManagerOptions,
         projectNameOptions,
+        procoreStatusOptions,
+        availableProcoreStatuses,
 
         // Filtered and sorted rows
         displayRows,
