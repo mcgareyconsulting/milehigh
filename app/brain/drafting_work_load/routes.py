@@ -1,6 +1,6 @@
 from app.brain import brain_bp
 from flask import jsonify, request
-from app.brain.services.dwl_service import SubmittalOrderingService, SubmittalOrderUpdate, DraftingWorkLoadService
+from app.brain.drafting_work_load.service import SubmittalOrderingService, SubmittalOrderUpdate, DraftingWorkLoadService, UrgencyService
 from app.logging_config import get_logger
 from app.models import ProcoreSubmittal, db
 from app.auth.utils import login_required
@@ -44,9 +44,12 @@ def update_submittal_order():
         if not is_valid:
             return jsonify({"error": error_msg}), 400
 
-        # Convert to float if not None
+        # Convert to float if not None, and round urgency slots to tenth place
         if order_number is not None:
             order_number = float(order_number)
+            # If it's an urgency slot (0 < order < 1), round to nearest tenth
+            if 0 < order_number < 1:
+                order_number = round(order_number, 1)
 
         # Get the submittal
         submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
@@ -195,6 +198,57 @@ def update_submittal_drafting_status():
         db.session.rollback()
         return jsonify({
             "error": "Failed to update submittal_drafting_status",
+            "details": str(exc)
+        }), 500
+
+@brain_bp.route("/drafting-work-load/bump", methods=["POST"])
+@login_required
+def bump_submittal():
+    """Bump a submittal to the 0.9 urgency slot with cascading effects"""
+    try:
+        data = request.json
+        submittal_id = str(data.get('submittal_id', ''))
+        
+        if not submittal_id:
+            return jsonify({"error": "submittal_id is required"}), 400
+        
+        # Get the submittal
+        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({"error": "Submittal not found"}), 404
+        
+        # Check if submittal has ball_in_court (required for bumping)
+        if not submittal.ball_in_court:
+            return jsonify({"error": "Submittal must have a ball_in_court value to bump"}), 400
+        
+        # Call the bump function via service
+        bumped = UrgencyService.bump_order_number_to_urgent(
+            submittal,
+            submittal_id,
+            submittal.ball_in_court
+        )
+        
+        if not bumped:
+            return jsonify({
+                "error": "Submittal could not be bumped. Order number must be an integer >= 1.",
+                "details": "The bump function only works on submittals with integer order numbers >= 1"
+            }), 400
+        
+        # Commit the changes
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "order_number": submittal.order_number,
+            "message": "Submittal bumped to urgency slot with cascading effects applied"
+        }), 200
+        
+    except Exception as exc:
+        logger.error("Error bumping submittal", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to bump submittal",
             "details": str(exc)
         }), 500
 

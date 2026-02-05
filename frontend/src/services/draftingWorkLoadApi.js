@@ -63,6 +63,20 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Bump a submittal to the 0.9 urgency slot with cascading effects
+     */
+    async bumpSubmittal(submittalId) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/bump`, {
+                submittal_id: submittalId
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to bump submittal ${submittalId}`);
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

@@ -5,8 +5,9 @@ import { getBallInCourt, parseOrderNumber } from './rowDataAccessors';
  * for a given ball_in_court group.
  *
  * Rules:
- * - If the smallest order >= 1, use 0.5
- * - If there are already decimals < 1, keep halving the current smallest positive order
+ * - If the smallest order >= 1, use 0.9 (least urgent urgency slot)
+ * - If there are already urgency slots (0.1-0.9), find the highest available slot
+ * - If all 9 slots are filled, use 1.0 (regular order)
  */
 export function calculateTopOrderNumber(draggedRow, allRows) {
     const draggedBallInCourt = getBallInCourt(draggedRow);
@@ -17,7 +18,7 @@ export function calculateTopOrderNumber(draggedRow, allRows) {
     });
 
     if (sameBallInCourtRows.length === 0) {
-        return 0.5;
+        return 0.9; // Use least urgent slot if no other rows
     }
 
     // Sort by current order number
@@ -30,25 +31,41 @@ export function calculateTopOrderNumber(draggedRow, allRows) {
     const first = sortedRows[0];
     const firstOrder = parseOrderNumber(first, 1);
 
-    // If the first order is an integer >= 1, just use 0.5
+    // If the first order is >= 1, use 0.9 (least urgent slot)
     if (firstOrder >= 1) {
-        return 0.5;
+        return 0.9;
     }
 
-    // Otherwise, find the smallest positive order and halve it
-    let minPositive = Infinity;
-    for (const row of sortedRows) {
+    // Find all existing urgency slots (0.1-0.9)
+    const validUrgencySlots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+    const occupiedSlots = new Set();
+    
+    for (const row of sameBallInCourtRows) {
         const val = parseOrderNumber(row);
-        if (!isNaN(val) && val > 0 && val < minPositive) {
-            minPositive = val;
+        if (!isNaN(val) && val > 0 && val < 1) {
+            // Round to nearest tenth to match urgency slot
+            const rounded = Math.round(val * 10) / 10;
+            if (validUrgencySlots.includes(rounded)) {
+                occupiedSlots.add(rounded);
+            }
         }
     }
 
-    const base = minPositive === Infinity ? 1 : minPositive;
-    const newOrder = base / 2;
+    // If all 9 slots are filled, return 1.0 (regular order)
+    if (occupiedSlots.size >= 9) {
+        return 1.0;
+    }
 
-    // Round to reasonable precision (4 decimal places)
-    return Math.round(newOrder * 10000) / 10000;
+    // Find the highest available slot (0.9 is least urgent, 0.1 is most urgent)
+    // We want to use the least urgent available slot
+    for (let i = validUrgencySlots.length - 1; i >= 0; i--) {
+        if (!occupiedSlots.has(validUrgencySlots[i])) {
+            return validUrgencySlots[i];
+        }
+    }
+
+    // Fallback (shouldn't reach here)
+    return 0.9;
 }
 
 /**

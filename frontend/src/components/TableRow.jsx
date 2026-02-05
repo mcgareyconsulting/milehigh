@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onBump, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -327,20 +327,45 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             }
                         }
 
+                        // Check if order number is an integer >= 1 and has ball_in_court (eligible for bump)
+                        const canBump = rawOrderValue !== null && rawOrderValue !== undefined && rawOrderValue !== '' && 
+                                       typeof rawOrderValue === 'number' && rawOrderValue >= 1 && rawOrderValue === Math.floor(rawOrderValue) &&
+                                       ballInCourt && !hasMultipleAssignees;
+
+                        const handleBumpClick = (e) => {
+                            e.stopPropagation();
+                            if (submittalId && onBump && canBump) {
+                                onBump(submittalId);
+                            }
+                        };
+
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center dwl-col-order-number`}
                                 draggable={false}
-                                onClick={isEditable ? handleOrderNumberFocus : undefined}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title={isEditable ? "Click to edit order number" : "Order number editing disabled for multiple assignees (reviewers)"}
                             >
-                                <div className={`px-0.5 py-0 text-xs border rounded-sm font-medium min-w-[20px] max-w-[50px] inline-block transition-colors ${isEditable
-                                    ? 'border-gray-300 bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text text-gray-700'
-                                    : 'border-gray-200 bg-gray-100 cursor-not-allowed text-gray-500 opacity-75'
-                                    }`}>
-                                    {displayOrder}
+                                <div className="flex items-center justify-center gap-1">
+                                    <div 
+                                        className={`px-0.5 py-0 text-xs border rounded-sm font-medium min-w-[20px] max-w-[50px] inline-block transition-colors ${isEditable
+                                            ? 'border-gray-300 bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text text-gray-700'
+                                            : 'border-gray-200 bg-gray-100 cursor-not-allowed text-gray-500 opacity-75'
+                                            }`}
+                                        onClick={isEditable ? handleOrderNumberFocus : undefined}
+                                        title={isEditable ? "Click to edit order number" : "Order number editing disabled for multiple assignees (reviewers)"}
+                                    >
+                                        {displayOrder}
+                                    </div>
+                                    {canBump && onBump && (
+                                        <button
+                                            onClick={handleBumpClick}
+                                            className="px-1.5 py-0.5 text-xs font-medium bg-accent-500 hover:bg-accent-600 text-white rounded transition-colors shadow-sm"
+                                            title="Bump submittal to 0.9 urgency slot"
+                                        >
+                                            Bump
+                                        </button>
+                                    )}
                                 </div>
                             </td>
                         );

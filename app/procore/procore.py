@@ -14,6 +14,7 @@ from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
 from app.procore.helpers import parse_ball_in_court_from_submittal
+from app.brain.drafting_work_load.service import UrgencyService
 
 
 logger = logging.getLogger(__name__)
@@ -647,249 +648,6 @@ def create_submittal_from_webhook(project_id, submittal_id):
         return False, None, error_msg
 
 
-def _check_submitter_pending_in_workflow(approvers):
-    """
-    Check if the submitter (workflow_group_number 0) appears as a pending approver
-    in the next workflow group that has pending approvers.
-    The "next workflow group" is determined by finding the workflow group with the
-    smallest workflow_group_number > 0 that has at least one pending approver.
-    Only checks the next pending approver in line for urgency bump functionality.
-    
-    Args:
-        approvers: List of approver dictionaries from submittal data
-        
-    Returns:
-        bool: True if submitter appears as pending in the next workflow group with pending approvers
-    """
-    print(f"[SUBMITTER CHECK] Starting check with {len(approvers) if approvers else 0} approvers")
-    logger.info(f"[SUBMITTER CHECK] Starting check with {len(approvers) if approvers else 0} approvers")
-    
-    if not approvers or not isinstance(approvers, list):
-        print(f"[SUBMITTER CHECK] No approvers list or invalid type")
-        logger.info(f"[SUBMITTER CHECK] No approvers list or invalid type")
-        return False
-    
-    # Find the submitter (workflow_group_number 0)
-    submitter = None
-    print(f"[SUBMITTER CHECK] Searching for submitter (workflow_group_number 0)...")
-    logger.info(f"[SUBMITTER CHECK] Searching for submitter (workflow_group_number 0)...")
-    
-    for approver in approvers:
-        if not isinstance(approver, dict):
-            continue
-        workflow_group = approver.get("workflow_group_number")
-        print(f"[SUBMITTER CHECK] Checking approver with workflow_group_number={workflow_group}")
-        logger.info(f"[SUBMITTER CHECK] Checking approver with workflow_group_number={workflow_group}")
-        
-        if workflow_group == 0:
-            user = approver.get("user")
-            if user and isinstance(user, dict):
-                submitter = {
-                    "name": user.get("name"),
-                    "login": user.get("login")
-                }
-                print(f"[SUBMITTER CHECK] Found submitter: name='{submitter.get('name')}', login='{submitter.get('login')}'")
-                logger.info(f"[SUBMITTER CHECK] Found submitter: name='{submitter.get('name')}', login='{submitter.get('login')}'")
-            break
-    
-    if not submitter:
-        print(f"[SUBMITTER CHECK] No submitter found (workflow_group_number 0 not found)")
-        logger.info(f"[SUBMITTER CHECK] No submitter found (workflow_group_number 0 not found)")
-        return False
-    
-    # Find the next workflow group that has at least one pending approver
-    # First, collect all workflow groups > 0 that have pending approvers
-    pending_workflow_groups = set()
-    for approver in approvers:
-        if not isinstance(approver, dict):
-            continue
-        
-        workflow_group = approver.get("workflow_group_number")
-        if workflow_group is None or workflow_group == 0:
-            continue  # Skip submitter or approvers without workflow_group_number
-        
-        # Check if this approver is pending
-        response = approver.get("response", {})
-        if isinstance(response, dict):
-            response_name = response.get("name", "").strip()
-            if response_name.lower() == "pending":
-                pending_workflow_groups.add(workflow_group)
-                print(f"[SUBMITTER CHECK] Found pending approver in workflow_group_number={workflow_group}")
-                logger.info(f"[SUBMITTER CHECK] Found pending approver in workflow_group_number={workflow_group}")
-    
-    if not pending_workflow_groups:
-        print(f"[SUBMITTER CHECK] No pending workflow groups found")
-        logger.info(f"[SUBMITTER CHECK] No pending workflow groups found")
-        return False
-    
-    # Find the minimum workflow group number (the next one in line)
-    next_workflow_group = min(pending_workflow_groups)
-    print(f"[SUBMITTER CHECK] Next pending workflow group to check: {next_workflow_group}")
-    logger.info(f"[SUBMITTER CHECK] Next pending workflow group to check: {next_workflow_group}")
-    
-    # Check if submitter appears as pending in the NEXT workflow group only
-    print(f"[SUBMITTER CHECK] Checking if submitter appears as pending in workflow_group_number={next_workflow_group}...")
-    logger.info(f"[SUBMITTER CHECK] Checking if submitter appears as pending in workflow_group_number={next_workflow_group}...")
-    
-    for approver in approvers:
-        if not isinstance(approver, dict):
-            continue
-        
-        workflow_group = approver.get("workflow_group_number")
-        # Only check approvers in the next workflow group
-        if workflow_group != next_workflow_group:
-            continue
-        
-        print(f"[SUBMITTER CHECK] Checking approver at workflow_group_number={workflow_group}")
-        logger.info(f"[SUBMITTER CHECK] Checking approver at workflow_group_number={workflow_group}")
-        
-        # Check if response is "Pending"
-        response = approver.get("response", {})
-        if not isinstance(response, dict):
-            print(f"[SUBMITTER CHECK]   Response is not a dict, skipping")
-            logger.info(f"[SUBMITTER CHECK]   Response is not a dict, skipping")
-            continue
-        
-        response_name = response.get("name", "").strip()
-        print(f"[SUBMITTER CHECK]   Response name: '{response_name}'")
-        logger.info(f"[SUBMITTER CHECK]   Response name: '{response_name}'")
-        
-        if response_name.lower() != "pending":
-            print(f"[SUBMITTER CHECK]   Response is not 'Pending', skipping")
-            logger.info(f"[SUBMITTER CHECK]   Response is not 'Pending', skipping")
-            continue
-        
-        # Check if user matches submitter
-        user = approver.get("user")
-        if not user or not isinstance(user, dict):
-            print(f"[SUBMITTER CHECK]   User is not a dict, skipping")
-            logger.info(f"[SUBMITTER CHECK]   User is not a dict, skipping")
-            continue
-        
-        approver_name = user.get("name")
-        approver_login = user.get("login")
-        print(f"[SUBMITTER CHECK]   Approver user: name='{approver_name}', login='{approver_login}'")
-        logger.info(f"[SUBMITTER CHECK]   Approver user: name='{approver_name}', login='{approver_login}'")
-        
-        # Match by name or login
-        name_match = (submitter.get("name") and approver_name and 
-                     submitter.get("name").lower() == approver_name.lower())
-        login_match = (submitter.get("login") and approver_login and 
-                      submitter.get("login").lower() == approver_login.lower())
-        
-        print(f"[SUBMITTER CHECK]   Name match: {name_match}, Login match: {login_match}")
-        logger.info(f"[SUBMITTER CHECK]   Name match: {name_match}, Login match: {login_match}")
-        
-        if name_match or login_match:
-            print(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('name')}' appears as pending at workflow_group_number={workflow_group}")
-            logger.info(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('name')}' appears as pending at workflow_group_number={workflow_group}")
-            return True
-    
-    # No match found in the next workflow group
-    print(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in workflow_group_number={next_workflow_group}")
-    logger.info(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in workflow_group_number={next_workflow_group}")
-    return False
-
-
-def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
-    """
-    Convert an integer order number to an urgent decimal (e.g., 6 -> 0.6).
-    Handles collision detection and finds the next available decimal.
-    
-    Args:
-        record: ProcoreSubmittal DB record
-        submittal_id: Submittal ID for logging
-        ball_in_court_value: Current ball_in_court value for collision detection
-        
-    Returns:
-        bool: True if order number was bumped, False otherwise
-    """
-    print(f"[ORDER BUMP] Starting bump check for submittal {submittal_id}")
-    logger.info(f"[ORDER BUMP] Starting bump check for submittal {submittal_id}")
-    
-    if record.order_number is None:
-        print(f"[ORDER BUMP] Order number is None, cannot bump")
-        logger.info(f"[ORDER BUMP] Order number is None, cannot bump")
-        return False
-    
-    current_order = record.order_number
-    print(f"[ORDER BUMP] Current order number: {current_order} (type: {type(current_order)})")
-    logger.info(f"[ORDER BUMP] Current order number: {current_order} (type: {type(current_order)})")
-    
-    # Check if order_number is an integer >= 1
-    is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
-    print(f"[ORDER BUMP] Is integer >= 1: {is_integer}")
-    logger.info(f"[ORDER BUMP] Is integer >= 1: {is_integer}")
-    
-    if not is_integer:
-        print(f"[ORDER BUMP] Order number is not an integer >= 1, cannot bump")
-        logger.info(f"[ORDER BUMP] Order number is not an integer >= 1, cannot bump")
-        return False
-    
-    # Convert to urgent decimal (e.g., 6 -> 0.6)
-    target_decimal = current_order / 10.0
-    print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
-    logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
-    
-    # Find all existing order numbers for this ball_in_court that are < 1
-    print(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")
-    logger.info(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")
-    
-    existing_urgent_orders = db.session.query(ProcoreSubmittal.order_number).filter(
-        ProcoreSubmittal.ball_in_court == ball_in_court_value,
-        ProcoreSubmittal.submittal_id != submittal_id,  # Exclude current submittal
-        ProcoreSubmittal.order_number < 1,
-        ProcoreSubmittal.order_number.isnot(None)
-    ).all()
-    existing_urgent_orders = [float(o[0]) for o in existing_urgent_orders if o[0] is not None]
-    
-    print(f"[ORDER BUMP] Found {len(existing_urgent_orders)} existing urgent orders: {existing_urgent_orders}")
-    logger.info(f"[ORDER BUMP] Found {len(existing_urgent_orders)} existing urgent orders: {existing_urgent_orders}")
-    
-    # Find next available decimal that is more urgent (smaller) than any collision
-    new_order = target_decimal
-    if target_decimal in existing_urgent_orders:
-        print(f"[ORDER BUMP] Collision detected! {target_decimal} already exists")
-        logger.info(f"[ORDER BUMP] Collision detected! {target_decimal} already exists")
-        
-        # Collision detected - find next available smaller decimal
-        if existing_urgent_orders:
-            smallest_existing = min(existing_urgent_orders)
-            candidate = smallest_existing / 2.0
-            print(f"[ORDER BUMP] Starting collision resolution: smallest_existing={smallest_existing}, initial candidate={candidate}")
-            logger.info(f"[ORDER BUMP] Starting collision resolution: smallest_existing={smallest_existing}, initial candidate={candidate}")
-            
-            # Keep halving until we find a value that's not in the list
-            max_iterations = 10  # Prevent infinite loops
-            iteration = 0
-            while candidate in existing_urgent_orders and candidate > 0.001 and iteration < max_iterations:
-                candidate = candidate / 2.0
-                iteration += 1
-                print(f"[ORDER BUMP]   Iteration {iteration}: candidate={candidate}")
-                logger.info(f"[ORDER BUMP]   Iteration {iteration}: candidate={candidate}")
-            
-            # If we still have a collision after iterations, use a fixed small value
-            if candidate in existing_urgent_orders or candidate <= 0:
-                candidate = 0.01
-                print(f"[ORDER BUMP]   Using fallback value: {candidate}")
-                logger.info(f"[ORDER BUMP]   Using fallback value: {candidate}")
-            
-            new_order = candidate
-        else:
-            # No existing urgent orders, but target_decimal is somehow in the list (shouldn't happen)
-            new_order = target_decimal / 2.0
-            print(f"[ORDER BUMP] Edge case: using {new_order}")
-            logger.info(f"[ORDER BUMP] Edge case: using {new_order}")
-    else:
-        print(f"[ORDER BUMP] No collision, using target decimal: {new_order}")
-        logger.info(f"[ORDER BUMP] No collision, using target decimal: {new_order}")
-    
-    record.order_number = new_order
-    print(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> {new_order} for submittal {submittal_id}")
-    logger.info(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> {new_order} for submittal {submittal_id}")
-    return True
-
-
 def check_and_update_submittal(project_id, submittal_id):
     """
     Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
@@ -938,7 +696,7 @@ def check_and_update_submittal(project_id, submittal_id):
                 record.was_multiple_assignees = True
             elif record.was_multiple_assignees and not is_new_multiple:
                 # Was multiple, now single - this is the bounce-back scenario
-                if _bump_order_number_to_decimal(record, submittal_id, webhook_ball_value):
+                if UrgencyService.bump_order_number_to_urgent(record, submittal_id, webhook_ball_value):
                     order_bumped = True
                 
                 # Reset the flag after handling bounce-back
@@ -953,11 +711,11 @@ def check_and_update_submittal(project_id, submittal_id):
         logger.info(f"[MAIN CHECK] Checking submitter pending workflow condition for submittal {submittal_id}")
         
         if approvers:
-            print(f"[MAIN CHECK] Approvers list available, calling _check_submitter_pending_in_workflow")
-            logger.info(f"[MAIN CHECK] Approvers list available, calling _check_submitter_pending_in_workflow")
-            submitter_pending = _check_submitter_pending_in_workflow(approvers)
-            print(f"[MAIN CHECK] Result from _check_submitter_pending_in_workflow: {submitter_pending}")
-            logger.info(f"[MAIN CHECK] Result from _check_submitter_pending_in_workflow: {submitter_pending}")
+            print(f"[MAIN CHECK] Approvers list available, calling UrgencyService.check_submitter_pending_in_workflow")
+            logger.info(f"[MAIN CHECK] Approvers list available, calling UrgencyService.check_submitter_pending_in_workflow")
+            submitter_pending = UrgencyService.check_submitter_pending_in_workflow(approvers)
+            print(f"[MAIN CHECK] Result from UrgencyService.check_submitter_pending_in_workflow: {submitter_pending}")
+            logger.info(f"[MAIN CHECK] Result from UrgencyService.check_submitter_pending_in_workflow: {submitter_pending}")
         else:
             print(f"[MAIN CHECK] No approvers list available")
             logger.info(f"[MAIN CHECK] No approvers list available")
@@ -982,10 +740,10 @@ def check_and_update_submittal(project_id, submittal_id):
                 if is_integer:
                     # Use current ball_in_court value (may have been updated above)
                     ball_in_court_for_bump = record.ball_in_court if ball_updated else (ball_in_court or "")
-                    print(f"[MAIN CHECK] Calling _bump_order_number_to_decimal with ball_in_court='{ball_in_court_for_bump}'")
-                    logger.info(f"[MAIN CHECK] Calling _bump_order_number_to_decimal with ball_in_court='{ball_in_court_for_bump}'")
+                    print(f"[MAIN CHECK] Calling UrgencyService.bump_order_number_to_urgent with ball_in_court='{ball_in_court_for_bump}'")
+                    logger.info(f"[MAIN CHECK] Calling UrgencyService.bump_order_number_to_urgent with ball_in_court='{ball_in_court_for_bump}'")
                     
-                    if _bump_order_number_to_decimal(record, submittal_id, ball_in_court_for_bump):
+                    if UrgencyService.bump_order_number_to_urgent(record, submittal_id, ball_in_court_for_bump):
                         order_bumped = True
                         print(f"[MAIN CHECK] ✓ Order number successfully bumped for submittal {submittal_id}")
                         logger.info(

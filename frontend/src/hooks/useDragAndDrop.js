@@ -80,18 +80,82 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
 
         const submittalId = draggedRowId;
 
-        // Case 1: moving above the current first item -> use decimal bumping
+        // Get target row's order number
+        const targetOrderRaw = targetRow.order_number ?? targetRow['Order Number'] ?? null;
+        const targetOrder = typeof targetOrderRaw === 'number'
+            ? targetOrderRaw
+            : targetOrderRaw !== null && targetOrderRaw !== undefined
+                ? parseFloat(targetOrderRaw)
+                : null;
+
+        // Check if target is an urgency slot (0.1-0.9)
+        const validUrgencySlots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+        const isTargetUrgencySlot = targetOrder !== null && !isNaN(targetOrder) && 
+                                    targetOrder > 0 && targetOrder < 1 &&
+                                    validUrgencySlots.includes(Math.round(targetOrder * 10) / 10);
+
+        // Case 1: moving above the current first item -> use urgency slot system
         if (targetPosition === 0 && draggedPosition !== 0) {
             const newOrderNumber = calculateTopOrderNumber(draggedRow, rows);
             if (submittalId) {
                 await updateOrderNumber(submittalId, newOrderNumber);
             }
-        } else {
-            // Case 2: reordering in the middle or end
-            // Let the backend handle renumbering - just set the dragged row to the target position
-            // The backend will handle renumbering all values >= 1 to be tight, while preserving
-            // decimals < 1 and leaving NULL rows unchanged
+        } 
+        // Case 2: dragging to an urgency slot position
+        // Stack/FIFO behavior: position determines urgency, slots compress DOWN to 0.9 (fill from highest slot downward)
+        // Oldest (most urgent) gets lowest slot, newest (least urgent) gets 0.9
+        // Backend will compress after assignment
+        else if (isTargetUrgencySlot || (targetOrder !== null && !isNaN(targetOrder) && targetOrder > 0 && targetOrder < 1)) {
+            // Count how many urgency slots exist before the target position (excluding dragged row)
+            // This tells us the target's position in the urgency stack
+            let urgencyPosition = 0;
+            for (let i = 0; i < targetPosition; i++) {
+                const row = sortedGroup[i];
+                if (getRowId(row) === draggedRowId) {
+                    continue; // Skip the dragged row
+                }
+                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
+                const currentOrder = typeof currentOrderRaw === 'number'
+                    ? currentOrderRaw
+                    : currentOrderRaw !== null && currentOrderRaw !== undefined
+                        ? parseFloat(currentOrderRaw)
+                        : null;
 
+                if (currentOrder !== null && !isNaN(currentOrder) && currentOrder > 0 && currentOrder < 1) {
+                    const rounded = Math.round(currentOrder * 10) / 10;
+                    if (validUrgencySlots.includes(rounded)) {
+                        urgencyPosition += 1;
+                    }
+                }
+            }
+
+            // Determine insert position based on drag direction
+            // draggedPosition < targetPosition: moving up (earlier in list) -> insert before target
+            // draggedPosition > targetPosition: moving down (later in list) -> insert after target
+            let targetStackPosition;
+            if (draggedPosition < targetPosition) {
+                // Moving up - insert at target's position (target and below will shift down)
+                targetStackPosition = urgencyPosition;
+            } else if (draggedPosition > targetPosition) {
+                // Moving down - insert after target (one position later in stack)
+                targetStackPosition = urgencyPosition + 1;
+            } else {
+                // Same position - use target's position
+                targetStackPosition = urgencyPosition;
+            }
+
+            // Map stack position to slot: position 0 → 0.1, position 1 → 0.2, etc.
+            // The backend will compress all slots after this assignment
+            const newSlotIndex = Math.min(Math.max(0, targetStackPosition), validUrgencySlots.length - 1);
+            const newOrderNumber = validUrgencySlots[newSlotIndex];
+            
+            // Update the dragged row - backend will compress all urgency slots
+            if (submittalId) {
+                await updateOrderNumber(submittalId, newOrderNumber);
+            }
+        } 
+        // Case 3: reordering in regular positions (>= 1)
+        else {
             // Count urgent rows (decimals < 1) that come before the target
             let urgentCount = 0;
             for (let i = 0; i < targetPosition; i++) {
@@ -134,13 +198,6 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
             let insertOffset = 0;
             if (draggedPosition < targetPosition) {
                 // Dragging down - check if target row has order >= 1
-                const targetOrderRaw = targetRow.order_number ?? targetRow['Order Number'] ?? null;
-                const targetOrder = typeof targetOrderRaw === 'number'
-                    ? targetOrderRaw
-                    : targetOrderRaw !== null && targetOrderRaw !== undefined
-                        ? parseFloat(targetOrderRaw)
-                        : null;
-
                 // If target has order >= 1, insert after it; otherwise insert before
                 if (targetOrder !== null && !isNaN(targetOrder) && targetOrder >= 1) {
                     insertOffset = 1;

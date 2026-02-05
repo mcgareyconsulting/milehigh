@@ -31,6 +31,7 @@ function DraftingWorkLoad() {
         updateOrderNumber,
         updateNotes,
         updateStatus,
+        bumpSubmittal,
     } = useMutations(refetch);
 
     // Tab state: 'open' or 'draft'
@@ -369,6 +370,7 @@ function DraftingWorkLoad() {
                                                             onOrderNumberChange={updateOrderNumber}
                                                             onNotesChange={updateNotes}
                                                             onStatusChange={updateStatus}
+                                                            onBump={bumpSubmittal}
                                                             rowIndex={index}
                                                             onDragStart={handleDragStart}
                                                             onDragOver={handleDragOver}

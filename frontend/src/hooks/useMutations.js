@@ -53,6 +53,24 @@ export function useMutations(refetch) {
             return;
         }
 
+        // Validate urgency slots: if < 1, must be exactly 0.1, 0.2, ..., 0.9
+        if (parsedValue !== null && parsedValue > 0 && parsedValue < 1) {
+            // Round to nearest tenth
+            const rounded = Math.round(parsedValue * 10) / 10;
+            const validUrgencySlots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+            if (!validUrgencySlots.includes(rounded)) {
+                setError('Urgency slots must be exactly 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, or 0.9');
+                return;
+            }
+            // Use the rounded value
+            const finalValue = rounded;
+            await executeMutation(
+                () => draftingWorkLoadApi.updateOrderNumber(submittalId, finalValue),
+                `Failed to update order number for submittal ${submittalId}`
+            );
+            return;
+        }
+
         await executeMutation(
             () => draftingWorkLoadApi.updateOrderNumber(submittalId, parsedValue),
             `Failed to update order number for submittal ${submittalId}`
@@ -73,6 +91,13 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
+    const bumpSubmittal = useCallback(async (submittalId) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.bumpSubmittal(submittalId),
+            `Failed to bump submittal ${submittalId}`
+        );
+    }, [executeMutation]);
+
     return {
         // Order number mutation
         updateOrderNumber,
@@ -85,5 +110,8 @@ export function useMutations(refetch) {
 
         // Status mutation
         updateStatus,
+
+        // Bump mutation
+        bumpSubmittal,
     };
 }

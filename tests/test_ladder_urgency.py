@@ -1,5 +1,5 @@
 """
-Tests for the ladder urgency system in _bump_order_number_to_decimal.
+Tests for the ladder urgency system in UrgencyService.bump_order_number_to_urgent.
 
 The ladder system works as follows:
 - 0.1 = MOST urgent (oldest, been waiting longest)
@@ -11,18 +11,36 @@ The ladder system works as follows:
 """
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from app.procore.procore import _bump_order_number_to_decimal
+from app.brain.drafting_work_load.service import UrgencyService
 from app.models import ProcoreSubmittal
+from app.brain.drafting_work_load import service
+from app import create_app
 
 
 class TestLadderUrgencySystem:
     """Test suite for the ladder urgency bump system."""
     
     @pytest.fixture
-    def mock_db_session(self):
-        """Mock database session."""
-        with patch('app.procore.procore.db.session') as mock_session:
-            yield mock_session
+    def app(self):
+        """Create Flask application context for tests."""
+        app = create_app()
+        app.config['TESTING'] = True
+        with app.app_context():
+            yield app
+    
+    @pytest.fixture
+    def mock_query(self, app):
+        """Mock ProcoreSubmittal.query.filter().all() chain to avoid database hits."""
+        # Create mock objects for the query chain
+        mock_query_obj = Mock()
+        
+        # Patch ProcoreSubmittal.query where it's imported in the service module
+        # This replaces the Flask-SQLAlchemy query with our mock
+        # Use start/stop instead of context manager so patch stays active during test
+        patcher = patch('app.brain.drafting_work_load.service.ProcoreSubmittal.query', mock_query_obj)
+        patcher.start()
+        yield mock_query_obj
+        patcher.stop()
     
     @pytest.fixture
     def sample_record(self):
@@ -32,33 +50,33 @@ class TestLadderUrgencySystem:
         record.submittal_id = "submittal_123"
         return record
     
-    def test_first_urgent_gets_09(self, mock_db_session, sample_record):
+    def test_first_urgent_gets_09(self, mock_query, sample_record):
         """Test that the first urgent submittal gets 0.9."""
         # No existing urgent submittals
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        mock_query.filter.return_value.all.return_value = []
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
     
-    def test_second_urgent_shifts_first_up(self, mock_db_session, sample_record):
+    def test_second_urgent_shifts_first_up(self, mock_query, sample_record):
         """Test that when a second urgent arrives, the first shifts from 0.9 to 0.8."""
         # Create existing urgent submittal at 0.9
         existing_urgent = Mock(spec=ProcoreSubmittal)
         existing_urgent.order_number = 0.9
         existing_urgent.submittal_id = "submittal_456"
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [existing_urgent]
+        mock_query.filter.return_value.all.return_value = [existing_urgent]
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
         # 0.9 - 0.1 = 0.8 (shifts down toward 0.1 = most urgent)
         assert existing_urgent.order_number == pytest.approx(0.8, abs=0.001)
     
-    def test_multiple_urgent_with_room(self, mock_db_session, sample_record):
+    def test_multiple_urgent_with_room(self, mock_query, sample_record):
         """Test that multiple existing urgent submittals all shift up correctly."""
         # Create 3 existing urgent submittals that won't exceed 0.9 when shifted
         urgent1 = Mock(spec=ProcoreSubmittal)
@@ -73,11 +91,11 @@ class TestLadderUrgencySystem:
         urgent3.order_number = 0.7
         urgent3.submittal_id = "urgent_3"
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [
+        mock_query.filter.return_value.all.return_value = [
             urgent1, urgent2, urgent3
         ]
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
@@ -86,22 +104,22 @@ class TestLadderUrgencySystem:
         assert urgent2.order_number == pytest.approx(0.6, abs=0.001)  
         assert urgent3.order_number == pytest.approx(0.7, abs=0.001)  
     
-    def test_urgent_at_09_shifts_to_08(self, mock_db_session, sample_record):
+    def test_urgent_at_09_shifts_to_08(self, mock_query, sample_record):
         """Test that urgent at 0.9 shifts to 0.8 when new urgent arrives."""
         urgent = Mock(spec=ProcoreSubmittal)
         urgent.order_number = 0.9
         urgent.submittal_id = "urgent_1"
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [urgent]
+        mock_query.filter.return_value.all.return_value = [urgent]
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
         # 0.9 - 0.1 = 0.8 (shifts down toward 0.1 = most urgent)
         assert urgent.order_number == pytest.approx(0.8, abs=0.001)
     
-    def test_all_nine_slots_filled_bumps_regulars(self, mock_db_session, sample_record):
+    def test_all_nine_slots_filled_bumps_regulars(self, mock_query, sample_record):
         """Test that when all 9 slots are filled, the regulars shift down by 1 to make room for the new urgent at 1."""
         # Create 9 urgent submittals filling all slots
         urgent_submittals = []
@@ -123,24 +141,22 @@ class TestLadderUrgencySystem:
         # Set up query side effects - first call returns urgent, second returns regular
         call_tracker = {'count': 0}
         
-        def query_side_effect(model):
-            if model == ProcoreSubmittal:
-                mock_filter = Mock()
-                call_tracker['count'] += 1
-                
-                if call_tracker['count'] == 1:
-                    # First call: urgent submittals
-                    mock_filter.filter.return_value.all.return_value = urgent_submittals
-                else:
-                    # Second call: regular submittals
-                    mock_filter.filter.return_value.all.return_value = [regular1, regular2]
-                
-                return mock_filter
-            return Mock()
+        def filter_side_effect(*args, **kwargs):
+            mock_all = Mock()
+            call_tracker['count'] += 1
+            
+            if call_tracker['count'] == 1:
+                # First call: urgent submittals
+                mock_all.all.return_value = urgent_submittals
+            else:
+                # Second call: regular submittals
+                mock_all.all.return_value = [regular1, regular2]
+            
+            return mock_all
         
-        mock_db_session.query.side_effect = query_side_effect
+        mock_query.filter.side_effect = filter_side_effect
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 1
@@ -158,7 +174,7 @@ class TestLadderUrgencySystem:
         assert urgent_submittals[6].order_number == pytest.approx(0.7, abs=0.001)
         assert urgent_submittals[7].order_number == pytest.approx(0.8, abs=0.001)
     
-    def test_multiple_urgent_shifting_when_09_occupied(self, mock_db_session, sample_record):
+    def test_multiple_urgent_shifting_when_09_occupied(self, mock_query, sample_record):
         """Test that multiple urgent items all shift when 0.9 is occupied."""
         urgent1 = Mock(spec=ProcoreSubmittal)
         urgent1.order_number = 0.7
@@ -172,11 +188,11 @@ class TestLadderUrgencySystem:
         urgent3.order_number = 0.9
         urgent3.submittal_id = "urgent_3"
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [
+        mock_query.filter.return_value.all.return_value = [
             urgent1, urgent2, urgent3
         ]
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
@@ -185,7 +201,7 @@ class TestLadderUrgencySystem:
         assert urgent2.order_number == pytest.approx(0.7, abs=0.001)  # 0.8 -> 0.7
         assert urgent3.order_number == pytest.approx(0.8, abs=0.001)  # 0.9 -> 0.8
     
-    def test_all_nine_slots_filled_no_regular_orders(self, mock_db_session, sample_record):
+    def test_all_nine_slots_filled_no_regular_orders(self, mock_query, sample_record):
         """Test that when all 9 slots are filled and no regular orders exist, new gets 1.0."""
         urgent_submittals = []
         for i in range(1, 10):  # 0.1 through 0.9
@@ -196,24 +212,22 @@ class TestLadderUrgencySystem:
         
         call_tracker = {'count': 0}
         
-        def query_side_effect(model):
-            if model == ProcoreSubmittal:
-                mock_filter = Mock()
-                call_tracker['count'] += 1
-                
-                if call_tracker['count'] == 1:
-                    # First call: urgent submittals
-                    mock_filter.filter.return_value.all.return_value = urgent_submittals
-                else:
-                    # Second call: regular submittals (empty)
-                    mock_filter.filter.return_value.all.return_value = []
-                
-                return mock_filter
-            return Mock()
+        def filter_side_effect(*args, **kwargs):
+            mock_all = Mock()
+            call_tracker['count'] += 1
+            
+            if call_tracker['count'] == 1:
+                # First call: urgent submittals
+                mock_all.all.return_value = urgent_submittals
+            else:
+                # Second call: regular submittals (empty)
+                mock_all.all.return_value = []
+            
+            return mock_all
         
-        mock_db_session.query.side_effect = query_side_effect
+        mock_query.filter.side_effect = filter_side_effect
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 1.0
@@ -221,7 +235,7 @@ class TestLadderUrgencySystem:
         for i, urgent in enumerate(urgent_submittals):
             assert urgent.order_number == pytest.approx((i + 1) * 0.1, abs=0.001)
     
-    def test_all_nine_slots_filled_many_regular_orders(self, mock_db_session, sample_record):
+    def test_all_nine_slots_filled_many_regular_orders(self, mock_query, sample_record):
         """Test that when all 9 slots are filled, all regular orders shift up correctly."""
         urgent_submittals = []
         for i in range(1, 10):  # 0.1 through 0.9
@@ -240,24 +254,22 @@ class TestLadderUrgencySystem:
         
         call_tracker = {'count': 0}
         
-        def query_side_effect(model):
-            if model == ProcoreSubmittal:
-                mock_filter = Mock()
-                call_tracker['count'] += 1
-                
-                if call_tracker['count'] == 1:
-                    # First call: urgent submittals
-                    mock_filter.filter.return_value.all.return_value = urgent_submittals
-                else:
-                    # Second call: regular submittals
-                    mock_filter.filter.return_value.all.return_value = regulars
-                
-                return mock_filter
-            return Mock()
+        def filter_side_effect(*args, **kwargs):
+            mock_all = Mock()
+            call_tracker['count'] += 1
+            
+            if call_tracker['count'] == 1:
+                # First call: urgent submittals
+                mock_all.all.return_value = urgent_submittals
+            else:
+                # Second call: regular submittals
+                mock_all.all.return_value = regulars
+            
+            return mock_all
         
-        mock_db_session.query.side_effect = query_side_effect
+        mock_query.filter.side_effect = filter_side_effect
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 1.0
@@ -272,29 +284,29 @@ class TestLadderUrgencySystem:
         assert regular_dict["regular_4"].order_number == 5.0  # 4 -> 5
         assert regular_dict["regular_5"].order_number == 6.0  # 5 -> 6
     
-    def test_non_integer_order_number(self, mock_db_session, sample_record):
+    def test_non_integer_order_number(self, mock_query, sample_record):
         """Test that non-integer order numbers >= 1 still work (e.g., 5.0, 10.0)."""
         sample_record.order_number = 5.0  # Float but effectively integer
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        mock_query.filter.return_value.all.return_value = []
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
     
-    def test_order_number_exactly_one(self, mock_db_session, sample_record):
+    def test_order_number_exactly_one(self, mock_query, sample_record):
         """Test that order number exactly 1.0 works correctly."""
         sample_record.order_number = 1.0
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        mock_query.filter.return_value.all.return_value = []
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
     
-    def test_three_urgent_items_one_shift(self, mock_db_session, sample_record):
+    def test_three_urgent_items_one_shift(self, mock_query, sample_record):
         """Test that three urgent items (0.6, 0.7, 0.9) - only 0.9 shifts to 0.8 since 0.8 is open."""
         urgent1 = Mock(spec=ProcoreSubmittal)
         urgent1.order_number = 0.6
@@ -308,11 +320,11 @@ class TestLadderUrgencySystem:
         urgent3.order_number = 0.9
         urgent3.submittal_id = "urgent_3"
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [
+        mock_query.filter.return_value.all.return_value = [
             urgent1, urgent2, urgent3
         ]
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
@@ -322,7 +334,7 @@ class TestLadderUrgencySystem:
         assert urgent2.order_number == pytest.approx(0.7, abs=0.001)  # Stays 0.7
         assert urgent3.order_number == pytest.approx(0.8, abs=0.001)  # 0.9 -> 0.8
     
-    def test_current_submittal_excluded_from_query(self, mock_db_session, sample_record):
+    def test_current_submittal_excluded_from_query(self, mock_query, sample_record):
         """Test that current submittal is excluded from queries even if it has urgent order."""
         # Create an urgent submittal with same ID as current (should be excluded)
         existing_urgent = Mock(spec=ProcoreSubmittal)
@@ -335,9 +347,9 @@ class TestLadderUrgencySystem:
         other_urgent.submittal_id = "urgent_other"
         
         # Query should exclude current submittal, so only return other_urgent
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [other_urgent]
+        mock_query.filter.return_value.all.return_value = [other_urgent]
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
@@ -346,43 +358,43 @@ class TestLadderUrgencySystem:
         # existing_urgent (with same ID as current) should not be affected since it's excluded from query
         assert existing_urgent.order_number == 0.9
     
-    def test_none_order_number_returns_false(self, mock_db_session, sample_record):
+    def test_none_order_number_returns_false(self, mock_query, sample_record):
         """Test that None order number returns False."""
         sample_record.order_number = None
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is False
         assert sample_record.order_number is None
     
-    def test_already_decimal_returns_false(self, mock_db_session, sample_record):
+    def test_already_decimal_returns_false(self, mock_query, sample_record):
         """Test that if order number is already a decimal (< 1), it returns False."""
         sample_record.order_number = 0.5
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is False
         assert sample_record.order_number == 0.5
     
-    def test_zero_order_number_returns_false(self, mock_db_session, sample_record):
+    def test_zero_order_number_returns_false(self, mock_query, sample_record):
         """Test that order number 0 returns False."""
         sample_record.order_number = 0
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is False
         assert sample_record.order_number == 0
     
-    def test_negative_order_number_returns_false(self, mock_db_session, sample_record):
+    def test_negative_order_number_returns_false(self, mock_query, sample_record):
         """Test that negative order number returns False."""
         sample_record.order_number = -1
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is False
         assert sample_record.order_number == -1
     
-    def test_different_ball_in_court_ignored(self, mock_db_session, sample_record):
+    def test_different_ball_in_court_ignored(self, mock_query, sample_record):
         """Test that urgent submittals with different ball_in_court are ignored."""
         # Create urgent submittal with different ball_in_court
         other_urgent = Mock(spec=ProcoreSubmittal)
@@ -391,16 +403,16 @@ class TestLadderUrgencySystem:
         other_urgent.ball_in_court = "Drafter B"
         
         # Mock query to return empty (different ball_in_court filtered out)
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        mock_query.filter.return_value.all.return_value = []
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
         # Other urgent should not be affected
         assert other_urgent.order_number == 0.9
     
-    def test_ladder_progression_example(self, mock_db_session, sample_record):
+    def test_ladder_progression_example(self, mock_query, sample_record):
         """Test a realistic ladder progression scenario - 0.9 not occupied, so no shifting."""
         # Start with 2 urgent items at 0.7 and 0.8 (0.9 is available)
         urgent1 = Mock(spec=ProcoreSubmittal)
@@ -411,11 +423,11 @@ class TestLadderUrgencySystem:
         urgent2.order_number = 0.8
         urgent2.submittal_id = "urgent_2"
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [
+        mock_query.filter.return_value.all.return_value = [
             urgent1, urgent2
         ]
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
@@ -423,7 +435,7 @@ class TestLadderUrgencySystem:
         assert urgent1.order_number == pytest.approx(0.7, abs=0.001)  # Stays 0.7
         assert urgent2.order_number == pytest.approx(0.8, abs=0.001)  # Stays 0.8
     
-    def test_eight_slots_filled_09_available(self, mock_db_session, sample_record):
+    def test_eight_slots_filled_09_available(self, mock_query, sample_record):
         """Test that when 8 slots filled (0.1-0.8), new gets 0.9 without shifting."""
         # Create 8 urgent submittals filling slots 0.1 through 0.8
         urgent_submittals = []
@@ -433,9 +445,9 @@ class TestLadderUrgencySystem:
             urgent.submittal_id = f"urgent_{i}"
             urgent_submittals.append(urgent)
         
-        mock_db_session.query.return_value.filter.return_value.all.return_value = urgent_submittals
+        mock_query.filter.return_value.all.return_value = urgent_submittals
         
-        result = _bump_order_number_to_decimal(sample_record, "submittal_123", "Drafter A")
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
         
         assert result is True
         assert sample_record.order_number == 0.9
@@ -443,3 +455,28 @@ class TestLadderUrgencySystem:
         for i, urgent in enumerate(urgent_submittals):
             assert urgent.order_number == pytest.approx((i + 1) * 0.1, abs=0.001)
 
+    def test_single_order_compression(self, mock_query, sample_record):
+        """Test that when a submittal pops from ball in court higher urgency submittals shift down."""
+        # Create 4 urgent submittals at 0.6, 0.7, 0.8, and 0.9
+        urgent1 = Mock(spec=ProcoreSubmittal)
+        urgent1.order_number = 0.6
+        urgent1.submittal_id = "urgent_1"
+        
+        urgent2 = Mock(spec=ProcoreSubmittal)
+        urgent2.order_number = 0.7
+        urgent2.submittal_id = "urgent_2"
+
+        urgent3 = Mock(spec=ProcoreSubmittal)
+        urgent3.order_number = 0.8
+        urgent3.submittal_id = "urgent_3"
+
+        urgent4 = Mock(spec=ProcoreSubmittal)
+        urgent4.order_number = 0.9
+        urgent4.submittal_id = "urgent_4"
+        
+        mock_query.filter.return_value.all.return_value = [
+            urgent1, urgent2, urgent3, urgent4
+        ]
+        
+        result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
+        

@@ -5,7 +5,7 @@ Run with: pytest tests/test_dwl_service.py -v
 """
 import pytest
 from unittest.mock import Mock
-from app.brain.services.dwl_service import DraftingWorkLoadService, SubmittalOrderingService
+from app.brain.drafting_work_load.service import DraftingWorkLoadService, SubmittalOrderingService
 from datetime import datetime
 
 # ==============================================================================
