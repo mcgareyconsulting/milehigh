@@ -33,3 +33,6 @@ excel_snapshots/
 # Refresh staging db script
 refresh_staging_db.sh
 prod.dump
+
+# Markdown
+*.md
