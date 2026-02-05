@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onBump, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onBump, onDueDateChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
     const [notesValue, setNotesValue] = useState('');
+    const [editingDueDate, setEditingDueDate] = useState(false);
+    const [dueDateValue, setDueDateValue] = useState('');
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
+    const dueDateInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
     const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
@@ -96,11 +99,103 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         }
     }, [editingNotes]);
 
+    useEffect(() => {
+        if (editingDueDate && dueDateInputRef.current) {
+            dueDateInputRef.current.focus();
+            dueDateInputRef.current.select();
+        }
+    }, [editingDueDate]);
+
+    const handleDueDateFocus = () => {
+        const currentValue = row['Due Date'] ?? row.due_date ?? '';
+        // Format date for input (YYYY-MM-DD)
+        let formattedDate = '';
+        if (currentValue) {
+            // If it's already in YYYY-MM-DD format, use it directly
+            if (typeof currentValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
+                formattedDate = currentValue;
+            } else {
+                // Try to extract YYYY-MM-DD from ISO string or Date object
+                try {
+                    const dateStr = typeof currentValue === 'string' ? currentValue.split('T')[0] : currentValue;
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                        formattedDate = dateStr;
+                    } else {
+                        // Fallback: parse as Date and format
+                        const date = new Date(currentValue);
+                        if (!isNaN(date.getTime())) {
+                            // Use UTC methods to avoid timezone shift
+                            const year = date.getUTCFullYear();
+                            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                            const day = String(date.getUTCDate()).padStart(2, '0');
+                            formattedDate = `${year}-${month}-${day}`;
+                        }
+                    }
+                } catch (e) {
+                    // Invalid date, leave empty
+                }
+            }
+        }
+        setDueDateValue(formattedDate);
+        setEditingDueDate(true);
+    };
+
+    const handleDueDateBlur = () => {
+        setEditingDueDate(false);
+        if (submittalId && onDueDateChange) {
+            // Send empty string if cleared, otherwise send the date value
+            const valueToSend = dueDateValue.trim() === '' ? null : dueDateValue;
+            onDueDateChange(submittalId, valueToSend);
+        }
+    };
+
+    const handleDueDateKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            const currentValue = row['Due Date'] ?? row.due_date ?? '';
+            let formattedDate = '';
+            if (currentValue) {
+                // If it's already in YYYY-MM-DD format, use it directly
+                if (typeof currentValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
+                    formattedDate = currentValue;
+                } else {
+                    // Try to extract YYYY-MM-DD from ISO string
+                    try {
+                        const dateStr = typeof currentValue === 'string' ? currentValue.split('T')[0] : currentValue;
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                            formattedDate = dateStr;
+                        } else {
+                            // Fallback: parse as Date and format
+                            const date = new Date(currentValue);
+                            if (!isNaN(date.getTime())) {
+                                // Use UTC methods to avoid timezone shift
+                                const year = date.getUTCFullYear();
+                                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                                const day = String(date.getUTCDate()).padStart(2, '0');
+                                formattedDate = `${year}-${month}-${day}`;
+                            }
+                        }
+                    } catch (e) {
+                        // Invalid date, leave empty
+                    }
+                }
+            }
+            setDueDateValue(formattedDate);
+            setEditingDueDate(false);
+        }
+    };
+
     const rowType = row.type ?? row['Type'] ?? '';
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
+    
+    // Check if status is HOLD for yellow background
+    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? '';
+    const isHoldStatus = currentStatus === 'HOLD';
 
-    // Alternate row background colors
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
+    // Alternate row background colors, but override with yellow if status is HOLD
+    const baseRowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
+    const rowBgClass = isHoldStatus ? 'bg-yellow-200' : baseRowBgClass;
 
     // Prevent drag start from protected cells
     const handleProtectedCellMouseDown = (e) => {
@@ -127,7 +222,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             return;
         }
 
-        // Check if drag started from a protected cell (Order Number, Project Number, Status, Notes)
+        // Check if drag started from a protected cell (Order Number, Project Number, Status, Notes, Due Date)
         const target = e.target;
         const cell = target.closest('td');
 
@@ -137,6 +232,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             const isProjectNumberCell = cellClasses.includes('dwl-col-project-number');
             const isStatusCell = cellClasses.includes('dwl-col-status');
             const isNotesCell = cellClasses.includes('dwl-col-notes');
+            const isDueDateCell = cellClasses.includes('dwl-col-due-date');
 
             // Also check if clicking on inputs, textareas, selects, links, or buttons anywhere
             const isInputElement = target.tagName === 'INPUT' ||
@@ -150,7 +246,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 target.closest('a') ||
                 target.closest('button');
 
-            if (isOrderNumberCell || isProjectNumberCell || isStatusCell || isNotesCell || isInputElement) {
+            if (isOrderNumberCell || isProjectNumberCell || isStatusCell || isNotesCell || isDueDateCell || isInputElement) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -236,6 +332,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isBallInCourt = column === 'Ball In Court';
                     const isLastBIC = column === 'Last BIC';
                     const isCreationDate = column === 'Creation Date';
+                    const isDueDate = column === 'Due Date';
 
                     // Skip rendering the Submittals Id column
                     if (isSubmittalId) {
@@ -278,6 +375,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     } else if (isCreationDate) {
                         customStyle = { maxWidth: '120px' };
                         columnClass = 'dwl-col-creation-date';
+                    } else if (isDueDate) {
+                        customStyle = { maxWidth: '120px' };
+                        columnClass = 'dwl-col-due-date';
                     }
 
                     // Apply Type truncation mapping before formatting
@@ -453,6 +553,55 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         </option>
                                     ))}
                                 </select>
+                            </td>
+                        );
+                    }
+
+                    if (isDueDate && editingDueDate) {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-due-date`}
+                                style={{ maxWidth: '120px' }}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
+                            >
+                                <input
+                                    ref={dueDateInputRef}
+                                    type="date"
+                                    value={dueDateValue}
+                                    onChange={(e) => setDueDateValue(e.target.value)}
+                                    onBlur={handleDueDateBlur}
+                                    onKeyDown={handleDueDateKeyDown}
+                                    className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
+                                />
+                            </td>
+                        );
+                    }
+
+                    if (isDueDate) {
+                        const dueDateValue = row['Due Date'] ?? row.due_date ?? '';
+                        const hasDueDate = dueDateValue && dueDateValue !== '';
+                        // Use formatDateShort which now handles date-only strings without timezone conversion
+                        const formattedDate = hasDueDate ? formatDateShort(dueDateValue) : '';
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-due-date`}
+                                style={{ maxWidth: '120px' }}
+                                draggable={false}
+                                onClick={handleDueDateFocus}
+                                onMouseDown={handleProtectedCellMouseDown}
+                                title="Click to edit due date"
+                            >
+                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all cursor-text min-h-[10px] text-center ${
+                                    hasDueDate
+                                        ? 'border-red-300 bg-red-100 hover:bg-red-200 hover:border-red-400 text-red-900 font-medium'
+                                        : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
+                                }`}>
+                                    {hasDueDate ? formattedDate : <span className="italic">Click to add...</span>}
+                                </div>
                             </td>
                         );
                     }

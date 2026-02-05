@@ -32,6 +32,7 @@ function DraftingWorkLoad() {
         updateNotes,
         updateStatus,
         bumpSubmittal,
+        updateDueDate,
     } = useMutations(refetch);
 
     // Tab state: 'open' or 'draft'
@@ -232,6 +233,7 @@ function DraftingWorkLoad() {
                                                         const isSubmittalManager = column === 'Submittal Manager';
                                                         const isLastBIC = column === 'Last BIC';
                                                         const isCreationDate = column === 'Creation Date';
+                                                        const isDueDate = column === 'Due Date';
 
                                                         // Set max-widths for all columns (perfect for laptop screens)
                                                         // CSS media queries handle larger screens to prevent bloating
@@ -270,6 +272,9 @@ function DraftingWorkLoad() {
                                                         } else if (isCreationDate) {
                                                             headerStyle = { maxWidth: '75px' };
                                                             columnClass = 'dwl-col-creation-date';
+                                                        } else if (isDueDate) {
+                                                            headerStyle = { maxWidth: '120px' };
+                                                            columnClass = 'dwl-col-due-date';
                                                         }
 
                                                         // Reduce padding for specific columns
@@ -278,8 +283,8 @@ function DraftingWorkLoad() {
                                                         const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isCreationDateHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
                                                         // Determine if this column is sortable
-                                                        // Order Number, Notes, and Status are not sortable (they're interactive)
-                                                        const isNotSortable = isOrderNumber || isNotes || isStatus;
+                                                        // Order Number, Notes, Status, and Due Date are not sortable (they're interactive)
+                                                        const isNotSortable = isOrderNumber || isNotes || isStatus || isDueDate;
 
                                                         // Get sort state for this column
                                                         const isSorted = columnSort.column === column;
@@ -336,7 +341,7 @@ function DraftingWorkLoad() {
                                                             );
                                                         }
 
-                                                        // Non-sortable column (Order Number, Notes, Status)
+                                                        // Non-sortable column (Order Number, Notes, Status, Due Date)
                                                         return (
                                                             <th
                                                                 key={column}
@@ -371,6 +376,7 @@ function DraftingWorkLoad() {
                                                             onNotesChange={updateNotes}
                                                             onStatusChange={updateStatus}
                                                             onBump={bumpSubmittal}
+                                                            onDueDateChange={updateDueDate}
                                                             rowIndex={index}
                                                             onDragStart={handleDragStart}
                                                             onDragOver={handleDragOver}

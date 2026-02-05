@@ -63,6 +63,30 @@ class DraftingWorkLoadEngine:
             return False, None, f"submittal_drafting_status must be one of: {valid_display}"
         
         return True, status, None
+    
+    @staticmethod
+    def validate_due_date(due_date: Optional[str]) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Validate due date format.
+        
+        Args:
+            due_date: The due date string to validate (ISO format: YYYY-MM-DD or None)
+            
+        Returns:
+            (is_valid, normalized_date, error_message)
+        """
+        if due_date is None or due_date == '':
+            return True, None, None
+        
+        # Check if it's a valid date string (YYYY-MM-DD format)
+        try:
+            from datetime import datetime
+            # Try to parse the date
+            parsed_date = datetime.strptime(due_date, '%Y-%m-%d').date()
+            # Return as ISO format string
+            return True, due_date, None
+        except (ValueError, TypeError):
+            return False, None, "due_date must be in YYYY-MM-DD format or empty"
 
 
 class SubmittalOrderingEngine:

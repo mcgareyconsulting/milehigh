@@ -9,6 +9,7 @@ export const DESIRED_COLUMN_ORDER = [
     'Ball In Court',
     'Type',
     'Status',
+    'Due Date',
     'Submittal Manager',
     'Last BIC',
     'Creation Date',

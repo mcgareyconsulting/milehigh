@@ -99,6 +99,48 @@ class DraftingWorkLoadService:
         submittal.last_updated = datetime.utcnow()
         logger.info(f"Updated drafting status for submittal {submittal.submittal_id} to '{normalized_status}'")
         return True, None
+    
+    @staticmethod
+    def validate_due_date(due_date: Optional[str]) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Validate due date format.
+        
+        Args:
+            due_date: The due date string to validate
+            
+        Returns:
+            (is_valid, normalized_date, error_message)
+        """
+        return DraftingWorkLoadEngine.validate_due_date(due_date)
+    
+    @staticmethod
+    def update_due_date(submittal, due_date: Optional[str]) -> Tuple[bool, Optional[str]]:
+        """
+        Update submittal due date.
+        
+        Args:
+            submittal: The submittal object to update
+            due_date: New due date value (ISO format string or None)
+            
+        Returns:
+            (success, error_message)
+        """
+        is_valid, normalized_date, error = DraftingWorkLoadEngine.validate_due_date(due_date)
+        
+        if not is_valid:
+            logger.warning(f"Invalid due date for submittal {submittal.submittal_id}: {error}")
+            return False, error
+        
+        # Convert string to date object if provided
+        if normalized_date:
+            from datetime import datetime
+            submittal.due_date = datetime.strptime(normalized_date, '%Y-%m-%d').date()
+        else:
+            submittal.due_date = None
+        
+        submittal.last_updated = datetime.utcnow()
+        logger.info(f"Updated due date for submittal {submittal.submittal_id} to '{normalized_date}'")
+        return True, None
 
 
 class SubmittalOrderingService:

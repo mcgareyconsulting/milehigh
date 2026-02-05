@@ -252,3 +252,54 @@ def bump_submittal():
             "details": str(exc)
         }), 500
 
+@brain_bp.route("/drafting-work-load/due-date", methods=["PUT"])
+@login_required
+def update_submittal_due_date():
+    """Update the due_date for a submittal"""
+    try:
+        data = request.json
+        submittal_id = data.get('submittal_id')
+        due_date = data.get('due_date')
+        
+        if submittal_id is None:
+            return jsonify({
+                "error": "submittal_id is required"
+            }), 400
+        
+        # Allow None or empty string for blank due date
+        if due_date is None or due_date == '':
+            due_date = None
+        
+        # Ensure submittal_id is a string for proper database comparison
+        submittal_id = str(submittal_id)
+        
+        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({
+                "error": "Submittal not found"
+            }), 404
+        
+        # Update via service layer
+        success, error_msg = DraftingWorkLoadService.update_due_date(
+            submittal, 
+            due_date
+        )
+        
+        if not success:
+            return jsonify({"error": error_msg}), 400
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "due_date": submittal.due_date.isoformat() if submittal.due_date else None
+        }), 200
+    except Exception as exc:
+        logger.error("Error updating submittal due date", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to update due_date",
+            "details": str(exc)
+        }), 500
+

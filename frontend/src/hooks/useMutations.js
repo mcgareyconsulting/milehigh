@@ -98,6 +98,13 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
+    const updateDueDate = useCallback(async (submittalId, dueDate) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.updateDueDate(submittalId, dueDate),
+            `Failed to update due date for submittal ${submittalId}`
+        );
+    }, [executeMutation]);
+
     return {
         // Order number mutation
         updateOrderNumber,
@@ -113,5 +120,8 @@ export function useMutations(refetch) {
 
         // Bump mutation
         bumpSubmittal,
+
+        // Due date mutation
+        updateDueDate,
     };
 }

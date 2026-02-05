@@ -19,6 +19,7 @@ function transformSubmittal(submittal, index) {
         'Ball In Court': submittal.ball_in_court,
         'Order Number': submittal.order_number,
         'Notes': submittal.notes,
+        'Due Date': submittal.due_date,
         'Created At': submittal.created_at,
         'Last BIC': submittal.days_since_ball_in_court_update,
         'Creation Date': submittal.created_at,

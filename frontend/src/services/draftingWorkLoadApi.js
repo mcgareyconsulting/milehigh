@@ -77,6 +77,21 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Update due date for a submittal
+     */
+    async updateDueDate(submittalId, dueDate) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/due-date`, {
+                submittal_id: submittalId,
+                due_date: dueDate
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update due date for submittal ${submittalId}`);
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

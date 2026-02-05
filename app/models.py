@@ -64,6 +64,7 @@ class ProcoreSubmittal(db.Model):
     order_number = db.Column(db.Float)
     notes = db.Column(db.Text)
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
+    due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -130,6 +131,7 @@ class ProcoreSubmittal(db.Model):
             "order_number": self.order_number,
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": self.last_updated.isoformat() if self.last_updated else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
