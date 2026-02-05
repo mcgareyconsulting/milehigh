@@ -3,7 +3,7 @@ from flask import jsonify, request
 from app.brain.drafting_work_load.service import SubmittalOrderingService, SubmittalOrderUpdate, DraftingWorkLoadService, UrgencyService
 from app.logging_config import get_logger
 from app.models import ProcoreSubmittal, db
-from app.auth.utils import login_required
+from app.auth.utils import login_required, admin_required
 from datetime import datetime
 
 logger = get_logger(__name__)
@@ -28,7 +28,7 @@ def drafting_work_load():
         }), 500
 
 @brain_bp.route("/drafting-work-load/order", methods=["PUT"])
-@login_required
+@admin_required
 def update_submittal_order():
     """Update the order_number for a submittal (simple update, no cascading)"""
     try:
@@ -103,7 +103,7 @@ def update_submittal_order():
         }), 500
 
 @brain_bp.route("/drafting-work-load/notes", methods=["PUT"])
-@login_required
+@admin_required
 def update_submittal_notes():
     """Update the notes for a submittal"""
     try:
@@ -144,7 +144,7 @@ def update_submittal_notes():
         }), 500
 
 @brain_bp.route("/drafting-work-load/submittal-drafting-status", methods=["PUT"])
-@login_required
+@admin_required
 def update_submittal_drafting_status():
     """Update the submittal_drafting_status for a submittal"""
     try:
@@ -202,7 +202,7 @@ def update_submittal_drafting_status():
         }), 500
 
 @brain_bp.route("/drafting-work-load/bump", methods=["POST"])
-@login_required
+@admin_required
 def bump_submittal():
     """Bump a submittal to the 0.9 urgency slot with cascading effects"""
     try:
@@ -253,7 +253,7 @@ def bump_submittal():
         }), 500
 
 @brain_bp.route("/drafting-work-load/due-date", methods=["PUT"])
-@login_required
+@admin_required
 def update_submittal_due_date():
     """Update the due_date for a submittal"""
     try:

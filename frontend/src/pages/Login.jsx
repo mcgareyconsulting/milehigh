@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../utils/api';
 
 function Login({ onLogin }) {
-    const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -36,8 +35,7 @@ function Login({ onLogin }) {
         setLoading(true);
 
         try {
-            const endpoint = isLogin ? `${API_BASE_URL}/api/auth/login` : `${API_BASE_URL}/api/auth/register`;
-            const response = await fetch(endpoint, {
+            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -67,37 +65,8 @@ function Login({ onLogin }) {
             <div className="max-w-md w-full space-y-8">
                 <div>
                     <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        {isLogin ? 'Sign in to your account' : 'Create a new account'}
+                        Sign in to your account
                     </h2>
-                    <p className="mt-2 text-center text-sm text-gray-600">
-                        {isLogin ? (
-                            <>
-                                Don't have an account?{' '}
-                                <button
-                                    onClick={() => {
-                                        setIsLogin(false);
-                                        setError('');
-                                    }}
-                                    className="font-medium text-blue-600 hover:text-blue-500"
-                                >
-                                    Sign up
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                Already have an account?{' '}
-                                <button
-                                    onClick={() => {
-                                        setIsLogin(true);
-                                        setError('');
-                                    }}
-                                    className="font-medium text-blue-600 hover:text-blue-500"
-                                >
-                                    Sign in
-                                </button>
-                            </>
-                        )}
-                    </p>
                 </div>
                 <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                     {error && (
@@ -144,7 +113,7 @@ function Login({ onLogin }) {
                             disabled={loading}
                             className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Create account'}
+                            {loading ? 'Please wait...' : 'Sign in'}
                         </button>
                     </div>
                 </form>

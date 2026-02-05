@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
@@ -8,6 +8,7 @@ import { FilterButtonGroup } from '../components/FilterButtonGroup';
 import { AlertMessage } from '../components/AlertMessage';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
+import { checkAuth } from '../utils/auth';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
@@ -34,6 +35,26 @@ function DraftingWorkLoad() {
         bumpSubmittal,
         updateDueDate,
     } = useMutations(refetch);
+
+    // User admin status
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [userLoading, setUserLoading] = useState(true);
+
+    // Fetch user info to check admin status
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            try {
+                const user = await checkAuth();
+                setIsAdmin(user?.is_admin || false);
+            } catch (err) {
+                console.error('Error fetching user info:', err);
+                setIsAdmin(false);
+            } finally {
+                setUserLoading(false);
+            }
+        };
+        fetchUserInfo();
+    }, []);
 
     // Tab state: 'open' or 'draft'
     const [selectedTab, setSelectedTab] = useState('open');
@@ -372,18 +393,19 @@ function DraftingWorkLoad() {
                                                             columns={columns}
                                                             formatCellValue={formatCellValue}
                                                             formatDate={formatDate}
-                                                            onOrderNumberChange={updateOrderNumber}
-                                                            onNotesChange={updateNotes}
-                                                            onStatusChange={updateStatus}
-                                                            onBump={bumpSubmittal}
-                                                            onDueDateChange={updateDueDate}
+                                                            onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
+                                                            onNotesChange={isAdmin ? updateNotes : undefined}
+                                                            onStatusChange={isAdmin ? updateStatus : undefined}
+                                                            onBump={isAdmin ? bumpSubmittal : undefined}
+                                                            onDueDateChange={isAdmin ? updateDueDate : undefined}
                                                             rowIndex={index}
-                                                            onDragStart={handleDragStart}
-                                                            onDragOver={handleDragOver}
-                                                            onDragLeave={handleDragLeave}
-                                                            onDrop={handleDrop}
+                                                            onDragStart={isAdmin ? handleDragStart : undefined}
+                                                            onDragOver={isAdmin ? handleDragOver : undefined}
+                                                            onDragLeave={isAdmin ? handleDragLeave : undefined}
+                                                            onDrop={isAdmin ? handleDrop : undefined}
                                                             isDragging={draggedIndex}
                                                             dragOverIndex={dragOverIndex}
+                                                            isAdmin={isAdmin}
                                                         />
                                                     ))
                                                 )}

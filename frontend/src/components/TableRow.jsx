@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onBump, onDueDateChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onBump, onDueDateChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, isAdmin = false }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -15,7 +15,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const submittalId = row['Submittals Id'] || row.submittal_id;
     const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
     const hasMultipleAssignees = String(ballInCourt).includes(',');
-    const isDraggable = !hasMultipleAssignees;
+    const isDraggable = isAdmin && !hasMultipleAssignees;
 
     const formatTypeValue = (value) => {
         if (value === null || value === undefined || value === '') {
@@ -30,6 +30,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     };
 
     const handleOrderNumberFocus = () => {
+        // Only allow editing if user is admin
+        if (!isAdmin) {
+            return;
+        }
+
         // Check if this row has multiple assignees (comma-separated ball_in_court)
         const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
         const hasMultipleAssignees = String(ballInCourt).includes(',');
@@ -62,6 +67,10 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     };
 
     const handleNotesFocus = () => {
+        // Only allow editing if user is admin
+        if (!isAdmin) {
+            return;
+        }
         const currentValue = row['Notes'] ?? row.notes ?? '';
         setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
         setEditingNotes(true);
@@ -107,6 +116,10 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     }, [editingDueDate]);
 
     const handleDueDateFocus = () => {
+        // Only allow editing if user is admin
+        if (!isAdmin) {
+            return;
+        }
         const currentValue = row['Due Date'] ?? row.due_date ?? '';
         // Format date for input (YYYY-MM-DD)
         let formattedDate = '';
@@ -410,8 +423,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     }
 
                     if (isOrderNumber) {
-                        // isEditable already determined above (hasMultipleAssignees)
-                        const isEditable = !hasMultipleAssignees;
+                        // isEditable requires admin and no multiple assignees
+                        const isEditable = isAdmin && !hasMultipleAssignees;
 
                         // Display Order Number - show all values (including decimals and numbers > 10)
                         const rawOrderValue = row['Order Number'] ?? row.order_number;
@@ -428,7 +441,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         }
 
                         // Check if order number is an integer >= 1 and has ball_in_court (eligible for bump)
-                        const canBump = rawOrderValue !== null && rawOrderValue !== undefined && rawOrderValue !== '' && 
+                        // Also requires admin privileges
+                        const canBump = isAdmin && rawOrderValue !== null && rawOrderValue !== undefined && rawOrderValue !== '' && 
                                        typeof rawOrderValue === 'number' && rawOrderValue >= 1 && rawOrderValue === Math.floor(rawOrderValue) &&
                                        ballInCourt && !hasMultipleAssignees;
 
@@ -503,13 +517,18 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
                                 draggable={false}
-                                onClick={handleNotesFocus}
+                                onClick={isAdmin ? handleNotesFocus : undefined}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title="Click to edit notes"
+                                title={isAdmin ? "Click to edit notes" : "Read-only (admin only)"}
                             >
-                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all cursor-text min-h-[10px] text-center ${hasNotes
-                                    ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800'
-                                    : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
+                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
+                                    isAdmin 
+                                        ? hasNotes
+                                            ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800 cursor-text'
+                                            : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500 cursor-text'
+                                        : hasNotes
+                                            ? 'border-gray-200 bg-gray-100 text-gray-600 cursor-default'
+                                            : 'border-gray-200 bg-gray-50/50 text-gray-400 cursor-default'
                                     }`}>
                                     {hasNotes ? (
                                         <div className="whitespace-normal break-words leading-tight">
@@ -539,12 +558,18 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 <select
                                     value={currentStatus || ''}
                                     onChange={(e) => {
-                                        if (submittalId && onStatusChange) {
+                                        if (isAdmin && submittalId && onStatusChange) {
                                             // Send empty string for blank, not null
                                             onStatusChange(submittalId, e.target.value);
                                         }
                                     }}
-                                    className="w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center"
+                                    disabled={!isAdmin}
+                                    className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded text-center ${
+                                        isAdmin 
+                                            ? 'bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer'
+                                            : 'bg-gray-100 text-gray-600 cursor-not-allowed opacity-75'
+                                    }`}
+                                    title={isAdmin ? "Select status" : "Read-only (admin only)"}
                                 >
                                     <option value="">—</option>
                                     {statusOptions.map((option) => (
@@ -591,16 +616,20 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-due-date`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
-                                onClick={handleDueDateFocus}
+                                onClick={isAdmin ? handleDueDateFocus : undefined}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title="Click to edit due date"
+                                title={isAdmin ? "Click to edit due date" : "Read-only (admin only)"}
                             >
-                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all cursor-text min-h-[10px] text-center ${
-                                    hasDueDate
-                                        ? 'border-red-300 bg-red-100 hover:bg-red-200 hover:border-red-400 text-red-900 font-medium'
-                                        : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
+                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
+                                    isAdmin
+                                        ? hasDueDate
+                                            ? 'border-red-300 bg-red-100 hover:bg-red-200 hover:border-red-400 text-red-900 font-medium cursor-text'
+                                            : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500 cursor-text'
+                                        : hasDueDate
+                                            ? 'border-red-200 bg-red-50 text-red-700 font-medium cursor-default'
+                                            : 'border-gray-200 bg-gray-50/50 text-gray-400 cursor-default'
                                 }`}>
-                                    {hasDueDate ? formattedDate : <span className="italic">Click to add...</span>}
+                                    {hasDueDate ? formattedDate : <span className="italic">{isAdmin ? "Click to add..." : "—"}</span>}
                                 </div>
                             </td>
                         );

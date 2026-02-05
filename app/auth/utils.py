@@ -98,3 +98,22 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def admin_required(f):
+    """
+    Decorator to require admin privileges for a route.
+    
+    Returns 401 Unauthorized if user is not logged in.
+    Returns 403 Forbidden if user is not an admin.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        if not user.is_admin:
+            logger.warning(f"Non-admin user {user.username} attempted to access admin-only route")
+            return jsonify({'error': 'Admin privileges required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
