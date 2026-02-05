@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
@@ -8,7 +9,7 @@ import { FilterButtonGroup } from '../components/FilterButtonGroup';
 import { AlertMessage } from '../components/AlertMessage';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, logout } from '../utils/auth';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
@@ -27,6 +28,7 @@ const columnWidthStyles = `
 `;
 
 function DraftingWorkLoad() {
+    const navigate = useNavigate();
     const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
     const {
         updateOrderNumber,
@@ -40,6 +42,11 @@ function DraftingWorkLoad() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [userLoading, setUserLoading] = useState(true);
 
+    const handleLogout = async () => {
+        await logout();
+        window.location.href = '/login';
+    };
+
     // Fetch user info to check admin status
     useEffect(() => {
         const fetchUserInfo = async () => {
@@ -50,10 +57,29 @@ function DraftingWorkLoad() {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
             } finally {
+                // Always set loading to false, even on error, to prevent blocking
                 setUserLoading(false);
             }
         };
+        
+        // Set a timeout to ensure we don't block forever
+        let timeoutId;
+        const startTime = Date.now();
+        
+        timeoutId = setTimeout(() => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed >= 5000) {
+                console.warn('User info fetch timed out, defaulting to non-admin');
+                setIsAdmin(false);
+                setUserLoading(false);
+            }
+        }, 5000); // 5 second timeout
+        
         fetchUserInfo();
+        
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, []);
 
     // Tab state: 'open' or 'draft'
@@ -125,9 +151,45 @@ function DraftingWorkLoad() {
     return (
         <>
             <style>{columnWidthStyles}</style>
-            <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%' }}>
-                <div className="max-w-full mx-auto w-full" style={{ width: '100%' }}>
-                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+            {/* Ensure no invisible overlays are blocking - add explicit pointer-events */}
+            <style>{`
+                body {
+                    pointer-events: auto !important;
+                }
+                #root {
+                    pointer-events: auto !important;
+                }
+            `}</style>
+            {/* Navigation Header - Always visible for navigation */}
+            <div className="w-full bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 sticky top-0 z-50" style={{ width: '100%', minWidth: '100%', pointerEvents: 'auto' }}>
+                <div className="max-w-full mx-auto px-4 py-3 w-full" style={{ width: '100%' }}>
+                    <div className="flex items-center justify-between">
+                        <div
+                            className="text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 bg-clip-text text-transparent cursor-pointer hover:from-accent-600 hover:to-accent-700 transition-all"
+                            onClick={() => navigate('/')}
+                        >
+                            ← Back to Dashboard
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => navigate('/')}
+                                className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-gray-700 hover:bg-gray-100"
+                            >
+                                Dashboard
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-red-600 hover:bg-red-50 border border-red-200"
+                            >
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%', pointerEvents: 'auto' }}>
+                <div className="max-w-full mx-auto w-full" style={{ width: '100%', pointerEvents: 'auto' }}>
+                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden" style={{ pointerEvents: 'auto' }}>
                         <div className={`px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
                             <div className="flex items-center justify-between">
                                 <div>
