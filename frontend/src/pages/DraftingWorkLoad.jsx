@@ -57,29 +57,10 @@ function DraftingWorkLoad() {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
             } finally {
-                // Always set loading to false, even on error, to prevent blocking
                 setUserLoading(false);
             }
         };
-        
-        // Set a timeout to ensure we don't block forever
-        let timeoutId;
-        const startTime = Date.now();
-        
-        timeoutId = setTimeout(() => {
-            const elapsed = Date.now() - startTime;
-            if (elapsed >= 5000) {
-                console.warn('User info fetch timed out, defaulting to non-admin');
-                setIsAdmin(false);
-                setUserLoading(false);
-            }
-        }, 5000); // 5 second timeout
-        
         fetchUserInfo();
-        
-        return () => {
-            if (timeoutId) clearTimeout(timeoutId);
-        };
     }, []);
 
     // Tab state: 'open' or 'draft'
@@ -151,17 +132,8 @@ function DraftingWorkLoad() {
     return (
         <>
             <style>{columnWidthStyles}</style>
-            {/* Ensure no invisible overlays are blocking - add explicit pointer-events */}
-            <style>{`
-                body {
-                    pointer-events: auto !important;
-                }
-                #root {
-                    pointer-events: auto !important;
-                }
-            `}</style>
             {/* Navigation Header - Always visible for navigation */}
-            <div className="w-full bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 sticky top-0 z-50" style={{ width: '100%', minWidth: '100%', pointerEvents: 'auto' }}>
+            <div className="w-full bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 sticky top-0 z-50" style={{ width: '100%', minWidth: '100%' }}>
                 <div className="max-w-full mx-auto px-4 py-3 w-full" style={{ width: '100%' }}>
                     <div className="flex items-center justify-between">
                         <div
@@ -187,9 +159,9 @@ function DraftingWorkLoad() {
                     </div>
                 </div>
             </div>
-            <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%', pointerEvents: 'auto' }}>
-                <div className="max-w-full mx-auto w-full" style={{ width: '100%', pointerEvents: 'auto' }}>
-                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden" style={{ pointerEvents: 'auto' }}>
+            <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%' }}>
+                <div className="max-w-full mx-auto w-full" style={{ width: '100%' }}>
+                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                         <div className={`px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
                             <div className="flex items-center justify-between">
                                 <div>
