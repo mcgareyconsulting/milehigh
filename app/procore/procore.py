@@ -14,7 +14,8 @@ from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
 from app.procore.helpers import parse_ball_in_court_from_submittal
-from app.brain.drafting_work_load.service import UrgencyService
+from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
+from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
 
 
 logger = logging.getLogger(__name__)
@@ -687,6 +688,38 @@ def check_and_update_submittal(project_id, submittal_id):
                 f"Ball in court mismatch detected for submittal {submittal_id}: "
                 f"DB='{record.ball_in_court}' vs Procore='{ball_in_court}'"
             )
+            
+            # Compress the old drafter's list if the old value is a single drafter (not empty, not multiple)
+            if db_ball_value and ',' not in db_ball_value:
+                logger.info(f"Compressing orders for old drafter '{db_ball_value}' after submittal {submittal_id} moved")
+                
+                # Get all submittals for the old ball_in_court (excluding the one being moved)
+                old_drafter_submittals = ProcoreSubmittal.query.filter(
+                    ProcoreSubmittal.ball_in_court == db_ball_value,
+                    ProcoreSubmittal.submittal_id != str(submittal_id),
+                    ProcoreSubmittal.status == 'Open'
+                ).all()
+                
+                if old_drafter_submittals:
+                    # Convert to dict format for compression
+                    submittals_data = [
+                        {
+                            'submittal_id': s.submittal_id,
+                            'order_number': s.order_number
+                        }
+                        for s in old_drafter_submittals
+                    ]
+                    
+                    # Compress both urgency and regular subsets
+                    compression_updates = SubmittalOrderingEngine.compress_orders(submittals_data)
+                    
+                    # Apply compression updates
+                    if compression_updates:
+                        submittal_map = {s.submittal_id: s for s in old_drafter_submittals}
+                        for submittal_id, new_order in compression_updates:
+                            if submittal_id in submittal_map:
+                                submittal_map[submittal_id].order_number = new_order
+                                logger.info(f"Compressed submittal {submittal_id} to order {new_order} for drafter '{db_ball_value}'")
             
             # Check if new value is multiple assignees (comma-separated)
             is_new_multiple = webhook_ball_value and ',' in webhook_ball_value

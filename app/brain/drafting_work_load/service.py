@@ -133,7 +133,6 @@ class DraftingWorkLoadService:
         
         # Convert string to date object if provided
         if normalized_date:
-            from datetime import datetime
             submittal.due_date = datetime.strptime(normalized_date, '%Y-%m-%d').date()
         else:
             submittal.due_date = None

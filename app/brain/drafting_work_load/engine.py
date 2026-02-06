@@ -172,6 +172,8 @@ class SubmittalOrderingEngine:
     def handle_set_to_null(submittal_data: Dict, all_group_submittals_data: List[Dict]) -> List[Tuple[str, Optional[float]]]:
         """
         Handle setting order to NULL. Returns list of (submittal_id, new_order_value) tuples.
+        Compresses urgency submittals (0 < order < 1) upward when one is removed.
+        Renumbers regular submittals (>= 1) downward when one is removed.
         
         Args:
             submittal_data: Dict with 'submittal_id' and 'order_number' keys
@@ -182,16 +184,32 @@ class SubmittalOrderingEngine:
         old_order = SubmittalOrderingEngine.safe_float_order(submittal_data.get('order_number'))
         updates = []
         
-        # Only renumber if old value was >= 1
-        if old_order is not None and old_order >= 1:
-            for s in all_group_submittals_data:
-                if s.get('submittal_id') == submittal_data.get('submittal_id'):
-                    continue
-                
-                s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
-                # Decrease order numbers > old_order by 1 (only for values >= 1)
-                if s_order is not None and s_order >= 1 and s_order > old_order:
-                    updates.append((s.get('submittal_id'), s_order - 1))
+        if old_order is not None:
+            if 0 < old_order < 1:
+                # Urgency submittal: compress remaining urgency submittals upward (toward 0.9)
+                for s in all_group_submittals_data:
+                    if s.get('submittal_id') == submittal_data.get('submittal_id'):
+                        continue
+                    
+                    s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                    if s_order is not None and 0 < s_order < 1:
+                        if s_order < old_order:
+                            # Shift urgency submittals with order < old_order up by 0.1 to fill gap
+                            new_order = round(s_order + 0.1, 1)
+                            updates.append((s.get('submittal_id'), new_order))
+                        else:
+                            # Include urgency submittals with order >= old_order (they stay the same)
+                            updates.append((s.get('submittal_id'), s_order))
+            elif old_order >= 1:
+                # Regular submittal: decrease order numbers > old_order by 1
+                for s in all_group_submittals_data:
+                    if s.get('submittal_id') == submittal_data.get('submittal_id'):
+                        continue
+                    
+                    s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                    # Decrease order numbers > old_order by 1 (only for values >= 1)
+                    if s_order is not None and s_order >= 1 and s_order > old_order:
+                        updates.append((s.get('submittal_id'), s_order - 1))
         
         # Update the target submittal
         updates.append((submittal_data.get('submittal_id'), None))
@@ -312,6 +330,65 @@ class SubmittalOrderingEngine:
         for row in reordered_regular:
             updates.append((row.get('submittal_id'), float(next_integer)))
             next_integer += 1
+        
+        return updates
+
+    @staticmethod
+    def compress_orders(all_group_submittals_data: List[Dict]) -> List[Tuple[str, float]]:
+        """
+        Compress order numbers for both urgency and regular submittals.
+        - Urgency subset (0 < order < 1): Compresses down to 0.9 (fills from highest slot downward)
+          Oldest (lowest order) gets the lowest available slot, newest (highest order) gets 0.9
+        - Regular subset (order >= 1): Compresses down to 1.0 (renumbers to 1, 2, 3, ...)
+        
+        Args:
+            all_group_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
+            
+        Returns: List of (submittal_id, new_order_value) tuples for all submittals that need updates
+        """
+        updates = []
+        
+        # Categorize submittals (don't exclude any)
+        urgent = []
+        regular = []
+        
+        for s in all_group_submittals_data:
+            order_val = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+            if order_val is not None:
+                if 0 < order_val < 1:
+                    urgent.append(s)
+                elif order_val >= 1:
+                    regular.append(s)
+        
+        # Sort urgent by current order (ascending: oldest/most urgent first)
+        urgent.sort(key=lambda s: SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0)
+        
+        # Compress urgency slots: fill from 0.9 downward
+        # Position 0 (oldest) → lowest slot, Position N (newest) → 0.9
+        valid_urgency_slots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        total_urgent = len(urgent)
+        
+        for idx, s in enumerate(urgent):
+            # Calculate slot index: newest (last in sorted list) gets 0.9, oldest gets (0.9 - count + 1)
+            # idx 0 (oldest) → slot index (9 - total_urgent), idx (total_urgent-1) (newest) → slot index 8 (0.9)
+            slot_index = (len(valid_urgency_slots) - total_urgent) + idx
+            if 0 <= slot_index < len(valid_urgency_slots):
+                new_slot = valid_urgency_slots[slot_index]
+                current_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                # Only update if the slot has changed
+                if current_order is None or abs(current_order - new_slot) > 0.001:
+                    updates.append((s.get('submittal_id'), new_slot))
+        
+        # Sort regular by current order (ascending)
+        regular.sort(key=lambda s: SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0)
+        
+        # Compress regular orders: renumber starting from 1.0
+        for idx, s in enumerate(regular):
+            new_order = float(idx + 1)  # 1, 2, 3, ...
+            current_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+            # Only update if the order has changed
+            if current_order is None or abs(current_order - new_order) > 0.001:
+                updates.append((s.get('submittal_id'), new_order))
         
         return updates
 
