@@ -38,6 +38,7 @@ def infer_database_url(cli_url: str = None) -> str:
     candidates = [
         cli_url,
         os.environ.get("DATABASE_URL"),
+        os.environ.get("SANDBOX_DATABASE_URL"),
         os.environ.get("SQLALCHEMY_DATABASE_URI"),
         os.environ.get("JOBS_DB_URL"),
         os.environ.get("JOBS_SQLITE_PATH"),

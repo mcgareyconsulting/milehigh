@@ -132,7 +132,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const cleanDateInput = (value) => {
         // Remove all non-numeric and non-separator characters
         const cleaned = value.replace(/[^\d\/-]/g, '');
-        
+
         // Limit length to 10 characters (mm/dd/yyyy)
         return cleaned.slice(0, 10);
     };
@@ -144,21 +144,21 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         const regex = /^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/;
         const match = dateString.match(regex);
         if (!match) return false;
-        
+
         const month = parseInt(match[1], 10);
         const day = parseInt(match[2], 10);
         const year = parseInt(match[3], 10);
-        
+
         // Basic validation
         if (month < 1 || month > 12) return false;
         if (day < 1 || day > 31) return false;
         if (year < 1900 || year > 2100) return false;
-        
+
         // Check if date is valid (handles leap years, etc.)
         const date = new Date(year, month - 1, day);
-        return date.getFullYear() === year && 
-               date.getMonth() === month - 1 && 
-               date.getDate() === day;
+        return date.getFullYear() === year &&
+            date.getMonth() === month - 1 &&
+            date.getDate() === day;
     };
 
     const handleDueDateFocus = () => {
@@ -245,8 +245,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const isHoldStatus = currentStatus === 'HOLD';
 
     // Alternate row background colors, but use yellow for HOLD status
-    const rowBgClass = isHoldStatus 
-        ? 'bg-yellow-200' 
+    const rowBgClass = isHoldStatus
+        ? 'bg-yellow-200'
         : (rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200');
 
     // Drag and drop handlers
@@ -542,9 +542,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                             onStatusChange(submittalId, e.target.value);
                                         }
                                     }}
-                                    className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center ${
-                                        isHoldStatus ? 'bg-yellow-200' : 'bg-white'
-                                    }`}
+                                    className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 text-center ${isHoldStatus ? 'bg-yellow-200' : 'bg-white'
+                                        }`}
                                 >
                                     <option value="">—</option>
                                     {statusOptions.map((option) => (
@@ -584,7 +583,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         const dueDateRaw = row['Due Date'] ?? row.due_date;
                         const hasDueDate = dueDateRaw && dueDateRaw !== null && dueDateRaw !== '';
                         const formattedDueDate = hasDueDate ? formatDateToMMDDYYYY(dueDateRaw) : '—';
-                        
+
                         // Red background when date is set
                         const dueDateBgClass = hasDueDate ? 'bg-red-200' : rowBgClass;
 
@@ -596,11 +595,10 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 onClick={handleDueDateFocus}
                                 title="Click to edit due date"
                             >
-                                <div className={`px-1 py-0.5 text-xs border rounded-sm font-medium transition-all cursor-text min-h-[20px] text-center ${
-                                    hasDueDate
+                                <div className={`px-1 py-0.5 text-xs border rounded-sm font-medium transition-all cursor-text min-h-[20px] text-center ${hasDueDate
                                         ? 'border-red-300 bg-red-200 hover:bg-red-300 hover:border-red-400 text-gray-900'
                                         : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500'
-                                }`}>
+                                    }`}>
                                     {formattedDueDate}
                                 </div>
                             </td>

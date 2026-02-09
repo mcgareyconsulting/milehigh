@@ -214,7 +214,9 @@ def create_app():
 
     else:
         # Fallback to SQLite for local development
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
+        # sandbox
+        app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SANDBOX_DATABASE_URL")
+        # app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
     
     # Configure Flask-SQLAlchemy for proper session management
     # This ensures sessions are properly scoped and closed, preventing threading issues
