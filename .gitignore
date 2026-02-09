@@ -29,3 +29,6 @@ Thumbs.db
 
 # Snapshot files
 excel_snapshots/
+
+# Markdown files
+*.md
