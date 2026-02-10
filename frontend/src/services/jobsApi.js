@@ -102,6 +102,30 @@ class JobsApi {
         }
     }
 
+    async updateJobComp(job, release, jobComp) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-job-comp/${job}/${release}`,
+                { job_comp: jobComp }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update job comp');
+        }
+    }
+
+    async updateInvoiced(job, release, invoiced) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-invoiced/${job}/${release}`,
+                { invoiced }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update invoiced');
+        }
+    }
+
     async updateBananaColor(job, release, bananaColor) {
         try {
             const response = await axios.patch(

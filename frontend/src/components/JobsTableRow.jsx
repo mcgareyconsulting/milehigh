@@ -8,12 +8,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
 
-    // Alternate row background colors - light blue for alternate rows
-    const rowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-blue-100';
-    
-    // Check if row should be grayed out (Complete status)
+    // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X)
     const isComplete = row['Stage'] === 'Complete';
-    const completeRowClass = isComplete ? 'opacity-50' : '';
 
     // Row is draggable (disabled for now)
     const isDraggable = false;
@@ -157,6 +153,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [updatingBananaColor, setUpdatingBananaColor] = useState(false);
     const [showBananaDropdown, setShowBananaDropdown] = useState(false);
 
+    // Local state for Job Comp and Invoiced (editable text)
+    const [localJobComp, setLocalJobComp] = useState(row['Job Comp'] ?? '');
+    const [localInvoiced, setLocalInvoiced] = useState(row['Invoiced'] ?? '');
+    const [jobCompInputValue, setJobCompInputValue] = useState(row['Job Comp'] ?? '');
+    const [invoicedInputValue, setInvoicedInputValue] = useState(row['Invoiced'] ?? '');
+    const [updatingJobComp, setUpdatingJobComp] = useState(false);
+    const [updatingInvoiced, setUpdatingInvoiced] = useState(false);
+
     // Sync local state when row data changes (e.g., on refresh)
     useEffect(() => {
         setLocalStage(row['Stage'] || 'Released');
@@ -166,7 +170,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setNotesInputValue(row['Notes'] ?? '');
         setLocalStartInstall(row['Start install'] ?? null);
         setLocalBananaColor(row['Banana Color'] || null);
-    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Banana Color']]);
+        setLocalJobComp(row['Job Comp'] ?? '');
+        setLocalInvoiced(row['Invoiced'] ?? '');
+        setJobCompInputValue(row['Job Comp'] ?? '');
+        setInvoicedInputValue(row['Invoiced'] ?? '');
+    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Banana Color'], row['Job Comp'], row['Invoiced']]);
+
+    const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
+    const invoicedIsX = (localInvoiced || '').toString().trim().toUpperCase() === 'X';
+    const isBothX = jobCompIsX && invoicedIsX;
+    const isGrayed = isComplete || isBothX;
+    const rowBgClass = isGrayed ? 'bg-gray-300' : (rowIndex % 2 === 0 ? 'bg-white' : 'bg-blue-100');
 
     // Handle stage change
     const handleStageChange = async (newStage) => {
@@ -302,6 +316,38 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
+    const handleJobCompChange = async (newValue) => {
+        const oldValue = localJobComp ?? '';
+        setLocalJobComp(newValue);
+        setUpdatingJobComp(true);
+        try {
+            await jobsApi.updateJobComp(row['Job #'], row['Release #'], newValue);
+            if (onUpdate) onUpdate();
+        } catch (err) {
+            setLocalJobComp(oldValue);
+            setJobCompInputValue(oldValue);
+            alert(`Failed to update job comp: ${err.message}`);
+        } finally {
+            setUpdatingJobComp(false);
+        }
+    };
+
+    const handleInvoicedChange = async (newValue) => {
+        const oldValue = localInvoiced ?? '';
+        setLocalInvoiced(newValue);
+        setUpdatingInvoiced(true);
+        try {
+            await jobsApi.updateInvoiced(row['Job #'], row['Release #'], newValue);
+            if (onUpdate) onUpdate();
+        } catch (err) {
+            setLocalInvoiced(oldValue);
+            setInvoicedInputValue(oldValue);
+            alert(`Failed to update invoiced: ${err.message}`);
+        } finally {
+            setUpdatingInvoiced(false);
+        }
+    };
+
     // Handle start install change from modal
     const handleStartInstallSave = async (dateValue, isHardDate) => {
         if (!isHardDate) {
@@ -390,6 +436,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             const isStartInstallCell = cell.querySelector('input[type="date"]') !== null;
             const isStageCell = cell.querySelector('select') !== null;
             const isNotesCell = cell.querySelector('textarea') !== null;
+            const isEditableXCell = cell.getAttribute('data-editable-x') === 'true';
 
             // Also check if clicking on inputs, textareas, selects, links, or buttons anywhere
             const isInputElement = target.tagName === 'INPUT' ||
@@ -403,7 +450,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 target.closest('a') ||
                 target.closest('button');
 
-            if (isFabOrderCell || isStartInstallCell || isStageCell || isNotesCell || isInputElement) {
+            if (isFabOrderCell || isStartInstallCell || isStageCell || isNotesCell || isEditableXCell || isInputElement) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -472,7 +519,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`${rowBgClass} ${completeRowClass} hover:bg-gray-100 transition-all duration-200 border-b border-gray-300 ${isDragOver ? 'bg-blue-50' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
+                className={`${rowBgClass} hover:bg-gray-100 transition-all duration-200 border-b border-gray-300 ${isDragOver ? 'bg-blue-50' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -721,6 +768,80 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     placeholder="—"
                                     rows={2}
                                     style={{ minWidth: '120px' }}
+                                />
+                            </td>
+                        );
+                    }
+
+                    // Handle Job Comp column - editable text input
+                    if (column === 'Job Comp') {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                data-editable-x="true"
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
+                                onMouseDown={handleProtectedCellMouseDown}
+                            >
+                                <input
+                                    type="text"
+                                    value={jobCompInputValue}
+                                    onChange={(e) => setJobCompInputValue(e.target.value)}
+                                    onBlur={(e) => {
+                                        const newValue = e.target.value.trim();
+                                        if (newValue !== (localJobComp ?? '')) {
+                                            handleJobCompChange(newValue);
+                                        } else {
+                                            setJobCompInputValue(localJobComp ?? '');
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') e.target.blur();
+                                        if (e.key === 'Escape') {
+                                            setJobCompInputValue(localJobComp ?? '');
+                                            e.target.blur();
+                                        }
+                                    }}
+                                    disabled={updatingJobComp}
+                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 text-center ${updatingJobComp ? 'opacity-50 cursor-wait' : ''}`}
+                                    placeholder="—"
+                                    style={{ minWidth: '48px' }}
+                                />
+                            </td>
+                        );
+                    }
+
+                    // Handle Invoiced column - editable text input
+                    if (column === 'Invoiced') {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                data-editable-x="true"
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center`}
+                                onMouseDown={handleProtectedCellMouseDown}
+                            >
+                                <input
+                                    type="text"
+                                    value={invoicedInputValue}
+                                    onChange={(e) => setInvoicedInputValue(e.target.value)}
+                                    onBlur={(e) => {
+                                        const newValue = e.target.value.trim();
+                                        if (newValue !== (localInvoiced ?? '')) {
+                                            handleInvoicedChange(newValue);
+                                        } else {
+                                            setInvoicedInputValue(localInvoiced ?? '');
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') e.target.blur();
+                                        if (e.key === 'Escape') {
+                                            setInvoicedInputValue(localInvoiced ?? '');
+                                            e.target.blur();
+                                        }
+                                    }}
+                                    disabled={updatingInvoiced}
+                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 text-center ${updatingInvoiced ? 'opacity-50 cursor-wait' : ''}`}
+                                    placeholder="—"
+                                    style={{ minWidth: '48px' }}
                                 />
                             </td>
                         );

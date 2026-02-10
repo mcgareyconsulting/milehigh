@@ -1232,6 +1232,83 @@ def update_notes(job, release):
             'error_type': type(e).__name__
         }), 500
 
+
+def _normalize_short_field(value, max_len=8):
+    """Normalize job_comp/invoiced to a string (max 8 chars) or None."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s[:max_len] if s else None
+
+
+@brain_bp.route("/update-job-comp/<int:job>/<release>", methods=["PATCH"])
+@login_required
+def update_job_comp(job, release):
+    """
+    Update the job_comp field for a specific job-release.
+    Accepts any string (e.g. 'X', 'MFP', '0.9'); stores up to 8 chars.
+
+    Request Body: { "job_comp": str (optional, empty to clear) }
+    Returns: JSON with status or error.
+    """
+    from app.models import Job, db
+
+    logger.info("update_job_comp called", extra={"job": job, "release": release, "job_comp": request.json.get("job_comp")})
+
+    try:
+        raw = request.json.get("job_comp")
+        job_comp_str = _normalize_short_field(raw)
+
+        job_record = Job.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            return jsonify({"error": "Job not found"}), 404
+
+        job_record.job_comp = job_comp_str
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = "Brain"
+        db.session.commit()
+
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        logger.error("update_job_comp failed", exc_info=True, extra={"job": job, "release": release, "error": str(e)})
+        db.session.rollback()
+        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
+
+
+@brain_bp.route("/update-invoiced/<int:job>/<release>", methods=["PATCH"])
+@login_required
+def update_invoiced(job, release):
+    """
+    Update the invoiced field for a specific job-release.
+    Accepts any string (e.g. 'X', 'MFP', '0.9'); stores up to 8 chars.
+
+    Request Body: { "invoiced": str (optional, empty to clear) }
+    Returns: JSON with status or error.
+    """
+    from app.models import Job, db
+
+    logger.info("update_invoiced called", extra={"job": job, "release": release, "invoiced": request.json.get("invoiced")})
+
+    try:
+        raw = request.json.get("invoiced")
+        invoiced_str = _normalize_short_field(raw)
+
+        job_record = Job.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            return jsonify({"error": "Job not found"}), 404
+
+        job_record.invoiced = invoiced_str
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = "Brain"
+        db.session.commit()
+
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        logger.error("update_invoiced failed", exc_info=True, extra={"job": job, "release": release, "error": str(e)})
+        db.session.rollback()
+        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
+
+
 @brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
 @login_required
 def update_start_install(job, release):
