@@ -39,6 +39,11 @@ function getColumnValue(row, column) {
 }
 
 /**
+ * Column display names that hold raw date values (to format for PDF)
+ */
+const DATE_COLUMNS = new Set(['Due Date']);
+
+/**
  * Prepare table data for PDF export
  * Returns both the table data and a set of row indices that are DRR rows
  */
@@ -60,8 +65,8 @@ function prepareTableData(rows, columns) {
                 value = formatTypeValue(value);
             }
 
-            // Format dates
-            if (column.includes('Date') || column.includes('date')) {
+            // Format only columns that store raw dates (e.g. Due Date). Lifespan / Last BIC Update are already "X days"
+            if (DATE_COLUMNS.has(column)) {
                 value = formatDate(value);
             } else {
                 value = formatCellValue(value);
@@ -77,6 +82,58 @@ function prepareTableData(rows, columns) {
     });
 
     return { tableData, drrRowIndices };
+}
+
+// 11x17 landscape: 17" = 1224pt. Use 10pt side margins → table width 1204pt
+const PAGE_WIDTH_PT = 1224;
+const SIDE_MARGIN_PT = 10;
+const AVAILABLE_TABLE_WIDTH_PT = PAGE_WIDTH_PT - 2 * SIDE_MARGIN_PT;
+
+/**
+ * Relative column widths (weights) per column name. We scale these so the table fills the page.
+ */
+const COLUMN_WIDTHS = {
+    'Order Number': 40,
+    'Submittals Id': 80,
+    'Project Number': 55,
+    'Project Name': 140,
+    'Title': 140,
+    'Ball In Court': 70,
+    'Last BIC Update': 60,
+    'Type': 60,
+    'Status': 60,
+    'Procore Status': 70,
+    'Submittal Manager': 90,
+    'Lifespan': 55,
+    'Due Date': 60,
+    'Notes': 174,
+};
+
+const DEFAULT_COLUMN_WIDTH = 86;
+
+/**
+ * Build columnStyles so the table always fills the available width (1204pt).
+ * Scales preferred widths proportionally and assigns any rounding remainder to the last column.
+ */
+function buildColumnStyles(columns) {
+    const preferred = columns.map(col => COLUMN_WIDTHS[col] ?? DEFAULT_COLUMN_WIDTH);
+    const sum = preferred.reduce((a, b) => a + b, 0);
+    const scale = sum > 0 ? AVAILABLE_TABLE_WIDTH_PT / sum : 1;
+    const widths = preferred.map((w, i) => Math.round(w * scale));
+    // Fix rounding: ensure total is exactly AVAILABLE_TABLE_WIDTH_PT (give remainder to last column)
+    const total = widths.reduce((a, b) => a + b, 0);
+    const diff = AVAILABLE_TABLE_WIDTH_PT - total;
+    if (diff !== 0 && widths.length > 0) {
+        widths[widths.length - 1] += diff;
+    }
+    const styles = {};
+    columns.forEach((col, i) => {
+        styles[i] = {
+            cellWidth: widths[i],
+            halign: 'center',
+        };
+    });
+    return styles;
 }
 
 /**
@@ -95,7 +152,7 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
     const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'pt',
-        format: [1224, 792] // 11x17 inches in points (17" x 11" landscape)
+        format: [PAGE_WIDTH_PT, 792] // 11x17 inches in points (17" x 11" landscape)
     });
 
     // Add title
@@ -115,14 +172,16 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
     // Find the index of the Type column
     const typeColumnIndex = columns.findIndex(col => col === 'Type' || col.toLowerCase() === 'type');
 
-    // Generate table
+    // Generate table — full width between side margins (1204pt)
     autoTable(doc, {
         head: [columns],
         body: tableData,
         startY: 65,
+        tableWidth: AVAILABLE_TABLE_WIDTH_PT,
+        margin: { left: SIDE_MARGIN_PT, right: SIDE_MARGIN_PT },
         styles: {
             fontSize: 10,
-            cellPadding: 2,
+            cellPadding: 3,
             halign: 'center',
         },
         headStyles: {
@@ -134,28 +193,13 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
         alternateRowStyles: {
             fillColor: [220, 220, 220],
         },
-        columnStyles: {
-            // Explicit column widths for all columns
-            0: { cellWidth: 50, halign: 'center' }, // Order Number
-            1: { cellWidth: 100, halign: 'center' }, // Submittals Id
-            2: { cellWidth: 70, halign: 'center' }, // Project Number
-            3: { cellWidth: 210, halign: 'center' }, // Project Name
-            4: { cellWidth: 210, halign: 'center' }, // Title
-            5: { cellWidth: 90, halign: 'center' }, // Ball In Court
-            6: { cellWidth: 80, halign: 'center' }, // Type
-            7: { cellWidth: 80, halign: 'center' }, // Status
-            8: { cellWidth: 110, halign: 'center' }, // Submittal Manager
-            9: { cellWidth: 200, halign: 'center' }, // Notes
-        },
-        margin: { top: 65, left: 10, right: 10 },
+        columnStyles: buildColumnStyles(columns),
         didParseCell: function (data) {
-            // Highlight only the Type column cell for DRR rows with green background
-            // data.row.index is 0-based for body rows (header is -1)
-            // data.column.index is the column index
-            if (data.row.index >= 0 &&
-                drrRowIndices.has(data.row.index) &&
-                typeColumnIndex !== -1 &&
-                data.column.index === typeColumnIndex) {
+            // Highlight only body cells in the Type column for DRR rows (never the column header)
+            const isBody = (data.section || data.row?.section) === 'body';
+            const isTypeColumn = typeColumnIndex !== -1 && data.column.index === typeColumnIndex;
+            const isDRRRow = data.row.index >= 0 && drrRowIndices.has(data.row.index);
+            if (isBody && isTypeColumn && isDRRRow) {
                 data.cell.styles.fillColor = [220, 252, 231]; // Light green (equivalent to bg-green-100)
             }
         },
