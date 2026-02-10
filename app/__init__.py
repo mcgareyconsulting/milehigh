@@ -230,15 +230,15 @@ def create_app():
         # Only create tables if they don't exist
         db.create_all()
         
-        # Check if we need to seed the database (only if empty)
-        from app.models import Job
-        job_count = Job.query.count()
-        if job_count == 0:
-            print(f"No jobs found in database, seeding with fresh data...")
-            combined_data = combine_trello_excel_data()
-            seed_from_combined_data(combined_data)
-        else:
-            print(f"Database already contains {job_count} jobs, skipping seed.")
+        # # Check if we need to seed the database (only if empty)
+        # from app.models import Job
+        # job_count = Job.query.count()
+        # if job_count == 0:
+        #     print(f"No jobs found in database, seeding with fresh data...")
+        #     combined_data = combine_trello_excel_data()
+        #     seed_from_combined_data(combined_data)
+        # else:
+        #     print(f"Database already contains {job_count} jobs, skipping seed.")
 
     # Configure static file serving for React frontend
     # Get the path to the frontend build directory
