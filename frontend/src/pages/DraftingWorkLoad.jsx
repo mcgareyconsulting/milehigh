@@ -42,7 +42,9 @@ function DraftingWorkLoad() {
     const [userCoords, setUserCoords] = useState(null);
     const [locationRequesting, setLocationRequesting] = useState(false);
     const locationFilter = locationEnabled && userCoords ? userCoords : null;
-    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching(locationFilter);
+    // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
+    const [selectedTab, setSelectedTab] = useState('open');
+    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching(locationFilter, selectedTab);
     const {
         updateOrderNumber,
         updateNotes,
@@ -85,40 +87,25 @@ function DraftingWorkLoad() {
         fetchUserInfo();
     }, []);
 
-    // Tab state: 'open' or 'draft'
-    const [selectedTab, setSelectedTab] = useState('open');
-
-    // Filter rows based on selected tab before passing to useFilters
-    const filteredRowsByTab = useMemo(() => {
-        return submittals.filter((row) => {
-            // Filter on status field from the database
-            const rowStatus = row.status ?? '';
-
-            if (selectedTab === 'draft') {
-                // Draft tab: only show submittals with status = "Draft"
-                return rowStatus === 'Draft';
-            } else {
-                // Open tab: show all submittals except those with status = "Draft"
-                return rowStatus !== 'Draft';
-            }
-        });
-    }, [submittals, selectedTab]);
-
-    const rows = filteredRowsByTab; // now that submittals is clean, we alias
+    // Backend returns tab-specific data (open = Open status, draft = not Open/Closed), so use submittals as rows
+    const rows = submittals;
 
     // Use the filters hook
     const {
         selectedBallInCourt,
         selectedSubmittalManager,
         selectedProjectName,
+        selectedProcoreStatus,
         projectNameSortMode,
         columnSort,
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,
+        setSelectedProcoreStatus,
         ballInCourtOptions,
         submittalManagerOptions,
         projectNameOptions,
+        procoreStatusOptions,
         displayRows,
         resetFilters,
         handleProjectNameSortToggle,
@@ -306,6 +293,13 @@ function DraftingWorkLoad() {
                                                 options={projectNameOptions}
                                                 selectedValue={selectedProjectName}
                                                 onSelect={setSelectedProjectName}
+                                                allOptionValue={ALL_OPTION_VALUE}
+                                            />
+                                            <FilterButtonGroup
+                                                label="📋 Procore Status"
+                                                options={procoreStatusOptions}
+                                                selectedValue={selectedProcoreStatus}
+                                                onSelect={setSelectedProcoreStatus}
                                                 allOptionValue={ALL_OPTION_VALUE}
                                             />
                                         </div>

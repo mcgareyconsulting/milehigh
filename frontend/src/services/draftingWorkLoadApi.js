@@ -8,17 +8,18 @@ class DraftingWorkLoadApi {
     /**
      * Fetch DWL data. Optionally pass { lat, lng } to filter submittals by job_sites containing that point.
      * @param { { lat: number, lng: number } | null } locationFilter - if set, only submittals for matching job_sites are returned
+     * @param { 'open' | 'draft' } tab - 'open' = Open status only; 'draft' = status not Open or Closed
      */
-    async fetchData(locationFilter = null) {
+    async fetchData(locationFilter = null, tab = 'open') {
         try {
-            const params = {};
+            const params = { tab: tab === 'draft' ? 'draft' : 'open' };
             if (locationFilter && typeof locationFilter.lat === 'number' && typeof locationFilter.lng === 'number') {
                 params.lat = locationFilter.lat;
                 params.lng = locationFilter.lng;
             }
             const response = await axios.get(
                 `${API_BASE_URL}/brain/drafting-work-load`,
-                { params: Object.keys(params).length ? params : undefined }
+                { params }
             );
             return response.data;
         } catch (error) {

@@ -6,28 +6,33 @@ import { getVisibleColumns } from '../utils/columns';
 
 /**
  * @param { { lat: number, lng: number } | null } locationFilter - when set, DWL is filtered by job_sites containing this point
+ * @param { 'open' | 'draft' } tab - 'open' = Open status submittals; 'draft' = submittals not Open or Closed
  */
-export function useDataFetching(locationFilter = null) {
+export function useDataFetching(locationFilter = null, tab = 'open') {
     const [submittals, setSubmittals] = useState([]);
     const [columns, setColumns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
 
-    // Ref so the 30s poller always uses current lat/lng and does not overwrite the location filter
+    // Ref so the 30s poller always uses current lat/lng and tab
     const locationFilterRef = useRef(locationFilter);
+    const tabRef = useRef(tab);
     useEffect(() => {
         locationFilterRef.current = locationFilter;
     }, [locationFilter]);
+    useEffect(() => {
+        tabRef.current = tab;
+    }, [tab]);
 
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
         setError(null); // Reset error
 
         try {
-            // Always use latest location filter (ref) so polling preserves filter
             const currentFilter = locationFilterRef.current;
-            const data = await draftingWorkLoadApi.fetchData(currentFilter);
+            const currentTab = tabRef.current;
+            const data = await draftingWorkLoadApi.fetchData(currentFilter, currentTab);
 
             // Transform data
             const transformed = transformSubmittals(data.submittals);
@@ -48,7 +53,7 @@ export function useDataFetching(locationFilter = null) {
         } finally {
             if (!silent) setLoading(false);
         }
-    }, [locationFilter]);
+    }, [locationFilter, tab]);
 
 
     // Fetch data on mount

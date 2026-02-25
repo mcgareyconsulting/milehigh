@@ -46,19 +46,26 @@ class DraftingWorkLoadService:
         ).all()
 
     @staticmethod
-    def get_dwl_submittals(job_numbers_filter: Optional[List[str]] = None) -> List:
+    def get_dwl_submittals(
+        job_numbers_filter: Optional[List[str]] = None,
+        tab: Optional[str] = 'open',
+    ) -> List:
         """
-        Get Drafting Work Load submittals (status Open or Draft), optionally filtered by job site.
+        Get Drafting Work Load submittals, optionally filtered by job site and tab.
 
         Args:
             job_numbers_filter: If set, only submittals with project_number in this list are returned.
+            tab: 'open' = submittals with status 'Open'; 'draft' = submittals with status not in ('Open', 'Closed').
 
         Returns:
             List of ProcoreSubmittal instances.
         """
-        base = ProcoreSubmittal.query.filter(
-            ProcoreSubmittal.status.in_(['Open', 'Draft'])
-        )
+        if tab == 'draft':
+            base = ProcoreSubmittal.query.filter(
+                ~ProcoreSubmittal.status.in_(['Open', 'Closed'])
+            )
+        else:
+            base = ProcoreSubmittal.query.filter(ProcoreSubmittal.status == 'Open')
         if job_numbers_filter is not None:
             base = base.filter(ProcoreSubmittal.project_number.in_(job_numbers_filter))
         return base.all()

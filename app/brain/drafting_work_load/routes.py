@@ -20,10 +20,14 @@ logger = get_logger(__name__)
 @brain_bp.route('/drafting-work-load')
 @login_required
 def drafting_work_load():
-    """Return Drafting Work Load data from the db, including submittals with status='Open' or status='Draft'.
+    """Return Drafting Work Load data from the db.
+    Query param tab: 'open' (default) = submittals with status Open; 'draft' = submittals with status not Open or Closed.
     Optional query params lat, lng: when both provided, only submittals for job_sites that contain or are near
     the point (active job_sites; PostGIS: within 25m, else point-in-polygon)."""
     try:
+        tab = request.args.get('tab', 'open')
+        if tab not in ('open', 'draft'):
+            tab = 'open'
         lat_raw = request.args.get('lat')
         lng_raw = request.args.get('lng')
         job_numbers_filter = None
@@ -38,7 +42,7 @@ def drafting_work_load():
                 if not job_numbers_filter:
                     return jsonify({"submittals": []}), 200
 
-        submittals = DraftingWorkLoadService.get_dwl_submittals(job_numbers_filter)
+        submittals = DraftingWorkLoadService.get_dwl_submittals(job_numbers_filter, tab=tab)
         return jsonify({
             "submittals": [submittal.to_dict() for submittal in submittals]
         }), 200

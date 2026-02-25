@@ -74,6 +74,7 @@ export function useFilters(rows = []) {
     const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
     const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
     const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
+    const [selectedProcoreStatus, setSelectedProcoreStatus] = useState(ALL_OPTION_VALUE);
     
     // General column sorting: { column: 'Project Name', direction: 'asc' | 'desc' | null }
     // For Project Name, we maintain backward compatibility with the existing 'normal' mode
@@ -109,8 +110,16 @@ export function useFilters(rows = []) {
             }
         }
 
+        // Check Procore Status filter
+        if (selectedProcoreStatus !== ALL_OPTION_VALUE) {
+            const statusValue = row.status ?? row['PROCORE STATUS'] ?? '';
+            if ((statusValue ?? '').toString().trim() !== selectedProcoreStatus) {
+                return false;
+            }
+        }
+
         return true;
-    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName]);
+    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName, selectedProcoreStatus]);
 
     /**
      * Sort rows based on columnSort state
@@ -292,12 +301,31 @@ export function useFilters(rows = []) {
     }, [rows]);
 
     /**
+     * Extract unique Procore status options from rows (subset of statuses present in current data)
+     * Excludes rows where type is 'For Construction'
+     */
+    const procoreStatusOptions = useMemo(() => {
+        const values = new Set();
+        rows.forEach((row) => {
+            const type = row.type ?? row['Type'] ?? '';
+            if (type === 'For Construction') return;
+
+            const value = row.status ?? row['PROCORE STATUS'];
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+                values.add(String(value).trim());
+            }
+        });
+        return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }, [rows]);
+
+    /**
      * Reset all filters to default values
      */
     const resetFilters = useCallback(() => {
         setSelectedBallInCourt(ALL_OPTION_VALUE);
         setSelectedSubmittalManager(ALL_OPTION_VALUE);
         setSelectedProjectName(ALL_OPTION_VALUE);
+        setSelectedProcoreStatus(ALL_OPTION_VALUE);
         setColumnSort({ column: null, direction: null });
     }, []);
 
@@ -340,6 +368,7 @@ export function useFilters(rows = []) {
         selectedBallInCourt,
         selectedSubmittalManager,
         selectedProjectName,
+        selectedProcoreStatus,
         columnSort, // New general column sort state
         projectNameSortMode, // Backward compatibility
 
@@ -347,11 +376,13 @@ export function useFilters(rows = []) {
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,
+        setSelectedProcoreStatus,
 
         // Filter options
         ballInCourtOptions,
         submittalManagerOptions,
         projectNameOptions,
+        procoreStatusOptions,
 
         // Filtered and sorted rows
         displayRows,
