@@ -1,6 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 
 db = SQLAlchemy()
@@ -116,6 +116,13 @@ class ProcoreSubmittal(db.Model):
         days_since_ball_update = None
         if time_since_update:
             days_since_ball_update = int(time_since_update.total_seconds() / 86400)  # Convert seconds to days
+
+        # Lifespan: days since creation (how old the submittal is)
+        lifespan = None
+        if self.created_at:
+            today = date.today()
+            created_date = self.created_at.date() if hasattr(self.created_at, 'date') else self.created_at
+            lifespan = (today - created_date).days
         
         return {
             "id": self.id,
@@ -132,6 +139,7 @@ class ProcoreSubmittal(db.Model):
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
             "due_date": self.due_date.isoformat() if self.due_date else None,
+            "lifespan": lifespan,
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": self.last_updated.isoformat() if self.last_updated else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,

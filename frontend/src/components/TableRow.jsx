@@ -13,7 +13,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const dueDateInputRef = useRef(null);
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
-    const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
+    const ballInCourt = row.ball_in_court ?? row['BIC'] ?? '';
     const hasMultipleAssignees = String(ballInCourt).includes(',');
     const isDraggable = isAdmin && !hasMultipleAssignees;
 
@@ -36,7 +36,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         }
 
         // Check if this row has multiple assignees (comma-separated ball_in_court)
-        const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
+        const ballInCourt = row.ball_in_court ?? row['BIC'] ?? '';
         const hasMultipleAssignees = String(ballInCourt).includes(',');
 
         // Don't allow editing order number for multiple assignees (reviewers)
@@ -44,7 +44,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             return;
         }
 
-        const currentValue = row['Order Number'] ?? row.order_number ?? '';
+        const currentValue = row['ORDER #'] ?? row.order_number ?? '';
         setOrderNumberValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
         setEditingOrderNumber(true);
     };
@@ -60,7 +60,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         if (e.key === 'Enter') {
             e.target.blur();
         } else if (e.key === 'Escape') {
-            const currentValue = row['Order Number'] ?? row.order_number ?? '';
+            const currentValue = row['ORDER #'] ?? row.order_number ?? '';
             setOrderNumberValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
             setEditingOrderNumber(false);
         }
@@ -71,7 +71,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         if (!isAdmin) {
             return;
         }
-        const currentValue = row['Notes'] ?? row.notes ?? '';
+        const currentValue = row['NOTES'] ?? row.notes ?? '';
         setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
         setEditingNotes(true);
     };
@@ -88,7 +88,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             e.preventDefault();
             e.target.blur();
         } else if (e.key === 'Escape') {
-            const currentValue = row['Notes'] ?? row.notes ?? '';
+            const currentValue = row['NOTES'] ?? row.notes ?? '';
             setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
             setEditingNotes(false);
         }
@@ -120,7 +120,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         if (!isAdmin) {
             return;
         }
-        const currentValue = row['Due Date'] ?? row.due_date ?? '';
+        const currentValue = row['DUE DATE'] ?? row.due_date ?? '';
         // Format date for input (YYYY-MM-DD)
         let formattedDate = '';
         if (currentValue) {
@@ -166,7 +166,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         if (e.key === 'Enter') {
             e.target.blur();
         } else if (e.key === 'Escape') {
-            const currentValue = row['Due Date'] ?? row.due_date ?? '';
+            const currentValue = row['DUE DATE'] ?? row.due_date ?? '';
             let formattedDate = '';
             if (currentValue) {
                 // If it's already in YYYY-MM-DD format, use it directly
@@ -199,11 +199,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         }
     };
 
-    const rowType = row.type ?? row['Type'] ?? '';
+    const rowType = row.type ?? row['TYPE'] ?? '';
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
     
     // Check if status is HOLD for yellow background
-    const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? '';
+    const currentStatus = row.submittal_drafting_status ?? row['COMP. STATUS'] ?? '';
     const isHoldStatus = currentStatus === 'HOLD';
 
     // Alternate row background colors, but override with yellow if status is HOLD
@@ -244,7 +244,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             const isOrderNumberCell = cellClasses.includes('dwl-col-order-number');
             const isProjectNumberCell = cellClasses.includes('dwl-col-project-number');
             const isProcoreStatusCell = cellClasses.includes('dwl-col-procore-status');
-            const isStatusCell = cellClasses.includes('dwl-col-status');
+            const isStatusCell = cellClasses.includes('dwl-col-comp-status');
             const isNotesCell = cellClasses.includes('dwl-col-notes');
             const isDueDateCell = cellClasses.includes('dwl-col-due-date');
 
@@ -337,17 +337,17 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 onDrop={handleDrop}
             >
                 {columns.map((column) => {
-                    const isOrderNumber = column === 'Order Number';
+                    const isOrderNumber = column === 'ORDER #';
                     const isSubmittalId = column === 'Submittals Id';
-                    const isType = column === 'Type';
-                    const isNotes = column === 'Notes';
-                    const isProcoreStatus = column === 'Procore Status';
-                    const isStatus = column === 'Status';
-                    const isProjectName = column === 'Project Name';
-                    const isBallInCourt = column === 'Ball In Court';
-                    const isLastBIC = column === 'Last BIC';
-                    const isCreationDate = column === 'Creation Date';
-                    const isDueDate = column === 'Due Date';
+                    const isType = column === 'TYPE';
+                    const isNotes = column === 'NOTES';
+                    const isProcoreStatus = column === 'PROCORE STATUS';
+                    const isStatus = column === 'COMP. STATUS';
+                    const isProjectName = column === 'NAME';
+                    const isBallInCourt = column === 'BIC';
+                    const isLastBIC = column === 'LAST BIC';
+                    const isLifespan = column === 'LIFESPAN';
+                    const isDueDate = column === 'DUE DATE';
 
                     // Skip rendering the Submittals Id column
                     if (isSubmittalId) {
@@ -362,18 +362,18 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     if (isSubmittalId) {
                         customWidthClass = 'w-32'; // Accommodate 8-10 digit ID + operations link icon
                         columnClass = 'dwl-col-submittal-id';
-                    } else if (column === 'Project Number') {
+                    } else if (column === 'PROJ. #') {
                         customWidthClass = 'w-20'; // Accommodate 3-4 digit number
                         columnClass = 'dwl-col-project-number';
-                    } else if (column === 'Title') {
+                    } else if (column === 'TITLE') {
                         customStyle = { maxWidth: '280px' };
                         columnClass = 'dwl-col-title';
-                    } else if (column === 'Type') {
+                    } else if (column === 'TYPE') {
                         customStyle = { maxWidth: '80px' };
                         columnClass = 'dwl-col-type';
-                    } else if (column === 'Submittal Manager') {
-                        customWidthClass = 'w-32'; // Reduce Submittal Manager width
-                        columnClass = 'dwl-col-submittal-manager';
+                    } else if (column === 'SUB MANAGER') {
+                        customWidthClass = 'w-32';
+                        columnClass = 'dwl-col-sub-manager';
                     } else if (isOrderNumber) {
                         columnClass = 'dwl-col-order-number';
                     } else if (isNotes) {
@@ -381,17 +381,17 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     } else if (isProcoreStatus) {
                         columnClass = 'dwl-col-procore-status';
                     } else if (isStatus) {
-                        columnClass = 'dwl-col-status';
+                        columnClass = 'dwl-col-comp-status';
                     } else if (isProjectName) {
-                        columnClass = 'dwl-col-project-name';
+                        columnClass = 'dwl-col-name';
                     } else if (isBallInCourt) {
-                        columnClass = 'dwl-col-ball-in-court';
+                        columnClass = 'dwl-col-bic';
                     } else if (isLastBIC) {
                         customStyle = { maxWidth: '100px' };
-                        columnClass = 'dwl-col-last-bic';
-                    } else if (isCreationDate) {
-                        customStyle = { maxWidth: '120px' };
-                        columnClass = 'dwl-col-creation-date';
+                        columnClass = 'dwl-col-last-bic-update';
+                    } else if (isLifespan) {
+                        customStyle = { maxWidth: '75px' };
+                        columnClass = 'dwl-col-lifespan';
                     } else if (isDueDate) {
                         customStyle = { maxWidth: '120px' };
                         columnClass = 'dwl-col-due-date';
@@ -431,7 +431,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         const isEditable = isAdmin && !hasMultipleAssignees;
 
                         // Display Order Number - show all values (including decimals and numbers > 10)
-                        const rawOrderValue = row['Order Number'] ?? row.order_number;
+                        const rawOrderValue = row['ORDER #'] ?? row.order_number;
                         let displayOrder = '';
 
                         if (rawOrderValue !== null && rawOrderValue !== undefined && rawOrderValue !== '') {
@@ -549,7 +549,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                     if (isProcoreStatus) {
                         // Procore Status column: current submittal status from Procore (default value) + dropdown to patch
-                        const currentProcoreStatus = row.status ?? row['Procore Status'] ?? '';
+                        const currentProcoreStatus = row.status ?? row['PROCORE STATUS'] ?? '';
                         const hasOptions = Array.isArray(procoreStatusOptions) && procoreStatusOptions.length > 0;
                         return (
                             <td
@@ -588,7 +588,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                     if (isStatus) {
                         // Status column: always HOLD / NEED VIF / STARTED drafting dropdown
-                        const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? row['Status'] ?? '';
+                        const currentStatus = row.submittal_drafting_status ?? row['COMP. STATUS'] ?? '';
                         const statusOptions = ['STARTED', 'NEED VIF', 'HOLD'];
 
                         return (
@@ -648,7 +648,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     }
 
                     if (isDueDate) {
-                        const dueDateValue = row['Due Date'] ?? row.due_date ?? '';
+                        const dueDateValue = row['DUE DATE'] ?? row.due_date ?? '';
                         const hasDueDate = dueDateValue && dueDateValue !== '';
                         // Use formatDateShort which now handles date-only strings without timezone conversion
                         const formattedDate = hasDueDate ? formatDateShort(dueDateValue) : '';
@@ -683,7 +683,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         ? 'bg-green-100'
                         : rowBgClass;
 
-                    // Handle Project Name truncation to 20 characters
+                    // Handle NAME (project name) truncation to 20 characters
                     if (isProjectName) {
                         const fullProjectName = cellValue;
                         const truncatedProjectName = fullProjectName && fullProjectName.length > 20
@@ -693,7 +693,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-project-name`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-name`}
                                 style={{ maxWidth: '280px' }}
                                 title={fullProjectName}
                             >
@@ -705,7 +705,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     // Handle Ball In Court: wrap if value is longer than 'Rourke Alvarado' (15 chars)
                     if (isBallInCourt) {
                         // Get the value directly from row to ensure we have it
-                        const ballInCourtValue = row.ball_in_court ?? row['Ball In Court'] ?? rawValue ?? '';
+                        const ballInCourtValue = row.ball_in_court ?? row['BIC'] ?? rawValue ?? '';
                         const ballInCourtString = String(ballInCourtValue);
                         const shouldWrap = ballInCourtString.length > 15; // 'Rourke Alvarado' is 15 chars
                         const whitespaceClass = shouldWrap ? 'whitespace-normal break-words' : 'whitespace-nowrap';
@@ -713,7 +713,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-ball-in-court`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-bic`}
                                 style={{ maxWidth: '180px' }}
                                 title={cellValue}
                             >
@@ -724,7 +724,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                     // Handle Last BIC column - show days since last ball in court update
                     if (isLastBIC) {
-                        const daysSinceUpdate = row['Last BIC'] ?? row.days_since_ball_in_court_update;
+                        const daysSinceUpdate = row['LAST BIC'] ?? row.days_since_ball_in_court_update;
                         const displayValue = daysSinceUpdate !== null && daysSinceUpdate !== undefined
                             ? `${daysSinceUpdate} days`
                             : '—';
@@ -751,25 +751,27 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle Creation Date column - format the date nicely with 2-digit year
-                    if (isCreationDate) {
-                        const creationDateValue = row['Creation Date'] ?? row.created_at;
-                        const formattedDate = formatDateShort(creationDateValue);
+                    // Handle LIFESPAN column - days since creation (how old the submittal is)
+                    if (isLifespan) {
+                        const lifespanValue = row['LIFESPAN'] ?? row.lifespan;
+                        const displayLifespan = lifespanValue !== null && lifespanValue !== undefined
+                            ? `${lifespanValue} days`
+                            : '—';
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-creation-date`}
+                                className={`px-0 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-lifespan`}
                                 style={{ maxWidth: '75px' }}
-                                title={creationDateValue ? new Date(creationDateValue).toLocaleString() : 'N/A'}
+                                title={lifespanValue !== null && lifespanValue !== undefined ? `${lifespanValue} days since creation` : 'N/A'}
                             >
-                                {formattedDate}
+                                {displayLifespan}
                             </td>
                         );
                     }
 
-                    // Handle Title column - plain text display
-                    if (column === 'Title') {
+                    // Handle TITLE column - plain text display
+                    if (column === 'TITLE') {
                         const shouldWrap = true;
                         const whitespaceClass = 'whitespace-normal';
 
@@ -785,8 +787,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle Project Number column - make it a link to Procore
-                    const isProjectNumber = column === 'Project Number';
+                    // Handle PROJ. # column - make it a link to Procore
+                    const isProjectNumber = column === 'PROJ. #';
                     if (isProjectNumber) {
                         const submittalId = row.submittal_id || row['Submittals Id'] || '';
                         const projectId = row.procore_project_id || row['Project Id'] || '';
@@ -821,7 +823,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     }
 
                     // Determine if this column should allow text wrapping
-                    const shouldWrap = column === 'Notes';
+                    const shouldWrap = column === 'NOTES';
                     const whitespaceClass = shouldWrap ? 'whitespace-normal' : 'whitespace-nowrap';
 
                     return (

@@ -17,14 +17,14 @@ import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 const columnWidthStyles = `
     @media (min-width: 1536px) {
         /* Reduce column max-widths on very large screens to prevent bloating */
-        .dwl-col-project-name { max-width: 260px !important; }
+        .dwl-col-name { max-width: 260px !important; }
         .dwl-col-title { max-width: 250px !important; }
-        .dwl-col-ball-in-court { max-width: 160px !important; }
-        .dwl-col-submittal-manager { max-width: 120px !important; }
+        .dwl-col-bic { max-width: 160px !important; }
+        .dwl-col-sub-manager { max-width: 120px !important; }
         .dwl-col-notes { max-width: 300px !important; }
         .dwl-col-submittal-id { max-width: 128px !important; }
-        .dwl-col-last-bic { max-width: 100px !important; }
-        .dwl-col-creation-date { max-width: 75px !important; }
+        .dwl-col-last-bic-update { max-width: 100px !important; }
+        .dwl-col-lifespan { max-width: 75px !important; }
     }
 `;
 
@@ -137,46 +137,48 @@ function DraftingWorkLoad() {
 
     const hasData = displayRows.length > 0;
     const visibleColumns = columns.filter(column => column !== 'Submittals Id');
+    // Column display names are case-sensitive: ORDER #, PROJ. #, NAME, TITLE, etc.
     const tableColumnCount = visibleColumns.length;
 
     return (
         <>
             <style>{columnWidthStyles}</style>
-            {/* Navigation Header - Always visible for navigation */}
-            <div className="w-full bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 sticky top-0 z-50" style={{ width: '100%', minWidth: '100%' }}>
-                <div className="max-w-full mx-auto px-4 py-3 w-full" style={{ width: '100%' }}>
-                    <div className="flex items-center justify-between">
-                        <div
-                            className="text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 bg-clip-text text-transparent cursor-pointer hover:from-accent-600 hover:to-accent-700 transition-all"
-                            onClick={() => navigate('/')}
-                        >
-                            ← Back to Dashboard
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button
+            <div className="w-full h-screen flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50" style={{ width: '100%', minWidth: '100%' }}>
+                {/* Navigation Header - fixed, does not scroll */}
+                <div className="flex-shrink-0 w-full bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200" style={{ width: '100%', minWidth: '100%' }}>
+                    <div className="max-w-full mx-auto px-4 py-3 w-full" style={{ width: '100%' }}>
+                        <div className="flex items-center justify-between">
+                            <div
+                                className="text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 bg-clip-text text-transparent cursor-pointer hover:from-accent-600 hover:to-accent-700 transition-all"
                                 onClick={() => navigate('/')}
-                                className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-gray-700 hover:bg-gray-100"
                             >
-                                Dashboard
-                            </button>
-                            <button
-                                onClick={handleLogout}
-                                className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-red-600 hover:bg-red-50 border border-red-200"
-                            >
-                                Logout
-                            </button>
+                                ← Back to Dashboard
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => navigate('/')}
+                                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-gray-700 hover:bg-gray-100"
+                                >
+                                    Dashboard
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-red-600 hover:bg-red-50 border border-red-200"
+                                >
+                                    Logout
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%' }}>
-                <div className="max-w-full mx-auto w-full" style={{ width: '100%' }}>
-                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                        <div className={`px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
+
+                <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
+                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+                        {/* Title bar - fixed, does not scroll */}
+                        <div className={`flex-shrink-0 px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
-
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button
@@ -194,7 +196,8 @@ function DraftingWorkLoad() {
                             </div>
                         </div>
 
-                        <div className="p-2 space-y-2">
+                        {/* Tabs + Filters - fixed, do not scroll */}
+                        <div className="flex-shrink-0 p-2 space-y-2">
                             {/* Tab Selection */}
                             <div className="bg-white rounded-xl p-2 border border-gray-200 shadow-sm">
                                 <div className="flex gap-2">
@@ -263,209 +266,210 @@ function DraftingWorkLoad() {
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            {loading && (
-                                <div className="text-center py-12">
-                                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
-                                    <p className="text-gray-600 font-medium">Loading Drafting Work Load data...</p>
-                                </div>
-                            )}
+                        {loading && (
+                            <div className="flex-shrink-0 text-center py-12">
+                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
+                                <p className="text-gray-600 font-medium">Loading Drafting Work Load data...</p>
+                            </div>
+                        )}
 
-                            {fetchError && !loading && (
+                        {fetchError && !loading && (
+                            <div className="flex-shrink-0 p-2">
                                 <AlertMessage
                                     type="error"
                                     title="Unable to load Drafting Work Load data"
                                     message={fetchError}
                                 />
-                            )}
+                            </div>
+                        )}
 
-                            {!loading && !fetchError && (
-                                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                    <div className="">
-                                        <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%' }}>
-                                            <thead className="bg-gray-100">
-                                                <tr>
-                                                    {visibleColumns.map((column) => {
-                                                        const isOrderNumber = column === 'Order Number';
-                                                        const isNotes = column === 'Notes';
-                                                        const isProjectName = column === 'Project Name';
-                                                        const isTitle = column === 'Title';
-                                                        const isProcoreStatus = column === 'Procore Status';
-                                                        const isStatus = column === 'Status';
-                                                        const isBallInCourt = column === 'Ball In Court';
-                                                        const isType = column === 'Type';
-                                                        const isSubmittalId = column === 'Submittals Id';
-                                                        const isProjectNumber = column === 'Project Number';
-                                                        const isSubmittalManager = column === 'Submittal Manager';
-                                                        const isLastBIC = column === 'Last BIC';
-                                                        const isCreationDate = column === 'Creation Date';
-                                                        const isDueDate = column === 'Due Date';
+                        {!loading && !fetchError && (
+                            <div className="flex-1 min-h-0 flex flex-col border border-gray-200 rounded-xl overflow-hidden bg-white min-w-0">
+                                <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0">
+                                    <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+                                        <thead className="sticky top-0 z-10 bg-gray-100 shadow-sm">
+                                            <tr>
+                                                {visibleColumns.map((column) => {
+                                                    const isOrderNumber = column === 'ORDER #';
+                                                    const isNotes = column === 'NOTES';
+                                                    const isProjectName = column === 'NAME';
+                                                    const isTitle = column === 'TITLE';
+                                                    const isProcoreStatus = column === 'PROCORE STATUS';
+                                                    const isStatus = column === 'COMP. STATUS';
+                                                    const isBallInCourt = column === 'BIC';
+                                                    const isType = column === 'TYPE';
+                                                    const isSubmittalId = column === 'Submittals Id';
+                                                    const isProjectNumber = column === 'PROJ. #';
+                                                    const isSubmittalManager = column === 'SUB MANAGER';
+                                                    const isLastBIC = column === 'LAST BIC';
+                                                    const isLifespan = column === 'LIFESPAN';
+                                                    const isDueDate = column === 'DUE DATE';
 
-                                                        // Set max-widths for all columns (perfect for laptop screens)
-                                                        // CSS media queries handle larger screens to prevent bloating
-                                                        let headerStyle = {};
-                                                        let columnClass = '';
-                                                        if (isOrderNumber) {
-                                                            headerStyle = { maxWidth: '64px' };
-                                                            columnClass = 'dwl-col-order-number';
-                                                        } else if (isSubmittalId) {
-                                                            headerStyle = { maxWidth: '128px' };
-                                                            columnClass = 'dwl-col-submittal-id';
-                                                        } else if (isProjectNumber) {
-                                                            headerStyle = { maxWidth: '65px' };
-                                                            columnClass = 'dwl-col-project-number';
-                                                        } else if (isTitle) {
-                                                            headerStyle = { maxWidth: '280px' };
-                                                            columnClass = 'dwl-col-title';
-                                                        } else if (isNotes) {
-                                                            headerStyle = { maxWidth: '350px' };
-                                                            columnClass = 'dwl-col-notes';
-                                                        } else if (isBallInCourt) {
-                                                            headerStyle = { maxWidth: '180px' };
-                                                            columnClass = 'dwl-col-ball-in-court';
-                                                        } else if (isType) {
-                                                            headerStyle = { maxWidth: '80px' };
-                                                            columnClass = 'dwl-col-type';
-                                                        } else if (isProcoreStatus) {
-                                                            headerStyle = { maxWidth: '96px' };
-                                                            columnClass = 'dwl-col-procore-status';
-                                                        } else if (isStatus) {
-                                                            headerStyle = { maxWidth: '96px' };
-                                                            columnClass = 'dwl-col-status';
-                                                        } else if (isSubmittalManager) {
-                                                            headerStyle = { maxWidth: '128px' };
-                                                            columnClass = 'dwl-col-submittal-manager';
-                                                        } else if (isLastBIC) {
-                                                            headerStyle = { maxWidth: '100px' };
-                                                            columnClass = 'dwl-col-last-bic';
-                                                        } else if (isCreationDate) {
-                                                            headerStyle = { maxWidth: '75px' };
-                                                            columnClass = 'dwl-col-creation-date';
-                                                        } else if (isDueDate) {
-                                                            headerStyle = { maxWidth: '120px' };
-                                                            columnClass = 'dwl-col-due-date';
-                                                        }
+                                                    // Percentage widths (must total 100%). PROCORE STATUS and LAST BIC get more space.
+                                                    let headerStyle = {};
+                                                    let columnClass = '';
+                                                    if (isOrderNumber) {
+                                                        headerStyle = { width: '6%' };
+                                                        columnClass = 'dwl-col-order-number';
+                                                    } else if (isProjectNumber) {
+                                                        headerStyle = { width: '4%' };
+                                                        columnClass = 'dwl-col-project-number';
+                                                    } else if (isTitle) {
+                                                        headerStyle = { width: '12%' };
+                                                        columnClass = 'dwl-col-title';
+                                                    } else if (isNotes) {
+                                                        headerStyle = { width: '14%' };
+                                                        columnClass = 'dwl-col-notes';
+                                                    } else if (isBallInCourt) {
+                                                        headerStyle = { width: '8%' };
+                                                        columnClass = 'dwl-col-bic';
+                                                    } else if (isType) {
+                                                        headerStyle = { width: '4%' };
+                                                        columnClass = 'dwl-col-type';
+                                                    } else if (isProcoreStatus) {
+                                                        headerStyle = { width: '9%' };
+                                                        columnClass = 'dwl-col-procore-status';
+                                                    } else if (isStatus) {
+                                                        headerStyle = { width: '5%' };
+                                                        columnClass = 'dwl-col-comp-status';
+                                                    } else if (isSubmittalManager) {
+                                                        headerStyle = { width: '7%' };
+                                                        columnClass = 'dwl-col-sub-manager';
+                                                    } else if (isLastBIC) {
+                                                        headerStyle = { width: '6%' };
+                                                        columnClass = 'dwl-col-last-bic-update';
+                                                    } else if (isLifespan) {
+                                                        headerStyle = { width: '7%' };
+                                                        columnClass = 'dwl-col-lifespan';
+                                                    } else if (isDueDate) {
+                                                        headerStyle = { width: '6%' };
+                                                        columnClass = 'dwl-col-due-date';
+                                                    } else if (isProjectName) {
+                                                        headerStyle = { width: '12%' };
+                                                        columnClass = 'dwl-col-name';
+                                                    }
 
-                                                        // Reduce padding for specific columns
-                                                        const isCreationDateHeader = column === 'Creation Date';
-                                                        const isProjectNumberHeader = column === 'Project Number';
-                                                        const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isCreationDateHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
+                                                    // Reduce padding for specific columns
+                                                    const isLifespanHeader = column === 'LIFESPAN';
+                                                    const isProjectNumberHeader = column === 'PROJ. #';
+                                                    const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isLifespanHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
-                                                        // Determine if this column is sortable
-                                                        // Order Number, Notes, Procore Status, Status, and Due Date are not sortable (they're interactive)
-                                                        const isNotSortable = isOrderNumber || isNotes || isProcoreStatus || isStatus || isDueDate;
+                                                    // Determine if this column is sortable
+                                                    // ORDER #, NOTES, PROCORE STATUS, COMP. STATUS are not sortable (interactive); DUE DATE is sortable (asc/desc)
+                                                    const isNotSortable = isOrderNumber || isNotes || isProcoreStatus || isStatus;
 
-                                                        // Get sort state for this column
-                                                        const isSorted = columnSort.column === column;
-                                                        const sortDirection = isSorted ? columnSort.direction : null;
+                                                    // Get sort state for this column
+                                                    const isSorted = columnSort.column === column;
+                                                    const sortDirection = isSorted ? columnSort.direction : null;
 
-                                                        if (isProjectName) {
-                                                            return (
-                                                                <th
-                                                                    key={column}
-                                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 dwl-col-project-name"
-                                                                    style={{ maxWidth: '280px' }}
+                                                    if (isProjectName) {
+                                                        return (
+                                                            <th
+                                                                key={column}
+                                                                className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 dwl-col-name"
+                                                                style={{ width: '12%' }}
+                                                            >
+                                                                <button
+                                                                    onClick={handleProjectNameSortToggle}
+                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                    title={
+                                                                        projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
+                                                                            projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
+                                                                                'Click to sort by Order Number'
+                                                                    }
                                                                 >
-                                                                    <button
-                                                                        onClick={handleProjectNameSortToggle}
-                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
-                                                                        title={
-                                                                            projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
-                                                                                projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
-                                                                                    'Click to sort by Order Number'
-                                                                        }
-                                                                    >
-                                                                        <span>{column}</span>
-                                                                        {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
-                                                                        {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
-                                                                        {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
-                                                                    </button>
-                                                                </th>
-                                                            );
-                                                        }
+                                                                    <span>{column}</span>
+                                                                    {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
+                                                                    {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
+                                                                    {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
+                                                                </button>
+                                                            </th>
+                                                        );
+                                                    }
 
-                                                        // Render sortable column header
-                                                        if (!isNotSortable) {
-                                                            return (
-                                                                <th
-                                                                    key={column}
-                                                                    className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
-                                                                    style={headerStyle}
-                                                                >
-                                                                    <button
-                                                                        onClick={() => handleColumnSort(column)}
-                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
-                                                                        title={
-                                                                            sortDirection === null ? 'Click to sort ascending' :
-                                                                                sortDirection === 'asc' ? 'Click to sort descending' :
-                                                                                    'Click to remove sort'
-                                                                        }
-                                                                    >
-                                                                        <span>{column}</span>
-                                                                        {sortDirection === 'asc' && <span className="text-xs">↑</span>}
-                                                                        {sortDirection === 'desc' && <span className="text-xs">↓</span>}
-                                                                        {sortDirection === null && <span className="text-xs text-gray-400">↕</span>}
-                                                                    </button>
-                                                                </th>
-                                                            );
-                                                        }
-
-                                                        // Non-sortable column (Order Number, Notes, Status, Due Date)
+                                                    // Render sortable column header
+                                                    if (!isNotSortable) {
                                                         return (
                                                             <th
                                                                 key={column}
                                                                 className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
                                                                 style={headerStyle}
                                                             >
-                                                                {column}
+                                                                <button
+                                                                    onClick={() => handleColumnSort(column)}
+                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                    title={
+                                                                        sortDirection === null ? 'Click to sort ascending' :
+                                                                            sortDirection === 'asc' ? 'Click to sort descending' :
+                                                                                'Click to remove sort'
+                                                                    }
+                                                                >
+                                                                    <span>{column}</span>
+                                                                    {sortDirection === 'asc' && <span className="text-xs">↑</span>}
+                                                                    {sortDirection === 'desc' && <span className="text-xs">↓</span>}
+                                                                    {sortDirection === null && <span className="text-xs text-gray-400">↕</span>}
+                                                                </button>
                                                             </th>
                                                         );
-                                                    })}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {!hasData ? (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={tableColumnCount}
-                                                            className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
+                                                    }
+
+                                                    // Non-sortable column (Order Number, Notes, Procore Status, Comp. Status)
+                                                    return (
+                                                        <th
+                                                            key={column}
+                                                            className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
+                                                            style={headerStyle}
                                                         >
-                                                            No records match the selected filters.
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    displayRows.map((row, index) => (
-                                                        <TableRow
-                                                            key={row.id}
-                                                            row={row}
-                                                            columns={columns}
-                                                            formatCellValue={formatCellValue}
-                                                            formatDate={formatDate}
-                                                            onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
-                                                            onNotesChange={isAdmin ? updateNotes : undefined}
-                                                            onStatusChange={isAdmin ? updateStatus : undefined}
-                                                            onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
-                                                            procoreStatusOptions={submittalStatuses}
-                                                            selectedTab={selectedTab}
-                                                            onBump={isAdmin ? bumpSubmittal : undefined}
-                                                            onDueDateChange={isAdmin ? updateDueDate : undefined}
-                                                            rowIndex={index}
-                                                            onDragStart={isAdmin ? handleDragStart : undefined}
-                                                            onDragOver={isAdmin ? handleDragOver : undefined}
-                                                            onDragLeave={isAdmin ? handleDragLeave : undefined}
-                                                            onDrop={isAdmin ? handleDrop : undefined}
-                                                            isDragging={draggedIndex}
-                                                            dragOverIndex={dragOverIndex}
-                                                            isAdmin={isAdmin}
-                                                        />
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                            {column}
+                                                        </th>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {!hasData ? (
+                                                <tr>
+                                                    <td
+                                                        colSpan={tableColumnCount}
+                                                        className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
+                                                    >
+                                                        No records match the selected filters.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                displayRows.map((row, index) => (
+                                                    <TableRow
+                                                        key={row.id}
+                                                        row={row}
+                                                        columns={columns}
+                                                        formatCellValue={formatCellValue}
+                                                        formatDate={formatDate}
+                                                        onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
+                                                        onNotesChange={isAdmin ? updateNotes : undefined}
+                                                        onStatusChange={isAdmin ? updateStatus : undefined}
+                                                        onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
+                                                        procoreStatusOptions={submittalStatuses}
+                                                        selectedTab={selectedTab}
+                                                        onBump={isAdmin ? bumpSubmittal : undefined}
+                                                        onDueDateChange={isAdmin ? updateDueDate : undefined}
+                                                        rowIndex={index}
+                                                        onDragStart={isAdmin ? handleDragStart : undefined}
+                                                        onDragOver={isAdmin ? handleDragOver : undefined}
+                                                        onDragLeave={isAdmin ? handleDragLeave : undefined}
+                                                        onDrop={isAdmin ? handleDrop : undefined}
+                                                        isDragging={draggedIndex}
+                                                        dragOverIndex={dragOverIndex}
+                                                        isAdmin={isAdmin}
+                                                    />
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

@@ -81,7 +81,7 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
         const submittalId = draggedRowId;
 
         // Get target row's order number
-        const targetOrderRaw = targetRow.order_number ?? targetRow['Order Number'] ?? null;
+        const targetOrderRaw = targetRow.order_number ?? targetRow['ORDER #'] ?? targetRow['Order Number'] ?? null;
         const targetOrder = typeof targetOrderRaw === 'number'
             ? targetOrderRaw
             : targetOrderRaw !== null && targetOrderRaw !== undefined
@@ -114,7 +114,7 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
                 if (getRowId(row) === draggedRowId) {
                     continue; // Skip the dragged row
                 }
-                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
+                const currentOrderRaw = row.order_number ?? row['ORDER #'] ?? row['Order Number'] ?? null;
                 const currentOrder = typeof currentOrderRaw === 'number'
                     ? currentOrderRaw
                     : currentOrderRaw !== null && currentOrderRaw !== undefined
@@ -160,7 +160,7 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
             let urgentCount = 0;
             for (let i = 0; i < targetPosition; i++) {
                 const row = sortedGroup[i];
-                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
+                const currentOrderRaw = row.order_number ?? row['ORDER #'] ?? row['Order Number'] ?? null;
                 const currentOrder = typeof currentOrderRaw === 'number'
                     ? currentOrderRaw
                     : currentOrderRaw !== null && currentOrderRaw !== undefined
@@ -181,7 +181,7 @@ export function useDragAndDrop(rows, displayRows, updateOrderNumber) {
                 if (getRowId(row) === draggedRowId) {
                     continue; // Skip the dragged row
                 }
-                const currentOrderRaw = row.order_number ?? row['Order Number'] ?? null;
+                const currentOrderRaw = row.order_number ?? row['ORDER #'] ?? row['Order Number'] ?? null;
                 const currentOrder = typeof currentOrderRaw === 'number'
                     ? currentOrderRaw
                     : currentOrderRaw !== null && currentOrderRaw !== undefined

@@ -4,26 +4,24 @@
 function transformSubmittal(submittal, index) {
     const rawId = submittal.submittal_id ?? submittal.id ?? `row-${index}`;
 
-    // Map database field names to frontend expected names
+    // Map database field names to frontend display names (case-sensitive)
     return {
         ...submittal,
         'Submittals Id': submittal.submittal_id,
         'Project Id': submittal.procore_project_id,
-        'Submittal Manager': submittal.submittal_manager,
-        'Project Name': submittal.project_name,
-        'Project Number': submittal.project_number,
-        'Title': submittal.title,
-        'Procore Status': submittal.status,
-        'Status': submittal.submittal_drafting_status,
-        'Submittal Drafting Status': submittal.submittal_drafting_status,
-        'Type': submittal.type,
-        'Ball In Court': submittal.ball_in_court,
-        'Order Number': submittal.order_number,
-        'Notes': submittal.notes,
-        'Due Date': submittal.due_date,
-        'Created At': submittal.created_at,
-        'Last BIC': submittal.days_since_ball_in_court_update,
-        'Creation Date': submittal.created_at,
+        'ORDER #': submittal.order_number,
+        'PROJ. #': submittal.project_number,
+        'NAME': submittal.project_name,
+        'TITLE': submittal.title,
+        'PROCORE STATUS': submittal.status,
+        'BIC': submittal.ball_in_court,
+        'LAST BIC': submittal.days_since_ball_in_court_update,
+        'TYPE': submittal.type,
+        'COMP. STATUS': submittal.submittal_drafting_status,
+        'SUB MANAGER': submittal.submittal_manager,
+        'DUE DATE': submittal.due_date,
+        'LIFESPAN': submittal.lifespan,
+        'NOTES': submittal.notes,
         // Include ball_in_court tracking fields
         last_ball_in_court_update: submittal.last_ball_in_court_update,
         time_since_ball_in_court_update_seconds: submittal.time_since_ball_in_court_update_seconds,

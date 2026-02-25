@@ -47,7 +47,7 @@ function prepareTableData(rows, columns) {
 
     const tableData = rows.map((row, rowIndex) => {
         // Check if this row is a DRR row
-        const rowType = row.type ?? row['Type'] ?? '';
+        const rowType = row.type ?? row['TYPE'] ?? '';
         if (rowType === 'Drafting Release Review') {
             drrRowIndices.add(rowIndex);
         }
@@ -55,13 +55,13 @@ function prepareTableData(rows, columns) {
         return columns.map(column => {
             let value = getColumnValue(row, column);
 
-            // Apply type mapping for Type column
-            if (column === 'Type') {
+            // Apply type mapping for TYPE column
+            if (column === 'TYPE') {
                 value = formatTypeValue(value);
             }
 
-            // Format dates
-            if (column.includes('Date') || column.includes('date')) {
+            // Format dates (DUE DATE); LIFESPAN is a number, not a date
+            if (column === 'DUE DATE' || (column.includes('Date') && column !== 'LIFESPAN')) {
                 value = formatDate(value);
             } else {
                 value = formatCellValue(value);
@@ -112,8 +112,16 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
     // Prepare table data and get DRR row indices
     const { tableData, drrRowIndices } = prepareTableData(displayRows, columns);
 
-    // Find the index of the Type column
-    const typeColumnIndex = columns.findIndex(col => col === 'Type' || col.toLowerCase() === 'type');
+    // Find the index of the TYPE column (for DRR green highlight)
+    const typeColumnIndex = columns.findIndex(col => col === 'TYPE');
+
+    // Build column styles by index (ORDER #, PROJ. #, NAME, TITLE, PROCORE STATUS, BIC, LAST BIC, TYPE, COMP. STATUS, SUB MANAGER, DUE DATE, LIFESPAN, NOTES)
+    const defaultWidth = 80;
+    const columnStyles = columns.reduce((acc, _, i) => {
+        const widths = [50, 65, 180, 180, 80, 100, 70, 70, 90, 100, 75, 50, 200]; // match new column order
+        acc[i] = { cellWidth: widths[i] ?? defaultWidth, halign: 'center' };
+        return acc;
+    }, {});
 
     // Generate table
     autoTable(doc, {
@@ -134,19 +142,7 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
         alternateRowStyles: {
             fillColor: [220, 220, 220],
         },
-        columnStyles: {
-            // Explicit column widths for all columns
-            0: { cellWidth: 50, halign: 'center' }, // Order Number
-            1: { cellWidth: 100, halign: 'center' }, // Submittals Id
-            2: { cellWidth: 70, halign: 'center' }, // Project Number
-            3: { cellWidth: 210, halign: 'center' }, // Project Name
-            4: { cellWidth: 210, halign: 'center' }, // Title
-            5: { cellWidth: 90, halign: 'center' }, // Ball In Court
-            6: { cellWidth: 80, halign: 'center' }, // Type
-            7: { cellWidth: 80, halign: 'center' }, // Status
-            8: { cellWidth: 110, halign: 'center' }, // Submittal Manager
-            9: { cellWidth: 200, halign: 'center' }, // Notes
-        },
+        columnStyles,
         margin: { top: 65, left: 10, right: 10 },
         didParseCell: function (data) {
             // Highlight only the Type column cell for DRR rows with green background

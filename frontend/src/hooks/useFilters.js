@@ -6,19 +6,21 @@ const ALL_OPTION_VALUE = '__ALL__';
  * Get value from row by column name (handles both database field names and display names)
  */
 const getColumnValue = (row, column) => {
-    // Map display column names to database field names
+    // Map display column names to database field names (case-sensitive)
     const columnMap = {
-        'Order Number': 'order_number',
-        'Project Number': 'project_number',
-        'Project Name': 'project_name',
-        'Title': 'title',
-        'Ball In Court': 'ball_in_court',
-        'Type': 'type',
-        'Status': 'submittal_drafting_status',
-        'Submittal Manager': 'submittal_manager',
-        'Last BIC': 'days_since_ball_in_court_update',
-        'Creation Date': 'created_at',
-        'Notes': 'notes',
+        'ORDER #': 'order_number',
+        'PROJ. #': 'project_number',
+        'NAME': 'project_name',
+        'TITLE': 'title',
+        'PROCORE STATUS': 'status',
+        'BIC': 'ball_in_court',
+        'LAST BIC': 'days_since_ball_in_court_update',
+        'TYPE': 'type',
+        'COMP. STATUS': 'submittal_drafting_status',
+        'SUB MANAGER': 'submittal_manager',
+        'DUE DATE': 'due_date',
+        'LIFESPAN': 'lifespan',
+        'NOTES': 'notes',
     };
 
     const fieldName = columnMap[column] || column.toLowerCase().replace(/\s+/g, '_');
@@ -93,7 +95,7 @@ export function useFilters(rows = []) {
 
         // Check Submittal Manager filter
         if (selectedSubmittalManager !== ALL_OPTION_VALUE) {
-            const managerValue = row.submittal_manager ?? row['Submittal Manager'];
+            const managerValue = row.submittal_manager ?? row['SUB MANAGER'];
             if ((managerValue ?? '').toString().trim() !== selectedSubmittalManager) {
                 return false;
             }
@@ -101,7 +103,7 @@ export function useFilters(rows = []) {
 
         // Check Project Name filter
         if (selectedProjectName !== ALL_OPTION_VALUE) {
-            const projectNameValue = row.project_name ?? row['Project Name'];
+            const projectNameValue = row.project_name ?? row['NAME'];
             if ((projectNameValue ?? '').toString().trim() !== selectedProjectName) {
                 return false;
             }
@@ -139,8 +141,8 @@ export function useFilters(rows = []) {
                     return ballA.localeCompare(ballB);
                 }
 
-                const orderA = a.order_number ?? a['Order Number'];
-                const orderB = b.order_number ?? b['Order Number'];
+                const orderA = a.order_number ?? a['ORDER #'];
+                const orderB = b.order_number ?? b['ORDER #'];
 
                 const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
                 const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
@@ -182,8 +184,8 @@ export function useFilters(rows = []) {
                 return comparison;
             }
 
-            // Secondary sort: keep multi-assignee rows at the bottom when sorting by Project Name
-            if (column === 'Project Name') {
+            // Secondary sort: keep multi-assignee rows at the bottom when sorting by NAME
+            if (column === 'NAME') {
                 const ballA = (a.ball_in_court ?? '').toString();
                 const ballB = (b.ball_in_court ?? '').toString();
                 const hasMultipleA = ballA.includes(',');
@@ -197,8 +199,8 @@ export function useFilters(rows = []) {
                 }
 
                 // For single assignees, sort by order number as secondary
-                const orderA = a.order_number ?? a['Order Number'];
-                const orderB = b.order_number ?? b['Order Number'];
+                const orderA = a.order_number ?? a['ORDER #'];
+                const orderB = b.order_number ?? b['ORDER #'];
                 const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
                 const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
 
@@ -281,7 +283,7 @@ export function useFilters(rows = []) {
             const type = row.type ?? row['Type'] ?? '';
             if (type === 'For Construction') return;
 
-            const value = row.project_name ?? row['Project Name'];
+            const value = row.project_name ?? row['NAME'];
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 values.add(String(value).trim());
             }
@@ -319,15 +321,15 @@ export function useFilters(rows = []) {
         });
     }, []);
 
-    // Backward compatibility: handleProjectNameSortToggle for Project Name column
+    // handleProjectNameSortToggle for NAME column
     // Maps 'normal' -> null, 'a-z' -> asc, 'z-a' -> desc
     const handleProjectNameSortToggle = useCallback(() => {
-        handleColumnSort('Project Name');
+        handleColumnSort('NAME');
     }, [handleColumnSort]);
 
-    // Get current sort state for Project Name (for backward compatibility)
+    // Get current sort state for NAME column
     const projectNameSortMode = useMemo(() => {
-        if (columnSort.column !== 'Project Name') return 'normal';
+        if (columnSort.column !== 'NAME') return 'normal';
         if (columnSort.direction === 'asc') return 'a-z';
         if (columnSort.direction === 'desc') return 'z-a';
         return 'normal';

@@ -1,20 +1,20 @@
 /**
- * Default column order for drafting work load
+ * Default column order for drafting work load (case-sensitive display names)
  */
 export const DESIRED_COLUMN_ORDER = [
-    'Order Number',
-    'Project Number',
-    'Project Name',
-    'Title',
-    'Ball In Court',
-    'Type',
-    'Procore Status',
-    'Status',
-    'Due Date',
-    'Submittal Manager',
-    'Last BIC',
-    'Creation Date',
-    'Notes'
+    'ORDER #',
+    'PROJ. #',
+    'NAME',
+    'TITLE',
+    'PROCORE STATUS',
+    'BIC',
+    'LAST BIC',
+    'TYPE',
+    'COMP. STATUS',
+    'SUB MANAGER',
+    'DUE DATE',
+    'LIFESPAN',
+    'NOTES'
 ];
 
 /**

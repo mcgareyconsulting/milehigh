@@ -6,7 +6,7 @@
  * Get ball in court value from a row
  */
 export function getBallInCourt(row) {
-    return row.ball_in_court ?? row['Ball In Court'] ?? '';
+    return row.ball_in_court ?? row['BIC'] ?? row['Ball In Court'] ?? '';
 }
 
 /**
@@ -20,7 +20,7 @@ export function getRowId(row) {
  * Get order number from a row
  */
 export function getOrderNumber(row) {
-    return row.order_number ?? row['Order Number'] ?? null;
+    return row.order_number ?? row['ORDER #'] ?? row['Order Number'] ?? null;
 }
 
 /**
