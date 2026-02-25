@@ -13,7 +13,7 @@ export function getBallInCourt(row) {
  * Get row ID from a row
  */
 export function getRowId(row) {
-    return row['Submittals Id'] || row.submittal_id;
+    return row['Submittal ID'] || row.submittal_id;
 }
 
 /**

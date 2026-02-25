@@ -12,6 +12,9 @@ import { formatDate, formatCellValue } from '../utils/formatters';
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
 const columnWidthStyles = `
+    /* Submittal ID column: slightly narrower, header text can wrap */
+    .dwl-col-submittal-id { max-width: 96px !important; }
+    .dwl-header-submittal-id { white-space: normal !important; word-break: break-word; }
     @media (min-width: 1536px) {
         /* Reduce column max-widths on very large screens to prevent bloating */
         .dwl-col-project-name { max-width: 260px !important; }
@@ -19,7 +22,7 @@ const columnWidthStyles = `
         .dwl-col-ball-in-court { max-width: 160px !important; }
         .dwl-col-submittal-manager { max-width: 120px !important; }
         .dwl-col-notes { max-width: 300px !important; }
-        .dwl-col-submittal-id { max-width: 128px !important; }
+        .dwl-col-submittal-id { max-width: 96px !important; }
     }
 `;
 
@@ -30,11 +33,6 @@ function DraftingWorkLoad() {
         updateNotes,
         updateStatus,
         updateDueDate,
-        uploadFile,
-        uploading,
-        uploadError,
-        uploadSuccess,
-        clearUploadSuccess,
         reorderGroup,
         updating,
     } = useMutations(refetch);
@@ -79,6 +77,9 @@ function DraftingWorkLoad() {
         selectedProjectName,
         selectedProcoreStatus,
         projectNameSortMode,
+        lifespanSortMode,
+        dueDateSortMode,
+        lastBicUpdateSortMode,
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,
@@ -91,6 +92,9 @@ function DraftingWorkLoad() {
         displayRows,
         resetFilters,
         handleProjectNameSortToggle,
+        handleLifespanSortToggle,
+        handleDueDateSortToggle,
+        handleLastBicUpdateSortToggle,
         ALL_OPTION_VALUE,
     } = useFilters(rows);
 
@@ -115,18 +119,6 @@ function DraftingWorkLoad() {
     const handleGeneratePDF = useCallback(() => {
         generateDraftingWorkLoadPDF(displayRows, filteredColumns, lastUpdated);
     }, [displayRows, filteredColumns, lastUpdated]);
-
-    const handleFileUpload = async (event) => {
-        const file = event.target.files[0];
-        if (!file) {
-            return;
-        }
-
-        await uploadFile(file);
-
-        // Reset file input
-        event.target.value = '';
-    };
 
     const handleReorderClick = useCallback(() => {
         setShowReorderConfirm(true);
@@ -160,17 +152,6 @@ function DraftingWorkLoad() {
         setShowReorderConfirm(false);
     }, []);
 
-    // Clear upload success message after 3 seconds
-    useEffect(() => {
-        if (uploadSuccess) {
-            const timer = setTimeout(() => {
-                clearUploadSuccess();
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [uploadSuccess, clearUploadSuccess]);
-
-
     const formattedLastUpdated = useMemo(
         () => lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown',
         [lastUpdated]
@@ -182,10 +163,10 @@ function DraftingWorkLoad() {
     return (
         <>
             <style>{columnWidthStyles}</style>
-            <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%' }}>
-                <div className="max-w-full mx-auto w-full" style={{ width: '100%' }}>
-                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                        <div className={`px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
+            <div className="w-full h-screen flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2 overflow-hidden" style={{ width: '100%', minWidth: '100%' }}>
+                <div className="max-w-full mx-auto w-full flex flex-col flex-1 min-h-0" style={{ width: '100%' }}>
+                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+                        <div className={`flex-none px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
@@ -226,38 +207,13 @@ function DraftingWorkLoad() {
                                     >
                                         🖨️ Print/PDF
                                     </button>
-                                    <label className="relative cursor-pointer">
-                                        <input
-                                            type="file"
-                                            accept=".xlsx,.xls"
-                                            onChange={handleFileUpload}
-                                            disabled={uploading}
-                                            className="hidden"
-                                            id="file-upload"
-                                        />
-                                        <span className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${uploading
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
-                                            }`}>
-                                            {uploading ? (
-                                                <>
-                                                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600 mr-2"></span>
-                                                    Uploading...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    📤 Upload Excel
-                                                </>
-                                            )}
-                                        </span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="p-2 space-y-2">
+                        <div className="flex flex-col flex-1 min-h-0 p-2 space-y-2 overflow-hidden">
                             {/* Tab Selection */}
-                            <div className="bg-white rounded-xl p-2 border border-gray-200 shadow-sm">
+                            <div className="flex-none bg-white rounded-xl p-2 border border-gray-200 shadow-sm">
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => setSelectedTab('open')}
@@ -279,7 +235,7 @@ function DraftingWorkLoad() {
                                     </button>
                                 </div>
                             </div>
-                            <div className={`rounded-xl p-2 border border-gray-200 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50' : 'bg-gradient-to-r from-gray-50 to-accent-50'}`}>
+                            <div className={`flex-none rounded-xl p-2 border border-gray-200 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50' : 'bg-gradient-to-r from-gray-50 to-accent-50'}`}>
                                 <div className="flex flex-col gap-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="flex flex-col gap-3">
@@ -333,42 +289,30 @@ function DraftingWorkLoad() {
                                         </div>
                                     </div>
                                 </div>
-                                {uploadSuccess && (
-                                    <AlertMessage
-                                        type="success"
-                                        title="File uploaded successfully!"
-                                        message="The data has been refreshed."
-                                    />
-                                )}
-                                {uploadError && (
-                                    <AlertMessage
-                                        type="error"
-                                        title="Upload failed"
-                                        message={uploadError}
-                                    />
-                                )}
                             </div>
 
                             {loading && (
-                                <div className="text-center py-12">
+                                <div className="flex-none text-center py-12">
                                     <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
                                     <p className="text-gray-600 font-medium">Loading Drafting Work Load data...</p>
                                 </div>
                             )}
 
                             {fetchError && !loading && (
-                                <AlertMessage
-                                    type="error"
-                                    title="Unable to load Drafting Work Load data"
-                                    message={fetchError}
-                                />
+                                <div className="flex-none">
+                                    <AlertMessage
+                                        type="error"
+                                        title="Unable to load Drafting Work Load data"
+                                        message={fetchError}
+                                    />
+                                </div>
                             )}
 
                             {!loading && !fetchError && (
-                                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                    <div className="">
+                                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                                    <div className="flex-1 min-h-0 overflow-auto bg-white border border-gray-200 rounded-xl shadow-sm">
                                         <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%' }}>
-                                            <thead className="bg-gray-100">
+                                            <thead className="sticky top-0 z-10 bg-gray-100 shadow-[0_1px_0_0_rgba(0,0,0,0.1)]">
                                                 <tr>
                                                     {filteredColumns.map((column) => {
                                                         const isOrderNumber = column === 'Order Number';
@@ -392,10 +336,88 @@ function DraftingWorkLoad() {
                                                                                     'Click to sort by Order Number'
                                                                         }
                                                                     >
-                                                                        <span>{column}</span>
+                                                                        <span>PROJECT NAME</span>
                                                                         {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
                                                                         {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
                                                                         {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
+                                                                    </button>
+                                                                </th>
+                                                            );
+                                                        }
+
+                                                        const isLifespan = column === 'Lifespan';
+                                                        if (isLifespan) {
+                                                            return (
+                                                                <th
+                                                                    key={column}
+                                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                                    style={{ maxWidth: '80px' }}
+                                                                >
+                                                                    <button
+                                                                        onClick={handleLifespanSortToggle}
+                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                        title={
+                                                                            lifespanSortMode === 'default' ? 'Click to sort by lifespan' :
+                                                                                lifespanSortMode === 'asc' ? 'Oldest first (ascending). Click for newest first' :
+                                                                                    'Newest first (descending). Click for default order'
+                                                                        }
+                                                                    >
+                                                                        <span>{column}</span>
+                                                                        {lifespanSortMode === 'asc' && <span className="text-xs">↑</span>}
+                                                                        {lifespanSortMode === 'desc' && <span className="text-xs">↓</span>}
+                                                                        {lifespanSortMode === 'default' && <span className="text-xs text-gray-400">↕</span>}
+                                                                    </button>
+                                                                </th>
+                                                            );
+                                                        }
+
+                                                        const isDueDate = column === 'Due Date';
+                                                        if (isDueDate) {
+                                                            return (
+                                                                <th
+                                                                    key={column}
+                                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                                    style={{ maxWidth: '96px' }}
+                                                                >
+                                                                    <button
+                                                                        onClick={handleDueDateSortToggle}
+                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                        title={
+                                                                            dueDateSortMode === 'default' ? 'Click to sort by due date' :
+                                                                                dueDateSortMode === 'asc' ? 'Oldest first (ascending). Click for newest first' :
+                                                                                    'Newest first (descending). Click for default order'
+                                                                        }
+                                                                    >
+                                                                        <span>{column}</span>
+                                                                        {dueDateSortMode === 'asc' && <span className="text-xs">↑</span>}
+                                                                        {dueDateSortMode === 'desc' && <span className="text-xs">↓</span>}
+                                                                        {dueDateSortMode === 'default' && <span className="text-xs text-gray-400">↕</span>}
+                                                                    </button>
+                                                                </th>
+                                                            );
+                                                        }
+
+                                                        const isLastBicUpdate = column === 'Last BIC Update';
+                                                        if (isLastBicUpdate) {
+                                                            return (
+                                                                <th
+                                                                    key={column}
+                                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300"
+                                                                    style={{ maxWidth: '100px' }}
+                                                                >
+                                                                    <button
+                                                                        onClick={handleLastBicUpdateSortToggle}
+                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                        title={
+                                                                            lastBicUpdateSortMode === 'default' ? 'Click to sort by last BIC update' :
+                                                                                lastBicUpdateSortMode === 'asc' ? 'Oldest first (ascending). Click for newest first' :
+                                                                                    'Newest first (descending). Click for default order'
+                                                                        }
+                                                                    >
+                                                                        <span>{column}</span>
+                                                                        {lastBicUpdateSortMode === 'asc' && <span className="text-xs">↑</span>}
+                                                                        {lastBicUpdateSortMode === 'desc' && <span className="text-xs">↓</span>}
+                                                                        {lastBicUpdateSortMode === 'default' && <span className="text-xs text-gray-400">↕</span>}
                                                                     </button>
                                                                 </th>
                                                             );
@@ -405,7 +427,7 @@ function DraftingWorkLoad() {
                                                         const isProcoreStatus = column === 'Procore Status';
                                                         const isBallInCourt = column === 'Ball In Court';
                                                         const isType = column === 'Type';
-                                                        const isSubmittalId = column === 'Submittals Id';
+                                                        const isSubmittalId = column === 'Submittal ID';
                                                         const isProjectNumber = column === 'Project Number';
                                                         const isSubmittalManager = column === 'Submittal Manager';
 
@@ -417,8 +439,8 @@ function DraftingWorkLoad() {
                                                             headerStyle = { maxWidth: '64px' };
                                                             columnClass = 'dwl-col-order-number';
                                                         } else if (isSubmittalId) {
-                                                            headerStyle = { maxWidth: '128px' };
-                                                            columnClass = 'dwl-col-submittal-id';
+                                                            headerStyle = { maxWidth: '96px' };
+                                                            columnClass = 'dwl-col-submittal-id dwl-header-submittal-id';
                                                         } else if (isProjectNumber) {
                                                             headerStyle = { maxWidth: '80px' };
                                                             columnClass = 'dwl-col-project-number';

@@ -14,6 +14,9 @@ export function useFilters(rows = []) {
     const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
     const [selectedProcoreStatus, setSelectedProcoreStatus] = useState(ALL_OPTION_VALUE);
     const [projectNameSortMode, setProjectNameSortMode] = useState('normal'); // 'normal', 'a-z', 'z-a'
+    const [lifespanSortMode, setLifespanSortMode] = useState('default'); // 'default', 'asc', 'desc'
+    const [dueDateSortMode, setDueDateSortMode] = useState('default'); // 'default', 'asc', 'desc'
+    const [lastBicUpdateSortMode, setLastBicUpdateSortMode] = useState('default'); // 'default', 'asc', 'desc'
 
     /**
      * Check if a row matches all selected filters
@@ -57,193 +60,178 @@ export function useFilters(rows = []) {
     }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName, selectedProcoreStatus]);
 
     /**
-     * Sort rows based on projectNameSortMode
+     * Parse a value as date for sorting (returns timestamp or null)
+     */
+    const getSortableDate = useCallback((row, field) => {
+        let raw;
+        if (field === 'created_at') {
+            raw = row.created_at ?? row['Created At'];
+        } else if (field === 'due_date') {
+            raw = row.due_date ?? row['Due Date'];
+        } else if (field === 'last_bic_update') {
+            raw = row.last_bic_update ?? row['Last BIC Update'];
+        } else {
+            raw = null;
+        }
+        if (raw == null || raw === '') return null;
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? null : d.getTime();
+    }, []);
+
+    /**
+     * Single comparator: lifespan (if active) -> due date (if active) -> project name / normal.
+     * Using one sort() so date sorts are not overwritten by the next sort.
      */
     const sortRows = useCallback((filteredRows) => {
-        if (projectNameSortMode === 'a-z') {
-            return filteredRows.sort((a, b) => {
+        const arr = [...filteredRows];
+
+        const compareLifespan = (a, b) => {
+            const ta = getSortableDate(a, 'created_at');
+            const tb = getSortableDate(b, 'created_at');
+            const anull = ta == null;
+            const bnull = tb == null;
+            if (anull && bnull) return 0;
+            if (anull) return lifespanSortMode === 'asc' ? 1 : -1;
+            if (bnull) return lifespanSortMode === 'asc' ? -1 : 1;
+            return lifespanSortMode === 'asc' ? ta - tb : tb - ta;
+        };
+
+        const compareDueDate = (a, b) => {
+            const ta = getSortableDate(a, 'due_date');
+            const tb = getSortableDate(b, 'due_date');
+            const anull = ta == null;
+            const bnull = tb == null;
+            if (anull && bnull) return 0;
+            if (anull) return dueDateSortMode === 'asc' ? 1 : -1;
+            if (bnull) return dueDateSortMode === 'asc' ? -1 : 1;
+            return dueDateSortMode === 'asc' ? ta - tb : tb - ta;
+        };
+
+        const compareLastBicUpdate = (a, b) => {
+            const ta = getSortableDate(a, 'last_bic_update');
+            const tb = getSortableDate(b, 'last_bic_update');
+            const anull = ta == null;
+            const bnull = tb == null;
+            if (anull && bnull) return 0;
+            if (anull) return lastBicUpdateSortMode === 'asc' ? 1 : -1;
+            if (bnull) return lastBicUpdateSortMode === 'asc' ? -1 : 1;
+            return lastBicUpdateSortMode === 'asc' ? ta - tb : tb - ta;
+        };
+
+        const compareProjectOrNormal = (a, b) => {
+            if (projectNameSortMode === 'a-z') {
                 const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
                 const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
-                if (projectA !== projectB) {
-                    return projectA.localeCompare(projectB);
-                }
-                // Secondary sort: multi-assignee rows go to bottom within same project
+                if (projectA !== projectB) return projectA.localeCompare(projectB);
                 const ballA = (a.ball_in_court ?? '').toString();
                 const ballB = (b.ball_in_court ?? '').toString();
                 const hasMultipleA = ballA.includes(',');
                 const hasMultipleB = ballB.includes(',');
-
-                // Multi-assignee rows should go to the bottom
-                if (hasMultipleA && !hasMultipleB) {
-                    return 1; // A goes after B
-                }
-                if (!hasMultipleA && hasMultipleB) {
-                    return -1; // A goes before B
-                }
-
-                // If both have multiple or both are single, sort by order_number or submittal_id
-                if (hasMultipleA && hasMultipleB) {
-                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-                }
-
-                // Sort by order number (ordered items first, then unordered by last_updated)
+                if (hasMultipleA && !hasMultipleB) return 1;
+                if (!hasMultipleA && hasMultipleB) return -1;
+                if (hasMultipleA && hasMultipleB) return (a['Submittal ID'] || '').localeCompare(b['Submittal ID'] || '');
                 const orderA = a.order_number ?? a['Order Number'];
                 const orderB = b.order_number ?? b['Order Number'];
-
                 const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
                 const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
-
                 if (hasOrderA && !hasOrderB) return -1;
                 if (!hasOrderA && hasOrderB) return 1;
-
                 if (hasOrderA && hasOrderB) {
                     const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
                     const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
-                    if (!isNaN(numA) && !isNaN(numB)) {
-                        return numA - numB;
-                    }
+                    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
                 }
-
-                // Both unordered - sort by last_updated (oldest first)
                 const lastUpdatedA = a.last_updated ?? a['Last Updated'];
                 const lastUpdatedB = b.last_updated ?? b['Last Updated'];
                 if (lastUpdatedA && lastUpdatedB) {
                     const dateA = new Date(lastUpdatedA);
                     const dateB = new Date(lastUpdatedB);
-                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-                        return dateA - dateB;
-                    }
+                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) return dateA - dateB;
                 }
-
-                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-            });
-        } else if (projectNameSortMode === 'z-a') {
-            return filteredRows.sort((a, b) => {
+                return (a['Submittal ID'] || '').localeCompare(b['Submittal ID'] || '');
+            }
+            if (projectNameSortMode === 'z-a') {
                 const projectA = (a.project_name ?? a['Project Name'] ?? '').toString().trim();
                 const projectB = (b.project_name ?? b['Project Name'] ?? '').toString().trim();
-                if (projectA !== projectB) {
-                    return projectB.localeCompare(projectA);
-                }
-                // Secondary sort: multi-assignee rows go to bottom within same project
+                if (projectA !== projectB) return projectB.localeCompare(projectA);
                 const ballA = (a.ball_in_court ?? '').toString();
                 const ballB = (b.ball_in_court ?? '').toString();
                 const hasMultipleA = ballA.includes(',');
                 const hasMultipleB = ballB.includes(',');
-
-                // Multi-assignee rows should go to the bottom
-                if (hasMultipleA && !hasMultipleB) {
-                    return 1; // A goes after B
-                }
-                if (!hasMultipleA && hasMultipleB) {
-                    return -1; // A goes before B
-                }
-
-                // If both have multiple or both are single, sort by order_number or submittal_id
-                if (hasMultipleA && hasMultipleB) {
-                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-                }
-
-                // Sort by order number (ordered items first, then unordered by last_updated)
+                if (hasMultipleA && !hasMultipleB) return 1;
+                if (!hasMultipleA && hasMultipleB) return -1;
+                if (hasMultipleA && hasMultipleB) return (a['Submittal ID'] || '').localeCompare(b['Submittal ID'] || '');
                 const orderA = a.order_number ?? a['Order Number'];
                 const orderB = b.order_number ?? b['Order Number'];
-
                 const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
                 const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
-
                 if (hasOrderA && !hasOrderB) return -1;
                 if (!hasOrderA && hasOrderB) return 1;
-
                 if (hasOrderA && hasOrderB) {
                     const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
                     const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
-                    if (!isNaN(numA) && !isNaN(numB)) {
-                        return numA - numB;
-                    }
+                    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
                 }
-
-                // Both unordered - sort by last_updated (oldest first)
                 const lastUpdatedA = a.last_updated ?? a['Last Updated'];
                 const lastUpdatedB = b.last_updated ?? b['Last Updated'];
                 if (lastUpdatedA && lastUpdatedB) {
                     const dateA = new Date(lastUpdatedA);
                     const dateB = new Date(lastUpdatedB);
-                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-                        return dateA - dateB;
-                    }
+                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) return dateA - dateB;
                 }
+                return (a['Submittal ID'] || '').localeCompare(b['Submittal ID'] || '');
+            }
+            // Normal: Ball In Court, then order_number
+            const ballA = (a.ball_in_court ?? '').toString();
+            const ballB = (b.ball_in_court ?? '').toString();
+            const hasMultipleA = ballA.includes(',');
+            const hasMultipleB = ballB.includes(',');
+            if (hasMultipleA && !hasMultipleB) return 1;
+            if (!hasMultipleA && hasMultipleB) return -1;
+            if (hasMultipleA && hasMultipleB) {
+                if (ballA !== ballB) return ballA.localeCompare(ballB);
+                return (a['Submittal ID'] || '').localeCompare(b['Submittal ID'] || '');
+            }
+            if (ballA !== ballB) return ballA.localeCompare(ballB);
+            const orderA = a.order_number ?? a['Order Number'];
+            const orderB = b.order_number ?? b['Order Number'];
+            const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
+            const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
+            if (hasOrderA && !hasOrderB) return -1;
+            if (!hasOrderA && hasOrderB) return 1;
+            if (hasOrderA && hasOrderB) {
+                const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
+                const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            }
+            const lastUpdatedA = a.last_updated ?? a['Last Updated'];
+            const lastUpdatedB = b.last_updated ?? b['Last Updated'];
+            if (lastUpdatedA && lastUpdatedB) {
+                const dateA = new Date(lastUpdatedA);
+                const dateB = new Date(lastUpdatedB);
+                if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) return dateA - dateB;
+            }
+            return 0;
+        };
 
-                return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-            });
-        } else {
-            // Normal sort: by Ball In Court, then by order_number (as float)
-            // Multi-assignee cases (comma-separated = reviewers) sort to the bottom
-            return filteredRows.sort((a, b) => {
-                const ballA = (a.ball_in_court ?? '').toString();
-                const ballB = (b.ball_in_court ?? '').toString();
+        arr.sort((a, b) => {
+            if (lifespanSortMode !== 'default') {
+                const cmp = compareLifespan(a, b);
+                if (cmp !== 0) return cmp;
+            }
+            if (dueDateSortMode !== 'default') {
+                const cmp = compareDueDate(a, b);
+                if (cmp !== 0) return cmp;
+            }
+            if (lastBicUpdateSortMode !== 'default') {
+                const cmp = compareLastBicUpdate(a, b);
+                if (cmp !== 0) return cmp;
+            }
+            return compareProjectOrNormal(a, b);
+        });
 
-                // Check if either has multiple assignees (comma indicates reviewers)
-                const hasMultipleA = ballA.includes(',');
-                const hasMultipleB = ballB.includes(',');
-
-                // Multi-assignee rows should go to the bottom
-                // If one has multiple and the other doesn't, single assignee comes first
-                if (hasMultipleA && !hasMultipleB) {
-                    return 1; // A goes after B (A has multiple, B doesn't)
-                }
-                if (!hasMultipleA && hasMultipleB) {
-                    return -1; // A goes before B (A doesn't have multiple, B does)
-                }
-
-                // If both have multiple assignees, sort them together alphabetically
-                if (hasMultipleA && hasMultipleB) {
-                    if (ballA !== ballB) {
-                        return ballA.localeCompare(ballB);
-                    }
-                    // Tiebreaker: sort by submittal_id
-                    return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
-                }
-
-                // Both are single assignees: sort alphabetically by ball_in_court
-                if (ballA !== ballB) {
-                    return ballA.localeCompare(ballB);
-                }
-
-                // Same ball_in_court: sort by order_number (ordered items first, then unordered by last_updated)
-                const orderA = a.order_number ?? a['Order Number'];
-                const orderB = b.order_number ?? b['Order Number'];
-
-                const hasOrderA = orderA !== null && orderA !== undefined && orderA !== '';
-                const hasOrderB = orderB !== null && orderB !== undefined && orderB !== '';
-
-                // If one has order and the other doesn't, ordered item comes first
-                if (hasOrderA && !hasOrderB) return -1;
-                if (!hasOrderA && hasOrderB) return 1;
-
-                // Both have orders - sort by order number
-                if (hasOrderA && hasOrderB) {
-                    const numA = typeof orderA === 'number' ? orderA : parseFloat(orderA);
-                    const numB = typeof orderB === 'number' ? orderB : parseFloat(orderB);
-                    if (!isNaN(numA) && !isNaN(numB)) {
-                        return numA - numB;
-                    }
-                }
-
-                // Both are unordered - sort by last_updated (oldest first)
-                const lastUpdatedA = a.last_updated ?? a['Last Updated'];
-                const lastUpdatedB = b.last_updated ?? b['Last Updated'];
-
-                if (lastUpdatedA && lastUpdatedB) {
-                    const dateA = new Date(lastUpdatedA);
-                    const dateB = new Date(lastUpdatedB);
-                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-                        return dateA - dateB;
-                    }
-                }
-
-                return 0;
-            });
-        }
-    }, [projectNameSortMode]);
+        return arr;
+    }, [projectNameSortMode, lifespanSortMode, dueDateSortMode, lastBicUpdateSortMode, getSortableDate]);
 
     /**
      * Filtered and sorted rows for display
@@ -404,6 +392,9 @@ export function useFilters(rows = []) {
         setSelectedProjectName(ALL_OPTION_VALUE);
         setSelectedProcoreStatus(ALL_OPTION_VALUE);
         setProjectNameSortMode('normal');
+        setLifespanSortMode('default');
+        setDueDateSortMode('default');
+        setLastBicUpdateSortMode('default');
     }, []);
 
     /**
@@ -419,6 +410,21 @@ export function useFilters(rows = []) {
         }
     }, [projectNameSortMode]);
 
+    /** Toggle lifespan sort: default -> asc (oldest first) -> desc (newest first) -> default */
+    const handleLifespanSortToggle = useCallback(() => {
+        setLifespanSortMode((m) => (m === 'default' ? 'asc' : m === 'asc' ? 'desc' : 'default'));
+    }, []);
+
+    /** Toggle due date sort: default -> asc (oldest first) -> desc (newest first) -> default */
+    const handleDueDateSortToggle = useCallback(() => {
+        setDueDateSortMode((m) => (m === 'default' ? 'asc' : m === 'asc' ? 'desc' : 'default'));
+    }, []);
+
+    /** Toggle Last BIC Update sort: default -> asc (oldest first) -> desc (newest first) -> default */
+    const handleLastBicUpdateSortToggle = useCallback(() => {
+        setLastBicUpdateSortMode((m) => (m === 'default' ? 'asc' : m === 'asc' ? 'desc' : 'default'));
+    }, []);
+
     return {
         // Filter state
         selectedBallInCourt,
@@ -426,6 +432,9 @@ export function useFilters(rows = []) {
         selectedProjectName,
         selectedProcoreStatus,
         projectNameSortMode,
+        lifespanSortMode,
+        dueDateSortMode,
+        lastBicUpdateSortMode,
 
         // Filter setters
         setSelectedBallInCourt,
@@ -446,6 +455,9 @@ export function useFilters(rows = []) {
         // Actions
         resetFilters,
         handleProjectNameSortToggle,
+        handleLifespanSortToggle,
+        handleDueDateSortToggle,
+        handleLastBicUpdateSortToggle,
 
         // Constants
         ALL_OPTION_VALUE,

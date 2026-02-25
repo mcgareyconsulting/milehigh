@@ -9,7 +9,7 @@ function transformSubmittal(submittal, index) {
     // Map database field names to frontend expected names
     return {
         ...submittal,
-        'Submittals Id': submittal.submittal_id,
+        'Submittal ID': submittal.submittal_id,
         'Project Id': submittal.procore_project_id,
         'Submittal Manager': submittal.submittal_manager,
         'Project Name': submittal.project_name,

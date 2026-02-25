@@ -13,7 +13,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const notesInputRef = useRef(null);
     const dueDateInputRef = useRef(null);
 
-    const submittalId = row['Submittals Id'] || row.submittal_id;
+    const submittalId = row['Submittal ID'] || row.submittal_id;
     const ballInCourt = row.ball_in_court ?? row['Ball In Court'] ?? '';
     const hasMultipleAssignees = String(ballInCourt).includes(',');
     const isDraggable = !hasMultipleAssignees;
@@ -265,7 +265,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             >
                 {columns.map((column) => {
                     const isOrderNumber = column === 'Order Number';
-                    const isSubmittalId = column === 'Submittals Id';
+                    const isSubmittalId = column === 'Submittal ID';
                     const isType = column === 'Type';
                     const isNotes = column === 'Notes';
                     const isStatus = column === 'Status';
@@ -417,7 +417,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                     if (isSubmittalId && cellValue !== '—') {
                         const projectId = row['Project Id'] ?? row.procore_project_id ?? '';
-                        const submittalId = row['Submittals Id'] ?? row.submittal_id ?? '';
+                        const submittalId = row['Submittal ID'] ?? row.submittal_id ?? '';
                         const href = projectId && submittalId
                             ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
                             : '#';

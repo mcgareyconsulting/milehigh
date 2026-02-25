@@ -94,7 +94,7 @@ const AVAILABLE_TABLE_WIDTH_PT = PAGE_WIDTH_PT - 2 * SIDE_MARGIN_PT;
  */
 const COLUMN_WIDTHS = {
     'Order Number': 40,
-    'Submittals Id': 80,
+    'Submittal ID': 80,
     'Project Number': 55,
     'Project Name': 140,
     'Title': 140,

@@ -25,7 +25,7 @@ export function sortByOrderNumber(submittals) {
                 }
             }
             // If order numbers are equal, sort by ID
-            return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
+            return (a['Submittal ID'] || '').localeCompare(b['Submittal ID'] || '');
         }
 
         // Both are unordered - sort by last_updated (oldest first = most stale at top)
@@ -42,7 +42,7 @@ export function sortByOrderNumber(submittals) {
         }
 
         // Fallback to ID if dates are missing or invalid
-        return (a['Submittals Id'] || '').localeCompare(b['Submittals Id'] || '');
+        return (a['Submittal ID'] || '').localeCompare(b['Submittal ID'] || '');
     });
 }
 

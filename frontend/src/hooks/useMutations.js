@@ -6,11 +6,6 @@ export function useMutations(refetch) {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    // Separate state for upload since it has different UI behavior
-    const [uploading, setUploading] = useState(false);
-    const [uploadError, setUploadError] = useState(null);
-    const [uploadSuccess, setUploadSuccess] = useState(false);
-
     const executeMutation = useCallback(async (apiCall, errorMessage) => {
         setUpdating(true);
         setError(null);
@@ -85,29 +80,6 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
-    const uploadFile = useCallback(async (file) => {
-        setUploading(true);
-        setUploadError(null);
-        setUploadSuccess(false);
-
-        try {
-            await draftingWorkLoadApi.uploadFile(file);
-            setUploadSuccess(true);
-            setUploadError(null);
-            if (refetch) await refetch(true);
-        } catch (err) {
-            console.error('Failed to upload file:', err);
-            setUploadError(err.message);
-            setUploadSuccess(false);
-        } finally {
-            setUploading(false);
-        }
-    }, [refetch]);
-
-    const clearUploadSuccess = useCallback(() => {
-        setUploadSuccess(false);
-    }, []);
-
     const reorderGroup = useCallback(async (ballInCourt) => {
         await executeMutation(
             () => draftingWorkLoadApi.reorderGroup(ballInCourt),
@@ -130,13 +102,6 @@ export function useMutations(refetch) {
 
         // Due date mutation
         updateDueDate,
-
-        // Upload mutation
-        uploadFile,
-        uploading,
-        uploadError,
-        uploadSuccess,
-        clearUploadSuccess,
 
         // Reorder mutation
         reorderGroup,
