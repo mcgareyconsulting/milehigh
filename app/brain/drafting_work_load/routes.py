@@ -1,8 +1,9 @@
 from app.brain import brain_bp
 from flask import jsonify, request
+from sqlalchemy import text
 from app.brain.drafting_work_load.service import SubmittalOrderingService, SubmittalOrderUpdate, DraftingWorkLoadService, UrgencyService
 from app.logging_config import get_logger
-from app.models import ProcoreSubmittal, db
+from app.models import ProcoreSubmittal, JobSites, db
 from app.auth.utils import login_required, admin_required
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
@@ -10,15 +11,90 @@ from datetime import datetime
 
 logger = get_logger(__name__)
 
+# Meters: include job_sites where user is within this distance of the site geometry (PostGIS only)
+LOCATION_BUFFER_METERS = 25
+
+
+def _point_in_polygon(lng: float, lat: float, coordinates: list) -> bool:
+    """Ray-casting test. coordinates is GeoJSON Polygon coordinates: list of rings; first ring is exterior.
+    Each ring is list of [lng, lat] (or [lng, lat, z]). Returns True if (lng, lat) is inside the polygon."""
+    if not coordinates or not coordinates[0]:
+        return False
+    ring = coordinates[0]
+    n = len(ring)
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        if ((yi > lat) != (yj > lat)) and (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _job_numbers_for_location(lat: float, lng: float):
+    """Return list of job_number for active job_sites that contain or are near (lat, lng).
+    Uses PostGIS ST_DWithin(..., buffer_meters) when available for a 25m boundary; else Python point-in-polygon."""
+    dialect = db.session.get_bind().dialect.name
+    if dialect == "postgresql":
+        try:
+            # ST_DWithin with geography = distance in meters; point within buffer_m of site geometry
+            stmt = text("""
+                SELECT job_number FROM job_sites
+                WHERE is_active = true
+                AND ST_DWithin(
+                    ST_GeomFromGeoJSON(geometry::text)::geography,
+                    ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                    :buffer_meters
+                )
+            """)
+            rows = db.session.execute(
+                stmt,
+                {"lat": lat, "lng": lng, "buffer_meters": LOCATION_BUFFER_METERS},
+            ).fetchall()
+            if rows is not None:
+                return [r[0] for r in rows]
+        except Exception as e:
+            logger.warning("PostGIS location check failed, using Python fallback", error=str(e))
+
+    # Fallback: strict point-in-polygon (SQLite or PostGIS unavailable)
+    sites = JobSites.query.filter_by(is_active=True).all()
+    job_numbers = []
+    for site in sites:
+        geom = site.geometry
+        if isinstance(geom, dict) and geom.get("type") == "Polygon":
+            coords = geom.get("coordinates")
+            if coords and _point_in_polygon(lng, lat, coords):
+                job_numbers.append(site.job_number)
+    return job_numbers
+
+
 @brain_bp.route('/drafting-work-load')
 @login_required
 def drafting_work_load():
-    """Return Drafting Work Load data from the db, including submittals with status='Open' or status='Draft'"""
+    """Return Drafting Work Load data from the db, including submittals with status='Open' or status='Draft'.
+    Optional query params lat, lng: when both provided, only submittals for job_sites that contain or are near
+    the point (active job_sites; PostGIS: within 25m, else point-in-polygon)."""
     try:
-        # Get submittals with status='Open' or status='Draft'
-        submittals = ProcoreSubmittal.query.filter(
-            ProcoreSubmittal.status.in_(['Open', 'Draft'])
-        ).all()
+        lat_raw = request.args.get('lat')
+        lng_raw = request.args.get('lng')
+        job_numbers_filter = None
+        if lat_raw is not None and lng_raw is not None:
+            try:
+                lat = float(lat_raw)
+                lng = float(lng_raw)
+            except (TypeError, ValueError):
+                pass
+            else:
+                job_numbers_filter = _job_numbers_for_location(lat, lng)
+                if not job_numbers_filter:
+                    return jsonify({"submittals": []}), 200
+
+        base = ProcoreSubmittal.query.filter(ProcoreSubmittal.status.in_(['Open', 'Draft']))
+        if job_numbers_filter is not None:
+            base = base.filter(ProcoreSubmittal.project_number.in_(job_numbers_filter))
+        submittals = base.all()
         return jsonify({
             "submittals": [submittal.to_dict() for submittal in submittals]
         }), 200

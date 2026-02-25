@@ -1,23 +1,33 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { transformSubmittals, getMostRecentUpdate } from '../utils/transformers';
 import { sortByOrderNumber } from '../utils/sorting';
 import { getVisibleColumns } from '../utils/columns';
 
-export function useDataFetching() {
+/**
+ * @param { { lat: number, lng: number } | null } locationFilter - when set, DWL is filtered by job_sites containing this point
+ */
+export function useDataFetching(locationFilter = null) {
     const [submittals, setSubmittals] = useState([]);
     const [columns, setColumns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
 
+    // Ref so the 30s poller always uses current lat/lng and does not overwrite the location filter
+    const locationFilterRef = useRef(locationFilter);
+    useEffect(() => {
+        locationFilterRef.current = locationFilter;
+    }, [locationFilter]);
+
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
         setError(null); // Reset error
 
         try {
-            // Fetch data from API
-            const data = await draftingWorkLoadApi.fetchData();
+            // Always use latest location filter (ref) so polling preserves filter
+            const currentFilter = locationFilterRef.current;
+            const data = await draftingWorkLoadApi.fetchData(currentFilter);
 
             // Transform data
             const transformed = transformSubmittals(data.submittals);
@@ -38,7 +48,7 @@ export function useDataFetching() {
         } finally {
             if (!silent) setLoading(false);
         }
-    }, []);
+    }, [locationFilter]);
 
 
     // Fetch data on mount

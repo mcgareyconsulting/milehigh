@@ -38,7 +38,11 @@ const columnWidthStyles = `
 
 function DraftingWorkLoad() {
     const navigate = useNavigate();
-    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
+    const [locationEnabled, setLocationEnabled] = useState(false);
+    const [userCoords, setUserCoords] = useState(null);
+    const [locationRequesting, setLocationRequesting] = useState(false);
+    const locationFilter = locationEnabled && userCoords ? userCoords : null;
+    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching(locationFilter);
     const {
         updateOrderNumber,
         updateNotes,
@@ -137,6 +141,33 @@ function DraftingWorkLoad() {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
     }, [displayRows, columns, lastUpdated]);
 
+    const handleLocationToggle = useCallback(() => {
+        if (locationEnabled) {
+            setLocationEnabled(false);
+            setUserCoords(null);
+            return;
+        }
+        setLocationRequesting(true);
+        if (!navigator.geolocation) {
+            setLocationRequesting(false);
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
+                setLocationEnabled(true);
+                setLocationRequesting(false);
+                // Do not refetch here: ref is still null until next render. The effect in
+                // useDataFetching will refetch when locationFilter (and ref) update.
+            },
+            () => {
+                setLocationRequesting(false);
+                setLocationEnabled(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }, [locationEnabled, refetch]);
+
 
     const formattedLastUpdated = useMemo(
         () => lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown',
@@ -189,6 +220,27 @@ function DraftingWorkLoad() {
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
                                 </div>
                                 <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={handleLocationToggle}
+                                        disabled={locationRequesting}
+                                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${locationEnabled
+                                            ? 'bg-white text-accent-600 hover:bg-accent-50'
+                                            : 'bg-white/90 text-white hover:bg-white/95'
+                                            } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+                                        title={locationEnabled ? 'Turn off location filter' : 'Filter submittals by your current location (job site)'}
+                                    >
+                                        {locationRequesting ? (
+                                            <>
+                                                <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                Location…
+                                            </>
+                                        ) : locationEnabled ? (
+                                            <>📍 Filtering by location</>
+                                        ) : (
+                                            <>📍 Use my location</>
+                                        )}
+                                    </button>
                                     <button
                                         onClick={handleGeneratePDF}
                                         disabled={!hasData || loading}

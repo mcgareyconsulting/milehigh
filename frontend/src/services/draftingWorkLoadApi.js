@@ -5,10 +5,20 @@ import { API_BASE_URL } from '../utils/api';
 axios.defaults.withCredentials = true;
 
 class DraftingWorkLoadApi {
-    async fetchData() {
+    /**
+     * Fetch DWL data. Optionally pass { lat, lng } to filter submittals by job_sites containing that point.
+     * @param { { lat: number, lng: number } | null } locationFilter - if set, only submittals for matching job_sites are returned
+     */
+    async fetchData(locationFilter = null) {
         try {
+            const params = {};
+            if (locationFilter && typeof locationFilter.lat === 'number' && typeof locationFilter.lng === 'number') {
+                params.lat = locationFilter.lat;
+                params.lng = locationFilter.lng;
+            }
             const response = await axios.get(
-                `${API_BASE_URL}/brain/drafting-work-load`
+                `${API_BASE_URL}/brain/drafting-work-load`,
+                { params: Object.keys(params).length ? params : undefined }
             );
             return response.data;
         } catch (error) {
