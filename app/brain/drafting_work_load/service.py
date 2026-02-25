@@ -5,16 +5,24 @@ Handles database operations and coordinates with engine for business logic.
 from datetime import datetime
 from typing import Optional, List, Tuple
 import logging
-from app.models import db, ProcoreSubmittal
+from sqlalchemy import text
+from app.models import db, ProcoreSubmittal, JobSites
 from app.brain.drafting_work_load.engine import (
     DraftingWorkLoadEngine,
     SubmittalOrderingEngine,
     UrgencyEngine,
+    LocationEngine,
     SubmittalOrderUpdate
 )
 
 # Re-export SubmittalOrderUpdate for backward compatibility
-__all__ = ['DraftingWorkLoadService', 'SubmittalOrderingService', 'UrgencyService', 'SubmittalOrderUpdate']
+__all__ = [
+    'DraftingWorkLoadService',
+    'SubmittalOrderingService',
+    'UrgencyService',
+    'LocationService',
+    'SubmittalOrderUpdate',
+]
 
 logger = logging.getLogger(__name__)
 
@@ -26,16 +34,34 @@ class DraftingWorkLoadService:
     def get_open_submittals(submittal_model):
         """
         Get all submittals with status='Open'.
-        
+
         Args:
             submittal_model: The ProcoreSubmittal model class
-            
+
         Returns:
             List of submittals with status='Open'
         """
         return submittal_model.query.filter(
             submittal_model.status == 'Open'
         ).all()
+
+    @staticmethod
+    def get_dwl_submittals(job_numbers_filter: Optional[List[str]] = None) -> List:
+        """
+        Get Drafting Work Load submittals (status Open or Draft), optionally filtered by job site.
+
+        Args:
+            job_numbers_filter: If set, only submittals with project_number in this list are returned.
+
+        Returns:
+            List of ProcoreSubmittal instances.
+        """
+        base = ProcoreSubmittal.query.filter(
+            ProcoreSubmittal.status.in_(['Open', 'Draft'])
+        )
+        if job_numbers_filter is not None:
+            base = base.filter(ProcoreSubmittal.project_number.in_(job_numbers_filter))
+        return base.all()
     
     @staticmethod
     def validate_notes(notes: Optional[str]) -> Optional[str]:
@@ -366,5 +392,54 @@ class UrgencyService:
             logger.info(f"BUMPED: {int(current_order)} -> {new_order_for_bumped} for submittal {submittal_id} (ladder system - newest at 0.9)")
             if urgent_updates:
                 logger.info(f"Shifted {len(urgent_updates)} existing urgent submittals DOWN the ladder (toward 0.1 = most urgent)")
-        
+
         return True
+
+
+class LocationService:
+    """Service for job site location / boundary checks. Uses PostGIS when available, else engine fallback."""
+
+    @staticmethod
+    def get_job_numbers_for_location(lat: float, lng: float) -> List[str]:
+        """
+        Return job_number for active job_sites that contain or are near (lat, lng).
+        Uses PostGIS ST_DWithin when available (buffer in meters); else Python point-in-polygon.
+
+        Returns:
+            List of job_number strings.
+        """
+        dialect = db.session.get_bind().dialect.name
+        if dialect == "postgresql":
+            try:
+                stmt = text("""
+                    SELECT job_number FROM job_sites
+                    WHERE is_active = true
+                    AND ST_DWithin(
+                        ST_GeomFromGeoJSON(geometry::text)::geography,
+                        ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                        :buffer_meters
+                    )
+                """)
+                rows = db.session.execute(
+                    stmt,
+                    {
+                        "lat": lat,
+                        "lng": lng,
+                        "buffer_meters": LocationEngine.LOCATION_BUFFER_METERS,
+                    },
+                ).fetchall()
+                if rows is not None:
+                    return [r[0] for r in rows]
+            except Exception as e:
+                logger.warning("PostGIS location check failed, using Python fallback: %s", e)
+
+        # Fallback: strict point-in-polygon (SQLite or PostGIS unavailable)
+        sites = JobSites.query.filter_by(is_active=True).all()
+        job_numbers = []
+        for site in sites:
+            geom = site.geometry
+            if isinstance(geom, dict) and geom.get("type") == "Polygon":
+                coords = geom.get("coordinates")
+                if coords and LocationEngine.point_in_polygon(lng, lat, coords):
+                    job_numbers.append(site.job_number)
+        return job_numbers

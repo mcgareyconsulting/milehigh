@@ -99,13 +99,24 @@ def configure_database(app):
     This function sets SQLALCHEMY_DATABASE_URI and SQLALCHEMY_ENGINE_OPTIONS
     on the app config based on the current environment.
     
+    When TESTING=1 is set in the environment (e.g. by pytest), the database
+    is always forced to in-memory SQLite so tests never touch sandbox or production.
+    
     Args:
         app: Flask application instance
     """
+    # Never use sandbox or production during tests (prevents db.drop_all() from wiping real DBs)
+    if os.environ.get("TESTING"):
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        app.config["SQLALCHEMY_ECHO"] = False
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {}
+        return
+
     # Get environment
     environment = os.environ.get("FLASK_ENV") or os.environ.get("ENVIRONMENT", "local")
     environment = environment.lower()
-    
+
     # Get database configuration
     database_uri, engine_options = get_database_config(environment)
     

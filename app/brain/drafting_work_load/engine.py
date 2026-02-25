@@ -640,3 +640,29 @@ class UrgencyEngine:
         
         return True, new_order_for_bumped, urgent_updates, regular_updates
 
+
+class LocationEngine:
+    """Pure geometry/boundary logic for job site location. No database dependencies."""
+
+    # Meters: include job_sites where user is within this distance of the site geometry (PostGIS only)
+    LOCATION_BUFFER_METERS = 25
+
+    @staticmethod
+    def point_in_polygon(lng: float, lat: float, coordinates: list) -> bool:
+        """
+        Ray-casting test. coordinates is GeoJSON Polygon coordinates: list of rings; first ring is exterior.
+        Each ring is list of [lng, lat] (or [lng, lat, z]). Returns True if (lng, lat) is inside the polygon.
+        """
+        if not coordinates or not coordinates[0]:
+            return False
+        ring = coordinates[0]
+        n = len(ring)
+        inside = False
+        j = n - 1
+        for i in range(n):
+            xi, yi = ring[i][0], ring[i][1]
+            xj, yj = ring[j][0], ring[j][1]
+            if ((yi > lat) != (yj > lat)) and (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi):
+                inside = not inside
+            j = i
+        return inside

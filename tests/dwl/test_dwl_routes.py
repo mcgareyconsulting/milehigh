@@ -12,12 +12,18 @@ from app.models import ProcoreSubmittal, db
 
 @pytest.fixture
 def app():
-    """Create Flask application for testing."""
+    """Create Flask application for testing. Uses in-memory SQLite only (TESTING=1 in conftest)."""
     app = create_app()
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    app.config['SECRET_KEY'] = 'test-secret-key'
-    
+    app.config["TESTING"] = True
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app.config["SECRET_KEY"] = "test-secret-key"
+
+    # Guard: never run drop_all against sandbox or production
+    uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
+    assert "sandbox" not in uri.lower() and "render.com" not in uri, (
+        "Tests must not use sandbox/production DB. Set TESTING=1 before create_app (see tests/conftest.py)."
+    )
+
     with app.app_context():
         db.create_all()
         yield app
@@ -83,37 +89,37 @@ def mock_submittal():
 
 class TestGetDraftingWorkLoad:
     """Tests for GET /drafting-work-load endpoint."""
-    
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
-    def test_get_drafting_work_load_success(self, mock_submittal_model, client, mock_submittal):
+
+    @patch('app.brain.drafting_work_load.routes.DraftingWorkLoadService')
+    def test_get_drafting_work_load_success(self, mock_service, client, mock_submittal):
         """Test successful retrieval of drafting work load."""
-        mock_submittal_model.query.filter.return_value.all.return_value = [mock_submittal]
-        
+        mock_service.get_dwl_submittals.return_value = [mock_submittal]
+
         response = client.get('/brain/drafting-work-load')
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert 'submittals' in data
         assert len(data['submittals']) == 1
-    
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
-    def test_get_drafting_work_load_filters_by_status(self, mock_submittal_model, client):
-        """Test that only Open and Draft submittals are returned."""
-        mock_submittal_model.query.filter.return_value.all.return_value = []
-        
+        mock_service.get_dwl_submittals.assert_called_once_with(None)
+
+    @patch('app.brain.drafting_work_load.routes.DraftingWorkLoadService')
+    def test_get_drafting_work_load_filters_by_status(self, mock_service, client):
+        """Test that only Open and Draft submittals are returned (via service)."""
+        mock_service.get_dwl_submittals.return_value = []
+
         response = client.get('/brain/drafting-work-load')
-        
+
         assert response.status_code == 200
-        # Verify filter was called with correct status values
-        mock_submittal_model.query.filter.assert_called_once()
-    
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
-    def test_get_drafting_work_load_error_handling(self, mock_submittal_model, client):
-        """Test error handling when database query fails."""
-        mock_submittal_model.query.filter.side_effect = Exception("Database error")
-        
+        mock_service.get_dwl_submittals.assert_called_once_with(None)
+
+    @patch('app.brain.drafting_work_load.routes.DraftingWorkLoadService')
+    def test_get_drafting_work_load_error_handling(self, mock_service, client):
+        """Test error handling when service raises."""
+        mock_service.get_dwl_submittals.side_effect = Exception("Database error")
+
         response = client.get('/brain/drafting-work-load')
-        
+
         assert response.status_code == 500
         data = json.loads(response.data)
         assert 'error' in data
