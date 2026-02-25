@@ -105,6 +105,13 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
+    const updateProcoreStatus = useCallback(async (submittalId, statusId) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.updateProcoreStatus(submittalId, statusId),
+            `Failed to update Procore status for submittal ${submittalId}`
+        );
+    }, [executeMutation]);
+
     return {
         // Order number mutation
         updateOrderNumber,
@@ -117,6 +124,9 @@ export function useMutations(refetch) {
 
         // Status mutation
         updateStatus,
+
+        // Procore status mutation (Draft/Open/Closed etc.)
+        updateProcoreStatus,
 
         // Bump mutation
         bumpSubmittal,

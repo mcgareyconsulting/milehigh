@@ -77,6 +77,33 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Fetch submittal statuses for the company (for Procore status dropdown)
+     */
+    async fetchSubmittalStatuses() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/drafting-work-load/submittal-statuses`);
+            return response.data.submittal_statuses;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch submittal statuses');
+        }
+    }
+
+    /**
+     * Update Procore status for a submittal (Draft/Open/Closed/etc.)
+     */
+    async updateProcoreStatus(submittalId, statusId) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/procore-status`, {
+                submittal_id: submittalId,
+                status_id: statusId
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update Procore status for submittal ${submittalId}`);
+        }
+    }
+
+    /**
      * Update due date for a submittal
      */
     async updateDueDate(submittalId, dueDate) {

@@ -1569,6 +1569,13 @@ def create_app():
             logger.error("Error reading pkl file", error=str(e), file=file_path)
             return jsonify({"error": str(e)}), 500
 
+    # Register blueprints before catch-all so API routes (e.g. POST /api/auth/login) are matched first
+    app.register_blueprint(trello_bp, url_prefix="/trello")
+    app.register_blueprint(procore_bp, url_prefix="/procore")
+    # app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(brain_bp, url_prefix="/brain")
+    app.register_blueprint(auth_bp)
+
     # Catch-all route for React Router (must be last, after all API routes)
     # This handles direct URL access to React routes like /history, /operations, etc.
     # Note: /jobs is handled above with special logic to distinguish API vs browser requests
@@ -1594,13 +1601,6 @@ def create_app():
             return send_file(FRONTEND_BUILD_DIR / 'index.html')
         else:
             return "React build not found. Run 'npm run build' in the frontend directory.", 404
-
-    # Register blueprints
-    app.register_blueprint(trello_bp, url_prefix="/trello")
-    app.register_blueprint(procore_bp, url_prefix="/procore")
-    # app.register_blueprint(api_bp, url_prefix="/api")
-    app.register_blueprint(brain_bp, url_prefix="/brain")
-    app.register_blueprint(auth_bp)
 
     # Global error handler to ensure CORS headers are always included
     @app.errorhandler(Exception)

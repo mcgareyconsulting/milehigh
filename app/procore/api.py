@@ -8,6 +8,19 @@ from app.config import Config as cfg
 from app.procore.procore_auth import get_access_token, get_access_token_force_refresh
 from app.logging_config import get_logger
 
+# Coded mapping of company submittal statuses (id -> name). Update when company adds new statuses.
+SUBMITTAL_STATUSES = [
+    {"id": 203239, "name": "Closed", "status": "Closed", "is_default": True},
+    {"id": 203240, "name": "Draft", "status": "Draft", "is_default": True},
+    {"id": 203238, "name": "Open", "status": "Open", "is_default": True},
+    {"id": 55331, "name": "Fab Complete", "status": "Open", "is_default": False},
+    {"id": 55330, "name": "Ongoing Installation", "status": "Open", "is_default": False},
+    {"id": 114300, "name": "Submitted To Client", "status": "Open", "is_default": False},
+]
+VALID_SUBMITTAL_STATUS_IDS = {s["id"] for s in SUBMITTAL_STATUSES}
+SUBMITTAL_STATUS_ID_TO_NAME = {s["id"]: s["name"] for s in SUBMITTAL_STATUSES}
+
+
 class ProcoreAPI:
     """ProcoreAPI connection layer utilizing requests session for better performance and error handling."""
     BASE_URL = "https://api.procore.com"
@@ -99,6 +112,9 @@ class ProcoreAPI:
     def _post(self, endpoint: str, data: Dict):
         return self._request("POST", endpoint, json=data)
 
+    def _patch(self, endpoint: str, data: Dict):
+        return self._request("PATCH", endpoint, json=data)
+
     def _delete(self, endpoint: str):
         return self._request("DELETE", endpoint)
 
@@ -179,6 +195,19 @@ class ProcoreAPI:
         # type: 2 = Drafting Release Review
         # type: 3 = Submittal For Gc  Approval
         return self._get(f"/rest/v1.1/projects/{project_id}/submittals?filters[type][]=Drafting Release Review&filters[type][]=Submittal for GC  Approval&filter[type][]=Submittal for GC Approval&filters[status_id]=203238")
+
+    def get_submittals_statuses(self) -> List[Dict]:
+        return self._get(f"/rest/v1.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/submittal_statuses")
+
+    def update_submittal_status(self, project_id: int, submittal_id: int, status_id: int) -> Dict:
+        """Update a submittal's status in Procore. status_id must be in VALID_SUBMITTAL_STATUS_IDS."""
+        if status_id not in VALID_SUBMITTAL_STATUS_IDS:
+            raise ValueError(f"Invalid status_id {status_id}; must be one of {sorted(VALID_SUBMITTAL_STATUS_IDS)}")
+        return self._patch(
+            f"/rest/v1.1/projects/{project_id}/submittals/{submittal_id}",
+            {"status_id": status_id},
+        )
+
     # -------------------------
     # Webhooks
     # -------------------------
@@ -258,5 +287,6 @@ if __name__ == "__main__":
     with app.app_context():
 
         procore_client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_DEV_WEBHOOK_URL)
-        user_information = procore_client.get_user_information_by_id(14522375)
-        print(user_information)
+        statuses = procore_client.get_submittals_statuses()
+        print(statuses)
+        

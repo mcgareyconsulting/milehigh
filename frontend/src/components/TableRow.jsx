@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onBump, onDueDateChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, isAdmin = false }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, isAdmin = false }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -235,7 +235,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             return;
         }
 
-        // Check if drag started from a protected cell (Order Number, Project Number, Status, Notes, Due Date)
+        // Check if drag started from a protected cell (Order Number, Project Number, Procore Status, Status, Notes, Due Date)
         const target = e.target;
         const cell = target.closest('td');
 
@@ -243,6 +243,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             const cellClasses = cell.className || '';
             const isOrderNumberCell = cellClasses.includes('dwl-col-order-number');
             const isProjectNumberCell = cellClasses.includes('dwl-col-project-number');
+            const isProcoreStatusCell = cellClasses.includes('dwl-col-procore-status');
             const isStatusCell = cellClasses.includes('dwl-col-status');
             const isNotesCell = cellClasses.includes('dwl-col-notes');
             const isDueDateCell = cellClasses.includes('dwl-col-due-date');
@@ -259,7 +260,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 target.closest('a') ||
                 target.closest('button');
 
-            if (isOrderNumberCell || isProjectNumberCell || isStatusCell || isNotesCell || isDueDateCell || isInputElement) {
+            if (isOrderNumberCell || isProjectNumberCell || isProcoreStatusCell || isStatusCell || isNotesCell || isDueDateCell || isInputElement) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -340,6 +341,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isSubmittalId = column === 'Submittals Id';
                     const isType = column === 'Type';
                     const isNotes = column === 'Notes';
+                    const isProcoreStatus = column === 'Procore Status';
                     const isStatus = column === 'Status';
                     const isProjectName = column === 'Project Name';
                     const isBallInCourt = column === 'Ball In Court';
@@ -376,6 +378,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         columnClass = 'dwl-col-order-number';
                     } else if (isNotes) {
                         columnClass = 'dwl-col-notes';
+                    } else if (isProcoreStatus) {
+                        columnClass = 'dwl-col-procore-status';
                     } else if (isStatus) {
                         columnClass = 'dwl-col-status';
                     } else if (isProjectName) {
@@ -543,8 +547,48 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     }
 
 
+                    if (isProcoreStatus) {
+                        // Procore Status column: current submittal status from Procore (default value) + dropdown to patch
+                        const currentProcoreStatus = row.status ?? row['Procore Status'] ?? '';
+                        const hasOptions = Array.isArray(procoreStatusOptions) && procoreStatusOptions.length > 0;
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-procore-status`}
+                                style={{ maxWidth: '96px' }}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
+                            >
+                                {hasOptions && isAdmin ? (
+                                    <select
+                                        value={procoreStatusOptions.find((o) => o.name === currentProcoreStatus)?.id ?? ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (submittalId && onProcoreStatusChange && val !== '') {
+                                                const statusId = Number(val);
+                                                if (!Number.isNaN(statusId)) onProcoreStatusChange(submittalId, statusId);
+                                            }
+                                        }}
+                                        className="w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded text-center bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
+                                        title="Select Procore status (updates submittal in Procore)"
+                                    >
+                                        <option value="">—</option>
+                                        {procoreStatusOptions.map((opt) => (
+                                            <option key={opt.id} value={opt.id}>
+                                                {opt.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <span className="text-xs text-gray-700">{currentProcoreStatus || '—'}</span>
+                                )}
+                            </td>
+                        );
+                    }
+
                     if (isStatus) {
-                        const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? '';
+                        // Status column: always HOLD / NEED VIF / STARTED drafting dropdown
+                        const currentStatus = row.submittal_drafting_status ?? row['Submittal Drafting Status'] ?? row['Status'] ?? '';
                         const statusOptions = ['STARTED', 'NEED VIF', 'HOLD'];
 
                         return (
@@ -559,7 +603,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                     value={currentStatus || ''}
                                     onChange={(e) => {
                                         if (isAdmin && submittalId && onStatusChange) {
-                                            // Send empty string for blank, not null
                                             onStatusChange(submittalId, e.target.value);
                                         }
                                     }}
@@ -569,7 +612,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                             ? 'bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer'
                                             : 'bg-gray-100 text-gray-600 cursor-not-allowed opacity-75'
                                     }`}
-                                    title={isAdmin ? "Select status" : "Read-only (admin only)"}
+                                    title={isAdmin ? "Select drafting status (HOLD / NEED VIF / STARTED)" : "Read-only (admin only)"}
                                 >
                                     <option value="">—</option>
                                     {statusOptions.map((option) => (

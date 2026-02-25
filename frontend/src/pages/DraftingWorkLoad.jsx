@@ -10,6 +10,7 @@ import { AlertMessage } from '../components/AlertMessage';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
 import { checkAuth, logout } from '../utils/auth';
+import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
@@ -34,9 +35,18 @@ function DraftingWorkLoad() {
         updateOrderNumber,
         updateNotes,
         updateStatus,
+        updateProcoreStatus,
         bumpSubmittal,
         updateDueDate,
     } = useMutations(refetch);
+
+    // Submittal statuses for company (Procore status dropdown on draft tab)
+    const [submittalStatuses, setSubmittalStatuses] = useState([]);
+    useEffect(() => {
+        draftingWorkLoadApi.fetchSubmittalStatuses()
+            .then(setSubmittalStatuses)
+            .catch((err) => console.error('Failed to fetch submittal statuses:', err));
+    }, []);
 
     // User admin status
     const [isAdmin, setIsAdmin] = useState(false);
@@ -280,6 +290,7 @@ function DraftingWorkLoad() {
                                                         const isNotes = column === 'Notes';
                                                         const isProjectName = column === 'Project Name';
                                                         const isTitle = column === 'Title';
+                                                        const isProcoreStatus = column === 'Procore Status';
                                                         const isStatus = column === 'Status';
                                                         const isBallInCourt = column === 'Ball In Court';
                                                         const isType = column === 'Type';
@@ -315,6 +326,9 @@ function DraftingWorkLoad() {
                                                         } else if (isType) {
                                                             headerStyle = { maxWidth: '80px' };
                                                             columnClass = 'dwl-col-type';
+                                                        } else if (isProcoreStatus) {
+                                                            headerStyle = { maxWidth: '96px' };
+                                                            columnClass = 'dwl-col-procore-status';
                                                         } else if (isStatus) {
                                                             headerStyle = { maxWidth: '96px' };
                                                             columnClass = 'dwl-col-status';
@@ -338,8 +352,8 @@ function DraftingWorkLoad() {
                                                         const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isCreationDateHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
                                                         // Determine if this column is sortable
-                                                        // Order Number, Notes, Status, and Due Date are not sortable (they're interactive)
-                                                        const isNotSortable = isOrderNumber || isNotes || isStatus || isDueDate;
+                                                        // Order Number, Notes, Procore Status, Status, and Due Date are not sortable (they're interactive)
+                                                        const isNotSortable = isOrderNumber || isNotes || isProcoreStatus || isStatus || isDueDate;
 
                                                         // Get sort state for this column
                                                         const isSorted = columnSort.column === column;
@@ -430,6 +444,9 @@ function DraftingWorkLoad() {
                                                             onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
                                                             onNotesChange={isAdmin ? updateNotes : undefined}
                                                             onStatusChange={isAdmin ? updateStatus : undefined}
+                                                            onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
+                                                            procoreStatusOptions={submittalStatuses}
+                                                            selectedTab={selectedTab}
                                                             onBump={isAdmin ? bumpSubmittal : undefined}
                                                             onDueDateChange={isAdmin ? updateDueDate : undefined}
                                                             rowIndex={index}

@@ -4,6 +4,8 @@ from app.brain.drafting_work_load.service import SubmittalOrderingService, Submi
 from app.logging_config import get_logger
 from app.models import ProcoreSubmittal, db
 from app.auth.utils import login_required, admin_required
+from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
+from app.procore.client import get_procore_client
 from datetime import datetime
 
 logger = get_logger(__name__)
@@ -251,6 +253,74 @@ def bump_submittal():
             "error": "Failed to bump submittal",
             "details": str(exc)
         }), 500
+
+@brain_bp.route("/drafting-work-load/submittal-statuses")
+@login_required
+def get_submittal_statuses():
+    """Return the coded list of submittal statuses for the company (for dropdowns)."""
+    return jsonify({"submittal_statuses": SUBMITTAL_STATUSES}), 200
+
+
+@brain_bp.route("/drafting-work-load/procore-status", methods=["PUT"])
+@admin_required
+def update_submittal_procore_status():
+    """Update a submittal's Procore status (Draft/Open/Closed/etc.) via Procore API and sync DB."""
+    try:
+        data = request.json
+        submittal_id = data.get("submittal_id")
+        status_id = data.get("status_id")
+
+        if submittal_id is None:
+            return jsonify({"error": "submittal_id is required"}), 400
+        if status_id is None:
+            return jsonify({"error": "status_id is required"}), 400
+
+        try:
+            status_id = int(status_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "status_id must be an integer"}), 400
+
+        if status_id not in VALID_SUBMITTAL_STATUS_IDS:
+            return jsonify({
+                "error": f"status_id {status_id} is not allowed for this company",
+                "allowed_ids": sorted(VALID_SUBMITTAL_STATUS_IDS),
+            }), 400
+
+        submittal_id = str(submittal_id)
+        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({"error": "Submittal not found"}), 404
+
+        project_id = submittal.procore_project_id
+        if not project_id:
+            return jsonify({"error": "Submittal has no procore_project_id"}), 400
+        try:
+            project_id = int(project_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid procore_project_id"}), 400
+
+        procore_client = get_procore_client()
+        procore_client.update_submittal_status(project_id, int(submittal_id), status_id)
+
+        submittal.status = SUBMITTAL_STATUS_ID_TO_NAME[status_id]
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "status_id": status_id,
+            "status": submittal.status,
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as exc:
+        logger.error("Error updating submittal Procore status", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to update Procore status",
+            "details": str(exc),
+        }), 500
+
 
 @brain_bp.route("/drafting-work-load/due-date", methods=["PUT"])
 @admin_required

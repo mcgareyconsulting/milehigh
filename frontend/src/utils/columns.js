@@ -8,6 +8,7 @@ export const DESIRED_COLUMN_ORDER = [
     'Title',
     'Ball In Court',
     'Type',
+    'Procore Status',
     'Status',
     'Due Date',
     'Submittal Manager',
