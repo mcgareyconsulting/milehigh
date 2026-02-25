@@ -15,6 +15,14 @@ import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
 const columnWidthStyles = `
+    /* Hide scrollbar on table scroll area; scrolling still works via wheel/trackpad */
+    .dwl-table-scroll-hide-scrollbar {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE / Edge */
+    }
+    .dwl-table-scroll-hide-scrollbar::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Edge */
+    }
     @media (min-width: 1536px) {
         /* Reduce column max-widths on very large screens to prevent bloating */
         .dwl-col-name { max-width: 260px !important; }
@@ -287,7 +295,11 @@ function DraftingWorkLoad() {
 
                         {!loading && !fetchError && (
                             <div className="flex-1 min-h-0 flex flex-col border border-gray-200 rounded-xl overflow-hidden bg-white min-w-0">
-                                <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0">
+                                {/* Scrollbar hidden via CSS; scroll still works with wheel/trackpad */}
+                                <div
+                                    className="dwl-table-scroll-hide-scrollbar flex-1 min-h-0 overflow-x-hidden"
+                                    style={{ overflowY: 'auto' }}
+                                >
                                     <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
                                         <thead className="sticky top-0 z-10 bg-gray-100 shadow-sm">
                                             <tr>
