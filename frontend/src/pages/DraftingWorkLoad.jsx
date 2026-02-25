@@ -225,8 +225,8 @@ function DraftingWorkLoad() {
                                         onClick={handleLocationToggle}
                                         disabled={locationRequesting}
                                         className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${locationEnabled
-                                            ? 'bg-white text-accent-600 hover:bg-accent-50'
-                                            : 'bg-white/90 text-white hover:bg-white/95'
+                                            ? 'bg-green-500 text-white hover:bg-green-600'
+                                            : 'bg-white text-gray-800 hover:bg-gray-50'
                                             } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
                                         title={locationEnabled ? 'Turn off location filter' : 'Filter submittals by your current location (job site)'}
                                     >
