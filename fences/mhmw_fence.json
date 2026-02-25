@@ -1,0 +1,54 @@
+{
+    "type": "Feature Collection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -104.9709385384151,
+                            40.11264899185155,
+                            0
+                        ],
+                        [
+                            -104.9709483958617,
+                            40.11188273344606,
+                            0
+                        ],
+                        [
+                            -104.969541903565,
+                            40.11191628552783,
+                            0
+                        ],
+                        [
+                            -104.9695174455354,
+                            40.11264917342006,
+                            0
+                        ],
+                        [
+                            -104.9709385384151,
+                            40.11264899185155,
+                            0
+                        ]
+                    ]
+                ]
+            },
+            "properties": {
+                "name": "Mile High Metal Works",
+                "styleUrl": "#m_ylw-pushpin",
+                "icon-scale": 1.1,
+                "icon-offset": [
+                    20,
+                    2
+                ],
+                "icon-offset-units": [
+                    "pixels",
+                    "pixels"
+                ],
+                "icon": "http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png"
+            }
+        }
+    ]
+}

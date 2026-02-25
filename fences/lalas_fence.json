@@ -1,0 +1,54 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -104.861833604204,
+                            39.36652558805497,
+                            0
+                        ],
+                        [
+                            -104.8619213869429,
+                            39.366424697947,
+                            0
+                        ],
+                        [
+                            -104.861614399594,
+                            39.36627306461905,
+                            0
+                        ],
+                        [
+                            -104.8615324857917,
+                            39.36636499189304,
+                            0
+                        ],
+                        [
+                            -104.861833604204,
+                            39.36652558805497,
+                            0
+                        ]
+                    ]
+                ]
+            },
+            "properties": {
+                "name": "Lala's GeoFence",
+                "styleUrl": "#m_ylw-pushpin",
+                "icon-scale": 1.1,
+                "icon-offset": [
+                    20,
+                    2
+                ],
+                "icon-offset-units": [
+                    "pixels",
+                    "pixels"
+                ],
+                "icon": "http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png"
+            }
+        }
+    ]
+}
