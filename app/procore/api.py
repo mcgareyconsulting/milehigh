@@ -102,6 +102,12 @@ class ProcoreAPI:
     def _delete(self, endpoint: str):
         return self._request("DELETE", endpoint)
 
+    # -------------------------
+    # Users
+    # -------------------------
+    def get_user_information_by_id(self, user_id: int) -> List[Dict]:
+        return self._get(f"/rest/v1.3/companies/{cfg.PROD_PROCORE_COMPANY_ID}/users/{user_id}")
+
 
     # -------------------------
     # Projects
@@ -244,3 +250,13 @@ class ProcoreAPI:
     def delete_webhook(self, project_id: int, hook_id: int) -> Dict:
         """Delete a specific webhook."""
         return self._delete(f"/rest/v2.0/companies/{cfg.PROD_PROCORE_COMPANY_ID}/projects/{project_id}/webhooks/hooks/{hook_id}")
+
+# main function to test the api
+if __name__ == "__main__":
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+
+        procore_client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_DEV_WEBHOOK_URL)
+        user_information = procore_client.get_user_information_by_id(14522375)
+        print(user_information)

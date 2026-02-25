@@ -84,6 +84,10 @@ def procore_webhook():
             payload = {}
 
         # Extract metadata
+        print('Payload analysis')
+        print('--------------------------------')
+        print(payload)
+        print('--------------------------------')
         # Procore webhook uses "id" for resource_id, not "resource_id"
         resource_id_raw = payload.get("resource_id")
         project_id_raw = payload.get("project_id")
