@@ -22,7 +22,7 @@ function Login({ onLogin }) {
             if (response.ok) {
                 // User is already logged in, redirect to dashboard
                 if (onLogin) onLogin();
-                navigate('/');
+                navigate('/dashboard');
             }
         } catch (err) {
             // Not logged in, stay on login page
@@ -49,7 +49,7 @@ function Login({ onLogin }) {
             if (response.ok) {
                 // Success - update auth state and redirect to dashboard
                 if (onLogin) onLogin();
-                navigate('/');
+                navigate('/dashboard');
             } else {
                 setError(data.error || 'An error occurred');
             }

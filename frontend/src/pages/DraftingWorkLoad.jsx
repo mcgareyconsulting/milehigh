@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
@@ -9,7 +8,7 @@ import { FilterButtonGroup } from '../components/FilterButtonGroup';
 import { AlertMessage } from '../components/AlertMessage';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
-import { checkAuth, logout } from '../utils/auth';
+import { checkAuth } from '../utils/auth';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
@@ -37,7 +36,6 @@ const columnWidthStyles = `
 `;
 
 function DraftingWorkLoad() {
-    const navigate = useNavigate();
     const [locationEnabled, setLocationEnabled] = useState(false);
     const [userCoords, setUserCoords] = useState(null);
     const [locationRequesting, setLocationRequesting] = useState(false);
@@ -65,11 +63,6 @@ function DraftingWorkLoad() {
     // User admin status
     const [isAdmin, setIsAdmin] = useState(false);
     const [userLoading, setUserLoading] = useState(true);
-
-    const handleLogout = async () => {
-        await logout();
-        window.location.href = '/login';
-    };
 
     // Fetch user info to check admin status
     useEffect(() => {
@@ -169,35 +162,7 @@ function DraftingWorkLoad() {
     return (
         <>
             <style>{columnWidthStyles}</style>
-            <div className="w-full h-screen flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50" style={{ width: '100%', minWidth: '100%' }}>
-                {/* Navigation Header - fixed, does not scroll */}
-                <div className="flex-shrink-0 w-full bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200" style={{ width: '100%', minWidth: '100%' }}>
-                    <div className="max-w-full mx-auto px-4 py-3 w-full" style={{ width: '100%' }}>
-                        <div className="flex items-center justify-between">
-                            <div
-                                className="text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 bg-clip-text text-transparent cursor-pointer hover:from-accent-600 hover:to-accent-700 transition-all"
-                                onClick={() => navigate('/')}
-                            >
-                                ← Back to Dashboard
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => navigate('/')}
-                                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-gray-700 hover:bg-gray-100"
-                                >
-                                    Dashboard
-                                </button>
-                                <button
-                                    onClick={handleLogout}
-                                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-red-600 hover:bg-red-50 border border-red-200"
-                                >
-                                    Logout
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+            <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50" style={{ width: '100%', minWidth: '100%' }}>
                 <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
                         {/* Title bar - fixed, does not scroll */}

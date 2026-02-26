@@ -144,22 +144,19 @@ function Events() {
     };
 
     return (
-        <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-8 px-4" style={{ width: '100%', minWidth: '100%' }}>
-            <div className="max-w-7xl mx-auto w-full" style={{ width: '100%', maxWidth: '1280px' }}>
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-8 py-6">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h1 className="text-3xl font-bold text-white mb-2">Job Events</h1>
-                                <p className="text-accent-100">View and track job events with source, date, and payload information</p>
-                            </div>
+        <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+                    {/* Title bar - matches DWL / Job Log */}
+                    <div className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-accent-500 to-accent-600">
+                        <div className="flex items-center justify-between">
+                            <h1 className="text-3xl font-bold text-white">Job Events</h1>
                         </div>
                     </div>
 
-                    <div className="p-8">
-
-                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-6 mb-6 border border-gray-200">
-                            <div className="flex flex-wrap gap-4 items-end">
+                    <div className="p-2 flex flex-col flex-1 min-h-0 space-y-2">
+                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 rounded-xl p-3 border border-gray-200 shadow-sm flex-shrink-0">
+                            <div className="flex flex-wrap gap-3 items-end">
                                 <div className="flex-1 min-w-[200px]">
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         📅 Filter by Date
@@ -224,7 +221,7 @@ function Events() {
                                 </div>
                             </div>
                             {submittalId && (
-                                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-between">
+                                <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <span className="text-blue-700 font-semibold">Filtered by Submittal ID:</span>
                                         <span className="text-blue-900 font-mono text-sm">{submittalId}</span>
@@ -238,7 +235,7 @@ function Events() {
                                 </div>
                             )}
                             {(jobFilter || releaseFilter) && (
-                                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center justify-between">
+                                <div className="mt-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <span className="text-green-700 font-semibold">Filtered by Job:</span>
                                         <span className="text-green-900 font-mono text-sm">
@@ -274,9 +271,9 @@ function Events() {
                         )}
 
                         {!loading && !error && (
-                            <>
-                                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                                    <div className="overflow-x-auto">
+                            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                                    <div className="overflow-auto flex-1 min-h-0">
                                         <table className="w-full">
                                             <thead className="bg-gradient-to-r from-gray-50 to-accent-50">
                                                 <tr>
@@ -351,14 +348,14 @@ function Events() {
                                         </table>
                                     </div>
                                 </div>
-                                <div className="mt-6 flex items-center justify-between">
+                                <div className="flex items-center justify-between flex-shrink-0 pt-2">
                                     <div className="bg-accent-50 rounded-lg px-4 py-2 border border-accent-200">
                                         <p className="text-sm font-semibold text-accent-700">
                                             Total: <span className="text-accent-900">{events.length}</span> events
                                         </p>
                                     </div>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
                 </div>
