@@ -33,6 +33,8 @@ function JobLog() {
         projectNameOptions,
         stageOptions,
         stageColors,
+        stageToGroup,
+        stageGroupColors,
         displayJobs,
         resetFilters,
         toggleStage,
@@ -841,6 +843,8 @@ function JobLog() {
                                                         isDragging={draggedIndex}
                                                         dragOverIndex={dragOverIndex}
                                                         onUpdate={() => refetch(true)}
+                                                        stageToGroup={stageToGroup}
+                                                        stageGroupColors={stageGroupColors}
                                                     />
                                                 ))
                                             )}

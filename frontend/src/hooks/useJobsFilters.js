@@ -175,6 +175,34 @@ export function useJobsFilters(jobs = []) {
     }, [jobs]);
 
     /**
+     * Stage → stage_group for subset-based dropdown colors (matches backend).
+     * FABRICATION = Fab, READY_TO_SHIP = Ready to Ship, COMPLETE = Complete.
+     */
+    const stageToGroup = {
+        'Released': 'FABRICATION',
+        'Cut start': 'FABRICATION',
+        'Fit Up Complete.': 'FABRICATION',
+        'Hold': 'FABRICATION',
+        'Material Ordered': 'FABRICATION',
+        'Welded': 'FABRICATION',
+        'Welded QC': 'READY_TO_SHIP',
+        'Paint complete': 'READY_TO_SHIP',
+        'Store at MHMW for shipping': 'READY_TO_SHIP',
+        'Shipping planning': 'READY_TO_SHIP',
+        'Shipping completed': 'COMPLETE',
+        'Complete': 'COMPLETE',
+    };
+
+    /**
+     * Colors per stage subset for the job log stage dropdown (custom dropdown only).
+     */
+    const stageGroupColors = {
+        FABRICATION: { light: 'rgb(219 234 254)', text: 'rgb(30 64 175)', border: 'rgb(147 197 253)' },
+        READY_TO_SHIP: { light: 'rgb(209 250 229)', text: 'rgb(6 95 70)', border: 'rgb(110 231 183)' },
+        COMPLETE: { light: 'rgb(237 233 254)', text: 'rgb(91 33 182)', border: 'rgb(196 181 253)' },
+    };
+
+    /**
      * Stage options for multiselect (using simplified labels)
      */
     const stageOptions = [
@@ -290,6 +318,8 @@ export function useJobsFilters(jobs = []) {
         projectNameOptions,
         stageOptions,
         stageColors,
+        stageToGroup,
+        stageGroupColors,
 
         // Filtered and sorted jobs
         displayJobs,

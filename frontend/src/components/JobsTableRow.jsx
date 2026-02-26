@@ -4,7 +4,7 @@ import { JobDetailsModal } from './JobDetailsModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
 
@@ -152,6 +152,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [localBananaColor, setLocalBananaColor] = useState(row['Banana Color'] || null);
     const [updatingBananaColor, setUpdatingBananaColor] = useState(false);
     const [showBananaDropdown, setShowBananaDropdown] = useState(false);
+    const [showStageDropdown, setShowStageDropdown] = useState(false);
 
     // Local state for Job Comp and Invoiced (editable text)
     const [localJobComp, setLocalJobComp] = useState(row['Job Comp'] ?? '');
@@ -550,12 +551,18 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
                     // Handle Stage column with editable color-coded dropdown and banana selector
                     if (column === 'Stage') {
-                        const currentStageColors = stageColors[localStage] || stageColors['Released'];
-                        // Get display label for current stage
+                        // Use stage subset colors when provided, else per-stage colors
+                        const getStageColors = (stageValue) => {
+                            if (stageToGroup && stageGroupColors) {
+                                const group = stageToGroup[stageValue] || 'FABRICATION';
+                                return stageGroupColors[group] || stageGroupColors.FABRICATION;
+                            }
+                            return stageColors[stageValue] || stageColors['Released'];
+                        };
+                        const currentStageColors = getStageColors(localStage);
                         const currentOption = stageOptions.find(opt => opt.value === localStage);
                         const currentLabel = currentOption ? currentOption.label : localStage;
 
-                        // Solid color style (no gradient)
                         const solidStyle = {
                             backgroundColor: currentStageColors.light,
                             color: currentStageColors.text,
@@ -571,34 +578,60 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <div className="flex items-center justify-center gap-1">
-                                    {/* Stage dropdown */}
-                                    <select
-                                        value={localStage}
-                                        onChange={(e) => handleStageChange(e.target.value)}
-                                        disabled={updatingStage}
-                                        className={`flex-1 px-2 py-0.5 text-[10px] border-2 rounded font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
-                                        style={{
-                                            minWidth: '100px',
-                                            ...solidStyle
-                                        }}
-                                    >
-                                        {stageOptions.map((option) => {
-                                            const optionColors = stageColors[option.value] || stageColors['Released'];
-                                            return (
-                                                <option
-                                                    key={option.value}
-                                                    value={option.value}
-                                                    style={{
-                                                        backgroundColor: optionColors.light,
-                                                        color: optionColors.text
-                                                    }}
-                                                >
-                                                    {option.label}
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
-                                    
+                                    {/* Custom stage dropdown (fully styleable open menu) */}
+                                    <div className="relative flex-1 min-w-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
+                                            disabled={updatingStage}
+                                            className={`w-full min-w-[100px] px-2 py-0.5 text-[10px] border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
+                                            style={solidStyle}
+                                        >
+                                            {currentLabel}
+                                        </button>
+                                        {showStageDropdown && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-10"
+                                                    onClick={() => setShowStageDropdown(false)}
+                                                    aria-hidden="true"
+                                                />
+                                                <div className="absolute left-0 right-0 top-full mt-0.5 rounded-md border-2 border-gray-300 shadow-lg z-20 min-w-[100px] max-h-64 overflow-y-auto overflow-x-hidden bg-white flex flex-col">
+                                                    {(stageToGroup
+                                                        ? [...stageOptions].sort((a, b) => {
+                                                            const groupOrder = { FABRICATION: 0, READY_TO_SHIP: 1, COMPLETE: 2 };
+                                                            const ga = stageToGroup[a.value] ?? 'FABRICATION';
+                                                            const gb = stageToGroup[b.value] ?? 'FABRICATION';
+                                                            return (groupOrder[ga] ?? 0) - (groupOrder[gb] ?? 0);
+                                                          })
+                                                        : stageOptions
+                                                    ).map((option) => {
+                                                        const optionColors = getStageColors(option.value);
+                                                        const isSelected = option.value === localStage;
+                                                        return (
+                                                            <button
+                                                                key={option.value}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleStageChange(option.value);
+                                                                    setShowStageDropdown(false);
+                                                                }}
+                                                                className={`w-full px-2 py-1.5 text-[10px] font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400' : ''}`}
+                                                                style={{
+                                                                    backgroundColor: optionColors.light,
+                                                                    color: optionColors.text,
+                                                                    borderColor: optionColors.border
+                                                                }}
+                                                            >
+                                                                {option.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
                                     {/* Banana selector dropdown */}
                                     <div className="relative">
                                         {(() => {
@@ -614,29 +647,29 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                 : 'hover:bg-gray-50';
 
                                             return (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowBananaDropdown(!showBananaDropdown)}
-                                            disabled={updatingBananaColor}
-                                            className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
-                                            title="Set urgency indicator"
-                                        >
-                                            {localBananaColor ? (
-                                                <BananaIcon color={localBananaColor} size={22} />
-                                            ) : (
-                                                <div className="w-[22px] h-[22px] bg-white rounded flex items-center justify-center">
-                                                    <BananaIcon color="outline" size={18} />
-                                                </div>
-                                            )}
-                                        </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowBananaDropdown(!showBananaDropdown)}
+                                                    disabled={updatingBananaColor}
+                                                    className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
+                                                    title="Set urgency indicator"
+                                                >
+                                                    {localBananaColor ? (
+                                                        <BananaIcon color={localBananaColor} size={22} />
+                                                    ) : (
+                                                        <div className="w-[22px] h-[22px] bg-white rounded flex items-center justify-center">
+                                                            <BananaIcon color="outline" size={18} />
+                                                        </div>
+                                                    )}
+                                                </button>
                                             );
                                         })()}
-                                        
+
                                         {/* Banana dropdown menu */}
                                         {showBananaDropdown && (
                                             <>
-                                                <div 
-                                                    className="fixed inset-0 z-10" 
+                                                <div
+                                                    className="fixed inset-0 z-10"
                                                     onClick={() => setShowBananaDropdown(false)}
                                                 />
                                                 <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded shadow-lg z-20 min-w-[150px]">
