@@ -164,6 +164,7 @@ function JobLog() {
         'Released',
         'Fab Order',
         'Stage',
+        'Urgency',
         'Start install',
         'Comp. ETA',
         'Job Comp',
@@ -188,7 +189,8 @@ function JobLog() {
         'BY': 3,
         'Released': 5,
         'Fab Order': 6,
-        'Stage': 15,
+        'Stage': 9,
+        'Urgency': 9,
         'Start install': 5,
         'Comp. ETA': 5,
         'Job Comp': 5,
@@ -199,7 +201,7 @@ function JobLog() {
     // Filter and order columns based on defined order
     const columnHeaders = useMemo(() => {
         // Only include columns that exist in the data and are in our defined order
-        return columnOrder.filter(col => columns.includes(col));
+        return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
     }, [columns]);
 
     const tableColumnCount = columnHeaders.length;

@@ -549,7 +549,95 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
 
 
-                    // Handle Stage column with editable color-coded dropdown and banana selector
+                    // Urgency column: banana indicator (same spacing as Stage column)
+                    if (column === 'Urgency') {
+                        const bananaChipClass = localBananaColor === 'red'
+                            ? 'bg-red-100 border-red-300 ring-2 ring-red-300'
+                            : localBananaColor === 'yellow'
+                                ? 'bg-yellow-100 border-yellow-300 ring-1 ring-yellow-200'
+                                : localBananaColor === 'green'
+                                    ? 'bg-emerald-100 border-emerald-300 ring-1 ring-emerald-200'
+                                    : 'bg-white border-gray-300';
+                        const bananaHoverClass = localBananaColor
+                            ? 'hover:brightness-[0.98]'
+                            : 'hover:bg-gray-50';
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 text-center relative`}
+                                style={{ minWidth: '160px' }}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
+                            >
+                                <div className="flex items-center justify-center">
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowBananaDropdown(!showBananaDropdown)}
+                                            disabled={updatingBananaColor}
+                                            className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
+                                            title="Set urgency indicator"
+                                        >
+                                            {localBananaColor ? (
+                                                <BananaIcon color={localBananaColor} size={22} />
+                                            ) : (
+                                                <div className="w-[22px] h-[22px] bg-white rounded flex items-center justify-center">
+                                                    <BananaIcon color="outline" size={18} />
+                                                </div>
+                                            )}
+                                        </button>
+                                        {showBananaDropdown && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-10"
+                                                    onClick={() => setShowBananaDropdown(false)}
+                                                />
+                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded shadow-lg z-20 min-w-[150px]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange(null)}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <span className="inline-flex items-center justify-center w-[18px] h-[18px] bg-white border border-gray-200 rounded">
+                                                            <BananaIcon color="outline" size={16} />
+                                                        </span>
+                                                        <span className="text-gray-600">None</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange('red')}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <BananaIcon color="red" size={18} />
+                                                        <span>Red</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange('yellow')}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <BananaIcon color="yellow" size={18} />
+                                                        <span>Yellow</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBananaColorChange('green')}
+                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
+                                                    >
+                                                        <BananaIcon color="green" size={18} />
+                                                        <span>Green</span>
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </td>
+                        );
+                    }
+
+                    // Handle Stage column with editable color-coded dropdown (no banana here; see Urgency column)
                     if (column === 'Stage') {
                         // Use stage subset colors when provided, else per-stage colors
                         const getStageColors = (stageValue) => {
@@ -577,9 +665,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <div className="flex items-center justify-center gap-1">
-                                    {/* Custom stage dropdown (fully styleable open menu) */}
-                                    <div className="relative flex-1 min-w-0">
+                                <div className="flex items-center justify-center">
+                                    <div className="relative flex-1 min-w-0 max-w-full">
                                         <button
                                             type="button"
                                             onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
@@ -627,86 +714,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                             </button>
                                                         );
                                                     })}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-
-                                    {/* Banana selector dropdown */}
-                                    <div className="relative">
-                                        {(() => {
-                                            const bananaChipClass = localBananaColor === 'red'
-                                                ? 'bg-red-100 border-red-300 ring-2 ring-red-300'
-                                                : localBananaColor === 'yellow'
-                                                    ? 'bg-yellow-100 border-yellow-300 ring-1 ring-yellow-200'
-                                                    : localBananaColor === 'green'
-                                                        ? 'bg-emerald-100 border-emerald-300 ring-1 ring-emerald-200'
-                                                        : 'bg-white border-gray-300';
-                                            const bananaHoverClass = localBananaColor
-                                                ? 'hover:brightness-[0.98]'
-                                                : 'hover:bg-gray-50';
-
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowBananaDropdown(!showBananaDropdown)}
-                                                    disabled={updatingBananaColor}
-                                                    className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
-                                                    title="Set urgency indicator"
-                                                >
-                                                    {localBananaColor ? (
-                                                        <BananaIcon color={localBananaColor} size={22} />
-                                                    ) : (
-                                                        <div className="w-[22px] h-[22px] bg-white rounded flex items-center justify-center">
-                                                            <BananaIcon color="outline" size={18} />
-                                                        </div>
-                                                    )}
-                                                </button>
-                                            );
-                                        })()}
-
-                                        {/* Banana dropdown menu */}
-                                        {showBananaDropdown && (
-                                            <>
-                                                <div
-                                                    className="fixed inset-0 z-10"
-                                                    onClick={() => setShowBananaDropdown(false)}
-                                                />
-                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded shadow-lg z-20 min-w-[150px]">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange(null)}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <span className="inline-flex items-center justify-center w-[18px] h-[18px] bg-white border border-gray-200 rounded">
-                                                            <BananaIcon color="outline" size={16} />
-                                                        </span>
-                                                        <span className="text-gray-600">None</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange('red')}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <BananaIcon color="red" size={18} />
-                                                        <span>Red</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange('yellow')}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <BananaIcon color="yellow" size={18} />
-                                                        <span>Yellow</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange('green')}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <BananaIcon color="green" size={18} />
-                                                        <span>Green</span>
-                                                    </button>
                                                 </div>
                                             </>
                                         )}
