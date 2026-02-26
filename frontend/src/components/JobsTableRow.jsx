@@ -130,6 +130,44 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
+    /**
+     * Urgency banana count and default color by stage / stage group.
+     * FAB: 1 banana (Cut/Material Ordered=green, Fitup/Welded=yellow, Released=gray, Hold=red).
+     * Ready to Ship: 2 bananas (Welded QC=green, rest=yellow).
+     * Complete: 3 bananas (Complete=gray, Ship comp=green).
+     */
+    const getBananaCountAndDefault = (stage, stageToGroupMap) => {
+        const group = stageToGroupMap && stageToGroupMap[stage] ? stageToGroupMap[stage] : 'FABRICATION';
+        if (group === 'FABRICATION') {
+            const colorMap = {
+                'Cut start': 'green',
+                'Material Ordered': 'green',
+                'Fit Up Complete.': 'yellow',
+                'Welded': 'yellow',
+                'Released': 'gray',
+                'Hold': 'red',
+            };
+            return { count: 1, defaultColor: colorMap[stage] || 'gray' };
+        }
+        if (group === 'READY_TO_SHIP') {
+            const colorMap = {
+                'Welded QC': 'green',
+                'Paint complete': 'yellow',
+                'Store at MHMW for shipping': 'yellow',
+                'Shipping planning': 'yellow',
+            };
+            return { count: 2, defaultColor: colorMap[stage] || 'yellow' };
+        }
+        if (group === 'COMPLETE') {
+            const colorMap = {
+                'Complete': 'gray',
+                'Shipping completed': 'green',
+            };
+            return { count: 3, defaultColor: colorMap[stage] || 'gray' };
+        }
+        return { count: 1, defaultColor: 'gray' };
+    };
+
     // Local state for stage
     const [localStage, setLocalStage] = useState(row['Stage'] || 'Released');
     const [updatingStage, setUpdatingStage] = useState(false);
@@ -151,7 +189,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Local state for banana color
     const [localBananaColor, setLocalBananaColor] = useState(row['Banana Color'] || null);
     const [updatingBananaColor, setUpdatingBananaColor] = useState(false);
-    const [showBananaDropdown, setShowBananaDropdown] = useState(false);
     const [showStageDropdown, setShowStageDropdown] = useState(false);
 
     // Local state for Job Comp and Invoiced (editable text)
@@ -224,7 +261,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const oldColor = localBananaColor;
         setLocalBananaColor(newColor); // Optimistic update
         setUpdatingBananaColor(true);
-        setShowBananaDropdown(false);
 
         try {
             const jobNumber = row['Job #'];
@@ -549,18 +585,32 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
 
 
-                    // Urgency column: banana indicator (same spacing as Stage column)
+                    // Urgency column: stage-based banana count + color; toggleable to red (except Hold)
                     if (column === 'Urgency') {
-                        const bananaChipClass = localBananaColor === 'red'
+                        const { count: bananaCount, defaultColor: stageDefaultColor } = getBananaCountAndDefault(localStage, stageToGroup);
+                        const isHold = localStage === 'Hold';
+                        const effectiveColor = isHold ? 'red' : (localBananaColor === 'red' ? 'red' : stageDefaultColor);
+                        const isUrgencyToggleable = !isHold && !updatingBananaColor;
+
+                        const bananaChipClass = effectiveColor === 'red'
                             ? 'bg-red-100 border-red-300 ring-2 ring-red-300'
-                            : localBananaColor === 'yellow'
+                            : effectiveColor === 'yellow'
                                 ? 'bg-yellow-100 border-yellow-300 ring-1 ring-yellow-200'
-                                : localBananaColor === 'green'
+                                : effectiveColor === 'green'
                                     ? 'bg-emerald-100 border-emerald-300 ring-1 ring-emerald-200'
-                                    : 'bg-white border-gray-300';
-                        const bananaHoverClass = localBananaColor
-                            ? 'hover:brightness-[0.98]'
-                            : 'hover:bg-gray-50';
+                                    : effectiveColor === 'gray'
+                                        ? 'bg-gray-100 border-gray-300 ring-1 ring-gray-200'
+                                        : 'bg-white border-gray-300';
+                        const bananaHoverClass = isUrgencyToggleable ? 'hover:brightness-[0.98]' : '';
+
+                        const handleUrgencyClick = () => {
+                            if (!isUrgencyToggleable) return;
+                            if (effectiveColor === 'red') {
+                                handleBananaColorChange(null);
+                            } else {
+                                handleBananaColorChange('red');
+                            }
+                        };
 
                         return (
                             <td
@@ -571,66 +621,20 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <div className="flex items-center justify-center">
-                                    <div className="relative">
+                                    <div className="relative flex items-center justify-center gap-0.5">
                                         <button
                                             type="button"
-                                            onClick={() => setShowBananaDropdown(!showBananaDropdown)}
-                                            disabled={updatingBananaColor}
-                                            className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${updatingBananaColor ? 'opacity-50 cursor-wait' : ''}`}
-                                            title="Set urgency indicator"
+                                            onClick={handleUrgencyClick}
+                                            disabled={!isUrgencyToggleable}
+                                            className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${!isUrgencyToggleable ? 'opacity-90 cursor-default' : 'cursor-pointer'}`}
+                                            title={isHold ? 'Hold – always urgent (red)' : (effectiveColor === 'red' ? 'Marked urgent – click for normal' : 'Click to mark urgent (red)')}
                                         >
-                                            {localBananaColor ? (
-                                                <BananaIcon color={localBananaColor} size={22} />
-                                            ) : (
-                                                <div className="w-[22px] h-[22px] bg-white rounded flex items-center justify-center">
-                                                    <BananaIcon color="outline" size={18} />
-                                                </div>
-                                            )}
+                                            <span className="inline-flex items-center gap-0.5">
+                                                {Array.from({ length: bananaCount }, (_, i) => (
+                                                    <BananaIcon key={i} color={effectiveColor} size={bananaCount === 1 ? 22 : 18} />
+                                                ))}
+                                            </span>
                                         </button>
-                                        {showBananaDropdown && (
-                                            <>
-                                                <div
-                                                    className="fixed inset-0 z-10"
-                                                    onClick={() => setShowBananaDropdown(false)}
-                                                />
-                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded shadow-lg z-20 min-w-[150px]">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange(null)}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <span className="inline-flex items-center justify-center w-[18px] h-[18px] bg-white border border-gray-200 rounded">
-                                                            <BananaIcon color="outline" size={16} />
-                                                        </span>
-                                                        <span className="text-gray-600">None</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange('red')}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <BananaIcon color="red" size={18} />
-                                                        <span>Red</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange('yellow')}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <BananaIcon color="yellow" size={18} />
-                                                        <span>Yellow</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleBananaColorChange('green')}
-                                                        className="w-full px-3 py-2 text-[11px] text-left hover:bg-gray-100 flex items-center gap-2"
-                                                    >
-                                                        <BananaIcon color="green" size={18} />
-                                                        <span>Green</span>
-                                                    </button>
-                                                </div>
-                                            </>
-                                        )}
                                     </div>
                                 </div>
                             </td>

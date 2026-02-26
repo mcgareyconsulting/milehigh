@@ -3,7 +3,7 @@ import React from 'react';
 /**
  * Banana icon component for urgency indicators
  * Uses the banana SVG from the web app header
- * @param {string|null} color - 'red', 'yellow', 'green', or 'outline' (ghost/none)
+ * @param {string|null} color - 'red', 'yellow', 'green', 'gray', or 'outline' (ghost/none)
  * @param {number} size - Size in pixels (default: 16)
  */
 export function BananaIcon({ color = 'yellow', size = 16 }) {
@@ -11,6 +11,7 @@ export function BananaIcon({ color = 'yellow', size = 16 }) {
         red: 'Red',
         yellow: 'Yellow',
         green: 'Green',
+        gray: 'Gray',
         outline: 'No',
     };
     const safeColor = color || 'yellow';
@@ -22,11 +23,12 @@ export function BananaIcon({ color = 'yellow', size = 16 }) {
         red: '#EF4444',     // red-500
         yellow: '#FFE135',  // original file fill
         green: '#22C55E',   // green-500
+        gray: '#9CA3AF',   // gray-400 (uncolored)
         outline: 'none',
     };
 
     const fill = fillByColor[safeColor] ?? fillByColor.yellow;
-    const stroke = safeColor === 'outline' ? '#111827' : '#000000';
+    const stroke = (safeColor === 'outline' || safeColor === 'gray') ? '#6B7280' : '#000000';
     const strokeWidth = safeColor === 'outline'
         ? (size >= 18 ? 42 : 54) // bolder outline at small sizes (viewBox is huge)
         : (size >= 18 ? 18 : 22);
