@@ -661,15 +661,14 @@ function JobLog() {
                                     </div>
                                 </div>
 
-                                {/* Top Right: Filters */}
+                                {/* Top Right: Stage group filters + Review */}
                                 <div>
                                     <label className="block text-sm font-bold text-gray-800 mb-1">
                                         Filters
                                     </label>
-                                    <div className="flex flex-wrap gap-1.5">
+                                    <div className="flex flex-wrap gap-1.5 items-center">
                                         <button
                                             onClick={() => {
-                                                // When using stage-based subsets, Review mode should be off
                                                 setReviewMode(false);
                                                 setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
                                             }}
@@ -683,14 +682,50 @@ function JobLog() {
                                         <button
                                             onClick={() => {
                                                 setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'complete' ? null : 'complete');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'complete'
+                                                ? 'bg-violet-600 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Complete
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
                                                 setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
                                             }}
                                             className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
-                                                ? 'bg-blue-700 text-white'
+                                                ? 'bg-emerald-600 text-white'
                                                 : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
                                             Ready to Ship
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'paint' ? null : 'paint');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint'
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Paint
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'paint_fab' ? null : 'paint_fab');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint_fab'
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-white border border-gray-400 text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Paint+Fab
                                         </button>
                                         <button
                                             onClick={() => {
@@ -706,7 +741,6 @@ function JobLog() {
                                         </button>
                                         <button
                                             onClick={() => {
-                                                // Review mode is independent; when it toggles on, clear stage-based subsets
                                                 const next = !reviewMode;
                                                 if (next) {
                                                     setSelectedSubset(null);

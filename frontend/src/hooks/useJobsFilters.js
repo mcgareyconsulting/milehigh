@@ -11,7 +11,7 @@ export function useJobsFilters(jobs = []) {
     const [selectedStages, setSelectedStages] = useState([]); // Array of selected stage values
     const [jobNumberSearch, setJobNumberSearch] = useState('');
     const [releaseNumberSearch, setReleaseNumberSearch] = useState('');
-    const [selectedSubset, setSelectedSubset] = useState(null); // 'job_order', 'ready_to_ship', 'fab', or null for default
+    const [selectedSubset, setSelectedSubset] = useState(null); // 'job_order', 'complete', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
 
     /**
      * Check if a job matches all selected filters
@@ -148,10 +148,24 @@ export function useJobsFilters(jobs = []) {
         if (selectedSubset === 'job_order') {
             // Job Order: COMPLETE, READY_TO_SHIP, and FABRICATION stage_groups
             result = getJobOrderSubset(baseFiltered);
+        } else if (selectedSubset === 'complete') {
+            // Complete: COMPLETE stage_group only, ascending fab order
+            result = filterAndSortByStageGroups(baseFiltered, ['COMPLETE']);
         } else if (selectedSubset === 'ready_to_ship') {
             // Ready to Ship: READY_TO_SHIP stage_group + FABRICATION stage_group (trailing filter)
-            // Each stage_group is sorted independently by fab_order
             result = filterAndSortByStageGroups(baseFiltered, ['READY_TO_SHIP', 'FABRICATION']);
+        } else if (selectedSubset === 'paint') {
+            // Paint: only stages "Paint complete" and "Welded QC", ascending fab order
+            const paintStages = ['Paint complete', 'Welded QC'];
+            const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
+            result = sortByFabOrder(paintOnly);
+        } else if (selectedSubset === 'paint_fab') {
+            // Paint+Fab: Paint complete + Welded QC (asc fab), then FABRICATION group (asc fab)
+            const paintStages = ['Paint complete', 'Welded QC'];
+            const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
+            const paintSorted = sortByFabOrder(paintOnly);
+            const fabOnly = getFabSubset(baseFiltered);
+            result = [...paintSorted, ...fabOnly];
         } else if (selectedSubset === 'fab') {
             // Fab: Only FABRICATION stage_group
             result = getFabSubset(baseFiltered);
