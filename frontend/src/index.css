@@ -73,6 +73,15 @@ body>#root>div>div {
   background: #94a3b8;
 }
 
+/* Hide vertical scrollbar on job log table; scrolling still works via wheel/trackpad */
+.job-log-table-scroll-hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / Edge */
+}
+.job-log-table-scroll-hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
 /* Drop indicator pulse animation */
 @keyframes dropIndicatorPulse {
 

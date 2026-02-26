@@ -169,6 +169,31 @@ function JobLog() {
         'Notes'
     ];
 
+    /**
+     * Job log column widths as percentage of table width. Tune these to taste; they are
+     * normalized so visible columns always sum to 100%. Only columns listed here get
+     * custom widths; others share the remainder equally.
+     */
+    const COLUMN_WIDTH_PERCENT = {
+        'Job #': 3,
+        'Release #': 3,
+        'Job': 6,
+        'Description': 10,
+        'Fab Hrs': 4,
+        'Install HRS': 4,
+        'Paint color': 6,
+        'PM': 3,
+        'BY': 3,
+        'Released': 5,
+        'Fab Order': 6,
+        'Stage': 15,
+        'Start install': 5,
+        'Comp. ETA': 5,
+        'Job Comp': 5,
+        'Invoiced': 5,
+        'Notes': 12,
+    };
+
     // Filter and order columns based on defined order
     const columnHeaders = useMemo(() => {
         // Only include columns that exist in the data and are in our defined order
@@ -176,6 +201,18 @@ function JobLog() {
     }, [columns]);
 
     const tableColumnCount = columnHeaders.length;
+
+    // Normalize column width percentages so visible columns sum to 100%
+    const columnWidthPercents = useMemo(() => {
+        const defaultWeight = 5; // weight for columns not listed in COLUMN_WIDTH_PERCENT
+        const total = columnHeaders.reduce((sum, col) => sum + (COLUMN_WIDTH_PERCENT[col] ?? defaultWeight), 0);
+        return Object.fromEntries(
+            columnHeaders.map((col) => {
+                const weight = COLUMN_WIDTH_PERCENT[col] ?? defaultWeight;
+                return [col, (weight / total) * 100];
+            })
+        );
+    }, [columnHeaders]);
 
     const handleReleaseClick = () => {
         setShowReleaseModal(true);
@@ -754,18 +791,20 @@ function JobLog() {
 
                         {!loading && !fetchError && (
                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                <div className="overflow-auto flex-1">
-                                    <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                                <div className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                    <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                         <thead className="sticky top-0 z-10">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
                                                     // Display "rel. #" for Release # column header
                                                     const displayHeader = column === 'Release #' ? 'rel. #' : column;
+                                                    const colWidthPct = columnWidthPercents[column];
                                                     return (
                                                         <th
                                                             key={column}
                                                             className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 shadow-sm`}
+                                                            style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
                                                             {displayHeader}
                                                         </th>
