@@ -41,17 +41,17 @@ def insert_fence(path: str, job_number: str, name_override: Optional[str] = None
     name = name_override or name
 
     from app import create_app
-    from app.models import JobSites, db
+    from app.models import Jobs, db
 
     app = create_app()
     with app.app_context():
-        existing = JobSites.query.filter_by(job_number=job_number).first()
+        existing = Jobs.query.filter_by(job_number=job_number).first()
         if existing:
             print(f"Job number {job_number} already has a site: {existing.name} (id={existing.id})")
             print("Update or delete it first, or use a different job_number.")
             return 1
 
-        site = JobSites(
+        site = Jobs(
             name=name,
             job_number=job_number,
             geometry=geometry,

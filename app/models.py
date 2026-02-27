@@ -423,7 +423,7 @@ class Outbox(db.Model):
     # Relationship
     event = db.relationship('JobEvents', backref='outbox_items')
 
-class JobSites(db.Model):
+class Jobs(db.Model):
     """
     Job site geofences. Links to job log and DWL by identifier value (job number),
     not by foreign key: jobs come from Excel/Trello (Job.job), submittals from
@@ -432,7 +432,7 @@ class JobSites(db.Model):
       - Submittals.query.filter(Submittals.project_number == job_site.job_number)
     Relationships below provide the same via job_site.jobs and job_site.submittals.
     """
-    __tablename__ = 'job_sites'
+    __tablename__ = 'jobs'
     __table_args__ = (db.UniqueConstraint('job_number', name='_job_sites_job_number_uc'),)
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)

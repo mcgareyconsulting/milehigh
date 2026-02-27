@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Tuple
 import logging
 from sqlalchemy import text
-from app.models import db, Submittals, JobSites
+from app.models import db, Submittals, Jobs
 from app.brain.drafting_work_load.engine import (
     DraftingWorkLoadEngine,
     SubmittalOrderingEngine,
@@ -441,7 +441,7 @@ class LocationService:
                 logger.warning("PostGIS location check failed, using Python fallback: %s", e)
 
         # Fallback: strict point-in-polygon (SQLite or PostGIS unavailable)
-        sites = JobSites.query.filter_by(is_active=True).all()
+        sites = Jobs.query.filter_by(is_active=True).all()
         job_numbers = []
         for site in sites:
             geom = site.geometry
