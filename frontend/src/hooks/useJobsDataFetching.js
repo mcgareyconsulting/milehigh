@@ -219,8 +219,10 @@ export function useJobsDataFetching() {
             }
         };
 
-        // Start polling
-        startPolling();
+        // Only start polling if this tab is visible (avoids timer running in background if page opened in background tab)
+        if (!document.hidden) {
+            startPolling();
+        }
 
         document.addEventListener('visibilitychange', visibilityChangeHandler);
 
