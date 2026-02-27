@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from requests.exceptions import ConnectionError, Timeout
 from urllib3.exceptions import ProtocolError
 from app.config import Config as cfg
-from app.models import db, Job, ProcoreSubmittal, SubmittalEvents
+from app.models import db, Job, Submittals, SubmittalEvents
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
@@ -337,7 +337,7 @@ def handle_submittal_update(project_id, submittal_id):
         
     Returns:
         tuple: (procore_submittal, ball_in_court, approvers, status, title, submittal_manager) or None if parsing fails
-        - procore_submittal: ProcoreSubmittal DB record or None if not found
+        - procore_submittal: Submittals DB record or None if not found
         - ball_in_court: str or None - User who has the ball in court
         - approvers: list - List of approver data
         - status: str or None - Status of the submittal from Procore
@@ -390,7 +390,7 @@ def handle_submittal_update(project_id, submittal_id):
     submittal_manager = str(submittal_manager).strip() if submittal_manager else None
     
     # Look up the DB record
-    procore_submittal = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+    procore_submittal = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
     
     # Always return a tuple, even if procore_submittal is None
     return procore_submittal, ball_in_court, approvers, status, title, submittal_manager
@@ -424,20 +424,20 @@ def get_project_info(project_id):
 
 def create_submittal_from_webhook(project_id, submittal_id):
     """
-    Create a new ProcoreSubmittal record in the database from a webhook create event.
+    Create a new Submittals record in the database from a webhook create event.
     
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID (resource_id from webhook)
         
     Returns:
-        tuple: (created: bool, record: ProcoreSubmittal or None, error_message: str or None)
+        tuple: (created: bool, record: Submittals or None, error_message: str or None)
     """
     try:
         logger.info(f"Starting create_submittal_from_webhook for submittal {submittal_id}, project {project_id}")
         
         # Check if submittal already exists
-        existing = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+        existing = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
         if existing:
             logger.info(f"Submittal {submittal_id} already exists in database, skipping creation")
             return False, existing, None
@@ -504,7 +504,7 @@ def create_submittal_from_webhook(project_id, submittal_id):
             submittal_manager = None
         submittal_manager = str(submittal_manager).strip() if submittal_manager else None
         
-        logger.info(f"Creating new ProcoreSubmittal record with title: {title}")
+        logger.info(f"Creating new Submittals record with title: {title}")
 
         # Extract created_at from Procore API if available
         procore_created_at = None
@@ -529,7 +529,7 @@ def create_submittal_from_webhook(project_id, submittal_id):
         
         # Double-check it doesn't exist (race condition protection)
         # Another thread/request might have created it between our initial check and now
-        existing_check = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+        existing_check = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
         if existing_check:
             logger.info(
                 f"Submittal {submittal_id} was created by another process between initial check and commit. "
@@ -537,8 +537,8 @@ def create_submittal_from_webhook(project_id, submittal_id):
             )
             return False, existing_check, None
         
-        # Create new ProcoreSubmittal record
-        new_submittal = ProcoreSubmittal(
+        # Create new Submittals record
+        new_submittal = Submittals(
             submittal_id=str(submittal_id),
             procore_project_id=str(project_id),
             project_number=str(project_info.get("project_number", "")).strip() or None,
@@ -567,7 +567,7 @@ def create_submittal_from_webhook(project_id, submittal_id):
             )
             db.session.rollback()
             # Fetch the record that was created by the other process
-            existing_after_error = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+            existing_after_error = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
             if existing_after_error:
                 logger.info(f"Found existing record created by concurrent process, returning it")
                 return False, existing_after_error, None
@@ -659,7 +659,7 @@ def check_and_update_submittal(project_id, submittal_id):
         
     Returns:
         tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool, 
-                record: ProcoreSubmittal or None, ball_in_court: str or None, status: str or None)
+                record: Submittals or None, ball_in_court: str or None, status: str or None)
     """
     try:
         result = handle_submittal_update(project_id, submittal_id)
@@ -694,10 +694,10 @@ def check_and_update_submittal(project_id, submittal_id):
                 logger.info(f"Compressing orders for old drafter '{db_ball_value}' after submittal {submittal_id} moved")
                 
                 # Get all submittals for the old ball_in_court (excluding the one being moved)
-                old_drafter_submittals = ProcoreSubmittal.query.filter(
-                    ProcoreSubmittal.ball_in_court == db_ball_value,
-                    ProcoreSubmittal.submittal_id != str(submittal_id),
-                    ProcoreSubmittal.status == 'Open'
+                old_drafter_submittals = Submittals.query.filter(
+                    Submittals.ball_in_court == db_ball_value,
+                    Submittals.submittal_id != str(submittal_id),
+                    Submittals.status == 'Open'
                 ).all()
                 
                 if old_drafter_submittals:
@@ -1090,7 +1090,7 @@ def cross_reference_db_vs_api():
     
     Returns:
         dict with:
-            - db_only_submittals: List of ProcoreSubmittal records in DB but not in API
+            - db_only_submittals: List of Submittals records in DB but not in API
             - api_submittal_ids: Set of submittal IDs from API
             - db_submittal_ids: Set of submittal IDs from DB (filtered)
             - missing_in_api: Count of submittals in DB but not in API
@@ -1130,27 +1130,27 @@ def cross_reference_db_vs_api():
     logger.info(f"  - type IN {valid_types}")
     
     # First, check total count in DB
-    total_db_count = ProcoreSubmittal.query.count()
+    total_db_count = Submittals.query.count()
     logger.info(f"DEBUG: Total submittals in DB (no filters): {total_db_count}")
     
     # Check count by status
     status_counts = db.session.query(
-        ProcoreSubmittal.status,
-        db.func.count(ProcoreSubmittal.id)
-    ).group_by(ProcoreSubmittal.status).all()
+        Submittals.status,
+        db.func.count(Submittals.id)
+    ).group_by(Submittals.status).all()
     logger.info(f"DEBUG: DB submittals by status: {dict(status_counts)}")
     
     # Check count by type
     type_counts = db.session.query(
-        ProcoreSubmittal.type,
-        db.func.count(ProcoreSubmittal.id)
-    ).group_by(ProcoreSubmittal.type).all()
+        Submittals.type,
+        db.func.count(Submittals.id)
+    ).group_by(Submittals.type).all()
     logger.info(f"DEBUG: DB submittals by type (top 10): {dict(type_counts[:10])}")
     
     # Apply filters
-    db_submittals = ProcoreSubmittal.query.filter(
-        ProcoreSubmittal.status == "Open",
-        ProcoreSubmittal.type.in_(valid_types)
+    db_submittals = Submittals.query.filter(
+        Submittals.status == "Open",
+        Submittals.type.in_(valid_types)
     ).all()
     
     logger.info(f"✓ Found {len(db_submittals)} submittals in database matching API criteria")
@@ -1268,9 +1268,9 @@ def check_webhook_health(project_ids=None):
             "Submittal for GC  Approval",
             "Submittal for GC Approval"
         ]
-        db_projects = db.session.query(ProcoreSubmittal.procore_project_id).filter(
-            ProcoreSubmittal.status == "Open",
-            ProcoreSubmittal.type.in_(valid_types)
+        db_projects = db.session.query(Submittals.procore_project_id).filter(
+            Submittals.status == "Open",
+            Submittals.type.in_(valid_types)
         ).distinct().all()
         project_ids = [str(p[0]) for p in db_projects if p[0]]
         logger.info(f"Checking webhooks for {len(project_ids)} projects from database (filtered by status=Open, valid types)")
@@ -1688,7 +1688,7 @@ def comprehensive_health_scan(skip_user_prompt=False):
             for issue in sync_issues:
                 try:
                     # Find the DB record
-                    db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
+                    db_record = Submittals.query.filter_by(submittal_id=issue['submittal_id']).first()
                     if not db_record:
                         logger.warning(f"  Could not find DB record for submittal {issue['submittal_id']}")
                         continue

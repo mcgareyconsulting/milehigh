@@ -15,7 +15,7 @@ import argparse
 from typing import Dict, Optional
 
 from app import create_app
-from app.models import db, ProcoreSubmittal
+from app.models import db, Submittals
 from app.procore.client import get_procore_client
 from app.procore.webhook_utils import get_unique_projects, log_operation
 
@@ -103,8 +103,8 @@ def delete_all_webhooks_for_project(procore_client, project_id: int, project_num
 
 def get_project_number(project_id: int) -> Optional[str]:
     """Get project number for a given project ID from the database."""
-    result = db.session.query(ProcoreSubmittal.project_number).filter(
-        ProcoreSubmittal.procore_project_id == project_id
+    result = db.session.query(Submittals.project_number).filter(
+        Submittals.procore_project_id == project_id
     ).first()
     
     return result[0] if result else None

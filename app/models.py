@@ -21,6 +21,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    procore_id = db.Column(db.String(255), unique=True, nullable=True)
+    trello_id = db.Column(db.String(255), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
     
@@ -50,8 +52,8 @@ class ProcoreToken(db.Model):
         '''Get current Procore token'''
         return cls.query.order_by(cls.updated_at.desc()).first()
 
-class ProcoreSubmittal(db.Model):
-    __tablename__ = "procore_submittals"
+class Submittals(db.Model):
+    __tablename__ = "submittals"
     id = db.Column(db.Integer, primary_key=True)
     submittal_id = db.Column(db.String(255), unique=True, nullable=False)
     procore_project_id = db.Column(db.String(100))
@@ -425,9 +427,9 @@ class JobSites(db.Model):
     """
     Job site geofences. Links to job log and DWL by identifier value (job number),
     not by foreign key: jobs come from Excel/Trello (Job.job), submittals from
-    Procore (ProcoreSubmittal.project_number).     Use job_number to query:
+    Procore (Submittals.project_number).     Use job_number to query:
       - Job.query.filter(Job.job == cast(JobSites.job_number, Integer))  # Job.job is int
-      - ProcoreSubmittal.query.filter(ProcoreSubmittal.project_number == job_site.job_number)
+      - Submittals.query.filter(Submittals.project_number == job_site.job_number)
     Relationships below provide the same via job_site.jobs and job_site.submittals.
     """
     __tablename__ = 'job_sites'
@@ -450,9 +452,9 @@ class JobSites(db.Model):
     )
     # Relationship by value: DWL submittals where project_number == this job_number (both strings)
     submittals = db.relationship(
-        'ProcoreSubmittal',
-        primaryjoin='ProcoreSubmittal.project_number == JobSites.job_number',
-        foreign_keys='ProcoreSubmittal.project_number',
+        'Submittals',
+        primaryjoin='Submittals.project_number == JobSites.job_number',
+        foreign_keys='Submittals.project_number',
         lazy='dynamic',
         viewonly=True,
     )

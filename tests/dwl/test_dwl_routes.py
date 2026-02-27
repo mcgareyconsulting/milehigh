@@ -7,7 +7,7 @@ import json
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, date
 from app import create_app
-from app.models import ProcoreSubmittal, db
+from app.models import Submittals, db
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ def client(app):
 @pytest.fixture
 def mock_submittal():
     """Create a mock submittal for testing."""
-    submittal = Mock(spec=ProcoreSubmittal)
+    submittal = Mock(spec=Submittals)
     submittal.submittal_id = "test_submittal_123"
     submittal.status = "Open"
     submittal.notes = None
@@ -133,7 +133,7 @@ class TestUpdateSubmittalOrder:
     """Tests for PUT /drafting-work-load/order endpoint."""
     
     @patch('app.brain.drafting_work_load.routes.db')
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_order_success(self, mock_submittal_model, mock_db, client, mock_submittal):
         """Test successful order update."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
@@ -162,7 +162,7 @@ class TestUpdateSubmittalOrder:
         data = json.loads(response.data)
         assert 'error' in data
     
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_order_invalid_order_number(self, mock_submittal_model, client):
         """Test that invalid order number returns 400."""
         response = client.put(
@@ -175,7 +175,7 @@ class TestUpdateSubmittalOrder:
         data = json.loads(response.data)
         assert 'error' in data
     
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_order_submittal_not_found(self, mock_submittal_model, client):
         """Test that non-existent submittal returns 404."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = None
@@ -199,7 +199,7 @@ class TestUpdateSubmittalNotes:
     """Tests for PUT /drafting-work-load/notes endpoint."""
     
     @patch('app.brain.drafting_work_load.routes.db')
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_notes_success(self, mock_submittal_model, mock_db, client, mock_submittal):
         """Test successful notes update."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
@@ -227,7 +227,7 @@ class TestUpdateSubmittalNotes:
         data = json.loads(response.data)
         assert 'error' in data
     
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_notes_submittal_not_found(self, mock_submittal_model, client):
         """Test that non-existent submittal returns 404."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = None
@@ -249,7 +249,7 @@ class TestUpdateSubmittalDraftingStatus:
     """Tests for PUT /drafting-work-load/submittal-drafting-status endpoint."""
     
     @patch('app.brain.drafting_work_load.routes.db')
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_status_success(self, mock_submittal_model, mock_db, client, mock_submittal):
         """Test successful status update."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
@@ -294,7 +294,7 @@ class TestBumpSubmittal:
     """Tests for POST /drafting-work-load/bump endpoint."""
     
     @patch('app.brain.drafting_work_load.routes.db')
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_bump_success(self, mock_submittal_model, mock_db, client, mock_submittal):
         """Test successful bump to urgent."""
         # Configure mock_submittal with real values (not Mock objects)
@@ -332,7 +332,7 @@ class TestBumpSubmittal:
         
         assert response.status_code == 400
     
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_bump_no_ball_in_court(self, mock_submittal_model, client, mock_submittal):
         """Test that submittal without ball_in_court returns 400."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
@@ -357,7 +357,7 @@ class TestUpdateSubmittalDueDate:
     """Tests for PUT /drafting-work-load/due-date endpoint."""
     
     @patch('app.brain.drafting_work_load.routes.db')
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_due_date_success(self, mock_submittal_model, mock_db, client, mock_submittal):
         """Test successful due date update."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
@@ -383,7 +383,7 @@ class TestUpdateSubmittalDueDate:
         
         assert response.status_code == 400
     
-    @patch('app.brain.drafting_work_load.routes.ProcoreSubmittal')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
     def test_update_due_date_invalid_format(self, mock_submittal_model, client, mock_submittal):
         """Test that invalid date format returns 400."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal

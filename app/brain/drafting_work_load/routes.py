@@ -8,7 +8,7 @@ from app.brain.drafting_work_load.service import (
     LocationService,
 )
 from app.logging_config import get_logger
-from app.models import ProcoreSubmittal, db
+from app.models import Submittals, db
 from app.auth.utils import login_required, admin_required
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
@@ -78,14 +78,14 @@ def update_submittal_order():
                 order_number = round(order_number, 1)
 
         # Get the submittal
-        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({"error": "Submittal not found"}), 404
 
         # Get all submittals in the same group
         all_group_submittals = []
         if submittal.ball_in_court:
-            all_group_submittals = ProcoreSubmittal.query.filter_by(
+            all_group_submittals = Submittals.query.filter_by(
                 ball_in_court=submittal.ball_in_court
             ).all()
 
@@ -145,7 +145,7 @@ def update_submittal_notes():
         # Ensure submittal_id is a string for proper database comparison
         submittal_id = str(submittal_id)
         
-        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({
                 "error": "Submittal not found"
@@ -197,7 +197,7 @@ def update_submittal_drafting_status():
         # Ensure submittal_id is a string for proper database comparison
         submittal_id = str(submittal_id)
         
-        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({
                 "error": "Submittal not found"
@@ -239,7 +239,7 @@ def bump_submittal():
             return jsonify({"error": "submittal_id is required"}), 400
         
         # Get the submittal
-        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({"error": "Submittal not found"}), 404
         
@@ -311,7 +311,7 @@ def update_submittal_procore_status():
             }), 400
 
         submittal_id = str(submittal_id)
-        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({"error": "Submittal not found"}), 404
 
@@ -367,7 +367,7 @@ def update_submittal_due_date():
         # Ensure submittal_id is a string for proper database comparison
         submittal_id = str(submittal_id)
         
-        submittal = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first()
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({
                 "error": "Submittal not found"

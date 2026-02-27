@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Tuple
 import logging
 from sqlalchemy import text
-from app.models import db, ProcoreSubmittal, JobSites
+from app.models import db, Submittals, JobSites
 from app.brain.drafting_work_load.engine import (
     DraftingWorkLoadEngine,
     SubmittalOrderingEngine,
@@ -36,7 +36,7 @@ class DraftingWorkLoadService:
         Get all submittals with status='Open'.
 
         Args:
-            submittal_model: The ProcoreSubmittal model class
+            submittal_model: The Submittals model class
 
         Returns:
             List of submittals with status='Open'
@@ -58,16 +58,16 @@ class DraftingWorkLoadService:
             tab: 'open' = submittals with status 'Open'; 'draft' = submittals with status not in ('Open', 'Closed').
 
         Returns:
-            List of ProcoreSubmittal instances.
+            List of Submittals instances.
         """
         if tab == 'draft':
-            base = ProcoreSubmittal.query.filter(
-                ~ProcoreSubmittal.status.in_(['Open', 'Closed'])
+            base = Submittals.query.filter(
+                ~Submittals.status.in_(['Open', 'Closed'])
             )
         else:
-            base = ProcoreSubmittal.query.filter(ProcoreSubmittal.status == 'Open')
+            base = Submittals.query.filter(Submittals.status == 'Open')
         if job_numbers_filter is not None:
-            base = base.filter(ProcoreSubmittal.project_number.in_(job_numbers_filter))
+            base = base.filter(Submittals.project_number.in_(job_numbers_filter))
         return base.all()
     
     @staticmethod
@@ -313,7 +313,7 @@ class UrgencyService:
         - When bumping to regular, all regular orders (>= 1) shift UP by 1
         
         Args:
-            record: ProcoreSubmittal DB record
+            record: Submittals DB record
             submittal_id: Submittal ID for logging
             ball_in_court_value: Current ball_in_court value for grouping
             
@@ -336,20 +336,20 @@ class UrgencyService:
             return False
         
         # Find all existing urgent submittals (0 < order < 1) for this ball_in_court
-        existing_urgent_submittals = ProcoreSubmittal.query.filter(
-            ProcoreSubmittal.ball_in_court == ball_in_court_value,
-            ProcoreSubmittal.submittal_id != str(submittal_id),  # Exclude current submittal
-            ProcoreSubmittal.order_number < 1,
-            ProcoreSubmittal.order_number > 0,  # Must be > 0 (exclude NULL and 0)
-            ProcoreSubmittal.order_number.isnot(None)
+        existing_urgent_submittals = Submittals.query.filter(
+            Submittals.ball_in_court == ball_in_court_value,
+            Submittals.submittal_id != str(submittal_id),  # Exclude current submittal
+            Submittals.order_number < 1,
+            Submittals.order_number > 0,  # Must be > 0 (exclude NULL and 0)
+            Submittals.order_number.isnot(None)
         ).all()
         
         # Find all regular submittals (order >= 1) for this ball_in_court
-        existing_regular_submittals = ProcoreSubmittal.query.filter(
-            ProcoreSubmittal.ball_in_court == ball_in_court_value,
-            ProcoreSubmittal.submittal_id != str(submittal_id),  # Exclude current submittal
-            ProcoreSubmittal.order_number >= 1,
-            ProcoreSubmittal.order_number.isnot(None)
+        existing_regular_submittals = Submittals.query.filter(
+            Submittals.ball_in_court == ball_in_court_value,
+            Submittals.submittal_id != str(submittal_id),  # Exclude current submittal
+            Submittals.order_number >= 1,
+            Submittals.order_number.isnot(None)
         ).all()
         
         # Convert to plain data structures

@@ -530,7 +530,7 @@ def create_app():
     
     def _get_submittal_change_history(submittal_id):
         """Internal function to retrieve submittal event history."""
-        from app.models import SubmittalEvents, ProcoreSubmittal
+        from app.models import SubmittalEvents, Submittals
         
         # submittal_id is required
         if not submittal_id:
@@ -550,7 +550,7 @@ def create_app():
             submittal_events = events_query.order_by(SubmittalEvents.created_at.desc()).all()
             
             # Get submittal record for metadata
-            submittal_record = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+            submittal_record = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
             
             # Format the response
             history = []

@@ -9,7 +9,7 @@ from typing import Optional
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError
-from app.models import db, ProcoreSubmittal, SubmittalEvents
+from app.models import db, Submittals, SubmittalEvents
 
 from app.procore.procore import (
     get_project_id_by_project_name, 
@@ -229,7 +229,7 @@ def procore_webhook():
             # Handle update events - update existing submittal
             elif event_type == "update":
                 # Check if record exists first
-                old_record = ProcoreSubmittal.query.filter_by(submittal_id=str(resource_id)).first()
+                old_record = Submittals.query.filter_by(submittal_id=str(resource_id)).first()
                 
                 # If record doesn't exist, try to create it (fallback for race conditions)
                 # This handles the case where update events arrive before create events
@@ -954,7 +954,7 @@ def health_scan_update():
         for issue in sync_issues:
             try:
                 # Find the DB record
-                db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
+                db_record = Submittals.query.filter_by(submittal_id=issue['submittal_id']).first()
                 if not db_record:
                     errors.append({
                         'submittal_id': issue['submittal_id'],

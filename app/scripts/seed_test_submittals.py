@@ -1,5 +1,5 @@
 """
-Seed 3 fake ProcoreSubmittal rows for project_number 000 (for testing DWL location filter).
+Seed 3 fake Submittals rows for project_number 000 (for testing DWL location filter).
 
 Usage:
   python -m app.scripts.seed_test_submittals
@@ -11,7 +11,7 @@ Submittal IDs are test-loc-000-1, test-loc-000-2, test-loc-000-3. Safe to run mu
 from datetime import datetime
 
 from app import create_app
-from app.models import ProcoreSubmittal, db
+from app.models import Submittals, db
 
 
 def seed_test_submittals(project_number: str = "000") -> int:
@@ -37,10 +37,10 @@ def seed_test_submittals(project_number: str = "000") -> int:
         },
     ]
     for r in records:
-        if ProcoreSubmittal.query.filter_by(submittal_id=r["submittal_id"]).first():
+        if Submittals.query.filter_by(submittal_id=r["submittal_id"]).first():
             print(f"Already exists: {r['submittal_id']}")
             continue
-        sub = ProcoreSubmittal(
+        sub = Submittals(
             submittal_id=r["submittal_id"],
             procore_project_id=None,
             project_number=project_number,

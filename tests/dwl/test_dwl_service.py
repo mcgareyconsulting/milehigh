@@ -10,7 +10,7 @@ from app.brain.drafting_work_load.service import (
     SubmittalOrderingService,
     UrgencyService
 )
-from app.models import ProcoreSubmittal
+from app.models import Submittals
 from app import create_app
 
 
@@ -189,17 +189,17 @@ class TestUrgencyService:
     
     @pytest.fixture
     def mock_query(self, app):
-        """Mock ProcoreSubmittal.query.filter().all() chain to avoid database hits."""
+        """Mock Submittals.query.filter().all() chain to avoid database hits."""
         mock_query_obj = Mock()
-        patcher = patch('app.brain.drafting_work_load.service.ProcoreSubmittal.query', mock_query_obj)
+        patcher = patch('app.brain.drafting_work_load.service.Submittals.query', mock_query_obj)
         patcher.start()
         yield mock_query_obj
         patcher.stop()
     
     @pytest.fixture
     def sample_record(self):
-        """Create a sample ProcoreSubmittal record."""
-        record = Mock(spec=ProcoreSubmittal)
+        """Create a sample Submittals record."""
+        record = Mock(spec=Submittals)
         record.order_number = 5  # Regular order number
         record.submittal_id = "submittal_123"
         return record
@@ -215,7 +215,7 @@ class TestUrgencyService:
     
     def test_second_urgent_shifts_first_up(self, mock_query, sample_record):
         """Test that when a second urgent arrives, the first shifts from 0.9 to 0.8."""
-        existing_urgent = Mock(spec=ProcoreSubmittal)
+        existing_urgent = Mock(spec=Submittals)
         existing_urgent.order_number = 0.9
         existing_urgent.submittal_id = "submittal_456"
         
@@ -231,16 +231,16 @@ class TestUrgencyService:
         """Test that when all 9 slots are filled, the regulars shift down by 1."""
         urgent_submittals = []
         for i in range(1, 10):
-            urgent = Mock(spec=ProcoreSubmittal)
+            urgent = Mock(spec=Submittals)
             urgent.order_number = i * 0.1
             urgent.submittal_id = f"urgent_{i}"
             urgent_submittals.append(urgent)
         
-        regular1 = Mock(spec=ProcoreSubmittal)
+        regular1 = Mock(spec=Submittals)
         regular1.order_number = 1.0
         regular1.submittal_id = "regular_1"
         
-        regular2 = Mock(spec=ProcoreSubmittal)
+        regular2 = Mock(spec=Submittals)
         regular2.order_number = 2.0
         regular2.submittal_id = "regular_2"
         
@@ -302,15 +302,15 @@ class TestUrgencyService:
     
     def test_multiple_urgent_with_room(self, mock_query, sample_record):
         """Test that multiple existing urgent submittals all shift up correctly."""
-        urgent1 = Mock(spec=ProcoreSubmittal)
+        urgent1 = Mock(spec=Submittals)
         urgent1.order_number = 0.5
         urgent1.submittal_id = "urgent_1"
         
-        urgent2 = Mock(spec=ProcoreSubmittal)
+        urgent2 = Mock(spec=Submittals)
         urgent2.order_number = 0.6
         urgent2.submittal_id = "urgent_2"
         
-        urgent3 = Mock(spec=ProcoreSubmittal)
+        urgent3 = Mock(spec=Submittals)
         urgent3.order_number = 0.7
         urgent3.submittal_id = "urgent_3"
         
@@ -329,7 +329,7 @@ class TestUrgencyService:
     
     def test_urgent_at_09_shifts_to_08(self, mock_query, sample_record):
         """Test that urgent at 0.9 shifts to 0.8 when new urgent arrives."""
-        urgent = Mock(spec=ProcoreSubmittal)
+        urgent = Mock(spec=Submittals)
         urgent.order_number = 0.9
         urgent.submittal_id = "urgent_1"
         
@@ -343,15 +343,15 @@ class TestUrgencyService:
     
     def test_multiple_urgent_shifting_when_09_occupied(self, mock_query, sample_record):
         """Test that multiple urgent items all shift when 0.9 is occupied."""
-        urgent1 = Mock(spec=ProcoreSubmittal)
+        urgent1 = Mock(spec=Submittals)
         urgent1.order_number = 0.7
         urgent1.submittal_id = "urgent_1"
         
-        urgent2 = Mock(spec=ProcoreSubmittal)
+        urgent2 = Mock(spec=Submittals)
         urgent2.order_number = 0.8
         urgent2.submittal_id = "urgent_2"
         
-        urgent3 = Mock(spec=ProcoreSubmittal)
+        urgent3 = Mock(spec=Submittals)
         urgent3.order_number = 0.9
         urgent3.submittal_id = "urgent_3"
         
@@ -371,7 +371,7 @@ class TestUrgencyService:
         """Test that when all 9 slots are filled and no regular orders exist, new gets 1.0."""
         urgent_submittals = []
         for i in range(1, 10):
-            urgent = Mock(spec=ProcoreSubmittal)
+            urgent = Mock(spec=Submittals)
             urgent.order_number = i * 0.1
             urgent.submittal_id = f"urgent_{i}"
             urgent_submittals.append(urgent)
@@ -402,14 +402,14 @@ class TestUrgencyService:
         """Test that when all 9 slots are filled, all regular orders shift up correctly."""
         urgent_submittals = []
         for i in range(1, 10):
-            urgent = Mock(spec=ProcoreSubmittal)
+            urgent = Mock(spec=Submittals)
             urgent.order_number = i * 0.1
             urgent.submittal_id = f"urgent_{i}"
             urgent_submittals.append(urgent)
         
         regulars = []
         for i in range(1, 6):
-            regular = Mock(spec=ProcoreSubmittal)
+            regular = Mock(spec=Submittals)
             regular.order_number = float(i)
             regular.submittal_id = f"regular_{i}"
             regulars.append(regular)
@@ -455,15 +455,15 @@ class TestUrgencyService:
     
     def test_three_urgent_items_one_shift(self, mock_query, sample_record):
         """Test that three urgent items (0.6, 0.7, 0.9) - only 0.9 shifts to 0.8 since 0.8 is open."""
-        urgent1 = Mock(spec=ProcoreSubmittal)
+        urgent1 = Mock(spec=Submittals)
         urgent1.order_number = 0.6
         urgent1.submittal_id = "urgent_1"
         
-        urgent2 = Mock(spec=ProcoreSubmittal)
+        urgent2 = Mock(spec=Submittals)
         urgent2.order_number = 0.7
         urgent2.submittal_id = "urgent_2"
         
-        urgent3 = Mock(spec=ProcoreSubmittal)
+        urgent3 = Mock(spec=Submittals)
         urgent3.order_number = 0.9
         urgent3.submittal_id = "urgent_3"
         
@@ -481,11 +481,11 @@ class TestUrgencyService:
     
     def test_current_submittal_excluded_from_query(self, mock_query, sample_record):
         """Test that current submittal is excluded from queries even if it has urgent order."""
-        existing_urgent = Mock(spec=ProcoreSubmittal)
+        existing_urgent = Mock(spec=Submittals)
         existing_urgent.order_number = 0.9
         existing_urgent.submittal_id = "submittal_123"
         
-        other_urgent = Mock(spec=ProcoreSubmittal)
+        other_urgent = Mock(spec=Submittals)
         other_urgent.order_number = 0.9
         other_urgent.submittal_id = "urgent_other"
         
@@ -500,7 +500,7 @@ class TestUrgencyService:
     
     def test_different_ball_in_court_ignored(self, mock_query, sample_record):
         """Test that urgent submittals with different ball_in_court are ignored."""
-        other_urgent = Mock(spec=ProcoreSubmittal)
+        other_urgent = Mock(spec=Submittals)
         other_urgent.order_number = 0.9
         other_urgent.submittal_id = "other_urgent"
         other_urgent.ball_in_court = "Drafter B"
@@ -515,11 +515,11 @@ class TestUrgencyService:
     
     def test_ladder_progression_example(self, mock_query, sample_record):
         """Test a realistic ladder progression scenario - 0.9 not occupied, so no shifting."""
-        urgent1 = Mock(spec=ProcoreSubmittal)
+        urgent1 = Mock(spec=Submittals)
         urgent1.order_number = 0.7
         urgent1.submittal_id = "urgent_1"
         
-        urgent2 = Mock(spec=ProcoreSubmittal)
+        urgent2 = Mock(spec=Submittals)
         urgent2.order_number = 0.8
         urgent2.submittal_id = "urgent_2"
         
@@ -538,7 +538,7 @@ class TestUrgencyService:
         """Test that when 8 slots filled (0.1-0.8), new gets 0.9 without shifting."""
         urgent_submittals = []
         for i in range(1, 9):
-            urgent = Mock(spec=ProcoreSubmittal)
+            urgent = Mock(spec=Submittals)
             urgent.order_number = i * 0.1
             urgent.submittal_id = f"urgent_{i}"
             urgent_submittals.append(urgent)
@@ -554,19 +554,19 @@ class TestUrgencyService:
     
     def test_single_order_compression(self, mock_query, sample_record):
         """Test that when a submittal pops from ball in court higher urgency submittals shift down."""
-        urgent1 = Mock(spec=ProcoreSubmittal)
+        urgent1 = Mock(spec=Submittals)
         urgent1.order_number = 0.6
         urgent1.submittal_id = "urgent_1"
         
-        urgent2 = Mock(spec=ProcoreSubmittal)
+        urgent2 = Mock(spec=Submittals)
         urgent2.order_number = 0.7
         urgent2.submittal_id = "urgent_2"
 
-        urgent3 = Mock(spec=ProcoreSubmittal)
+        urgent3 = Mock(spec=Submittals)
         urgent3.order_number = 0.8
         urgent3.submittal_id = "urgent_3"
 
-        urgent4 = Mock(spec=ProcoreSubmittal)
+        urgent4 = Mock(spec=Submittals)
         urgent4.order_number = 0.9
         urgent4.submittal_id = "urgent_4"
         

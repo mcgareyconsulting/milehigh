@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
-from app.models import db, ProcoreSubmittal
+from app.models import db, Submittals
 from app.procore.client import get_procore_client
 from app.config import Config as cfg
 
@@ -25,9 +25,9 @@ def get_unique_projects(include_name: bool = False) -> List[Tuple]:
     """
     if include_name:
         results = db.session.query(
-            ProcoreSubmittal.procore_project_id,
-            ProcoreSubmittal.project_number,
-            ProcoreSubmittal.project_name
+            Submittals.procore_project_id,
+            Submittals.project_number,
+            Submittals.project_name
         ).distinct().all()
         
         projects = []
@@ -41,8 +41,8 @@ def get_unique_projects(include_name: bool = False) -> List[Tuple]:
         return projects
     else:
         results = db.session.query(
-            ProcoreSubmittal.procore_project_id,
-            ProcoreSubmittal.project_number
+            Submittals.procore_project_id,
+            Submittals.project_number
         ).distinct().all()
         
         projects = []

@@ -5,7 +5,7 @@ Usage:
     python -m app.procore.scripts.sync_submittals --project-id <project_id>
 
 Fetches all submittals from Procore API for a given project_id,
-checks against the database, and adds new submittals to the ProcoreSubmittals table.
+checks against the database, and adds new submittals to the Submittalss table.
 """
 
 import argparse
@@ -13,7 +13,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
 from app import create_app
-from app.models import db, ProcoreSubmittal
+from app.models import db, Submittals
 from app.procore.client import get_procore_client
 from app.procore.procore import get_project_info, get_submittal_by_id
 from app.procore.helpers import parse_ball_in_court_from_submittal
@@ -34,14 +34,14 @@ def extract_field_value(data, field_name, default=None):
 
 def create_submittal_from_api_data(project_id, submittal_data):
     """
-    Create a new ProcoreSubmittal record from API submittal data.
+    Create a new Submittals record from API submittal data.
     
     Args:
         project_id: Procore project ID
         submittal_data: Dict containing submittal data from Procore API
         
     Returns:
-        tuple: (created: bool, record: ProcoreSubmittal or None, error_message: str or None)
+        tuple: (created: bool, record: Submittals or None, error_message: str or None)
     """
     print(f"submittal_data: {submittal_data}")
     try:
@@ -54,7 +54,7 @@ def create_submittal_from_api_data(project_id, submittal_data):
         submittal_id_str = str(submittal_id)
         
         # Check if submittal already exists
-        existing = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id_str).first()
+        existing = Submittals.query.filter_by(submittal_id=submittal_id_str).first()
         if existing:
             logger.info(f"Submittal {submittal_id_str} already exists in database, skipping")
             return False, existing, None
@@ -124,7 +124,7 @@ def create_submittal_from_api_data(project_id, submittal_data):
             procore_created_at = datetime.utcnow()
         
         # Double-check it doesn't exist (race condition protection)
-        existing_check = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id_str).first()
+        existing_check = Submittals.query.filter_by(submittal_id=submittal_id_str).first()
         if existing_check:
             logger.info(
                 f"Submittal {submittal_id_str} was created by another process. "
@@ -132,8 +132,8 @@ def create_submittal_from_api_data(project_id, submittal_data):
             )
             return False, existing_check, None
         
-        # Create new ProcoreSubmittal record
-        new_submittal = ProcoreSubmittal(
+        # Create new Submittals record
+        new_submittal = Submittals(
             submittal_id=submittal_id_str,
             procore_project_id=str(project_id),
             project_number=str(project_info.get("project_number", "")).strip() or None,
@@ -166,7 +166,7 @@ def create_submittal_from_api_data(project_id, submittal_data):
                 f"Rolling back and fetching existing record."
             )
             db.session.rollback()
-            existing_after_error = ProcoreSubmittal.query.filter_by(submittal_id=submittal_id_str).first()
+            existing_after_error = Submittals.query.filter_by(submittal_id=submittal_id_str).first()
             if existing_after_error:
                 logger.info(f"Found existing record, returning it")
                 return False, existing_after_error, None
