@@ -12,7 +12,7 @@ Usage:
     python -m app.scripts.backfill_viewer_urls
 """
 
-from app.models import Job, db
+from app.models import Releases, db
 from app.procore.procore import get_viewer_url_for_job
 import logging
 
@@ -42,7 +42,7 @@ def backfill_viewer_urls(return_json=False):
         if not return_json:
             print("\n[STEP 1] Loading all jobs from database...")
         
-        all_jobs = Job.query.all()
+        all_jobs = Releases.query.all()
         total_jobs = len(all_jobs)
         
         if not return_json:

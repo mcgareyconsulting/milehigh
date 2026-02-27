@@ -9,7 +9,7 @@ from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.models import Job, db, JobEvents
+from app.models import Releases, db, JobEvents
 from app.auth.utils import login_required, format_source_with_user, get_current_user
 from datetime import datetime
 import json
@@ -294,7 +294,7 @@ def get_jobs():
         - 200: Success
         - 500: Server error
     """
-    from app.models import Job
+    from app.models import Releases
     from datetime import datetime
     
     try:        
@@ -305,13 +305,13 @@ def get_jobs():
         since_param = request.args.get('since')
         
         # Base query
-        query = Job.query
+        query = Releases.query
 
         # Apply timestamp filter if provided
         if since_param:
             try:
                 since_timestamp = datetime.fromisoformat(since_param.replace('Z', '+00:00'))
-                query = query.filter(Job.last_updated_at > since_timestamp)
+                query = query.filter(Releases.last_updated_at > since_timestamp)
                 logger.info(f"[CURSOR] Filtering jobs updated after: {since_timestamp}")
             except (ValueError, TypeError) as e:
                 logger.warning(f"[CURSOR] Invalid since parameter: {since_param}, error: {e}. Fetching all jobs.")
@@ -319,7 +319,7 @@ def get_jobs():
             logger.info(f"[CURSOR] No since parameter provided - fetching all jobs (initial load)")
 
         # Order by last_updated_at, id for deterministic results
-        query = query.order_by(Job.last_updated_at.asc(), Job.id.asc())
+        query = query.order_by(Releases.last_updated_at.asc(), Releases.id.asc())
         jobs = query.limit(limit).all()
         logger.info(f"[CURSOR] Query returned {len(jobs)} jobs (limit={limit})")
 
@@ -387,7 +387,7 @@ def get_jobs():
         from app.api.helpers import add_scheduling_fields_to_jobs
         try:
             # Fetch all jobs for queue calculation (regardless of filter/pagination)
-            all_jobs_for_queue = Job.query.all()
+            all_jobs_for_queue = Releases.query.all()
             all_jobs_dicts = []
             for j in all_jobs_for_queue:
                 all_jobs_dicts.append({
@@ -448,7 +448,7 @@ def get_all_jobs():
         - 200: Success
         - 500: Server error
     """
-    from app.models import Job
+    from app.models import Releases
     
     try:
         # Get page parameter from request (default to 1)
@@ -463,7 +463,7 @@ def get_all_jobs():
         offset = (page - 1) * limit
         
         # Base query - order by id for consistent pagination
-        query = Job.query.order_by(Job.id.asc())
+        query = Releases.query.order_by(Releases.id.asc())
         
         # Get total count for pagination info
         total_count = query.count()
@@ -535,7 +535,7 @@ def get_all_jobs():
         from app.api.helpers import add_scheduling_fields_to_jobs
         try:
             # Fetch all jobs for queue calculation (regardless of pagination)
-            all_jobs_for_queue = Job.query.all()
+            all_jobs_for_queue = Releases.query.all()
             all_jobs_dicts = []
             for j in all_jobs_for_queue:
                 all_jobs_dicts.append({
@@ -591,16 +591,16 @@ def get_gantt_data():
         - 200: Success
         - 500: Server error
     """
-    from app.models import Job
+    from app.models import Releases
     from app.trello.utils import add_business_days
     from datetime import date
     from collections import defaultdict
     
     try:
         # Get all jobs that have start_install dates and are in FABRICATION or READY_TO_SHIP stage_group
-        jobs = Job.query.filter(
-            Job.start_install.isnot(None),
-            Job.stage_group.in_(['FABRICATION', 'READY_TO_SHIP'])
+        jobs = Releases.query.filter(
+            Releases.start_install.isnot(None),
+            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP'])
         ).all()
         
         # Group jobs by project (job number)
@@ -706,7 +706,7 @@ def update_stage(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Job, db, JobEvents
+    from app.models import Releases, db, JobEvents
     from app.services.job_event_service import JobEventService
     from datetime import datetime
     
@@ -723,7 +723,7 @@ def update_stage(job, release):
             return jsonify({'error': 'Stage is required'}), 400
 
         # Fetch job record
-        job_record = Job.query.filter_by(job=job, release=release).first()
+        job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
@@ -772,12 +772,12 @@ def update_stage(job, release):
             # Find the maximum fab_order in the READY_TO_SHIP group (excluding current job)
             # Query the database BEFORE updating stage_group in memory
             # Use or_ to exclude current job: (job != current) OR (release != current)
-            max_fab_order = db.session.query(func.max(Job.fab_order)).filter(
-                Job.stage_group == 'READY_TO_SHIP',
-                Job.fab_order.isnot(None),
+            max_fab_order = db.session.query(func.max(Releases.fab_order)).filter(
+                Releases.stage_group == 'READY_TO_SHIP',
+                Releases.fab_order.isnot(None),
                 or_(
-                    Job.job != job,
-                    Job.release != release
+                    Releases.job != job,
+                    Releases.release != release
                 )
             ).scalar()
             
@@ -942,7 +942,7 @@ def update_banana_color(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Job, db
+    from app.models import Releases, db
     
     logger.info(f"update_banana_color called", extra={
         'job': job,
@@ -957,7 +957,7 @@ def update_banana_color(job, release):
             return jsonify({'error': 'banana_color must be "red", "yellow", "green", or null'}), 400
         
         # Fetch job record
-        job_record = Job.query.filter_by(job=job, release=release).first()
+        job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
@@ -1111,7 +1111,7 @@ def update_notes(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Job, db, JobEvents
+    from app.models import Releases, db, JobEvents
     from app.services.job_event_service import JobEventService
     
     logger.info(f"update_notes called", extra={
@@ -1129,7 +1129,7 @@ def update_notes(job, release):
             notes = str(notes).strip()
 
         # Fetch job record
-        job_record = Job.query.filter_by(job=job, release=release).first()
+        job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
@@ -1251,7 +1251,7 @@ def update_job_comp(job, release):
     Request Body: { "job_comp": str (optional, empty to clear) }
     Returns: JSON with status or error.
     """
-    from app.models import Job, db
+    from app.models import Releases, db
 
     logger.info("update_job_comp called", extra={"job": job, "release": release, "job_comp": request.json.get("job_comp")})
 
@@ -1259,7 +1259,7 @@ def update_job_comp(job, release):
         raw = request.json.get("job_comp")
         job_comp_str = _normalize_short_field(raw)
 
-        job_record = Job.query.filter_by(job=job, release=release).first()
+        job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
             return jsonify({"error": "Job not found"}), 404
 
@@ -1285,7 +1285,7 @@ def update_invoiced(job, release):
     Request Body: { "invoiced": str (optional, empty to clear) }
     Returns: JSON with status or error.
     """
-    from app.models import Job, db
+    from app.models import Releases, db
 
     logger.info("update_invoiced called", extra={"job": job, "release": release, "invoiced": request.json.get("invoiced")})
 
@@ -1293,7 +1293,7 @@ def update_invoiced(job, release):
         raw = request.json.get("invoiced")
         invoiced_str = _normalize_short_field(raw)
 
-        job_record = Job.query.filter_by(job=job, release=release).first()
+        job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
             return jsonify({"error": "Job not found"}), 404
 
@@ -1329,7 +1329,7 @@ def update_start_install(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Job, db
+    from app.models import Releases, db
     from app.services.job_event_service import JobEventService
     from datetime import datetime, date
     
@@ -1361,7 +1361,7 @@ def update_start_install(job, release):
             }), 200
 
         # Fetch job record
-        job_record = Job.query.filter_by(job=job, release=release).first()
+        job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
@@ -1547,7 +1547,7 @@ def release_job_data():
                 release_number = str(row_values['release']).strip()
                 
                 # Check if job already exists
-                existing_job = Job.query.filter_by(job=job_number, release=release_number).first()
+                existing_job = Releases.query.filter_by(job=job_number, release=release_number).first()
                 if existing_job:
                     continue
                 
@@ -1587,7 +1587,7 @@ def release_job_data():
                 db.session.add(event)
                 
                 # Create new job
-                new_job = Job(
+                new_job = Releases(
                     job=job_number,
                     release=release_number,
                     job_name=safe_string(row_values['job_name'], 128) or '',

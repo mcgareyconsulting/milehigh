@@ -14,7 +14,7 @@ Usage:
 """
 
 import argparse
-from app.models import Job, db
+from app.models import Releases, db
 from app.trello.scanner import create_trello_card_for_db_job
 from app.logging_config import get_logger
 
@@ -45,12 +45,12 @@ def seed_released_cards(limit=None, dry_run=False):
         print("\n[STEP 1] Querying released jobs from database...")
         
         # Query jobs with stage="Released" or stage=None, and no trello_card_id
-        query = Job.query.filter(
+        query = Releases.query.filter(
             db.or_(
-                Job.stage == "Released",
-                Job.stage.is_(None)
+                Releases.stage == "Released",
+                Releases.stage.is_(None)
             ),
-            Job.trello_card_id.is_(None)
+            Releases.trello_card_id.is_(None)
         )
         
         if limit:

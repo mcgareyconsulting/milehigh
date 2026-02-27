@@ -69,7 +69,7 @@ def migrate(database_url: str = None) -> bool:
     """Update stage_group for 'Welded' and 'Welded QC' stages to READY_TO_SHIP."""
     # Import app and models
     from app import create_app
-    from app.models import Job, db
+    from app.models import Releases, db
     from app.api.helpers import get_stage_group_from_stage
     
     app = create_app()
@@ -83,8 +83,8 @@ def migrate(database_url: str = None) -> bool:
             print(f"Updating stage_group for stages: {', '.join(stages_to_update)} to '{target_stage_group}'...")
             
             # Find all jobs with these stages
-            jobs_to_update = Job.query.filter(
-                Job.stage.in_(stages_to_update)
+            jobs_to_update = Releases.query.filter(
+                Releases.stage.in_(stages_to_update)
             ).all()
             
             total_jobs = len(jobs_to_update)

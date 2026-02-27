@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from app.models import Job, db
+from app.models import Releases, db
 from app.brain.job_log.features.fab_order.results import FabOrderUpdateResult
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
@@ -43,7 +43,7 @@ class UpdateFabOrderCommand:
             ValueError: If job not found or event already exists (deduplicated)
         """
         # 1️⃣ Fetch job record
-        job_record: Job = Job.query.filter_by(job=self.job_id, release=self.release).first()
+        job_record: Releases = Releases.query.filter_by(job=self.job_id, release=self.release).first()
         if not job_record:
             logger.warning(f"Job not found: {self.job_id}-{self.release}")
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
@@ -63,15 +63,15 @@ class UpdateFabOrderCommand:
             # Find all jobs in the same stage_group with fab_order >= target value (excluding current job)
             # We need to bump these jobs up by 1 to make room for the new value
             # Exclude None and ensure we only get valid numeric values
-            jobs_to_bump = Job.query.filter(
-                Job.stage_group == job_record.stage_group,
-                Job.fab_order.isnot(None),
-                Job.fab_order >= self.fab_order,
+            jobs_to_bump = Releases.query.filter(
+                Releases.stage_group == job_record.stage_group,
+                Releases.fab_order.isnot(None),
+                Releases.fab_order >= self.fab_order,
                 or_(
-                    Job.job != self.job_id,
-                    Job.release != self.release
+                    Releases.job != self.job_id,
+                    Releases.release != self.release
                 )
-            ).order_by(Job.fab_order.desc()).all()
+            ).order_by(Releases.fab_order.desc()).all()
             
             if jobs_to_bump:
                 logger.info(

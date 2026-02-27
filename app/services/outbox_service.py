@@ -51,7 +51,7 @@ class OutboxService:
         Returns:
             bool: True if processing succeeded, False if it failed (and will retry)
         """
-        from app.models import Job, db
+        from app.models import Releases, db
         from app.services.job_event_service import JobEventService
         from app.trello.api import update_trello_card, get_list_by_name
         
@@ -70,7 +70,7 @@ class OutboxService:
                 return False
             
             # Get the job record to derive card_id and other data
-            job_record = Job.query.filter_by(job=event.job, release=event.release).first()
+            job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
             if not job_record:
                 logger.error(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} not found")
                 outbox_item.status = 'failed'

@@ -256,8 +256,8 @@ class SyncLog(db.Model):
         return f"<SyncLog {self.operation_id} - {self.level} - {self.message[:50]}...>"
 
 
-class Job(db.Model):
-    __tablename__ = "jobs"
+class Releases(db.Model):
+    __tablename__ = "releases"
     __table_args__ = (db.UniqueConstraint("job", "release", name="_job_release_uc"),)
     id = db.Column(db.Integer, primary_key=True)
     # Job # and Release # for identifiers
@@ -348,7 +348,7 @@ class Job(db.Model):
 
 
 def query_job_releases():
-    results = Job.query.all()
+    results = Releases.query.all()
     return pd.DataFrame(
         [
             {

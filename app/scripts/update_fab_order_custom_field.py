@@ -17,7 +17,7 @@ Usage:
 import math
 import sys
 from app.config import Config as cfg
-from app.models import Job, db
+from app.models import Releases, db
 from app import create_app
 from app.trello.api import (
     update_card_custom_field_number
@@ -61,7 +61,7 @@ def scan_fab_order_updates(return_json=False):
     # Get all jobs with trello_card_id
     if not return_json:
         print("\n[STEP 1] Fetching jobs from database...")
-    jobs = Job.query.filter(Job.trello_card_id.isnot(None)).all()
+    jobs = Releases.query.filter(Releases.trello_card_id.isnot(None)).all()
     if not return_json:
         print(f"[INFO] Found {len(jobs)} job(s) with Trello cards")
     
@@ -201,7 +201,7 @@ def process_fab_order_updates(return_json=False):
     # Get all jobs with trello_card_id
     if not return_json:
         print("\n[STEP 1] Fetching jobs from database...")
-    jobs = Job.query.filter(Job.trello_card_id.isnot(None)).all()
+    jobs = Releases.query.filter(Releases.trello_card_id.isnot(None)).all()
     if not return_json:
         print(f"[INFO] Found {len(jobs)} job(s) with Trello cards")
     

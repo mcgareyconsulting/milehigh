@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from app.logging_config import get_logger
 from app.brain.job_log.outbox import OutboxItem
-from app.models import Outbox, Job, db
+from app.models import Outbox, Releases, db
 from app.services.job_event_service import JobEventService
 
 logger = get_logger(__name__)
@@ -68,7 +68,7 @@ class OutboxService:
                 logger.error(f"Outbox {outbox_item.id}: No event found")
                 return False
 
-            job_record = Job.query.filter_by(job=event.job, release=event.release).first()
+            job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
             if not job_record:
                 outbox_item.status = "failed"
                 outbox_item.error_message = f"Job {event.job}-{event.release} not found"

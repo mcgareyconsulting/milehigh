@@ -11,7 +11,7 @@ Usage:
     python -m app.scripts.health_scan          # Run scan
 """
 
-from app.models import Job, db
+from app.models import Releases, db
 from app.trello.api import get_trello_cards_from_subset, get_trello_card_by_id, update_trello_card_name, get_expected_card_name
 from app.trello.utils import extract_identifier
 # NOTE: Excel/OneDrive functionality removed - get_excel_dataframe no longer available
@@ -46,7 +46,7 @@ def health_scan(return_json=False):
         if not return_json:
             print("\n[STEP 1] Loading jobs from database...")
         
-        db_jobs = Job.query.all()
+        db_jobs = Releases.query.all()
         db_identifiers = set()
         for job in db_jobs:
             identifier = f"{job.job}-{job.release}"
@@ -337,7 +337,7 @@ def scan_trello_card_names(return_json=False, fix_names=False, limit=None):
         if not return_json:
             print("\n[STEP 1] Loading jobs with Trello cards from database...")
         
-        query = Job.query.filter(Job.trello_card_id.isnot(None))
+        query = Releases.query.filter(Releases.trello_card_id.isnot(None))
         if limit:
             query = query.limit(limit)
         

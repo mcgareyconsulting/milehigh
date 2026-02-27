@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from requests.exceptions import ConnectionError, Timeout
 from urllib3.exceptions import ProtocolError
 from app.config import Config as cfg
-from app.models import db, Job, Submittals, SubmittalEvents
+from app.models import db, Releases, Submittals, SubmittalEvents
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
@@ -1000,7 +1000,7 @@ def add_procore_link_to_trello_card(job, release):
     Function to add procore drafting document link to related trello card
     '''
     print(job, release)
-    job_record = Job.query.filter_by(job=job, release=release).first()
+    job_record = Releases.query.filter_by(job=job, release=release).first()
     if not job_record:
         return None
     print(job_record)

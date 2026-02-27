@@ -3,7 +3,7 @@ import re
 import os
 from app.config import Config as cfg
 from app.trello.utils import mountain_due_datetime, mountain_start_datetime
-from app.models import Job, db
+from app.models import Releases, db
 from flask import current_app
 from datetime import datetime
 import pandas as pd
@@ -253,7 +253,7 @@ def check_job_exists_in_db(job_number, release_number):
         print(f"[DEBUG] Converted identifiers - job_int: {job_int}, release_str: {release_str}")
         
         # Use Flask application context for database access
-        existing_job = Job.query.filter_by(job=job_int, release=release_str).one_or_none()
+        existing_job = Releases.query.filter_by(job=job_int, release=release_str).one_or_none()
         print(f"[DEBUG] Database query completed, found job: {existing_job is not None}")
         
         return existing_job
@@ -323,7 +323,7 @@ def create_job_record_from_excel_data(excel_data):
         release_number = str(excel_data.get('Release #', ''))
         
         # Create new Job record with Excel data only
-        new_job = Job(
+        new_job = Releases(
             # Basic identifiers
             job=job_number,
             release=release_number,
@@ -1012,7 +1012,7 @@ def get_card_attachments_by_job_release(job_number, release_number):
         print(f"[TRELLO API] Looking up attachments for job: {job_int}-{release_str}")
         
         # Find the job record in the database
-        job_record = Job.query.filter_by(job=job_int, release=release_str).one_or_none()
+        job_record = Releases.query.filter_by(job=job_int, release=release_str).one_or_none()
         
         if not job_record:
             return {

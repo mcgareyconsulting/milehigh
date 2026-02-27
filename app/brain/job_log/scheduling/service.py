@@ -7,7 +7,7 @@ based on the scheduling logic.
 
 from datetime import date, datetime
 from typing import List, Optional
-from app.models import Job, db
+from app.models import Releases, db
 from app.brain.job_log.scheduling.calculator import calculate_all_job_scheduling
 from app.logging_config import get_logger
 
@@ -15,11 +15,11 @@ logger = get_logger(__name__)
 
 
 def update_job_scheduling_fields(
-    job: Job,
-    all_jobs: Optional[List[Job]] = None,
+    job: Releases,
+    all_jobs: Optional[List[Releases]] = None,
     reference_date: Optional[date] = None,
     commit: bool = True
-) -> Job:
+) -> Releases:
     """
     Calculate and update scheduling fields for a single Job record.
     
@@ -42,7 +42,7 @@ def update_job_scheduling_fields(
     
     # Fetch all jobs if not provided (needed for hours_in_front calculation)
     if all_jobs is None:
-        all_jobs = Job.query.all()
+        all_jobs = Releases.query.all()
     
     # Convert Job models to dictionaries for calculation
     all_jobs_dicts = []
@@ -119,7 +119,7 @@ def recalculate_all_jobs_scheduling(
     logger.info(f"Starting scheduling recalculation for all jobs (reference_date={reference_date})")
     
     # Fetch all jobs
-    all_jobs = Job.query.all()
+    all_jobs = Releases.query.all()
     total_jobs = len(all_jobs)
     
     if total_jobs == 0:

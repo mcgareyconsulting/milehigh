@@ -29,7 +29,7 @@ from app.trello.api import (
     card_has_link_to,
     add_procore_link,
 )
-from app.models import Job, SyncOperation, SyncLog, SyncStatus, JobEvents, db
+from app.models import Releases, SyncOperation, SyncLog, SyncStatus, JobEvents, db
 from datetime import datetime, date, timezone, time
 from zoneinfo import ZoneInfo
 from app.sync_lock import synchronized_sync, sync_lock_manager
@@ -133,7 +133,7 @@ def sync_from_trello(event_info):
         
         # Check if card creation from Excel sync (skip Excel update)
         if event_info.get("event") == "card_created":
-            rec = Job.query.filter_by(trello_card_id=card_id).first()
+            rec = Releases.query.filter_by(trello_card_id=card_id).first()
             if rec and rec.source_of_update == "Excel":
                 time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
                 if time_diff and time_diff.total_seconds() < 300:  # 5 minutes
@@ -147,7 +147,7 @@ def sync_from_trello(event_info):
                     )
 
         elif event_info.get("event") == "card_updated":
-            rec = Job.query.filter_by(trello_card_id=card_id).first()
+            rec = Releases.query.filter_by(trello_card_id=card_id).first()
             if rec and rec.source_of_update == "Excel":
                 time_diff = datetime.utcnow() - rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
                 if time_diff and time_diff.total_seconds() < 120:  # 2 minutes
@@ -162,7 +162,7 @@ def sync_from_trello(event_info):
                     return
 
         # Find DB record
-        rec = Job.query.filter_by(trello_card_id=card_id).one_or_none()
+        rec = Releases.query.filter_by(trello_card_id=card_id).one_or_none()
         
         if not rec:
             safe_log_sync_event(sync_op.operation_id, "INFO", "No DB record found for card", card_id=card_id)

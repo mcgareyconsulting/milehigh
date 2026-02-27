@@ -20,7 +20,7 @@ import pandas as pd
 
 from app.config import Config as cfg
 from app.logging_config import get_logger
-from app.models import Job, db
+from app.models import Releases, db
 # NOTE: Excel/OneDrive functionality removed - get_excel_dataframe and update_excel_cell no longer available
 
 logger = get_logger(__name__)
@@ -110,7 +110,7 @@ def enforce_shipping_excel(
         include_details=include_details,
     )
 
-    query = Job.query.filter(Job.ship.in_(list(ALLOWED_SHIP_VALUES))).order_by(Job.id)
+    query = Releases.query.filter(Releases.ship.in_(list(ALLOWED_SHIP_VALUES))).order_by(Releases.id)
     total_jobs = query.count()
     logger.info("Jobs fetched for enforcement", total=total_jobs)
 
@@ -128,7 +128,7 @@ def enforce_shipping_excel(
         }
 
     if batch_size and batch_size > 0:
-        job_iterator: Iterable[Job] = query.yield_per(batch_size)
+        job_iterator: Iterable[Releases] = query.yield_per(batch_size)
     else:
         job_iterator = query
 

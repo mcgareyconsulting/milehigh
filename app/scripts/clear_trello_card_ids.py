@@ -18,7 +18,7 @@ Usage:
 """
 
 import argparse
-from app.models import Job, db
+from app.models import Releases, db
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -55,14 +55,14 @@ def clear_trello_card_ids(execute=False):
         # Step 1: Count jobs with Trello data
         print("\n[STEP 1] Counting jobs with Trello data...")
         
-        jobs_with_cards = Job.query.filter(Job.trello_card_id.isnot(None)).all()
-        total_jobs = Job.query.count()
-        jobs_without_cards = Job.query.filter(Job.trello_card_id.is_(None)).count()
+        jobs_with_cards = Releases.query.filter(Releases.trello_card_id.isnot(None)).all()
+        total_jobs = Releases.query.count()
+        jobs_without_cards = Releases.query.filter(Releases.trello_card_id.is_(None)).count()
         
         # Count jobs with various Trello fields
-        jobs_with_name = Job.query.filter(Job.trello_card_name.isnot(None)).count()
-        jobs_with_list = Job.query.filter(Job.trello_list_id.isnot(None)).count()
-        jobs_with_description = Job.query.filter(Job.trello_card_description.isnot(None)).count()
+        jobs_with_name = Releases.query.filter(Releases.trello_card_name.isnot(None)).count()
+        jobs_with_list = Releases.query.filter(Releases.trello_list_id.isnot(None)).count()
+        jobs_with_description = Releases.query.filter(Releases.trello_card_description.isnot(None)).count()
         
         print(f"[INFO] Total jobs in database: {total_jobs}")
         print(f"[INFO] Jobs with trello_card_id: {len(jobs_with_cards)}")
@@ -94,14 +94,14 @@ def clear_trello_card_ids(execute=False):
             print(f"\n[STEP 3] Clearing all Trello data for {len(jobs_with_cards)} jobs...")
             
             # Update all jobs with trello_card_id to clear all Trello fields
-            updated_count = Job.query.filter(Job.trello_card_id.isnot(None)).update(
+            updated_count = Releases.query.filter(Releases.trello_card_id.isnot(None)).update(
                 {
-                    Job.trello_card_id: None,
-                    Job.trello_card_name: None,
-                    Job.trello_list_id: None,
-                    Job.trello_list_name: None,
-                    Job.trello_card_description: None,
-                    Job.trello_card_date: None
+                    Releases.trello_card_id: None,
+                    Releases.trello_card_name: None,
+                    Releases.trello_list_id: None,
+                    Releases.trello_list_name: None,
+                    Releases.trello_card_description: None,
+                    Releases.trello_card_date: None
                 },
                 synchronize_session=False
             )
@@ -112,9 +112,9 @@ def clear_trello_card_ids(execute=False):
             print(f"[SUCCESS] Cleared all Trello data for {updated_count} jobs")
             
             # Verify
-            remaining_card_id = Job.query.filter(Job.trello_card_id.isnot(None)).count()
-            remaining_name = Job.query.filter(Job.trello_card_name.isnot(None)).count()
-            remaining_list = Job.query.filter(Job.trello_list_id.isnot(None)).count()
+            remaining_card_id = Releases.query.filter(Releases.trello_card_id.isnot(None)).count()
+            remaining_name = Releases.query.filter(Releases.trello_card_name.isnot(None)).count()
+            remaining_list = Releases.query.filter(Releases.trello_list_id.isnot(None)).count()
             
             if remaining_card_id == 0 and remaining_name == 0 and remaining_list == 0:
                 print(f"[VERIFY] ✅ All Trello data cleared successfully")

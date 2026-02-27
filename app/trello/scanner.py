@@ -9,7 +9,7 @@ This module provides scanning functionality to identify:
 """
 
 from typing import Dict, List, Optional, Tuple
-from app.models import Job, db
+from app.models import Releases, db
 from app.trello.api import get_all_trello_cards
 from app.trello.utils import extract_identifier
 from app.logging_config import get_logger
@@ -144,7 +144,7 @@ def scan_trello_db_comparison() -> Dict:
     
     # Step 1: Get all DB jobs
     logger.info("Fetching all jobs from database...")
-    db_jobs = Job.query.all()
+    db_jobs = Releases.query.all()
     db_jobs_by_identifier = {}
     db_identifiers = set()
     
@@ -330,7 +330,7 @@ def delete_trello_card(card_id: str) -> Dict:
         return {"success": False, "card_id": card_id, "error": str(err)}
 
 
-def create_trello_card_for_db_job(job: Job, list_name: Optional[str] = None) -> Dict:
+def create_trello_card_for_db_job(job: Releases, list_name: Optional[str] = None) -> Dict:
     """
     Create a Trello card for a database job.
     
@@ -531,7 +531,7 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
                 update_trello_card(card_id, new_list_id=list_info['id'])
                 
                 # Update DB job record with new list info
-                job = Job.query.filter_by(job=mismatch['job'], release=mismatch['release']).first()
+                job = Releases.query.filter_by(job=mismatch['job'], release=mismatch['release']).first()
                 if job:
                     from app.trello.api import get_list_name_by_id
                     job.trello_list_id = list_info['id']
@@ -559,7 +559,7 @@ def sync_trello_with_db(dry_run: bool = False) -> Dict:
     logger.info(f"Creating {len(scan_results['db_only'])} cards for DB-only jobs...")
     for job_info in scan_results['db_only']:
         # Get the job from database
-        job = Job.query.filter_by(job=job_info['job'], release=job_info['release']).first()
+        job = Releases.query.filter_by(job=job_info['job'], release=job_info['release']).first()
         if not job:
             logger.warning(f"Job {job_info['identifier']} not found in database, skipping")
             continue
@@ -616,7 +616,7 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
     
     try:
         # Query all jobs that don't have Trello cards
-        query = Job.query.filter(Job.trello_card_id.is_(None))
+        query = Releases.query.filter(Releases.trello_card_id.is_(None))
         
         if limit:
             query = query.limit(limit)

@@ -14,7 +14,7 @@ Usage:
 import sys
 from sqlalchemy import or_
 from app.config import Config as cfg
-from app.models import Job, db
+from app.models import Releases, db
 from app import create_app
 from app.trello.api import get_trello_card_by_id, get_list_name_by_id
 
@@ -40,19 +40,19 @@ def scan_missing_list_info(return_json=False, job=None, release=None):
     if not return_json:
         print("\n[STEP 1] Fetching jobs from database...")
     
-    query = Job.query.filter(
-        Job.trello_card_id.isnot(None),
+    query = Releases.query.filter(
+        Releases.trello_card_id.isnot(None),
         or_(
-            Job.trello_list_id.is_(None),
-            Job.trello_list_name.is_(None)
+            Releases.trello_list_id.is_(None),
+            Releases.trello_list_name.is_(None)
         )
     )
     
     # Filter by job and/or release if provided
     if job is not None:
-        query = query.filter(Job.job == job)
+        query = query.filter(Releases.job == job)
     if release is not None:
-        query = query.filter(Job.release == str(release))
+        query = query.filter(Releases.release == str(release))
     
     jobs = query.all()
     
@@ -179,19 +179,19 @@ def fix_missing_list_info(return_json=False, limit=None, batch_size=50, job=None
     # Get all jobs with trello_card_id but missing list info
     if not return_json:
         print("\n[STEP 1] Fetching jobs from database...")
-    query = Job.query.filter(
-        Job.trello_card_id.isnot(None),
+    query = Releases.query.filter(
+        Releases.trello_card_id.isnot(None),
         or_(
-            Job.trello_list_id.is_(None),
-            Job.trello_list_name.is_(None)
+            Releases.trello_list_id.is_(None),
+            Releases.trello_list_name.is_(None)
         )
     )
     
     # Filter by job and/or release if provided
     if job is not None:
-        query = query.filter(Job.job == job)
+        query = query.filter(Releases.job == job)
     if release is not None:
-        query = query.filter(Job.release == str(release))
+        query = query.filter(Releases.release == str(release))
     
     if limit:
         query = query.limit(limit)

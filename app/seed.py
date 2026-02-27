@@ -1,5 +1,5 @@
 import pandas as pd
-from app.models import db, Job, SyncOperation, SyncStatus
+from app.models import db, Releases, SyncOperation, SyncStatus
 from app.combine import combine_trello_excel_data
 from app.trello.operations import create_sync_operation, update_sync_operation
 from app.trello.logging import safe_log_sync_event
@@ -116,7 +116,7 @@ def seed_from_combined_data(combined_data, batch_size=50):
                     except (TypeError, ValueError):
                         return None
 
-                jr = Job(
+                jr = Releases(
                     job=excel_data.get("Job #"),
                     release=excel_data.get("Release #"),
                     job_name=safe_truncate_string(excel_data.get("Job"), 128),
@@ -383,7 +383,7 @@ def incremental_seed_missing_jobs(batch_size=50):
                 continue
                 
             # Check if job already exists in database
-            existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+            existing_job = Releases.query.filter_by(job=job_num, release=release_str).first()
             
             if existing_job:
                 existing_jobs.add(f"{job_num}-{release_str}")
@@ -493,7 +493,7 @@ def incremental_seed_missing_jobs(batch_size=50):
                             except (TypeError, ValueError):
                                 return None
                         
-                        jr = Job(
+                        jr = Releases(
                             job=excel_data.get("Job #"),
                             release=excel_data.get("Release #"),
                             job_name=safe_truncate_string(excel_data.get("Job"), 128),
@@ -692,7 +692,7 @@ def process_single_identifier(identifier: str, dry_run: bool = True):
         # Validate job number is an integer
         try:
             job_num = int(job_num)
-            existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+            existing_job = Releases.query.filter_by(job=job_num, release=release_str).first()
         except (ValueError, TypeError):
             # Skip rows with invalid job numbers
             pass
@@ -755,7 +755,7 @@ def process_single_identifier(identifier: str, dry_run: bool = True):
             except (TypeError, ValueError):
                 return None
 
-        jr = Job(
+        jr = Releases(
             job=excel_data.get("Job #"),
             release=excel_data.get("Release #"),
             job_name=safe_truncate_string(excel_data.get("Job"), 128),
@@ -937,7 +937,7 @@ def get_trello_excel_cross_check_summary():
                 # Validate job number is an integer
                 try:
                     job_num = int(job_num)
-                    existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+                    existing_job = Releases.query.filter_by(job=job_num, release=release_str).first()
                 except (ValueError, TypeError):
                     # Skip rows with invalid job numbers
                     existing_job = None
@@ -1052,7 +1052,7 @@ def get_first_identifier_to_seed():
         except (ValueError, TypeError):
             # Skip rows with invalid job numbers
             continue
-        existing_job = Job.query.filter_by(job=job_num, release=release_str).first()
+        existing_job = Releases.query.filter_by(job=job_num, release=release_str).first()
         if existing_job:
             continue
         return identifier
@@ -1435,7 +1435,7 @@ def seed_jobs_from_csv(csv_file_path=None, batch_size=50, require_confirmation=T
         print(f"   URI: {masked_uri}")
         
         # Count existing records
-        existing_count = Job.query.count()
+        existing_count = Releases.query.count()
         print(f"   Current records in jobs table: {existing_count}")
         
         if existing_count > 0:
@@ -1508,7 +1508,7 @@ def seed_jobs_from_csv(csv_file_path=None, batch_size=50, require_confirmation=T
             # Step 1: Delete all existing records
             if existing_count > 0:
                 print(f"\n🗑️  Deleting {existing_count} existing job records...")
-                deleted_count = Job.query.delete()
+                deleted_count = Releases.query.delete()
                 db.session.commit()
                 print(f"   ✓ Deleted {deleted_count} records")
             else:
@@ -1535,7 +1535,7 @@ def seed_jobs_from_csv(csv_file_path=None, batch_size=50, require_confirmation=T
                         from app.api.helpers import get_stage_group_from_stage
                         stage_group_value = get_stage_group_from_stage(stage_value) if stage_value else None
                         
-                        job_record = Job(
+                        job_record = Releases(
                             job=int(row['Job #']),
                             release=str(row['Release #']).strip(),
                             job_name=safe_truncate_string(row.get('Job'), 128),

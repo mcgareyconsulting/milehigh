@@ -368,7 +368,7 @@ def create_app():
     
     def _get_job_change_history(job, release):
         """Internal function to retrieve job event history."""
-        from app.models import JobEvents, Job
+        from app.models import JobEvents, Releases
         
         # At least one parameter must be provided
         if job is None and release is None:
@@ -396,7 +396,7 @@ def create_app():
             job_events = events_query.order_by(JobEvents.created_at.desc()).all()
             
             # Build job query to retrieve metadata for associated job-release combos
-            job_query = Job.query
+            job_query = Releases.query
             if job is not None:
                 job_query = job_query.filter_by(job=job)
             if release is not None:

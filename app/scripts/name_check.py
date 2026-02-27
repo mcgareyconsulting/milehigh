@@ -11,7 +11,7 @@ Usage:
     python -m app.scripts.name_check --update # Actually update cards
 """
 
-from app.models import Job, db
+from app.models import Releases, db
 from app.trello.api import update_trello_card_name, get_expected_card_name
 import logging
 
@@ -48,7 +48,7 @@ def check_card_names(return_json=False, dry_run=True, limit=None):
         if not return_json:
             print("\n[STEP 1] Loading jobs with Trello cards from database...")
         
-        query = Job.query.filter(Job.trello_card_id.isnot(None))
+        query = Releases.query.filter(Releases.trello_card_id.isnot(None))
         if limit:
             query = query.limit(limit)
         

@@ -75,7 +75,7 @@ def migrate(database_url: str = None) -> bool:
     """Perform the migration, adding stage column to jobs and populating it."""
     # Import app and models
     from app import create_app
-    from app.models import Job, db
+    from app.models import Releases, db
     from app.api.helpers import determine_stage_from_db_fields
     
     app = create_app()
@@ -106,8 +106,8 @@ def migrate(database_url: str = None) -> bool:
             print("Populating 'stage' column from existing X/O fields...")
             
             # Get all jobs that don't have a stage set (NULL or empty)
-            jobs = Job.query.filter(
-                (Job.stage.is_(None)) | (Job.stage == "")
+            jobs = Releases.query.filter(
+                (Releases.stage.is_(None)) | (Releases.stage == "")
             ).all()
             
             total_jobs = len(jobs)

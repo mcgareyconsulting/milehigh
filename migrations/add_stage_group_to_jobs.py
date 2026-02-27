@@ -76,7 +76,7 @@ def migrate(database_url: str = None) -> bool:
     """Perform the migration, adding stage_group column to jobs and populating it."""
     # Import app and models
     from app import create_app
-    from app.models import Job, db
+    from app.models import Releases, db
     from app.api.helpers import get_stage_group_from_stage
     
     app = create_app()
@@ -105,9 +105,9 @@ def migrate(database_url: str = None) -> bool:
             print("Populating 'stage_group' column from 'stage' values...")
             
             # Get all jobs that have a stage but no stage_group
-            jobs = Job.query.filter(
-                Job.stage.isnot(None),
-                (Job.stage_group.is_(None)) | (Job.stage_group == "")
+            jobs = Releases.query.filter(
+                Releases.stage.isnot(None),
+                (Releases.stage_group.is_(None)) | (Releases.stage_group == "")
             ).all()
             
             total_jobs = len(jobs)

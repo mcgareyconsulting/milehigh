@@ -3,7 +3,7 @@ API routes for internal database queries.
 """
 from flask import jsonify, request
 from app.api import api_bp
-from app.models import Job, db
+from app.models import Releases, db
 from app.api.helpers import transform_job_for_display
 from app.logging_config import get_logger
 

@@ -15,7 +15,7 @@ from sqlalchemy import asc
 
 from app.config import Config as cfg
 from app.logging_config import get_logger
-from app.models import Job, db
+from app.models import Releases, db
 from app.trello.list_mapper import TrelloListMapper
 from app.trello.api import get_list_by_name
 
@@ -58,7 +58,7 @@ def _fetch_trello_cards_in_target_list() -> List[Dict]:
     return response.json()
 
 
-def _build_job_snapshot(job: Job) -> Dict[str, str]:
+def _build_job_snapshot(job: Releases) -> Dict[str, str]:
     """Return a lightweight snapshot of a job for reporting purposes."""
     return {
         "job_release": f"{job.job}-{job.release}",
@@ -74,13 +74,13 @@ def _build_job_snapshot(job: Job) -> Dict[str, str]:
     }
 
 
-def _evaluate_jobs(jobs: List[Job]) -> Tuple[List[Job], int, int]:
+def _evaluate_jobs(jobs: List[Releases]) -> Tuple[List[Releases], int, int]:
     """
     Determine which jobs need updates and track status mismatches.
 
     Returns a tuple of (needing_update, status_mismatches, already_correct_count).
     """
-    needing_update: List[Job] = []
+    needing_update: List[Releases] = []
     status_mismatches = 0
     already_correct = 0
 
@@ -105,7 +105,7 @@ def _evaluate_jobs(jobs: List[Job]) -> Tuple[List[Job], int, int]:
 
 
 def _compare_db_and_trello(
-    jobs: List[Job], trello_cards: List[Dict]
+    jobs: List[Releases], trello_cards: List[Dict]
 ) -> Dict[str, object]:
     """Compare database records with Trello cards and return discrepancy details."""
     trello_card_ids = {card.get("id") for card in trello_cards if card.get("id")}
@@ -139,8 +139,8 @@ def scan_store_shipping(return_json: bool = False, limit: Optional[int] = None):
     column is not currently set to "ST".
     """
     jobs = (
-        Job.query.filter(Job.trello_list_name == TARGET_LIST_NAME)
-        .order_by(asc(Job.job), asc(Job.release))
+        Releases.query.filter(Releases.trello_list_name == TARGET_LIST_NAME)
+        .order_by(asc(Releases.job), asc(Releases.release))
         .all()
     )
     total_in_list = len(jobs)
@@ -229,8 +229,8 @@ def run_store_shipping_sync(
     Sets ship column to "ST" (and related fields) using TrelloListMapper.
     """
     jobs = (
-        Job.query.filter(Job.trello_list_name == TARGET_LIST_NAME)
-        .order_by(asc(Job.job), asc(Job.release))
+        Releases.query.filter(Releases.trello_list_name == TARGET_LIST_NAME)
+        .order_by(asc(Releases.job), asc(Releases.release))
         .all()
     )
     trello_cards = _fetch_trello_cards_in_target_list()

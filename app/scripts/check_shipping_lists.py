@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Config as cfg
 from app.logging_config import get_logger
-from app.models import Job, db
+from app.models import Releases, db
 from app.trello.api import get_list_by_name
 from app.trello.utils import extract_identifier
 
@@ -97,12 +97,12 @@ def _fetch_trello_cards(list_name: str) -> List[Dict]:
     return cards
 
 
-def _find_job_for_card(card: Dict) -> Optional[Job]:
+def _find_job_for_card(card: Dict) -> Optional[Releases]:
     card_id = card.get("id")
     if not card_id:
         return None
 
-    job = Job.query.filter_by(trello_card_id=card_id).first()
+    job = Releases.query.filter_by(trello_card_id=card_id).first()
     if job:
         return job
 
@@ -118,10 +118,10 @@ def _find_job_for_card(card: Dict) -> Optional[Job]:
         logger.warning("Failed to parse identifier", identifier=identifier, card_id=card_id)
         return None
 
-    return Job.query.filter_by(job=job_number, release=release_number).first()
+    return Releases.query.filter_by(job=job_number, release=release_number).first()
 
 
-def _apply_expected_status(job: Job, expected_status: Dict[str, str]) -> List[JobChange]:
+def _apply_expected_status(job: Releases, expected_status: Dict[str, str]) -> List[JobChange]:
     updates: List[JobChange] = []
     for field, expected_value in expected_status.items():
         current_value = _normalize(getattr(job, field))
@@ -137,7 +137,7 @@ def _apply_expected_status(job: Job, expected_status: Dict[str, str]) -> List[Jo
     return updates
 
 
-def _ensure_trello_metadata(job: Job, card: Dict, list_name: str) -> List[JobChange]:
+def _ensure_trello_metadata(job: Releases, card: Dict, list_name: str) -> List[JobChange]:
     changes: List[JobChange] = []
     trello_updates = {
         "trello_card_id": card.get("id"),

@@ -7,7 +7,7 @@ and shows a diff against the current database values, without making any changes
 
 from datetime import date, datetime
 from typing import List, Dict, Any, Optional
-from app.models import Job, db
+from app.models import Releases, db
 from app.brain.job_log.scheduling.calculator import calculate_all_job_scheduling
 from app.logging_config import get_logger
 
@@ -43,7 +43,7 @@ def preview_scheduling_changes(
     logger.info(f"Previewing scheduling changes (reference_date={reference_date})")
     
     # Fetch all jobs
-    all_jobs = Job.query.order_by(Job.job.asc(), Job.release.asc()).all()
+    all_jobs = Releases.query.order_by(Releases.job.asc(), Releases.release.asc()).all()
     total_jobs = len(all_jobs)
     
     if total_jobs == 0:

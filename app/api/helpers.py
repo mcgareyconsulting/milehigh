@@ -3,7 +3,7 @@ Helper functions for transforming job data for API responses.
 """
 from typing import Dict, Any, Union, List, Optional
 from datetime import date
-from app.models import Job
+from app.models import Releases
 
 # Stage to stage_group mapping
 # Includes both user-provided names and actual stage names used in the codebase
@@ -61,7 +61,7 @@ def get_stage_group_from_stage(stage: Optional[str]) -> Optional[str]:
     return None
 
 
-def determine_stage_from_db_fields(job: Union[Job, Any]) -> str:
+def determine_stage_from_db_fields(job: Union[Releases, Any]) -> str:
     """
     Get the stage from the job's stage field.
     Returns the stage name or 'Released' if the stage field is None/empty.

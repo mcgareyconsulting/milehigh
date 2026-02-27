@@ -16,7 +16,7 @@ Usage:
 """
 
 import argparse
-from app.models import Job, db
+from app.models import Releases, db
 from app.trello.api import get_all_trello_cards, update_job_record_with_trello_data, get_list_name_by_id
 from app.trello.utils import extract_identifier
 from app.logging_config import get_logger
@@ -105,7 +105,7 @@ def rebuild_trello_data(execute=False):
                 continue
             
             # Find matching job in database
-            job = Job.query.filter_by(job=job_number, release=release_number).first()
+            job = Releases.query.filter_by(job=job_number, release=release_number).first()
             if not job:
                 unmatched_cards.append({
                     "card_id": card.get("id"),
