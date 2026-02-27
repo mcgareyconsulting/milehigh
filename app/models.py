@@ -27,7 +27,7 @@ class User(db.Model):
     last_login = db.Column(db.DateTime, nullable=True)
     
     # Relationships
-    job_events = db.relationship('JobEvents', backref='user', lazy='dynamic')
+    job_events = db.relationship('ReleaseEvents', backref='user', lazy='dynamic')
     submittal_events = db.relationship('SubmittalEvents', backref='user', lazy='dynamic')
     
     def __repr__(self):
@@ -405,7 +405,7 @@ class Outbox(db.Model):
     """Outbox table for tracking external API calls with retry capabilities."""
     __tablename__ = "outbox"
     id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('job_events.id'), nullable=False, unique=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('release_events.id'), nullable=False, unique=True)
     destination = db.Column(db.String(50), nullable=False)  # 'trello' or 'procore'
     action = db.Column(db.String(50), nullable=False)  # 'move_card', 'update_card', etc.
     
@@ -421,14 +421,14 @@ class Outbox(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)
     
     # Relationship
-    event = db.relationship('JobEvents', backref='outbox_items')
+    event = db.relationship('ReleaseEvents', backref='outbox_items')
 
 class Jobs(db.Model):
     """
     Job site geofences. Links to job log and DWL by identifier value (job number),
-    not by foreign key: jobs come from Excel/Trello (Job.job), submittals from
-    Procore (Submittals.project_number).     Use job_number to query:
-      - Job.query.filter(Job.job == cast(JobSites.job_number, Integer))  # Job.job is int
+    not by foreign key: jobs come from Excel/Trello (Releases.job), submittals from
+    Procore (Submittals.project_number). Use job_number to query:
+      - Releases.query.filter(Releases.job == cast(Jobs.job_number, Integer))  # Releases.job is int
       - Submittals.query.filter(Submittals.project_number == job_site.job_number)
     Relationships below provide the same via job_site.jobs and job_site.submittals.
     """
@@ -442,18 +442,18 @@ class Jobs(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
-    # Relationship by value: job log rows where Job.job equals this job_number (job_number is string, Job.job is int)
+    # Relationship by value: job log rows where Releases.job equals this job_number (job_number is string, Releases.job is int)
     jobs = db.relationship(
-        'Job',
-        primaryjoin='cast(JobSites.job_number, Integer) == Job.job',
-        foreign_keys='Job.job',
+        'Releases',
+        primaryjoin='cast(Jobs.job_number, Integer) == Releases.job',
+        foreign_keys='Releases.job',
         lazy='dynamic',
         viewonly=True,
     )
     # Relationship by value: DWL submittals where project_number == this job_number (both strings)
     submittals = db.relationship(
         'Submittals',
-        primaryjoin='Submittals.project_number == JobSites.job_number',
+        primaryjoin='Submittals.project_number == Jobs.job_number',
         foreign_keys='Submittals.project_number',
         lazy='dynamic',
         viewonly=True,
