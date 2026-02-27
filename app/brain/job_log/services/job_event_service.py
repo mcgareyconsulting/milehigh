@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Optional
 
-from app.models import JobEvents, db  # your actual SQLAlchemy model
+from app.models import ReleaseEvents, db  # your actual SQLAlchemy model
 from app.brain.job_log.job_events import JobEvent
 from app.logging_config import get_logger
 from app.auth.utils import format_source_with_user, get_current_user
@@ -49,7 +49,7 @@ class JobEventService:
         payload_hash = hashlib.sha256(hash_string.encode("utf-8")).hexdigest()
 
         # 2️⃣ Check for duplicates
-        existing = self.session.query(JobEvents).filter_by(payload_hash=payload_hash).first()
+        existing = self.session.query(ReleaseEvents).filter_by(payload_hash=payload_hash).first()
         if existing:
             self.logger.info("Duplicate event detected", extra={
                 "job": job,
@@ -60,7 +60,7 @@ class JobEventService:
             return None
 
         # 3️⃣ Create DB object
-        db_event = JobEvents(
+        db_event = ReleaseEvents(
             job=job,
             release=release,
             action=action,
@@ -93,7 +93,7 @@ class JobEventService:
 
     def close(self, event_id: int):
         """Mark event as applied"""
-        db_event = self.session.query(JobEvents).get(event_id)
+        db_event = self.session.query(ReleaseEvents).get(event_id)
         if db_event:
             db_event.applied_at = datetime.utcnow()
             self.logger.debug(f"Event {event_id} marked as applied")

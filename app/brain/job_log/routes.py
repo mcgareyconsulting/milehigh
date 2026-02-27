@@ -9,7 +9,7 @@ from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.models import Releases, db, JobEvents
+from app.models import Releases, db, ReleaseEvents
 from app.auth.utils import login_required, format_source_with_user, get_current_user
 from datetime import datetime
 import json
@@ -706,7 +706,7 @@ def update_stage(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Releases, db, JobEvents
+    from app.models import Releases, db, ReleaseEvents
     from app.services.job_event_service import JobEventService
     from datetime import datetime
     
@@ -1111,7 +1111,7 @@ def update_notes(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Releases, db, JobEvents
+    from app.models import Releases, db, ReleaseEvents
     from app.services.job_event_service import JobEventService
     
     logger.info(f"update_notes called", extra={
@@ -1575,7 +1575,7 @@ def release_job_data():
                 formatted_source = format_source_with_user('Brain', user)
                 
                 # Create event
-                event = JobEvents(
+                event = ReleaseEvents(
                     job=job_number,
                     release=release_number,
                     action='created',
@@ -1627,7 +1627,7 @@ def release_job_data():
                     })
                 
                 # Update event applied_at time
-                event = JobEvents.query.filter_by(payload_hash=payload_hash).first()
+                event = ReleaseEvents.query.filter_by(payload_hash=payload_hash).first()
                 if event:
                     event.applied_at = datetime.utcnow()
                     db.session.commit()
@@ -1803,24 +1803,24 @@ def get_event_filters():
     """
     Get all distinct event dates and sources from the database.
     """
-    from app.models import JobEvents, db
+    from app.models import ReleaseEvents, db
     from sqlalchemy import func
     try:
         # build dates list
         date_rows = (
-            db.session.query(func.date(JobEvents.created_at))
+            db.session.query(func.date(ReleaseEvents.created_at))
             .distinct()
-            .order_by(func.date(JobEvents.created_at).desc())
+            .order_by(func.date(ReleaseEvents.created_at).desc())
             .all()
         )
         dates = [str(r[0]) for r in date_rows if r[0] is not None]
 
         # build sources list
         source_rows = (
-            db.session.query(JobEvents.source)
+            db.session.query(ReleaseEvents.source)
             .distinct()
-            .filter(JobEvents.source.isnot(None))
-            .order_by(JobEvents.source)
+            .filter(ReleaseEvents.source.isnot(None))
+            .order_by(ReleaseEvents.source)
             .all()
         )
         sources = [r[0] for r in source_rows]
@@ -1834,7 +1834,7 @@ def get_event_filters():
 @login_required
 def get_events():
     """Get events filtered by date range and source."""
-    from app.models import JobEvents, SubmittalEvents
+    from app.models import ReleaseEvents, SubmittalEvents
     from app.datetime_utils import format_datetime_mountain
     try:
         # Query parameters
@@ -1846,22 +1846,22 @@ def get_events():
         job = request.args.get('job', type=int)  # Filter by job number
         release = request.args.get('release')  # Filter by release
 
-        job_query = JobEvents.query
+        job_query = ReleaseEvents.query
         submittal_query = SubmittalEvents.query
 
         # Apply date range on created_at (inclusive)
         if start_date:
             start_dt = datetime.fromisoformat(start_date + "T00:00:00")
-            job_query = job_query.filter(JobEvents.created_at >= start_dt)
+            job_query = job_query.filter(ReleaseEvents.created_at >= start_dt)
             submittal_query = submittal_query.filter(SubmittalEvents.created_at >= start_dt)
         if end_date:
             end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
-            job_query = job_query.filter(JobEvents.created_at <= end_dt)
+            job_query = job_query.filter(ReleaseEvents.created_at <= end_dt)
             submittal_query = submittal_query.filter(SubmittalEvents.created_at <= end_dt)
         
         # Apply source filter
         if source:
-            job_query = job_query.filter(JobEvents.source == source)
+            job_query = job_query.filter(ReleaseEvents.source == source)
             submittal_query = submittal_query.filter(SubmittalEvents.source == source)
         
         # Apply submittal_id filter (only applies to submittal events)
@@ -1877,14 +1877,14 @@ def get_events():
         # When filtering by job/release, exclude submittal events entirely
         elif job is not None or release:
             if job is not None:
-                job_query = job_query.filter(JobEvents.job == job)
+                job_query = job_query.filter(ReleaseEvents.job == job)
             if release:
-                job_query = job_query.filter(JobEvents.release == str(release).strip())
+                job_query = job_query.filter(ReleaseEvents.release == str(release).strip())
             # Don't include submittal events when filtering by job/release
-            job_events = job_query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+            job_events = job_query.order_by(ReleaseEvents.created_at.desc()).limit(limit).all()
             submittal_events = []
         else:
-            job_events = job_query.order_by(JobEvents.created_at.desc()).limit(limit).all()
+            job_events = job_query.order_by(ReleaseEvents.created_at.desc()).limit(limit).all()
             submittal_events = submittal_query.order_by(SubmittalEvents.created_at.desc()).limit(limit).all()
         
         # Combine and sort events

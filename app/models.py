@@ -374,9 +374,9 @@ def query_job_releases():
         ]
     )
 
-class JobEvents(db.Model):
-    '''Table to track events for jobs.'''
-    __tablename__ = 'job_events'
+class ReleaseEvents(db.Model):
+    '''Table to track events for releases.'''
+    __tablename__ = 'release_events'
     id = db.Column(db.Integer, primary_key=True)
     job = db.Column(db.Integer, nullable=False)
     release = db.Column(db.String(50))

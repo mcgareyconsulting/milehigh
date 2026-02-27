@@ -23,7 +23,7 @@ class JobEventService:
             JobEvents object if created
             None if duplicate detected
         """
-        from app.models import JobEvents, db
+        from app.models import ReleaseEvents, db
         import json
         import hashlib
         
@@ -48,7 +48,7 @@ class JobEventService:
         payload_hash = hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
         
         # Check for duplicate
-        existing = JobEvents.query.filter_by(payload_hash=payload_hash).first()
+        existing = ReleaseEvents.query.filter_by(payload_hash=payload_hash).first()
         if existing:
             logger.info(f"Duplicate event detected", extra={
                 'job': job,
@@ -66,7 +66,7 @@ class JobEventService:
             'source': formatted_source
         })
         
-        event = JobEvents(
+        event = ReleaseEvents(
             job=job,
             release=release,
             action=action,
@@ -86,9 +86,9 @@ class JobEventService:
     @staticmethod
     def close(event_id):
         """Mark event as applied"""
-        from app.models import JobEvents, db
+        from app.models import ReleaseEvents, db
         
-        event = JobEvents.query.get(event_id)
+        event = ReleaseEvents.query.get(event_id)
         if event:
             event.applied_at = datetime.utcnow()
             logger.debug(f"Event {event_id} marked as applied")

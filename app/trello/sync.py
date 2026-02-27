@@ -29,7 +29,7 @@ from app.trello.api import (
     card_has_link_to,
     add_procore_link,
 )
-from app.models import Releases, SyncOperation, SyncLog, SyncStatus, JobEvents, db
+from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, db
 from datetime import datetime, date, timezone, time
 from zoneinfo import ZoneInfo
 from app.sync_lock import synchronized_sync, sync_lock_manager
