@@ -1987,6 +1987,8 @@ def get_events():
                 'action': event.action,
                 'payload': event.payload,
                 'source': event.source,
+                'internal_user_id': getattr(event, 'internal_user_id', None),
+                'external_user_id': getattr(event, 'external_user_id', None),
                 'created_at': format_datetime_mountain(event.created_at),
                 'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
             } for event in all_events],

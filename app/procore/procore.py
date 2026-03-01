@@ -13,7 +13,7 @@ from app.models import db, Releases, Submittals, SubmittalEvents
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
-from app.procore.helpers import parse_ball_in_court_from_submittal
+from app.procore.helpers import parse_ball_in_court_from_submittal, extract_procore_user_id_from_webhook, resolve_internal_user_id
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
 from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
 
@@ -422,13 +422,14 @@ def get_project_info(project_id):
         return None
 
 
-def create_submittal_from_webhook(project_id, submittal_id):
+def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None):
     """
     Create a new Submittals record in the database from a webhook create event.
     
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID (resource_id from webhook)
+        webhook_payload: Raw webhook payload dict (for extracting user who triggered the event)
         
     Returns:
         tuple: (created: bool, record: Submittals or None, error_message: str or None)
@@ -581,6 +582,15 @@ def create_submittal_from_webhook(project_id, submittal_id):
             logger.error(f"Unexpected error during commit: {commit_error}", exc_info=True)
             raise
         
+        # Resolve user who triggered webhook (for event attribution)
+        event_internal_user_id = None
+        event_external_user_id = None
+        if webhook_payload:
+            procore_uid = extract_procore_user_id_from_webhook(webhook_payload)
+            if procore_uid:
+                event_external_user_id = procore_uid
+                event_internal_user_id = resolve_internal_user_id(procore_uid)
+
         # Create submittal event for creation
         try:
             action = "created"
@@ -605,7 +615,9 @@ def create_submittal_from_webhook(project_id, submittal_id):
                     action=action,
                     payload=payload,
                     payload_hash=payload_hash,
-                    source='Procore'
+                    source='Procore',
+                    internal_user_id=event_internal_user_id,
+                    external_user_id=event_external_user_id
                 )
                 db.session.add(event)
                 db.session.commit()
@@ -649,13 +661,14 @@ def create_submittal_from_webhook(project_id, submittal_id):
         return False, None, error_msg
 
 
-def check_and_update_submittal(project_id, submittal_id):
+def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
     """
     Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
     
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID
+        webhook_payload: Raw webhook payload dict (for extracting user who triggered the event)
         
     Returns:
         tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool, 
@@ -868,6 +881,15 @@ def check_and_update_submittal(project_id, submittal_id):
                 
                 # Only create event if there are actual changes in payload
                 if payload:
+                    # Resolve user who triggered webhook (for event attribution)
+                    event_internal_user_id = None
+                    event_external_user_id = None
+                    if webhook_payload:
+                        procore_uid = extract_procore_user_id_from_webhook(webhook_payload)
+                        if procore_uid:
+                            event_external_user_id = procore_uid
+                            event_internal_user_id = resolve_internal_user_id(procore_uid)
+
                     payload_hash = _create_submittal_payload_hash(action, str(submittal_id), payload)
                     
                     # Check if event already exists
@@ -878,7 +900,9 @@ def check_and_update_submittal(project_id, submittal_id):
                             action=action,
                             payload=payload,
                             payload_hash=payload_hash,
-                            source='Procore'
+                            source='Procore',
+                            internal_user_id=event_internal_user_id,
+                            external_user_id=event_external_user_id
                         )
                         db.session.add(event)
                         db.session.commit()

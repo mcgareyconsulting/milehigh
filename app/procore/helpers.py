@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+from typing import Optional
 
 # Helper function to convert pandas NaT/NaN to None
 def clean_value(value):
@@ -117,3 +118,43 @@ def parse_ball_in_court_from_submittal(submittal_data):
         "ball_in_court": ball_in_court_value,
         "approvers": approvers
     }
+
+
+def extract_procore_user_id_from_webhook(payload: dict) -> Optional[str]:
+    """
+    Extract the Procore user ID of the actor who triggered the webhook from payload.
+    Tries common field names used by Procore webhooks (v4 and others).
+
+    Returns:
+        str or None: Procore user id as string (for matching users.procore_id), or None if not found
+    """
+    if not isinstance(payload, dict):
+        return None
+    # Direct scalar fields
+    for key in ("user_id", "initiator_id", "created_by", "updated_by", "actor_id"):
+        val = payload.get(key)
+        if val is not None:
+            return str(val).strip() or None
+    # Nested object: initiator or user with id
+    for key in ("initiator", "user", "created_by_user", "updated_by_user"):
+        obj = payload.get(key)
+        if isinstance(obj, dict):
+            uid = obj.get("id")
+            if uid is not None:
+                return str(uid).strip() or None
+    return None
+
+
+def resolve_internal_user_id(procore_user_id: Optional[str]) -> Optional[int]:
+    """
+    Resolve Procore user id to our User record. Uses users.procore_id (stored as string) for lookup.
+
+    Returns:
+        users.id if found, else None
+    """
+    if not procore_user_id or not str(procore_user_id).strip():
+        return None
+    from app.models import User
+    procore_id_str = str(procore_user_id).strip()
+    user = User.query.filter_by(procore_id=procore_id_str).first()
+    return user.id if user else None

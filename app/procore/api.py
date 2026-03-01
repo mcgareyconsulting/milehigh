@@ -121,6 +121,9 @@ class ProcoreAPI:
     # -------------------------
     # Users
     # -------------------------
+    def get_company_users(self) -> List[Dict]:
+        return self._get(f"/rest/v1.3/companies/{cfg.PROD_PROCORE_COMPANY_ID}/users")
+    
     def get_user_information_by_id(self, user_id: int) -> List[Dict]:
         return self._get(f"/rest/v1.3/companies/{cfg.PROD_PROCORE_COMPANY_ID}/users/{user_id}")
 
@@ -287,6 +290,6 @@ if __name__ == "__main__":
     with app.app_context():
 
         procore_client = ProcoreAPI(cfg.PROD_PROCORE_CLIENT_ID, cfg.PROD_PROCORE_CLIENT_SECRET, cfg.PROCORE_DEV_WEBHOOK_URL)
-        statuses = procore_client.get_submittals_statuses()
-        print(statuses)
-        
+        users = procore_client.get_company_users()
+        for user in users:
+            print(user['id'], user['name'], user['email_address'])

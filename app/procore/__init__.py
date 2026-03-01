@@ -183,7 +183,7 @@ def procore_webhook():
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id)
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload)
                     
                     if created and record:
                         with sync_operation_context(
@@ -262,7 +262,8 @@ def procore_webhook():
                 
                 ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status = check_and_update_submittal(
                     project_id, 
-                    resource_id
+                    resource_id,
+                    webhook_payload=payload
                 )
                 
                 # Log ball_in_court changes

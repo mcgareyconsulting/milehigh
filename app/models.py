@@ -18,6 +18,7 @@ class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
@@ -28,7 +29,10 @@ class User(db.Model):
     
     # Relationships
     job_events = db.relationship('ReleaseEvents', backref='user', lazy='dynamic')
-    submittal_events = db.relationship('SubmittalEvents', backref='user', lazy='dynamic')
+    submittal_events = db.relationship(
+        'SubmittalEvents', backref='user', lazy='dynamic',
+        foreign_keys='SubmittalEvents.internal_user_id'
+    )
     
     def __repr__(self):
         return f"<User {self.username}>"
@@ -396,8 +400,9 @@ class SubmittalEvents(db.Model):
     action = db.Column(db.String(50), nullable=False)
     payload = db.Column(db.JSON, nullable=False)
     payload_hash = db.Column(db.String(64), nullable=False)
-    source = db.Column(db.String(50), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    source = db.Column(db.String(50), nullable=False)  # Brain | Procore
+    internal_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    external_user_id = db.Column(db.String(255), nullable=True)  # e.g. Procore user id from webhook
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
