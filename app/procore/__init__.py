@@ -964,12 +964,13 @@ def health_scan_update():
                         # Check if event already exists
                         existing_event = SubmittalEvents.query.filter_by(payload_hash=payload_hash).first()
                         if not existing_event:
+                            # HealthScan has no user context; internal_user_id and external_user_id stay NULL
                             event = SubmittalEvents(
                                 submittal_id=issue['submittal_id'],
                                 action=action,
                                 payload=payload,
                                 payload_hash=payload_hash,
-                                source='HealthScan'
+                                source='HealthScan',
                             )
                             db.session.add(event)
                             logger.debug(f"Created SubmittalEvent for submittal {issue['submittal_id']} from health scan update")
