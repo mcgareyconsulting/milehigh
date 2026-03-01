@@ -206,20 +206,7 @@ def parse_and_log_submittal_data(submittal_data: dict, project_id: int, submitta
                 "item_type": type(value[0]).__name__ if len(value) > 0 else "empty",
                 "sample": value[0] if len(value) > 0 and isinstance(value[0], (str, int, float, bool)) else None
             }
-    
-    # Log to file
-    try:
-        log_dir = cfg.SNAPSHOTS_DIR
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, "procore_submittal_data.log")
-        
-        with open(log_file, "a") as f:
-            f.write(json.dumps(parsed, indent=2) + "\n" + "-" * 80 + "\n")
-        
-        logger.info(f"Logged parsed submittal data to {log_file}")
-    except Exception as e:
-        logger.error(f"Failed to log submittal data: {str(e)}", exc_info=True)
-    
+
     return parsed
 
 

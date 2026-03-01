@@ -31,36 +31,6 @@ logger = get_logger(__name__)
 procore_bp = Blueprint("procore", __name__)
 
 
-def log_webhook_payload(payload: dict, headers: dict = None, hook_id: Optional[int] = None):
-    """
-    Log incoming webhook payload to persistent disk (same as Excel snapshots).
-    Uses JSON Lines format (one JSON object per line) for easy parsing.
-    
-    Note: Procore webhook payloads don't include hook_id - it must be inferred
-    by querying Procore's API or looking up webhooks for the project.
-    """
-    log_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "headers": dict(headers) if headers else {},
-        "payload": payload,
-        "hook_id": hook_id  # Will be None if not provided - must be looked up separately
-    }
-    
-    # Use the same persistent disk directory as Excel snapshots
-    webhook_logs_dir = cfg.SNAPSHOTS_DIR
-    os.makedirs(webhook_logs_dir, exist_ok=True)
-    
-    # Use a subdirectory for webhook logs
-    webhook_logs_path = os.path.join(webhook_logs_dir, "procore_webhook_payloads.log")
-    
-    # Append to log file (JSON Lines format)
-    try:
-        with open(webhook_logs_path, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-        logger.info(f"Logged Procore webhook payload to {webhook_logs_path}")
-    except Exception as e:
-        logger.error(f"Failed to log webhook payload: {str(e)}", exc_info=True)
-
 DEBOUNCE_SECONDS = 8  # 8 seconds
 
 
@@ -539,30 +509,7 @@ def webhook_test():
                 },
                 "raw_payload": payload
             }
-            
-            # Log the parsed analysis to a separate test log file
-            test_log_entry = {
-                "timestamp": datetime.utcnow().isoformat(),
-                "headers": headers,
-                "parsed_analysis": {
-                    "summary": response["summary"],
-                    "payload_structure": response["payload_structure"]
-                },
-                "raw_payload": payload
-            }
-            
-            # Log to a separate test file for easy review
-            webhook_logs_dir = cfg.SNAPSHOTS_DIR
-            os.makedirs(webhook_logs_dir, exist_ok=True)
-            test_log_path = os.path.join(webhook_logs_dir, "procore_webhook_test_analysis.log")
-            
-            try:
-                with open(test_log_path, "a") as f:
-                    f.write(json.dumps(test_log_entry) + "\n")
-                logger.info(f"Logged webhook test analysis to {test_log_path}")
-            except Exception as log_error:
-                logger.error(f"Failed to log webhook test analysis: {str(log_error)}", exc_info=True)
-            
+
             logger.info(
                 f"Webhook test endpoint received: resource_type={resource_type}, "
                 f"event_type={event_type}, resource_id={resource_id}, project_id={project_id}"
@@ -582,247 +529,28 @@ def webhook_test():
 @procore_bp.route("/api/webhook/payloads", methods=["GET"])
 def webhook_payloads():
     """
-    API endpoint to view recent webhook payloads from the persistent disk.
-    Returns the last N webhook payloads that hit the production server.
-    
-    Query Parameters:
-    - limit: Number of payloads to return (default: 50, max: 200)
-    - project_id: Filter by project_id (optional)
-    - resource_name: Filter by resource_name (optional, e.g., "Submittals")
-    - event_type: Filter by event_type (optional, e.g., "update")
-    
-    Example:
-    GET /procore/api/webhook/payloads?limit=100
-    GET /procore/api/webhook/payloads?limit=50&resource_name=Submittals&event_type=update
-    GET /procore/api/webhook/payloads?project_id=2900844
+    Legacy endpoint. Webhook payloads are no longer logged to disk; use the Events page for submittal events.
     """
-    try:
-        import json as json_lib
-        
-        # Get query parameters
-        limit = request.args.get("limit", default=50, type=int)
-        limit = min(limit, 200)  # Cap at 200 for performance
-        project_id_filter = request.args.get("project_id")
-        resource_name_filter = request.args.get("resource_name")
-        event_type_filter = request.args.get("event_type")
-        
-        # Use the same persistent disk directory as Excel snapshots
-        webhook_logs_dir = cfg.SNAPSHOTS_DIR
-        log_file = os.path.join(webhook_logs_dir, "procore_webhook_payloads.log")
-        
-        if not os.path.exists(log_file):
-            return jsonify({
-                "status": "success",
-                "message": "No webhook payloads logged yet",
-                "payloads": [],
-                "total": 0,
-                "log_file": log_file
-            }), 200
-        
-        # Read all lines (we'll filter after parsing)
-        all_payloads = []
-        try:
-            with open(log_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            payload = json_lib.loads(line)
-                            all_payloads.append(payload)
-                        except json_lib.JSONDecodeError:
-                            continue
-            
-            # Filter payloads based on query parameters
-            filtered_payloads = []
-            for payload in all_payloads:
-                payload_data = payload.get("payload", {})
-                if isinstance(payload_data, str):
-                    try:
-                        payload_data = json_lib.loads(payload_data)
-                    except:
-                        payload_data = {}
-                
-                # Apply filters (Procore payload uses "resource_type" and "reason")
-                if project_id_filter:
-                    payload_project_id = payload_data.get("project_id") or payload_data.get("project", {}).get("id")
-                    if str(payload_project_id) != str(project_id_filter):
-                        continue
-                
-                if resource_name_filter:
-                    # Procore uses "resource_type" in payload
-                    payload_resource = payload_data.get("resource_type") or payload_data.get("resource_name") or payload_data.get("resource", {}).get("name")
-                    if payload_resource != resource_name_filter:
-                        continue
-                
-                if event_type_filter:
-                    # Procore uses "reason" in payload for event type
-                    payload_event = payload_data.get("reason") or payload_data.get("event_type") or payload_data.get("event", {}).get("type")
-                    if payload_event != event_type_filter:
-                        continue
-                
-                filtered_payloads.append(payload)
-            
-            # Sort by timestamp (most recent first)
-            filtered_payloads.sort(
-                key=lambda x: x.get("timestamp", ""), 
-                reverse=True
-            )
-            
-            # Limit results
-            payloads = filtered_payloads[:limit]
-            
-        except Exception as e:
-            logger.error(f"Error reading webhook payloads: {str(e)}", exc_info=True)
-            return jsonify({
-                "status": "error",
-                "error": f"Failed to read log file: {str(e)}",
-                "log_file": log_file
-            }), 500
-        
-        return jsonify({
-            "status": "success",
-            "payloads": payloads,
-            "total": len(payloads),
-            "total_matching": len(filtered_payloads),
-            "limit": limit,
-            "filters": {
-                "project_id": project_id_filter,
-                "resource_name": resource_name_filter,
-                "event_type": event_type_filter
-            },
-            "log_file": log_file
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error retrieving webhook payloads: {str(e)}", exc_info=True)
-        return jsonify({
-            "status": "error",
-            "error": str(e)
-        }), 500
+    return jsonify({
+        "status": "success",
+        "message": "Webhook payload disk logging has been removed; use the Events page for submittal events.",
+        "payloads": [],
+        "total": 0
+    }), 200
 
 
 @procore_bp.route("/api/webhook/submittal-data", methods=["GET"])
 def submittal_data():
     """
-    API endpoint to view parsed submittal data from webhook processing.
-    Returns the last N parsed submittal data entries that were logged.
-    
-    Query Parameters:
-    - limit: Number of entries to return (default: 50, max: 200)
-    - project_id: Filter by project_id (optional)
-    - submittal_id: Filter by submittal_id (optional)
-    - source: Filter by source (optional, e.g., "webhook_create", "webhook_update")
-    
-    Example:
-    GET /procore/api/webhook/submittal-data?limit=100
-    GET /procore/api/webhook/submittal-data?project_id=2900844&limit=50
-    GET /procore/api/webhook/submittal-data?submittal_id=12345
+    Legacy endpoint. Submittal data is no longer logged to disk; use the Events page for submittal events.
     """
-    try:
-        import json as json_lib
-        
-        # Get query parameters
-        limit = request.args.get("limit", default=50, type=int)
-        limit = min(limit, 200)  # Cap at 200 for performance
-        project_id_filter = request.args.get("project_id")
-        submittal_id_filter = request.args.get("submittal_id")
-        source_filter = request.args.get("source")
-        
-        # Read the log file
-        webhook_logs_dir = cfg.SNAPSHOTS_DIR
-        log_file = os.path.join(webhook_logs_dir, "procore_submittal_data.log")
-        
-        if not os.path.exists(log_file):
-            return jsonify({
-                "status": "success",
-                "message": "No submittal data logged yet",
-                "entries": [],
-                "total": 0
-            }), 200
-        
-        # Read and parse entries (JSON Lines format, separated by dashes)
-        entries = []
-        current_entry = []
-        
-        try:
-            with open(log_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line == "-" * 80:
-                        # End of entry, parse it
-                        if current_entry:
-                            entry_text = "\n".join(current_entry)
-                            try:
-                                entry = json_lib.loads(entry_text)
-                                
-                                # Apply filters
-                                if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
-                                    current_entry = []
-                                    continue
-                                if submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
-                                    current_entry = []
-                                    continue
-                                if source_filter and entry.get("source") != source_filter:
-                                    current_entry = []
-                                    continue
-                                
-                                entries.append(entry)
-                            except json_lib.JSONDecodeError:
-                                # Skip malformed entries
-                                pass
-                            current_entry = []
-                    elif line:
-                        current_entry.append(line)
-                
-                # Handle last entry if file doesn't end with separator
-                if current_entry:
-                    entry_text = "\n".join(current_entry)
-                    try:
-                        entry = json_lib.loads(entry_text)
-                        
-                        # Apply filters
-                        if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
-                            pass
-                        elif submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
-                            pass
-                        elif source_filter and entry.get("source") != source_filter:
-                            pass
-                        else:
-                            entries.append(entry)
-                    except json_lib.JSONDecodeError:
-                        pass
-        
-        except Exception as e:
-            logger.error(f"Error reading submittal data log: {str(e)}", exc_info=True)
-            return jsonify({
-                "status": "error",
-                "error": str(e),
-                "log_file": log_file
-            }), 500
-        
-        # Sort by timestamp (most recent first) and limit
-        entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        entries = entries[:limit]
-        
-        return jsonify({
-            "status": "success",
-            "entries": entries,
-            "total": len(entries),
-            "limit": limit,
-            "filters": {
-                "project_id": project_id_filter,
-                "submittal_id": submittal_id_filter,
-                "source": source_filter
-            },
-            "log_file": log_file
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error retrieving submittal data: {str(e)}", exc_info=True)
-        return jsonify({
-            "status": "error",
-            "error": str(e)
-        }), 500
+    return jsonify({
+        "status": "success",
+        "message": "Submittal data disk logging has been removed; use the Events page for submittal events.",
+        "entries": [],
+        "total": 0
+    }), 200
+
 
 @procore_bp.route("/health-scan", methods=["GET"])
 def health_scan():
