@@ -9,7 +9,7 @@ from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents
+from app.models import Releases, db, ReleaseEvents, Submittals
 from app.auth.utils import login_required, format_source_with_user, get_current_user
 from datetime import datetime
 import json
@@ -425,6 +425,71 @@ def get_jobs():
     except Exception as e:
         logger.error("Error in /jobs endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
+
+def _validate_job_param(job_param):
+    """Return (job_param or None, error_response). job_param must be exactly 3 digits."""
+    job_param = (job_param or '').strip()
+    if not job_param or len(job_param) != 3 or not job_param.isdigit():
+        return None, (jsonify({
+            'error': 'Job number must be exactly 3 digits (e.g. 001, 400)',
+            'releases': [],
+            'submittals': []
+        }), 400)
+    return job_param, None
+
+
+@brain_bp.route("/job-search")
+@login_required
+def job_search():
+    """
+    Search releases and submittals by 3-digit job number.
+    GET ?job=400 returns releases (Releases.job) and submittals (Submittals.project_number).
+    """
+    job_param, err_resp = _validate_job_param(request.args.get('job', ''))
+    if err_resp:
+        return err_resp[0], err_resp[1]
+
+    try:
+        job_int = int(job_param)
+        releases = Releases.query.filter(Releases.job == job_int).order_by(Releases.release).all()
+        submittals = Submittals.query.filter(Submittals.project_number == job_param).all()
+
+        release_list = [
+            {
+                'job_release': f"{r.job}-{r.release}",
+                'job': r.job,
+                'release': r.release,
+                'job_name': serialize_value(r.job_name),
+                'stage': serialize_value(r.stage or 'Released'),
+                'start_install': serialize_value(r.start_install),
+            }
+            for r in releases
+        ]
+
+        submittal_list = []
+        for s in submittals:
+            d = s.to_dict()
+            submittal_list.append({
+                'submittal_id': d.get('submittal_id'),
+                'title': d.get('title'),
+                'status': d.get('status'),
+                'ball_in_court': d.get('ball_in_court'),
+                'submittal_drafting_status': d.get('submittal_drafting_status') or '',
+                'due_date': d.get('due_date'),
+                'days_since_ball_in_court_update': d.get('days_since_ball_in_court_update'),
+            })
+
+        return jsonify({
+            'releases': release_list,
+            'submittals': submittal_list,
+            'job': job_param,
+        }), 200
+
+    except Exception as e:
+        logger.error("Error in /job-search endpoint", error=str(e), exc_info=True)
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
 
 @brain_bp.route("/get-all-jobs")
 @login_required

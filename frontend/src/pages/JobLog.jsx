@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
@@ -8,6 +9,7 @@ import { jobsApi } from '../services/jobsApi';
 
 function JobLog() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useJobsDataFetching();
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [csvData, setCsvData] = useState('');
@@ -205,6 +207,12 @@ function JobLog() {
     }, [columns]);
 
     const tableColumnCount = columnHeaders.length;
+
+    const jumpToTarget = useJumpToHighlight({
+        loading,
+        searchParams,
+        mode: 'job-release',
+    });
 
     // Normalize column width percentages so visible columns sum to 100%
     const columnWidthPercents = useMemo(() => {
@@ -540,6 +548,7 @@ function JobLog() {
     };
 
     return (
+        <>
         <div className="w-full h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
@@ -869,6 +878,7 @@ function JobLog() {
                                                         key={row.id}
                                                         row={row}
                                                         columns={columnHeaders}
+                                                        isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
                                                         formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
                                                         formatDate={formatDate}
                                                         rowIndex={index}
@@ -1032,6 +1042,7 @@ function JobLog() {
             )}
 
         </div>
+        </>
     );
 }
 

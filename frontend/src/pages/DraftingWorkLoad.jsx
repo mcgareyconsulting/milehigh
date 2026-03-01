@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
@@ -36,6 +38,7 @@ const columnWidthStyles = `
 `;
 
 function DraftingWorkLoad() {
+    const [searchParams] = useSearchParams();
     const [locationEnabled, setLocationEnabled] = useState(false);
     const [userCoords, setUserCoords] = useState(null);
     const [locationRequesting, setLocationRequesting] = useState(false);
@@ -116,6 +119,11 @@ function DraftingWorkLoad() {
         handleDrop,
     } = useDragAndDrop(rows, displayRows, updateOrderNumber);
 
+    const jumpToTarget = useJumpToHighlight({
+        loading,
+        searchParams,
+        mode: 'submittal',
+    });
 
     const handleGeneratePDF = useCallback(() => {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
@@ -467,6 +475,7 @@ function DraftingWorkLoad() {
                                                         key={row.id}
                                                         row={row}
                                                         columns={columns}
+                                                        isJumpToHighlight={jumpToTarget && String(row['Submittals Id'] ?? row.submittal_id ?? '') === jumpToTarget}
                                                         formatCellValue={formatCellValue}
                                                         formatDate={formatDate}
                                                         onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}

@@ -16,6 +16,12 @@ The script is defensive and idempotent:
 - It checks for table / column existence before making changes.
 - It safely no-ops if tables are already renamed or columns already exist.
 
+SQLAlchemy 2.0 note: Raw SQL via engine.execute() does NOT auto-commit.
+We use `with engine.begin() as conn:` which commits on block exit.
+To avoid long-held transactions and commit freezes on Render/Postgres,
+each DDL step runs in its OWN transaction (separate begin/commit) so
+locks are released immediately.
+
 Usage:
     python migrations/rename_job_tables_and_add_user_ids.py
 """
@@ -162,44 +168,25 @@ def ensure_users_table(conn, engine) -> None:
     print("✓ Successfully created 'users' table.")
 
 
-def ensure_user_external_ids(conn, engine) -> None:
+def ensure_user_external_ids(
+    conn, engine, columns: tuple = ("procore_id", "trello_id")
+) -> None:
     """
-    Ensure external ID columns (procore_id, trello_id) exist on users table.
-    Matches the SQLAlchemy model:
-      - nullable=True
-      - unique=True
+    Ensure external ID columns exist on users table.
+    Call with columns=("procore_id",) or columns=("trello_id",) to add
+    one at a time in separate transactions (avoids long-held locks).
     """
     if not table_exists(engine, "users"):
         print("✓ Table 'users' does not exist; skipping external ID columns.")
         return
 
-    if not column_exists(engine, "users", "procore_id"):
-        print("Adding column 'procore_id' to 'users' table...")
-        conn.execute(
-            text(
-                'ALTER TABLE users ADD COLUMN procore_id VARCHAR(255)'
-            )
-        )
-        # Keep migration fast and simple: do not add a UNIQUE
-        # constraint here; rely on the application layer or a
-        # separate, focused migration if you later decide to
-        # enforce uniqueness at the DB level.
-        print("✓ Successfully added 'procore_id' column to 'users'.")
-    else:
-        print("✓ Column 'procore_id' already exists on 'users'.")
-
-    if not column_exists(engine, "users", "trello_id"):
-        print("Adding column 'trello_id' to 'users' table...")
-        conn.execute(
-            text(
-                'ALTER TABLE users ADD COLUMN trello_id VARCHAR(255)'
-            )
-        )
-        # As with procore_id, skip adding a UNIQUE constraint here
-        # to avoid long-running DDL/locks on busy databases.
-        print("✓ Successfully added 'trello_id' column to 'users'.")
-    else:
-        print("✓ Column 'trello_id' already exists on 'users'.")
+    for col in columns:
+        if not column_exists(engine, "users", col):
+            print(f"Adding column '{col}' to 'users' table...")
+            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR(255)"))
+            print(f"✓ Successfully added '{col}' column to 'users'.")
+        else:
+            print(f"✓ Column '{col}' already exists on 'users'.")
 
 
 def add_user_id_column(conn, engine, table_name: str, constraint_name: str) -> None:
@@ -235,26 +222,44 @@ def migrate(database_url: Optional[str] = None) -> bool:
     db_url = infer_database_url(database_url)
     print(f"Connecting to database: {db_url}")
 
-    engine = create_engine(db_url)
+    # Use connect_timeout for Postgres to fail fast instead of hanging indefinitely
+    connect_args = {}
+    if "postgresql" in db_url.lower():
+        connect_args["connect_timeout"] = 10
+
+    engine = create_engine(db_url, connect_args=connect_args)
 
     try:
+        # Run each logical step in its own transaction so commits happen
+        # immediately and we don't hold long-lived locks (avoids commit freeze).
+
+        # 1) Rename legacy tables if needed (each rename in one transaction)
         with engine.begin() as conn:
-            # 1) Rename legacy tables if needed
             rename_table_if_needed(conn, engine, "job_sites", "jobs")
+        with engine.begin() as conn:
             rename_table_if_needed(conn, engine, "job_events", "release_events")
+        with engine.begin() as conn:
             rename_table_if_needed(conn, engine, "procore_submittals", "submittals")
 
-            # 2) Ensure users table and external ID columns exist
+        # 2) Ensure users table exists
+        with engine.begin() as conn:
             ensure_users_table(conn, engine)
-            ensure_user_external_ids(conn, engine)
 
-            # 3) Ensure user_id columns exist on event tables
+        # 3) Add procore_id and trello_id (each in its own transaction to avoid commit freeze)
+        with engine.begin() as conn:
+            ensure_user_external_ids(conn, engine, columns=("procore_id",))
+        with engine.begin() as conn:
+            ensure_user_external_ids(conn, engine, columns=("trello_id",))
+
+        # 4) Ensure user_id columns exist on event tables (each in its own transaction)
+        with engine.begin() as conn:
             add_user_id_column(
                 conn,
                 engine,
                 "release_events",
                 "fk_release_events_user_id",
             )
+        with engine.begin() as conn:
             add_user_id_column(
                 conn,
                 engine,
