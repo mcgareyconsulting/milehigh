@@ -104,7 +104,7 @@ def delete_all_webhooks_for_project(procore_client, project_id: int, project_num
 def get_project_number(project_id: int) -> Optional[str]:
     """Get project number for a given project ID from the database."""
     result = db.session.query(Submittals.project_number).filter(
-        Submittals.procore_project_id == project_id
+        Submittals.procore_project_id == str(project_id)
     ).first()
     
     return result[0] if result else None

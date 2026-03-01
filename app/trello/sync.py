@@ -100,13 +100,8 @@ def sync_from_trello(event_info):
     # Extract card id and event time from event info
     card_id = event_info["card_id"]
     event_time = parse_trello_datetime(event_info.get("time"))
-    username = event_info.get("username")
-    
-    # Format source with username
-    if username:
-        trello_source = f"Trello - {username}"
-    else:
-        trello_source = "Trello"
+
+    trello_source = "Trello"
     
     # Use context manager - it handles everything!
     with sync_operation_context("trello_webhook", "trello", card_id) as sync_op:

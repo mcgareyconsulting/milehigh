@@ -1,6 +1,6 @@
 from datetime import datetime
 from app.logging_config import get_logger
-from app.auth.utils import format_source_with_user, get_current_user
+from app.auth.utils import get_current_user
 
 logger = get_logger(__name__)
 
@@ -16,7 +16,7 @@ class JobEventService:
             job: Job number
             release: Release string
             action: Action string
-            source: Base source string (e.g., 'Brain', 'Procore')
+            source: Base source string (e.g., 'Brain', 'Trello', 'Excel', 'Procore')
             payload: Event payload dict
         
         Returns:
@@ -27,20 +27,8 @@ class JobEventService:
         import json
         import hashlib
         
-        # Get current user and format source with username
-        # Only get user for Brain-specific updates (external sources like Trello handle their own formatting)
-        if " - " in source:
-            # Source is already formatted (e.g., "Trello - username"), use as-is
-            user = None
-            formatted_source = source
-        elif source == "Brain":
-            # Brain updates: get user from session and format
-            user = get_current_user()
-            formatted_source = format_source_with_user(source, user)
-        else:
-            # External sources (Trello, Procore, etc.) - don't get user, use source as-is
-            user = None
-            formatted_source = source
+        # Use plain source (no email/username suffix). User attribution via user_id.
+        user = get_current_user() if source == "Brain" else None
         
         # Generate payload hash for deduplication
         payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
@@ -63,7 +51,7 @@ class JobEventService:
             'job': job,
             'release': release,
             'action': action,
-            'source': formatted_source
+            'source': source
         })
         
         event = ReleaseEvents(
@@ -72,7 +60,7 @@ class JobEventService:
             action=action,
             payload=payload,
             payload_hash=payload_hash,
-            source=formatted_source,
+            source=source,
             user_id=user.id if user else None,
             created_at=datetime.utcnow()
         )

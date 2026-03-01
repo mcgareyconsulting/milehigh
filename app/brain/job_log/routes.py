@@ -10,7 +10,7 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, Submittals
-from app.auth.utils import login_required, format_source_with_user, get_current_user
+from app.auth.utils import login_required, get_current_user
 from datetime import datetime
 import json
 import hashlib
@@ -1655,18 +1655,14 @@ def release_job_data():
                 action = "create"
                 payload_hash = _create_payload_hash(action, job_number, release_number, excel_data_dict)
                 
-                # Get current user and format source with username
                 user = get_current_user()
-                formatted_source = format_source_with_user('Brain', user)
-                
-                # Create event
                 event = ReleaseEvents(
                     job=job_number,
                     release=release_number,
                     action='created',
                     payload=excel_data_dict,
                     payload_hash=payload_hash,
-                    source=formatted_source,
+                    source='Brain',
                     user_id=user.id if user else None
                 )
                 db.session.add(event)
@@ -1915,6 +1911,34 @@ def get_event_filters():
         logger.error("Error in /events/filters endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
+def _resolve_event_user_names(all_events):
+    """
+    Resolve internal_user_id (SubmittalEvents) and user_id (ReleaseEvents) to plaintext names
+    via the users table.
+    Returns dict: event_key -> user_display (e.g. "John Smith" or None).
+    """
+    from app.models import User
+
+    # Collect all internal user IDs
+    internal_ids = set()
+    for event in all_events:
+        iid = getattr(event, 'internal_user_id', None) or getattr(event, 'user_id', None)
+        if iid is not None:
+            internal_ids.add(iid)
+
+    user_by_id = {}
+    if internal_ids:
+        for u in User.query.filter(User.id.in_(internal_ids)).all():
+            user_by_id[u.id] = (u.name or u.username or f"User {u.id}").strip()
+
+    result = {}
+    for event in all_events:
+        key = (event.id, 'job' if hasattr(event, 'job') else 'submittal')
+        iid = getattr(event, 'internal_user_id', None) or getattr(event, 'user_id', None)
+        result[key] = user_by_id.get(iid) if iid is not None else None
+    return result
+
+
 @brain_bp.route("/events")
 @login_required
 def get_events():
@@ -1977,6 +2001,11 @@ def get_events():
         all_events.sort(key=lambda x: x.created_at, reverse=True)
         all_events = all_events[:limit]
 
+        user_names = _resolve_event_user_names(all_events)
+
+        def event_key(ev):
+            return (ev.id, 'job' if hasattr(ev, 'job') else 'submittal')
+
         return jsonify({
             'events': [{
                 'id': event.id,
@@ -1989,6 +2018,7 @@ def get_events():
                 'source': event.source,
                 'internal_user_id': getattr(event, 'internal_user_id', None),
                 'external_user_id': getattr(event, 'external_user_id', None),
+                'user_name': user_names.get(event_key(event)),
                 'created_at': format_datetime_mountain(event.created_at),
                 'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
             } for event in all_events],

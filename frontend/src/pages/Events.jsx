@@ -108,9 +108,12 @@ function Events() {
             'Excel': 'bg-green-100 text-green-800',
             'System': 'bg-gray-100 text-gray-800',
             'Procore': 'bg-purple-100 text-purple-800',
+            'Brain': 'bg-amber-100 text-amber-800',
         };
         return colors[source] || 'bg-gray-100 text-gray-800';
     };
+
+    const formatUserDisplay = (event) => event.user_name || '—';
 
     const resetFilters = () => {
         setSelectedDate('');
@@ -279,6 +282,7 @@ function Events() {
                                                 <tr>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Date</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Source</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">User</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Identifier</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Action</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Payload</th>
@@ -308,6 +312,9 @@ function Events() {
                                                                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getSourceColor(event.source)}`}>
                                                                         {event.source}
                                                                     </span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                    {formatUserDisplay(event)}
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                                                     {event.type === 'job'
