@@ -4,8 +4,8 @@ import { API_BASE_URL } from '../utils/api';
 axios.defaults.withCredentials = true;
 
 /**
- * Search releases and submittals by 3-digit job number.
- * @param {string} job - Exactly 3 digits (e.g. '001', '400')
+ * Search releases and submittals by job number prefix (1–3 digits).
+ * @param {string} job - 1–3 digits (e.g. '4' for 4xx, '40' for 40x, '400' exact)
  * @returns {Promise<{releases: Array, submittals: Array, job: string}>}
  * @throws Re-throws axios errors; err.response.data.error contains API error message
  */

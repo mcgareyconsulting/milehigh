@@ -7,7 +7,6 @@ const SIDEBAR_LINKS = [
   { path: '/events', label: 'Events' },
   { path: '/drafting-work-load', label: 'Drafting Work Load' },
   { path: '/job-log', label: 'Job Log' },
-  { path: '/job-search', label: 'Job Search' },
 ];
 
 function AppShell({ isAuthenticated }) {

@@ -427,33 +427,53 @@ def get_jobs():
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 
-def _validate_job_param(job_param):
-    """Return (job_param or None, error_response). job_param must be exactly 3 digits."""
-    job_param = (job_param or '').strip()
-    if not job_param or len(job_param) != 3 or not job_param.isdigit():
+def _validate_job_prefix(job_param):
+    """Return (job_param or None, error_response). job_param must be 1–3 digits."""
+    job_param = (job_param or '').strip().replace(' ', '')
+    if not job_param or len(job_param) > 3 or not job_param.isdigit():
         return None, (jsonify({
-            'error': 'Job number must be exactly 3 digits (e.g. 001, 400)',
+            'error': 'Enter 1–3 digits (e.g. 4, 40, 400)',
             'releases': [],
             'submittals': []
         }), 400)
     return job_param, None
 
 
+def _job_prefix_range(job_param):
+    """Return (min_job, max_job_exclusive) for prefix search. job_param is 1–3 digits."""
+    n = len(job_param)
+    base = int(job_param)
+    if n == 1:
+        return (base * 100, (base + 1) * 100)   # "4" -> 400–499
+    if n == 2:
+        return (base * 10, base * 10 + 10)      # "40" -> 400–409
+    return (base, base + 1)                      # "400" -> exact 400
+
+
 @brain_bp.route("/job-search")
 @login_required
 def job_search():
     """
-    Search releases and submittals by 3-digit job number.
-    GET ?job=400 returns releases (Releases.job) and submittals (Submittals.project_number).
+    Search releases and submittals by job number prefix (1–3 digits).
+    GET ?job=4 returns jobs 4xx (400–499).
+    GET ?job=40 returns jobs 40x (400–409).
+    GET ?job=400 returns exact job 400.
     """
-    job_param, err_resp = _validate_job_param(request.args.get('job', ''))
+    job_param, err_resp = _validate_job_prefix(request.args.get('job', ''))
     if err_resp:
         return err_resp[0], err_resp[1]
 
     try:
-        job_int = int(job_param)
-        releases = Releases.query.filter(Releases.job == job_int).order_by(Releases.release).all()
-        submittals = Submittals.query.filter(Submittals.project_number == job_param).all()
+        min_job, max_job = _job_prefix_range(job_param)
+        releases = (
+            Releases.query
+            .filter(Releases.job >= min_job, Releases.job < max_job)
+            .order_by(Releases.job, Releases.release)
+            .all()
+        )
+        submittals = Submittals.query.filter(
+            Submittals.project_number.like(f"{job_param}%")
+        ).all()
 
         release_list = [
             {

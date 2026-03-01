@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../utils/api';
+import FloatingBananas from '../components/FloatingBananas';
 
 function Login({ onLogin }) {
     const [username, setUsername] = useState('');
@@ -61,66 +62,76 @@ function Login({ onLogin }) {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Sign in to your account
-                    </h2>
-                </div>
-                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-                    {error && (
-                        <div className="rounded-md bg-red-50 p-4">
-                            <div className="text-sm text-red-800">{error}</div>
-                        </div>
-                    )}
-                    <div className="rounded-md shadow-sm -space-y-px">
-                        <div>
-                            <label htmlFor="username" className="sr-only">
-                                Username
-                            </label>
-                            <input
-                                id="username"
-                                name="username"
-                                type="text"
-                                required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="Username"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="password" className="sr-only">
-                                Password
-                            </label>
-                            <input
-                                id="password"
-                                name="password"
-                                type="password"
-                                required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="Password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
-                        </div>
-                    </div>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 relative overflow-hidden">
+            {/* Floating bananas background */}
+            <div className="absolute inset-0 z-0">
+                <FloatingBananas className="w-full h-full" />
+            </div>
 
+            {/* Login form on top */}
+            <div className="relative z-10 w-full max-w-md px-4 py-12">
+                <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200 p-8 space-y-6">
                     <div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {loading ? 'Please wait...' : 'Sign in'}
-                        </button>
+                        <h2 className="text-center text-3xl font-extrabold text-gray-900">
+                            Sign in to your account
+                        </h2>
+                        <p className="mt-2 text-center text-sm text-gray-600">
+                            MHMW Brain
+                        </p>
                     </div>
-                </form>
+                    <form className="space-y-6" onSubmit={handleSubmit}>
+                        {error && (
+                            <div className="rounded-md bg-red-50 p-4 border border-red-200">
+                                <div className="text-sm text-red-800">{error}</div>
+                            </div>
+                        )}
+                        <div className="rounded-md shadow-sm -space-y-px">
+                            <div>
+                                <label htmlFor="username" className="sr-only">
+                                    Username
+                                </label>
+                                <input
+                                    id="username"
+                                    name="username"
+                                    type="text"
+                                    required
+                                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"
+                                    placeholder="Username"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="password" className="sr-only">
+                                    Password
+                                </label>
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    required
+                                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-accent-500 focus:border-accent-500 focus:z-10 sm:text-sm"
+                                    placeholder="Password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-accent-500 hover:bg-accent-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? 'Please wait...' : 'Sign in'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     );
 }
 
 export default Login;
-
