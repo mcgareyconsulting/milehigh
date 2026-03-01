@@ -6,11 +6,11 @@ import React from 'react';
 export function AlertMessage({ type, title, message, icon }) {
     const styles = {
         success: {
-            container: 'bg-green-50 border-l-4 border-green-500 text-green-700',
+            container: 'bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500 text-green-700 dark:text-green-200',
             icon: '✓',
         },
         error: {
-            container: 'bg-red-50 border-l-4 border-red-500 text-red-700',
+            container: 'bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-200',
             icon: '⚠️',
         },
     };

@@ -5,7 +5,7 @@ function LoginPrompt() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-      <p className="text-gray-600 text-lg mb-6 max-w-md">
+      <p className="text-gray-600 dark:text-slate-400 text-lg mb-6 max-w-md">
         Please log in to access Job Log, Events, and Drafting Work Load.
       </p>
       <button

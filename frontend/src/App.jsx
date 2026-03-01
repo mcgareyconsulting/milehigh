@@ -27,8 +27,8 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-        <div className="text-gray-600">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-slate-900">
+        <div className="text-gray-600 dark:text-slate-400">Loading...</div>
       </div>
     );
   }

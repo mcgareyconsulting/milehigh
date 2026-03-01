@@ -9,10 +9,10 @@ export function JobSearchTable({ columns, rows, emptyMessage, jumpTo }) {
     : columns;
 
   return (
-    <div className="flex flex-col min-h-0 border border-gray-200 rounded-xl bg-white shadow-sm overflow-hidden">
+    <div className="flex flex-col min-h-0 border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
       <div className="overflow-x-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-100 text-left text-gray-700 font-semibold sticky top-0 shadow-sm">
+          <thead className="bg-gray-100 dark:bg-slate-700 text-left text-gray-700 dark:text-slate-200 font-semibold sticky top-0 shadow-sm">
             <tr>
               {allColumns.map(({ key, label }) => (
                 <th key={key} className="px-4 py-3 text-left whitespace-nowrap">
@@ -21,16 +21,16 @@ export function JobSearchTable({ columns, rows, emptyMessage, jumpTo }) {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-600">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={allColumns.length} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={allColumns.length} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
               rows.map((row, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
+                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
                   {allColumns.map((col) => {
                     if (col.isAction && jumpTo) {
                       const url = jumpTo.getUrl(row);
@@ -51,7 +51,7 @@ export function JobSearchTable({ columns, rows, emptyMessage, jumpTo }) {
                     const val = row[key];
                     const display = format ? format(val) : formatCellValue(val);
                     return (
-                      <td key={key} className={`px-4 py-2 whitespace-nowrap ${className}`}>
+                      <td key={key} className={`px-4 py-2 whitespace-nowrap text-gray-900 dark:text-slate-100 ${className}`}>
                         {display}
                       </td>
                     );

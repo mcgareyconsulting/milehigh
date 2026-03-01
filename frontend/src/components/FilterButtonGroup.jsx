@@ -6,7 +6,7 @@ import React from 'react';
 export function FilterButtonGroup({ label, options, selectedValue, onSelect, allOptionValue }) {
     return (
         <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                 {label}
             </label>
             <div className="grid grid-cols-8 gap-1">
@@ -14,7 +14,7 @@ export function FilterButtonGroup({ label, options, selectedValue, onSelect, all
                     onClick={() => onSelect(allOptionValue)}
                     className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedValue === allOptionValue
                         ? 'bg-accent-500 text-white hover:bg-accent-600'
-                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                        : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-accent-50 dark:hover:bg-slate-500 hover:border-accent-300'
                         }`}
                     title="All"
                 >
@@ -26,7 +26,7 @@ export function FilterButtonGroup({ label, options, selectedValue, onSelect, all
                         onClick={() => onSelect(option)}
                         className={`px-0.5 py-0.5 rounded text-xs font-medium shadow-sm transition-all truncate ${selectedValue === option
                             ? 'bg-accent-500 text-white hover:bg-accent-600'
-                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-accent-50 hover:border-accent-300'
+                            : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-accent-50 dark:hover:bg-slate-500 hover:border-accent-300'
                             }`}
                         title={option}
                     >

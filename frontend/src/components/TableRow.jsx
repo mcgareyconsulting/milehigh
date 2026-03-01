@@ -208,8 +208,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const isHoldStatus = currentStatus === 'HOLD';
 
     // Alternate row background colors, but override with yellow if status is HOLD
-    const baseRowBgClass = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-200';
-    const rowBgClass = isHoldStatus ? 'bg-yellow-200' : baseRowBgClass;
+    const baseRowBgClass = rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-gray-200 dark:bg-slate-700';
+    const rowBgClass = isHoldStatus ? 'bg-yellow-200 dark:bg-yellow-900/40' : baseRowBgClass;
 
     // Prevent drag start from protected cells
     const handleProtectedCellMouseDown = (e) => {
@@ -330,7 +330,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 </tr>
             )}
             <tr
-                className={`${rowBgClass} hover:bg-gray-100 transition-all duration-200 border-b border-gray-300 ${isDragOver ? 'bg-blue-50' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-300 dark:border-slate-600 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -410,7 +410,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center dwl-col-order-number`}
+                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-order-number`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -421,7 +421,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                     onChange={(e) => setOrderNumberValue(e.target.value)}
                                     onBlur={handleOrderNumberBlur}
                                     onKeyDown={handleOrderNumberKeyDown}
-                                    className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
+                                    className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 font-medium text-gray-900 dark:text-slate-100"
                                     style={{ minWidth: '30px', maxWidth: '50px' }}
                                 />
                             </td>
@@ -462,15 +462,15 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 text-center dwl-col-order-number`}
+                                className={`px-0.5 py-0.5 align-middle ${rowBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-order-number`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <div className="flex items-center justify-center gap-1">
                                     <div 
                                         className={`px-0.5 py-0 text-xs border rounded-sm font-medium min-w-[20px] max-w-[50px] inline-block transition-colors ${isEditable
-                                            ? 'border-gray-300 bg-gray-50 hover:bg-white hover:border-accent-400 cursor-text text-gray-700'
-                                            : 'border-gray-200 bg-gray-100 cursor-not-allowed text-gray-500 opacity-75'
+                                            ? 'border-gray-300 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 hover:bg-white dark:hover:bg-slate-500 hover:border-accent-400 cursor-text text-gray-700 dark:text-slate-200'
+                                            : 'border-gray-200 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 cursor-not-allowed text-gray-500 dark:text-slate-400 opacity-75'
                                             }`}
                                         onClick={isEditable ? handleOrderNumberFocus : undefined}
                                         title={isEditable ? "Click to edit order number" : "Order number editing disabled for multiple assignees (reviewers)"}
@@ -495,7 +495,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -506,7 +506,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                     onChange={(e) => setNotesValue(e.target.value)}
                                     onBlur={handleNotesBlur}
                                     onKeyDown={handleNotesKeyDown}
-                                    className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white text-gray-900 resize-none shadow-sm transition-all text-center"
+                                    className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none shadow-sm transition-all text-center"
                                     rows={1}
                                     placeholder="Add notes..."
                                     style={{ lineHeight: '1.5' }}
@@ -520,7 +520,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-notes`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
                                 draggable={false}
                                 onClick={isAdmin ? handleNotesFocus : undefined}
@@ -530,11 +530,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
                                     isAdmin 
                                         ? hasNotes
-                                            ? 'border-gray-200 bg-gray-50 hover:bg-white hover:border-accent-300 hover:shadow-sm text-gray-800 cursor-text'
-                                            : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500 cursor-text'
+                                            ? 'border-gray-200 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 hover:bg-white dark:hover:bg-slate-500 hover:border-accent-300 text-gray-800 dark:text-slate-200 cursor-text'
+                                            : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
                                         : hasNotes
-                                            ? 'border-gray-200 bg-gray-100 text-gray-600 cursor-default'
-                                            : 'border-gray-200 bg-gray-50/50 text-gray-400 cursor-default'
+                                            ? 'border-gray-200 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 cursor-default'
+                                            : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default'
                                     }`}>
                                     {hasNotes ? (
                                         <div className="whitespace-normal break-words leading-tight">
@@ -556,7 +556,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-procore-status`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-procore-status`}
                                 style={{ maxWidth: '96px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -571,7 +571,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                                 if (!Number.isNaN(statusId)) onProcoreStatusChange(submittalId, statusId);
                                             }
                                         }}
-                                        className="w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded text-center bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
+                                        className="w-full px-0.5 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded text-center bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
                                         title="Select Procore status (updates submittal in Procore)"
                                     >
                                         <option value="">—</option>
@@ -582,7 +582,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         ))}
                                     </select>
                                 ) : (
-                                    <span className="text-xs text-gray-700">{currentProcoreStatus || '—'}</span>
+                                    <span className="text-xs text-gray-700 dark:text-slate-200">{currentProcoreStatus || '—'}</span>
                                 )}
                             </td>
                         );
@@ -596,7 +596,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-status`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-status`}
                                 style={{ maxWidth: '96px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -609,10 +609,10 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         }
                                     }}
                                     disabled={!isAdmin}
-                                    className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 rounded text-center ${
+                                    className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded text-center ${
                                         isAdmin 
-                                            ? 'bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer'
-                                            : 'bg-gray-100 text-gray-600 cursor-not-allowed opacity-75'
+                                            ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer'
+                                            : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 cursor-not-allowed opacity-75'
                                     }`}
                                     title={isAdmin ? "Select drafting status (HOLD / NEED VIF / STARTED)" : "Read-only (admin only)"}
                                 >
@@ -631,7 +631,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-due-date`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-due-date`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -643,7 +643,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                     onChange={(e) => setDueDateValue(e.target.value)}
                                     onBlur={handleDueDateBlur}
                                     onKeyDown={handleDueDateKeyDown}
-                                    className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white font-medium text-gray-900"
+                                    className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 font-medium text-gray-900 dark:text-slate-100"
                                 />
                             </td>
                         );
@@ -658,7 +658,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dwl-col-due-date`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-due-date`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
                                 onClick={isAdmin ? handleDueDateFocus : undefined}
@@ -668,11 +668,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
                                     isAdmin
                                         ? hasDueDate
-                                            ? 'border-red-300 bg-red-100 hover:bg-red-200 hover:border-red-400 text-red-900 font-medium cursor-text'
-                                            : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 hover:border-accent-300 text-gray-500 cursor-text'
+                                            ? 'border-red-300 dark:border-red-700 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/50 hover:border-red-400 text-red-900 dark:text-red-200 font-medium cursor-text'
+                                            : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
                                         : hasDueDate
-                                            ? 'border-red-200 bg-red-50 text-red-700 font-medium cursor-default'
-                                            : 'border-gray-200 bg-gray-50/50 text-gray-400 cursor-default'
+                                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 font-medium cursor-default'
+                                            : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default'
                                 }`}>
                                     {hasDueDate ? formattedDate : <span className="italic">{isAdmin ? "Click to add..." : "—"}</span>}
                                 </div>
@@ -682,7 +682,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
                     // Apply light green background for Type cell when type is "Drafting Release Review"
                     const cellBgClass = isType && isDraftingReleaseReview
-                        ? 'bg-green-100'
+                        ? 'bg-green-100 dark:bg-green-900/40'
                         : rowBgClass;
 
                     // Handle NAME (project name) truncation to 20 characters
@@ -695,7 +695,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-name`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-name`}
                                 style={{ maxWidth: '280px' }}
                                 title={fullProjectName}
                             >
@@ -715,7 +715,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-bic`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-bic`}
                                 style={{ maxWidth: '180px' }}
                                 title={cellValue}
                             >
@@ -735,16 +735,16 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         let bgColorClass = '';
                         if (daysSinceUpdate !== null && daysSinceUpdate !== undefined) {
                             if (daysSinceUpdate >= 5) {
-                                bgColorClass = 'bg-red-200'; // Red for 5+ days
+                                bgColorClass = 'bg-red-200 dark:bg-red-900/50 text-red-900 dark:text-red-200'; // Red for 5+ days
                             } else if (daysSinceUpdate >= 3) {
-                                bgColorClass = 'bg-yellow-200'; // Yellow for 3-4 days
+                                bgColorClass = 'bg-yellow-200 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-200'; // Yellow for 3-4 days
                             }
                         }
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${bgColorClass || cellBgClass} border-r border-gray-300 text-center dwl-col-last-bic`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${bgColorClass || cellBgClass} ${!bgColorClass ? 'text-gray-900 dark:text-slate-100' : ''} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-last-bic`}
                                 style={{ maxWidth: '100px' }}
                                 title={daysSinceUpdate !== null && daysSinceUpdate !== undefined ? `${daysSinceUpdate} days` : 'No ball in court update recorded'}
                             >
@@ -763,7 +763,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-lifespan`}
+                                className={`px-0 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-lifespan`}
                                 style={{ maxWidth: '75px' }}
                                 title={lifespanValue !== null && lifespanValue !== undefined ? `${lifespanValue} days since creation` : 'N/A'}
                             >
@@ -780,7 +780,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${columnClass} text-center`}
+                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 ${columnClass} text-center`}
                                 style={customStyle}
                                 title={cellValue}
                             >
@@ -801,7 +801,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 text-center dwl-col-project-number`}
+                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-project-number`}
                                 style={{ maxWidth: '65px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -812,13 +812,13 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         href={procoreUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition-colors"
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         {cellValue}
                                     </a>
                                 ) : (
-                                    <span>{cellValue}</span>
+                                    <span className="text-gray-900 dark:text-slate-100">{cellValue}</span>
                                 )}
                             </td>
                         );
@@ -831,7 +831,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 ${customWidthClass} ${columnClass} text-center`}
+                            className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 ${customWidthClass} ${columnClass} text-center`}
                             style={customStyle}
                             title={cellValue}
                         >

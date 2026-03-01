@@ -70,7 +70,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all"
+                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl">
@@ -78,7 +78,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                         <h2 className="text-xl font-bold text-white">Job Details</h2>
                         <button
                             onClick={onClose}
-                            className="text-white hover:text-gray-200 transition-colors text-2xl font-bold leading-none"
+                            className="text-white hover:text-gray-200 dark:hover:text-slate-200 transition-colors text-2xl font-bold leading-none"
                             aria-label="Close"
                         >
                             ×
@@ -88,35 +88,35 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
 
                 <div className="p-6 space-y-4">
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                             {jobName}
                         </h3>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-slate-300">
                             Job: {jobNumber} - Release: {releaseNumber || 'N/A'}
                         </p>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-4 space-y-4">
+                    <div className="border-t border-gray-200 dark:border-slate-600 pt-4 space-y-4">
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-semibold text-gray-700">Last Updated:</span>
+                                <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Last Updated:</span>
                             </div>
                             {lastUpdatedAt ? (
                                 <>
-                                    <p className="text-sm text-gray-600 pl-4 mb-1">
+                                    <p className="text-sm text-gray-600 dark:text-slate-300 pl-4 mb-1">
                                         {formatDateTime(lastUpdatedAt)}
                                     </p>
-                                    <p className="text-sm text-accent-600 font-medium pl-4 mb-2">
+                                    <p className="text-sm text-accent-600 dark:text-accent-400 font-medium pl-4 mb-2">
                                         {formatTimeAgo(lastUpdatedAt)}
                                     </p>
                                     {sourceOfUpdate && (
-                                        <p className="text-sm text-gray-500 pl-4">
-                                            Source: <span className="font-medium text-gray-700">{sourceOfUpdate}</span>
+                                        <p className="text-sm text-gray-500 dark:text-slate-400 pl-4">
+                                            Source: <span className="font-medium text-gray-700 dark:text-slate-200">{sourceOfUpdate}</span>
                                         </p>
                                     )}
                                 </>
                             ) : (
-                                <p className="text-sm text-gray-500 italic pl-4">
+                                <p className="text-sm text-gray-500 dark:text-slate-400 italic pl-4">
                                     No update information available
                                 </p>
                             )}
@@ -124,7 +124,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                     </div>
                 </div>
 
-                <div className="bg-gray-50 px-6 py-4 rounded-b-xl border-t border-gray-200 space-y-3">
+                <div className="bg-gray-50 dark:bg-slate-700 px-6 py-4 rounded-b-xl border-t border-gray-200 dark:border-slate-600 space-y-3">
                     <div className="flex gap-3">
                         {jobNumber && releaseNumber ? (
                             <button
@@ -136,7 +136,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                         ) : (
                             <button
                                 disabled
-                                className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed"
+                                className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-500 text-white rounded-lg font-medium cursor-not-allowed"
                             >
                                 Events
                             </button>
@@ -153,7 +153,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                         ) : (
                             <button
                                 disabled
-                                className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed"
+                                className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-500 text-white rounded-lg font-medium cursor-not-allowed"
                             >
                                 Trello
                             </button>
@@ -161,7 +161,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                     </div>
                     <button
                         onClick={onClose}
-                        className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                        className="w-full px-4 py-2 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
                     >
                         Close
                     </button>

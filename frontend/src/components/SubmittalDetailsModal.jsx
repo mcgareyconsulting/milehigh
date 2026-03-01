@@ -69,7 +69,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all"
+                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl">
@@ -77,7 +77,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                         <h2 className="text-xl font-bold text-white">Submittal Details</h2>
                         <button
                             onClick={onClose}
-                            className="text-white hover:text-gray-200 transition-colors text-2xl font-bold leading-none"
+                            className="text-white hover:text-gray-200 dark:hover:text-slate-200 transition-colors text-2xl font-bold leading-none"
                             aria-label="Close"
                         >
                             ×
@@ -87,39 +87,39 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
 
                 <div className="p-6 space-y-4">
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                             {submittal.title || submittal['Title'] || 'N/A'}
                         </h3>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-slate-300">
                             Submittal ID: {submittal.submittal_id || submittal['Submittals Id'] || 'N/A'}
                         </p>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-4 space-y-4">
+                    <div className="border-t border-gray-200 dark:border-slate-600 pt-4 space-y-4">
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-semibold text-gray-700">Created At:</span>
+                                <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Created At:</span>
                             </div>
-                            <p className="text-sm text-gray-600 pl-4">
+                            <p className="text-sm text-gray-600 dark:text-slate-300 pl-4">
                                 {formatDateTime(createdAt)}
                             </p>
                         </div>
 
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-semibold text-gray-700">Last Ball In Court Update:</span>
+                                <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Last Ball In Court Update:</span>
                             </div>
                             {lastBallUpdate ? (
                                 <>
-                                    <p className="text-sm text-gray-600 pl-4 mb-1">
+                                    <p className="text-sm text-gray-600 dark:text-slate-300 pl-4 mb-1">
                                         {formatDateTime(lastBallUpdate)}
                                     </p>
-                                    <p className="text-sm text-accent-600 font-medium pl-4">
+                                    <p className="text-sm text-accent-600 dark:text-accent-400 font-medium pl-4">
                                         {formatTimeAgo(timeSinceUpdate)}
                                     </p>
                                 </>
                             ) : (
-                                <p className="text-sm text-gray-500 italic pl-4">
+                                <p className="text-sm text-gray-500 dark:text-slate-400 italic pl-4">
                                     No ball in court update recorded
                                 </p>
                             )}
@@ -128,9 +128,9 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                         {submittal.ball_in_court || submittal['Ball In Court'] ? (
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-sm font-semibold text-gray-700">Current Ball In Court:</span>
+                                    <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Current Ball In Court:</span>
                                 </div>
-                                <p className="text-sm text-gray-600 pl-4">
+                                <p className="text-sm text-gray-600 dark:text-slate-300 pl-4">
                                     {submittal.ball_in_court || submittal['Ball In Court']}
                                 </p>
                             </div>
@@ -138,7 +138,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                     </div>
                 </div>
 
-                <div className="bg-gray-50 px-6 py-4 rounded-b-xl border-t border-gray-200 space-y-3">
+                <div className="bg-gray-50 dark:bg-slate-700 px-6 py-4 rounded-b-xl border-t border-gray-200 dark:border-slate-600 space-y-3">
                     <div className="flex gap-3">
                         {procoreUrl ? (
                             <a
@@ -152,7 +152,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                         ) : (
                             <button
                                 disabled
-                                className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed text-center"
+                                className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-500 text-white rounded-lg font-medium cursor-not-allowed text-center"
                             >
                                 Procore
                             </button>
@@ -167,7 +167,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                         ) : (
                             <button
                                 disabled
-                                className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed"
+                                className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-500 text-white rounded-lg font-medium cursor-not-allowed"
                             >
                                 Events
                             </button>
@@ -175,7 +175,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                     </div>
                     <button
                         onClick={onClose}
-                        className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                        className="w-full px-4 py-2 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
                     >
                         Close
                     </button>

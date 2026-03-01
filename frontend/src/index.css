@@ -31,6 +31,10 @@ body {
   background-color: #f8fafc;
 }
 
+.dark body {
+  background-color: #0f172a;
+}
+
 #root {
   width: 100%;
   min-height: 100vh;
@@ -64,13 +68,25 @@ body>#root>div>div {
   background: #f1f1f1;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 /* Hide vertical scrollbar on job log table; scrolling still works via wheel/trackpad */

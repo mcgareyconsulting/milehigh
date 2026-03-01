@@ -170,9 +170,9 @@ function DraftingWorkLoad() {
     return (
         <>
             <style>{columnWidthStyles}</style>
-            <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900" style={{ width: '100%', minWidth: '100%' }}>
                 <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
-                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
                         {/* Title bar - fixed, does not scroll */}
                         <div className={`flex-shrink-0 px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
                             <div className="flex items-center justify-between">
@@ -186,7 +186,7 @@ function DraftingWorkLoad() {
                                         disabled={locationRequesting}
                                         className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${locationEnabled
                                             ? 'bg-green-500 text-white hover:bg-green-600'
-                                            : 'bg-white text-gray-800 hover:bg-gray-50'
+                                            : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600'
                                             } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
                                         title={locationEnabled ? 'Turn off location filter' : 'Filter submittals by your current location (job site)'}
                                     >
@@ -205,8 +205,8 @@ function DraftingWorkLoad() {
                                         onClick={handleGeneratePDF}
                                         disabled={!hasData || loading}
                                         className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${!hasData || loading
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
+                                            ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
+                                            : 'bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-slate-600 cursor-pointer'
                                             }`}
                                         title="Generate PDF"
                                     >
@@ -219,13 +219,13 @@ function DraftingWorkLoad() {
                         {/* Tabs + Filters - fixed, do not scroll */}
                         <div className="flex-shrink-0 p-2 space-y-2">
                             {/* Tab Selection */}
-                            <div className="bg-white rounded-xl p-2 border border-gray-200 shadow-sm">
+                            <div className="bg-white dark:bg-slate-800 rounded-xl p-2 border border-gray-200 dark:border-slate-600 shadow-sm">
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => setSelectedTab('open')}
                                         className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${selectedTab === 'open'
                                             ? 'bg-gradient-to-r from-accent-500 to-accent-600 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
                                             }`}
                                     >
                                         Open
@@ -234,14 +234,14 @@ function DraftingWorkLoad() {
                                         onClick={() => setSelectedTab('draft')}
                                         className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${selectedTab === 'draft'
                                             ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
                                             }`}
                                     >
                                         Draft
                                     </button>
                                 </div>
                             </div>
-                            <div className={`rounded-xl p-2 border border-gray-200 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50' : 'bg-gradient-to-r from-gray-50 to-accent-50'}`}>
+                            <div className={`rounded-xl p-2 border border-gray-200 dark:border-slate-600 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50 dark:from-slate-700 dark:to-slate-700' : 'bg-gradient-to-r from-gray-50 to-accent-50 dark:from-slate-700 dark:to-slate-700'}`}>
                                 <div className="flex flex-col gap-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="flex flex-col gap-3">
@@ -280,15 +280,15 @@ function DraftingWorkLoad() {
                                     <div className="flex items-center gap-2 pt-2">
                                         <button
                                             onClick={resetFilters}
-                                            className="px-2 py-1 bg-white border border-accent-300 text-accent-700 rounded text-xs font-medium shadow-sm hover:bg-accent-50 transition-all"
+                                            className="px-2 py-1 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded text-xs font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all"
                                         >
                                             Reset Filters
                                         </button>
-                                        <div className="px-2 py-1 bg-white border border-gray-200 text-gray-600 rounded text-xs font-medium shadow-sm">
-                                            Total: <span className="text-gray-900">{displayRows.length}</span> records
+                                        <div className="px-2 py-1 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 text-gray-600 dark:text-slate-300 rounded text-xs font-medium shadow-sm">
+                                            Total: <span className="text-gray-900 dark:text-slate-100">{displayRows.length}</span> records
                                         </div>
-                                        <div className="text-xs text-gray-500 ml-auto">
-                                            Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
+                                        <div className="text-xs text-gray-500 dark:text-slate-400 ml-auto">
+                                            Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -298,7 +298,7 @@ function DraftingWorkLoad() {
                         {loading && (
                             <div className="flex-shrink-0 text-center py-12">
                                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
-                                <p className="text-gray-600 font-medium">Loading Drafting Work Load data...</p>
+                                <p className="text-gray-600 dark:text-slate-400 font-medium">Loading Drafting Work Load data...</p>
                             </div>
                         )}
 
@@ -313,14 +313,14 @@ function DraftingWorkLoad() {
                         )}
 
                         {!loading && !fetchError && (
-                            <div className="flex-1 min-h-0 flex flex-col border border-gray-200 rounded-xl overflow-hidden bg-white min-w-0">
+                            <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
                                 {/* Scrollbar hidden via CSS; scroll still works with wheel/trackpad */}
                                 <div
                                     className="dwl-table-scroll-hide-scrollbar flex-1 min-h-0 overflow-x-hidden"
                                     style={{ overflowY: 'auto' }}
                                 >
                                     <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
-                                        <thead className="sticky top-0 z-10 bg-gray-100 shadow-sm">
+                                        <thead className="sticky top-0 z-10 bg-gray-100 dark:bg-slate-700 shadow-sm">
                                             <tr>
                                                 {visibleColumns.map((column) => {
                                                     const isOrderNumber = column === 'ORDER #';
@@ -399,7 +399,7 @@ function DraftingWorkLoad() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 dwl-col-name"
+                                                                className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 dwl-col-name"
                                                                 style={{ width: '12%' }}
                                                             >
                                                                 <button
@@ -414,7 +414,7 @@ function DraftingWorkLoad() {
                                                                     <span>{column}</span>
                                                                     {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
                                                                     {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
-                                                                    {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
+                                                                    {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400 dark:text-slate-400">↕</span>}
                                                                 </button>
                                                             </th>
                                                         );
@@ -425,12 +425,12 @@ function DraftingWorkLoad() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
+                                                                className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 ${columnClass}`}
                                                                 style={headerStyle}
                                                             >
                                                                 <button
                                                                     onClick={() => handleColumnSort(column)}
-                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 dark:hover:bg-slate-600 rounded px-1 py-0.5 transition-colors w-full"
                                                                     title={
                                                                         sortDirection === null ? 'Click to sort ascending' :
                                                                             sortDirection === 'asc' ? 'Click to sort descending' :
@@ -440,7 +440,7 @@ function DraftingWorkLoad() {
                                                                     <span>{column}</span>
                                                                     {sortDirection === 'asc' && <span className="text-xs">↑</span>}
                                                                     {sortDirection === 'desc' && <span className="text-xs">↓</span>}
-                                                                    {sortDirection === null && <span className="text-xs text-gray-400">↕</span>}
+                                                                    {sortDirection === null && <span className="text-xs text-gray-400 dark:text-slate-400">↕</span>}
                                                                 </button>
                                                             </th>
                                                         );
@@ -450,7 +450,7 @@ function DraftingWorkLoad() {
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
+                                                            className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 ${columnClass}`}
                                                             style={headerStyle}
                                                         >
                                                             {column}
@@ -464,7 +464,7 @@ function DraftingWorkLoad() {
                                                 <tr>
                                                     <td
                                                         colSpan={tableColumnCount}
-                                                        className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
+                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
                                                     >
                                                         No records match the selected filters.
                                                     </td>

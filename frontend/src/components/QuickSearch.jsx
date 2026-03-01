@@ -71,8 +71,8 @@ export default function QuickSearch() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 w-full max-w-[1600px] mx-auto">
-      <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="flex-shrink-0 p-4 border-b border-gray-100">
+      <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 dark:border-slate-600 flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-slate-600">
           <div className="group relative flex items-center">
             <span className="absolute left-4 text-accent-400 transition-colors group-focus-within:text-accent-500" aria-hidden>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,21 +89,21 @@ export default function QuickSearch() {
               value={jobInput}
               onChange={(e) => setJobInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
               autoFocus
-              className="w-full pl-12 pr-4 py-3.5 bg-accent-50 border border-accent-200 rounded-full font-mono text-lg text-gray-900 placeholder-gray-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
+              className="w-full pl-12 pr-4 py-3.5 bg-accent-50 dark:bg-slate-700 border border-accent-200 dark:border-slate-500 rounded-full font-mono text-lg text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
             />
           </div>
           {loading && (
-            <p className="mt-2 text-sm text-gray-500">Searching…</p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">Searching…</p>
           )}
           {error && (
-            <p className="mt-2 text-sm text-red-600">{error}</p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
         </div>
 
         {searchedJob != null && !error ? (
           <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 overflow-hidden">
             <div className="flex flex-col min-h-0">
-              <h4 className="flex-shrink-0 text-sm font-semibold text-gray-700 mb-2">Releases</h4>
+              <h4 className="flex-shrink-0 text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">Releases</h4>
               <div className="flex-1 min-h-0 overflow-auto">
                 <JobSearchTable
                   columns={RELEASES_COLS}
@@ -123,7 +123,7 @@ export default function QuickSearch() {
               </div>
             </div>
             <div className="flex flex-col min-h-0">
-              <h4 className="flex-shrink-0 text-sm font-semibold text-gray-700 mb-2">Submittals</h4>
+              <h4 className="flex-shrink-0 text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">Submittals</h4>
               <div className="flex-1 min-h-0 overflow-auto">
                 <JobSearchTable
                   columns={SUBMITTALS_COLS}
