@@ -13,7 +13,12 @@ from app.models import db, Releases, Submittals, SubmittalEvents
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
-from app.procore.helpers import parse_ball_in_court_from_submittal, extract_procore_user_id_from_webhook, resolve_internal_user_id
+from app.procore.helpers import (
+    parse_ball_in_court_from_submittal,
+    extract_procore_user_id_from_webhook,
+    resolve_internal_user_id,
+    resolve_webhook_user_ids,
+)
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
 from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
 
@@ -24,24 +29,63 @@ logger = logging.getLogger(__name__)
 def _create_submittal_payload_hash(action, submittal_id, payload):
     """
     Create a hash for the submittal event payload to prevent duplicates.
-    
+
     Args:
         action: The action type (e.g., 'created', 'updated')
         submittal_id: The submittal ID
         payload: The payload dictionary
-        
+
     Returns:
         str: SHA-256 hash of the payload
     """
     # Normalize the payload by sorting keys and converting to JSON
-    # This ensures consistent hashing regardless of key order
     payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-    
-    # Create hash string from action + submittal_id + payload
     hash_string = f"{action}:{submittal_id}:{payload_json}"
-    
-    # Generate SHA-256 hash
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
+
+
+def _create_submittal_event(submittal_id, action, payload, webhook_payload=None, source='Procore', internal_user_id=None):
+    """
+    Create a SubmittalEvents record with user attribution. Idempotent (skips if payload_hash exists).
+
+    Args:
+        submittal_id: Submittal ID (string)
+        action: 'created' or 'updated'
+        payload: Event payload dict
+        webhook_payload: Raw webhook dict for resolving external_user_id / internal_user_id (Procore)
+        source: Event source (default 'Procore'; use 'Brain' for app-originated updates)
+        internal_user_id: Optional app user id (e.g. from get_current_user()); used when source='Brain', no webhook
+
+    Returns:
+        bool: True if event was created, False if skipped (duplicate or no payload)
+    """
+    if not payload and action == 'updated':
+        return False
+    if webhook_payload is not None:
+        external_user_id, internal_user_id = resolve_webhook_user_ids(webhook_payload)
+    else:
+        external_user_id = None
+        # internal_user_id already set from argument (Brain passes logged-in user id)
+    payload_hash = _create_submittal_payload_hash(action, str(submittal_id), payload)
+    if SubmittalEvents.query.filter_by(payload_hash=payload_hash).first():
+        logger.debug("SubmittalEvent already exists for submittal %s %s, skipping", submittal_id, action)
+        return False
+    event = SubmittalEvents(
+        submittal_id=str(submittal_id),
+        action=action,
+        payload=payload,
+        payload_hash=payload_hash,
+        source=source,
+        internal_user_id=internal_user_id,
+        external_user_id=external_user_id,
+    )
+    db.session.add(event)
+    db.session.commit()
+    logger.info(
+        "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s)",
+        submittal_id, action, external_user_id, internal_user_id,
+    )
+    return True
 
 
 def _request_json(url, headers, params=None):
@@ -582,19 +626,9 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             logger.error(f"Unexpected error during commit: {commit_error}", exc_info=True)
             raise
         
-        # Resolve user who triggered webhook (for event attribution)
-        event_internal_user_id = None
-        event_external_user_id = None
-        if webhook_payload:
-            procore_uid = extract_procore_user_id_from_webhook(webhook_payload)
-            if procore_uid:
-                event_external_user_id = procore_uid
-                event_internal_user_id = resolve_internal_user_id(procore_uid)
-
-        # Create submittal event for creation
+        # Create submittal event for creation (with user attribution from webhook)
         try:
-            action = "created"
-            payload = {
+            event_payload = {
                 "submittal_id": str(submittal_id),
                 "project_id": str(project_id),
                 "title": title,
@@ -605,28 +639,12 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
                 "project_name": project_info.get("name"),
                 "project_number": str(project_info.get("project_number", "")).strip() or None
             }
-            payload_hash = _create_submittal_payload_hash(action, str(submittal_id), payload)
-            
-            # Check if event already exists
-            existing_event = SubmittalEvents.query.filter_by(payload_hash=payload_hash).first()
-            if not existing_event:
-                event = SubmittalEvents(
-                    submittal_id=str(submittal_id),
-                    action=action,
-                    payload=payload,
-                    payload_hash=payload_hash,
-                    source='Procore',
-                    internal_user_id=event_internal_user_id,
-                    external_user_id=event_external_user_id
-                )
-                db.session.add(event)
-                db.session.commit()
-                logger.info(f"Created SubmittalEvent for submittal {submittal_id} creation")
-            else:
-                logger.debug(f"SubmittalEvent already exists for submittal {submittal_id} creation, skipping")
+            _create_submittal_event(
+                str(submittal_id), "created", event_payload,
+                webhook_payload=webhook_payload, source='Procore'
+            )
         except Exception as event_error:
-            # Log but don't fail the creation if event creation fails
-            logger.warning(f"Failed to create SubmittalEvent for submittal {submittal_id} creation: {event_error}", exc_info=True)
+            logger.warning("Failed to create SubmittalEvent for submittal %s creation: %s", submittal_id, event_error, exc_info=True)
         
         logger.info(
             f"Created new submittal record: submittal_id={submittal_id}, "
@@ -751,59 +769,28 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
             record.ball_in_court = ball_in_court
             ball_updated = True
         
-        # NEW LOGIC: Check if submitter appears as pending in a later workflow group
-        # This should trigger a bump regardless of ball_in_court changes
-        print(f"[MAIN CHECK] Checking submitter pending workflow condition for submittal {submittal_id}")
-        logger.info(f"[MAIN CHECK] Checking submitter pending workflow condition for submittal {submittal_id}")
-        
-        if approvers:
-            print(f"[MAIN CHECK] Approvers list available, calling UrgencyService.check_submitter_pending_in_workflow")
-            logger.info(f"[MAIN CHECK] Approvers list available, calling UrgencyService.check_submitter_pending_in_workflow")
-            submitter_pending = UrgencyService.check_submitter_pending_in_workflow(approvers)
-            print(f"[MAIN CHECK] Result from UrgencyService.check_submitter_pending_in_workflow: {submitter_pending}")
-            logger.info(f"[MAIN CHECK] Result from UrgencyService.check_submitter_pending_in_workflow: {submitter_pending}")
-        else:
-            print(f"[MAIN CHECK] No approvers list available")
-            logger.info(f"[MAIN CHECK] No approvers list available")
-            submitter_pending = False
-        
+        # Check if submitter appears as pending in a later workflow group (triggers order bump)
+        submitter_pending = (
+            UrgencyService.check_submitter_pending_in_workflow(approvers)
+            if approvers else False
+        )
+        logger.debug(
+            "Submittal %s submitter_pending_in_workflow=%s (approvers=%s)",
+            submittal_id, submitter_pending, bool(approvers)
+        )
         if submitter_pending:
-            print(f"[MAIN CHECK] ✓ Condition met: Submitter appears as pending approver in workflow for submittal {submittal_id}")
-            logger.info(
-                f"[MAIN CHECK] ✓ Condition met: Submitter appears as pending approver in workflow for submittal {submittal_id}. "
-                f"Checking if order number should be bumped."
-            )
             # Only bump if order_number is an integer >= 1 (not already a decimal)
             if record.order_number is not None:
                 current_order = record.order_number
-                print(f"[MAIN CHECK] Current order number: {current_order}")
-                logger.info(f"[MAIN CHECK] Current order number: {current_order}")
-                
                 is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
-                print(f"[MAIN CHECK] Order number is integer >= 1: {is_integer}")
-                logger.info(f"[MAIN CHECK] Order number is integer >= 1: {is_integer}")
-                
                 if is_integer:
-                    # Use current ball_in_court value (may have been updated above)
                     ball_in_court_for_bump = record.ball_in_court if ball_updated else (ball_in_court or "")
-                    print(f"[MAIN CHECK] Calling UrgencyService.bump_order_number_to_urgent with ball_in_court='{ball_in_court_for_bump}'")
-                    logger.info(f"[MAIN CHECK] Calling UrgencyService.bump_order_number_to_urgent with ball_in_court='{ball_in_court_for_bump}'")
-                    
                     if UrgencyService.bump_order_number_to_urgent(record, submittal_id, ball_in_court_for_bump):
                         order_bumped = True
-                        print(f"[MAIN CHECK] ✓ Order number successfully bumped for submittal {submittal_id}")
                         logger.info(
-                            f"[MAIN CHECK] ✓ Order number successfully bumped due to submitter pending in workflow for submittal {submittal_id}"
+                            "Order number bumped for submittal %s (submitter pending in workflow)",
+                            submittal_id
                         )
-                else:
-                    print(f"[MAIN CHECK] Order number is not an integer >= 1, skipping bump")
-                    logger.info(f"[MAIN CHECK] Order number is not an integer >= 1, skipping bump")
-            else:
-                print(f"[MAIN CHECK] Order number is None, skipping bump")
-                logger.info(f"[MAIN CHECK] Order number is None, skipping bump")
-        else:
-            print(f"[MAIN CHECK] ✗ Condition not met: Submitter does not appear as pending in workflow")
-            logger.info(f"[MAIN CHECK] ✗ Condition not met: Submitter does not appear as pending in workflow")
         
         # Check and update status
         db_status_value = record.status if record.status is not None else ""
@@ -879,39 +866,16 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
                     payload["order_bumped"] = True
                     payload["order_number"] = record.order_number
                 
-                # Only create event if there are actual changes in payload
                 if payload:
-                    # Resolve user who triggered webhook (for event attribution)
-                    event_internal_user_id = None
-                    event_external_user_id = None
-                    if webhook_payload:
-                        procore_uid = extract_procore_user_id_from_webhook(webhook_payload)
-                        if procore_uid:
-                            event_external_user_id = procore_uid
-                            event_internal_user_id = resolve_internal_user_id(procore_uid)
-
-                    payload_hash = _create_submittal_payload_hash(action, str(submittal_id), payload)
-                    
-                    # Check if event already exists
-                    existing_event = SubmittalEvents.query.filter_by(payload_hash=payload_hash).first()
-                    if not existing_event:
-                        event = SubmittalEvents(
-                            submittal_id=str(submittal_id),
-                            action=action,
-                            payload=payload,
-                            payload_hash=payload_hash,
-                            source='Procore',
-                            internal_user_id=event_internal_user_id,
-                            external_user_id=event_external_user_id
+                    try:
+                        _create_submittal_event(
+                            str(submittal_id), action, payload,
+                            webhook_payload=webhook_payload, source='Procore'
                         )
-                        db.session.add(event)
-                        db.session.commit()
-                        logger.info(f"Created SubmittalEvent for submittal {submittal_id} update")
-                    else:
-                        logger.debug(f"SubmittalEvent already exists for submittal {submittal_id} update, skipping")
+                    except Exception as event_error:
+                        logger.warning("Failed to create SubmittalEvent for submittal %s update: %s", submittal_id, event_error, exc_info=True)
             except Exception as event_error:
-                # Log but don't fail the update if event creation fails
-                logger.warning(f"Failed to create SubmittalEvent for submittal {submittal_id} update: {event_error}", exc_info=True)
+                logger.warning("Failed to build or create SubmittalEvent for submittal %s update: %s", submittal_id, event_error, exc_info=True)
             
             if ball_updated:
                 logger.info(f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'")

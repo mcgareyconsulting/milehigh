@@ -19,7 +19,7 @@ from app.procore.procore import (
     _create_submittal_payload_hash
 )
 
-from app.procore.helpers import clean_value, is_email
+from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -64,6 +64,17 @@ def log_webhook_payload(payload: dict, headers: dict = None, hook_id: Optional[i
 DEBOUNCE_SECONDS = 8  # 8 seconds
 
 
+def _recent_submittal_event_for_debounce(resource_id: int, action: str):
+    """Return a recent SubmittalEvent for this submittal/action if within DEBOUNCE_SECONDS, else None."""
+    now = datetime.utcnow()
+    return SubmittalEvents.query.filter(
+        SubmittalEvents.submittal_id == str(resource_id),
+        SubmittalEvents.action == action,
+        SubmittalEvents.source == "Procore",
+        SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
+    ).order_by(SubmittalEvents.created_at.desc()).first()
+
+
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
 def procore_webhook():
     """
@@ -83,16 +94,18 @@ def procore_webhook():
         except:
             payload = {}
 
-        # Extract metadata
-        print('Payload analysis')
-        print('--------------------------------')
-        print(payload)
-        print('--------------------------------')
-        # Procore webhook uses "id" for resource_id, not "resource_id"
+        # Extract metadata (Procore webhook uses resource_id, project_id, reason, resource_type)
         resource_id_raw = payload.get("resource_id")
         project_id_raw = payload.get("project_id")
         event_type = payload.get("reason") or "unknown"
         resource_type = payload.get("resource_type") or "unknown"
+        external_user_id, internal_user_id = resolve_webhook_user_ids(payload)
+        if external_user_id is not None:
+            current_app.logger.info(
+                "Procore webhook user: external_user_id=%s, internal_user_id=%s",
+                external_user_id, internal_user_id
+            )
+        current_app.logger.debug("Procore webhook payload: %s", json.dumps(payload) if payload else "{}")
 
         # Validate and convert to int
         if not resource_id_raw:
@@ -115,69 +128,24 @@ def procore_webhook():
             current_app.logger.warning(f"Invalid project_id format: {project_id_raw}")
             return jsonify({"status": "ignored"}), 200
 
-        # Use your existing logger setup
         current_app.logger.info(
-            f"Received Procore webhook: resource={resource_type}, "
-            f"event_type={event_type}, id={resource_id}, project={project_id}"
+            "Received Procore webhook: resource=%s, event_type=%s, id=%s, project=%s",
+            resource_type, event_type, resource_id, project_id
         )
-        
-        # Debug: Log the full payload for create events to verify structure
-        if event_type == "create":
-            current_app.logger.debug(
-                f"DEBUG: Full webhook payload for create event: {json.dumps(payload)}"
+
+        # Debounce: skip if we already processed this event type for this submittal recently
+        debounce_action = "updated" if event_type == "update" else "created"
+        recent_event = _recent_submittal_event_for_debounce(resource_id, debounce_action)
+        if recent_event:
+            diff = (datetime.utcnow() - recent_event.created_at).total_seconds()
+            current_app.logger.info(
+                "Debounced duplicate %s webhook; id=%s, project=%s, seen %.2fs ago",
+                event_type, resource_id, project_id, diff
             )
+            return jsonify({"status": "debounced"}), 200
 
-        now = datetime.utcnow()
-
-        # -----------------------------------
-        # Debounce lookup using SubmittalEvents (similar to JobEvents pattern)
-        # Check for recent events within DEBOUNCE_SECONDS window
-        # -----------------------------------
-        if event_type == "update":
-            # Check for recent update events for this submittal
-            action = "updated"
-            recent_event = SubmittalEvents.query.filter(
-                SubmittalEvents.submittal_id == str(resource_id),
-                SubmittalEvents.action == action,
-                SubmittalEvents.source == "Procore",
-                SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
-            ).order_by(SubmittalEvents.created_at.desc()).first()
-
-            if recent_event:
-                diff = (now - recent_event.created_at).total_seconds()
-                current_app.logger.info(
-                    f"Debounced duplicate update webhook; id={resource_id}, "
-                    f"project={project_id}, seen {diff:.2f}s ago"
-                )
-                return jsonify({"status": "debounced"}), 200
-        elif event_type == "create":
-            # For create events, check for recent created events
-            action = "created"
-            recent_event = SubmittalEvents.query.filter(
-                SubmittalEvents.submittal_id == str(resource_id),
-                SubmittalEvents.action == action,
-                SubmittalEvents.source == "Procore",
-                SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
-            ).order_by(SubmittalEvents.created_at.desc()).first()
-
-            if recent_event:
-                diff = (now - recent_event.created_at).total_seconds()
-                current_app.logger.info(
-                    f"Debounced duplicate create webhook; id={resource_id}, "
-                    f"project={project_id}, seen {diff:.2f}s ago"
-                )
-                return jsonify({"status": "debounced"}), 200
-
-        # -----------------------------------
-        # PROCESS ACTUAL SUBMITTAL
-        # -----------------------------------
+        # Process submittal create or update
         try:
-            current_app.logger.debug(
-                f"DEBUG: About to process event. event_type='{event_type}' "
-                f"(type: {type(event_type)}), resource_id={resource_id}"
-            )
-            
-            # Handle create events - add new submittal to database
             if event_type == "create":
                 current_app.logger.info(
                     f"Processing create event for submittal {resource_id} in project {project_id}"
@@ -238,7 +206,7 @@ def procore_webhook():
                         f"Update event received for submittal {resource_id} but record doesn't exist. "
                         f"Attempting to create it first (fallback for race conditions)..."
                     )
-                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id)
+                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload)
                     if created and new_record:
                         current_app.logger.info(
                             f"Successfully created missing submittal {resource_id} from update event fallback"

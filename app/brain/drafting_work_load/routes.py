@@ -9,9 +9,10 @@ from app.brain.drafting_work_load.service import (
 )
 from app.logging_config import get_logger
 from app.models import Submittals, db
-from app.auth.utils import login_required, admin_required
+from app.auth.utils import login_required, admin_required, get_current_user
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
+from app.procore.procore import _create_submittal_event
 from datetime import datetime
 
 logger = get_logger(__name__)
@@ -82,6 +83,8 @@ def update_submittal_order():
         if not submittal:
             return jsonify({"error": "Submittal not found"}), 404
 
+        old_order = SubmittalOrderingService.safe_float_order(submittal.order_number)
+
         # Get all submittals in the same group
         all_group_submittals = []
         if submittal.ball_in_court:
@@ -94,7 +97,7 @@ def update_submittal_order():
             update_request = SubmittalOrderUpdate(
                 submittal_id=submittal_id,
                 new_order=order_number,
-                old_order=SubmittalOrderingService.safe_float_order(submittal.order_number),
+                old_order=old_order,
                 ball_in_court=submittal.ball_in_court
             )
             
@@ -113,6 +116,17 @@ def update_submittal_order():
             submittal.last_updated = datetime.utcnow()
         
         db.session.commit()
+
+        user = get_current_user()
+        try:
+            _create_submittal_event(
+                submittal_id, "updated",
+                {"order_number": {"old": old_order, "new": order_number}},
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for order update: %s", event_err)
 
         return jsonify({
             "success": True,
@@ -151,10 +165,22 @@ def update_submittal_notes():
                 "error": "Submittal not found"
             }), 404
         
+        old_notes = submittal.notes
         # Update via service layer
         DraftingWorkLoadService.update_notes(submittal, notes)
         
         db.session.commit()
+
+        user = get_current_user()
+        try:
+            _create_submittal_event(
+                submittal_id, "updated",
+                {"notes": {"old": old_notes, "new": notes}},
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for notes update: %s", event_err)
         
         return jsonify({
             "success": True,
@@ -203,6 +229,7 @@ def update_submittal_drafting_status():
                 "error": "Submittal not found"
             }), 404
         
+        old_status = submittal.submittal_drafting_status or ""
         # Update via service layer
         success, error_msg = DraftingWorkLoadService.update_drafting_status(
             submittal, 
@@ -213,6 +240,17 @@ def update_submittal_drafting_status():
             return jsonify({"error": error_msg}), 400
         
         db.session.commit()
+
+        user = get_current_user()
+        try:
+            _create_submittal_event(
+                submittal_id, "updated",
+                {"submittal_drafting_status": {"old": old_status, "new": submittal_drafting_status or ""}},
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for drafting status update: %s", event_err)
         
         return jsonify({
             "success": True,
@@ -262,6 +300,17 @@ def bump_submittal():
         
         # Commit the changes
         db.session.commit()
+
+        user = get_current_user()
+        try:
+            _create_submittal_event(
+                submittal_id, "updated",
+                {"order_bumped": True, "order_number": submittal.order_number},
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for bump: %s", event_err)
         
         return jsonify({
             "success": True,
@@ -323,11 +372,23 @@ def update_submittal_procore_status():
         except (TypeError, ValueError):
             return jsonify({"error": "Invalid procore_project_id"}), 400
 
+        old_status = submittal.status
         procore_client = get_procore_client()
         procore_client.update_submittal_status(project_id, int(submittal_id), status_id)
 
         submittal.status = SUBMITTAL_STATUS_ID_TO_NAME[status_id]
         db.session.commit()
+
+        user = get_current_user()
+        try:
+            _create_submittal_event(
+                submittal_id, "updated",
+                {"status": {"old": old_status, "new": submittal.status}},
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for Procore status update: %s", event_err)
 
         return jsonify({
             "success": True,
@@ -373,6 +434,7 @@ def update_submittal_due_date():
                 "error": "Submittal not found"
             }), 404
         
+        old_due_date = submittal.due_date.isoformat() if submittal.due_date else None
         # Update via service layer
         success, error_msg = DraftingWorkLoadService.update_due_date(
             submittal, 
@@ -383,6 +445,18 @@ def update_submittal_due_date():
             return jsonify({"error": error_msg}), 400
         
         db.session.commit()
+
+        new_due_date = submittal.due_date.isoformat() if submittal.due_date else None
+        user = get_current_user()
+        try:
+            _create_submittal_event(
+                submittal_id, "updated",
+                {"due_date": {"old": old_due_date, "new": new_due_date}},
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for due date update: %s", event_err)
         
         return jsonify({
             "success": True,

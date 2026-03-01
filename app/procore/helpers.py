@@ -1,6 +1,6 @@
 import pandas as pd
 import re
-from typing import Optional
+from typing import Optional, Tuple
 
 # Helper function to convert pandas NaT/NaN to None
 def clean_value(value):
@@ -158,3 +158,19 @@ def resolve_internal_user_id(procore_user_id: Optional[str]) -> Optional[int]:
     procore_id_str = str(procore_user_id).strip()
     user = User.query.filter_by(procore_id=procore_id_str).first()
     return user.id if user else None
+
+
+def resolve_webhook_user_ids(webhook_payload: Optional[dict]) -> Tuple[Optional[str], Optional[int]]:
+    """
+    Extract Procore user id from webhook payload and resolve to internal user id.
+
+    Returns:
+        (external_user_id, internal_user_id) - Procore user id string and users.id, or (None, None)
+    """
+    if not webhook_payload:
+        return None, None
+    external = extract_procore_user_id_from_webhook(webhook_payload)
+    if not external:
+        return None, None
+    internal = resolve_internal_user_id(external)
+    return external, internal
