@@ -815,9 +815,10 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
             if order_bumped:
                 logger.info(f"Order number bumped for submittal {submittal_id}")
         else:
-            logger.debug(
-                f"All fields match for submittal {submittal_id}: "
-                f"ball='{ball_in_court}', status='{status}', title='{title}', manager='{submittal_manager}'"
+            logger.info(
+                "Webhook for submittal %s: no DB updates (already in sync). "
+                "Likely bounce-back from Brain/originated update. ball=%r, status=%r",
+                submittal_id, ball_in_court, status,
             )
         
         return ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status

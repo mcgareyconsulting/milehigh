@@ -283,6 +283,13 @@ def procore_webhook():
                                 submittal_title=record.title if record else None,
                                 project_name=record.project_name if record else None
                             )
+
+                # Log when webhook resulted in no updates (bounce-back handling)
+                if not (ball_updated or status_updated or title_updated or manager_updated):
+                    current_app.logger.info(
+                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync, bounce-back handled)",
+                        resource_id, project_id,
+                    )
             else:
                 current_app.logger.warning(
                     f"Unhandled event type '{event_type}' for submittal {resource_id}, ignoring. "
