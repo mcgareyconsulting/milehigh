@@ -73,29 +73,28 @@ export default function QuickSearch() {
     <div className="flex-1 flex flex-col min-h-0 w-full max-w-[1600px] mx-auto">
       <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex-shrink-0 p-4 border-b border-gray-100">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <label htmlFor="quick-search-input" className="text-sm font-medium text-gray-700">
-              Job number
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                id="quick-search-input"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={3}
-                placeholder="4 = 4xx • 40 = 40x • 400 = exact"
-                value={jobInput}
-                onChange={(e) => setJobInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                autoFocus
-                className="flex-1 max-w-[12rem] px-4 py-3 border border-gray-200 rounded-xl font-mono text-xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-accent-400 focus:border-accent-400"
-              />
-              {loading && (
-                <span className="text-sm text-gray-500">Searching…</span>
-              )}
-            </div>
+          <div className="group relative flex items-center">
+            <span className="absolute left-4 text-accent-400 transition-colors group-focus-within:text-accent-500" aria-hidden>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+            <input
+              id="quick-search-input"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={3}
+              placeholder="Project Number"
+              value={jobInput}
+              onChange={(e) => setJobInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
+              autoFocus
+              className="w-full pl-12 pr-4 py-3.5 bg-accent-50 border border-accent-200 rounded-full font-mono text-lg text-gray-900 placeholder-gray-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
+            />
           </div>
-
+          {loading && (
+            <p className="mt-2 text-sm text-gray-500">Searching…</p>
+          )}
           {error && (
             <p className="mt-2 text-sm text-red-600">{error}</p>
           )}
@@ -152,9 +151,7 @@ export default function QuickSearch() {
                 className="max-w-[min(40vw,280px)] w-auto h-auto object-contain opacity-25 mx-auto"
                 aria-hidden
               />
-              <p className="mt-4 text-sm text-gray-500">
-                Type 1–3 digits to search (4 = 4xx, 40 = 40x, 400 = exact)
-              </p>
+
             </div>
           </div>
         )}
