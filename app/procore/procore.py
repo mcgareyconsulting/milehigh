@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from requests.exceptions import ConnectionError, Timeout
 from urllib3.exceptions import ProtocolError
 from app.config import Config as cfg
-from app.models import db, Releases, Submittals, SubmittalEvents
+from app.models import db, Releases, Submittals
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
@@ -18,74 +18,14 @@ from app.procore.helpers import (
     extract_procore_user_id_from_webhook,
     resolve_internal_user_id,
     resolve_webhook_user_ids,
+    create_submittal_payload_hash as _create_submittal_payload_hash,
+    create_submittal_event as _create_submittal_event,
 )
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
 from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
 
 
 logger = logging.getLogger(__name__)
-
-
-def _create_submittal_payload_hash(action, submittal_id, payload):
-    """
-    Create a hash for the submittal event payload to prevent duplicates.
-
-    Args:
-        action: The action type (e.g., 'created', 'updated')
-        submittal_id: The submittal ID
-        payload: The payload dictionary
-
-    Returns:
-        str: SHA-256 hash of the payload
-    """
-    # Normalize the payload by sorting keys and converting to JSON
-    payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-    hash_string = f"{action}:{submittal_id}:{payload_json}"
-    return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
-
-
-def _create_submittal_event(submittal_id, action, payload, webhook_payload=None, source='Procore', internal_user_id=None):
-    """
-    Create a SubmittalEvents record with user attribution. Idempotent (skips if payload_hash exists).
-
-    Args:
-        submittal_id: Submittal ID (string)
-        action: 'created' or 'updated'
-        payload: Event payload dict
-        webhook_payload: Raw webhook dict for resolving external_user_id / internal_user_id (Procore)
-        source: Event source (default 'Procore'; use 'Brain' for app-originated updates)
-        internal_user_id: Optional app user id (e.g. from get_current_user()); used when source='Brain', no webhook
-
-    Returns:
-        bool: True if event was created, False if skipped (duplicate or no payload)
-    """
-    if not payload and action == 'updated':
-        return False
-    if webhook_payload is not None:
-        external_user_id, internal_user_id = resolve_webhook_user_ids(webhook_payload)
-    else:
-        external_user_id = None
-        # internal_user_id already set from argument (Brain passes logged-in user id)
-    payload_hash = _create_submittal_payload_hash(action, str(submittal_id), payload)
-    if SubmittalEvents.query.filter_by(payload_hash=payload_hash).first():
-        logger.debug("SubmittalEvent already exists for submittal %s %s, skipping", submittal_id, action)
-        return False
-    event = SubmittalEvents(
-        submittal_id=str(submittal_id),
-        action=action,
-        payload=payload,
-        payload_hash=payload_hash,
-        source=source,
-        internal_user_id=internal_user_id,
-        external_user_id=external_user_id,
-    )
-    db.session.add(event)
-    db.session.commit()
-    logger.info(
-        "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s)",
-        submittal_id, action, external_user_id, internal_user_id,
-    )
-    return True
 
 
 def _request_json(url, headers, params=None):

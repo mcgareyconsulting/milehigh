@@ -12,7 +12,7 @@ from app.models import Submittals, db
 from app.auth.utils import login_required, admin_required, get_current_user
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
-from app.procore.procore import _create_submittal_event
+from app.procore.helpers import create_submittal_event
 from datetime import datetime
 
 logger = get_logger(__name__)
@@ -119,7 +119,7 @@ def update_submittal_order():
 
         user = get_current_user()
         try:
-            _create_submittal_event(
+            create_submittal_event(
                 submittal_id, "updated",
                 {"order_number": {"old": old_order, "new": order_number}},
                 webhook_payload=None, source="Brain",
@@ -173,7 +173,7 @@ def update_submittal_notes():
 
         user = get_current_user()
         try:
-            _create_submittal_event(
+            create_submittal_event(
                 submittal_id, "updated",
                 {"notes": {"old": old_notes, "new": notes}},
                 webhook_payload=None, source="Brain",
@@ -243,7 +243,7 @@ def update_submittal_drafting_status():
 
         user = get_current_user()
         try:
-            _create_submittal_event(
+            create_submittal_event(
                 submittal_id, "updated",
                 {"submittal_drafting_status": {"old": old_status, "new": submittal_drafting_status or ""}},
                 webhook_payload=None, source="Brain",
@@ -303,7 +303,7 @@ def bump_submittal():
 
         user = get_current_user()
         try:
-            _create_submittal_event(
+            create_submittal_event(
                 submittal_id, "updated",
                 {"order_bumped": True, "order_number": submittal.order_number},
                 webhook_payload=None, source="Brain",
@@ -381,7 +381,7 @@ def update_submittal_procore_status():
 
         user = get_current_user()
         try:
-            _create_submittal_event(
+            create_submittal_event(
                 submittal_id, "updated",
                 {"status": {"old": old_status, "new": submittal.status}},
                 webhook_payload=None, source="Brain",
@@ -449,7 +449,7 @@ def update_submittal_due_date():
         new_due_date = submittal.due_date.isoformat() if submittal.due_date else None
         user = get_current_user()
         try:
-            _create_submittal_event(
+            create_submittal_event(
                 submittal_id, "updated",
                 {"due_date": {"old": old_due_date, "new": new_due_date}},
                 webhook_payload=None, source="Brain",

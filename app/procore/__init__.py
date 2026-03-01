@@ -11,12 +11,12 @@ from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError
 from app.models import db, Submittals, SubmittalEvents
 
+from app.procore.helpers import create_submittal_payload_hash as _create_submittal_payload_hash
 from app.procore.procore import (
-    get_project_id_by_project_name, 
-    check_and_update_submittal, 
+    get_project_id_by_project_name,
+    check_and_update_submittal,
     create_submittal_from_webhook,
     comprehensive_health_scan,
-    _create_submittal_payload_hash
 )
 
 from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids
