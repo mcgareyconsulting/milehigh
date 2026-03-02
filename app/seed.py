@@ -1152,6 +1152,231 @@ def determine_stage_from_staging_columns(row):
     return 'Released'
 
 
+def determine_stage_from_rebuild_snapshot_columns(row):
+    """
+    Determine stage from rebuild_snapshot.csv staging columns.
+    
+    Extends determine_stage_from_staging_columns to handle:
+    - Cut start "-" → Hold (not started or on hold)
+    - Job Comp as decimal (0.5, 0.75, 0.9) → NOT Complete; use staging columns for furthest stage
+    - MFP, M in Ship/Invoiced have no mapping; fall through to Released or furthest X/O stage.
+    
+    XXXO format: Cut start, Fitup comp, Welded, Paint Comp, Ship (X=done, O=empty).
+    New stages in dropdown: Released, Cut start, Material Ordered, Fit Up Complete., Welded,
+    Welded QC, Paint complete, Hold, Store at MHMW for shipping, Shipping planning,
+    Shipping completed, Complete.
+    """
+    def normalize_val(val):
+        """Treat O, empty, null, blank as empty. Preserve X, MFP, M, decimals, etc."""
+        if pd.isna(val) or val == '':
+            return ''
+        s = str(val).strip().upper()
+        if s == 'O':
+            return ''
+        return s
+
+    job_comp_raw = str(row.get('Job Comp', '') or '').strip().upper()
+    job_comp = normalize_val(row.get('Job Comp', ''))
+    ship = normalize_val(row.get('Ship', ''))
+    paint_comp = normalize_val(row.get('Paint Comp', ''))
+    welded = normalize_val(row.get('Welded', ''))
+    fitup_comp = normalize_val(row.get('Fitup comp', ''))
+    cut_start_raw = str(row.get('Cut start', '') or '').strip()
+    cut_start = normalize_val(row.get('Cut start', ''))
+
+    # Job Comp as decimal (0.5, 0.75, 0.9) = in progress, NOT Complete
+    def is_job_comp_complete():
+        if job_comp_raw == 'X':
+            return True
+        try:
+            float(job_comp_raw)
+            return False  # decimal = in progress
+        except (ValueError, TypeError):
+            pass
+        return False
+
+    # 1. Complete - Job Comp = "X" only (decimals = in progress)
+    if is_job_comp_complete():
+        return 'Complete'
+
+    # 2. Hold - Cut start = "-" (inference: not started or on hold)
+    if cut_start_raw == '-' or (cut_start == '' and cut_start_raw and cut_start_raw != 'O'):
+        if cut_start_raw == '-':
+            return 'Hold'
+        # Other non-X values in Cut start that aren't empty
+        if cut_start_raw and cut_start_raw.upper() not in ('O', 'X'):
+            return 'Hold'
+
+    # 3. Shipping completed - Ship = "X"
+    if ship == 'X':
+        return 'Shipping completed'
+
+    # 4. Shipping planning - Ship = "RS"
+    if ship == 'RS':
+        return 'Shipping planning'
+
+    # 5. Store at MHMW for shipping - Ship = "ST"
+    if ship == 'ST':
+        return 'Store at MHMW for shipping'
+
+    # 6. Paint complete - Paint Comp = "X" AND Ship empty
+    if paint_comp == 'X' and ship == '':
+        return 'Paint complete'
+
+    # 7. Welded QC - Welded = "X" AND Paint Comp empty
+    if welded == 'X' and paint_comp == '':
+        return 'Welded QC'
+
+    # 8. Fit Up Complete. - Fitup comp = "X" AND Welded empty
+    if fitup_comp == 'X' and welded == '':
+        return 'Fit Up Complete.'
+
+    # 9. Cut start - Cut start = "X" AND Fitup comp empty
+    if cut_start == 'X' and fitup_comp == '':
+        return 'Cut start'
+
+    # 10. Released - Default (MFP, M, and other unmapped values fall through here)
+    return 'Released'
+
+
+def seed_releases_from_rebuild_snapshot(
+    csv_path=None,
+    batch_size=50,
+    wipe_existing=True,
+    require_confirmation=True,
+):
+    """
+    Read rebuild_snapshot.csv and seed the releases table.
+
+    Uses determine_stage_from_rebuild_snapshot_columns to map staging columns
+    (Cut start, Fitup comp, Welded, Paint Comp, Ship, Job Comp, Invoiced) to
+    the current stage dropdown values.
+
+    Args:
+        csv_path: Path to CSV. Defaults to rebuild_snapshot.csv in project root.
+        batch_size: Records per batch (default 50).
+        wipe_existing: If True (default), delete all releases before seeding (full wipe and reset).
+        require_confirmation: If True, prompt before wipe/seed (default True).
+
+    Returns:
+        dict: { success, created_count, errors, stage_distribution, ... }
+    """
+    from app import create_app
+    from datetime import datetime
+    from app.api.helpers import get_stage_group_from_stage
+
+    project_root = Path(__file__).parent.parent
+    csv_path = Path(csv_path) if csv_path else project_root / "rebuild_snapshot.csv"
+    if not csv_path.exists():
+        return {"success": False, "error": f"CSV not found: {csv_path}"}
+
+    app = create_app()
+    with app.app_context():
+        df = pd.read_csv(csv_path, low_memory=False)
+
+        required = ["Job #", "Release #", "Job"]
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            return {"success": False, "error": f"Missing columns: {missing}"}
+
+        def is_valid_job_release(row):
+            try:
+                job = row.get("Job #")
+                rel = row.get("Release #")
+                if pd.isna(job) or pd.isna(rel):
+                    return False
+                if not str(rel).strip():
+                    return False
+                float(job)
+                return True
+            except (ValueError, TypeError):
+                return False
+
+        mask = df.apply(is_valid_job_release, axis=1)
+        df = df[mask].copy()
+
+        df = df.drop_duplicates(subset=["Job #", "Release #"], keep="first")
+        df["Stage"] = df.apply(determine_stage_from_rebuild_snapshot_columns, axis=1)
+        stage_dist = df["Stage"].value_counts().to_dict()
+
+        existing = Releases.query.count()
+        if wipe_existing:
+            if require_confirmation:
+                print(f"This will DELETE all {existing} releases and insert {len(df)} from CSV.")
+                r = input("Type YES to proceed: ").strip()
+                if r != "YES":
+                    return {"success": False, "cancelled": True}
+            Releases.query.delete()
+            db.session.commit()
+
+        total_created = 0
+        errors = []
+
+        for i in range(0, len(df), batch_size):
+            batch = df.iloc[i : i + batch_size]
+            jobs_to_add = []
+            for _, row in batch.iterrows():
+                try:
+                    existing_rec = Releases.query.filter_by(
+                        job=int(row["Job #"]),
+                        release=str(row["Release #"]).strip(),
+                    ).first()
+                    if existing_rec and not wipe_existing:
+                        continue
+
+                    stage_val = safe_truncate_string(row.get("Stage"), 128)
+                    stage_group_val = get_stage_group_from_stage(stage_val) if stage_val else None
+
+                    rec = Releases(
+                        job=int(row["Job #"]),
+                        release=str(row["Release #"]).strip(),
+                        job_name=safe_truncate_string(row.get("Job"), 128),
+                        description=safe_truncate_string(row.get("Description"), 256),
+                        fab_hrs=safe_float(row.get("Fab Hrs")),
+                        install_hrs=safe_float(row.get("Install HRS")),
+                        paint_color=safe_truncate_string(row.get("Paint color"), 64),
+                        pm=safe_truncate_string(row.get("PM"), 16),
+                        by=safe_truncate_string(row.get("BY"), 16),
+                        released=to_date(row.get("Released")),
+                        fab_order=safe_float(row.get("Fab Order")),
+                        stage=stage_val,
+                        stage_group=stage_group_val,
+                        start_install=to_date(row.get("Start install")),
+                        start_install_formula=row.get("start_install_formula"),
+                        start_install_formulaTF=row.get("start_install_formulaTF"),
+                        comp_eta=to_date(row.get("Comp. ETA")),
+                        job_comp=safe_truncate_string(row.get("Job Comp"), 8),
+                        invoiced=safe_truncate_string(row.get("Invoiced"), 8),
+                        notes=safe_truncate_string(row.get("Notes"), 256),
+                        last_updated_at=datetime.utcnow(),
+                        source_of_update="rebuild_snapshot",
+                    )
+                    jobs_to_add.append(rec)
+                except Exception as e:
+                    errors.append(f"{row.get('Job #')}-{row.get('Release #')}: {e}")
+                    continue
+
+            if jobs_to_add:
+                try:
+                    db.session.bulk_save_objects(jobs_to_add)
+                    db.session.commit()
+                    total_created += len(jobs_to_add)
+                except SQLAlchemyError as e:
+                    db.session.rollback()
+                    errors.append(str(e))
+                finally:
+                    db.session.expunge_all()
+                    gc.collect()
+
+        return {
+            "success": True,
+            "created_count": total_created,
+            "skipped_duplicates": len(df) - total_created if not wipe_existing else 0,
+            "stage_distribution": stage_dist,
+            "errors": errors,
+        }
+
+
 def preview_csv_jobs_data(csv_file_path=None, max_rows_to_display=50, export_to_csv=None, add_stage_column=True):
     """
     Read CSV file and filter rows with numeric Job # and Release #.
@@ -1675,9 +1900,30 @@ if __name__ == "__main__":
         result = seed_jobs_from_csv(csv_file_path=csv_path, require_confirmation=not no_confirm)
         if not result.get("success"):
             sys.exit(1)
+    elif len(sys.argv) > 1 and sys.argv[1] == "rebuild_snapshot":
+        print("=" * 80)
+        print("🌱 REBUILD SNAPSHOT → RELEASES SEEDING")
+        print("=" * 80)
+        csv_path = sys.argv[2] if len(sys.argv) > 2 else None
+        args = sys.argv[3:] if len(sys.argv) > 3 else []
+        # Default: wipe. Use --no-wipe for incremental (skip existing)
+        wipe = "--no-wipe" not in args
+        no_confirm = "--no-confirm" in args
+        result = seed_releases_from_rebuild_snapshot(
+            csv_path=csv_path,
+            wipe_existing=wipe,
+            require_confirmation=not no_confirm,
+        )
+        if not result.get("success"):
+            print(f"Error: {result.get('error', result.get('cancelled', 'Unknown'))}")
+            sys.exit(1)
+        print(f"Created: {result.get('created_count', 0)}")
+        if result.get("stage_distribution"):
+            print("Stage distribution:", result["stage_distribution"])
     else:
         print("Usage:")
         print("  Preview CSV: python -m app.seed preview [output.csv]")
         print("  Seed database: python -m app.seed seed [csv_path] [--no-confirm]")
+        print("  Rebuild snapshot: python -m app.seed rebuild_snapshot [csv_path] [--no-wipe] [--no-confirm]")
         print("\nRunning incremental seeding example...")
         run_incremental_seed_example()

@@ -86,6 +86,31 @@ def get_list_name_by_id(list_id):
         return None
 
 
+def get_board_info(board_id=None):
+    """
+    Fetch board details (name, id, url) from Trello API.
+    
+    Args:
+        board_id: Trello board ID (defaults to configured TRELLO_BOARD_ID)
+    
+    Returns:
+        dict with name, id, url, or None if fetch fails
+    """
+    bid = board_id or cfg.TRELLO_BOARD_ID
+    if not bid:
+        return None
+    url = f"https://api.trello.com/1/boards/{bid}"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN, "fields": "name,url"}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return {"id": data.get("id"), "name": data.get("name"), "url": data.get("url")}
+    except Exception as e:
+        print(f"Trello API error fetching board: {e}")
+        return None
+
+
 def get_list_by_name(list_name):
     """
     Fetches the list details from Trello API by list name.
@@ -382,22 +407,36 @@ def update_job_record_with_trello_data(job_record, card_data):
     
     Args:
         job_record: Existing Job object
-        card_data: Dictionary containing Trello card information
+        card_data: Dictionary containing Trello card information.
+                   Expected keys: id, name, desc, idList (or list_id), due (optional)
     
     Returns:
         True if updated successfully, False otherwise
     """
     try:
+        from app.trello.utils import parse_trello_datetime
+
         # Store the ID BEFORE commit (while object is still in session)
         job_id = job_record.id
-        
+
+        # Support both idList (Trello API) and list_id (get_all_trello_cards format)
+        list_id = card_data.get('idList') or card_data.get('list_id')
+
         # Update Trello fields
         job_record.trello_card_id = card_data.get('id')
         job_record.trello_card_name = card_data.get('name')
-        job_record.trello_list_id = card_data.get('idList')
-        job_record.trello_list_name = get_list_name_by_id(card_data.get('idList'))
+        job_record.trello_list_id = list_id
+        job_record.trello_list_name = get_list_name_by_id(list_id)
         job_record.trello_card_description = card_data.get('desc', '')
-        
+
+        # Parse due date for trello_card_date (Date column)
+        due_val = card_data.get('due')
+        if due_val:
+            parsed = parse_trello_datetime(due_val)
+            job_record.trello_card_date = parsed.date() if parsed else None
+        else:
+            job_record.trello_card_date = None
+
         # Update metadata
         job_record.last_updated_at = datetime.utcnow()
         

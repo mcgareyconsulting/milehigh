@@ -165,7 +165,8 @@ def rebuild_trello_data(execute=False):
                         "id": card.get("id"),
                         "name": card.get("name"),
                         "desc": card.get("desc", ""),
-                        "idList": card.get("list_id")  # Convert list_id to idList
+                        "idList": card.get("list_id"),  # Convert list_id to idList
+                        "due": card.get("due"),
                     }
                     
                     # Update job record with Trello card data

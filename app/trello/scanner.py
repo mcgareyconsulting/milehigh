@@ -729,3 +729,282 @@ def scan_and_create_cards_for_all_jobs(dry_run: bool = False, limit: Optional[in
             "dry_run": dry_run
         }
 
+
+def clear_trello_board(dry_run: bool = False) -> Dict:
+    """
+    Delete all cards from the Trello board and clear Trello fields from DB.
+
+    Use before sync_releases_to_trello to avoid duplicates when repopulating
+    the board from the database.
+
+    Args:
+        dry_run: If True, only report what would be done without making changes
+
+    Returns:
+        Dictionary with cleared count, board_name, and any errors
+    """
+    from app.trello.api import get_all_trello_cards, get_board_info
+
+    logger.info(f"Starting clear_trello_board (dry_run={dry_run})")
+
+    try:
+        board = get_board_info()
+        if not board or not board.get("name"):
+            return {
+                "success": False,
+                "error": "Could not fetch board name from Trello API",
+                "dry_run": dry_run,
+            }
+        board_name = board["name"]
+        logger.info(f"Board to clear: {board_name!r} (ID: {board.get('id')})")
+
+        cards = get_all_trello_cards()
+        logger.info(f"Found {len(cards)} cards on board")
+
+        deleted = 0
+        failed = []
+        for card in cards:
+            card_id = card.get("id")
+            if dry_run:
+                deleted += 1
+                continue
+            result = delete_trello_card(card_id)
+            if result.get("success"):
+                deleted += 1
+            else:
+                failed.append({"card_id": card_id, "error": result.get("error", "Unknown")})
+
+        # Clear DB trello fields so releases don't point to deleted cards
+        jobs_with_cards = Releases.query.filter(Releases.trello_card_id.isnot(None)).count()
+        if not dry_run and jobs_with_cards > 0:
+            Releases.query.filter(Releases.trello_card_id.isnot(None)).update(
+                {
+                    Releases.trello_card_id: None,
+                    Releases.trello_card_name: None,
+                    Releases.trello_list_id: None,
+                    Releases.trello_list_name: None,
+                    Releases.trello_card_description: None,
+                    Releases.trello_card_date: None,
+                },
+                synchronize_session=False,
+            )
+            db.session.commit()
+            logger.info(f"Cleared Trello data from {jobs_with_cards} DB records")
+
+        return {
+            "success": len(failed) == 0,
+            "board_name": board_name,
+            "board_id": board.get("id"),
+            "cards_deleted": deleted,
+            "db_cleared": jobs_with_cards if (not dry_run and jobs_with_cards > 0) else 0,
+            "db_would_clear": jobs_with_cards if dry_run else 0,
+            "failed": failed,
+            "dry_run": dry_run,
+        }
+    except Exception as e:
+        logger.error(f"clear_trello_board failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "dry_run": dry_run,
+        }
+
+
+def sync_releases_to_trello(
+    dry_run: bool = False,
+    limit: Optional[int] = None,
+    job_filter: Optional[int] = None,
+    release_filter: Optional[str] = None,
+    create_only: bool = False,
+    update_only: bool = False,
+    clear_board_first: bool = False,
+) -> Dict:
+    """
+    Create and/or update Trello cards relative to releases in the DB.
+
+    Fills in missing Trello data for releases:
+    - Creates Trello cards for releases without trello_card_id
+    - Refreshes Trello data in DB for releases that have cards (fetches from API)
+
+    Args:
+        dry_run: If True, only report what would be done without making changes
+        limit: Maximum number of releases to process (None for all)
+        job_filter: If set, only process releases for this job number
+        release_filter: If set, only process this release (requires job_filter)
+        create_only: If True, only create cards for releases without them; skip updates
+        update_only: If True, only refresh DB from Trello for releases with cards; skip creates
+        clear_board_first: If True, delete all cards from board and clear DB before syncing
+                          (avoids duplicates when repopulating from DB)
+
+    Returns:
+        Dictionary with sync results
+    """
+    from app.trello.api import get_trello_card_by_id, update_job_record_with_trello_data
+
+    logger.info(
+        f"Starting sync_releases_to_trello (dry_run={dry_run}, create_only={create_only}, "
+        f"update_only={update_only}, clear_board_first={clear_board_first})"
+    )
+
+    try:
+        # Clear board first if requested (only when actually executing)
+        if clear_board_first:
+            clear_result = clear_trello_board(dry_run=dry_run)
+            if not clear_result.get("success") and "error" in clear_result:
+                return {
+                    "success": False,
+                    "error": f"clear_board_first failed: {clear_result.get('error')}",
+                    "clear_result": clear_result,
+                }
+            if dry_run:
+                logger.info(
+                    f"Would clear board: {clear_result.get('cards_deleted', 0)} cards, "
+                    f"{clear_result.get('db_would_clear', 0)} DB records"
+                )
+            else:
+                logger.info(
+                    f"Board cleared: deleted={clear_result.get('cards_deleted', 0)} cards, "
+                    f"db_cleared={clear_result.get('db_cleared', 0)} records"
+                )
+
+        query = Releases.query.order_by(Releases.job, Releases.release)
+        if job_filter is not None:
+            query = query.filter(Releases.job == job_filter)
+        if release_filter is not None:
+            query = query.filter(Releases.release == release_filter)
+        if limit:
+            query = query.limit(limit)
+
+        releases = query.all()
+        logger.info(f"Found {len(releases)} releases to process")
+
+        results = {
+            "success": True,
+            "total": len(releases),
+            "created": 0,
+            "updated": 0,
+            "failed": 0,
+            "skipped": 0,
+            "dry_run": dry_run,
+            "created_details": [],
+            "updated_details": [],
+            "failed_details": [],
+        }
+        if clear_board_first:
+            results["clear_result"] = clear_result
+
+        for idx, rec in enumerate(releases, 1):
+            identifier = f"{rec.job}-{rec.release}"
+            try:
+                if rec.trello_card_id is None:
+                    # CREATE: no card yet
+                    if update_only:
+                        results["skipped"] += 1
+                        continue
+                    if dry_run:
+                        results["created"] += 1
+                        results["created_details"].append({
+                            "job": rec.job,
+                            "release": rec.release,
+                            "identifier": identifier,
+                            "action": "would_create",
+                        })
+                        continue
+                    create_result = create_trello_card_for_db_job(rec)
+                    if create_result.get("success"):
+                        results["created"] += 1
+                        results["created_details"].append({
+                            "job": rec.job,
+                            "release": rec.release,
+                            "identifier": identifier,
+                            "card_id": create_result.get("card_id"),
+                            "list_name": create_result.get("list_name"),
+                        })
+                        logger.info(f"[{idx}/{len(releases)}] Created card for {identifier}")
+                    else:
+                        error = create_result.get("error", "Unknown error")
+                        results["failed"] += 1
+                        results["failed_details"].append({
+                            "job": rec.job,
+                            "release": rec.release,
+                            "identifier": identifier,
+                            "error": error,
+                        })
+                        logger.error(f"Failed to create card for {identifier}: {error}")
+                else:
+                    # UPDATE: refresh DB from Trello
+                    if create_only:
+                        results["skipped"] += 1
+                        continue
+                    if dry_run:
+                        results["updated"] += 1
+                        results["updated_details"].append({
+                            "job": rec.job,
+                            "release": rec.release,
+                            "identifier": identifier,
+                            "card_id": rec.trello_card_id,
+                            "action": "would_refresh",
+                        })
+                        continue
+                    card_data = get_trello_card_by_id(rec.trello_card_id)
+                    if not card_data:
+                        results["failed"] += 1
+                        results["failed_details"].append({
+                            "job": rec.job,
+                            "release": rec.release,
+                            "identifier": identifier,
+                            "card_id": rec.trello_card_id,
+                            "error": "Card not found in Trello",
+                        })
+                        logger.warning(f"Card {rec.trello_card_id} not found for {identifier}")
+                        continue
+                    # Normalize: Trello API returns idList; ensure we pass it
+                    if "idList" not in card_data and "list_id" in card_data:
+                        card_data["idList"] = card_data["list_id"]
+                    success = update_job_record_with_trello_data(rec, card_data)
+                    if success:
+                        results["updated"] += 1
+                        results["updated_details"].append({
+                            "job": rec.job,
+                            "release": rec.release,
+                            "identifier": identifier,
+                            "card_id": rec.trello_card_id,
+                        })
+                        if idx % 25 == 0:
+                            logger.info(f"[{idx}/{len(releases)}] Refreshed Trello data for {identifier}")
+                    else:
+                        results["failed"] += 1
+                        results["failed_details"].append({
+                            "job": rec.job,
+                            "release": rec.release,
+                            "identifier": identifier,
+                            "error": "update_job_record_with_trello_data returned False",
+                        })
+            except Exception as err:
+                error_msg = str(err)
+                logger.error(f"Error processing {identifier}: {error_msg}", exc_info=True)
+                results["failed"] += 1
+                results["failed_details"].append({
+                    "job": rec.job,
+                    "release": rec.release,
+                    "identifier": identifier,
+                    "error": error_msg,
+                })
+
+        logger.info(
+            f"sync_releases_to_trello complete: created={results['created']}, "
+            f"updated={results['updated']}, failed={results['failed']}, skipped={results['skipped']}"
+        )
+        return results
+
+    except Exception as e:
+        error_msg = f"sync_releases_to_trello failed: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "success": False,
+            "error": error_msg,
+            "error_type": type(e).__name__,
+            "dry_run": dry_run,
+        }
+
