@@ -1663,7 +1663,7 @@ def release_job_data():
                     payload=excel_data_dict,
                     payload_hash=payload_hash,
                     source='Brain',
-                    user_id=user.id if user else None
+                    internal_user_id=user.id if user else None
                 )
                 db.session.add(event)
                 

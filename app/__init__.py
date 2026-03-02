@@ -419,6 +419,8 @@ def create_app():
                     'payload': event.payload,  # Keep full payload for reference
                     'payload_hash': event.payload_hash,
                     'source': event.source,
+                    'internal_user_id': event.internal_user_id,
+                    'external_user_id': event.external_user_id,
                     'created_at': format_datetime_mountain(event.created_at),
                     'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
                 })

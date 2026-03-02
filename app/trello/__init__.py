@@ -77,6 +77,15 @@ def trello_webhook():
             app.logger.debug(f"Skipping unhandled webhook: {action_type}")
             return "", 200
 
+        # Log Trello webhook receipt with userId when available
+        trello_user_id = event_info.get("trello_user_id")
+        app.logger.info(
+            "Trello webhook received: event=%s, card_id=%s, trello_user_id=%s",
+            event_info.get("event"),
+            event_info.get("card_id"),
+            trello_user_id,
+        )
+
         # If locked, enqueue the event for later processing and return 202
         if sync_lock_manager.is_locked():
             current_op = sync_lock_manager.get_current_operation()

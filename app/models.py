@@ -28,7 +28,10 @@ class User(db.Model):
     last_login = db.Column(db.DateTime, nullable=True)
     
     # Relationships
-    job_events = db.relationship('ReleaseEvents', backref='user', lazy='dynamic')
+    job_events = db.relationship(
+        'ReleaseEvents', backref='user', lazy='dynamic',
+        foreign_keys='ReleaseEvents.internal_user_id'
+    )
     submittal_events = db.relationship(
         'SubmittalEvents', backref='user', lazy='dynamic',
         foreign_keys='SubmittalEvents.internal_user_id'
@@ -388,7 +391,8 @@ class ReleaseEvents(db.Model):
     payload = db.Column(db.JSON, nullable=False)
     payload_hash = db.Column(db.String(64), nullable=False)
     source = db.Column(db.String(50), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    internal_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    external_user_id = db.Column(db.String(255), nullable=True)  # e.g. Trello/Procore user id from webhook
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 

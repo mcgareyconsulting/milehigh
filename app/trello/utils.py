@@ -17,9 +17,11 @@ def parse_webhook_data(data):
         card_name = card_info.get("name")
         event_time = action.get("date")
         
-        # Extract username from memberCreator (prefer fullName, fallback to username)
+        # Extract username and userId from memberCreator (prefer fullName, fallback to username)
         member_creator = action.get("memberCreator", {})
         username = member_creator.get("fullName") or member_creator.get("username") or None
+        # Trello user ID (e.g. "50e853a3a98492ed05002257") for release event attribution
+        trello_user_id = member_creator.get("id") or action.get("idMemberCreator") or None
 
         # Card created
         if action_type == "createCard":
@@ -77,6 +79,7 @@ def parse_webhook_data(data):
                     "time": event_time,
                     "change_types": change_types,
                     "username": username,
+                    "trello_user_id": trello_user_id,
                 }
                 
                 # Add specific flags for easier handling

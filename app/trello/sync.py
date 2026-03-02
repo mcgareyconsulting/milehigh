@@ -110,7 +110,7 @@ def sync_from_trello(event_info):
             # (context manager already logged warning)
             return
         
-        # Log webhook received
+        # Log webhook received (incl. trello_user_id for event attribution)
         safe_log_sync_event(
             sync_op.operation_id,
             "WEBHOOK",
@@ -118,6 +118,7 @@ def sync_from_trello(event_info):
             card_id=card_id,
             event_type=event_info.get("event"),
             change_types=event_info.get("change_types", []),
+            trello_user_id=event_info.get("trello_user_id"),
         )
         
         # Fetch card data
@@ -205,6 +206,7 @@ def sync_from_trello(event_info):
         
         # Track created events to close them after successful update
         created_events = []
+        trello_user_id = event_info.get("trello_user_id")
         
         # Create JobEvents for all changes before updating the Job record
         change_types = event_info.get("change_types", [])
@@ -218,7 +220,8 @@ def sync_from_trello(event_info):
                     release=rec.release,
                     action="update_name",
                     source=trello_source,
-                    payload={"from": old_name, "to": new_name}
+                    payload={"from": old_name, "to": new_name},
+                    external_user_id=trello_user_id,
                 )
                 if event:
                     created_events.append(event)
@@ -240,7 +243,8 @@ def sync_from_trello(event_info):
                     release=rec.release,
                     action="update_description",
                     source=trello_source,
-                    payload={"from": old_description, "to": new_description}
+                    payload={"from": old_description, "to": new_description},
+                    external_user_id=trello_user_id,
                 )
                 if event:
                     created_events.append(event)
@@ -268,7 +272,8 @@ def sync_from_trello(event_info):
                     payload={
                         "from": old_due_date.isoformat() if old_due_date else None,
                         "to": new_due_date.isoformat() if new_due_date else None
-                    }
+                    },
+                    external_user_id=trello_user_id,
                 )
                 if event:
                     created_events.append(event)
@@ -335,7 +340,8 @@ def sync_from_trello(event_info):
                 release=rec.release,
                 action="update_stage",
                 source=trello_source,
-                payload={"from": from_stage, "to": stage}
+                payload={"from": from_stage, "to": stage},
+                external_user_id=trello_user_id,
             )
             if event:
                 created_events.append(event)

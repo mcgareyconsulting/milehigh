@@ -8,7 +8,7 @@ class JobEventService:
     """Service for managing job events"""
     
     @staticmethod
-    def create(job, release, action, source, payload):
+    def create(job, release, action, source, payload, external_user_id=None):
         """
         Create a new job event with deduplication.
         
@@ -18,6 +18,7 @@ class JobEventService:
             action: Action string
             source: Base source string (e.g., 'Brain', 'Trello', 'Excel', 'Procore')
             payload: Event payload dict
+            external_user_id: Optional external user id (e.g. Trello member id, Procore user id)
         
         Returns:
             JobEvents object if created
@@ -27,8 +28,14 @@ class JobEventService:
         import json
         import hashlib
         
-        # Use plain source (no email/username suffix). User attribution via user_id.
-        user = get_current_user() if source == "Brain" else None
+        # Resolve internal_user_id: Brain uses get_current_user(); Trello resolves via users.trello_id
+        internal_user_id = None
+        if source == "Brain":
+            user = get_current_user()
+            internal_user_id = user.id if user else None
+        elif source == "Trello" and external_user_id:
+            from app.trello.helpers import resolve_internal_user_id_from_trello
+            internal_user_id = resolve_internal_user_id_from_trello(external_user_id)
         
         # Generate payload hash for deduplication
         payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
@@ -51,7 +58,9 @@ class JobEventService:
             'job': job,
             'release': release,
             'action': action,
-            'source': source
+            'source': source,
+            'external_user_id': external_user_id,
+            'internal_user_id': internal_user_id,
         })
         
         event = ReleaseEvents(
@@ -61,7 +70,8 @@ class JobEventService:
             payload=payload,
             payload_hash=payload_hash,
             source=source,
-            user_id=user.id if user else None,
+            internal_user_id=internal_user_id,
+            external_user_id=external_user_id,
             created_at=datetime.utcnow()
         )
         

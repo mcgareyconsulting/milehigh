@@ -65,7 +65,7 @@ class JobEventService:
             source=source,
             payload=payload,
             payload_hash=payload_hash,
-            user_id=user.id if user else None,
+            internal_user_id=user.id if user else None,
             created_at=datetime.utcnow()
         )
 
