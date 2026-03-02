@@ -11,7 +11,7 @@ function PMBoard() {
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'timeline'
 
     return (
-        <div className="w-full h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
+        <div className="w-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2 overflow-x-auto overflow-y-hidden" style={{ width: '100%', minWidth: '100%', height: 'calc(100vh - 3.5rem)' }}>
             <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-4 py-3 flex-shrink-0">
@@ -53,7 +53,7 @@ function PMBoard() {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex flex-col">
                         {loading && (
                             <div className="text-center py-12">
                                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
@@ -89,6 +89,9 @@ function PMBoard() {
                             </>
                         )}
                     </div>
+
+                    {/* Footer command area - reserved for future use */}
+                    <div className="flex-shrink-0 h-12 border-t border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-800" />
                 </div>
             </div>
         </div>

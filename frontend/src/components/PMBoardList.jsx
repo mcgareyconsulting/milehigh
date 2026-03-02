@@ -127,20 +127,6 @@ function PMBoardList({ jobs, onUpdate }) {
         return grouped;
     }, [jobs]);
 
-    const formatDate = (dateValue) => {
-        if (!dateValue) return '—';
-        try {
-            const date = new Date(dateValue);
-            if (isNaN(date.getTime())) return '—';
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const year = String(date.getFullYear()).slice(-2);
-            return `${month}/${day}/${year}`;
-        } catch (e) {
-            return '—';
-        }
-    };
-
     const handleDragStart = (e, job) => {
         setDraggedJob(job);
         e.dataTransfer.effectAllowed = 'move';
@@ -203,8 +189,8 @@ function PMBoardList({ jobs, onUpdate }) {
     };
 
     return (
-        <div className="flex-1 overflow-auto p-4 bg-gray-100 h-full">
-            <div className="flex gap-4 h-full">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4 bg-gray-100 flex flex-col">
+            <div className="flex gap-4 flex-1 min-h-0">
                 {stageOptions.map((stageOption) => {
                     const stage = stageOption.value;
                     const stageJobs = jobsByStage[stage] || [];
@@ -214,7 +200,7 @@ function PMBoardList({ jobs, onUpdate }) {
                     return (
                         <div
                             key={stage}
-                            className={`flex-1 min-w-[280px] bg-gray-50 rounded-lg shadow-sm flex flex-col ${
+                            className={`flex-1 min-w-[280px] min-h-0 bg-gray-50 rounded-lg shadow-sm flex flex-col ${
                                 isDragOver ? 'ring-2 ring-blue-400' : ''
                             }`}
                             onDragOver={(e) => handleDragOver(e, stage)}
@@ -260,8 +246,15 @@ function PMBoardList({ jobs, onUpdate }) {
                                                 } ${isUpdating ? 'opacity-50 cursor-wait' : 'hover:shadow-md'}`}
                                                 style={getJobCardStyle(job, stage)}
                                             >
-                                                <div className="font-semibold text-sm mb-1">
-                                                    {job['Job #']}-{job['Release #']}
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                    <span className="font-semibold text-sm shrink-0">
+                                                        {job['Job #']}-{job['Release #']}
+                                                    </span>
+                                                    {job['Fab Order'] !== null && job['Fab Order'] !== undefined && (
+                                                        <span className="text-xs font-medium shrink-0">
+                                                            {job['Fab Order']}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {job['Job'] && (
                                                     <div className="text-xs mb-1 font-medium truncate" title={job['Job']}>
@@ -269,26 +262,8 @@ function PMBoardList({ jobs, onUpdate }) {
                                                     </div>
                                                 )}
                                                 {job['Description'] && (
-                                                    <div className="text-xs text-gray-600 mb-2 line-clamp-2" title={job['Description']}>
+                                                    <div className="text-xs text-gray-600 line-clamp-2" title={job['Description']}>
                                                         {job['Description']}
-                                                    </div>
-                                                )}
-                                                <div className="flex flex-wrap gap-2 text-xs">
-                                                    {job['PM'] && (
-                                                        <span className="font-medium">PM: {job['PM']}</span>
-                                                    )}
-                                                    {job['BY'] && (
-                                                        <span>BY: {job['BY']}</span>
-                                                    )}
-                                                </div>
-                                                {job['Released'] && (
-                                                    <div className="text-xs mt-2 pt-2 border-t border-opacity-30">
-                                                        Released: {formatDate(job['Released'])}
-                                                    </div>
-                                                )}
-                                                {job['Fab Order'] !== null && job['Fab Order'] !== undefined && (
-                                                    <div className="text-xs mt-1">
-                                                        Fab Order: {job['Fab Order']}
                                                     </div>
                                                 )}
                                             </div>

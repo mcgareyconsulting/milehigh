@@ -6,6 +6,7 @@ import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import Events from './pages/Events';
 import JobLog from './pages/JobLog';
+import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
 import DashboardPlaceholder from './pages/DashboardPlaceholder';
 import { checkAuth } from './utils/auth';
@@ -46,6 +47,7 @@ function AppContent() {
             <Route path="drafting-work-load" element={<DraftingWorkLoad />} />
             <Route path="drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
             <Route path="dashboard" element={<DashboardPlaceholder />} />
+            <Route path="pm-board" element={<PMBoard />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </>
         ) : (
