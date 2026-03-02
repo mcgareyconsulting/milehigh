@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
+import { PMBoardCardModal } from './PMBoardCardModal';
 
 function PMBoardList({ jobs, onUpdate }) {
     // Stage options matching JobsTableRow
@@ -97,6 +98,8 @@ function PMBoardList({ jobs, onUpdate }) {
     const [draggedJob, setDraggedJob] = useState(null);
     const [dragOverColumn, setDragOverColumn] = useState(null);
     const [updatingJobs, setUpdatingJobs] = useState(new Set());
+    const [selectedJob, setSelectedJob] = useState(null);
+    const didDragRef = useRef(false);
 
     // Group jobs by stage
     const jobsByStage = useMemo(() => {
@@ -128,9 +131,23 @@ function PMBoardList({ jobs, onUpdate }) {
     }, [jobs]);
 
     const handleDragStart = (e, job) => {
+        didDragRef.current = false;
         setDraggedJob(job);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/html', '');
+    };
+
+    const handleDragEnd = () => {
+        didDragRef.current = true;
+        setDraggedJob(null);
+    };
+
+    const handleCardClick = (job, stage) => {
+        if (didDragRef.current) {
+            didDragRef.current = false;
+            return;
+        }
+        setSelectedJob({ job, stage });
     };
 
     const handleDragOver = (e, stage) => {
@@ -241,7 +258,9 @@ function PMBoardList({ jobs, onUpdate }) {
                                                 key={jobId}
                                                 draggable={!isUpdating}
                                                 onDragStart={(e) => handleDragStart(e, job)}
-                                                className={`p-3 rounded-lg shadow-sm cursor-move transition-all border-2 ${
+                                                onDragEnd={handleDragEnd}
+                                                onClick={() => handleCardClick(job, stage)}
+                                                className={`p-3 rounded-lg shadow-sm cursor-pointer transition-all border-2 ${
                                                     isDragging ? 'opacity-50' : ''
                                                 } ${isUpdating ? 'opacity-50 cursor-wait' : 'hover:shadow-md'}`}
                                                 style={getJobCardStyle(job, stage)}
@@ -275,6 +294,13 @@ function PMBoardList({ jobs, onUpdate }) {
                     );
                 })}
             </div>
+
+            <PMBoardCardModal
+                isOpen={!!selectedJob}
+                onClose={() => setSelectedJob(null)}
+                job={selectedJob?.job}
+                stageColor={selectedJob ? stageColors[selectedJob.stage] || stageColors['Released'] : null}
+            />
         </div>
     );
 }
