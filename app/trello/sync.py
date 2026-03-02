@@ -29,10 +29,9 @@ from app.trello.api import (
     card_has_link_to,
     add_procore_link,
 )
-from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, db
-from datetime import datetime, date, timezone, time
+from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, Outbox, db
+from datetime import datetime, date, timezone, time, timedelta
 from zoneinfo import ZoneInfo
-from app.sync_lock import synchronized_sync, sync_lock_manager
 from app.logging_config import get_logger, SyncContext, log_sync_operation
 from app.services.job_event_service import JobEventService
 import uuid
@@ -77,7 +76,7 @@ def compare_timestamps(event_time, source_time, operation_id: str):
 def as_date(val):
     if pd.isna(val) or val is None:
         return None
-    # Handle pd.Timestamp, datetime, string, etc.
+    # Handle pd.Timestamp, datetime, date, string, etc.
     if isinstance(val, pd.Timestamp):
         return val.date()
     if isinstance(val, datetime):
@@ -89,6 +88,51 @@ def as_date(val):
         return pd.to_datetime(val).date()
     except Exception:
         return None
+
+
+def _is_brain_echo_webhook(rec, event_info):
+    """
+    True if webhook is the echo of our own Brain->Trello API call for this card.
+    Cross-references Outbox by card (job/release) and change content to avoid
+    skipping legitimate user changes (e.g. Brain moves to A, user moves to B).
+    """
+    if rec.source_of_update != "Brain":
+        return False
+    last_updated = rec.last_updated_at.replace(tzinfo=None) if rec.last_updated_at else None
+    if not last_updated or (datetime.utcnow() - last_updated).total_seconds() >= 90:
+        return False
+
+    # Find recently completed Trello outbox for this card (job/release)
+    cutoff = datetime.utcnow() - timedelta(seconds=90)
+    recent_outbox = (
+        db.session.query(Outbox)
+        .join(ReleaseEvents, Outbox.event_id == ReleaseEvents.id)
+        .filter(
+            ReleaseEvents.job == rec.job,
+            ReleaseEvents.release == rec.release,
+            Outbox.destination == "trello",
+            Outbox.status == "completed",
+            Outbox.completed_at >= cutoff,
+        )
+        .order_by(Outbox.completed_at.desc())
+        .first()
+    )
+    if not recent_outbox or not recent_outbox.event:
+        return False
+
+    # Content match: only skip if webhook change matches what we sent
+    our_action = recent_outbox.action
+    our_payload = recent_outbox.event.payload or {}
+
+    if our_action == "move_card":
+        if not event_info.get("has_list_move"):
+            return False
+        our_dest = our_payload.get("to")  # stage/list name
+        webhook_dest = event_info.get("to")  # list name from listAfter
+        return our_dest == webhook_dest
+
+    # update_fab_order, update_notes: don't produce updateCard list_move webhooks
+    return False
 
 
 def sync_from_trello(event_info):
@@ -167,7 +211,21 @@ def sync_from_trello(event_info):
 
         duplicate_card_id = None
 
-        # Check for duplicate updates
+        # Skip echo webhooks from Brain's own Trello API calls (outbox -> update_trello_card).
+        # Cross-reference with Outbox by card (job/release) and change content so we don't
+        # skip legitimate user changes (e.g. Brain moves to A, user moves to B).
+        if _is_brain_echo_webhook(rec, event_info):
+            safe_log_sync_event(
+                sync_op.operation_id,
+                "INFO",
+                "Skipping webhook echo from Brain's Trello API call (matched outbox for card)",
+                job=rec.job,
+                release=rec.release,
+                card_id=card_id,
+            )
+            return
+
+        # Check for duplicate updates (Trello-originated changes)
         if rec.source_of_update == "Trello" and event_time <= rec.last_updated_at:
             safe_log_sync_event(
                 sync_op.operation_id,
