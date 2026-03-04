@@ -29,7 +29,7 @@ from app.trello.api import (
     card_has_link_to,
     add_procore_link,
 )
-from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, Outbox, db
+from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, TrelloOutbox, db
 from datetime import datetime, date, timezone, time, timedelta
 from zoneinfo import ZoneInfo
 from app.logging_config import get_logger, SyncContext, log_sync_operation
@@ -105,16 +105,16 @@ def _is_brain_echo_webhook(rec, event_info):
     # Find recently completed Trello outbox for this card (job/release)
     cutoff = datetime.utcnow() - timedelta(seconds=90)
     recent_outbox = (
-        db.session.query(Outbox)
-        .join(ReleaseEvents, Outbox.event_id == ReleaseEvents.id)
+        db.session.query(TrelloOutbox)
+        .join(ReleaseEvents, TrelloOutbox.event_id == ReleaseEvents.id)
         .filter(
             ReleaseEvents.job == rec.job,
             ReleaseEvents.release == rec.release,
-            Outbox.destination == "trello",
-            Outbox.status == "completed",
-            Outbox.completed_at >= cutoff,
+            TrelloOutbox.destination == "trello",
+            TrelloOutbox.status == "completed",
+            TrelloOutbox.completed_at >= cutoff,
         )
-        .order_by(Outbox.completed_at.desc())
+        .order_by(TrelloOutbox.completed_at.desc())
         .first()
     )
     if not recent_outbox or not recent_outbox.event:

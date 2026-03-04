@@ -15,10 +15,10 @@ class OutboxService:
             action: 'move_card', 'update_card', etc.
             event_id: Related event ID (foreign key to job_events)
         """
-        from app.models import Outbox, db
+        from app.models import TrelloOutbox, db
         from datetime import datetime
-        
-        outbox_item = Outbox(
+
+        outbox_item = TrelloOutbox(
             event_id=event_id,
             destination=destination,
             action=action,
@@ -359,13 +359,13 @@ class OutboxService:
         Returns:
             int: Number of items processed
         """
-        from app.models import Outbox, db
+        from app.models import TrelloOutbox, db
         
         # Query for pending items ready to process
         now = datetime.utcnow()
-        pending_items = Outbox.query.filter(
-            Outbox.status == 'pending',
-            Outbox.next_retry_at <= now
+        pending_items = TrelloOutbox.query.filter(
+            TrelloOutbox.status == 'pending',
+            TrelloOutbox.next_retry_at <= now
         ).limit(limit).all()
         
         if not pending_items:

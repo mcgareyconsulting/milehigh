@@ -5,6 +5,8 @@ import pandas as pd
 import re
 from typing import Optional, Tuple
 
+from sqlalchemy.exc import IntegrityError
+
 from app.models import SubmittalEvents, db
 
 logger = logging.getLogger(__name__)
@@ -221,7 +223,10 @@ def create_submittal_event(
         external_user_id, internal_user_id = resolve_webhook_user_ids(webhook_payload)
     else:
         external_user_id = None
-    payload_hash = create_submittal_payload_hash(action, str(submittal_id), payload)
+    # Brain-originated payload gets a unique marker so we always create the event even if
+    # the webhook already created one with the same status/title/etc. (avoids skip-as-duplicate).
+    payload_for_hash = {**payload, "origin": "Brain"} if source == "Brain" else payload
+    payload_hash = create_submittal_payload_hash(action, str(submittal_id), payload_for_hash)
     if SubmittalEvents.query.filter_by(payload_hash=payload_hash).first():
         logger.debug("SubmittalEvent already exists for submittal %s %s, skipping", submittal_id, action)
         return False
@@ -235,7 +240,17 @@ def create_submittal_event(
         external_user_id=external_user_id,
     )
     db.session.add(event)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError as e:
+        db.session.rollback()
+        if "payload_hash" in str(e) or "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            logger.debug(
+                "SubmittalEvent duplicate (payload_hash already exists) for submittal %s %s, skipping",
+                submittal_id, action,
+            )
+            return False
+        raise
     logger.info(
         "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s)",
         submittal_id, action, external_user_id, internal_user_id,

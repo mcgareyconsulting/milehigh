@@ -399,6 +399,7 @@ class ReleaseEvents(db.Model):
 class SubmittalEvents(db.Model):
     '''Table to track events for submittals.'''
     __tablename__ = 'submittal_events'
+    __table_args__ = (db.UniqueConstraint('payload_hash', name='uq_submittal_events_payload_hash'),)
     id = db.Column(db.Integer, primary_key=True)
     submittal_id = db.Column(db.String(255), nullable=False)
     action = db.Column(db.String(50), nullable=False)
@@ -410,12 +411,12 @@ class SubmittalEvents(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
-class Outbox(db.Model):
-    """Outbox table for tracking external API calls with retry capabilities."""
-    __tablename__ = "outbox"
+class TrelloOutbox(db.Model):
+    """Outbox table for Trello API calls (move card, update card, etc.) with retry capabilities."""
+    __tablename__ = "trello_outbox"
     id = db.Column(db.Integer, primary_key=True)
     event_id = db.Column(db.Integer, db.ForeignKey('release_events.id'), nullable=False, unique=True)
-    destination = db.Column(db.String(50), nullable=False)  # 'trello' or 'procore'
+    destination = db.Column(db.String(50), nullable=False)  # 'trello'
     action = db.Column(db.String(50), nullable=False)  # 'move_card', 'update_card', etc.
     
     # Retry tracking
@@ -430,7 +431,29 @@ class Outbox(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)
     
     # Relationship
-    event = db.relationship('ReleaseEvents', backref='outbox_items')
+    event = db.relationship('ReleaseEvents', backref='trello_outbox_items')
+
+
+class ProcoreOutbox(db.Model):
+    """Outbox table for Procore API calls (e.g. submittal status update) with retry capabilities."""
+    __tablename__ = "procore_outbox"
+    id = db.Column(db.Integer, primary_key=True)
+    submittal_id = db.Column(db.String(255), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=False, index=True)
+    action = db.Column(db.String(50), nullable=False)  # e.g. 'update_status'
+    request_payload = db.Column(db.JSON, nullable=True)  # e.g. {"status_id": 203238}
+    # Metadata we send to Procore / use to detect our own webhooks (per Procore: filter by source_application_id)
+    source_application_id = db.Column(db.String(255), nullable=True, index=True)
+    
+    # Retry tracking (for async processing; DWL status update is sync so often completed immediately)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending, processing, completed, failed
+    retry_count = db.Column(db.Integer, default=0)
+    max_retries = db.Column(db.Integer, default=5)
+    next_retry_at = db.Column(db.DateTime, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
 
 class Jobs(db.Model):
     """

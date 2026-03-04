@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from app.logging_config import get_logger
 from app.brain.job_log.outbox import OutboxItem
-from app.models import Outbox, Releases, db
+from app.models import TrelloOutbox, Releases, db
 from app.services.job_event_service import JobEventService
 
 logger = get_logger(__name__)
@@ -14,13 +14,12 @@ class OutboxService:
 
     @staticmethod
     def add(destination: str, action: str, event_id: int, payload: Optional[dict] = None, max_retries: int = 5) -> OutboxItem:
-        """Add a new item to the outbox"""
+        """Add a new item to the Trello outbox (payload is derived from event when processing)."""
         now = datetime.utcnow()
-        outbox_obj = Outbox(
+        outbox_obj = TrelloOutbox(
             event_id=event_id,
             destination=destination,
             action=action,
-            payload=payload or {},
             status="pending",
             retry_count=0,
             max_retries=max_retries,
@@ -30,15 +29,15 @@ class OutboxService:
         db.session.add(outbox_obj)
         db.session.flush()
 
-        logger.debug(f"Outbox item created: {outbox_obj.id} for event {event_id}")
+        logger.debug(f"TrelloOutbox item created: {outbox_obj.id} for event {event_id}")
 
-        # Return as dataclass
+        # Return as dataclass (payload from arg for compatibility; event.payload used when processing)
         return OutboxItem(
             id=outbox_obj.id,
             event_id=outbox_obj.event_id,
             destination=outbox_obj.destination,
             action=outbox_obj.action,
-            payload=outbox_obj.payload,
+            payload=payload or {},
             status=outbox_obj.status,
             retry_count=outbox_obj.retry_count,
             max_retries=outbox_obj.max_retries,
@@ -49,7 +48,7 @@ class OutboxService:
         )
 
     @staticmethod
-    def process_item(outbox_item: Outbox) -> bool:
+    def process_item(outbox_item: TrelloOutbox) -> bool:
         """
         Process an outbox item. Returns True if processed successfully, False otherwise.
         """
@@ -113,7 +112,7 @@ class OutboxService:
             return OutboxService._handle_failure(outbox_item, e)
 
     @staticmethod
-    def _handle_failure(outbox_item: Outbox, error: Exception | str) -> bool:
+    def _handle_failure(outbox_item: TrelloOutbox, error: Exception | str) -> bool:
         """Internal helper to handle failure and retries"""
         outbox_item.retry_count += 1
         outbox_item.error_message = str(error)
@@ -135,9 +134,9 @@ class OutboxService:
     def process_pending_items(limit: int = 10) -> int:
         """Process pending outbox items ready for retry"""
         now = datetime.utcnow()
-        pending_items = Outbox.query.filter(
-            Outbox.status == "pending",
-            Outbox.next_retry_at <= now
+        pending_items = TrelloOutbox.query.filter(
+            TrelloOutbox.status == "pending",
+            TrelloOutbox.next_retry_at <= now
         ).limit(limit).all()
 
         count = 0

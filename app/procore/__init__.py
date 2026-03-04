@@ -8,7 +8,6 @@ from typing import Optional
 
 import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
-from sqlalchemy.exc import IntegrityError
 from app.models import db, Submittals, SubmittalEvents
 
 from app.procore.helpers import create_submittal_payload_hash as _create_submittal_payload_hash
@@ -35,7 +34,7 @@ DEBOUNCE_SECONDS = 8  # 8 seconds
 
 
 def _recent_submittal_event_for_debounce(resource_id: int, action: str):
-    """Return a recent SubmittalEvent for this submittal/action if within DEBOUNCE_SECONDS, else None."""
+    """Return a recent SubmittalEvent from Procore for this submittal/action if within DEBOUNCE_SECONDS, else None."""
     now = datetime.utcnow()
     return SubmittalEvents.query.filter(
         SubmittalEvents.submittal_id == str(resource_id),

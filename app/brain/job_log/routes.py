@@ -1882,29 +1882,46 @@ def sync_operation_logs(operation_id):
 @login_required
 def get_event_filters():
     """
-    Get all distinct event dates and sources from the database.
+    Get all distinct event dates and sources from ReleaseEvents and SubmittalEvents.
     """
-    from app.models import ReleaseEvents, db
+    from app.models import ReleaseEvents, SubmittalEvents, db
     from sqlalchemy import func
     try:
-        # build dates list
-        date_rows = (
+        # Dates from job (release) events
+        job_date_rows = (
             db.session.query(func.date(ReleaseEvents.created_at))
             .distinct()
-            .order_by(func.date(ReleaseEvents.created_at).desc())
+            .filter(ReleaseEvents.created_at.isnot(None))
             .all()
         )
-        dates = [str(r[0]) for r in date_rows if r[0] is not None]
+        job_dates = {str(r[0]) for r in job_date_rows if r[0] is not None}
+        # Dates from submittal events (DWL/Procore, Brain-originated, etc.)
+        submittal_date_rows = (
+            db.session.query(func.date(SubmittalEvents.created_at))
+            .distinct()
+            .filter(SubmittalEvents.created_at.isnot(None))
+            .all()
+        )
+        submittal_dates = {str(r[0]) for r in submittal_date_rows if r[0] is not None}
+        dates = sorted(job_dates | submittal_dates, reverse=True)
 
-        # build sources list
-        source_rows = (
+        # Sources from job events (Trello, Excel, System, etc.)
+        job_source_rows = (
             db.session.query(ReleaseEvents.source)
             .distinct()
             .filter(ReleaseEvents.source.isnot(None))
-            .order_by(ReleaseEvents.source)
             .all()
         )
-        sources = [r[0] for r in source_rows]
+        sources_set = {r[0] for r in job_source_rows}
+        # Sources from submittal events (Brain, Procore) so Brain-originated DWL updates show in filters
+        submittal_source_rows = (
+            db.session.query(SubmittalEvents.source)
+            .distinct()
+            .filter(SubmittalEvents.source.isnot(None))
+            .all()
+        )
+        sources_set.update(r[0] for r in submittal_source_rows)
+        sources = sorted(sources_set)
 
         return jsonify({'dates': dates, 'sources': sources, 'total': len(dates)}), 200
     except Exception as e:

@@ -820,7 +820,6 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
                 "Likely bounce-back from Brain/originated update. ball=%r, status=%r",
                 submittal_id, ball_in_court, status,
             )
-        
         return ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status
             
     except Exception as e:

@@ -373,28 +373,40 @@ def update_submittal_procore_status():
             return jsonify({"error": "Invalid procore_project_id"}), 400
 
         old_status = submittal.status
+        new_status = SUBMITTAL_STATUS_ID_TO_NAME[status_id]
         procore_client = get_procore_client()
         procore_client.update_submittal_status(project_id, int(submittal_id), status_id)
 
-        submittal.status = SUBMITTAL_STATUS_ID_TO_NAME[status_id]
-        db.session.commit()
-
+        # Create Brain event *before* committing submittal so we always record it;
+        # otherwise a fast webhook can create the same payload and our create would be skipped as duplicate.
         user = get_current_user()
         try:
-            create_submittal_event(
+            created = create_submittal_event(
                 submittal_id, "updated",
-                {"status": {"old": old_status, "new": submittal.status}},
+                {"status": {"old": old_status, "new": new_status}},
                 webhook_payload=None, source="Brain",
                 internal_user_id=user.id if user else None,
             )
+            if not created:
+                logger.debug(
+                    "SubmittalEvent for Procore status update skipped (likely duplicate payload_hash) submittal_id=%s",
+                    submittal_id,
+                )
         except Exception as event_err:
-            logger.warning("Failed to create SubmittalEvent for Procore status update: %s", event_err)
+            logger.error(
+                "Failed to create SubmittalEvent for Procore status update: %s",
+                event_err,
+                exc_info=True,
+            )
+
+        submittal.status = new_status
+        db.session.commit()
 
         return jsonify({
             "success": True,
             "submittal_id": submittal_id,
             "status_id": status_id,
-            "status": submittal.status,
+            "status": new_status,
         }), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
