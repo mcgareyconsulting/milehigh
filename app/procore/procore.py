@@ -610,12 +610,18 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, i
             logger.warning(f"Failed to parse submittal data for submittal {submittal_id}")
             return False, False, False, False, None, None, None
         
-        record, ball_in_court, approvers, status, title, submittal_manager = result
-        
+        _, ball_in_court, approvers, status, title, submittal_manager = result
+
+        # Re-fetch with a row-level lock so concurrent webhook deliveries serialize here
+        # rather than both detecting the same mismatch and writing duplicate events.
+        record = Submittals.query.filter_by(
+            submittal_id=str(submittal_id)
+        ).with_for_update().first()
+
         if not record:
             logger.warning(f"No DB record found for submittal {submittal_id}")
             return False, False, False, False, None, ball_in_court, status
-        
+
         ball_updated = False
         status_updated = False
         title_updated = False
