@@ -384,6 +384,7 @@ def query_job_releases():
 class ReleaseEvents(db.Model):
     '''Table to track events for releases.'''
     __tablename__ = 'release_events'
+    __table_args__ = (db.UniqueConstraint('payload_hash', name='uq_release_events_payload_hash'),)
     id = db.Column(db.Integer, primary_key=True)
     job = db.Column(db.Integer, nullable=False)
     release = db.Column(db.String(50))
@@ -393,6 +394,7 @@ class ReleaseEvents(db.Model):
     source = db.Column(db.String(50), nullable=False)
     internal_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     external_user_id = db.Column(db.String(255), nullable=True)  # e.g. Trello/Procore user id from webhook
+    is_system_echo = db.Column(db.Boolean, nullable=False, default=False)  # True = echo of our own API call; hidden in UI by default
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
@@ -408,6 +410,7 @@ class SubmittalEvents(db.Model):
     source = db.Column(db.String(50), nullable=False)  # Brain | Procore
     internal_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     external_user_id = db.Column(db.String(255), nullable=True)  # e.g. Procore user id from webhook
+    is_system_echo = db.Column(db.Boolean, nullable=False, default=False)  # True = echo of our own API call; hidden in UI by default
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 

@@ -8,7 +8,7 @@ class JobEventService:
     """Service for managing job events"""
     
     @staticmethod
-    def create(job, release, action, source, payload, external_user_id=None):
+    def create(job, release, action, source, payload, external_user_id=None, is_system_echo=False):
         """
         Create a new job event with deduplication.
         
@@ -72,6 +72,7 @@ class JobEventService:
             source=source,
             internal_user_id=internal_user_id,
             external_user_id=external_user_id,
+            is_system_echo=is_system_echo,
             created_at=datetime.utcnow()
         )
         

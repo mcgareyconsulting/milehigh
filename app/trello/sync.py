@@ -211,18 +211,38 @@ def sync_from_trello(event_info):
 
         duplicate_card_id = None
 
-        # Skip echo webhooks from Brain's own Trello API calls (outbox -> update_trello_card).
+        # Detect echo webhooks from Brain's own Trello API calls (outbox -> update_trello_card).
         # Cross-reference with Outbox by card (job/release) and change content so we don't
         # skip legitimate user changes (e.g. Brain moves to A, user moves to B).
+        # We record the echo event (is_system_echo=True) rather than dropping it so it remains
+        # available for debugging, but it will be hidden in the Events UI by default.
         if _is_brain_echo_webhook(rec, event_info):
             safe_log_sync_event(
                 sync_op.operation_id,
                 "INFO",
-                "Skipping webhook echo from Brain's Trello API call (matched outbox for card)",
+                "Webhook echo from Brain's Trello API call — recording as system echo (hidden in UI)",
                 job=rec.job,
                 release=rec.release,
                 card_id=card_id,
             )
+            trello_user_id = event_info.get("trello_user_id")
+            action = event_info.get("event", "echo_webhook")
+            echo_payload = {k: event_info[k] for k in ("to", "from", "has_list_move") if k in event_info}
+            try:
+                echo_event = JobEventService.create(
+                    job=rec.job,
+                    release=rec.release,
+                    action=action,
+                    source="Trello",
+                    payload=echo_payload,
+                    external_user_id=trello_user_id,
+                    is_system_echo=True,
+                )
+                if echo_event:
+                    db.session.commit()
+            except Exception as echo_err:
+                logger.warning("Failed to record Trello echo event: %s", echo_err, exc_info=True)
+                db.session.rollback()
             return
 
         # Check for duplicate updates (Trello-originated changes)

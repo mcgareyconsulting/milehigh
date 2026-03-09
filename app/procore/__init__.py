@@ -18,7 +18,7 @@ from app.procore.procore import (
     comprehensive_health_scan,
 )
 
-from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids
+from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids, is_procore_echo_webhook, create_submittal_event as _create_submittal_event_helper
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -34,12 +34,18 @@ DEBOUNCE_SECONDS = 8  # 8 seconds
 
 
 def _recent_submittal_event_for_debounce(resource_id: int, action: str):
-    """Return a recent SubmittalEvent from Procore for this submittal/action if within DEBOUNCE_SECONDS, else None."""
+    """
+    Return a recent genuine Procore SubmittalEvent for this submittal/action if within DEBOUNCE_SECONDS, else None.
+    Only matches source='Procore' non-echo events so that:
+    - Brain-originated events don't suppress a real external Procore change arriving within 8s
+    - Echo events (is_system_echo=True) don't re-trigger debounce on legitimate re-delivery
+    """
     now = datetime.utcnow()
     return SubmittalEvents.query.filter(
         SubmittalEvents.submittal_id == str(resource_id),
         SubmittalEvents.action == action,
         SubmittalEvents.source == "Procore",
+        SubmittalEvents.is_system_echo == False,  # noqa: E712
         SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
     ).order_by(SubmittalEvents.created_at.desc()).first()
 
@@ -113,6 +119,17 @@ def procore_webhook():
             )
             return jsonify({"status": "debounced"}), 200
 
+        # Echo detection: check if this webhook is the bounce-back from our own Procore API call.
+        # We still process and record the event, but mark it is_system_echo=True so it stays
+        # hidden in the Events UI by default while remaining available for debugging.
+        is_echo = is_procore_echo_webhook(str(resource_id))
+        if is_echo:
+            current_app.logger.info(
+                "Procore webhook detected as system echo (ProcoreOutbox match); "
+                "id=%s, project=%s, event=%s — recording with is_system_echo=True",
+                resource_id, project_id, event_type,
+            )
+
         # Process submittal create or update
         try:
             if event_type == "create":
@@ -120,7 +137,7 @@ def procore_webhook():
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload)
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=is_echo)
                     
                     if created and record:
                         with sync_operation_context(
@@ -175,7 +192,7 @@ def procore_webhook():
                         f"Update event received for submittal {resource_id} but record doesn't exist. "
                         f"Attempting to create it first (fallback for race conditions)..."
                     )
-                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload)
+                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=is_echo)
                     if created and new_record:
                         current_app.logger.info(
                             f"Successfully created missing submittal {resource_id} from update event fallback"
@@ -198,9 +215,10 @@ def procore_webhook():
                 old_manager = old_record.submittal_manager if old_record else None
                 
                 ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status = check_and_update_submittal(
-                    project_id, 
+                    project_id,
                     resource_id,
-                    webhook_payload=payload
+                    webhook_payload=payload,
+                    is_system_echo=is_echo,
                 )
                 
                 # Log ball_in_court changes
@@ -283,12 +301,22 @@ def procore_webhook():
                                 project_name=record.project_name if record else None
                             )
 
-                # Log when webhook resulted in no updates (bounce-back handling)
+                # Log when webhook resulted in no updates (DB already in sync)
                 if not (ball_updated or status_updated or title_updated or manager_updated):
                     current_app.logger.info(
                         "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync, bounce-back handled)",
                         resource_id, project_id,
                     )
+                    # If this was an echo and check_and_update_submittal found nothing to change
+                    # (Brain already committed before the webhook arrived), we still want a record.
+                    if is_echo:
+                        _create_submittal_event_helper(
+                            str(resource_id), "updated",
+                            {"echo": True, "note": "DB already in sync when echo arrived"},
+                            webhook_payload=payload,
+                            source='Procore',
+                            is_system_echo=True,
+                        )
             else:
                 current_app.logger.warning(
                     f"Unhandled event type '{event_type}' for submittal {resource_id}, ignoring. "

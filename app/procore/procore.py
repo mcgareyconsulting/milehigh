@@ -393,7 +393,7 @@ def get_project_info(project_id):
         return None
 
 
-def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None):
+def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None, is_system_echo=False):
     """
     Create a new Submittals record in the database from a webhook create event.
     
@@ -568,7 +568,8 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             }
             _create_submittal_event(
                 str(submittal_id), "created", event_payload,
-                webhook_payload=webhook_payload, source='Procore'
+                webhook_payload=webhook_payload, source='Procore',
+                is_system_echo=is_system_echo,
             )
         except Exception as event_error:
             logger.warning("Failed to create SubmittalEvent for submittal %s creation: %s", submittal_id, event_error, exc_info=True)
@@ -606,7 +607,7 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
         return False, None, error_msg
 
 
-def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
+def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, is_system_echo=False):
     """
     Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
     
@@ -797,7 +798,8 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
                     try:
                         _create_submittal_event(
                             str(submittal_id), action, payload,
-                            webhook_payload=webhook_payload, source='Procore'
+                            webhook_payload=webhook_payload, source='Procore',
+                            is_system_echo=is_system_echo,
                         )
                     except Exception as event_error:
                         logger.warning("Failed to create SubmittalEvent for submittal %s update: %s", submittal_id, event_error, exc_info=True)

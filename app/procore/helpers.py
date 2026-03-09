@@ -194,6 +194,26 @@ def create_submittal_payload_hash(action: str, submittal_id: str, payload: dict)
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
 
+def is_procore_echo_webhook(submittal_id: str, window_seconds: int = 120) -> bool:
+    """
+    Return True if a recent ProcoreOutbox record exists for this submittal,
+    meaning the webhook is likely an echo of our own API call.
+
+    Args:
+        submittal_id: Procore submittal ID (string)
+        window_seconds: How far back to look (default 120s)
+    """
+    from app.models import ProcoreOutbox
+    from datetime import datetime, timedelta
+    cutoff = datetime.utcnow() - timedelta(seconds=window_seconds)
+    match = ProcoreOutbox.query.filter(
+        ProcoreOutbox.submittal_id == str(submittal_id),
+        ProcoreOutbox.status.in_(['completed', 'processing']),
+        ProcoreOutbox.created_at >= cutoff,
+    ).first()
+    return match is not None
+
+
 def create_submittal_event(
     submittal_id,
     action: str,
@@ -201,6 +221,7 @@ def create_submittal_event(
     webhook_payload: Optional[dict] = None,
     source: str = 'Procore',
     internal_user_id: Optional[int] = None,
+    is_system_echo: bool = False,
 ) -> bool:
     """
     Create a SubmittalEvents record with user attribution. Idempotent (skips if payload_hash exists).
@@ -238,6 +259,7 @@ def create_submittal_event(
         source=source,
         internal_user_id=internal_user_id,
         external_user_id=external_user_id,
+        is_system_echo=is_system_echo,
     )
     db.session.add(event)
     try:
@@ -252,7 +274,7 @@ def create_submittal_event(
             return False
         raise
     logger.info(
-        "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s)",
-        submittal_id, action, external_user_id, internal_user_id,
+        "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s, is_system_echo=%s)",
+        submittal_id, action, external_user_id, internal_user_id, is_system_echo,
     )
     return True
