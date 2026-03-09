@@ -93,17 +93,18 @@ def procore_webhook():
             )
             return jsonify({"status": "deduplicated"}), 200
 
-        # Source attribution: if the webhook was triggered by the connector service account,
-        # it's a bounce-back from our own Procore API call. Tag it as 'Connector' so it's
-        # visible in history but filterable. Real user changes come with a different user_id.
+        # Connector detection: if the webhook was triggered by the connector service account,
+        # it's a bounce-back from our own Procore API call. We still process it to catch
+        # Procore side-effect changes (e.g. auto-ball_in_court on status→Closed).
+        # source stays 'Procore' — external_user_id='14554506' on the event identifies it
+        # as connector-triggered for UI filtering.
         is_connector = (
             external_user_id is not None
             and str(external_user_id) == str(cfg.PROCORE_CONNECTOR_USER_ID)
         )
-        event_source = 'Connector' if is_connector else 'Procore'
         if is_connector:
             current_app.logger.info(
-                "Procore webhook from connector account (user %s); id=%s, project=%s — will process for side-effect diffs",
+                "Procore webhook from connector account (user %s); id=%s, project=%s — processing for side-effect diffs",
                 external_user_id, resource_id, project_id,
             )
 
@@ -114,7 +115,7 @@ def procore_webhook():
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source=event_source)
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
                     
                     if created and record:
                         with sync_operation_context(
@@ -169,7 +170,7 @@ def procore_webhook():
                         f"Update event received for submittal {resource_id} but record doesn't exist. "
                         f"Attempting to create it first (fallback for race conditions)..."
                     )
-                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source=event_source)
+                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
                     if created and new_record:
                         current_app.logger.info(
                             f"Successfully created missing submittal {resource_id} from update event fallback"
@@ -195,7 +196,7 @@ def procore_webhook():
                     project_id,
                     resource_id,
                     webhook_payload=payload,
-                    source=event_source,
+                    source='Procore',
                 )
                 
                 # Log ball_in_court changes
@@ -281,8 +282,9 @@ def procore_webhook():
                 # Log when webhook resulted in no updates (DB already in sync)
                 if not (ball_updated or status_updated or title_updated or manager_updated):
                     current_app.logger.info(
-                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync, source=%s)",
-                        resource_id, project_id, event_source,
+                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync%s)",
+                        resource_id, project_id,
+                        ", connector" if is_connector else "",
                     )
             else:
                 current_app.logger.warning(
