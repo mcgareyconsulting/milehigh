@@ -14,7 +14,7 @@ from app.procore.procore import (
     comprehensive_health_scan,
 )
 
-from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids, is_procore_echo_webhook, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
+from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -93,15 +93,17 @@ def procore_webhook():
             )
             return jsonify({"status": "deduplicated"}), 200
 
-        # Echo detection: check if this webhook is a bounce-back from our own Procore API call.
-        # Returns the outbox action (e.g. 'update_status') or None. Field-aware echo checking
-        # happens inside check_and_update_submittal after we know what actually changed.
-        echo_outbox_action = is_procore_echo_webhook(str(resource_id))
-        if echo_outbox_action:
+        # Echo detection: if the webhook was triggered by the connector service account,
+        # it's a bounce-back from our own Procore API call. Log it, mark is_system_echo=True,
+        # hide from UI. Real user changes come with a different external_user_id.
+        is_echo = (
+            external_user_id is not None
+            and str(external_user_id) == str(cfg.PROCORE_CONNECTOR_USER_ID)
+        )
+        if is_echo:
             current_app.logger.info(
-                "Procore webhook may be system echo (ProcoreOutbox action=%s); "
-                "id=%s, project=%s — will verify against actual field changes",
-                echo_outbox_action, resource_id, project_id,
+                "Procore webhook is system echo (connector user %s); id=%s, project=%s",
+                external_user_id, resource_id, project_id,
             )
 
         # Process submittal create or update
@@ -111,7 +113,7 @@ def procore_webhook():
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=bool(echo_outbox_action))
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=is_echo)
                     
                     if created and record:
                         with sync_operation_context(
@@ -192,7 +194,7 @@ def procore_webhook():
                     project_id,
                     resource_id,
                     webhook_payload=payload,
-                    echo_outbox_action=echo_outbox_action,
+                    is_system_echo=is_echo,
                 )
                 
                 # Log ball_in_court changes

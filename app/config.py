@@ -47,6 +47,9 @@ class Config:
     PROCORE_DEV_WEBHOOK_URL = os.environ.get("PROCORE_DEV_WEBHOOK_URL")
     PROCORE_PROD_WEBHOOK_URL = os.environ.get("PROCORE_PROD_WEBHOOK_URL")
     PROCORE_SANDBOX_WEBHOOK_URL = os.environ.get("PROCORE_SANDBOX_WEBHOOK_URL")
+    # Procore service account used by this app to make API calls.
+    # Webhooks triggered by this user ID are Brain-originated echoes.
+    PROCORE_CONNECTOR_USER_ID = os.environ.get("PROCORE_CONNECTOR_USER_ID", "14554506")
     
     # CORS configuration
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
