@@ -71,16 +71,6 @@ def get_companies_list():
     company_id = companies[0]["id"]
     return company_id
 
-# count num projects by company id
-def count_projects_by_company_id(company_id):
-    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
-    headers = {
-        "Authorization": f"Bearer {get_access_token()}",
-        "Procore-Company-Id": str(company_id),
-    }
-    projects = _request_json(url, headers=headers) or []
-    return len(projects)
-
 
 # Get Projects by Company ID
 def get_projects_by_company_id(company_id, project_number):
@@ -1278,94 +1268,6 @@ def check_webhook_health(project_ids=None):
     }
 
 
-def check_orphaned_submittals_webhooks():
-    """
-    Check webhook health for projects that have submittals in DB but not in API response.
-    This helps identify if missing webhooks are causing submittals to not appear in API.
-    
-    Returns:
-        dict combining cross-reference and webhook health check results
-    """
-    logger.info("Starting orphaned submittals webhook check")
-    
-    # First, cross-reference DB vs API
-    cross_ref = cross_reference_db_vs_api()
-    
-    # Get unique project IDs from DB-only submittals
-    orphaned_project_ids = list(cross_ref['db_only_by_project'].keys())
-    
-    if not orphaned_project_ids:
-        logger.info("No orphaned submittals found - all DB submittals are in API response")
-        return {
-            'cross_reference': cross_ref,
-            'webhook_check': None,
-            'summary': 'No orphaned submittals to check'
-        }
-    
-    logger.info(f"Checking webhooks for {len(orphaned_project_ids)} projects with orphaned submittals")
-    
-    # Check webhooks for these projects
-    webhook_check = check_webhook_health(orphaned_project_ids)
-    
-    # Combine results
-    result = {
-        'cross_reference': cross_ref,
-        'webhook_check': webhook_check,
-        'summary': {
-            'orphaned_submittals_count': cross_ref['missing_in_api'],
-            'orphaned_projects_count': len(orphaned_project_ids),
-            'orphaned_projects_without_webhooks': len([
-                pid for pid in orphaned_project_ids 
-                if pid in webhook_check['projects_without_webhooks']
-            ]),
-            'orphaned_projects_with_broken_webhooks': len([
-                pid for pid in orphaned_project_ids 
-                if pid in webhook_check['broken_webhooks']
-            ])
-        }
-    }
-    
-    logger.info(f"Orphaned submittals check complete: {result['summary']}")
-    return result
-
-
-def check_all_relevant_projects_webhooks():
-    """
-    Check webhook health for all projects that have submittals in the API response.
-    This ensures all 37 relevant projects have proper webhooks configured.
-    
-    Returns:
-        dict with webhook health check results for all relevant projects
-    """
-    logger.info("Starting webhook health check for all relevant projects")
-    
-    # Get submittals from API to identify relevant projects
-    api_submittals = get_drafting_workload()
-    
-    # Get unique project IDs from API response
-    relevant_project_ids = list(set(s['project_id'] for s in api_submittals))
-    logger.info(f"Found {len(relevant_project_ids)} relevant projects with submittals in API")
-    
-    # Check webhooks for all relevant projects
-    webhook_check = check_webhook_health(relevant_project_ids)
-    
-    # Add summary
-    webhook_check['summary'] = {
-        'total_relevant_projects': len(relevant_project_ids),
-        'projects_with_webhooks': len(webhook_check['projects_with_webhooks']),
-        'projects_without_webhooks': len(webhook_check['projects_without_webhooks']),
-        'projects_with_broken_webhooks': len(webhook_check['broken_webhooks']),
-        'coverage_percentage': round(
-            (len(webhook_check['projects_with_webhooks']) / len(relevant_project_ids) * 100) 
-            if relevant_project_ids else 0, 
-            2
-        )
-    }
-    
-    logger.info(f"Relevant projects webhook check complete: {webhook_check['summary']}")
-    return webhook_check
-
-
 def comprehensive_health_scan(skip_user_prompt=False):
     """
     Comprehensive health scan for orphaned submittals:
@@ -1653,15 +1555,6 @@ if __name__ == "__main__":
     # app context
     with app.app_context():
 
-        # # Check for orphaned submittals and their webhook status
-        # result = check_orphaned_submittals_webhooks()
-        # print(f"Found {result['summary']['orphaned_submittals_count']} orphaned submittals")
-        # print(f"In {result['summary']['orphaned_projects_count']} projects")
-        # print(f"{result['summary']['orphaned_projects_without_webhooks']} projects missing webhooks")
-
-        # # Or check all relevant projects
-        # webhook_status = check_all_relevant_projects_webhooks()
-        # print(f"Webhook coverage: {webhook_status['summary']['coverage_percentage']}%")
         # Comprehensive health scan
         result = comprehensive_health_scan()
         print(f"Total orphaned submittals: {result['summary']['total_orphaned']}")
