@@ -591,19 +591,28 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
         return False, None, error_msg
 
 
-def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, is_system_echo=False):
+def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, echo_outbox_action=None):
     """
     Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
-    
+
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID
         webhook_payload: Raw webhook payload dict (for extracting user who triggered the event)
-        
+        echo_outbox_action: ProcoreOutbox action if this webhook may be a Brain echo (e.g. 'update_status'),
+                            or None if not an echo. Used for field-aware echo classification:
+                            only fields the Brain directly changed are marked is_system_echo=True.
+                            Procore side effects (e.g. ball_in_court auto-changes on status→Closed)
+                            are classified as genuine external changes.
+
     Returns:
-        tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool, 
+        tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool,
                 record: Submittals or None, ball_in_court: str or None, status: str or None)
     """
+    # Map ProcoreOutbox action → the field it directly changes
+    _ECHO_ACTION_FIELD = {
+        'update_status': 'status',
+    }
     try:
         result = handle_submittal_update(project_id, submittal_id)
         if result is None:
@@ -786,6 +795,19 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, i
                 
                 if payload:
                     try:
+                        # Field-aware echo classification: only mark as echo if the fields
+                        # that actually changed are the field the Brain directly sent to Procore.
+                        # Procore side effects (e.g. ball_in_court auto-changes on status→Closed)
+                        # are real external state changes and must be visible in the event log.
+                        echo_field = _ECHO_ACTION_FIELD.get(echo_outbox_action) if echo_outbox_action else None
+                        changed_fields = set(payload.keys()) - {'order_bumped', 'order_number'}
+                        is_system_echo = bool(echo_field and changed_fields == {echo_field})
+                        if echo_outbox_action:
+                            logger.info(
+                                "Echo classification for submittal %s: outbox_action=%s, "
+                                "changed=%s, is_system_echo=%s",
+                                submittal_id, echo_outbox_action, changed_fields, is_system_echo,
+                            )
                         _create_submittal_event(
                             str(submittal_id), action, payload,
                             webhook_payload=webhook_payload, source='Procore',

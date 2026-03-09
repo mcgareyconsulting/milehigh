@@ -229,14 +229,15 @@ def create_submittal_payload_hash(action: str, submittal_id: str, payload: dict)
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
 
-def is_procore_echo_webhook(submittal_id: str, window_seconds: int = 120) -> bool:
+def is_procore_echo_webhook(submittal_id: str, window_seconds: int = 120) -> Optional[str]:
     """
-    Return True if a recent ProcoreOutbox record exists for this submittal,
-    meaning the webhook is likely an echo of our own API call.
+    Return the ProcoreOutbox action (e.g. 'update_status') if a recent Brain-originated
+    outbox entry exists for this submittal, meaning the webhook may be an echo of our own
+    API call. Returns None if no match.
 
-    Args:
-        submittal_id: Procore submittal ID (string)
-        window_seconds: How far back to look (default 120s)
+    Callers should treat a non-None return as an echo hint, but must verify that the
+    fields that actually changed match the outbox action — Procore side-effects (e.g.
+    ball_in_court auto-changing when status → Closed) are real state changes, not echoes.
     """
     from app.models import ProcoreOutbox
     from datetime import datetime, timedelta
@@ -245,8 +246,8 @@ def is_procore_echo_webhook(submittal_id: str, window_seconds: int = 120) -> boo
         ProcoreOutbox.submittal_id == str(submittal_id),
         ProcoreOutbox.status.in_(['completed', 'processing']),
         ProcoreOutbox.created_at >= cutoff,
-    ).first()
-    return match is not None
+    ).order_by(ProcoreOutbox.created_at.desc()).first()
+    return match.action if match else None
 
 
 def create_submittal_event(

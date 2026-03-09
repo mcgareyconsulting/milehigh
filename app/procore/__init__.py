@@ -93,15 +93,15 @@ def procore_webhook():
             )
             return jsonify({"status": "deduplicated"}), 200
 
-        # Echo detection: check if this webhook is the bounce-back from our own Procore API call.
-        # We still process and record the event, but mark it is_system_echo=True so it stays
-        # hidden in the Events UI by default while remaining available for debugging.
-        is_echo = is_procore_echo_webhook(str(resource_id))
-        if is_echo:
+        # Echo detection: check if this webhook is a bounce-back from our own Procore API call.
+        # Returns the outbox action (e.g. 'update_status') or None. Field-aware echo checking
+        # happens inside check_and_update_submittal after we know what actually changed.
+        echo_outbox_action = is_procore_echo_webhook(str(resource_id))
+        if echo_outbox_action:
             current_app.logger.info(
-                "Procore webhook detected as system echo (ProcoreOutbox match); "
-                "id=%s, project=%s, event=%s — recording with is_system_echo=True",
-                resource_id, project_id, event_type,
+                "Procore webhook may be system echo (ProcoreOutbox action=%s); "
+                "id=%s, project=%s — will verify against actual field changes",
+                echo_outbox_action, resource_id, project_id,
             )
 
         # Process submittal create or update
@@ -111,7 +111,7 @@ def procore_webhook():
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=is_echo)
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=bool(echo_outbox_action))
                     
                     if created and record:
                         with sync_operation_context(
@@ -192,7 +192,7 @@ def procore_webhook():
                     project_id,
                     resource_id,
                     webhook_payload=payload,
-                    is_system_echo=is_echo,
+                    echo_outbox_action=echo_outbox_action,
                 )
                 
                 # Log ball_in_court changes
