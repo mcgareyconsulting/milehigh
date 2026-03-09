@@ -3,6 +3,7 @@ import json
 import logging
 import pandas as pd
 import re
+from datetime import datetime
 from typing import Optional, Tuple
 
 from sqlalchemy.exc import IntegrityError
@@ -187,10 +188,14 @@ def resolve_webhook_user_ids(webhook_payload: Optional[dict]) -> Tuple[Optional[
 
 def create_submittal_payload_hash(action: str, submittal_id: str, payload: dict) -> str:
     """
-    Create a hash for the submittal event payload to prevent duplicates.
+    Create a hash for the submittal event. Includes a second-level timestamp so the
+    same state transition (e.g. Open→Fab Complete) can be recorded multiple times.
+    Concurrent duplicate deliveries within the same second still get the same hash
+    and are blocked by the DB UniqueConstraint.
     """
     payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-    hash_string = f"{action}:{submittal_id}:{payload_json}"
+    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+    hash_string = f"{action}:{submittal_id}:{timestamp}:{payload_json}"
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
 
@@ -244,13 +249,7 @@ def create_submittal_event(
         external_user_id, internal_user_id = resolve_webhook_user_ids(webhook_payload)
     else:
         external_user_id = None
-    # Brain-originated payload gets a unique marker so we always create the event even if
-    # the webhook already created one with the same status/title/etc. (avoids skip-as-duplicate).
-    payload_for_hash = {**payload, "origin": "Brain"} if source == "Brain" else payload
-    payload_hash = create_submittal_payload_hash(action, str(submittal_id), payload_for_hash)
-    if SubmittalEvents.query.filter_by(payload_hash=payload_hash).first():
-        logger.debug("SubmittalEvent already exists for submittal %s %s, skipping", submittal_id, action)
-        return False
+    payload_hash = create_submittal_payload_hash(action, str(submittal_id), payload)
     event = SubmittalEvents(
         submittal_id=str(submittal_id),
         action=action,

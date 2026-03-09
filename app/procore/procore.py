@@ -18,7 +18,6 @@ from app.procore.helpers import (
     extract_procore_user_id_from_webhook,
     resolve_internal_user_id,
     resolve_webhook_user_ids,
-    create_submittal_payload_hash as _create_submittal_payload_hash,
     create_submittal_event as _create_submittal_event,
 )
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
