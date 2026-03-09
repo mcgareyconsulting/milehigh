@@ -269,19 +269,10 @@ def procore_webhook():
                 # Log when webhook resulted in no updates (DB already in sync)
                 if not (ball_updated or status_updated or title_updated or manager_updated):
                     current_app.logger.info(
-                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync, bounce-back handled)",
+                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync%s)",
                         resource_id, project_id,
+                        ", echo" if is_echo else "",
                     )
-                    # If this was an echo and check_and_update_submittal found nothing to change
-                    # (Brain already committed before the webhook arrived), we still want a record.
-                    if is_echo:
-                        _create_submittal_event_helper(
-                            str(resource_id), "updated",
-                            {"echo": True, "note": "DB already in sync when echo arrived"},
-                            webhook_payload=payload,
-                            source='Procore',
-                            is_system_echo=True,
-                        )
             else:
                 current_app.logger.warning(
                     f"Unhandled event type '{event_type}' for submittal {resource_id}, ignoring. "
