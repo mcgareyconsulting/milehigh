@@ -3,7 +3,6 @@ import json
 import logging
 import pandas as pd
 import re
-from datetime import datetime
 from typing import Optional, Tuple
 
 from sqlalchemy.exc import IntegrityError
@@ -188,14 +187,12 @@ def resolve_webhook_user_ids(webhook_payload: Optional[dict]) -> Tuple[Optional[
 
 def create_submittal_payload_hash(action: str, submittal_id: str, payload: dict) -> str:
     """
-    Create a hash for the submittal event. Includes a second-level timestamp so the
-    same state transition (e.g. Open→Fab Complete) can be recorded multiple times.
-    Concurrent duplicate deliveries within the same second still get the same hash
-    and are blocked by the DB UniqueConstraint.
+    Create a content-based hash for the submittal event. Identical transitions
+    (same action, submittal, and field changes) produce the same hash and are
+    deduplicated by the DB UniqueConstraint on submittal_events.payload_hash.
     """
     payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
-    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-    hash_string = f"{action}:{submittal_id}:{timestamp}:{payload_json}"
+    hash_string = f"{action}:{submittal_id}:{payload_json}"
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
 
