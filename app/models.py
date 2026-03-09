@@ -401,7 +401,6 @@ class ReleaseEvents(db.Model):
 class SubmittalEvents(db.Model):
     '''Table to track events for submittals.'''
     __tablename__ = 'submittal_events'
-    __table_args__ = (db.UniqueConstraint('payload_hash', name='uq_submittal_events_payload_hash'),)
     id = db.Column(db.Integer, primary_key=True)
     submittal_id = db.Column(db.String(255), nullable=False)
     action = db.Column(db.String(50), nullable=False)
@@ -457,6 +456,26 @@ class ProcoreOutbox(db.Model):
     
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
+
+class WebhookReceipt(db.Model):
+    """
+    Deduplication log for incoming Procore webhook deliveries.
+    Procore sends burst duplicates (2-5 deliveries within ~7 seconds) for every update.
+    A receipt_hash is written on first delivery; retries hit the unique constraint and
+    are rejected before any Procore API call is made.
+
+    receipt_hash = sha256("procore:{resource_id}:{project_id}:{reason}:{bucket}")
+    where bucket = int(unix_time // WEBHOOK_DEDUP_WINDOW_SECONDS)
+
+    Rows older than a few hours carry no value and can be pruned.
+    """
+    __tablename__ = 'webhook_receipts'
+    id = db.Column(db.Integer, primary_key=True)
+    receipt_hash = db.Column(db.String(64), nullable=False, unique=True)
+    provider = db.Column(db.String(32), nullable=False, default='procore')
+    resource_id = db.Column(db.String(64), nullable=True)
+    received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
 
 class Jobs(db.Model):
     """

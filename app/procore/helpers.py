@@ -1,13 +1,18 @@
 import hashlib
 import json
 import logging
+import time
 import pandas as pd
 import re
 from typing import Optional, Tuple
 
 from sqlalchemy.exc import IntegrityError
 
-from app.models import SubmittalEvents, db
+from app.models import SubmittalEvents, WebhookReceipt, db
+
+# How long (seconds) to treat repeated Procore webhook deliveries as burst duplicates.
+# Procore bursts arrive within ~7s. Workflow cycles happen minutes/hours apart.
+WEBHOOK_DEDUP_WINDOW_SECONDS = 15
 
 logger = logging.getLogger(__name__)
 
@@ -185,11 +190,39 @@ def resolve_webhook_user_ids(webhook_payload: Optional[dict]) -> Tuple[Optional[
     return external, internal
 
 
+def is_duplicate_webhook(resource_id: int, project_id: int, event_type: str) -> bool:
+    """
+    Return True if this Procore webhook delivery is a burst duplicate of one already
+    being processed within the current dedup window.
+
+    On first delivery in the window: inserts a WebhookReceipt row and returns False.
+    On retry deliveries: the unique constraint fires (IntegrityError), rolls back, returns True.
+
+    receipt_hash = sha256("procore:{resource_id}:{project_id}:{event_type}:{bucket}")
+    where bucket = int(unix_time // WEBHOOK_DEDUP_WINDOW_SECONDS)
+    """
+    bucket = int(time.time() // WEBHOOK_DEDUP_WINDOW_SECONDS)
+    raw = f"procore:{resource_id}:{project_id}:{event_type}:{bucket}"
+    receipt_hash = hashlib.sha256(raw.encode()).hexdigest()
+    receipt = WebhookReceipt(
+        receipt_hash=receipt_hash,
+        provider='procore',
+        resource_id=str(resource_id),
+    )
+    db.session.add(receipt)
+    try:
+        db.session.commit()
+        return False
+    except IntegrityError:
+        db.session.rollback()
+        return True
+
+
 def create_submittal_payload_hash(action: str, submittal_id: str, payload: dict) -> str:
     """
-    Create a content-based hash for the submittal event. Identical transitions
-    (same action, submittal, and field changes) produce the same hash and are
-    deduplicated by the DB UniqueConstraint on submittal_events.payload_hash.
+    Content-based hash for the submittal event — used for auditing/debugging only.
+    Deduplication is handled upstream by is_duplicate_webhook() and the row lock
+    in check_and_update_submittal().
     """
     payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
     hash_string = f"{action}:{submittal_id}:{payload_json}"

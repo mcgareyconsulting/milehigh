@@ -14,7 +14,7 @@ from app.procore.procore import (
     comprehensive_health_scan,
 )
 
-from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids, is_procore_echo_webhook, create_submittal_event as _create_submittal_event_helper
+from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids, is_procore_echo_webhook, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -83,6 +83,15 @@ def procore_webhook():
             "Received Procore webhook: resource=%s, event_type=%s, id=%s, project=%s",
             resource_type, event_type, resource_id, project_id
         )
+
+        # Burst dedup: Procore sends 2-5 identical deliveries within ~7 seconds per update.
+        # Write a receipt row for the first delivery in the 15s window; reject the rest.
+        if is_duplicate_webhook(resource_id, project_id, event_type):
+            current_app.logger.info(
+                "Duplicate webhook delivery rejected (burst dedup): id=%s, event=%s",
+                resource_id, event_type,
+            )
+            return jsonify({"status": "deduplicated"}), 200
 
         # Echo detection: check if this webhook is the bounce-back from our own Procore API call.
         # We still process and record the event, but mark it is_system_echo=True so it stays
