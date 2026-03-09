@@ -1,12 +1,9 @@
 # Package
 import os
 import json
-from pathlib import Path
-from datetime import datetime, date, timedelta
-from collections import defaultdict
+from datetime import datetime
 from typing import Optional
 
-import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
 from app.models import db, Submittals, SubmittalEvents
 
@@ -28,26 +25,6 @@ from app.trello.logging import safe_log_sync_event
 logger = get_logger(__name__)
 
 procore_bp = Blueprint("procore", __name__)
-
-
-DEBOUNCE_SECONDS = 8  # 8 seconds
-
-
-def _recent_submittal_event_for_debounce(resource_id: int, action: str):
-    """
-    Return a recent genuine Procore SubmittalEvent for this submittal/action if within DEBOUNCE_SECONDS, else None.
-    Only matches source='Procore' non-echo events so that:
-    - Brain-originated events don't suppress a real external Procore change arriving within 8s
-    - Echo events (is_system_echo=True) don't re-trigger debounce on legitimate re-delivery
-    """
-    now = datetime.utcnow()
-    return SubmittalEvents.query.filter(
-        SubmittalEvents.submittal_id == str(resource_id),
-        SubmittalEvents.action == action,
-        SubmittalEvents.source == "Procore",
-        SubmittalEvents.is_system_echo == False,  # noqa: E712
-        SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
-    ).order_by(SubmittalEvents.created_at.desc()).first()
 
 
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
@@ -107,17 +84,6 @@ def procore_webhook():
             "Received Procore webhook: resource=%s, event_type=%s, id=%s, project=%s",
             resource_type, event_type, resource_id, project_id
         )
-
-        # Debounce: skip if we already processed this event type for this submittal recently
-        debounce_action = "updated" if event_type == "update" else "created"
-        recent_event = _recent_submittal_event_for_debounce(resource_id, debounce_action)
-        if recent_event:
-            diff = (datetime.utcnow() - recent_event.created_at).total_seconds()
-            current_app.logger.info(
-                "Debounced duplicate %s webhook; id=%s, project=%s, seen %.2fs ago",
-                event_type, resource_id, project_id, diff
-            )
-            return jsonify({"status": "debounced"}), 200
 
         # Echo detection: check if this webhook is the bounce-back from our own Procore API call.
         # We still process and record the event, but mark it is_system_echo=True so it stays
