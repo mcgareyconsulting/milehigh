@@ -81,47 +81,6 @@ def log_operation(log_file: str, action: str, project_id: int, project_number: O
     print(f"[{status.upper()}] {action} - Project {project_id} ({project_number}): {json.dumps(data)[:100]}")
 
 
-def has_submittals_update_trigger(procore_client, project_id: int, namespace: str) -> Tuple[bool, Optional[int]]:
-    """
-    Check if a webhook with Submittals/update trigger already exists for the project.
-    Returns (exists, hook_id) tuple.
-    """
-    try:
-        webhooks = procore_client.list_project_webhooks(project_id, namespace)
-        
-        if not webhooks:
-            return False, None
-        
-        # Check each webhook for Submittals/update trigger
-        for webhook in webhooks:
-            hook_id = webhook.get("id")
-            if not hook_id:
-                continue
-            
-            # Fetch triggers for this webhook separately
-            try:
-                triggers = procore_client.get_webhook_triggers(project_id, hook_id)
-                if triggers:
-                    for trigger in triggers:
-                        if (trigger.get("resource_name") == "Submittals" and 
-                            trigger.get("event_type") == "update"):
-                            return True, hook_id
-            except Exception:
-                # If we can't get triggers, check if they're in the webhook response
-                triggers = webhook.get("triggers", [])
-                for trigger in triggers:
-                    if (trigger.get("resource_name") == "Submittals" and 
-                        trigger.get("event_type") == "update"):
-                        return True, hook_id
-        
-        # If no matching trigger found, return the first hook_id if available
-        first_hook_id = webhooks[0].get("id") if webhooks else None
-        return False, first_hook_id
-        
-    except Exception as e:
-        print(f"Error checking webhooks for project {project_id}: {e}")
-        return False, None
-
 
 def get_webhook_triggers(procore_client, project_id: int, hook_id: int) -> List[Dict]:
     """Get all triggers for a specific webhook."""

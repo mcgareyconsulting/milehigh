@@ -1,8 +1,3 @@
-from numpy import safe_eval
-import openpyxl
-import pandas as pd
-from pandas import Timestamp
-import math
 from app.trello.utils import (
     extract_card_name,
     extract_identifier,
@@ -30,7 +25,7 @@ from app.trello.api import (
     add_procore_link,
 )
 from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, TrelloOutbox, db
-from datetime import datetime, date, timezone, time, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from app.logging_config import get_logger, SyncContext, log_sync_operation
 from app.services.job_event_service import JobEventService
@@ -45,49 +40,6 @@ from app.trello.logging import safe_log_sync_event, safe_sync_op_call
 from app.trello.list_mapper import TrelloListMapper
 logger = get_logger(__name__)
 
-
-def check_database_connection():
-    """Check if database connection is working."""
-    try:
-        from sqlalchemy import text
-        db.session.execute(text("SELECT 1"))
-        return True
-    except Exception as e:
-        logger.warning("Database connection check failed", error=str(e))
-        return False
-
-def compare_timestamps(event_time, source_time, operation_id: str):
-    """Compare external event timestamp with database record timestamp."""
-    if not event_time:
-        logger.warning("Invalid event_time (None)", operation_id=operation_id)
-        return None
-
-    if not source_time:
-        logger.info("No DB timestamp — treating event as newer", operation_id=operation_id)
-        return "newer"
-
-    if event_time > source_time:
-        logger.info("Event is newer than DB record", operation_id=operation_id)
-        return "newer"
-    else:
-        logger.info("Event is older than DB record", operation_id=operation_id)
-        return "older"
-
-def as_date(val):
-    if pd.isna(val) or val is None:
-        return None
-    # Handle pd.Timestamp, datetime, date, string, etc.
-    if isinstance(val, pd.Timestamp):
-        return val.date()
-    if isinstance(val, datetime):
-        return val.date()
-    if isinstance(val, date):
-        return val
-    # Try parsing string
-    try:
-        return pd.to_datetime(val).date()
-    except Exception:
-        return None
 
 
 def _is_brain_echo_webhook(rec, event_info):
@@ -600,14 +552,4 @@ def sync_from_trello(event_info):
         # - Log error
         # - Re-raise exception
 
-# Helper: detect if start_install is formula-driven
-def is_formula_cell(row):
-    formula_val = row.get("start_install_formula")
-    formulaTF_val = row.get("start_install_formulaTF")
-    return bool(formulaTF_val) or (
-        isinstance(formula_val, str) and formula_val.startswith("=")
-    )
-
-
-# sync_from_onedrive and _update_trello_card_from_excel functions removed - OneDrive polling functionality removed
 
