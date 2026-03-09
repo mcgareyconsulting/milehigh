@@ -60,21 +60,6 @@ def _normalize_title(value):
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized
 
-# def procore_authorization():
-#     url = "https://login.procore.com/oauth/token/"
-#     headers = {
-#         "Content-Type": "application/x-www-form-urlencoded",
-#     }
-#     body = {
-#         "grant_type": "authorization_code",
-#         "code": cfg.PROD_PROCORE_AUTH_CODE,
-#         "client_id": cfg.PROD_PROCORE_CLIENT_ID,
-#         "client_secret": cfg.PROD_PROCORE_CLIENT_SECRET,
-#         "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
-#     }
-#     response = requests.post(url, data=body)
-#     print(response.json())
-#     return response.json()
 
 # Get Companies List
 def get_companies_list():

@@ -560,31 +560,6 @@ def webhook_test():
             }), 500
 
 
-@procore_bp.route("/api/webhook/payloads", methods=["GET"])
-def webhook_payloads():
-    """
-    Legacy endpoint. Webhook payloads are no longer logged to disk; use the Events page for submittal events.
-    """
-    return jsonify({
-        "status": "success",
-        "message": "Webhook payload disk logging has been removed; use the Events page for submittal events.",
-        "payloads": [],
-        "total": 0
-    }), 200
-
-
-@procore_bp.route("/api/webhook/submittal-data", methods=["GET"])
-def submittal_data():
-    """
-    Legacy endpoint. Submittal data is no longer logged to disk; use the Events page for submittal events.
-    """
-    return jsonify({
-        "status": "success",
-        "message": "Submittal data disk logging has been removed; use the Events page for submittal events.",
-        "entries": [],
-        "total": 0
-    }), 200
-
 
 @procore_bp.route("/health-scan", methods=["GET"])
 def health_scan():
