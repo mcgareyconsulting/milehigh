@@ -8,7 +8,7 @@ from app.brain.drafting_work_load.service import (
     LocationService,
 )
 from app.logging_config import get_logger
-from app.models import Submittals, db
+from app.models import Submittals, ProcoreOutbox, db
 from app.auth.utils import login_required, admin_required, get_current_user
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
@@ -374,8 +374,30 @@ def update_submittal_procore_status():
 
         old_status = submittal.status
         new_status = SUBMITTAL_STATUS_ID_TO_NAME[status_id]
+
+        # Record outgoing API call in ProcoreOutbox BEFORE calling Procore.
+        # The webhook handler checks this table to identify echo webhooks.
+        outbox_entry = ProcoreOutbox(
+            submittal_id=submittal_id,
+            project_id=project_id,
+            action='update_status',
+            request_payload={'status_id': status_id},
+            status='processing',
+        )
+        db.session.add(outbox_entry)
+        db.session.commit()  # commit before API call so webhook handler sees it immediately
+
         procore_client = get_procore_client()
-        procore_client.update_submittal_status(project_id, int(submittal_id), status_id)
+        try:
+            procore_client.update_submittal_status(project_id, int(submittal_id), status_id)
+        except Exception as api_exc:
+            outbox_entry.status = 'failed'
+            outbox_entry.error_message = str(api_exc)[:500]
+            db.session.commit()
+            raise
+
+        outbox_entry.status = 'completed'
+        outbox_entry.completed_at = datetime.utcnow()
 
         # Create Brain event *before* committing submittal so we always record it;
         # otherwise a fast webhook can create the same payload and our create would be skipped as duplicate.

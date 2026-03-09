@@ -1,16 +1,12 @@
 # Package
 import os
 import json
-from pathlib import Path
-from datetime import datetime, date, timedelta
-from collections import defaultdict
+from datetime import datetime
 from typing import Optional
 
-import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
-from app.models import db, Submittals, SubmittalEvents
+from app.models import db, Submittals
 
-from app.procore.helpers import create_submittal_payload_hash as _create_submittal_payload_hash
 from app.procore.procore import (
     get_project_id_by_project_name,
     check_and_update_submittal,
@@ -18,7 +14,7 @@ from app.procore.procore import (
     comprehensive_health_scan,
 )
 
-from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids
+from app.procore.helpers import resolve_webhook_user_ids, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -28,20 +24,6 @@ from app.trello.logging import safe_log_sync_event
 logger = get_logger(__name__)
 
 procore_bp = Blueprint("procore", __name__)
-
-
-DEBOUNCE_SECONDS = 8  # 8 seconds
-
-
-def _recent_submittal_event_for_debounce(resource_id: int, action: str):
-    """Return a recent SubmittalEvent from Procore for this submittal/action if within DEBOUNCE_SECONDS, else None."""
-    now = datetime.utcnow()
-    return SubmittalEvents.query.filter(
-        SubmittalEvents.submittal_id == str(resource_id),
-        SubmittalEvents.action == action,
-        SubmittalEvents.source == "Procore",
-        SubmittalEvents.created_at >= (now - timedelta(seconds=DEBOUNCE_SECONDS))
-    ).order_by(SubmittalEvents.created_at.desc()).first()
 
 
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
@@ -102,16 +84,29 @@ def procore_webhook():
             resource_type, event_type, resource_id, project_id
         )
 
-        # Debounce: skip if we already processed this event type for this submittal recently
-        debounce_action = "updated" if event_type == "update" else "created"
-        recent_event = _recent_submittal_event_for_debounce(resource_id, debounce_action)
-        if recent_event:
-            diff = (datetime.utcnow() - recent_event.created_at).total_seconds()
+        # Burst dedup: Procore sends 2-5 identical deliveries within ~7 seconds per update.
+        # Write a receipt row for the first delivery in the 15s window; reject the rest.
+        if is_duplicate_webhook(resource_id, project_id, event_type):
             current_app.logger.info(
-                "Debounced duplicate %s webhook; id=%s, project=%s, seen %.2fs ago",
-                event_type, resource_id, project_id, diff
+                "Duplicate webhook delivery rejected (burst dedup): id=%s, event=%s",
+                resource_id, event_type,
             )
-            return jsonify({"status": "debounced"}), 200
+            return jsonify({"status": "deduplicated"}), 200
+
+        # Connector detection: if the webhook was triggered by the connector service account,
+        # it's a bounce-back from our own Procore API call. We still process it to catch
+        # Procore side-effect changes (e.g. auto-ball_in_court on status→Closed).
+        # source stays 'Procore' — external_user_id='14554506' on the event identifies it
+        # as connector-triggered for UI filtering.
+        is_connector = (
+            external_user_id is not None
+            and str(external_user_id) == str(cfg.PROCORE_CONNECTOR_USER_ID)
+        )
+        if is_connector:
+            current_app.logger.info(
+                "Procore webhook from connector account (user %s); id=%s, project=%s — processing for side-effect diffs",
+                external_user_id, resource_id, project_id,
+            )
 
         # Process submittal create or update
         try:
@@ -120,7 +115,7 @@ def procore_webhook():
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload)
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
                     
                     if created and record:
                         with sync_operation_context(
@@ -175,7 +170,7 @@ def procore_webhook():
                         f"Update event received for submittal {resource_id} but record doesn't exist. "
                         f"Attempting to create it first (fallback for race conditions)..."
                     )
-                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload)
+                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
                     if created and new_record:
                         current_app.logger.info(
                             f"Successfully created missing submittal {resource_id} from update event fallback"
@@ -198,9 +193,10 @@ def procore_webhook():
                 old_manager = old_record.submittal_manager if old_record else None
                 
                 ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status = check_and_update_submittal(
-                    project_id, 
+                    project_id,
                     resource_id,
-                    webhook_payload=payload
+                    webhook_payload=payload,
+                    source='Procore',
                 )
                 
                 # Log ball_in_court changes
@@ -283,11 +279,12 @@ def procore_webhook():
                                 project_name=record.project_name if record else None
                             )
 
-                # Log when webhook resulted in no updates (bounce-back handling)
+                # Log when webhook resulted in no updates (DB already in sync)
                 if not (ball_updated or status_updated or title_updated or manager_updated):
                     current_app.logger.info(
-                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync, bounce-back handled)",
+                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync%s)",
                         resource_id, project_id,
+                        ", connector" if is_connector else "",
                     )
             else:
                 current_app.logger.warning(
@@ -532,31 +529,6 @@ def webhook_test():
             }), 500
 
 
-@procore_bp.route("/api/webhook/payloads", methods=["GET"])
-def webhook_payloads():
-    """
-    Legacy endpoint. Webhook payloads are no longer logged to disk; use the Events page for submittal events.
-    """
-    return jsonify({
-        "status": "success",
-        "message": "Webhook payload disk logging has been removed; use the Events page for submittal events.",
-        "payloads": [],
-        "total": 0
-    }), 200
-
-
-@procore_bp.route("/api/webhook/submittal-data", methods=["GET"])
-def submittal_data():
-    """
-    Legacy endpoint. Submittal data is no longer logged to disk; use the Events page for submittal events.
-    """
-    return jsonify({
-        "status": "success",
-        "message": "Submittal data disk logging has been removed; use the Events page for submittal events.",
-        "entries": [],
-        "total": 0
-    }), 200
-
 
 @procore_bp.route("/health-scan", methods=["GET"])
 def health_scan():
@@ -691,25 +663,11 @@ def health_scan_update():
                 # Create submittal event for update
                 if updates:
                     try:
-                        action = "updated"
-                        payload = updates.copy()
-                        payload_hash = _create_submittal_payload_hash(action, issue['submittal_id'], payload)
-                        
-                        # Check if event already exists
-                        existing_event = SubmittalEvents.query.filter_by(payload_hash=payload_hash).first()
-                        if not existing_event:
-                            # HealthScan has no user context; internal_user_id and external_user_id stay NULL
-                            event = SubmittalEvents(
-                                submittal_id=issue['submittal_id'],
-                                action=action,
-                                payload=payload,
-                                payload_hash=payload_hash,
-                                source='HealthScan',
-                            )
-                            db.session.add(event)
-                            logger.debug(f"Created SubmittalEvent for submittal {issue['submittal_id']} from health scan update")
+                        _create_submittal_event_helper(
+                            issue['submittal_id'], "updated", updates.copy(),
+                            source='HealthScan',
+                        )
                     except Exception as event_error:
-                        # Log but don't fail the update if event creation fails
                         logger.warning(f"Failed to create SubmittalEvent for submittal {issue['submittal_id']} from health scan: {event_error}", exc_info=True)
                 
                 updated_submittals.append({

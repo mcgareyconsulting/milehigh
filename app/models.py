@@ -384,6 +384,7 @@ def query_job_releases():
 class ReleaseEvents(db.Model):
     '''Table to track events for releases.'''
     __tablename__ = 'release_events'
+    __table_args__ = (db.UniqueConstraint('payload_hash', name='uq_release_events_payload_hash'),)
     id = db.Column(db.Integer, primary_key=True)
     job = db.Column(db.Integer, nullable=False)
     release = db.Column(db.String(50))
@@ -393,13 +394,13 @@ class ReleaseEvents(db.Model):
     source = db.Column(db.String(50), nullable=False)
     internal_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     external_user_id = db.Column(db.String(255), nullable=True)  # e.g. Trello/Procore user id from webhook
+    is_system_echo = db.Column(db.Boolean, nullable=False, default=False)  # True = echo of our own API call; hidden in UI by default
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
 class SubmittalEvents(db.Model):
     '''Table to track events for submittals.'''
     __tablename__ = 'submittal_events'
-    __table_args__ = (db.UniqueConstraint('payload_hash', name='uq_submittal_events_payload_hash'),)
     id = db.Column(db.Integer, primary_key=True)
     submittal_id = db.Column(db.String(255), nullable=False)
     action = db.Column(db.String(50), nullable=False)
@@ -408,6 +409,7 @@ class SubmittalEvents(db.Model):
     source = db.Column(db.String(50), nullable=False)  # Brain | Procore
     internal_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     external_user_id = db.Column(db.String(255), nullable=True)  # e.g. Procore user id from webhook
+    is_system_echo = db.Column(db.Boolean, nullable=False, default=False)  # True = echo of our own API call; hidden in UI by default
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
@@ -455,6 +457,34 @@ class ProcoreOutbox(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
 
+class WebhookReceipt(db.Model):
+    """
+    Deduplication log for incoming Procore webhook deliveries.
+    Procore sends burst duplicates (2-5 deliveries within ~7 seconds) for every update.
+    A receipt_hash is written on first delivery; retries hit the unique constraint and
+    are rejected before any Procore API call is made.
+
+    receipt_hash = sha256("procore:{resource_id}:{project_id}:{reason}:{bucket}")
+    where bucket = int(unix_time // WEBHOOK_DEDUP_WINDOW_SECONDS)
+
+    Rows older than a few hours carry no value and can be pruned.
+    """
+    __tablename__ = 'webhook_receipts'
+    id = db.Column(db.Integer, primary_key=True)
+    receipt_hash = db.Column(db.String(64), nullable=False, unique=True)
+    provider = db.Column(db.String(32), nullable=False, default='procore')
+    resource_id = db.Column(db.String(64), nullable=True)
+    received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class ProjectManager(db.Model):
+    """Project managers assigned to jobsites."""
+    __tablename__ = 'project_managers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    color = db.Column(db.String(50), nullable=False, default='#888888')
+
+
 class Jobs(db.Model):
     """
     Job site geofences. Links to job log and DWL by identifier value (job number),
@@ -473,6 +503,16 @@ class Jobs(db.Model):
     geometry = db.Column(db.JSON, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    # Map feature columns
+    address = db.Column(db.String(500))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    radius_meters = db.Column(db.Float)
+    pm_id = db.Column(db.Integer, db.ForeignKey('project_managers.id'))
+    geofence_geojson = db.Column(db.JSON)
+
+    pm = db.relationship('ProjectManager', backref='jobsites')
 
     # Relationship by value: job log rows where Releases.job equals this job_number (job_number is string, Releases.job is int)
     jobs = db.relationship(

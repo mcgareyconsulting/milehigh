@@ -1,13 +1,18 @@
 import hashlib
 import json
 import logging
+import time
 import pandas as pd
 import re
 from typing import Optional, Tuple
 
 from sqlalchemy.exc import IntegrityError
 
-from app.models import SubmittalEvents, db
+from app.models import SubmittalEvents, WebhookReceipt, db
+
+# How long (seconds) to treat repeated Procore webhook deliveries as burst duplicates.
+# Procore bursts arrive within ~7s. Workflow cycles happen minutes/hours apart.
+WEBHOOK_DEDUP_WINDOW_SECONDS = 15
 
 logger = logging.getLogger(__name__)
 
@@ -185,13 +190,44 @@ def resolve_webhook_user_ids(webhook_payload: Optional[dict]) -> Tuple[Optional[
     return external, internal
 
 
+def is_duplicate_webhook(resource_id: int, project_id: int, event_type: str) -> bool:
+    """
+    Return True if this Procore webhook delivery is a burst duplicate of one already
+    being processed within the current dedup window.
+
+    On first delivery in the window: inserts a WebhookReceipt row and returns False.
+    On retry deliveries: the unique constraint fires (IntegrityError), rolls back, returns True.
+
+    receipt_hash = sha256("procore:{resource_id}:{project_id}:{event_type}:{bucket}")
+    where bucket = int(unix_time // WEBHOOK_DEDUP_WINDOW_SECONDS)
+    """
+    bucket = int(time.time() // WEBHOOK_DEDUP_WINDOW_SECONDS)
+    raw = f"procore:{resource_id}:{project_id}:{event_type}:{bucket}"
+    receipt_hash = hashlib.sha256(raw.encode()).hexdigest()
+    receipt = WebhookReceipt(
+        receipt_hash=receipt_hash,
+        provider='procore',
+        resource_id=str(resource_id),
+    )
+    db.session.add(receipt)
+    try:
+        db.session.commit()
+        return False
+    except IntegrityError:
+        db.session.rollback()
+        return True
+
+
 def create_submittal_payload_hash(action: str, submittal_id: str, payload: dict) -> str:
     """
-    Create a hash for the submittal event payload to prevent duplicates.
+    Content-based hash for the submittal event — used for auditing/debugging only.
+    Deduplication is handled upstream by is_duplicate_webhook() and the row lock
+    in check_and_update_submittal().
     """
     payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
     hash_string = f"{action}:{submittal_id}:{payload_json}"
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
+
 
 
 def create_submittal_event(
@@ -201,6 +237,7 @@ def create_submittal_event(
     webhook_payload: Optional[dict] = None,
     source: str = 'Procore',
     internal_user_id: Optional[int] = None,
+    is_system_echo: bool = False,
 ) -> bool:
     """
     Create a SubmittalEvents record with user attribution. Idempotent (skips if payload_hash exists).
@@ -223,13 +260,7 @@ def create_submittal_event(
         external_user_id, internal_user_id = resolve_webhook_user_ids(webhook_payload)
     else:
         external_user_id = None
-    # Brain-originated payload gets a unique marker so we always create the event even if
-    # the webhook already created one with the same status/title/etc. (avoids skip-as-duplicate).
-    payload_for_hash = {**payload, "origin": "Brain"} if source == "Brain" else payload
-    payload_hash = create_submittal_payload_hash(action, str(submittal_id), payload_for_hash)
-    if SubmittalEvents.query.filter_by(payload_hash=payload_hash).first():
-        logger.debug("SubmittalEvent already exists for submittal %s %s, skipping", submittal_id, action)
-        return False
+    payload_hash = create_submittal_payload_hash(action, str(submittal_id), payload)
     event = SubmittalEvents(
         submittal_id=str(submittal_id),
         action=action,
@@ -238,6 +269,7 @@ def create_submittal_event(
         source=source,
         internal_user_id=internal_user_id,
         external_user_id=external_user_id,
+        is_system_echo=is_system_echo,
     )
     db.session.add(event)
     try:
@@ -252,7 +284,7 @@ def create_submittal_event(
             return False
         raise
     logger.info(
-        "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s)",
-        submittal_id, action, external_user_id, internal_user_id,
+        "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s, is_system_echo=%s)",
+        submittal_id, action, external_user_id, internal_user_id, is_system_echo,
     )
     return True

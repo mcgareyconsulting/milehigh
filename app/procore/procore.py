@@ -18,7 +18,6 @@ from app.procore.helpers import (
     extract_procore_user_id_from_webhook,
     resolve_internal_user_id,
     resolve_webhook_user_ids,
-    create_submittal_payload_hash as _create_submittal_payload_hash,
     create_submittal_event as _create_submittal_event,
 )
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
@@ -60,21 +59,6 @@ def _normalize_title(value):
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized
 
-# def procore_authorization():
-#     url = "https://login.procore.com/oauth/token/"
-#     headers = {
-#         "Content-Type": "application/x-www-form-urlencoded",
-#     }
-#     body = {
-#         "grant_type": "authorization_code",
-#         "code": cfg.PROD_PROCORE_AUTH_CODE,
-#         "client_id": cfg.PROD_PROCORE_CLIENT_ID,
-#         "client_secret": cfg.PROD_PROCORE_CLIENT_SECRET,
-#         "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
-#     }
-#     response = requests.post(url, data=body)
-#     print(response.json())
-#     return response.json()
 
 # Get Companies List
 def get_companies_list():
@@ -86,16 +70,6 @@ def get_companies_list():
         return None
     company_id = companies[0]["id"]
     return company_id
-
-# count num projects by company id
-def count_projects_by_company_id(company_id):
-    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
-    headers = {
-        "Authorization": f"Bearer {get_access_token()}",
-        "Procore-Company-Id": str(company_id),
-    }
-    projects = _request_json(url, headers=headers) or []
-    return len(projects)
 
 
 # Get Projects by Company ID
@@ -393,7 +367,7 @@ def get_project_info(project_id):
         return None
 
 
-def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None):
+def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None, source='Procore'):
     """
     Create a new Submittals record in the database from a webhook create event.
     
@@ -568,7 +542,7 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             }
             _create_submittal_event(
                 str(submittal_id), "created", event_payload,
-                webhook_payload=webhook_payload, source='Procore'
+                webhook_payload=webhook_payload, source=source,
             )
         except Exception as event_error:
             logger.warning("Failed to create SubmittalEvent for submittal %s creation: %s", submittal_id, event_error, exc_info=True)
@@ -606,17 +580,21 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
         return False, None, error_msg
 
 
-def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
+def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, source='Procore'):
     """
     Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
-    
+
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID
         webhook_payload: Raw webhook payload dict (for extracting user who triggered the event)
-        
+        source: Event source string — 'Procore' for real user changes, 'Connector' for
+                bounce-backs from the connector service account. 'Connector' events are
+                still processed (to catch Procore side-effect changes like auto-ball_in_court)
+                but are tagged for filtering in the UI.
+
     Returns:
-        tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool, 
+        tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool,
                 record: Submittals or None, ball_in_court: str or None, status: str or None)
     """
     try:
@@ -625,12 +603,18 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
             logger.warning(f"Failed to parse submittal data for submittal {submittal_id}")
             return False, False, False, False, None, None, None
         
-        record, ball_in_court, approvers, status, title, submittal_manager = result
-        
+        _, ball_in_court, approvers, status, title, submittal_manager = result
+
+        # Re-fetch with a row-level lock so concurrent webhook deliveries serialize here
+        # rather than both detecting the same mismatch and writing duplicate events.
+        record = Submittals.query.filter_by(
+            submittal_id=str(submittal_id)
+        ).with_for_update().first()
+
         if not record:
             logger.warning(f"No DB record found for submittal {submittal_id}")
             return False, False, False, False, None, ball_in_court, status
-        
+
         ball_updated = False
         status_updated = False
         title_updated = False
@@ -797,7 +781,7 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None):
                     try:
                         _create_submittal_event(
                             str(submittal_id), action, payload,
-                            webhook_payload=webhook_payload, source='Procore'
+                            webhook_payload=webhook_payload, source=source,
                         )
                     except Exception as event_error:
                         logger.warning("Failed to create SubmittalEvent for submittal %s update: %s", submittal_id, event_error, exc_info=True)
@@ -1284,94 +1268,6 @@ def check_webhook_health(project_ids=None):
     }
 
 
-def check_orphaned_submittals_webhooks():
-    """
-    Check webhook health for projects that have submittals in DB but not in API response.
-    This helps identify if missing webhooks are causing submittals to not appear in API.
-    
-    Returns:
-        dict combining cross-reference and webhook health check results
-    """
-    logger.info("Starting orphaned submittals webhook check")
-    
-    # First, cross-reference DB vs API
-    cross_ref = cross_reference_db_vs_api()
-    
-    # Get unique project IDs from DB-only submittals
-    orphaned_project_ids = list(cross_ref['db_only_by_project'].keys())
-    
-    if not orphaned_project_ids:
-        logger.info("No orphaned submittals found - all DB submittals are in API response")
-        return {
-            'cross_reference': cross_ref,
-            'webhook_check': None,
-            'summary': 'No orphaned submittals to check'
-        }
-    
-    logger.info(f"Checking webhooks for {len(orphaned_project_ids)} projects with orphaned submittals")
-    
-    # Check webhooks for these projects
-    webhook_check = check_webhook_health(orphaned_project_ids)
-    
-    # Combine results
-    result = {
-        'cross_reference': cross_ref,
-        'webhook_check': webhook_check,
-        'summary': {
-            'orphaned_submittals_count': cross_ref['missing_in_api'],
-            'orphaned_projects_count': len(orphaned_project_ids),
-            'orphaned_projects_without_webhooks': len([
-                pid for pid in orphaned_project_ids 
-                if pid in webhook_check['projects_without_webhooks']
-            ]),
-            'orphaned_projects_with_broken_webhooks': len([
-                pid for pid in orphaned_project_ids 
-                if pid in webhook_check['broken_webhooks']
-            ])
-        }
-    }
-    
-    logger.info(f"Orphaned submittals check complete: {result['summary']}")
-    return result
-
-
-def check_all_relevant_projects_webhooks():
-    """
-    Check webhook health for all projects that have submittals in the API response.
-    This ensures all 37 relevant projects have proper webhooks configured.
-    
-    Returns:
-        dict with webhook health check results for all relevant projects
-    """
-    logger.info("Starting webhook health check for all relevant projects")
-    
-    # Get submittals from API to identify relevant projects
-    api_submittals = get_drafting_workload()
-    
-    # Get unique project IDs from API response
-    relevant_project_ids = list(set(s['project_id'] for s in api_submittals))
-    logger.info(f"Found {len(relevant_project_ids)} relevant projects with submittals in API")
-    
-    # Check webhooks for all relevant projects
-    webhook_check = check_webhook_health(relevant_project_ids)
-    
-    # Add summary
-    webhook_check['summary'] = {
-        'total_relevant_projects': len(relevant_project_ids),
-        'projects_with_webhooks': len(webhook_check['projects_with_webhooks']),
-        'projects_without_webhooks': len(webhook_check['projects_without_webhooks']),
-        'projects_with_broken_webhooks': len(webhook_check['broken_webhooks']),
-        'coverage_percentage': round(
-            (len(webhook_check['projects_with_webhooks']) / len(relevant_project_ids) * 100) 
-            if relevant_project_ids else 0, 
-            2
-        )
-    }
-    
-    logger.info(f"Relevant projects webhook check complete: {webhook_check['summary']}")
-    return webhook_check
-
-
 def comprehensive_health_scan(skip_user_prompt=False):
     """
     Comprehensive health scan for orphaned submittals:
@@ -1659,15 +1555,6 @@ if __name__ == "__main__":
     # app context
     with app.app_context():
 
-        # # Check for orphaned submittals and their webhook status
-        # result = check_orphaned_submittals_webhooks()
-        # print(f"Found {result['summary']['orphaned_submittals_count']} orphaned submittals")
-        # print(f"In {result['summary']['orphaned_projects_count']} projects")
-        # print(f"{result['summary']['orphaned_projects_without_webhooks']} projects missing webhooks")
-
-        # # Or check all relevant projects
-        # webhook_status = check_all_relevant_projects_webhooks()
-        # print(f"Webhook coverage: {webhook_status['summary']['coverage_percentage']}%")
         # Comprehensive health scan
         result = comprehensive_health_scan()
         print(f"Total orphaned submittals: {result['summary']['total_orphaned']}")
