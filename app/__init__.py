@@ -10,6 +10,7 @@ from app.procore import procore_bp
 from app.brain import brain_bp
 from app.auth.routes import auth_bp
 from app.history import history_bp
+from app.admin import admin_bp
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -65,6 +66,7 @@ def create_app():
         'trello/',
         'procore/',
         'brain/',
+        'admin/',
     ]
 
     def is_api_route(path):
@@ -273,6 +275,7 @@ def create_app():
     app.register_blueprint(brain_bp, url_prefix="/brain")
     app.register_blueprint(auth_bp)
     app.register_blueprint(history_bp)
+    app.register_blueprint(admin_bp, url_prefix="/admin")
 
     # Catch-all route for React Router (must be last, after all API routes)
     # This handles direct URL access to React routes like /history, /operations, etc.

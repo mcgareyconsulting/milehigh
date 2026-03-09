@@ -477,6 +477,14 @@ class WebhookReceipt(db.Model):
     received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
+class ProjectManager(db.Model):
+    """Project managers assigned to jobsites."""
+    __tablename__ = 'project_managers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    color = db.Column(db.String(50), nullable=False, default='#888888')
+
+
 class Jobs(db.Model):
     """
     Job site geofences. Links to job log and DWL by identifier value (job number),
@@ -495,6 +503,16 @@ class Jobs(db.Model):
     geometry = db.Column(db.JSON, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    # Map feature columns
+    address = db.Column(db.String(500))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    radius_meters = db.Column(db.Float)
+    pm_id = db.Column(db.Integer, db.ForeignKey('project_managers.id'))
+    geofence_geojson = db.Column(db.JSON)
+
+    pm = db.relationship('ProjectManager', backref='jobsites')
 
     # Relationship by value: job log rows where Releases.job equals this job_number (job_number is string, Releases.job is int)
     jobs = db.relationship(

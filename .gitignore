@@ -2,6 +2,7 @@ venv
 .env
 instance/
 .vscode/
+.claude/
 
 # Log files
 logs/
