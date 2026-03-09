@@ -14,7 +14,7 @@ from app.procore.procore import (
     comprehensive_health_scan,
 )
 
-from app.procore.helpers import clean_value, is_email, resolve_webhook_user_ids, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
+from app.procore.helpers import resolve_webhook_user_ids, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -93,16 +93,17 @@ def procore_webhook():
             )
             return jsonify({"status": "deduplicated"}), 200
 
-        # Echo detection: if the webhook was triggered by the connector service account,
-        # it's a bounce-back from our own Procore API call. Log it, mark is_system_echo=True,
-        # hide from UI. Real user changes come with a different external_user_id.
-        is_echo = (
+        # Source attribution: if the webhook was triggered by the connector service account,
+        # it's a bounce-back from our own Procore API call. Tag it as 'Connector' so it's
+        # visible in history but filterable. Real user changes come with a different user_id.
+        is_connector = (
             external_user_id is not None
             and str(external_user_id) == str(cfg.PROCORE_CONNECTOR_USER_ID)
         )
-        if is_echo:
+        event_source = 'Connector' if is_connector else 'Procore'
+        if is_connector:
             current_app.logger.info(
-                "Procore webhook is system echo (connector user %s); id=%s, project=%s",
+                "Procore webhook from connector account (user %s); id=%s, project=%s — will process for side-effect diffs",
                 external_user_id, resource_id, project_id,
             )
 
@@ -113,7 +114,7 @@ def procore_webhook():
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=is_echo)
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source=event_source)
                     
                     if created and record:
                         with sync_operation_context(
@@ -168,7 +169,7 @@ def procore_webhook():
                         f"Update event received for submittal {resource_id} but record doesn't exist. "
                         f"Attempting to create it first (fallback for race conditions)..."
                     )
-                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, is_system_echo=is_echo)
+                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source=event_source)
                     if created and new_record:
                         current_app.logger.info(
                             f"Successfully created missing submittal {resource_id} from update event fallback"
@@ -194,7 +195,7 @@ def procore_webhook():
                     project_id,
                     resource_id,
                     webhook_payload=payload,
-                    is_system_echo=is_echo,
+                    source=event_source,
                 )
                 
                 # Log ball_in_court changes
@@ -280,9 +281,8 @@ def procore_webhook():
                 # Log when webhook resulted in no updates (DB already in sync)
                 if not (ball_updated or status_updated or title_updated or manager_updated):
                     current_app.logger.info(
-                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync%s)",
-                        resource_id, project_id,
-                        ", echo" if is_echo else "",
+                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync, source=%s)",
+                        resource_id, project_id, event_source,
                     )
             else:
                 current_app.logger.warning(

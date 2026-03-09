@@ -367,7 +367,7 @@ def get_project_info(project_id):
         return None
 
 
-def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None, is_system_echo=False):
+def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None, source='Procore'):
     """
     Create a new Submittals record in the database from a webhook create event.
     
@@ -542,8 +542,7 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             }
             _create_submittal_event(
                 str(submittal_id), "created", event_payload,
-                webhook_payload=webhook_payload, source='Procore',
-                is_system_echo=is_system_echo,
+                webhook_payload=webhook_payload, source=source,
             )
         except Exception as event_error:
             logger.warning("Failed to create SubmittalEvent for submittal %s creation: %s", submittal_id, event_error, exc_info=True)
@@ -581,7 +580,7 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
         return False, None, error_msg
 
 
-def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, is_system_echo=False):
+def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, source='Procore'):
     """
     Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
 
@@ -589,8 +588,10 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, i
         project_id: Procore project ID
         submittal_id: Procore submittal ID
         webhook_payload: Raw webhook payload dict (for extracting user who triggered the event)
-        is_system_echo: True if the webhook was triggered by the connector service account
-                        (Brain-originated bounce-back). Event is logged but hidden in UI.
+        source: Event source string — 'Procore' for real user changes, 'Connector' for
+                bounce-backs from the connector service account. 'Connector' events are
+                still processed (to catch Procore side-effect changes like auto-ball_in_court)
+                but are tagged for filtering in the UI.
 
     Returns:
         tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool,
@@ -780,8 +781,7 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, i
                     try:
                         _create_submittal_event(
                             str(submittal_id), action, payload,
-                            webhook_payload=webhook_payload, source='Procore',
-                            is_system_echo=is_system_echo,
+                            webhook_payload=webhook_payload, source=source,
                         )
                     except Exception as event_error:
                         logger.warning("Failed to create SubmittalEvent for submittal %s update: %s", submittal_id, event_error, exc_info=True)
