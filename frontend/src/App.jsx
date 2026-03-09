@@ -9,6 +9,7 @@ import JobLog from './pages/JobLog';
 import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
 import DashboardPlaceholder from './pages/DashboardPlaceholder';
+import JobsiteMap from './pages/maps/JobsiteMap';
 import { checkAuth } from './utils/auth';
 import './App.css';
 
@@ -48,6 +49,7 @@ function AppContent() {
             <Route path="drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
             <Route path="dashboard" element={<DashboardPlaceholder />} />
             <Route path="pm-board" element={<PMBoard />} />
+            <Route path="jobsite-map" element={<JobsiteMap />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </>
         ) : (
