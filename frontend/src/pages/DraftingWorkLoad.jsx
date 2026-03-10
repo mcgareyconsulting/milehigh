@@ -41,6 +41,8 @@ function DraftingWorkLoad() {
     const [locationEnabled, setLocationEnabled] = useState(false);
     const [userCoords, setUserCoords] = useState(null);
     const [locationRequesting, setLocationRequesting] = useState(false);
+    const [resorting, setResorting] = useState(false);
+    const [resortError, setResortError] = useState(null);
     const locationFilter = locationEnabled && userCoords ? userCoords : null;
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
@@ -114,6 +116,20 @@ function DraftingWorkLoad() {
         searchParams,
         mode: 'submittal',
     });
+
+    const handleResort = useCallback(async () => {
+        if (selectedBallInCourt === ALL_OPTION_VALUE) return;
+        setResorting(true);
+        setResortError(null);
+        try {
+            await draftingWorkLoadApi.resortDrafter(selectedBallInCourt);
+            await refetch();
+        } catch (err) {
+            setResortError(err.message);
+        } finally {
+            setResorting(false);
+        }
+    }, [selectedBallInCourt, ALL_OPTION_VALUE, refetch]);
 
     const handleGeneratePDF = useCallback(() => {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
@@ -190,6 +206,20 @@ function DraftingWorkLoad() {
                                         ) : (
                                             <>📍 Use my location</>
                                         )}
+                                    </button>
+                                    <button
+                                        onClick={handleResort}
+                                        disabled={selectedBallInCourt === ALL_OPTION_VALUE || resorting}
+                                        className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${
+                                            selectedBallInCourt === ALL_OPTION_VALUE || resorting
+                                                ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
+                                                : 'bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-slate-600 cursor-pointer'
+                                        }`}
+                                        title={selectedBallInCourt === ALL_OPTION_VALUE
+                                            ? 'Select a single drafter to enable resort'
+                                            : `Compress ${selectedBallInCourt}'s ordered submittals to sequential numbers`}
+                                    >
+                                        {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
                                     </button>
                                     <button
                                         onClick={handleGeneratePDF}
@@ -299,6 +329,12 @@ function DraftingWorkLoad() {
                                     title="Unable to load Drafting Work Load data"
                                     message={fetchError}
                                 />
+                            </div>
+                        )}
+
+                        {resortError && (
+                            <div className="flex-shrink-0 p-2">
+                                <AlertMessage type="error" title="Resort failed" message={resortError} />
                             </div>
                         )}
 

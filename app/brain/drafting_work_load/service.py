@@ -293,6 +293,17 @@ class SubmittalOrderingService:
         submittal_map = {s.submittal_id: s for s in all_group_submittals}
         return [(submittal_map[submittal_id], new_order) for submittal_id, new_order in updates]
 
+    @staticmethod
+    def resort_ordered_submittals(all_group_submittals: List) -> List:
+        """
+        Compress ordered (>= 1) submittals for a drafter to sequential integers starting at 1.
+        Returns: List of (submittal, new_order_value) tuples
+        """
+        all_group_submittals_data = SubmittalOrderingService._submittals_to_dicts(all_group_submittals)
+        updates = SubmittalOrderingEngine.compress_ordered_submittals(all_group_submittals_data)
+        submittal_map = {s.submittal_id: s for s in all_group_submittals}
+        return [(submittal_map[submittal_id], new_order) for submittal_id, new_order in updates]
+
 
 class UrgencyService:
     """Service for handling urgency-related business logic, including bumping and workflow checks."""

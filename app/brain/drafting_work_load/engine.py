@@ -334,6 +334,27 @@ class SubmittalOrderingEngine:
         return updates
 
     @staticmethod
+    def compress_ordered_submittals(all_group_submittals_data: List[Dict]) -> List[Tuple[str, float]]:
+        """
+        Compress ordered (>= 1) submittals to sequential integers starting at 1.
+        Preserves relative order. Urgency submittals (0 < order < 1) are untouched.
+        Example: [4, 5, 6, 7, 8] → [1, 2, 3, 4, 5]
+        Returns: List of (submittal_id, new_order_value) tuples for submittals that need updates.
+        """
+        ordered = [
+            s for s in all_group_submittals_data
+            if (v := SubmittalOrderingEngine.safe_float_order(s.get('order_number'))) is not None and v >= 1
+        ]
+        ordered.sort(key=lambda s: SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0)
+        updates = []
+        for idx, s in enumerate(ordered):
+            new_order = float(idx + 1)
+            current = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+            if current is None or abs(current - new_order) > 0.001:
+                updates.append((s.get('submittal_id'), new_order))
+        return updates
+
+    @staticmethod
     def calculate_step_updates(submittal_data: Dict, direction: str, all_group_submittals_data: List[Dict]) -> List[Tuple[str, float]]:
         """
         Calculate a simple 2-item swap for stepping up or down within the same zone.

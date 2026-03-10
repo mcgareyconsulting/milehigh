@@ -345,6 +345,55 @@ def step_submittal_order():
         }), 500
 
 
+@brain_bp.route("/drafting-work-load/resort", methods=["POST"])
+@admin_required
+def resort_drafter_order():
+    """Compress ordered (>= 1) submittals for a drafter to sequential integers starting at 1."""
+    try:
+        data = request.json
+        ball_in_court = str(data.get('ball_in_court', '')).strip()
+
+        if not ball_in_court:
+            return jsonify({"error": "ball_in_court is required"}), 400
+
+        all_group_submittals = Submittals.query.filter_by(ball_in_court=ball_in_court).all()
+
+        updates = SubmittalOrderingService.resort_ordered_submittals(all_group_submittals)
+
+        for subm, new_order_val in updates:
+            subm.order_number = new_order_val
+            subm.last_updated = datetime.utcnow()
+
+        db.session.commit()
+
+        user = get_current_user()
+        for subm, new_order_val in updates:
+            try:
+                create_submittal_event(
+                    subm.submittal_id, "updated",
+                    {"resort": True, "order_number": {"new": new_order_val}},
+                    webhook_payload=None, source="Brain",
+                    internal_user_id=user.id if user else None,
+                )
+            except Exception as event_err:
+                logger.warning("Failed to create SubmittalEvent for resort: %s", event_err)
+
+        return jsonify({
+            "success": True,
+            "ball_in_court": ball_in_court,
+            "updates": [{"submittal_id": subm.submittal_id, "order_number": new_order_val}
+                        for subm, new_order_val in updates]
+        }), 200
+
+    except Exception as exc:
+        logger.error("Error resorting submittal order", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to resort submittal order",
+            "details": str(exc)
+        }), 500
+
+
 @brain_bp.route("/drafting-work-load/bump", methods=["POST"])
 @admin_required
 def bump_submittal():

@@ -145,6 +145,20 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Compress ordered (>= 1) submittals for a drafter to sequential integers
+     */
+    async resortDrafter(ballInCourt) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/resort`, {
+                ball_in_court: ballInCourt
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to resort submittals for ${ballInCourt}`);
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

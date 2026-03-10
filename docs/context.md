@@ -1,17 +1,17 @@
 # Feature Name / Description
-DWL Urgency and Ordering
-Removing drag n drop functionality from drafting work load. Replacing with single step
-up/down arrows and bump toggle functionality.
+Resort on Drafter Filter
 
 # UI Location
-The Drafting Work Load is the target UI page. The Up/Down arrows are row specific and should be rendered in the title column, central to the page.
-The Bump button should remain where it is, next to the manual order number entry cell, per row.
+The Drafting Work Load is the target UI page. The filtering block at the top of the DWL lists out all drafters with submittals in either tab, Open or Draft. 
+The Resort button is in the upper right of this header feature on the DWL.
+
+# UI Needs
+The resort button should be disabled when drafter filter is 'All'
+Only active when we are filtering by a single drafter
 
 # Backend Needs
-Will probably need a single step urgency bump and resort function. Move submittal up 1 will have to move the one above it down 1, and vice versa. 
-Each drafter will have 3 distinct submittal lists (Unordered, Ordered, and Urgent)
-Bump button will toggle up only, so Unordered 'Bump' will push that submittal to x+1 of the Ordered column.
-Bump button on Ordered will move that Submittal to 0.9 in urgency slots and bump urgents up as normal.
+The Resort button, which will compress the ordering of a drafter's submittal should be reworked to be drafter specific.
+Resort will compress a drafters submittal order list for 'Ordered' submittals only. Urgency should be auto cascading. We want to force a resort of ordered submittals occasionally. Example: Drafter list is 4-5-6-7-8. Admin pushes resort with that drafter filtered and result is 1-2-3-4-5, preserving order.
 
 
 # Relevant Directories
