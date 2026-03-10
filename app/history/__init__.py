@@ -84,6 +84,16 @@ def _extract_submittal_new_value_from_payload(action, payload):
                 changes.append(f"Status: {old_val} → {new_val}")
             if payload.get('order_bumped'):
                 changes.append(f"Order bumped to {payload.get('order_number', 'N/A')}")
+            if 'order_step' in payload:
+                step_dir = payload['order_step']
+                on = payload.get('order_number', {})
+                old_n = on.get('old', 'N/A') if isinstance(on, dict) else 'N/A'
+                new_n = on.get('new', 'N/A') if isinstance(on, dict) else 'N/A'
+                msg = f"Order stepped {step_dir}: {old_n} → {new_n}"
+                swapped = payload.get('swapped_with')
+                if swapped and swapped.get('submittal_id'):
+                    msg += f" (swapped with {swapped['submittal_id']})"
+                changes.append(msg)
             return " | ".join(changes) if changes else "Submittal updated"
         return "Submittal updated"
 

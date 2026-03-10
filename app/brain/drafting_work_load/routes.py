@@ -298,6 +298,10 @@ def step_submittal_order():
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
 
+        # Capture swap partner info before applying updates
+        neighbor = next((subm for subm, _ in updates if subm.submittal_id != submittal_id), None)
+        neighbor_old_order = neighbor.order_number if neighbor else None
+
         for subm, new_order_val in updates:
             subm.order_number = new_order_val
             subm.last_updated = datetime.utcnow()
@@ -306,9 +310,18 @@ def step_submittal_order():
 
         user = get_current_user()
         try:
+            event_payload = {
+                "order_step": direction,
+                "order_number": {"old": old_order, "new": submittal.order_number},
+            }
+            if neighbor:
+                event_payload["swapped_with"] = {
+                    "submittal_id": neighbor.submittal_id,
+                    "order_number": {"old": neighbor_old_order, "new": neighbor.order_number},
+                }
             create_submittal_event(
                 submittal_id, "updated",
-                {"order_step": direction, "order_number": {"old": old_order, "new": submittal.order_number}},
+                event_payload,
                 webhook_payload=None, source="Brain",
                 internal_user_id=user.id if user else None,
             )
