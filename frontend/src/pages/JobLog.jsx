@@ -38,6 +38,8 @@ function JobLog() {
         stageToGroup,
         stageGroupColors,
         displayJobs,
+        totalFabHrs,
+        totalInstallHrs,
         resetFilters,
         toggleStage,
         selectedSubset,
@@ -806,8 +808,14 @@ function JobLog() {
                                         </div>
                                     </div>
 
-                                    {/* Bottom Right: Last updated */}
-                                    <div className="flex items-center justify-end">
+                                    {/* Bottom Right: KPI chips + Last updated */}
+                                    <div className="flex items-center justify-end gap-2">
+                                        <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
+                                            Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                                        </div>
+                                        <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
+                                            Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                        </div>
                                         <div className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
                                             Last updated: <span className="font-semibold text-gray-800 dark:text-slate-200">{formattedLastUpdated}</span>
                                         </div>

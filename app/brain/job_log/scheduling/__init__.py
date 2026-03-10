@@ -6,6 +6,11 @@ preserving all current scheduling assumptions until real stage-duration data is 
 """
 
 from app.brain.job_log.scheduling.config import SchedulingConfig
+from app.brain.job_log.scheduling.hours_summary import (
+    get_fab_modifier,
+    calculate_total_fab_hrs,
+    calculate_total_install_hrs,
+)
 from app.brain.job_log.scheduling.calculator import (
     calculate_remaining_fab_hours,
     calculate_hours_in_front,
@@ -19,6 +24,9 @@ from app.brain.job_log.scheduling.calculator import (
 
 __all__ = [
     'SchedulingConfig',
+    'get_fab_modifier',
+    'calculate_total_fab_hrs',
+    'calculate_total_install_hrs',
     'calculate_remaining_fab_hours',
     'calculate_hours_in_front',
     'calculate_days_in_front',

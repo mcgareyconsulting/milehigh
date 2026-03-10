@@ -1,5 +1,28 @@
 import { useState, useMemo, useCallback } from 'react';
 
+const _FAB_MODIFIER = {
+    'Released': 1.0,
+    'Cut Start': 0.9, 'Cut start': 0.9,
+    'Fit up Comp': 0.5, 'Fit Up Complete': 0.5, 'Fit Up Complete.': 0.5, 'Fitup comp': 0.5,
+    'WeldingQC': 0.0, 'Welded QC': 0.0, 'Welding QC': 0.0, 'Welded': 0.0,
+    'Paint Complete': 0.0, 'Paint complete': 0.0, 'Paint comp': 0.0,
+    'Store': 0.0, 'Store at MHMW for shipping': 0.0,
+    'Ship Planning': 0.0, 'Shipping planning': 0.0,
+    'Ship Complete': 0.0, 'Shipping completed': 0.0,
+    'Complete': 0.0,
+};
+
+function _getFabModifier(stage) {
+    return stage in _FAB_MODIFIER ? _FAB_MODIFIER[stage] : 1.0;
+}
+
+function _parseJobComp(val) {
+    if (val === null || val === undefined || val === '') return 0.0;
+    const frac = parseFloat(val);
+    if (isNaN(frac)) return 0.0;
+    return Math.min(frac, 1.0);
+}
+
 /**
  * Custom hook for managing filters in Jobs
  * @param {Array} jobs - The raw jobs data to filter
@@ -302,6 +325,14 @@ export function useJobsFilters(jobs = []) {
         });
     }, []);
 
+    const totalFabHrs = useMemo(() =>
+        jobs.reduce((sum, job) => sum + (job['Fab Hrs'] || 0) * _getFabModifier(job['Stage'] || ''), 0),
+    [jobs]);
+
+    const totalInstallHrs = useMemo(() =>
+        jobs.reduce((sum, job) => sum + (job['Install HRS'] || 0) * (1.0 - _parseJobComp(job['Job Comp'])), 0),
+    [jobs]);
+
     /**
      * Reset all filters to default values
      */
@@ -337,6 +368,10 @@ export function useJobsFilters(jobs = []) {
 
         // Filtered and sorted jobs
         displayJobs,
+
+        // Aggregate KPIs (all jobs, not filtered)
+        totalFabHrs,
+        totalInstallHrs,
 
         // Actions
         resetFilters,
