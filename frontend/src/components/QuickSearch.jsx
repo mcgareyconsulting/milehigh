@@ -27,6 +27,7 @@ export default function QuickSearch() {
   const [error, setError] = useState(null);
   const [searchedJob, setSearchedJob] = useState(null);
   const debounceRef = useRef(null);
+  const containerRef = useRef(null);
 
   const runSearch = useCallback(async (trimmed) => {
     if (!trimmed || !/^\d{1,3}$/.test(trimmed)) return;
@@ -69,42 +70,54 @@ export default function QuickSearch() {
     };
   }, [jobInput, runSearch]);
 
+  // Click-outside: clear input and close dropdown
+  useEffect(() => {
+    const handleMouseDown = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setJobInput('');
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
+  const isOpen = searchedJob != null || loading || !!error;
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 w-full max-w-[1600px] mx-auto">
-      <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 dark:border-slate-600 flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-slate-600">
-          <div className="group relative flex items-center">
-            <span className="absolute left-4 text-accent-400 transition-colors group-focus-within:text-accent-500" aria-hidden>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </span>
-            <input
-              id="quick-search-input"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={3}
-              placeholder="Project Number"
-              value={jobInput}
-              onChange={(e) => setJobInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
-              autoFocus
-              className="w-full pl-12 pr-4 py-3.5 bg-accent-50 dark:bg-slate-700 border border-accent-200 dark:border-slate-500 rounded-full font-mono text-lg text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
-            />
-          </div>
+    <div ref={containerRef} className="relative">
+      {/* Compact search input */}
+      <div className="relative flex items-center">
+        <span className="absolute left-3 text-accent-400" aria-hidden>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </span>
+        <input
+          id="quick-search-input"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={3}
+          placeholder="Project #"
+          value={jobInput}
+          onChange={(e) => setJobInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
+          className="w-36 pl-9 pr-3 py-1.5 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg font-mono text-sm text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
+        />
+      </div>
+
+      {/* Dropdown results panel */}
+      {isOpen && (
+        <div className="fixed left-4 right-4 mt-1 z-50 max-h-[45vh] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-xl" style={{ top: '3.75rem' }}>
           {loading && (
-            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">Searching…</p>
+            <p className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400">Searching…</p>
           )}
           {error && (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
+            <p className="px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
-        </div>
-
-        {searchedJob != null && !error ? (
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 overflow-hidden">
-            <div className="flex flex-col min-h-0">
-              <h4 className="flex-shrink-0 text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">Releases</h4>
-              <div className="flex-1 min-h-0 overflow-auto">
+          {searchedJob != null && !error && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+              <div className="flex flex-col">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">Releases</h4>
                 <JobSearchTable
                   columns={RELEASES_COLS}
                   rows={releases}
@@ -118,13 +131,12 @@ export default function QuickSearch() {
                         ? `/job-log?job=${job}&release=${encodeURIComponent(release)}`
                         : null;
                     },
+                    onJump: () => setJobInput(''),
                   }}
                 />
               </div>
-            </div>
-            <div className="flex flex-col min-h-0">
-              <h4 className="flex-shrink-0 text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">Submittals</h4>
-              <div className="flex-1 min-h-0 overflow-auto">
+              <div className="flex flex-col">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">Submittals</h4>
                 <JobSearchTable
                   columns={SUBMITTALS_COLS}
                   rows={submittals}
@@ -137,25 +149,14 @@ export default function QuickSearch() {
                         ? `/drafting-work-load?highlight=${encodeURIComponent(String(sid))}`
                         : null;
                     },
+                    onJump: () => setJobInput(''),
                   }}
                 />
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center min-h-0 p-8">
-            <div className="text-center">
-              <img
-                src="/logo.jpg"
-                alt=""
-                className="max-w-[min(40vw,280px)] w-auto h-auto object-contain opacity-25 mx-auto"
-                aria-hidden
-              />
-
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

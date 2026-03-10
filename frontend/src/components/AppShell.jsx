@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { logout } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
+import QuickSearch from './QuickSearch';
 
 const SIDEBAR_LINKS = [
   { path: '/dashboard', label: 'Dashboard' },
   { path: '/events', label: 'Events' },
-  { path: '/drafting-work-load', label: 'Drafting Work Load' },
-  { path: '/job-log', label: 'Job Log' },
 ];
 
 function AppShell({ isAuthenticated }) {
@@ -33,12 +32,13 @@ function AppShell({ isAuthenticated }) {
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-[#f8fafc] dark:bg-slate-900">
-      {/* Top bar: hamburger + theme toggle + Login/Logout */}
-      <header className="relative flex items-center justify-between h-14 px-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0">
+      {/* Top bar */}
+      <header className="relative flex items-center h-14 px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0">
+        {/* Hamburger */}
         <button
           type="button"
           onClick={() => setSidebarOpen(true)}
-          className="p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+          className="shrink-0 p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
           aria-label="Open menu"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -46,11 +46,43 @@ function AppShell({ isAuthenticated }) {
           </svg>
         </button>
 
+        {/* Quick search */}
+        <QuickSearch />
+
+        {/* Centered title */}
         <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none">
           MHMW Brain
         </h1>
 
-        <div className="flex items-center gap-2">
+        {/* Right cluster */}
+        <div className="ml-auto flex items-center gap-2">
+          {/* Job Log shortcut */}
+          <button
+            type="button"
+            onClick={() => navigate('/job-log')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              isActive('/job-log')
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            Job Log
+          </button>
+
+          {/* Drafting Work Load shortcut */}
+          <button
+            type="button"
+            onClick={() => navigate('/drafting-work-load')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              isActive('/drafting-work-load')
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            Drafting WL
+          </button>
+
+          {/* Theme toggle */}
           <button
             type="button"
             onClick={toggleTheme}
@@ -63,6 +95,8 @@ function AppShell({ isAuthenticated }) {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
             )}
           </button>
+
+          {/* Login / Logout */}
           {isAuthenticated ? (
             <button
               type="button"
