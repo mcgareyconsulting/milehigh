@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, isAdmin = false, isJumpToHighlight }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isJumpToHighlight }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -16,7 +16,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const submittalId = row['Submittals Id'] || row.submittal_id;
     const ballInCourt = row.ball_in_court ?? row['BIC'] ?? '';
     const hasMultipleAssignees = String(ballInCourt).includes(',');
-    const isDraggable = isAdmin && !hasMultipleAssignees;
 
     const formatTypeValue = (value) => {
         if (value === null || value === undefined || value === '') {
@@ -229,113 +228,10 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         e.preventDefault();
     };
 
-    // Drag and drop handlers
-    const handleDragStart = (e) => {
-        if (!isDraggable) {
-            e.preventDefault();
-            return;
-        }
-
-        // Check if drag started from a protected cell (Order Number, Project Number, Procore Status, Status, Notes, Due Date)
-        const target = e.target;
-        const cell = target.closest('td');
-
-        if (cell) {
-            const cellClasses = cell.className || '';
-            const isOrderNumberCell = cellClasses.includes('dwl-col-order-number');
-            const isProjectNumberCell = cellClasses.includes('dwl-col-project-number');
-            const isProcoreStatusCell = cellClasses.includes('dwl-col-procore-status');
-            const isStatusCell = cellClasses.includes('dwl-col-comp-status');
-            const isNotesCell = cellClasses.includes('dwl-col-notes');
-            const isDueDateCell = cellClasses.includes('dwl-col-due-date');
-
-            // Also check if clicking on inputs, textareas, selects, links, or buttons anywhere
-            const isInputElement = target.tagName === 'INPUT' ||
-                target.tagName === 'TEXTAREA' ||
-                target.tagName === 'SELECT' ||
-                target.tagName === 'A' ||
-                target.tagName === 'BUTTON' ||
-                target.closest('input') ||
-                target.closest('textarea') ||
-                target.closest('select') ||
-                target.closest('a') ||
-                target.closest('button');
-
-            if (isOrderNumberCell || isProjectNumberCell || isProcoreStatusCell || isStatusCell || isNotesCell || isDueDateCell || isInputElement) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                return false;
-            }
-        }
-
-        if (onDragStart) {
-            onDragStart(e, rowIndex, row);
-        }
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', ''); // Required for Firefox
-    };
-
-    const handleDragOver = (e) => {
-        if (!isDraggable) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (onDragOver) {
-            onDragOver(e, rowIndex);
-        }
-    };
-
-    const handleDragLeave = (e) => {
-        if (!isDraggable) return;
-        // Only trigger if we're actually leaving the row (not just moving between child elements)
-        if (!e.currentTarget.contains(e.relatedTarget)) {
-            // Let the parent handle clearing the drag over state
-        }
-    };
-
-    const handleDrop = (e) => {
-        if (!isDraggable) return;
-        e.preventDefault();
-        if (onDrop) {
-            onDrop(e, rowIndex, row);
-        }
-    };
-
-    const isDragOver = dragOverIndex === rowIndex;
-    const isBeingDragged = isDragging === rowIndex;
-
     return (
         <>
-            {/* Drop indicator line - appears above the row when dragging over */}
-            {isDragOver && (
-                <tr className="drop-indicator-row">
-                    <td
-                        colSpan={columns.length}
-                        className="p-0"
-                        style={{
-                            height: '4px',
-                            padding: '0 !important',
-                            backgroundColor: 'transparent',
-                        }}
-                    >
-                        <div
-                            className="w-full h-full bg-blue-500 rounded-full"
-                            style={{
-                                height: '4px',
-                                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.5)',
-                                animation: 'dropIndicatorPulse 1.5s ease-in-out infinite',
-                            }}
-                        ></div>
-                    </td>
-                </tr>
-            )}
             <tr
-                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-300 dark:border-slate-600 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
-                draggable={isDraggable}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={handleDrop}
+                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-300 dark:border-slate-600 ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 data-submittal-id={submittalId}
             >
                 {columns.map((column) => {
@@ -446,11 +342,15 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             }
                         }
 
-                        // Check if order number is an integer >= 1 and has ball_in_court (eligible for bump)
-                        // Also requires admin privileges
-                        const canBump = isAdmin && rawOrderValue !== null && rawOrderValue !== undefined && rawOrderValue !== '' && 
-                                       typeof rawOrderValue === 'number' && rawOrderValue >= 1 && rawOrderValue === Math.floor(rawOrderValue) &&
-                                       ballInCourt && !hasMultipleAssignees;
+                        // Check bump eligibility:
+                        // - Ordered (integer >= 1) → bumps to urgency slot
+                        // - Unordered (null) → appended to end of ordered list
+                        const rawIsNull = rawOrderValue === null || rawOrderValue === undefined || rawOrderValue === '';
+                        const rawIsIntegerOrdered = !rawIsNull &&
+                            typeof rawOrderValue === 'number' &&
+                            rawOrderValue >= 1 &&
+                            rawOrderValue === Math.floor(rawOrderValue);
+                        const canBump = isAdmin && (rawIsNull || rawIsIntegerOrdered) && ballInCourt && !hasMultipleAssignees;
 
                         const handleBumpClick = (e) => {
                             e.stopPropagation();
@@ -481,7 +381,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         <button
                                             onClick={handleBumpClick}
                                             className="px-1.5 py-0.5 text-xs font-medium bg-accent-500 hover:bg-accent-600 text-white rounded transition-colors shadow-sm"
-                                            title="Bump submittal to 0.9 urgency slot"
+                                            title={rawIsNull ? "Bump: add to end of ordered list" : "Bump submittal to 0.9 urgency slot"}
                                         >
                                             Bump
                                         </button>
@@ -772,19 +672,60 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle TITLE column - plain text display
+                    // Handle TITLE column - plain text display with optional up/down step arrows
                     if (column === 'TITLE') {
-                        const shouldWrap = true;
-                        const whitespaceClass = 'whitespace-normal';
+                        const rawOrderVal = row['ORDER #'] ?? row.order_number;
+                        const numericOrder = rawOrderVal !== null && rawOrderVal !== undefined
+                            ? parseFloat(rawOrderVal) : null;
+                        const isOrdered = numericOrder !== null && !isNaN(numericOrder) && numericOrder >= 1;
+                        const isUrgent = numericOrder !== null && !isNaN(numericOrder) && numericOrder > 0 && numericOrder < 1;
+                        const canStep = isAdmin && !hasMultipleAssignees && ballInCourt && (isOrdered || isUrgent);
+
+                        let canStepUp = false;
+                        let canStepDown = false;
+
+                        if (canStep && allRows) {
+                            const sameGroupOrders = allRows
+                                .filter(r => String(r.ball_in_court ?? r['BIC'] ?? '') === String(ballInCourt))
+                                .map(r => parseFloat(r['ORDER #'] ?? r.order_number ?? 'x'))
+                                .filter(o => !isNaN(o));
+
+                            const zoneOrders = isUrgent
+                                ? sameGroupOrders.filter(o => o > 0 && o < 1)
+                                : sameGroupOrders.filter(o => o >= 1);
+
+                            if (zoneOrders.length > 1) {
+                                canStepUp = numericOrder > Math.min(...zoneOrders);
+                                canStepDown = numericOrder < Math.max(...zoneOrders);
+                            }
+                        }
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 ${whitespaceClass} text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 ${columnClass} text-center`}
+                                className={`px-1 py-0.5 whitespace-normal text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 ${columnClass}`}
                                 style={customStyle}
                                 title={cellValue}
                             >
-                                {cellValue}
+                                <div className="flex items-center gap-1">
+                                    {canStep && onStepOrder && (
+                                        <div className="flex flex-col flex-shrink-0">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); if (canStepUp) onStepOrder(submittalId, 'up'); }}
+                                                disabled={!canStepUp}
+                                                className={`text-xs leading-none px-0.5 rounded transition-colors ${canStepUp ? 'text-accent-600 hover:text-accent-800 hover:bg-accent-50 cursor-pointer' : 'text-gray-300 dark:text-slate-600 cursor-not-allowed'}`}
+                                                title={canStepUp ? 'Move up' : 'Already at top of zone'}
+                                            >▲</button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); if (canStepDown) onStepOrder(submittalId, 'down'); }}
+                                                disabled={!canStepDown}
+                                                className={`text-xs leading-none px-0.5 rounded transition-colors ${canStepDown ? 'text-accent-600 hover:text-accent-800 hover:bg-accent-50 cursor-pointer' : 'text-gray-300 dark:text-slate-600 cursor-not-allowed'}`}
+                                                title={canStepDown ? 'Move down' : 'Already at bottom of zone'}
+                                            >▼</button>
+                                        </div>
+                                    )}
+                                    <span className="text-center flex-1">{cellValue}</span>
+                                </div>
                             </td>
                         );
                     }

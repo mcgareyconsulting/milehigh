@@ -272,10 +272,24 @@ class SubmittalOrderingService:
         Returns: List of (submittal, new_order_value) tuples
         """
         all_group_submittals_data = SubmittalOrderingService._submittals_to_dicts(all_group_submittals)
-        
+
         updates = SubmittalOrderingEngine.calculate_updates(update_request, all_group_submittals_data)
-        
+
         # Map back to model objects
+        submittal_map = {s.submittal_id: s for s in all_group_submittals}
+        return [(submittal_map[submittal_id], new_order) for submittal_id, new_order in updates]
+
+    @staticmethod
+    def step_order(submittal, direction: str, all_group_submittals: List) -> List:
+        """
+        Calculate a simple 2-item swap for stepping up or down within the same zone.
+        Returns: List of (submittal, new_order_value) tuples
+        """
+        submittal_data = SubmittalOrderingService._submittal_to_dict(submittal)
+        all_group_submittals_data = SubmittalOrderingService._submittals_to_dicts(all_group_submittals)
+
+        updates = SubmittalOrderingEngine.calculate_step_updates(submittal_data, direction, all_group_submittals_data)
+
         submittal_map = {s.submittal_id: s for s in all_group_submittals}
         return [(submittal_map[submittal_id], new_order) for submittal_id, new_order in updates]
 
@@ -400,6 +414,44 @@ class UrgencyService:
             if urgent_updates:
                 logger.info(f"Shifted {len(urgent_updates)} existing urgent submittals DOWN the ladder (toward 0.1 = most urgent)")
 
+        return True
+
+    @staticmethod
+    def bump_unordered_to_ordered(record, submittal_id, ball_in_court_value):
+        """
+        Move an unordered (null order_number) submittal to the end of the ordered list.
+        Assigns max(existing integer orders) + 1, or 1 if none exist.
+
+        Args:
+            record: Submittals DB record (must have order_number == None)
+            submittal_id: Submittal ID for logging
+            ball_in_court_value: Current ball_in_court value for grouping
+
+        Returns:
+            bool: True if successfully bumped, False otherwise
+        """
+        logger.info(f"Bumping unordered submittal {submittal_id} to end of ordered list")
+
+        if record.order_number is not None:
+            logger.warning(f"Submittal {submittal_id} already has order_number {record.order_number}, not unordered")
+            return False
+
+        # Find all ordered submittals (>= 1) for this ball_in_court
+        existing_regular_submittals = Submittals.query.filter(
+            Submittals.ball_in_court == ball_in_court_value,
+            Submittals.submittal_id != str(submittal_id),
+            Submittals.order_number >= 1,
+            Submittals.order_number.isnot(None)
+        ).all()
+
+        regular_data = [
+            {'submittal_id': s.submittal_id, 'order_number': s.order_number}
+            for s in existing_regular_submittals
+        ]
+
+        new_order = UrgencyEngine.calculate_bump_unordered_updates(regular_data)
+        record.order_number = new_order
+        logger.info(f"Bumped unordered submittal {submittal_id} to ordered position {new_order}")
         return True
 
 

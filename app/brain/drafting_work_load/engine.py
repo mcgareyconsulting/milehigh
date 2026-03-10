@@ -173,44 +173,34 @@ class SubmittalOrderingEngine:
         """
         Handle setting order to NULL. Returns list of (submittal_id, new_order_value) tuples.
         Compresses urgency submittals (0 < order < 1) upward when one is removed.
-        Renumbers regular submittals (>= 1) downward when one is removed.
-        
+        Ordered submittals (>= 1) keep their absolute order numbers (no cascade).
+
         Args:
             submittal_data: Dict with 'submittal_id' and 'order_number' keys
             all_group_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
-            
+
         Returns: List of (submittal_id, new_order_value) tuples
         """
         old_order = SubmittalOrderingEngine.safe_float_order(submittal_data.get('order_number'))
         updates = []
-        
-        if old_order is not None:
-            if 0 < old_order < 1:
-                # Urgency submittal: compress remaining urgency submittals upward (toward 0.9)
-                for s in all_group_submittals_data:
-                    if s.get('submittal_id') == submittal_data.get('submittal_id'):
-                        continue
-                    
-                    s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
-                    if s_order is not None and 0 < s_order < 1:
-                        if s_order < old_order:
-                            # Shift urgency submittals with order < old_order up by 0.1 to fill gap
-                            new_order = round(s_order + 0.1, 1)
-                            updates.append((s.get('submittal_id'), new_order))
-                        else:
-                            # Include urgency submittals with order >= old_order (they stay the same)
-                            updates.append((s.get('submittal_id'), s_order))
-            elif old_order >= 1:
-                # Regular submittal: decrease order numbers > old_order by 1
-                for s in all_group_submittals_data:
-                    if s.get('submittal_id') == submittal_data.get('submittal_id'):
-                        continue
-                    
-                    s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
-                    # Decrease order numbers > old_order by 1 (only for values >= 1)
-                    if s_order is not None and s_order >= 1 and s_order > old_order:
-                        updates.append((s.get('submittal_id'), s_order - 1))
-        
+
+        if old_order is not None and 0 < old_order < 1:
+            # Urgency submittal: compress remaining urgency submittals upward (toward 0.9)
+            for s in all_group_submittals_data:
+                if s.get('submittal_id') == submittal_data.get('submittal_id'):
+                    continue
+
+                s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                if s_order is not None and 0 < s_order < 1:
+                    if s_order < old_order:
+                        # Shift urgency submittals with order < old_order up by 0.1 to fill gap
+                        new_order = round(s_order + 0.1, 1)
+                        updates.append((s.get('submittal_id'), new_order))
+                    else:
+                        # Include urgency submittals with order >= old_order (they stay the same)
+                        updates.append((s.get('submittal_id'), s_order))
+        # Ordered submittals (>= 1): no cascade — they keep their absolute order numbers
+
         # Update the target submittal
         updates.append((submittal_data.get('submittal_id'), None))
         return updates
@@ -236,16 +226,8 @@ class SubmittalOrderingEngine:
         # Round urgency slot to nearest tenth place to ensure exact values (0.1, 0.2, ..., 0.9)
         rounded_order = round(new_order, 1)
         
-        # If old value was >= 1, renumber those greater than old value
-        if old_order is not None and old_order >= 1:
-            for s in all_group_submittals_data:
-                if s.get('submittal_id') == submittal_data.get('submittal_id'):
-                    continue
-                
-                s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
-                if s_order is not None and s_order >= 1 and s_order > old_order:
-                    updates.append((s.get('submittal_id'), s_order - 1))
-        
+        # Ordered submittals (>= 1) keep their absolute order numbers when item leaves — no cascade
+
         # Update the target submittal to new urgent value (rounded to tenth place)
         updates.append((submittal_data.get('submittal_id'), rounded_order))
         
@@ -301,96 +283,120 @@ class SubmittalOrderingEngine:
     def handle_set_to_regular(submittal_data: Dict, new_order: float, all_group_submittals_data: List[Dict]) -> List[Tuple[str, float]]:
         """
         Handle setting order to regular position (>= 1). Returns list of (submittal_id, new_order_value) tuples.
-        Renumbers all regular positions to be tight (1, 2, 3...), preserves urgent decimals.
-        
+        Assigns the exact given order_number; does NOT renumber other ordered items.
+
         Args:
             submittal_data: Dict with 'submittal_id' and 'order_number' keys
             new_order: New regular order value (>= 1)
             all_group_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
-            
+
         Returns: List of (submittal_id, new_order_value) tuples
         """
-        urgent, regular = SubmittalOrderingEngine.categorize_submittals(
-            all_group_submittals_data, 
-            submittal_data.get('submittal_id')
-        )
-        
-        # Insert submittal at target position
-        target_pos = int(new_order) - 1  # Convert to 0-based
-        target_pos = max(0, min(target_pos, len(regular)))
-        
-        reordered_regular = regular[:target_pos] + [submittal_data] + regular[target_pos:]
-        
-        # Build updates list
-        updates = []
-        
-        # Urgent submittals keep their values (no updates needed for them)
-        # Regular submittals get renumbered to 1, 2, 3...
-        next_integer = 1
-        for row in reordered_regular:
-            updates.append((row.get('submittal_id'), float(next_integer)))
-            next_integer += 1
-        
-        return updates
+        # Direct assign — no renumbering of other ordered items
+        return [(submittal_data.get('submittal_id'), float(new_order))]
 
     @staticmethod
     def compress_orders(all_group_submittals_data: List[Dict]) -> List[Tuple[str, float]]:
         """
-        Compress order numbers for both urgency and regular submittals.
+        Compress order numbers for urgency submittals only.
         - Urgency subset (0 < order < 1): Compresses down to 0.9 (fills from highest slot downward)
           Oldest (lowest order) gets the lowest available slot, newest (highest order) gets 0.9
-        - Regular subset (order >= 1): Compresses down to 1.0 (renumbers to 1, 2, 3, ...)
-        
+        - Regular subset (order >= 1): Untouched — preserves absolute order numbers
+
         Args:
             all_group_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
-            
-        Returns: List of (submittal_id, new_order_value) tuples for all submittals that need updates
+
+        Returns: List of (submittal_id, new_order_value) tuples for submittals that need updates
         """
         updates = []
-        
-        # Categorize submittals (don't exclude any)
+
         urgent = []
-        regular = []
-        
         for s in all_group_submittals_data:
             order_val = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
-            if order_val is not None:
-                if 0 < order_val < 1:
-                    urgent.append(s)
-                elif order_val >= 1:
-                    regular.append(s)
-        
+            if order_val is not None and 0 < order_val < 1:
+                urgent.append(s)
+
         # Sort urgent by current order (ascending: oldest/most urgent first)
         urgent.sort(key=lambda s: SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0)
-        
+
         # Compress urgency slots: fill from 0.9 downward
-        # Position 0 (oldest) → lowest slot, Position N (newest) → 0.9
         valid_urgency_slots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
         total_urgent = len(urgent)
-        
+
         for idx, s in enumerate(urgent):
-            # Calculate slot index: newest (last in sorted list) gets 0.9, oldest gets (0.9 - count + 1)
-            # idx 0 (oldest) → slot index (9 - total_urgent), idx (total_urgent-1) (newest) → slot index 8 (0.9)
             slot_index = (len(valid_urgency_slots) - total_urgent) + idx
             if 0 <= slot_index < len(valid_urgency_slots):
                 new_slot = valid_urgency_slots[slot_index]
                 current_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
-                # Only update if the slot has changed
                 if current_order is None or abs(current_order - new_slot) > 0.001:
                     updates.append((s.get('submittal_id'), new_slot))
-        
-        # Sort regular by current order (ascending)
-        regular.sort(key=lambda s: SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0)
-        
-        # Compress regular orders: renumber starting from 1.0
-        for idx, s in enumerate(regular):
-            new_order = float(idx + 1)  # 1, 2, 3, ...
-            current_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
-            # Only update if the order has changed
-            if current_order is None or abs(current_order - new_order) > 0.001:
-                updates.append((s.get('submittal_id'), new_order))
-        
+
         return updates
+
+    @staticmethod
+    def calculate_step_updates(submittal_data: Dict, direction: str, all_group_submittals_data: List[Dict]) -> List[Tuple[str, float]]:
+        """
+        Calculate a simple 2-item swap for stepping up or down within the same zone.
+        Zones are independent: urgent (0 < order < 1) and ordered (>= 1).
+        Unordered (null) items cannot be stepped.
+
+        Args:
+            submittal_data: Dict with 'submittal_id' and 'order_number' keys
+            direction: 'up' (toward lower order number) or 'down' (toward higher order number)
+            all_group_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
+
+        Returns: List of (submittal_id, new_order_value) tuples (2 items — the swap)
+        """
+        submittal_id = submittal_data.get('submittal_id')
+        current_order = SubmittalOrderingEngine.safe_float_order(submittal_data.get('order_number'))
+
+        if current_order is None:
+            raise ValueError("Cannot step an unordered (null) submittal")
+
+        is_urgent = 0 < current_order < 1
+        is_regular = current_order >= 1
+
+        if not is_urgent and not is_regular:
+            raise ValueError(f"Invalid order number for step: {current_order}")
+
+        # Collect same-zone neighbours (excluding target)
+        same_zone = []
+        for s in all_group_submittals_data:
+            if s.get('submittal_id') == submittal_id:
+                continue
+            s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+            if s_order is None:
+                continue
+            if is_urgent and 0 < s_order < 1:
+                same_zone.append(s)
+            elif is_regular and s_order >= 1:
+                same_zone.append(s)
+
+        same_zone.sort(key=lambda s: SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0)
+
+        if direction == 'up':
+            candidates = [s for s in same_zone
+                          if (SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0) < current_order]
+            if not candidates:
+                raise ValueError("Already at top of zone, cannot step up")
+            adjacent = candidates[-1]  # largest order less than current
+        elif direction == 'down':
+            candidates = [s for s in same_zone
+                          if (SubmittalOrderingEngine.safe_float_order(s.get('order_number')) or 0) > current_order]
+            if not candidates:
+                raise ValueError("Already at bottom of zone, cannot step down")
+            adjacent = candidates[0]  # smallest order greater than current
+        else:
+            raise ValueError(f"Invalid direction: {direction}")
+
+        adjacent_order = SubmittalOrderingEngine.safe_float_order(adjacent.get('order_number'))
+        adjacent_id = adjacent.get('submittal_id')
+
+        # Swap the two order numbers
+        return [
+            (submittal_id, adjacent_order),
+            (adjacent_id, current_order),
+        ]
 
     @staticmethod
     def calculate_updates(update_request: SubmittalOrderUpdate, all_group_submittals_data: List[Dict]) -> List[Tuple[str, Optional[float]]]:
@@ -423,7 +429,35 @@ class SubmittalOrderingEngine:
 
 class UrgencyEngine:
     """Pure business logic for urgency-related operations."""
-    
+
+    @staticmethod
+    def calculate_bump_unordered_updates(existing_regular_submittals_data: List[Dict]) -> float:
+        """
+        Calculate the new order_number for bumping an unordered (null) submittal to the ordered list.
+        Appends to the end: max(existing integer orders) + 1, or 1 if none exist.
+
+        Args:
+            existing_regular_submittals_data: List of dicts with 'submittal_id' and 'order_number' for
+                                              ordered (>= 1) submittals in the same ball_in_court group
+
+        Returns:
+            new_order: float — the order number to assign
+        """
+        existing_orders = []
+        for s in existing_regular_submittals_data:
+            order_val = s.get('order_number')
+            if order_val is not None:
+                try:
+                    f = float(order_val)
+                    if f >= 1:
+                        existing_orders.append(f)
+                except (ValueError, TypeError):
+                    pass
+
+        if existing_orders:
+            return float(int(max(existing_orders))) + 1.0
+        return 1.0
+
     @staticmethod
     def check_submitter_pending_in_workflow(approvers: List[Dict]) -> bool:
         """

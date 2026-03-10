@@ -265,40 +265,118 @@ def update_submittal_drafting_status():
             "details": str(exc)
         }), 500
 
-@brain_bp.route("/drafting-work-load/bump", methods=["POST"])
+@brain_bp.route("/drafting-work-load/step", methods=["POST"])
 @admin_required
-def bump_submittal():
-    """Bump a submittal to the 0.9 urgency slot with cascading effects"""
+def step_submittal_order():
+    """Step a submittal order up or down within its zone (simple 2-item swap)"""
     try:
         data = request.json
         submittal_id = str(data.get('submittal_id', ''))
-        
+        direction = data.get('direction', '')
+
         if not submittal_id:
             return jsonify({"error": "submittal_id is required"}), 400
-        
-        # Get the submittal
+
+        if direction not in ('up', 'down'):
+            return jsonify({"error": "direction must be 'up' or 'down'"}), 400
+
         submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({"error": "Submittal not found"}), 404
-        
-        # Check if submittal has ball_in_court (required for bumping)
+
+        if not submittal.ball_in_court:
+            return jsonify({"error": "Submittal must have a ball_in_court value"}), 400
+
+        all_group_submittals = Submittals.query.filter_by(
+            ball_in_court=submittal.ball_in_court
+        ).all()
+
+        old_order = submittal.order_number
+
+        try:
+            updates = SubmittalOrderingService.step_order(submittal, direction, all_group_submittals)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+        for subm, new_order_val in updates:
+            subm.order_number = new_order_val
+            subm.last_updated = datetime.utcnow()
+
+        db.session.commit()
+
+        user = get_current_user()
+        try:
+            create_submittal_event(
+                submittal_id, "updated",
+                {"order_step": direction, "order_number": {"old": old_order, "new": submittal.order_number}},
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for step: %s", event_err)
+
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "direction": direction,
+            "updates": [{"submittal_id": subm.submittal_id, "order_number": new_order_val}
+                        for subm, new_order_val in updates]
+        }), 200
+
+    except Exception as exc:
+        logger.error("Error stepping submittal order", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to step submittal order",
+            "details": str(exc)
+        }), 500
+
+
+@brain_bp.route("/drafting-work-load/bump", methods=["POST"])
+@admin_required
+def bump_submittal():
+    """Bump a submittal: ordered (>= 1) → urgent slot, or unordered (null) → end of ordered list"""
+    try:
+        data = request.json
+        submittal_id = str(data.get('submittal_id', ''))
+
+        if not submittal_id:
+            return jsonify({"error": "submittal_id is required"}), 400
+
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({"error": "Submittal not found"}), 404
+
         if not submittal.ball_in_court:
             return jsonify({"error": "Submittal must have a ball_in_court value to bump"}), 400
-        
-        # Call the bump function via service
-        bumped = UrgencyService.bump_order_number_to_urgent(
-            submittal,
-            submittal_id,
-            submittal.ball_in_court
-        )
-        
-        if not bumped:
-            return jsonify({
-                "error": "Submittal could not be bumped. Order number must be an integer >= 1.",
-                "details": "The bump function only works on submittals with integer order numbers >= 1"
-            }), 400
-        
-        # Commit the changes
+
+        if submittal.order_number is None:
+            # Unordered → Ordered: append to end of ordered list
+            bumped = UrgencyService.bump_unordered_to_ordered(
+                submittal,
+                submittal_id,
+                submittal.ball_in_court
+            )
+            if not bumped:
+                return jsonify({
+                    "error": "Submittal could not be bumped.",
+                    "details": "Submittal already has an order number."
+                }), 400
+            message = "Unordered submittal added to end of ordered list"
+        else:
+            # Ordered → Urgent: existing ladder logic
+            bumped = UrgencyService.bump_order_number_to_urgent(
+                submittal,
+                submittal_id,
+                submittal.ball_in_court
+            )
+            if not bumped:
+                return jsonify({
+                    "error": "Submittal could not be bumped. Order number must be an integer >= 1.",
+                    "details": "The bump function only works on submittals with integer order numbers >= 1"
+                }), 400
+            message = "Submittal bumped to urgency slot with cascading effects applied"
+
         db.session.commit()
 
         user = get_current_user()
@@ -311,14 +389,14 @@ def bump_submittal():
             )
         except Exception as event_err:
             logger.warning("Failed to create SubmittalEvent for bump: %s", event_err)
-        
+
         return jsonify({
             "success": True,
             "submittal_id": submittal_id,
             "order_number": submittal.order_number,
-            "message": "Submittal bumped to urgency slot with cascading effects applied"
+            "message": message
         }), 200
-        
+
     except Exception as exc:
         logger.error("Error bumping submittal", error=str(exc))
         db.session.rollback()

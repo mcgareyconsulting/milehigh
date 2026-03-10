@@ -112,6 +112,13 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
+    const stepSubmittal = useCallback(async (submittalId, direction) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.stepOrder(submittalId, direction),
+            `Failed to step submittal ${submittalId} ${direction}`
+        );
+    }, [executeMutation]);
+
     return {
         // Order number mutation
         updateOrderNumber,
@@ -133,5 +140,8 @@ export function useMutations(refetch) {
 
         // Due date mutation
         updateDueDate,
+
+        // Step mutation (up/down arrows)
+        stepSubmittal,
     };
 }

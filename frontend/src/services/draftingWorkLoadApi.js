@@ -115,6 +115,21 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Step a submittal order up or down within its zone (simple swap)
+     */
+    async stepOrder(submittalId, direction) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/step`, {
+                submittal_id: submittalId,
+                direction: direction
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to step submittal ${submittalId} ${direction}`);
+        }
+    }
+
+    /**
      * Update due date for a submittal
      */
     async updateDueDate(submittalId, dueDate) {

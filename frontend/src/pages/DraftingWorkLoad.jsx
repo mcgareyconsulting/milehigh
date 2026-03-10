@@ -4,7 +4,6 @@ import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
-import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { TableRow } from '../components/TableRow';
 import { FilterButtonGroup } from '../components/FilterButtonGroup';
 import { AlertMessage } from '../components/AlertMessage';
@@ -53,6 +52,7 @@ function DraftingWorkLoad() {
         updateProcoreStatus,
         bumpSubmittal,
         updateDueDate,
+        stepSubmittal,
     } = useMutations(refetch);
 
     // Submittal statuses for company (Procore status dropdown on draft tab)
@@ -108,16 +108,6 @@ function DraftingWorkLoad() {
         handleColumnSort,
         ALL_OPTION_VALUE,
     } = useFilters(rows);
-
-    // Drag and drop functionality
-    const {
-        draggedIndex,
-        dragOverIndex,
-        handleDragStart,
-        handleDragOver,
-        handleDragLeave,
-        handleDrop,
-    } = useDragAndDrop(rows, displayRows, updateOrderNumber);
 
     const jumpToTarget = useJumpToHighlight({
         loading,
@@ -486,13 +476,9 @@ function DraftingWorkLoad() {
                                                         selectedTab={selectedTab}
                                                         onBump={isAdmin ? bumpSubmittal : undefined}
                                                         onDueDateChange={isAdmin ? updateDueDate : undefined}
+                                                        onStepOrder={isAdmin ? stepSubmittal : undefined}
+                                                        allRows={rows}
                                                         rowIndex={index}
-                                                        onDragStart={isAdmin ? handleDragStart : undefined}
-                                                        onDragOver={isAdmin ? handleDragOver : undefined}
-                                                        onDragLeave={isAdmin ? handleDragLeave : undefined}
-                                                        onDrop={isAdmin ? handleDrop : undefined}
-                                                        isDragging={draggedIndex}
-                                                        dragOverIndex={dragOverIndex}
                                                         isAdmin={isAdmin}
                                                     />
                                                 ))
