@@ -8,7 +8,6 @@ import Events from './pages/Events';
 import JobLog from './pages/JobLog';
 import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
-import DashboardPlaceholder from './pages/DashboardPlaceholder';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import { checkAuth } from './utils/auth';
 import './App.css';
@@ -41,16 +40,14 @@ function AppContent() {
       <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} />}>
         {isAuthenticated ? (
           <>
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route index element={<Navigate to="/job-log" replace />} />
             <Route path="job-log" element={<JobLog />} />
-            <Route path="job-search" element={<Navigate to="/dashboard" replace />} />
             <Route path="events" element={<Events />} />
             <Route path="drafting-work-load" element={<DraftingWorkLoad />} />
             <Route path="drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
-            <Route path="dashboard" element={<DashboardPlaceholder />} />
             <Route path="pm-board" element={<PMBoard />} />
             <Route path="jobsite-map" element={<JobsiteMap />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/job-log" replace />} />
           </>
         ) : (
           <Route path="*" element={<LoginPrompt />} />

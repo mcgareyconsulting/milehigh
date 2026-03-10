@@ -1,18 +1,11 @@
-import { useState } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { logout } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
 import QuickSearch from './QuickSearch';
 
-const SIDEBAR_LINKS = [
-  { path: '/dashboard', label: 'Dashboard' },
-  { path: '/events', label: 'Events' },
-];
-
 function AppShell({ isAuthenticated }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isDark, toggleTheme } = useTheme();
 
   const handleLogout = async () => {
@@ -20,32 +13,12 @@ function AppShell({ isAuthenticated }) {
     window.location.href = '/login';
   };
 
-  const handleNav = (path) => {
-    navigate(path);
-    setSidebarOpen(false);
-  };
-
-  const isActive = (path) => {
-    if (path === '/dashboard') return location.pathname === '/dashboard';
-    return location.pathname.startsWith(path);
-  };
+  const isActive = (path) => location.pathname.startsWith(path);
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-[#f8fafc] dark:bg-slate-900">
       {/* Top bar */}
       <header className="relative flex items-center h-14 px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0">
-        {/* Hamburger */}
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          className="shrink-0 p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
-          aria-label="Open menu"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-
         {/* Quick search */}
         <QuickSearch />
 
@@ -82,6 +55,19 @@ function AppShell({ isAuthenticated }) {
             Drafting WL
           </button>
 
+          {/* Events shortcut */}
+          <button
+            type="button"
+            onClick={() => navigate('/events')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              isActive('/events')
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            Events
+          </button>
+
           {/* Theme toggle */}
           <button
             type="button"
@@ -116,51 +102,6 @@ function AppShell({ isAuthenticated }) {
           )}
         </div>
       </header>
-
-      {/* Overlay sidebar */}
-      {sidebarOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/40 z-40 transition-opacity"
-            aria-hidden="true"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <aside
-            className="fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-800 shadow-xl z-50 flex flex-col border-r border-gray-200 dark:border-slate-600 animate-fade-in"
-            aria-label="Navigation"
-          >
-            <div className="flex items-center justify-between h-14 px-4 border-b border-gray-200 dark:border-slate-600">
-              <span className="font-semibold text-gray-800 dark:text-slate-100">Menu</span>
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(false)}
-                className="p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none"
-                aria-label="Close menu"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <nav className="p-3 flex flex-col gap-1">
-              {SIDEBAR_LINKS.map(({ path, label }) => (
-                <button
-                  key={path}
-                  type="button"
-                  onClick={() => handleNav(path)}
-                  className={`text-left px-4 py-3 rounded-lg font-medium transition-colors ${
-                    isActive(path)
-                      ? 'bg-accent-500 text-white'
-                      : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
-          </aside>
-        </>
-      )}
 
       {/* Main content */}
       <main className="flex-1 w-full min-h-0 flex flex-col">
