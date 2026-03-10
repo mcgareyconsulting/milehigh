@@ -2,17 +2,26 @@ import logging
 import re
 import json
 import os
+import hashlib
 import requests
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from requests.exceptions import ConnectionError, Timeout
 from urllib3.exceptions import ProtocolError
 from app.config import Config as cfg
-from app.models import db, Job, ProcoreSubmittal
+from app.models import db, Releases, Submittals
 from app.trello.api import add_procore_link
 from app.procore.procore_auth import get_access_token
 from app.procore.client import get_procore_client
-from app.procore.helpers import parse_ball_in_court_from_submittal
+from app.procore.helpers import (
+    parse_ball_in_court_from_submittal,
+    extract_procore_user_id_from_webhook,
+    resolve_internal_user_id,
+    resolve_webhook_user_ids,
+    create_submittal_event as _create_submittal_event,
+)
+from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
+from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
 
 
 logger = logging.getLogger(__name__)
@@ -50,21 +59,6 @@ def _normalize_title(value):
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized
 
-# def procore_authorization():
-#     url = "https://login.procore.com/oauth/token/"
-#     headers = {
-#         "Content-Type": "application/x-www-form-urlencoded",
-#     }
-#     body = {
-#         "grant_type": "authorization_code",
-#         "code": cfg.PROD_PROCORE_AUTH_CODE,
-#         "client_id": cfg.PROD_PROCORE_CLIENT_ID,
-#         "client_secret": cfg.PROD_PROCORE_CLIENT_SECRET,
-#         "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
-#     }
-#     response = requests.post(url, data=body)
-#     print(response.json())
-#     return response.json()
 
 # Get Companies List
 def get_companies_list():
@@ -76,16 +70,6 @@ def get_companies_list():
         return None
     company_id = companies[0]["id"]
     return company_id
-
-# count num projects by company id
-def count_projects_by_company_id(company_id):
-    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
-    headers = {
-        "Authorization": f"Bearer {get_access_token()}",
-        "Procore-Company-Id": str(company_id),
-    }
-    projects = _request_json(url, headers=headers) or []
-    return len(projects)
 
 
 # Get Projects by Company ID
@@ -196,20 +180,7 @@ def parse_and_log_submittal_data(submittal_data: dict, project_id: int, submitta
                 "item_type": type(value[0]).__name__ if len(value) > 0 else "empty",
                 "sample": value[0] if len(value) > 0 and isinstance(value[0], (str, int, float, bool)) else None
             }
-    
-    # Log to file
-    try:
-        log_dir = cfg.SNAPSHOTS_DIR
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, "procore_submittal_data.log")
-        
-        with open(log_file, "a") as f:
-            f.write(json.dumps(parsed, indent=2) + "\n" + "-" * 80 + "\n")
-        
-        logger.info(f"Logged parsed submittal data to {log_file}")
-    except Exception as e:
-        logger.error(f"Failed to log submittal data: {str(e)}", exc_info=True)
-    
+
     return parsed
 
 
@@ -311,7 +282,7 @@ def handle_submittal_update(project_id, submittal_id):
         
     Returns:
         tuple: (procore_submittal, ball_in_court, approvers, status, title, submittal_manager) or None if parsing fails
-        - procore_submittal: ProcoreSubmittal DB record or None if not found
+        - procore_submittal: Submittals DB record or None if not found
         - ball_in_court: str or None - User who has the ball in court
         - approvers: list - List of approver data
         - status: str or None - Status of the submittal from Procore
@@ -364,7 +335,7 @@ def handle_submittal_update(project_id, submittal_id):
     submittal_manager = str(submittal_manager).strip() if submittal_manager else None
     
     # Look up the DB record
-    procore_submittal = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+    procore_submittal = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
     
     # Always return a tuple, even if procore_submittal is None
     return procore_submittal, ball_in_court, approvers, status, title, submittal_manager
@@ -396,22 +367,23 @@ def get_project_info(project_id):
         return None
 
 
-def create_submittal_from_webhook(project_id, submittal_id):
+def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None, source='Procore'):
     """
-    Create a new ProcoreSubmittal record in the database from a webhook create event.
+    Create a new Submittals record in the database from a webhook create event.
     
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID (resource_id from webhook)
+        webhook_payload: Raw webhook payload dict (for extracting user who triggered the event)
         
     Returns:
-        tuple: (created: bool, record: ProcoreSubmittal or None, error_message: str or None)
+        tuple: (created: bool, record: Submittals or None, error_message: str or None)
     """
     try:
         logger.info(f"Starting create_submittal_from_webhook for submittal {submittal_id}, project {project_id}")
         
         # Check if submittal already exists
-        existing = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+        existing = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
         if existing:
             logger.info(f"Submittal {submittal_id} already exists in database, skipping creation")
             return False, existing, None
@@ -478,11 +450,32 @@ def create_submittal_from_webhook(project_id, submittal_id):
             submittal_manager = None
         submittal_manager = str(submittal_manager).strip() if submittal_manager else None
         
-        logger.info(f"Creating new ProcoreSubmittal record with title: {title}")
+        logger.info(f"Creating new Submittals record with title: {title}")
+
+        # Extract created_at from Procore API if available
+        procore_created_at = None
+        created_at_str = submittal_data.get("created_at")
+        logger.info(f"Extracting created_at from API: {created_at_str}")
+        if created_at_str:
+            try:
+                # Parse ISO format timestamp (handles Z suffix and timezone offsets)
+                procore_created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                # Convert to naive datetime (remove timezone info)
+                if procore_created_at.tzinfo:
+                    procore_created_at = procore_created_at.replace(tzinfo=None)
+                logger.info(f"Parsed procore_created_at: {procore_created_at}")
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Could not parse created_at '{created_at_str}' from Procore API: {e}")
+                procore_created_at = None
+        
+        # Fallback to current time if not available from API
+        if not procore_created_at:
+            logger.warning(f"Using fallback datetime.utcnow() because procore_created_at is None")
+            procore_created_at = datetime.utcnow()
         
         # Double-check it doesn't exist (race condition protection)
         # Another thread/request might have created it between our initial check and now
-        existing_check = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+        existing_check = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
         if existing_check:
             logger.info(
                 f"Submittal {submittal_id} was created by another process between initial check and commit. "
@@ -490,10 +483,8 @@ def create_submittal_from_webhook(project_id, submittal_id):
             )
             return False, existing_check, None
         
-        # Create new ProcoreSubmittal record
-        ball_in_court_value = str(ball_in_court).strip() if ball_in_court else None
-        now = datetime.utcnow()
-        new_submittal = ProcoreSubmittal(
+        # Create new Submittals record
+        new_submittal = Submittals(
             submittal_id=str(submittal_id),
             procore_project_id=str(project_id),
             project_number=str(project_info.get("project_number", "")).strip() or None,
@@ -501,12 +492,11 @@ def create_submittal_from_webhook(project_id, submittal_id):
             title=title,
             status=status,
             type=submittal_type,
-            ball_in_court=ball_in_court_value,
+            ball_in_court=str(ball_in_court).strip() if ball_in_court else None,
             submittal_manager=submittal_manager,
             # submittal_drafting_status uses model default of '' (empty string)
-            last_bic_update=now if ball_in_court_value else None,  # Set if submittal is created with ball_in_court
-            created_at=now,
-            last_updated=now
+            created_at=procore_created_at,
+            last_updated=datetime.utcnow()
         )
         
         db.session.add(new_submittal)
@@ -523,7 +513,7 @@ def create_submittal_from_webhook(project_id, submittal_id):
             )
             db.session.rollback()
             # Fetch the record that was created by the other process
-            existing_after_error = ProcoreSubmittal.query.filter_by(submittal_id=str(submittal_id)).first()
+            existing_after_error = Submittals.query.filter_by(submittal_id=str(submittal_id)).first()
             if existing_after_error:
                 logger.info(f"Found existing record created by concurrent process, returning it")
                 return False, existing_after_error, None
@@ -536,6 +526,26 @@ def create_submittal_from_webhook(project_id, submittal_id):
             # Re-raise other commit errors after logging
             logger.error(f"Unexpected error during commit: {commit_error}", exc_info=True)
             raise
+        
+        # Create submittal event for creation (with user attribution from webhook)
+        try:
+            event_payload = {
+                "submittal_id": str(submittal_id),
+                "project_id": str(project_id),
+                "title": title,
+                "status": status,
+                "type": submittal_type,
+                "ball_in_court": str(ball_in_court).strip() if ball_in_court else None,
+                "submittal_manager": submittal_manager,
+                "project_name": project_info.get("name"),
+                "project_number": str(project_info.get("project_number", "")).strip() or None
+            }
+            _create_submittal_event(
+                str(submittal_id), "created", event_payload,
+                webhook_payload=webhook_payload, source=source,
+            )
+        except Exception as event_error:
+            logger.warning("Failed to create SubmittalEvent for submittal %s creation: %s", submittal_id, event_error, exc_info=True)
         
         logger.info(
             f"Created new submittal record: submittal_id={submittal_id}, "
@@ -570,266 +580,22 @@ def create_submittal_from_webhook(project_id, submittal_id):
         return False, None, error_msg
 
 
-def _check_submitter_pending_in_workflow(approvers):
-    """
-    Check if the submitter (workflow_group_number 0) appears as a pending approver
-    in the next workflow group that has pending approvers.
-    The "next workflow group" is determined by finding the workflow group with the
-    smallest workflow_group_number > 0 that has at least one pending approver.
-    Only checks the next pending approver in line for urgency bump functionality.
-    
-    Args:
-        approvers: List of approver dictionaries from submittal data
-        
-    Returns:
-        bool: True if submitter appears as pending in the next workflow group with pending approvers
-    """
-    print(f"[SUBMITTER CHECK] Starting check with {len(approvers) if approvers else 0} approvers")
-    logger.info(f"[SUBMITTER CHECK] Starting check with {len(approvers) if approvers else 0} approvers")
-    
-    if not approvers or not isinstance(approvers, list):
-        print(f"[SUBMITTER CHECK] No approvers list or invalid type")
-        logger.info(f"[SUBMITTER CHECK] No approvers list or invalid type")
-        return False
-    
-    # Find the submitter (workflow_group_number 0)
-    submitter = None
-    print(f"[SUBMITTER CHECK] Searching for submitter (workflow_group_number 0)...")
-    logger.info(f"[SUBMITTER CHECK] Searching for submitter (workflow_group_number 0)...")
-    
-    for approver in approvers:
-        if not isinstance(approver, dict):
-            continue
-        workflow_group = approver.get("workflow_group_number")
-        print(f"[SUBMITTER CHECK] Checking approver with workflow_group_number={workflow_group}")
-        logger.info(f"[SUBMITTER CHECK] Checking approver with workflow_group_number={workflow_group}")
-        
-        if workflow_group == 0:
-            user = approver.get("user")
-            if user and isinstance(user, dict):
-                submitter = {
-                    "name": user.get("name"),
-                    "login": user.get("login")
-                }
-                print(f"[SUBMITTER CHECK] Found submitter: name='{submitter.get('name')}', login='{submitter.get('login')}'")
-                logger.info(f"[SUBMITTER CHECK] Found submitter: name='{submitter.get('name')}', login='{submitter.get('login')}'")
-            break
-    
-    if not submitter:
-        print(f"[SUBMITTER CHECK] No submitter found (workflow_group_number 0 not found)")
-        logger.info(f"[SUBMITTER CHECK] No submitter found (workflow_group_number 0 not found)")
-        return False
-    
-    # Find the next workflow group that has at least one pending approver
-    # First, collect all workflow groups > 0 that have pending approvers
-    pending_workflow_groups = set()
-    for approver in approvers:
-        if not isinstance(approver, dict):
-            continue
-        
-        workflow_group = approver.get("workflow_group_number")
-        if workflow_group is None or workflow_group == 0:
-            continue  # Skip submitter or approvers without workflow_group_number
-        
-        # Check if this approver is pending
-        response = approver.get("response", {})
-        if isinstance(response, dict):
-            response_name = response.get("name", "").strip()
-            if response_name.lower() == "pending":
-                pending_workflow_groups.add(workflow_group)
-                print(f"[SUBMITTER CHECK] Found pending approver in workflow_group_number={workflow_group}")
-                logger.info(f"[SUBMITTER CHECK] Found pending approver in workflow_group_number={workflow_group}")
-    
-    if not pending_workflow_groups:
-        print(f"[SUBMITTER CHECK] No pending workflow groups found")
-        logger.info(f"[SUBMITTER CHECK] No pending workflow groups found")
-        return False
-    
-    # Find the minimum workflow group number (the next one in line)
-    next_workflow_group = min(pending_workflow_groups)
-    print(f"[SUBMITTER CHECK] Next pending workflow group to check: {next_workflow_group}")
-    logger.info(f"[SUBMITTER CHECK] Next pending workflow group to check: {next_workflow_group}")
-    
-    # Check if submitter appears as pending in the NEXT workflow group only
-    print(f"[SUBMITTER CHECK] Checking if submitter appears as pending in workflow_group_number={next_workflow_group}...")
-    logger.info(f"[SUBMITTER CHECK] Checking if submitter appears as pending in workflow_group_number={next_workflow_group}...")
-    
-    for approver in approvers:
-        if not isinstance(approver, dict):
-            continue
-        
-        workflow_group = approver.get("workflow_group_number")
-        # Only check approvers in the next workflow group
-        if workflow_group != next_workflow_group:
-            continue
-        
-        print(f"[SUBMITTER CHECK] Checking approver at workflow_group_number={workflow_group}")
-        logger.info(f"[SUBMITTER CHECK] Checking approver at workflow_group_number={workflow_group}")
-        
-        # Check if response is "Pending"
-        response = approver.get("response", {})
-        if not isinstance(response, dict):
-            print(f"[SUBMITTER CHECK]   Response is not a dict, skipping")
-            logger.info(f"[SUBMITTER CHECK]   Response is not a dict, skipping")
-            continue
-        
-        response_name = response.get("name", "").strip()
-        print(f"[SUBMITTER CHECK]   Response name: '{response_name}'")
-        logger.info(f"[SUBMITTER CHECK]   Response name: '{response_name}'")
-        
-        if response_name.lower() != "pending":
-            print(f"[SUBMITTER CHECK]   Response is not 'Pending', skipping")
-            logger.info(f"[SUBMITTER CHECK]   Response is not 'Pending', skipping")
-            continue
-        
-        # Check if user matches submitter
-        user = approver.get("user")
-        if not user or not isinstance(user, dict):
-            print(f"[SUBMITTER CHECK]   User is not a dict, skipping")
-            logger.info(f"[SUBMITTER CHECK]   User is not a dict, skipping")
-            continue
-        
-        approver_name = user.get("name")
-        approver_login = user.get("login")
-        print(f"[SUBMITTER CHECK]   Approver user: name='{approver_name}', login='{approver_login}'")
-        logger.info(f"[SUBMITTER CHECK]   Approver user: name='{approver_name}', login='{approver_login}'")
-        
-        # Match by name or login
-        name_match = (submitter.get("name") and approver_name and 
-                     submitter.get("name").lower() == approver_name.lower())
-        login_match = (submitter.get("login") and approver_login and 
-                      submitter.get("login").lower() == approver_login.lower())
-        
-        print(f"[SUBMITTER CHECK]   Name match: {name_match}, Login match: {login_match}")
-        logger.info(f"[SUBMITTER CHECK]   Name match: {name_match}, Login match: {login_match}")
-        
-        if name_match or login_match:
-            print(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('name')}' appears as pending at workflow_group_number={workflow_group}")
-            logger.info(f"[SUBMITTER CHECK] ✓ MATCH FOUND: Submitter '{submitter.get('name')}' appears as pending at workflow_group_number={workflow_group}")
-            return True
-    
-    # No match found in the next workflow group
-    print(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in workflow_group_number={next_workflow_group}")
-    logger.info(f"[SUBMITTER CHECK] ✗ No match found: Submitter does not appear as pending in workflow_group_number={next_workflow_group}")
-    return False
-
-
-def _bump_order_number_to_decimal(record, submittal_id, ball_in_court_value):
-    """
-    Convert an integer order number to an urgent decimal (e.g., 6 -> 0.6).
-    Handles collision detection and finds the next available decimal.
-    
-    Args:
-        record: ProcoreSubmittal DB record
-        submittal_id: Submittal ID for logging
-        ball_in_court_value: Current ball_in_court value for collision detection
-        
-    Returns:
-        bool: True if order number was bumped, False otherwise
-    """
-    print(f"[ORDER BUMP] Starting bump check for submittal {submittal_id}")
-    logger.info(f"[ORDER BUMP] Starting bump check for submittal {submittal_id}")
-    
-    if record.order_number is None:
-        print(f"[ORDER BUMP] Order number is None, cannot bump")
-        logger.info(f"[ORDER BUMP] Order number is None, cannot bump")
-        return False
-    
-    current_order = record.order_number
-    print(f"[ORDER BUMP] Current order number: {current_order} (type: {type(current_order)})")
-    logger.info(f"[ORDER BUMP] Current order number: {current_order} (type: {type(current_order)})")
-    
-    # Check if order_number is an integer >= 1
-    is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
-    print(f"[ORDER BUMP] Is integer >= 1: {is_integer}")
-    logger.info(f"[ORDER BUMP] Is integer >= 1: {is_integer}")
-    
-    if not is_integer:
-        print(f"[ORDER BUMP] Order number is not an integer >= 1, cannot bump")
-        logger.info(f"[ORDER BUMP] Order number is not an integer >= 1, cannot bump")
-        return False
-    
-    # Convert to urgent decimal in tenths place (e.g., 6 -> 0.6, 14 -> 0.14) - always less than 1
-    # For numbers >= 10, divide by 100; for single digits, divide by 10
-    if current_order >= 10:
-        target_decimal = current_order / 100.0
-        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
-        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 100.0)")
-    else:
-        target_decimal = current_order / 10.0
-        print(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
-        logger.info(f"[ORDER BUMP] Target decimal: {target_decimal} (from {int(current_order)} / 10.0)")
-    
-    # Find all existing order numbers for this ball_in_court that are < 1
-    print(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")
-    logger.info(f"[ORDER BUMP] Checking for collisions with ball_in_court='{ball_in_court_value}'")
-    
-    existing_urgent_orders = db.session.query(ProcoreSubmittal.order_number).filter(
-        ProcoreSubmittal.ball_in_court == ball_in_court_value,
-        ProcoreSubmittal.submittal_id != str(submittal_id),  # Exclude current submittal
-        ProcoreSubmittal.order_number < 1,
-        ProcoreSubmittal.order_number.isnot(None)
-    ).all()
-    existing_urgent_orders = [float(o[0]) for o in existing_urgent_orders if o[0] is not None]
-    
-    print(f"[ORDER BUMP] Found {len(existing_urgent_orders)} existing urgent orders: {existing_urgent_orders}")
-    logger.info(f"[ORDER BUMP] Found {len(existing_urgent_orders)} existing urgent orders: {existing_urgent_orders}")
-    
-    # Find next available decimal that is more urgent (smaller) than any collision
-    new_order = target_decimal
-    if target_decimal in existing_urgent_orders:
-        print(f"[ORDER BUMP] Collision detected! {target_decimal} already exists")
-        logger.info(f"[ORDER BUMP] Collision detected! {target_decimal} already exists")
-        
-        # Collision detected - find next available smaller decimal
-        if existing_urgent_orders:
-            smallest_existing = min(existing_urgent_orders)
-            candidate = smallest_existing / 2.0
-            print(f"[ORDER BUMP] Starting collision resolution: smallest_existing={smallest_existing}, initial candidate={candidate}")
-            logger.info(f"[ORDER BUMP] Starting collision resolution: smallest_existing={smallest_existing}, initial candidate={candidate}")
-            
-            # Keep halving until we find a value that's not in the list
-            max_iterations = 10  # Prevent infinite loops
-            iteration = 0
-            while candidate in existing_urgent_orders and candidate > 0.001 and iteration < max_iterations:
-                candidate = candidate / 2.0
-                iteration += 1
-                print(f"[ORDER BUMP]   Iteration {iteration}: candidate={candidate}")
-                logger.info(f"[ORDER BUMP]   Iteration {iteration}: candidate={candidate}")
-            
-            # If we still have a collision after iterations, use a fixed small value
-            if candidate in existing_urgent_orders or candidate <= 0:
-                candidate = 0.01
-                print(f"[ORDER BUMP]   Using fallback value: {candidate}")
-                logger.info(f"[ORDER BUMP]   Using fallback value: {candidate}")
-            
-            new_order = candidate
-        else:
-            # No existing urgent orders, but target_decimal is somehow in the list (shouldn't happen)
-            new_order = target_decimal / 2.0
-            print(f"[ORDER BUMP] Edge case: using {new_order}")
-            logger.info(f"[ORDER BUMP] Edge case: using {new_order}")
-    else:
-        print(f"[ORDER BUMP] No collision, using target decimal: {new_order}")
-        logger.info(f"[ORDER BUMP] No collision, using target decimal: {new_order}")
-    
-    record.order_number = new_order
-    print(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> {new_order} for submittal {submittal_id}")
-    logger.info(f"[ORDER BUMP] ✓ BUMPED: {int(current_order)} -> {new_order} for submittal {submittal_id}")
-    return True
-
-
-def check_and_update_submittal(project_id, submittal_id):
+def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, source='Procore'):
     """
     Check if ball_in_court, status, title, and submittal_manager from Procore differ from DB, update if needed.
-    
+
     Args:
         project_id: Procore project ID
         submittal_id: Procore submittal ID
-        
+        webhook_payload: Raw webhook payload dict (for extracting user who triggered the event)
+        source: Event source string — 'Procore' for real user changes, 'Connector' for
+                bounce-backs from the connector service account. 'Connector' events are
+                still processed (to catch Procore side-effect changes like auto-ball_in_court)
+                but are tagged for filtering in the UI.
+
     Returns:
         tuple: (ball_updated: bool, status_updated: bool, title_updated: bool, manager_updated: bool,
-                record: ProcoreSubmittal or None, ball_in_court: str or None, status: str or None)
+                record: Submittals or None, ball_in_court: str or None, status: str or None)
     """
     try:
         result = handle_submittal_update(project_id, submittal_id)
@@ -837,12 +603,18 @@ def check_and_update_submittal(project_id, submittal_id):
             logger.warning(f"Failed to parse submittal data for submittal {submittal_id}")
             return False, False, False, False, None, None, None
         
-        record, ball_in_court, approvers, status, title, submittal_manager = result
-        
+        _, ball_in_court, approvers, status, title, submittal_manager = result
+
+        # Re-fetch with a row-level lock so concurrent webhook deliveries serialize here
+        # rather than both detecting the same mismatch and writing duplicate events.
+        record = Submittals.query.filter_by(
+            submittal_id=str(submittal_id)
+        ).with_for_update().first()
+
         if not record:
             logger.warning(f"No DB record found for submittal {submittal_id}")
             return False, False, False, False, None, ball_in_court, status
-        
+
         ball_updated = False
         status_updated = False
         title_updated = False
@@ -859,6 +631,38 @@ def check_and_update_submittal(project_id, submittal_id):
                 f"DB='{record.ball_in_court}' vs Procore='{ball_in_court}'"
             )
             
+            # Compress the old drafter's list if the old value is a single drafter (not empty, not multiple)
+            if db_ball_value and ',' not in db_ball_value:
+                logger.info(f"Compressing orders for old drafter '{db_ball_value}' after submittal {submittal_id} moved")
+                
+                # Get all submittals for the old ball_in_court (excluding the one being moved)
+                old_drafter_submittals = Submittals.query.filter(
+                    Submittals.ball_in_court == db_ball_value,
+                    Submittals.submittal_id != str(submittal_id),
+                    Submittals.status == 'Open'
+                ).all()
+                
+                if old_drafter_submittals:
+                    # Convert to dict format for compression
+                    submittals_data = [
+                        {
+                            'submittal_id': s.submittal_id,
+                            'order_number': s.order_number
+                        }
+                        for s in old_drafter_submittals
+                    ]
+                    
+                    # Compress both urgency and regular subsets
+                    compression_updates = SubmittalOrderingEngine.compress_orders(submittals_data)
+                    
+                    # Apply compression updates
+                    if compression_updates:
+                        submittal_map = {s.submittal_id: s for s in old_drafter_submittals}
+                        for submittal_id, new_order in compression_updates:
+                            if submittal_id in submittal_map:
+                                submittal_map[submittal_id].order_number = new_order
+                                logger.info(f"Compressed submittal {submittal_id} to order {new_order} for drafter '{db_ball_value}'")
+            
             # Check if new value is multiple assignees (comma-separated)
             is_new_multiple = webhook_ball_value and ',' in webhook_ball_value
             
@@ -867,69 +671,37 @@ def check_and_update_submittal(project_id, submittal_id):
                 record.was_multiple_assignees = True
             elif record.was_multiple_assignees and not is_new_multiple:
                 # Was multiple, now single - this is the bounce-back scenario
-                if _bump_order_number_to_decimal(record, submittal_id, webhook_ball_value):
+                if UrgencyService.bump_order_number_to_urgent(record, submittal_id, webhook_ball_value):
                     order_bumped = True
                 
                 # Reset the flag after handling bounce-back
                 record.was_multiple_assignees = False
             
             record.ball_in_court = ball_in_court
-            record.last_bic_update = datetime.utcnow()  # Track when ball in court was last updated
             ball_updated = True
         
-        # NEW LOGIC: Check if submitter appears as pending in a later workflow group
-        # This should trigger a bump regardless of ball_in_court changes
-        print(f"[MAIN CHECK] Checking submitter pending workflow condition for submittal {submittal_id}")
-        logger.info(f"[MAIN CHECK] Checking submitter pending workflow condition for submittal {submittal_id}")
-        
-        if approvers:
-            print(f"[MAIN CHECK] Approvers list available, calling _check_submitter_pending_in_workflow")
-            logger.info(f"[MAIN CHECK] Approvers list available, calling _check_submitter_pending_in_workflow")
-            submitter_pending = _check_submitter_pending_in_workflow(approvers)
-            print(f"[MAIN CHECK] Result from _check_submitter_pending_in_workflow: {submitter_pending}")
-            logger.info(f"[MAIN CHECK] Result from _check_submitter_pending_in_workflow: {submitter_pending}")
-        else:
-            print(f"[MAIN CHECK] No approvers list available")
-            logger.info(f"[MAIN CHECK] No approvers list available")
-            submitter_pending = False
-        
+        # Check if submitter appears as pending in a later workflow group (triggers order bump)
+        submitter_pending = (
+            UrgencyService.check_submitter_pending_in_workflow(approvers)
+            if approvers else False
+        )
+        logger.debug(
+            "Submittal %s submitter_pending_in_workflow=%s (approvers=%s)",
+            submittal_id, submitter_pending, bool(approvers)
+        )
         if submitter_pending:
-            print(f"[MAIN CHECK] ✓ Condition met: Submitter appears as pending approver in workflow for submittal {submittal_id}")
-            logger.info(
-                f"[MAIN CHECK] ✓ Condition met: Submitter appears as pending approver in workflow for submittal {submittal_id}. "
-                f"Checking if order number should be bumped."
-            )
             # Only bump if order_number is an integer >= 1 (not already a decimal)
             if record.order_number is not None:
                 current_order = record.order_number
-                print(f"[MAIN CHECK] Current order number: {current_order}")
-                logger.info(f"[MAIN CHECK] Current order number: {current_order}")
-                
                 is_integer = isinstance(current_order, (int, float)) and current_order >= 1 and current_order == int(current_order)
-                print(f"[MAIN CHECK] Order number is integer >= 1: {is_integer}")
-                logger.info(f"[MAIN CHECK] Order number is integer >= 1: {is_integer}")
-                
                 if is_integer:
-                    # Use current ball_in_court value (may have been updated above)
                     ball_in_court_for_bump = record.ball_in_court if ball_updated else (ball_in_court or "")
-                    print(f"[MAIN CHECK] Calling _bump_order_number_to_decimal with ball_in_court='{ball_in_court_for_bump}'")
-                    logger.info(f"[MAIN CHECK] Calling _bump_order_number_to_decimal with ball_in_court='{ball_in_court_for_bump}'")
-                    
-                    if _bump_order_number_to_decimal(record, submittal_id, ball_in_court_for_bump):
+                    if UrgencyService.bump_order_number_to_urgent(record, submittal_id, ball_in_court_for_bump):
                         order_bumped = True
-                        print(f"[MAIN CHECK] ✓ Order number successfully bumped for submittal {submittal_id}")
                         logger.info(
-                            f"[MAIN CHECK] ✓ Order number successfully bumped due to submitter pending in workflow for submittal {submittal_id}"
+                            "Order number bumped for submittal %s (submitter pending in workflow)",
+                            submittal_id
                         )
-                else:
-                    print(f"[MAIN CHECK] Order number is not an integer >= 1, skipping bump")
-                    logger.info(f"[MAIN CHECK] Order number is not an integer >= 1, skipping bump")
-            else:
-                print(f"[MAIN CHECK] Order number is None, skipping bump")
-                logger.info(f"[MAIN CHECK] Order number is None, skipping bump")
-        else:
-            print(f"[MAIN CHECK] ✗ Condition not met: Submitter does not appear as pending in workflow")
-            logger.info(f"[MAIN CHECK] ✗ Condition not met: Submitter does not appear as pending in workflow")
         
         # Check and update status
         db_status_value = record.status if record.status is not None else ""
@@ -972,6 +744,50 @@ def check_and_update_submittal(project_id, submittal_id):
             record.last_updated = datetime.utcnow()
             db.session.commit()
             
+            # Create submittal event for update
+            try:
+                action = "updated"
+                payload = {}
+                
+                if ball_updated:
+                    payload["ball_in_court"] = {
+                        "old": db_ball_value,
+                        "new": ball_in_court
+                    }
+                
+                if status_updated:
+                    payload["status"] = {
+                        "old": db_status_value,
+                        "new": status
+                    }
+                
+                if title_updated:
+                    payload["title"] = {
+                        "old": db_title_value,
+                        "new": title
+                    }
+                
+                if manager_updated:
+                    payload["submittal_manager"] = {
+                        "old": db_manager_value,
+                        "new": submittal_manager
+                    }
+                
+                if order_bumped:
+                    payload["order_bumped"] = True
+                    payload["order_number"] = record.order_number
+                
+                if payload:
+                    try:
+                        _create_submittal_event(
+                            str(submittal_id), action, payload,
+                            webhook_payload=webhook_payload, source=source,
+                        )
+                    except Exception as event_error:
+                        logger.warning("Failed to create SubmittalEvent for submittal %s update: %s", submittal_id, event_error, exc_info=True)
+            except Exception as event_error:
+                logger.warning("Failed to build or create SubmittalEvent for submittal %s update: %s", submittal_id, event_error, exc_info=True)
+            
             if ball_updated:
                 logger.info(f"Updated ball_in_court for submittal {submittal_id} to '{ball_in_court}'")
             if status_updated:
@@ -983,11 +799,11 @@ def check_and_update_submittal(project_id, submittal_id):
             if order_bumped:
                 logger.info(f"Order number bumped for submittal {submittal_id}")
         else:
-            logger.debug(
-                f"All fields match for submittal {submittal_id}: "
-                f"ball='{ball_in_court}', status='{status}', title='{title}', manager='{submittal_manager}'"
+            logger.info(
+                "Webhook for submittal %s: no DB updates (already in sync). "
+                "Likely bounce-back from Brain/originated update. ball=%r, status=%r",
+                submittal_id, ball_in_court, status,
             )
-        
         return ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status
             
     except Exception as e:
@@ -997,13 +813,93 @@ def check_and_update_submittal(project_id, submittal_id):
         )
         return False, False, False, False, None, None, None
 
+# Get Viewer URL for Job (without Trello updates)
+def get_viewer_url_for_job(job_number, release_number):
+    '''
+    Function to get procore viewer_url for a job without updating Trello.
+    This is used for backfilling viewer_urls into the database.
+    
+    Args:
+        job_number: The job number (integer)
+        release_number: The release number (string)
+    
+    Returns:
+        dict with viewer_url if found, None otherwise
+        Returns dict with error information if any step fails
+    '''
+    try:
+        # Get companies list
+        company_id = get_companies_list()
+        if not company_id:
+            return {
+                "success": False,
+                "error": "No Procore company_id returned",
+                "job": job_number,
+                "release": release_number
+            }
+
+        # Get project by company id
+        project_id = get_projects_by_company_id(company_id, job_number)
+        if not project_id:
+            return {
+                "success": False,
+                "error": f"No Procore project found for job={job_number} company_id={company_id}",
+                "job": job_number,
+                "release": release_number
+            }
+
+        # Get submittals by project id
+        identifier = f"{job_number}-{release_number}"
+        submittals = get_submittals_by_project_id(project_id, identifier)
+        if not submittals:
+            return {
+                "success": False,
+                "error": f"No Procore submittals found for project_id={project_id} identifier={identifier}",
+                "job": job_number,
+                "release": release_number
+            }
+        
+        final_pdfs = get_final_pdf_viewers(project_id, submittals)
+        if not final_pdfs:
+            return {
+                "success": False,
+                "error": f"No final PDF viewers found for project_id={project_id} identifier={identifier}",
+                "job": job_number,
+                "release": release_number
+            }
+
+        # Extract viewer urls from final pdfs
+        viewer_url = final_pdfs[0]["viewer_url"]
+
+        return {
+            "success": True,
+            "viewer_url": viewer_url,
+            "job": job_number,
+            "release": release_number
+        }
+    except Exception as e:
+        logger.error(
+            "Error getting viewer_url for job=%s release=%s: %s",
+            job_number,
+            release_number,
+            str(e),
+            exc_info=True
+        )
+        return {
+            "success": False,
+            "error": f"Exception: {str(e)}",
+            "job": job_number,
+            "release": release_number
+        }
+
+
 # Add Procore Link to Trello Card
 def add_procore_link_to_trello_card(job, release):
     '''
     Function to add procore drafting document link to related trello card
     '''
     print(job, release)
-    job_record = Job.query.filter_by(job=job, release=release).first()
+    job_record = Releases.query.filter_by(job=job, release=release).first()
     if not job_record:
         return None
     print(job_record)
@@ -1093,7 +989,7 @@ def cross_reference_db_vs_api():
     
     Returns:
         dict with:
-            - db_only_submittals: List of ProcoreSubmittal records in DB but not in API
+            - db_only_submittals: List of Submittals records in DB but not in API
             - api_submittal_ids: Set of submittal IDs from API
             - db_submittal_ids: Set of submittal IDs from DB (filtered)
             - missing_in_api: Count of submittals in DB but not in API
@@ -1133,27 +1029,27 @@ def cross_reference_db_vs_api():
     logger.info(f"  - type IN {valid_types}")
     
     # First, check total count in DB
-    total_db_count = ProcoreSubmittal.query.count()
+    total_db_count = Submittals.query.count()
     logger.info(f"DEBUG: Total submittals in DB (no filters): {total_db_count}")
     
     # Check count by status
     status_counts = db.session.query(
-        ProcoreSubmittal.status,
-        db.func.count(ProcoreSubmittal.id)
-    ).group_by(ProcoreSubmittal.status).all()
+        Submittals.status,
+        db.func.count(Submittals.id)
+    ).group_by(Submittals.status).all()
     logger.info(f"DEBUG: DB submittals by status: {dict(status_counts)}")
     
     # Check count by type
     type_counts = db.session.query(
-        ProcoreSubmittal.type,
-        db.func.count(ProcoreSubmittal.id)
-    ).group_by(ProcoreSubmittal.type).all()
+        Submittals.type,
+        db.func.count(Submittals.id)
+    ).group_by(Submittals.type).all()
     logger.info(f"DEBUG: DB submittals by type (top 10): {dict(type_counts[:10])}")
     
     # Apply filters
-    db_submittals = ProcoreSubmittal.query.filter(
-        ProcoreSubmittal.status == "Open",
-        ProcoreSubmittal.type.in_(valid_types)
+    db_submittals = Submittals.query.filter(
+        Submittals.status == "Open",
+        Submittals.type.in_(valid_types)
     ).all()
     
     logger.info(f"✓ Found {len(db_submittals)} submittals in database matching API criteria")
@@ -1271,9 +1167,9 @@ def check_webhook_health(project_ids=None):
             "Submittal for GC  Approval",
             "Submittal for GC Approval"
         ]
-        db_projects = db.session.query(ProcoreSubmittal.procore_project_id).filter(
-            ProcoreSubmittal.status == "Open",
-            ProcoreSubmittal.type.in_(valid_types)
+        db_projects = db.session.query(Submittals.procore_project_id).filter(
+            Submittals.status == "Open",
+            Submittals.type.in_(valid_types)
         ).distinct().all()
         project_ids = [str(p[0]) for p in db_projects if p[0]]
         logger.info(f"Checking webhooks for {len(project_ids)} projects from database (filtered by status=Open, valid types)")
@@ -1370,94 +1266,6 @@ def check_webhook_health(project_ids=None):
         'webhook_details': webhook_details,
         'total_checked': len(project_ids)
     }
-
-
-def check_orphaned_submittals_webhooks():
-    """
-    Check webhook health for projects that have submittals in DB but not in API response.
-    This helps identify if missing webhooks are causing submittals to not appear in API.
-    
-    Returns:
-        dict combining cross-reference and webhook health check results
-    """
-    logger.info("Starting orphaned submittals webhook check")
-    
-    # First, cross-reference DB vs API
-    cross_ref = cross_reference_db_vs_api()
-    
-    # Get unique project IDs from DB-only submittals
-    orphaned_project_ids = list(cross_ref['db_only_by_project'].keys())
-    
-    if not orphaned_project_ids:
-        logger.info("No orphaned submittals found - all DB submittals are in API response")
-        return {
-            'cross_reference': cross_ref,
-            'webhook_check': None,
-            'summary': 'No orphaned submittals to check'
-        }
-    
-    logger.info(f"Checking webhooks for {len(orphaned_project_ids)} projects with orphaned submittals")
-    
-    # Check webhooks for these projects
-    webhook_check = check_webhook_health(orphaned_project_ids)
-    
-    # Combine results
-    result = {
-        'cross_reference': cross_ref,
-        'webhook_check': webhook_check,
-        'summary': {
-            'orphaned_submittals_count': cross_ref['missing_in_api'],
-            'orphaned_projects_count': len(orphaned_project_ids),
-            'orphaned_projects_without_webhooks': len([
-                pid for pid in orphaned_project_ids 
-                if pid in webhook_check['projects_without_webhooks']
-            ]),
-            'orphaned_projects_with_broken_webhooks': len([
-                pid for pid in orphaned_project_ids 
-                if pid in webhook_check['broken_webhooks']
-            ])
-        }
-    }
-    
-    logger.info(f"Orphaned submittals check complete: {result['summary']}")
-    return result
-
-
-def check_all_relevant_projects_webhooks():
-    """
-    Check webhook health for all projects that have submittals in the API response.
-    This ensures all 37 relevant projects have proper webhooks configured.
-    
-    Returns:
-        dict with webhook health check results for all relevant projects
-    """
-    logger.info("Starting webhook health check for all relevant projects")
-    
-    # Get submittals from API to identify relevant projects
-    api_submittals = get_drafting_workload()
-    
-    # Get unique project IDs from API response
-    relevant_project_ids = list(set(s['project_id'] for s in api_submittals))
-    logger.info(f"Found {len(relevant_project_ids)} relevant projects with submittals in API")
-    
-    # Check webhooks for all relevant projects
-    webhook_check = check_webhook_health(relevant_project_ids)
-    
-    # Add summary
-    webhook_check['summary'] = {
-        'total_relevant_projects': len(relevant_project_ids),
-        'projects_with_webhooks': len(webhook_check['projects_with_webhooks']),
-        'projects_without_webhooks': len(webhook_check['projects_without_webhooks']),
-        'projects_with_broken_webhooks': len(webhook_check['broken_webhooks']),
-        'coverage_percentage': round(
-            (len(webhook_check['projects_with_webhooks']) / len(relevant_project_ids) * 100) 
-            if relevant_project_ids else 0, 
-            2
-        )
-    }
-    
-    logger.info(f"Relevant projects webhook check complete: {webhook_check['summary']}")
-    return webhook_check
 
 
 def comprehensive_health_scan(skip_user_prompt=False):
@@ -1691,7 +1499,7 @@ def comprehensive_health_scan(skip_user_prompt=False):
             for issue in sync_issues:
                 try:
                     # Find the DB record
-                    db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
+                    db_record = Submittals.query.filter_by(submittal_id=issue['submittal_id']).first()
                     if not db_record:
                         logger.warning(f"  Could not find DB record for submittal {issue['submittal_id']}")
                         continue
@@ -1700,7 +1508,6 @@ def comprehensive_health_scan(skip_user_prompt=False):
                     if issue['ball_in_court']['mismatch']:
                         old_value = db_record.ball_in_court
                         db_record.ball_in_court = issue['ball_in_court']['api']
-                        db_record.last_bic_update = datetime.utcnow()  # Track when ball in court was last updated
                         logger.info(f"  Updated submittal {issue['submittal_id']}: ball_in_court '{old_value}' -> '{issue['ball_in_court']['api']}'")
                     
                     # Update status if there's a mismatch
@@ -1748,15 +1555,6 @@ if __name__ == "__main__":
     # app context
     with app.app_context():
 
-        # # Check for orphaned submittals and their webhook status
-        # result = check_orphaned_submittals_webhooks()
-        # print(f"Found {result['summary']['orphaned_submittals_count']} orphaned submittals")
-        # print(f"In {result['summary']['orphaned_projects_count']} projects")
-        # print(f"{result['summary']['orphaned_projects_without_webhooks']} projects missing webhooks")
-
-        # # Or check all relevant projects
-        # webhook_status = check_all_relevant_projects_webhooks()
-        # print(f"Webhook coverage: {webhook_status['summary']['coverage_percentage']}%")
         # Comprehensive health scan
         result = comprehensive_health_scan()
         print(f"Total orphaned submittals: {result['summary']['total_orphaned']}")

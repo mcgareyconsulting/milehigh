@@ -1,0 +1,556 @@
+{
+    "jobsites": [
+        {
+            "job_number": "130",
+            "name": "Arista Fairfield",
+            "address": "8251 Transit Way, Broomfield, CO 80021",
+            "latitude": 39.907278,
+            "longitude": -105.088519,
+            "pm_id": 2,
+            "is_active": true,
+            "geofence_geojson": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -105.089519,
+                            39.906278
+                        ],
+                        [
+                            -105.087519,
+                            39.906278
+                        ],
+                        [
+                            -105.087519,
+                            39.908278
+                        ],
+                        [
+                            -105.089519,
+                            39.908278
+                        ],
+                        [
+                            -105.089519,
+                            39.906278
+                        ]
+                    ]
+                ]
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -105.089519,
+                            39.906278
+                        ],
+                        [
+                            -105.087519,
+                            39.906278
+                        ],
+                        [
+                            -105.087519,
+                            39.908278
+                        ],
+                        [
+                            -105.089519,
+                            39.908278
+                        ],
+                        [
+                            -105.089519,
+                            39.906278
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "job_number": "140",
+            "name": "Crestview",
+            "address": "79050 US-40, Winter Park, CO 80482",
+            "latitude": 39.916628,
+            "longitude": -105.784205,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -105.785205,
+                            39.915628
+                        ],
+                        [
+                            -105.783205,
+                            39.915628
+                        ],
+                        [
+                            -105.783205,
+                            39.917628
+                        ],
+                        [
+                            -105.785205,
+                            39.917628
+                        ],
+                        [
+                            -105.785205,
+                            39.915628
+                        ]
+                    ]
+                ]
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -105.785205,
+                            39.915628
+                        ],
+                        [
+                            -105.783205,
+                            39.915628
+                        ],
+                        [
+                            -105.783205,
+                            39.917628
+                        ],
+                        [
+                            -105.785205,
+                            39.917628
+                        ],
+                        [
+                            -105.785205,
+                            39.915628
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "job_number": "160",
+            "name": "Wind Crest RB3.5",
+            "address": "3235 Mill Vista Rd, Highlands Ranch, CO 80129",
+            "latitude": 39.561039,
+            "longitude": -105.030194,
+            "pm_id": 3,
+            "is_active": true,
+            "geofence_geojson": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -105.031194,
+                            39.560039
+                        ],
+                        [
+                            -105.029194,
+                            39.560039
+                        ],
+                        [
+                            -105.029194,
+                            39.562039
+                        ],
+                        [
+                            -105.031194,
+                            39.562039
+                        ],
+                        [
+                            -105.031194,
+                            39.560039
+                        ]
+                    ]
+                ]
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -105.031194,
+                            39.560039
+                        ],
+                        [
+                            -105.029194,
+                            39.560039
+                        ],
+                        [
+                            -105.029194,
+                            39.562039
+                        ],
+                        [
+                            -105.031194,
+                            39.562039
+                        ],
+                        [
+                            -105.031194,
+                            39.560039
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "job_number": "140",
+            "name": "Crestview",
+            "address": "79050 US-40, Winter Park, CO 80482",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "160",
+            "name": "Wind Crest RB3.5",
+            "address": "3235 Mill Vista Rd, Highlands Ranch, CO 80129",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "170",
+            "name": "Banyan High Point",
+            "address": "21775 East 65th Ave, Aurora, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "190",
+            "name": "Metro Center",
+            "address": "SW Corner E. Alameda Dr & E. Centrepoint Dr, Aurora, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "200",
+            "name": "Alexan Diagonal Plaza",
+            "address": "3320 28th Street, Boulder, CO 80301",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "260",
+            "name": "Kairoi (Tripoint)",
+            "address": "1150 East Colfax Ave, Denver, CO 80218",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "290",
+            "name": "Martin Residence",
+            "address": "2440 Cessna Drive, Erie, CO 80516",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "300",
+            "name": "16th Street Mall",
+            "address": "16th Street Mall, Denver, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "320",
+            "name": "Landing at Lemay",
+            "address": "1200 Duff Dr., Fort Collins, CO, 80524",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "330",
+            "name": "Aspendale (Headwaters) Littleton Senior",
+            "address": "13256 W Crestline Dr, Littleton, CO 80127",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "340",
+            "name": "Littleton Village II",
+            "address": "101 Village Park Drive, Littleton, CO 80122",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "360",
+            "name": "Life Time Boulder",
+            "address": "1821 30th Street, Boulder, CO 80301",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "370",
+            "name": "Vista Highlands",
+            "address": "1151 Spring Place, Broomfield, CO 80023",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "380",
+            "name": "Marshall Pointe",
+            "address": "5170 Marshall Street, Arvada, CO 80002",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "390",
+            "name": "Heritage on Hover",
+            "address": "10147 Hover Street, Longmont, CO 80903",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "400",
+            "name": "Fieldhouse (Idaho Springs)",
+            "address": "925 Miner Street (Bldg1), 995 Miner Street (Bldg2), 55-11th Ave (Bldg3), Idaho Springs, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "410",
+            "name": "Columbine Square",
+            "address": "5151 South Federal Blvd, Littleton, CO 80123",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "420",
+            "name": "Stack Wheat Ridge",
+            "address": "9880 West 45th Place, Wheat Ridge, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "440",
+            "name": "Outlook Green Valley Ranch",
+            "address": "4587 N Telluride Way, Denver, CO 80249",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "450",
+            "name": "Sandstone Ranch",
+            "address": "2020 Zlaten Drive, Longmont, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "460",
+            "name": "Dublin Springs",
+            "address": "6415 Templeton Gap Road, Colorado Springs, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "470",
+            "name": "Olde Course Maint. Building",
+            "address": "2115 West 29th Street, Loveland, CO 80538",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "480",
+            "name": "Alta Flatirons",
+            "address": "350 Gateway Drive, Superior CO 80027",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "490",
+            "name": "Capital Hill",
+            "address": "655 Pearl St Denver CO 80203",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "500",
+            "name": "Novel Flatiron",
+            "address": "81 West Flatiron Crossing Drive, Broomfield, CO 80021",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "510",
+            "name": "Idaho Springs Police Dept",
+            "address": "1744 Miner Street, Idaho Springs, CO",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 2,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "530",
+            "name": "East Oak Townhomes",
+            "address": "220 E Oak St Fort Collins, CO 80524",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "537",
+            "name": "Loecker Decks",
+            "address": "346 Alpine Dr. Estas Park, Co 80517",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "980",
+            "name": "Northfield Flats",
+            "address": "4545 North Xenia Street, Denver, CO 80238",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "540",
+            "name": "Compactor Shading (Ft. Collins)",
+            "address": "1775 Ashlar Dr, Ft. Collins, Co 80526",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "545",
+            "name": "Cabinet & Oil Containment",
+            "address": "5792 Ideal Dr, Suite 200 Fredrick, Co 80516",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "546",
+            "name": "Window Safety Rails",
+            "address": "66 S Van Gordon St, Lakewood, Co 80228",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        },
+        {
+            "job_number": "999",
+            "name": "Wesley Residence",
+            "address": "9310 E Winding Hill Ave, Lone Tree, CO 80124",
+            "latitude": null,
+            "longitude": null,
+            "pm_id": 1,
+            "is_active": true,
+            "geofence_geojson": null,
+            "geometry": null
+        }
+    ]
+}

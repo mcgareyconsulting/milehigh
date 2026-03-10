@@ -16,4 +16,4 @@ from app.logging_config import get_logger
 brain_bp = Blueprint("brain", __name__)
 
 from app.brain.routes import routes
-from app.brain.routes import dwl_routes
+from app.brain.drafting_work_load import routes as dwl_routes

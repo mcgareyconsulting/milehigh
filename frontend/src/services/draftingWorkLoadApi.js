@@ -1,17 +1,25 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/api';
 
-// Automatically detect dev vs production mode
-// Dev mode (npm run dev): Use Flask backend at localhost:8000
-// Production mode (npm run build): Use same origin (empty string)
-// Can override with VITE_API_URL env var if needed
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-    (import.meta.env.DEV ? 'http://localhost:8000' : '');
+// Configure axios to include credentials for session cookies
+axios.defaults.withCredentials = true;
 
 class DraftingWorkLoadApi {
-    async fetchData() {
+    /**
+     * Fetch DWL data. Optionally pass { lat, lng } to filter submittals by job_sites containing that point.
+     * @param { { lat: number, lng: number } | null } locationFilter - if set, only submittals for matching job_sites are returned
+     * @param { 'open' | 'draft' } tab - 'open' = Open status only; 'draft' = status not Open or Closed
+     */
+    async fetchData(locationFilter = null, tab = 'open') {
         try {
+            const params = { tab: tab === 'draft' ? 'draft' : 'open' };
+            if (locationFilter && typeof locationFilter.lat === 'number' && typeof locationFilter.lng === 'number') {
+                params.lat = locationFilter.lat;
+                params.lng = locationFilter.lng;
+            }
             const response = await axios.get(
-                `${API_BASE_URL}/brain/drafting-work-load`
+                `${API_BASE_URL}/brain/drafting-work-load`,
+                { params }
             );
             return response.data;
         } catch (error) {
@@ -66,34 +74,69 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Bump a submittal to the 0.9 urgency slot with cascading effects
+     */
+    async bumpSubmittal(submittalId) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/bump`, {
+                submittal_id: submittalId
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to bump submittal ${submittalId}`);
+        }
+    }
+
+    /**
+     * Fetch submittal statuses for the company (for Procore status dropdown)
+     */
+    async fetchSubmittalStatuses() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/drafting-work-load/submittal-statuses`);
+            return response.data.submittal_statuses;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch submittal statuses');
+        }
+    }
+
+    /**
+     * Update Procore status for a submittal (Draft/Open/Closed/etc.)
+     */
+    async updateProcoreStatus(submittalId, statusId) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/procore-status`, {
+                submittal_id: submittalId,
+                status_id: statusId
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update Procore status for submittal ${submittalId}`);
+        }
+    }
+
+    /**
+     * Step a submittal order up or down within its zone (simple swap)
+     */
+    async stepOrder(submittalId, direction) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/step`, {
+                submittal_id: submittalId,
+                direction: direction
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to step submittal ${submittalId} ${direction}`);
+        }
+    }
+
+    /**
      * Update due date for a submittal
      */
     async updateDueDate(submittalId, dueDate) {
         try {
-            // Convert date to YYYY-MM-DD format if it's a Date object or mm/dd/yyyy string
-            let formattedDate = null;
-            if (dueDate) {
-                if (dueDate instanceof Date) {
-                    formattedDate = dueDate.toISOString().split('T')[0];
-                } else if (typeof dueDate === 'string') {
-                    // If it's already in YYYY-MM-DD format, use it
-                    if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-                        formattedDate = dueDate;
-                    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dueDate)) {
-                        // Convert mm/dd/yyyy to YYYY-MM-DD
-                        const [month, day, year] = dueDate.split('/');
-                        formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                    } else {
-                        formattedDate = dueDate;
-                    }
-                } else {
-                    formattedDate = dueDate;
-                }
-            }
-
             const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/due-date`, {
                 submittal_id: submittalId,
-                due_date: formattedDate
+                due_date: dueDate
             });
             return response.data;
         } catch (error) {
@@ -102,49 +145,16 @@ class DraftingWorkLoadApi {
     }
 
     /**
-     * Reorder items in a ball_in_court group so the lowest order >= 1 becomes 1
+     * Compress ordered (>= 1) submittals for a drafter to sequential integers
      */
-    async reorderGroup(ballInCourt) {
+    async resortDrafter(ballInCourt) {
         try {
-            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/reorder-group`, {
+            const response = await axios.post(`${API_BASE_URL}/brain/drafting-work-load/resort`, {
                 ball_in_court: ballInCourt
             });
             return response.data;
         } catch (error) {
-            throw this._handleError(error, `Failed to reorder group for ${ballInCourt}`);
-        }
-    }
-
-    /**
-     * Upload Excel file for drafting workload submittals
-     */
-    async uploadFile(file) {
-        // Validate file type
-        if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
-            throw new Error('Please select an Excel file (.xlsx or .xls)');
-        }
-
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await axios.post(
-                `${API_BASE_URL}/procore/api/upload/drafting-workload-submittals`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
-                }
-            );
-
-            if (!response.data.success) {
-                throw new Error(response.data.error || 'Upload failed');
-            }
-
-            return response.data;
-        } catch (error) {
-            throw this._handleError(error, 'Failed to upload file');
+            throw this._handleError(error, `Failed to resort submittals for ${ballInCourt}`);
         }
     }
 

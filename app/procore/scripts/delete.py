@@ -15,7 +15,7 @@ import argparse
 from typing import Dict, Optional
 
 from app import create_app
-from app.models import db, ProcoreSubmittal
+from app.models import db, Submittals as ProcoreSubmittal
 from app.procore.client import get_procore_client
 from app.procore.webhook_utils import get_unique_projects, log_operation
 

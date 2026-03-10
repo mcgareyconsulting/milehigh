@@ -1,0 +1,375 @@
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import axios from 'axios';
+
+import { API_BASE_URL } from '../utils/api';
+
+function Events() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [selectedDate, setSelectedDate] = useState('');
+    const [availableDates, setAvailableDates] = useState([]);
+    const [selectedSource, setSelectedSource] = useState('');
+    const [availableSources, setAvailableSources] = useState([]);
+    const [limit, setLimit] = useState(50);
+    const [expandedPayload, setExpandedPayload] = useState({});
+    const [submittalId, setSubmittalId] = useState(searchParams.get('submittal_id') || '');
+    const [jobFilter, setJobFilter] = useState(searchParams.get('job') || '');
+    const [releaseFilter, setReleaseFilter] = useState(searchParams.get('release') || '');
+
+    useEffect(() => {
+        // Update filters from URL params
+        const urlSubmittalId = searchParams.get('submittal_id') || '';
+        const urlJob = searchParams.get('job') || '';
+        const urlRelease = searchParams.get('release') || '';
+        setSubmittalId(urlSubmittalId);
+        setJobFilter(urlJob);
+        setReleaseFilter(urlRelease);
+    }, [searchParams]);
+
+    useEffect(() => {
+        fetchEvents();
+        fetchFilters();
+    }, [selectedDate, limit, selectedSource, submittalId, jobFilter, releaseFilter]);
+
+    const fetchFilters = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/events/filters`);
+            const dates = [...new Set(
+                response.data.dates
+            )].sort().reverse();
+            setAvailableDates(dates);
+            const sources = response.data.sources;
+            setAvailableSources(sources);
+        } catch (err) {
+            console.error('Error fetching filters:', err);
+        }
+    }
+
+    const fetchEvents = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const params = { limit };
+            if (selectedDate) {
+                params.start = selectedDate;
+                params.end = selectedDate;
+            }
+            if (selectedSource) {
+                params.source = selectedSource;
+            }
+            if (submittalId) {
+                params.submittal_id = String(submittalId).trim();
+            }
+            if (jobFilter) {
+                params.job = parseInt(jobFilter, 10);
+            }
+            if (releaseFilter) {
+                params.release = String(releaseFilter).trim();
+            }
+            const response = await axios.get(`${API_BASE_URL}/brain/events`, { params });
+            setEvents(response.data.events || []);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatDateTime = (dateString) => {
+        if (!dateString) return '—';
+        return new Date(dateString).toLocaleString();
+    };
+
+    const formatPayload = (payload) => {
+        if (!payload) return '—';
+        if (typeof payload === 'string') {
+            try {
+                payload = JSON.parse(payload);
+            } catch {
+                return payload;
+            }
+        }
+        return JSON.stringify(payload, null, 2);
+    };
+
+    const togglePayload = (eventId) => {
+        setExpandedPayload(prev => ({
+            ...prev,
+            [eventId]: !prev[eventId]
+        }));
+    };
+
+    const getSourceColor = (source) => {
+        const colors = {
+            'Trello': 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200',
+            'Excel': 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200',
+            'System': 'bg-gray-100 dark:bg-slate-600 text-gray-800 dark:text-slate-200',
+            'Procore': 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200',
+            'Brain': 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200',
+        };
+        return colors[source] || 'bg-gray-100 dark:bg-slate-600 text-gray-800 dark:text-slate-200';
+    };
+
+    const formatUserDisplay = (event) => event.user_name || '—';
+
+    const resetFilters = () => {
+        setSelectedDate('');
+        setSelectedSource('');
+        setLimit(50);
+        setSubmittalId('');
+        setJobFilter('');
+        setReleaseFilter('');
+        // Clear all filters from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('submittal_id');
+        newParams.delete('job');
+        newParams.delete('release');
+        setSearchParams(newParams);
+    };
+
+    const clearSubmittalIdFilter = () => {
+        setSubmittalId('');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('submittal_id');
+        setSearchParams(newParams);
+    };
+
+    const clearJobReleaseFilter = () => {
+        setJobFilter('');
+        setReleaseFilter('');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('job');
+        newParams.delete('release');
+        setSearchParams(newParams);
+    };
+
+    return (
+        <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+                    {/* Title bar - matches DWL / Job Log */}
+                    <div className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-accent-500 to-accent-600">
+                        <div className="flex items-center justify-between">
+                            <h1 className="text-3xl font-bold text-white">Job Events</h1>
+                        </div>
+                    </div>
+
+                    <div className="p-2 flex flex-col flex-1 min-h-0 space-y-2">
+                        <div className="bg-gradient-to-r from-gray-50 to-accent-50 dark:from-slate-700 dark:to-slate-700 rounded-xl p-3 border border-gray-200 dark:border-slate-600 shadow-sm flex-shrink-0">
+                            <div className="flex flex-wrap gap-3 items-end">
+                                <div className="flex-1 min-w-[200px]">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                                        📅 Filter by Date
+                                    </label>
+                                    <select
+                                        value={selectedDate}
+                                        onChange={(e) => setSelectedDate(e.target.value)}
+                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white dark:bg-slate-600 dark:text-slate-100 shadow-sm transition-all"
+                                    >
+                                        <option value="">All Dates</option>
+                                        {availableDates.map(date => (
+                                            <option key={date} value={date}>{date}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex-1 min-w-[200px]">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                                        🔗 Filter by Source
+                                    </label>
+                                    <select
+                                        value={selectedSource}
+                                        onChange={(e) => setSelectedSource(e.target.value)}
+                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white dark:bg-slate-600 dark:text-slate-100 shadow-sm transition-all"
+                                    >
+                                        <option value="">All Sources</option>
+                                        {availableSources.map(source => (
+                                            <option key={source} value={source}>{source}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="min-w-[150px]">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                                        🔢 Results Limit
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="200"
+                                        value={limit}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            if (value === '') {
+                                                setLimit(50); // Default to 50 if empty
+                                            } else {
+                                                const parsed = parseInt(value, 10);
+                                                if (!isNaN(parsed) && parsed >= 1 && parsed <= 200) {
+                                                    setLimit(parsed);
+                                                }
+                                            }
+                                        }}
+                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white dark:bg-slate-600 dark:text-slate-100 shadow-sm transition-all"
+                                    />
+                                </div>
+                                <div className="flex items-end">
+                                    <button
+                                        onClick={resetFilters}
+                                        className="px-6 py-2.5 bg-gray-200 dark:bg-slate-600 hover:bg-gray-300 dark:hover:bg-slate-500 text-gray-700 dark:text-slate-200 font-semibold rounded-lg text-sm transition-colors duration-150 shadow-sm hover:shadow border border-gray-300 dark:border-slate-500 flex items-center gap-2"
+                                    >
+                                        <span>🔄</span>
+                                        Reset Filters
+                                    </button>
+                                </div>
+                            </div>
+                            {submittalId && (
+                                <div className="mt-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-blue-700 dark:text-blue-300 font-semibold">Filtered by Submittal ID:</span>
+                                        <span className="text-blue-900 dark:text-blue-100 font-mono text-sm">{submittalId}</span>
+                                    </div>
+                                    <button
+                                        onClick={clearSubmittalIdFilter}
+                                        className="text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 font-medium text-sm underline"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            )}
+                            {(jobFilter || releaseFilter) && (
+                                <div className="mt-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-green-700 dark:text-green-300 font-semibold">Filtered by Job:</span>
+                                        <span className="text-green-900 dark:text-green-100 font-mono text-sm">
+                                            {jobFilter}{releaseFilter ? `-${releaseFilter}` : ''}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={clearJobReleaseFilter}
+                                        className="text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100 font-medium text-sm underline"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {loading && (
+                            <div className="text-center py-12">
+                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
+                                <p className="text-gray-600 dark:text-slate-400 font-medium">Loading events...</p>
+                            </div>
+                        )}
+                        {error && (
+                            <div className="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-200 px-6 py-4 rounded-lg mb-6 shadow-sm">
+                                <div className="flex items-center">
+                                    <span className="text-xl mr-3">⚠️</span>
+                                    <div>
+                                        <p className="font-semibold">Error loading events</p>
+                                        <p className="text-sm mt-1">{error}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {!loading && !error && (
+                            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                                <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                                    <div className="overflow-auto flex-1 min-h-0">
+                                        <table className="w-full">
+                                            <thead className="bg-gradient-to-r from-gray-50 to-accent-50 dark:from-slate-700 dark:to-slate-700">
+                                                <tr>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Date</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Source</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">User</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Identifier</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Action</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Payload</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-600">
+                                                {events.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-6 py-12 text-center">
+                                                            <div className="text-gray-400 dark:text-slate-500 text-4xl mb-3">📭</div>
+                                                            <p className="text-gray-500 dark:text-slate-400 font-medium">No events found</p>
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    events.map((event, index) => {
+                                                        const uniqueKey = `${event.type}-${event.id}`;
+                                                        return (
+                                                            <tr
+                                                                key={uniqueKey}
+                                                                className="hover:bg-accent-50/50 dark:hover:bg-slate-700/50 transition-colors duration-150"
+                                                                style={{ animationDelay: `${index * 50}ms` }}
+                                                            >
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                                                                    {formatDateTime(event.created_at)}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getSourceColor(event.source)}`}>
+                                                                        {event.source}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                                                                    {formatUserDisplay(event)}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                                                                    {event.type === 'job'
+                                                                        ? `${event.job}-${event.release || 'N/A'}`
+                                                                        : event.submittal_id || 'N/A'
+                                                                    }
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-100">
+                                                                    {event.action}
+                                                                </td>
+                                                                <td className="px-6 py-4 text-sm">
+                                                                    {expandedPayload[uniqueKey] ? (
+                                                                        <div className="space-y-2">
+                                                                            <pre className="bg-gray-50 dark:bg-slate-700 p-3 rounded-lg text-xs overflow-x-auto max-w-md border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-200">
+                                                                                {formatPayload(event.payload)}
+                                                                            </pre>
+                                                                            <button
+                                                                                onClick={() => togglePayload(uniqueKey)}
+                                                                                className="text-xs text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 font-medium"
+                                                                            >
+                                                                                ▲ Collapse
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => togglePayload(uniqueKey)}
+                                                                            className="text-xs text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 font-medium"
+                                                                        >
+                                                                            ▼ View Payload
+                                                                        </button>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between flex-shrink-0 pt-2">
+                                    <div className="bg-accent-50 dark:bg-accent-900/30 rounded-lg px-4 py-2 border border-accent-200 dark:border-accent-700">
+                                        <p className="text-sm font-semibold text-accent-700 dark:text-accent-300">
+                                            Total: <span className="text-accent-900 dark:text-accent-100">{events.length}</span> events
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default Events;
+

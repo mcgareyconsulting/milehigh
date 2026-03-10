@@ -16,7 +16,7 @@ from collections import defaultdict
 
 from app import create_app
 from app.procore.client import get_procore_client
-from app.models import db, ProcoreSubmittal
+from app.models import db, Submittals as ProcoreSubmittal
 from app.config import Config as cfg
 from app.procore.helpers import parse_ball_in_court_from_submittal
 

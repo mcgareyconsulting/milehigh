@@ -9,6 +9,7 @@ from app.onedrive import onedrive_bp
 from app.procore import procore_bp
 from app.api import api_bp
 from app.brain import brain_bp
+from app.auth.routes import auth_bp
 from app.trello.api import create_trello_card_from_excel_data
 
 # database imports
@@ -184,39 +185,46 @@ def create_app():
         # Check if path starts with any API prefix
         return any(path.startswith(prefix) for prefix in API_ROUTE_PREFIXES)
     
-    # Database configuration - use environment variable for production
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        # For production databases (PostgreSQL, MySQL, etc.)
-        app.config["SQLALCHEMY_DATABASE_URI"] = database_url
-        
-        # Import pool classes
-        from sqlalchemy.pool import QueuePool
-        
-        # Use QueuePool with proper thread safety settings
-        engine_options = {
-            "pool_pre_ping": True,        # Detect and refresh dead connections before use
-            "pool_recycle": 280,          # Recycle connections slightly before Render's idle timeout (~5 min)
-            "pool_size": 5,               # Render free-tier DBs are resource-constrained; keep this modest
-            "max_overflow": 10,           # Allow some burst usage during concurrent jobs
-            "pool_timeout": 30,           # Wait up to 30s for a connection before raising
-            "pool_reset_on_return": "commit",  # Reset connections properly on return
-            "poolclass": QueuePool,       # Use QueuePool for standard threading
-            "connect_args": {
-                "sslmode": "require",     # Enforce SSL
-                "connect_timeout": 10,    # Fail fast if DB can't be reached
-                "application_name": "trello_sharepoint_app",
-                "options": "-c statement_timeout=30000"  # 30s max per SQL statement
-            },
-        }
-        
-        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_options
+    # Database configuration — routed by ENVIRONMENT env var
+    # Set ENVIRONMENT=local | sandbox | production in .env
+    _environment = (os.environ.get("ENVIRONMENT") or os.environ.get("FLASK_ENV") or "local").lower()
 
-    else:
-        # Fallback to SQLite for local development
-        # sandbox
-        app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SANDBOX_DATABASE_URL")
-        # app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jobs.sqlite"
+    from sqlalchemy.pool import QueuePool
+
+    _pg_engine_options = {
+        "pool_pre_ping": True,
+        "pool_recycle": 280,
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_timeout": 30,
+        "pool_reset_on_return": "commit",
+        "poolclass": QueuePool,
+        "connect_args": {
+            "sslmode": "require",
+            "connect_timeout": 10,
+            "application_name": "trello_sharepoint_app",
+            "options": "-c statement_timeout=30000",
+        },
+    }
+
+    if _environment in ("production", "prod"):
+        _db_url = os.environ.get("DATABASE_URL")
+        if not _db_url:
+            raise RuntimeError("DATABASE_URL must be set for production environment")
+        app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _pg_engine_options
+
+    elif _environment in ("sandbox", "staging", "stage"):
+        _db_url = os.environ.get("SANDBOX_DATABASE_URL")
+        if not _db_url:
+            raise RuntimeError("SANDBOX_DATABASE_URL must be set for sandbox environment")
+        app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _pg_engine_options
+
+    else:  # local / development / default
+        _db_url = os.environ.get("LOCAL_DATABASE_URL") or "sqlite:///jobs.sqlite"
+        app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
+        # No SSL engine options for local
     
     # Configure Flask-SQLAlchemy for proper session management
     # This ensures sessions are properly scoped and closed, preventing threading issues
@@ -225,10 +233,11 @@ def create_app():
     
     db.init_app(app)
 
-    # Initialize the database - only create tables, don't drop and reseed
+    # Initialize the database - only auto-create tables in local dev.
+    # Sandbox and production use explicit migrations to avoid schema conflicts.
     with app.app_context():
-        # Only create tables if they don't exist
-        db.create_all()
+        if _environment not in ("production", "prod", "sandbox", "staging", "stage"):
+            db.create_all()
         
         # # Check if we need to seed the database (only if empty)
         # from app.models import Job
@@ -2049,6 +2058,7 @@ def create_app():
     app.register_blueprint(procore_bp, url_prefix="/procore")
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(brain_bp, url_prefix="/brain")
+    app.register_blueprint(auth_bp)
 
     # Global error handler to ensure CORS headers are always included
     @app.errorhandler(Exception)

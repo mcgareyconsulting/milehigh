@@ -45,6 +45,32 @@ export function formatCellValue(value) {
 }
 
 /**
+ * Format a date value for short display (M/D/YY)
+ * Parses dates without timezone conversion to avoid day shift issues
+ */
+export function formatDateShort(dateValue) {
+    if (!dateValue) return '—';
+    try {
+        if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            const [year, month, day] = dateValue.split('-');
+            return `${parseInt(month)}/${parseInt(day)}/${year.slice(2)}`;
+        }
+        if (typeof dateValue === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+            const [month, day, year] = dateValue.split('/');
+            return `${parseInt(month)}/${parseInt(day)}/${year.slice(2)}`;
+        }
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) return '—';
+        const month = date.getUTCMonth() + 1;
+        const day = date.getUTCDate();
+        const year = String(date.getUTCFullYear()).slice(2);
+        return `${month}/${day}/${year}`;
+    } catch (e) {
+        return '—';
+    }
+}
+
+/**
  * Calculate and format days since a date/time
  * Returns the number of days as a string (e.g., "0 days", "1 day", "5 days")
  */

@@ -28,7 +28,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app import create_app
 from app.procore.client import get_procore_client
-from app.models import db, ProcoreSubmittal
+from app.models import db, Submittals as ProcoreSubmittal
 from app.config import Config as cfg
 from app.procore.helpers import parse_ball_in_court_from_submittal
 from app.procore.procore import get_submittal_by_id, get_project_info
@@ -437,7 +437,6 @@ def create_submittal_from_api_data(procore_client, project_id: int, submittal_id
             ball_in_court=ball_in_court_value,
             submittal_manager=submittal_manager,
             # submittal_drafting_status uses model default of '' (empty string)
-            last_bic_update=now if ball_in_court_value else None,  # Set if submittal is created with ball_in_court
             created_at=now,
             last_updated=now
         )

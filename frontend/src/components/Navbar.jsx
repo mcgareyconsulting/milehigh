@@ -1,13 +1,19 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import { logout } from '../utils/auth';
 
 function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
 
+    const handleLogout = async () => {
+        await logout();
+        window.location.href = '/login';
+    };
+
     const isActive = (path) => location.pathname === path;
 
     return (
-        <nav className="w-full bg-white/95 backdrop-blur-sm shadow-lg border-b border-gray-200 sticky top-0 z-50" style={{ width: '100%', minWidth: '100%' }}>
+        <nav className="w-full bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-lg border-b border-gray-200 dark:border-slate-600 sticky top-0 z-50" style={{ width: '100%', minWidth: '100%' }}>
             <div className="max-w-7xl mx-auto px-6 py-4 w-full" style={{ width: '100%', maxWidth: '1280px' }}>
                 <div className="flex items-center justify-between">
                     <div
@@ -21,7 +27,7 @@ function Navbar() {
                             onClick={() => navigate('/operations')}
                             className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${isActive('/operations')
                                 ? 'bg-accent-500 text-white shadow-md'
-                                : 'text-gray-700 hover:bg-gray-100'
+                                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
                                 }`}
                         >
                             Operations
@@ -30,19 +36,34 @@ function Navbar() {
                             onClick={() => navigate('/history')}
                             className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${isActive('/history')
                                 ? 'bg-accent-500 text-white shadow-md'
-                                : 'text-gray-700 hover:bg-gray-100'
+                                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
                                 }`}
                         >
                             History
                         </button>
                         <button
+                            onClick={() => navigate('/events')}
+                            className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${isActive('/events')
+                                ? 'bg-accent-500 text-white shadow-md'
+                                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                }`}
+                        >
+                            Events
+                        </button>
+                        <button
                             onClick={() => navigate('/')}
                             className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${isActive('/')
                                 ? 'bg-accent-500 text-white shadow-md'
-                                : 'text-gray-700 hover:bg-gray-100'
+                                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
                                 }`}
                         >
                             Dashboard
+                        </button>
+                        <button
+                            onClick={handleLogout}
+                            className="px-6 py-2 rounded-lg font-medium transition-all duration-200 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800"
+                        >
+                            Logout
                         </button>
                     </div>
                 </div>

@@ -1,68 +1,29 @@
 # Package
 import os
 import json
-from pathlib import Path
-from datetime import datetime, date
-from collections import defaultdict
+from datetime import datetime
 from typing import Optional
 
-import pandas as pd
 from flask import Blueprint, request, jsonify, current_app
-from sqlalchemy.exc import IntegrityError
-from app.models import db, ProcoreSubmittal, ProcoreWebhookEvents
+from app.models import db, Submittals
 
 from app.procore.procore import (
-    get_project_id_by_project_name, 
-    check_and_update_submittal, 
+    get_project_id_by_project_name,
+    check_and_update_submittal,
     create_submittal_from_webhook,
-    comprehensive_health_scan
+    comprehensive_health_scan,
 )
 
-from app.procore.helpers import clean_value, is_email
+from app.procore.helpers import resolve_webhook_user_ids, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
-from app.sync.context import sync_operation_context
-from app.sync.logging import safe_log_sync_event
+from app.trello.context import sync_operation_context
+from app.trello.logging import safe_log_sync_event
 
 logger = get_logger(__name__)
 
 procore_bp = Blueprint("procore", __name__)
-
-
-def log_webhook_payload(payload: dict, headers: dict = None, hook_id: Optional[int] = None):
-    """
-    Log incoming webhook payload to persistent disk (same as Excel snapshots).
-    Uses JSON Lines format (one JSON object per line) for easy parsing.
-    
-    Note: Procore webhook payloads don't include hook_id - it must be inferred
-    by querying Procore's API or looking up webhooks for the project.
-    """
-    log_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "headers": dict(headers) if headers else {},
-        "payload": payload,
-        "hook_id": hook_id  # Will be None if not provided - must be looked up separately
-    }
-    
-    # Use the same persistent disk directory as Excel snapshots
-    webhook_logs_dir = cfg.SNAPSHOTS_DIR
-    os.makedirs(webhook_logs_dir, exist_ok=True)
-    
-    # Use a subdirectory for webhook logs
-    webhook_logs_path = os.path.join(webhook_logs_dir, "procore_webhook_payloads.log")
-    
-    # Append to log file (JSON Lines format)
-    try:
-        with open(webhook_logs_path, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-        logger.info(f"Logged Procore webhook payload to {webhook_logs_path}")
-    except Exception as e:
-        logger.error(f"Failed to log webhook payload: {str(e)}", exc_info=True)
-
-# Minimal debounce for update events - tight window to catch true duplicates
-# while ensuring status updates aren't missed
-UPDATE_DEBOUNCE_SECONDS = 0.5  # 0.5 seconds - only catches rapid-fire duplicates
 
 
 @procore_bp.route("/webhook", methods=["HEAD", "POST"])
@@ -72,10 +33,6 @@ def procore_webhook():
     Handles both 'create' and 'update' event types:
     - 'create': Creates a new submittal record in the database
     - 'update': Updates existing submittal record (ball_in_court, status, etc.)
-    
-    Update events use minimal debounce (0.5s) to catch true duplicates while ensuring
-    status updates aren't missed. Processing is idempotent - check_and_update_submittal()
-    fetches fresh data from Procore API and only updates fields that actually changed.
     """
     if request.method == "HEAD":
         # Procore webhook verification request
@@ -88,12 +45,18 @@ def procore_webhook():
         except:
             payload = {}
 
-        # Extract metadata
-        # Procore webhook uses "id" for resource_id, not "resource_id"
+        # Extract metadata (Procore webhook uses resource_id, project_id, reason, resource_type)
         resource_id_raw = payload.get("resource_id")
         project_id_raw = payload.get("project_id")
         event_type = payload.get("reason") or "unknown"
         resource_type = payload.get("resource_type") or "unknown"
+        external_user_id, internal_user_id = resolve_webhook_user_ids(payload)
+        if external_user_id is not None:
+            current_app.logger.info(
+                "Procore webhook user: external_user_id=%s, internal_user_id=%s",
+                external_user_id, internal_user_id
+            )
+        current_app.logger.debug("Procore webhook payload: %s", json.dumps(payload) if payload else "{}")
 
         # Validate and convert to int
         if not resource_id_raw:
@@ -116,151 +79,43 @@ def procore_webhook():
             current_app.logger.warning(f"Invalid project_id format: {project_id_raw}")
             return jsonify({"status": "ignored"}), 200
 
-        # Use your existing logger setup
         current_app.logger.info(
-            f"Received Procore webhook: resource={resource_type}, "
-            f"event_type={event_type}, id={resource_id}, project={project_id}"
+            "Received Procore webhook: resource=%s, event_type=%s, id=%s, project=%s",
+            resource_type, event_type, resource_id, project_id
         )
-        
-        # Debug: Log the full payload for create events to verify structure
-        if event_type == "create":
-            current_app.logger.debug(
-                f"DEBUG: Full webhook payload for create event: {json.dumps(payload)}"
-            )
 
-        now = datetime.utcnow()
-
-        # -----------------------------------
-        # Minimal debounce for update events (0.5s window)
-        # Create events are not debounced - let DB handle duplicates via unique constraint
-        # 
-        # Tight debounce window catches true duplicates while ensuring status updates
-        # aren't missed. Processing is idempotent, so safe to process all events.
-        # -----------------------------------
-        if event_type == "update":
-            event = ProcoreWebhookEvents.query.filter_by(
-                resource_id=resource_id,
-                project_id=project_id,
-                event_type=event_type
-            ).first()
-
-            if event:
-                time_since_seen = (now - event.last_seen).total_seconds()
-                
-                # Only debounce if seen within 0.5 seconds (catches true duplicates)
-                if time_since_seen < UPDATE_DEBOUNCE_SECONDS:
-                    current_app.logger.debug(
-                        f"Debouncing duplicate update webhook (seen {time_since_seen:.2f}s ago); "
-                        f"id={resource_id}, project={project_id}"
-                    )
-                    event.last_seen = now
-                    db.session.commit()
-                    return jsonify({"status": "debounced"}), 200
-                
-                # Process event - it's been >0.5s, so likely a different update
-                current_app.logger.debug(
-                    f"Processing update webhook (seen {time_since_seen:.2f}s ago); "
-                    f"id={resource_id}, project={project_id}"
-                )
-                event.last_seen = now
-            else:
-                # First time this resource/project/event_type combo has been seen
-                event = ProcoreWebhookEvents(
-                    resource_id=resource_id,
-                    project_id=project_id,
-                    event_type=event_type,
-                    last_seen=now
-                )
-                db.session.add(event)
-            try:
-                db.session.commit()
-            except IntegrityError as e:
-                # Handle case where old unique constraint on resource_id still exists
-                # or duplicate record exists - just update the existing record
-                db.session.rollback()
-                current_app.logger.warning(
-                    f"IntegrityError when recording update event (likely old constraint): {e}. "
-                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
-                )
-                # Try to find and update existing record
-                existing = ProcoreWebhookEvents.query.filter_by(
-                    resource_id=resource_id,
-                    project_id=project_id
-                ).first()
-                if existing:
-                    existing.event_type = event_type  # Update event_type if it changed
-                    existing.last_seen = now
-                    db.session.commit()
-                else:
-                    # If we can't find it, log and continue (tracking is non-critical)
-                    current_app.logger.warning(
-                        f"Could not find existing record to update. Continuing without tracking."
-                    )
-        else:
-            # For create events (and any other event types), record but don't debounce
-            # Still track in database for logging/auditing purposes
-            event = ProcoreWebhookEvents.query.filter_by(
-                resource_id=resource_id,
-                project_id=project_id,
-                event_type=event_type
-            ).first()
-
-            if event:
-                # Update timestamp for tracking
-                event.last_seen = now
-            else:
-                # First time this resource/project/event_type combo has been seen
-                event = ProcoreWebhookEvents(
-                    resource_id=resource_id,
-                    project_id=project_id,
-                    event_type=event_type,
-                    last_seen=now
-                )
-                db.session.add(event)
-            try:
-                db.session.commit()
-            except IntegrityError as e:
-                # Handle case where old unique constraint on resource_id still exists
-                # or duplicate record exists - just update the existing record
-                db.session.rollback()
-                current_app.logger.warning(
-                    f"IntegrityError when recording {event_type} event (likely old constraint): {e}. "
-                    f"Attempting to update existing record for id={resource_id}, project={project_id}"
-                )
-                # Try to find and update existing record
-                existing = ProcoreWebhookEvents.query.filter_by(
-                    resource_id=resource_id,
-                    project_id=project_id
-                ).first()
-                if existing:
-                    existing.event_type = event_type  # Update event_type if it changed
-                    existing.last_seen = now
-                    db.session.commit()
-                else:
-                    # If we can't find it, log and continue (tracking is non-critical)
-                    current_app.logger.warning(
-                        f"Could not find existing record to update. Continuing without tracking."
-                    )
+        # Burst dedup: Procore sends 2-5 identical deliveries within ~7 seconds per update.
+        # Write a receipt row for the first delivery in the 15s window; reject the rest.
+        if is_duplicate_webhook(resource_id, project_id, event_type):
             current_app.logger.info(
-                f"Processing {event_type} event immediately (not debounced); id={resource_id}, project={project_id}"
+                "Duplicate webhook delivery rejected (burst dedup): id=%s, event=%s",
+                resource_id, event_type,
+            )
+            return jsonify({"status": "deduplicated"}), 200
+
+        # Connector detection: if the webhook was triggered by the connector service account,
+        # it's a bounce-back from our own Procore API call. We still process it to catch
+        # Procore side-effect changes (e.g. auto-ball_in_court on status→Closed).
+        # source stays 'Procore' — external_user_id='14554506' on the event identifies it
+        # as connector-triggered for UI filtering.
+        is_connector = (
+            external_user_id is not None
+            and str(external_user_id) == str(cfg.PROCORE_CONNECTOR_USER_ID)
+        )
+        if is_connector:
+            current_app.logger.info(
+                "Procore webhook from connector account (user %s); id=%s, project=%s — processing for side-effect diffs",
+                external_user_id, resource_id, project_id,
             )
 
-        # -----------------------------------
-        # PROCESS ACTUAL SUBMITTAL
-        # -----------------------------------
+        # Process submittal create or update
         try:
-            current_app.logger.debug(
-                f"DEBUG: About to process event. event_type='{event_type}' "
-                f"(type: {type(event_type)}), resource_id={resource_id}"
-            )
-            
-            # Handle create events - add new submittal to database
             if event_type == "create":
                 current_app.logger.info(
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
-                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id)
+                    created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
                     
                     if created and record:
                         with sync_operation_context(
@@ -305,11 +160,8 @@ def procore_webhook():
             
             # Handle update events - update existing submittal
             elif event_type == "update":
-                # NOTE: All update events are processed (no debouncing) to ensure status updates
-                # are never missed, even when status and ball_in_court updates arrive simultaneously.
-                # check_and_update_submittal() fetches fresh data from API and handles both correctly.
                 # Check if record exists first
-                old_record = ProcoreSubmittal.query.filter_by(submittal_id=str(resource_id)).first()
+                old_record = Submittals.query.filter_by(submittal_id=str(resource_id)).first()
                 
                 # If record doesn't exist, try to create it (fallback for race conditions)
                 # This handles the case where update events arrive before create events
@@ -318,7 +170,7 @@ def procore_webhook():
                         f"Update event received for submittal {resource_id} but record doesn't exist. "
                         f"Attempting to create it first (fallback for race conditions)..."
                     )
-                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id)
+                    created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
                     if created and new_record:
                         current_app.logger.info(
                             f"Successfully created missing submittal {resource_id} from update event fallback"
@@ -341,8 +193,10 @@ def procore_webhook():
                 old_manager = old_record.submittal_manager if old_record else None
                 
                 ball_updated, status_updated, title_updated, manager_updated, record, ball_in_court, status = check_and_update_submittal(
-                    project_id, 
-                    resource_id
+                    project_id,
+                    resource_id,
+                    webhook_payload=payload,
+                    source='Procore',
                 )
                 
                 # Log ball_in_court changes
@@ -424,6 +278,14 @@ def procore_webhook():
                                 submittal_title=record.title if record else None,
                                 project_name=record.project_name if record else None
                             )
+
+                # Log when webhook resulted in no updates (DB already in sync)
+                if not (ball_updated or status_updated or title_updated or manager_updated):
+                    current_app.logger.info(
+                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync%s)",
+                        resource_id, project_id,
+                        ", connector" if is_connector else "",
+                    )
             else:
                 current_app.logger.warning(
                     f"Unhandled event type '{event_type}' for submittal {resource_id}, ignoring. "
@@ -650,30 +512,7 @@ def webhook_test():
                 },
                 "raw_payload": payload
             }
-            
-            # Log the parsed analysis to a separate test log file
-            test_log_entry = {
-                "timestamp": datetime.utcnow().isoformat(),
-                "headers": headers,
-                "parsed_analysis": {
-                    "summary": response["summary"],
-                    "payload_structure": response["payload_structure"]
-                },
-                "raw_payload": payload
-            }
-            
-            # Log to a separate test file for easy review
-            webhook_logs_dir = cfg.SNAPSHOTS_DIR
-            os.makedirs(webhook_logs_dir, exist_ok=True)
-            test_log_path = os.path.join(webhook_logs_dir, "procore_webhook_test_analysis.log")
-            
-            try:
-                with open(test_log_path, "a") as f:
-                    f.write(json.dumps(test_log_entry) + "\n")
-                logger.info(f"Logged webhook test analysis to {test_log_path}")
-            except Exception as log_error:
-                logger.error(f"Failed to log webhook test analysis: {str(log_error)}", exc_info=True)
-            
+
             logger.info(
                 f"Webhook test endpoint received: resource_type={resource_type}, "
                 f"event_type={event_type}, resource_id={resource_id}, project_id={project_id}"
@@ -689,410 +528,6 @@ def webhook_test():
                 "timestamp": datetime.utcnow().isoformat()
             }), 500
 
-
-@procore_bp.route("/api/webhook/payloads", methods=["GET"])
-def webhook_payloads():
-    """
-    API endpoint to view recent webhook payloads from the persistent disk.
-    Returns the last N webhook payloads that hit the production server.
-    
-    Query Parameters:
-    - limit: Number of payloads to return (default: 50, max: 200)
-    - project_id: Filter by project_id (optional)
-    - resource_name: Filter by resource_name (optional, e.g., "Submittals")
-    - event_type: Filter by event_type (optional, e.g., "update")
-    
-    Example:
-    GET /procore/api/webhook/payloads?limit=100
-    GET /procore/api/webhook/payloads?limit=50&resource_name=Submittals&event_type=update
-    GET /procore/api/webhook/payloads?project_id=2900844
-    """
-    try:
-        import json as json_lib
-        
-        # Get query parameters
-        limit = request.args.get("limit", default=50, type=int)
-        limit = min(limit, 200)  # Cap at 200 for performance
-        project_id_filter = request.args.get("project_id")
-        resource_name_filter = request.args.get("resource_name")
-        event_type_filter = request.args.get("event_type")
-        
-        # Use the same persistent disk directory as Excel snapshots
-        webhook_logs_dir = cfg.SNAPSHOTS_DIR
-        log_file = os.path.join(webhook_logs_dir, "procore_webhook_payloads.log")
-        
-        if not os.path.exists(log_file):
-            return jsonify({
-                "status": "success",
-                "message": "No webhook payloads logged yet",
-                "payloads": [],
-                "total": 0,
-                "log_file": log_file
-            }), 200
-        
-        # Read all lines (we'll filter after parsing)
-        all_payloads = []
-        try:
-            with open(log_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            payload = json_lib.loads(line)
-                            all_payloads.append(payload)
-                        except json_lib.JSONDecodeError:
-                            continue
-            
-            # Filter payloads based on query parameters
-            filtered_payloads = []
-            for payload in all_payloads:
-                payload_data = payload.get("payload", {})
-                if isinstance(payload_data, str):
-                    try:
-                        payload_data = json_lib.loads(payload_data)
-                    except:
-                        payload_data = {}
-                
-                # Apply filters (Procore payload uses "resource_type" and "reason")
-                if project_id_filter:
-                    payload_project_id = payload_data.get("project_id") or payload_data.get("project", {}).get("id")
-                    if str(payload_project_id) != str(project_id_filter):
-                        continue
-                
-                if resource_name_filter:
-                    # Procore uses "resource_type" in payload
-                    payload_resource = payload_data.get("resource_type") or payload_data.get("resource_name") or payload_data.get("resource", {}).get("name")
-                    if payload_resource != resource_name_filter:
-                        continue
-                
-                if event_type_filter:
-                    # Procore uses "reason" in payload for event type
-                    payload_event = payload_data.get("reason") or payload_data.get("event_type") or payload_data.get("event", {}).get("type")
-                    if payload_event != event_type_filter:
-                        continue
-                
-                filtered_payloads.append(payload)
-            
-            # Sort by timestamp (most recent first)
-            filtered_payloads.sort(
-                key=lambda x: x.get("timestamp", ""), 
-                reverse=True
-            )
-            
-            # Limit results
-            payloads = filtered_payloads[:limit]
-            
-        except Exception as e:
-            logger.error(f"Error reading webhook payloads: {str(e)}", exc_info=True)
-            return jsonify({
-                "status": "error",
-                "error": f"Failed to read log file: {str(e)}",
-                "log_file": log_file
-            }), 500
-        
-        return jsonify({
-            "status": "success",
-            "payloads": payloads,
-            "total": len(payloads),
-            "total_matching": len(filtered_payloads),
-            "limit": limit,
-            "filters": {
-                "project_id": project_id_filter,
-                "resource_name": resource_name_filter,
-                "event_type": event_type_filter
-            },
-            "log_file": log_file
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error retrieving webhook payloads: {str(e)}", exc_info=True)
-        return jsonify({
-            "status": "error",
-            "error": str(e)
-        }), 500
-
-
-@procore_bp.route("/api/webhook/submittal-data", methods=["GET"])
-def submittal_data():
-    """
-    API endpoint to view parsed submittal data from webhook processing.
-    Returns the last N parsed submittal data entries that were logged.
-    
-    Query Parameters:
-    - limit: Number of entries to return (default: 50, max: 200)
-    - project_id: Filter by project_id (optional)
-    - submittal_id: Filter by submittal_id (optional)
-    - source: Filter by source (optional, e.g., "webhook_create", "webhook_update")
-    
-    Example:
-    GET /procore/api/webhook/submittal-data?limit=100
-    GET /procore/api/webhook/submittal-data?project_id=2900844&limit=50
-    GET /procore/api/webhook/submittal-data?submittal_id=12345
-    """
-    try:
-        import json as json_lib
-        
-        # Get query parameters
-        limit = request.args.get("limit", default=50, type=int)
-        limit = min(limit, 200)  # Cap at 200 for performance
-        project_id_filter = request.args.get("project_id")
-        submittal_id_filter = request.args.get("submittal_id")
-        source_filter = request.args.get("source")
-        
-        # Read the log file
-        webhook_logs_dir = cfg.SNAPSHOTS_DIR
-        log_file = os.path.join(webhook_logs_dir, "procore_submittal_data.log")
-        
-        if not os.path.exists(log_file):
-            return jsonify({
-                "status": "success",
-                "message": "No submittal data logged yet",
-                "entries": [],
-                "total": 0
-            }), 200
-        
-        # Read and parse entries (JSON Lines format, separated by dashes)
-        entries = []
-        current_entry = []
-        
-        try:
-            with open(log_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line == "-" * 80:
-                        # End of entry, parse it
-                        if current_entry:
-                            entry_text = "\n".join(current_entry)
-                            try:
-                                entry = json_lib.loads(entry_text)
-                                
-                                # Apply filters
-                                if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
-                                    current_entry = []
-                                    continue
-                                if submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
-                                    current_entry = []
-                                    continue
-                                if source_filter and entry.get("source") != source_filter:
-                                    current_entry = []
-                                    continue
-                                
-                                entries.append(entry)
-                            except json_lib.JSONDecodeError:
-                                # Skip malformed entries
-                                pass
-                            current_entry = []
-                    elif line:
-                        current_entry.append(line)
-                
-                # Handle last entry if file doesn't end with separator
-                if current_entry:
-                    entry_text = "\n".join(current_entry)
-                    try:
-                        entry = json_lib.loads(entry_text)
-                        
-                        # Apply filters
-                        if project_id_filter and str(entry.get("project_id")) != str(project_id_filter):
-                            pass
-                        elif submittal_id_filter and str(entry.get("submittal_id")) != str(submittal_id_filter):
-                            pass
-                        elif source_filter and entry.get("source") != source_filter:
-                            pass
-                        else:
-                            entries.append(entry)
-                    except json_lib.JSONDecodeError:
-                        pass
-        
-        except Exception as e:
-            logger.error(f"Error reading submittal data log: {str(e)}", exc_info=True)
-            return jsonify({
-                "status": "error",
-                "error": str(e),
-                "log_file": log_file
-            }), 500
-        
-        # Sort by timestamp (most recent first) and limit
-        entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        entries = entries[:limit]
-        
-        return jsonify({
-            "status": "success",
-            "entries": entries,
-            "total": len(entries),
-            "limit": limit,
-            "filters": {
-                "project_id": project_id_filter,
-                "submittal_id": submittal_id_filter,
-                "source": source_filter
-            },
-            "log_file": log_file
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error retrieving submittal data: {str(e)}", exc_info=True)
-        return jsonify({
-            "status": "error",
-            "error": str(e)
-        }), 500
-
-@procore_bp.route("/api/upload/drafting-workload-submittals", methods=["POST"])
-def drafting_workload_submittals():
-    """Upload a new Drafting Work Load Excel file and save to DB"""
-    try:
-        # Validate file presence
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-
-        # Read Excel file
-        try:
-            df = pd.read_excel(file)
-        except Exception as exc:
-            logger.error(f"Error reading Excel file: {str(exc)}", exc_info=True)
-            return jsonify({'error': f'Failed to read Excel file: {str(exc)}'}), 400
-
-        # Validate required columns
-        required_columns = ['Submittals Id', 'Project Name', 'Project Number', 'Title', 
-                          'Status', 'Type', 'Ball In Court', 
-                          'Submittal Manager']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            logger.error(f"Missing required columns: {missing_columns}")
-            return jsonify({'error': f'Missing required columns: {", ".join(missing_columns)}'}), 400
-
-        # Helper function to safely get row value
-        def safe_get(row, col, default=None):
-            if col not in df.columns:
-                return default
-            try:
-                value = row[col]
-                if pd.isna(value):
-                    return default
-                return value
-            except (KeyError, IndexError):
-                return default
-
-        # drop all columns in procoresubmittal table
-        try:
-            ProcoreSubmittal.query.delete()
-            db.session.commit()
-        except Exception as exc:
-            logger.error(f"Error deleting existing records: {str(exc)}", exc_info=True)
-            db.session.rollback()
-            return jsonify({'error': f'Failed to clear existing records: {str(exc)}'}), 500
-
-        # Cache project id lookups
-        project_id_cache = {}
-        skipped_count = 0
-        inserted_count = 0
-        error_count = 0
-
-        for idx, row in df.iterrows():
-            try:
-                # Get and validate submittal_id
-                submittal_id_raw = safe_get(row, 'Submittals Id')
-                if submittal_id_raw is None:
-                    skipped_count += 1
-                    logger.warning(f"Row {idx}: Missing Submittals Id, skipping")
-                    continue
-                
-                submittal_id = str(submittal_id_raw).strip()
-                if not submittal_id:
-                    skipped_count += 1
-                    logger.warning(f"Row {idx}: Empty Submittals Id, skipping")
-                    continue
-
-                # Check if already exists (shouldn't happen after delete, but check anyway)
-                if ProcoreSubmittal.query.filter_by(submittal_id=submittal_id).first():
-                    skipped_count += 1
-                    continue
-
-                project_name = safe_get(row, 'Project Name', '').strip()
-                if not project_name:
-                    skipped_count += 1
-                    logger.warning(f"Row {idx}: Missing Project Name, skipping")
-                    continue
-
-                # Get project_id from cache or API
-                if project_name not in project_id_cache:
-                    try:
-                        project_id = get_project_id_by_project_name(project_name)
-                        project_id_cache[project_name] = project_id
-                    except Exception as exc:
-                        logger.error(f"Error getting project_id for '{project_name}': {str(exc)}")
-                        project_id = None
-                        project_id_cache[project_name] = None
-                else:
-                    project_id = project_id_cache[project_name]
-
-                # Convert project_id to string if it exists
-                if project_id is not None:
-                    project_id = str(project_id)
-
-                # Get ball_in_court value and determine if it's multiple assignees
-                ball_in_court_value = str(safe_get(row, 'Ball In Court', '') or '').strip() or None
-                
-                # Filter out email addresses from ball_in_court (handle comma-separated values)
-                if ball_in_court_value:
-                    # Split by comma, filter out emails, then rejoin
-                    parts = [part.strip() for part in ball_in_court_value.split(',')]
-                    filtered_parts = [part for part in parts if part and not is_email(part)]
-                    ball_in_court_value = ', '.join(filtered_parts) if filtered_parts else None
-                
-                is_multiple_assignees = ball_in_court_value and ',' in ball_in_court_value
-                now = datetime.utcnow()
-                
-                # Insert/update in DB with cleaned values
-                submittal = ProcoreSubmittal(
-                    submittal_id=submittal_id,
-                    procore_project_id=project_id,
-                    project_number=str(safe_get(row, 'Project Number', '') or '').strip() or None,
-                    project_name=project_name,
-                    title=str(safe_get(row, 'Title', '') or '').strip() or None,
-                    status=str(safe_get(row, 'Status', '') or '').strip() or None,
-                    type=str(safe_get(row, 'Type', '') or '').strip() or None,
-                    ball_in_court=ball_in_court_value,
-                    submittal_manager=str(safe_get(row, 'Submittal Manager', '') or '').strip() or None,
-                    was_multiple_assignees=is_multiple_assignees,
-                    last_bic_update=now if ball_in_court_value else None  # Set if submittal is created with ball_in_court
-                )
-                db.session.add(submittal)
-                inserted_count += 1
-            except Exception as exc:
-                error_count += 1
-                logger.error(f"Error processing row {idx}: {str(exc)}", exc_info=True)
-                continue
-
-        # Commit all inserts
-        try:
-            db.session.commit()
-        except Exception as exc:
-            logger.error(f"Error committing submittals: {str(exc)}", exc_info=True)
-            db.session.rollback()
-            return jsonify({'error': f'Failed to save submittals: {str(exc)}'}), 500
-
-        # Note: Order numbers are no longer auto-assigned.
-        # Submittals start with NULL order_number and only get assigned via drag-and-drop or manual entry.
-
-        return jsonify({
-            'success': True, 
-            'rows_updated': len(df), 
-            'rows_inserted': inserted_count,
-            'rows_skipped': skipped_count,
-            'rows_with_errors': error_count,
-            'projects_cached': len(project_id_cache)
-        }), 200
-
-    except Exception as exc:
-        logger.error(f"Unexpected error in drafting_workload_submittals: {str(exc)}", exc_info=True)
-        db.session.rollback()
-        return jsonify({
-            'error': 'An unexpected error occurred',
-            'details': str(exc)
-        }), 500
 
 
 @procore_bp.route("/health-scan", methods=["GET"])
@@ -1194,7 +629,7 @@ def health_scan_update():
         for issue in sync_issues:
             try:
                 # Find the DB record
-                db_record = ProcoreSubmittal.query.filter_by(submittal_id=issue['submittal_id']).first()
+                db_record = Submittals.query.filter_by(submittal_id=issue['submittal_id']).first()
                 if not db_record:
                     errors.append({
                         'submittal_id': issue['submittal_id'],
@@ -1208,7 +643,6 @@ def health_scan_update():
                 if issue['ball_in_court']['mismatch']:
                     old_value = db_record.ball_in_court
                     db_record.ball_in_court = issue['ball_in_court']['api']
-                    db_record.last_bic_update = datetime.utcnow()  # Track when ball in court was last updated
                     updates['ball_in_court'] = {
                         'old': old_value,
                         'new': issue['ball_in_court']['api']
@@ -1225,6 +659,16 @@ def health_scan_update():
                 
                 # Update last_updated timestamp
                 db_record.last_updated = datetime.utcnow()
+                
+                # Create submittal event for update
+                if updates:
+                    try:
+                        _create_submittal_event_helper(
+                            issue['submittal_id'], "updated", updates.copy(),
+                            source='HealthScan',
+                        )
+                    except Exception as event_error:
+                        logger.warning(f"Failed to create SubmittalEvent for submittal {issue['submittal_id']} from health scan: {event_error}", exc_info=True)
                 
                 updated_submittals.append({
                     'submittal_id': issue['submittal_id'],

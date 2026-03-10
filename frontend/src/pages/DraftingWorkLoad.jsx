@@ -1,76 +1,92 @@
-import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
-import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { TableRow } from '../components/TableRow';
 import { FilterButtonGroup } from '../components/FilterButtonGroup';
 import { AlertMessage } from '../components/AlertMessage';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
+import { checkAuth } from '../utils/auth';
+import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
 const columnWidthStyles = `
+    /* Hide scrollbar on table scroll area; scrolling still works via wheel/trackpad */
+    .dwl-table-scroll-hide-scrollbar {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE / Edge */
+    }
+    .dwl-table-scroll-hide-scrollbar::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Edge */
+    }
     @media (min-width: 1536px) {
         /* Reduce column max-widths on very large screens to prevent bloating */
-        .dwl-col-project-name { max-width: 260px !important; }
+        .dwl-col-name { max-width: 260px !important; }
         .dwl-col-title { max-width: 250px !important; }
-        .dwl-col-ball-in-court { max-width: 160px !important; }
-        .dwl-col-submittal-manager { max-width: 120px !important; }
+        .dwl-col-bic { max-width: 160px !important; }
+        .dwl-col-sub-manager { max-width: 120px !important; }
         .dwl-col-notes { max-width: 300px !important; }
         .dwl-col-submittal-id { max-width: 128px !important; }
+        .dwl-col-last-bic-update { max-width: 100px !important; }
+        .dwl-col-lifespan { max-width: 75px !important; }
     }
 `;
 
 function DraftingWorkLoad() {
-    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching();
+    const [searchParams] = useSearchParams();
+    const [locationEnabled, setLocationEnabled] = useState(false);
+    const [userCoords, setUserCoords] = useState(null);
+    const [locationRequesting, setLocationRequesting] = useState(false);
+    const [resorting, setResorting] = useState(false);
+    const [resortError, setResortError] = useState(null);
+    const locationFilter = locationEnabled && userCoords ? userCoords : null;
+    // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
+    const [selectedTab, setSelectedTab] = useState('open');
+    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching(locationFilter, selectedTab);
     const {
         updateOrderNumber,
         updateNotes,
         updateStatus,
+        updateProcoreStatus,
+        bumpSubmittal,
         updateDueDate,
-        uploadFile,
-        uploading,
-        uploadError,
-        uploadSuccess,
-        clearUploadSuccess,
-        reorderGroup,
-        updating,
+        stepSubmittal,
     } = useMutations(refetch);
 
-    // Tab state: 'open' or 'draft'
-    const [selectedTab, setSelectedTab] = useState('open');
-    
-    // Reorder confirmation dialog state
-    const [showReorderConfirm, setShowReorderConfirm] = useState(false);
+    // Submittal statuses for company (Procore status dropdown on draft tab)
+    const [submittalStatuses, setSubmittalStatuses] = useState([]);
+    useEffect(() => {
+        draftingWorkLoadApi.fetchSubmittalStatuses()
+            .then(setSubmittalStatuses)
+            .catch((err) => console.error('Failed to fetch submittal statuses:', err));
+    }, []);
 
-    // Filter rows based on selected tab before passing to useFilters
-    const filteredRowsByTab = useMemo(() => {
-        return submittals.filter((row) => {
-            // Filter on status field from the database
-            const rowStatus = row.status ?? '';
+    // User admin status
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [userLoading, setUserLoading] = useState(true);
 
-            if (selectedTab === 'draft') {
-                // Draft tab: show all submittals EXCEPT 'Open' and 'Closed'
-                return rowStatus !== 'Open' && rowStatus !== 'Closed';
-            } else {
-                // Open tab: show only submittals with status = "Open"
-                return rowStatus === 'Open';
+    // Fetch user info to check admin status
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            try {
+                const user = await checkAuth();
+                setIsAdmin(user?.is_admin || false);
+            } catch (err) {
+                console.error('Error fetching user info:', err);
+                setIsAdmin(false);
+            } finally {
+                setUserLoading(false);
             }
-        });
-    }, [submittals, selectedTab]);
+        };
+        fetchUserInfo();
+    }, []);
 
-    const rows = filteredRowsByTab; // now that submittals is clean, we alias
-
-    // Filter columns based on selected tab - show "Procore Status" only in Draft tab
-    const filteredColumns = useMemo(() => {
-        if (selectedTab === 'draft') {
-            return columns; // Show all columns including "Procore Status" in Draft tab
-        } else {
-            return columns.filter(col => col !== 'Procore Status'); // Hide "Procore Status" in Open tab
-        }
-    }, [columns, selectedTab]);
+    // Backend returns tab-specific data (open = Open status, draft = not Open/Closed), so use submittals as rows
+    const rows = submittals;
 
     // Use the filters hook
     const {
@@ -79,6 +95,7 @@ function DraftingWorkLoad() {
         selectedProjectName,
         selectedProcoreStatus,
         projectNameSortMode,
+        columnSort,
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,
@@ -87,88 +104,63 @@ function DraftingWorkLoad() {
         submittalManagerOptions,
         projectNameOptions,
         procoreStatusOptions,
-        availableProcoreStatuses,
         displayRows,
         resetFilters,
         handleProjectNameSortToggle,
+        handleColumnSort,
         ALL_OPTION_VALUE,
     } = useFilters(rows);
 
-    // Reset Procore Status filter when switching tabs (since it only applies to Draft tab)
-    useEffect(() => {
-        if (selectedTab === 'open') {
-            setSelectedProcoreStatus(ALL_OPTION_VALUE);
+    const jumpToTarget = useJumpToHighlight({
+        loading,
+        searchParams,
+        mode: 'submittal',
+    });
+
+    const handleResort = useCallback(async () => {
+        if (selectedBallInCourt === ALL_OPTION_VALUE) return;
+        setResorting(true);
+        setResortError(null);
+        try {
+            await draftingWorkLoadApi.resortDrafter(selectedBallInCourt);
+            await refetch();
+        } catch (err) {
+            setResortError(err.message);
+        } finally {
+            setResorting(false);
         }
-    }, [selectedTab, setSelectedProcoreStatus, ALL_OPTION_VALUE]);
-
-    // Drag and drop functionality
-    const {
-        draggedIndex,
-        dragOverIndex,
-        handleDragStart,
-        handleDragOver,
-        handleDragLeave,
-        handleDrop,
-    } = useDragAndDrop(rows, displayRows, updateOrderNumber);
-
+    }, [selectedBallInCourt, ALL_OPTION_VALUE, refetch]);
 
     const handleGeneratePDF = useCallback(() => {
-        generateDraftingWorkLoadPDF(displayRows, filteredColumns, lastUpdated);
-    }, [displayRows, filteredColumns, lastUpdated]);
+        generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
+    }, [displayRows, columns, lastUpdated]);
 
-    const handleFileUpload = async (event) => {
-        const file = event.target.files[0];
-        if (!file) {
+    const handleLocationToggle = useCallback(() => {
+        if (locationEnabled) {
+            setLocationEnabled(false);
+            setUserCoords(null);
             return;
         }
-
-        await uploadFile(file);
-
-        // Reset file input
-        event.target.value = '';
-    };
-
-    const handleReorderClick = useCallback(() => {
-        setShowReorderConfirm(true);
-    }, []);
-
-    const handleReorderConfirm = useCallback(async () => {
-        setShowReorderConfirm(false);
-        
-        // Get all unique ball_in_court values from submittals
-        const uniqueBallInCourts = [...new Set(
-            submittals
-                .map(s => s.ball_in_court ?? s['Ball In Court'])
-                .filter(bic => bic && bic.trim() !== '')
-        )];
-
-        if (uniqueBallInCourts.length === 0) {
+        setLocationRequesting(true);
+        if (!navigator.geolocation) {
+            setLocationRequesting(false);
             return;
         }
-
-        // Reorder each group
-        try {
-            for (const ballInCourt of uniqueBallInCourts) {
-                await reorderGroup(ballInCourt);
-            }
-        } catch (err) {
-            console.error('Error reordering groups:', err);
-        }
-    }, [submittals, reorderGroup]);
-
-    const handleReorderCancel = useCallback(() => {
-        setShowReorderConfirm(false);
-    }, []);
-
-    // Clear upload success message after 3 seconds
-    useEffect(() => {
-        if (uploadSuccess) {
-            const timer = setTimeout(() => {
-                clearUploadSuccess();
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [uploadSuccess, clearUploadSuccess]);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
+                setLocationEnabled(true);
+                setLocationRequesting(false);
+                // Do not refetch here: ref is still null until next render. The effect in
+                // useDataFetching will refetch when locationFilter (and ref) update.
+            },
+            () => {
+                setLocationRequesting(false);
+                setLocationEnabled(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }, [locationEnabled, refetch]);
 
 
     const formattedLastUpdated = useMemo(
@@ -177,93 +169,83 @@ function DraftingWorkLoad() {
     );
 
     const hasData = displayRows.length > 0;
-    const tableColumnCount = filteredColumns.length;
+    const visibleColumns = columns.filter(column => column !== 'Submittals Id');
+    // Column display names are case-sensitive: ORDER #, PROJ. #, NAME, TITLE, etc.
+    const tableColumnCount = visibleColumns.length;
 
     return (
         <>
             <style>{columnWidthStyles}</style>
-            <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 py-2 px-2" style={{ width: '100%', minWidth: '100%' }}>
-                <div className="max-w-full mx-auto w-full" style={{ width: '100%' }}>
-                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                        <div className={`px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
+            <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900" style={{ width: '100%', minWidth: '100%' }}>
+                <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
+                        {/* Title bar - fixed, does not scroll */}
+                        <div className={`flex-shrink-0 px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
+                                <div>
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
-                                    <img
-                                        src="/bananas-svgrepo-com.svg"
-                                        alt="banana"
-                                        className="w-7 h-7"
-                                    />
-
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button
-                                        onClick={handleReorderClick}
-                                        disabled={!hasData || loading || updating}
-                                        className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${!hasData || loading || updating
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
-                                            }`}
-                                        title="Re-order all groups (lowest order becomes 1)"
+                                        type="button"
+                                        onClick={handleLocationToggle}
+                                        disabled={locationRequesting}
+                                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${locationEnabled
+                                            ? 'bg-green-500 text-white hover:bg-green-600'
+                                            : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600'
+                                            } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+                                        title={locationEnabled ? 'Turn off location filter' : 'Filter submittals by your current location (job site)'}
                                     >
-                                        {updating ? (
+                                        {locationRequesting ? (
                                             <>
-                                                <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600 mr-2"></span>
-                                                Re-ordering...
+                                                <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                Location…
                                             </>
+                                        ) : locationEnabled ? (
+                                            <>📍 Filtering by location</>
                                         ) : (
-                                            '🔄 Re-Order'
+                                            <>📍 Use my location</>
                                         )}
+                                    </button>
+                                    <button
+                                        onClick={handleResort}
+                                        disabled={selectedBallInCourt === ALL_OPTION_VALUE || resorting}
+                                        className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${
+                                            selectedBallInCourt === ALL_OPTION_VALUE || resorting
+                                                ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
+                                                : 'bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-slate-600 cursor-pointer'
+                                        }`}
+                                        title={selectedBallInCourt === ALL_OPTION_VALUE
+                                            ? 'Select a single drafter to enable resort'
+                                            : `Compress ${selectedBallInCourt}'s ordered submittals to sequential numbers`}
+                                    >
+                                        {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
                                     </button>
                                     <button
                                         onClick={handleGeneratePDF}
                                         disabled={!hasData || loading}
                                         className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${!hasData || loading
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
+                                            ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
+                                            : 'bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-slate-600 cursor-pointer'
                                             }`}
                                         title="Generate PDF"
                                     >
                                         🖨️ Print/PDF
                                     </button>
-                                    <label className="relative cursor-pointer">
-                                        <input
-                                            type="file"
-                                            accept=".xlsx,.xls"
-                                            onChange={handleFileUpload}
-                                            disabled={uploading}
-                                            className="hidden"
-                                            id="file-upload"
-                                        />
-                                        <span className={`inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${uploading
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-white text-accent-600 hover:bg-accent-50 cursor-pointer'
-                                            }`}>
-                                            {uploading ? (
-                                                <>
-                                                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600 mr-2"></span>
-                                                    Uploading...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    📤 Upload Excel
-                                                </>
-                                            )}
-                                        </span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="p-2 space-y-2">
+                        {/* Tabs + Filters - fixed, do not scroll */}
+                        <div className="flex-shrink-0 p-2 space-y-2">
                             {/* Tab Selection */}
-                            <div className="bg-white rounded-xl p-2 border border-gray-200 shadow-sm">
+                            <div className="bg-white dark:bg-slate-800 rounded-xl p-2 border border-gray-200 dark:border-slate-600 shadow-sm">
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => setSelectedTab('open')}
                                         className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${selectedTab === 'open'
                                             ? 'bg-gradient-to-r from-accent-500 to-accent-600 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
                                             }`}
                                     >
                                         Open
@@ -272,14 +254,14 @@ function DraftingWorkLoad() {
                                         onClick={() => setSelectedTab('draft')}
                                         className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${selectedTab === 'draft'
                                             ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
                                             }`}
                                     >
                                         Draft
                                     </button>
                                 </div>
                             </div>
-                            <div className={`rounded-xl p-2 border border-gray-200 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50' : 'bg-gradient-to-r from-gray-50 to-accent-50'}`}>
+                            <div className={`rounded-xl p-2 border border-gray-200 dark:border-slate-600 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50 dark:from-slate-700 dark:to-slate-700' : 'bg-gradient-to-r from-gray-50 to-accent-50 dark:from-slate-700 dark:to-slate-700'}`}>
                                 <div className="flex flex-col gap-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="flex flex-col gap-3">
@@ -298,7 +280,7 @@ function DraftingWorkLoad() {
                                                 allOptionValue={ALL_OPTION_VALUE}
                                             />
                                         </div>
-                                        <div className="flex flex-col gap-3">
+                                        <div>
                                             <FilterButtonGroup
                                                 label="📁 Project Name"
                                                 options={projectNameOptions}
@@ -306,231 +288,245 @@ function DraftingWorkLoad() {
                                                 onSelect={setSelectedProjectName}
                                                 allOptionValue={ALL_OPTION_VALUE}
                                             />
-                                            {selectedTab === 'draft' && (
-                                                <FilterButtonGroup
-                                                    label="📋 Procore Status"
-                                                    options={procoreStatusOptions}
-                                                    selectedValue={selectedProcoreStatus}
-                                                    onSelect={setSelectedProcoreStatus}
-                                                    allOptionValue={ALL_OPTION_VALUE}
-                                                    disabledOptions={availableProcoreStatuses}
-                                                />
-                                            )}
+                                            <FilterButtonGroup
+                                                label="📋 Procore Status"
+                                                options={procoreStatusOptions}
+                                                selectedValue={selectedProcoreStatus}
+                                                onSelect={setSelectedProcoreStatus}
+                                                allOptionValue={ALL_OPTION_VALUE}
+                                            />
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 pt-2">
                                         <button
                                             onClick={resetFilters}
-                                            className="px-2 py-1 bg-white border border-accent-300 text-accent-700 rounded text-xs font-medium shadow-sm hover:bg-accent-50 transition-all"
+                                            className="px-2 py-1 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded text-xs font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all"
                                         >
                                             Reset Filters
                                         </button>
-                                        <div className="px-2 py-1 bg-white border border-gray-200 text-gray-600 rounded text-xs font-medium shadow-sm">
-                                            Total: <span className="text-gray-900">{displayRows.length}</span> records
+                                        <div className="px-2 py-1 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 text-gray-600 dark:text-slate-300 rounded text-xs font-medium shadow-sm">
+                                            Total: <span className="text-gray-900 dark:text-slate-100">{displayRows.length}</span> records
                                         </div>
-                                        <div className="text-xs text-gray-500 ml-auto">
-                                            Last updated: <span className="font-medium text-gray-700">{formattedLastUpdated}</span>
+                                        <div className="text-xs text-gray-500 dark:text-slate-400 ml-auto">
+                                            Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
                                         </div>
                                     </div>
                                 </div>
-                                {uploadSuccess && (
-                                    <AlertMessage
-                                        type="success"
-                                        title="File uploaded successfully!"
-                                        message="The data has been refreshed."
-                                    />
-                                )}
-                                {uploadError && (
-                                    <AlertMessage
-                                        type="error"
-                                        title="Upload failed"
-                                        message={uploadError}
-                                    />
-                                )}
                             </div>
+                        </div>
 
-                            {loading && (
-                                <div className="text-center py-12">
-                                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
-                                    <p className="text-gray-600 font-medium">Loading Drafting Work Load data...</p>
-                                </div>
-                            )}
+                        {loading && (
+                            <div className="flex-shrink-0 text-center py-12">
+                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
+                                <p className="text-gray-600 dark:text-slate-400 font-medium">Loading Drafting Work Load data...</p>
+                            </div>
+                        )}
 
-                            {fetchError && !loading && (
+                        {fetchError && !loading && (
+                            <div className="flex-shrink-0 p-2">
                                 <AlertMessage
                                     type="error"
                                     title="Unable to load Drafting Work Load data"
                                     message={fetchError}
                                 />
-                            )}
+                            </div>
+                        )}
 
-                            {!loading && !fetchError && (
-                                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                    <div className="">
-                                        <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%' }}>
-                                            <thead className="bg-gray-100">
-                                                <tr>
-                                                    {filteredColumns.map((column) => {
-                                                        const isOrderNumber = column === 'Order Number';
-                                                        const isNotes = column === 'Notes';
-                                                        const isProjectName = column === 'Project Name';
-                                                        const isTitle = column === 'Title';
+                        {resortError && (
+                            <div className="flex-shrink-0 p-2">
+                                <AlertMessage type="error" title="Resort failed" message={resortError} />
+                            </div>
+                        )}
 
-                                                        if (isProjectName) {
-                                                            return (
-                                                                <th
-                                                                    key={column}
-                                                                    className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 dwl-col-project-name"
-                                                                    style={{ maxWidth: '280px' }}
-                                                                >
-                                                                    <button
-                                                                        onClick={handleProjectNameSortToggle}
-                                                                        className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
-                                                                        title={
-                                                                            projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
-                                                                                projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
-                                                                                    'Click to sort by Order Number'
-                                                                        }
-                                                                    >
-                                                                        <span>{column}</span>
-                                                                        {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
-                                                                        {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
-                                                                        {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400">↕</span>}
-                                                                    </button>
-                                                                </th>
-                                                            );
-                                                        }
+                        {!loading && !fetchError && (
+                            <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
+                                {/* Scrollbar hidden via CSS; scroll still works with wheel/trackpad */}
+                                <div
+                                    className="dwl-table-scroll-hide-scrollbar flex-1 min-h-0 overflow-x-hidden"
+                                    style={{ overflowY: 'auto' }}
+                                >
+                                    <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+                                        <thead className="sticky top-0 z-10 bg-gray-100 dark:bg-slate-700 shadow-sm">
+                                            <tr>
+                                                {visibleColumns.map((column) => {
+                                                    const isOrderNumber = column === 'ORDER #';
+                                                    const isNotes = column === 'NOTES';
+                                                    const isProjectName = column === 'NAME';
+                                                    const isTitle = column === 'TITLE';
+                                                    const isProcoreStatus = column === 'PROCORE STATUS';
+                                                    const isStatus = column === 'COMP. STATUS';
+                                                    const isBallInCourt = column === 'BIC';
+                                                    const isType = column === 'TYPE';
+                                                    const isSubmittalId = column === 'Submittals Id';
+                                                    const isProjectNumber = column === 'PROJ. #';
+                                                    const isSubmittalManager = column === 'SUB MANAGER';
+                                                    const isLastBIC = column === 'LAST BIC';
+                                                    const isLifespan = column === 'LIFESPAN';
+                                                    const isDueDate = column === 'DUE DATE';
 
-                                                        const isStatus = column === 'Status';
-                                                        const isProcoreStatus = column === 'Procore Status';
-                                                        const isBallInCourt = column === 'Ball In Court';
-                                                        const isType = column === 'Type';
-                                                        const isSubmittalId = column === 'Submittals Id';
-                                                        const isProjectNumber = column === 'Project Number';
-                                                        const isSubmittalManager = column === 'Submittal Manager';
+                                                    // Percentage widths (must total 100%). PROCORE STATUS and LAST BIC get more space.
+                                                    let headerStyle = {};
+                                                    let columnClass = '';
+                                                    if (isOrderNumber) {
+                                                        headerStyle = { width: '6%' };
+                                                        columnClass = 'dwl-col-order-number';
+                                                    } else if (isProjectNumber) {
+                                                        headerStyle = { width: '4%' };
+                                                        columnClass = 'dwl-col-project-number';
+                                                    } else if (isTitle) {
+                                                        headerStyle = { width: '12%' };
+                                                        columnClass = 'dwl-col-title';
+                                                    } else if (isNotes) {
+                                                        headerStyle = { width: '14%' };
+                                                        columnClass = 'dwl-col-notes';
+                                                    } else if (isBallInCourt) {
+                                                        headerStyle = { width: '8%' };
+                                                        columnClass = 'dwl-col-bic';
+                                                    } else if (isType) {
+                                                        headerStyle = { width: '4%' };
+                                                        columnClass = 'dwl-col-type';
+                                                    } else if (isProcoreStatus) {
+                                                        headerStyle = { width: '9%' };
+                                                        columnClass = 'dwl-col-procore-status';
+                                                    } else if (isStatus) {
+                                                        headerStyle = { width: '5%' };
+                                                        columnClass = 'dwl-col-comp-status';
+                                                    } else if (isSubmittalManager) {
+                                                        headerStyle = { width: '7%' };
+                                                        columnClass = 'dwl-col-sub-manager';
+                                                    } else if (isLastBIC) {
+                                                        headerStyle = { width: '6%' };
+                                                        columnClass = 'dwl-col-last-bic-update';
+                                                    } else if (isLifespan) {
+                                                        headerStyle = { width: '7%' };
+                                                        columnClass = 'dwl-col-lifespan';
+                                                    } else if (isDueDate) {
+                                                        headerStyle = { width: '6%' };
+                                                        columnClass = 'dwl-col-due-date';
+                                                    } else if (isProjectName) {
+                                                        headerStyle = { width: '12%' };
+                                                        columnClass = 'dwl-col-name';
+                                                    }
 
-                                                        // Set max-widths for all columns (perfect for laptop screens)
-                                                        // CSS media queries handle larger screens to prevent bloating
-                                                        let headerStyle = {};
-                                                        let columnClass = '';
-                                                        if (isOrderNumber) {
-                                                            headerStyle = { maxWidth: '64px' };
-                                                            columnClass = 'dwl-col-order-number';
-                                                        } else if (isSubmittalId) {
-                                                            headerStyle = { maxWidth: '128px' };
-                                                            columnClass = 'dwl-col-submittal-id';
-                                                        } else if (isProjectNumber) {
-                                                            headerStyle = { maxWidth: '80px' };
-                                                            columnClass = 'dwl-col-project-number';
-                                                        } else if (isTitle) {
-                                                            headerStyle = { maxWidth: '280px' };
-                                                            columnClass = 'dwl-col-title';
-                                                        } else if (isNotes) {
-                                                            headerStyle = { maxWidth: '350px' };
-                                                            columnClass = 'dwl-col-notes';
-                                                        } else if (isBallInCourt) {
-                                                            headerStyle = { maxWidth: '180px' };
-                                                            columnClass = 'dwl-col-ball-in-court';
-                                                        } else if (isType) {
-                                                            headerStyle = { maxWidth: '80px' };
-                                                            columnClass = 'dwl-col-type';
-                                                        } else if (isStatus) {
-                                                            headerStyle = { maxWidth: '96px' };
-                                                            columnClass = 'dwl-col-status';
-                                                        } else if (isProcoreStatus) {
-                                                            headerStyle = { maxWidth: '96px' };
-                                                            columnClass = 'dwl-col-procore-status';
-                                                        } else if (isSubmittalManager) {
-                                                            headerStyle = { maxWidth: '128px' };
-                                                            columnClass = 'dwl-col-submittal-manager';
-                                                        }
+                                                    // Reduce padding for specific columns
+                                                    const isLifespanHeader = column === 'LIFESPAN';
+                                                    const isProjectNumberHeader = column === 'PROJ. #';
+                                                    const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isLifespanHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
+                                                    // Determine if this column is sortable
+                                                    // ORDER #, NOTES, PROCORE STATUS, COMP. STATUS are not sortable (interactive); DUE DATE is sortable (asc/desc)
+                                                    const isNotSortable = isOrderNumber || isNotes || isProcoreStatus || isStatus;
+
+                                                    // Get sort state for this column
+                                                    const isSorted = columnSort.column === column;
+                                                    const sortDirection = isSorted ? columnSort.direction : null;
+
+                                                    if (isProjectName) {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isOrderNumber ? 'px-0.5 py-0.5' : 'px-1 py-0.5'} text-center text-xs font-bold text-gray-900 uppercase tracking-wider bg-gray-100 border-r border-gray-300 ${columnClass}`}
-                                                                style={headerStyle}
+                                                                className="px-1 py-0.5 text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 dwl-col-name"
+                                                                style={{ width: '12%' }}
                                                             >
-                                                                {column}
+                                                                <button
+                                                                    onClick={handleProjectNameSortToggle}
+                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 rounded px-1 py-0.5 transition-colors w-full"
+                                                                    title={
+                                                                        projectNameSortMode === 'normal' ? 'Click to sort A-Z' :
+                                                                            projectNameSortMode === 'a-z' ? 'Click to sort Z-A' :
+                                                                                'Click to sort by Order Number'
+                                                                    }
+                                                                >
+                                                                    <span>{column}</span>
+                                                                    {projectNameSortMode === 'a-z' && <span className="text-xs">↑</span>}
+                                                                    {projectNameSortMode === 'z-a' && <span className="text-xs">↓</span>}
+                                                                    {projectNameSortMode === 'normal' && <span className="text-xs text-gray-400 dark:text-slate-400">↕</span>}
+                                                                </button>
                                                             </th>
                                                         );
-                                                    })}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {!hasData ? (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={tableColumnCount}
-                                                            className="px-6 py-12 text-center text-gray-500 font-medium bg-white rounded-md"
+                                                    }
+
+                                                    // Render sortable column header
+                                                    if (!isNotSortable) {
+                                                        return (
+                                                            <th
+                                                                key={column}
+                                                                className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 ${columnClass}`}
+                                                                style={headerStyle}
+                                                            >
+                                                                <button
+                                                                    onClick={() => handleColumnSort(column)}
+                                                                    className="flex items-center justify-center gap-1 hover:bg-gray-200 dark:hover:bg-slate-600 rounded px-1 py-0.5 transition-colors w-full"
+                                                                    title={
+                                                                        sortDirection === null ? 'Click to sort ascending' :
+                                                                            sortDirection === 'asc' ? 'Click to sort descending' :
+                                                                                'Click to remove sort'
+                                                                    }
+                                                                >
+                                                                    <span>{column}</span>
+                                                                    {sortDirection === 'asc' && <span className="text-xs">↑</span>}
+                                                                    {sortDirection === 'desc' && <span className="text-xs">↓</span>}
+                                                                    {sortDirection === null && <span className="text-xs text-gray-400 dark:text-slate-400">↕</span>}
+                                                                </button>
+                                                            </th>
+                                                        );
+                                                    }
+
+                                                    // Non-sortable column (Order Number, Notes, Procore Status, Comp. Status)
+                                                    return (
+                                                        <th
+                                                            key={column}
+                                                            className={`${headerPaddingClass} text-center text-xs font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 ${columnClass}`}
+                                                            style={headerStyle}
                                                         >
-                                                            No records match the selected filters.
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    displayRows.map((row, index) => (
-                                                        <TableRow
-                                                            key={row.id}
-                                                            row={row}
-                                                            columns={filteredColumns}
-                                                            formatCellValue={formatCellValue}
-                                                            formatDate={formatDate}
-                                                            onOrderNumberChange={updateOrderNumber}
-                                                            onNotesChange={updateNotes}
-                                                            onStatusChange={updateStatus}
-                                                            onDueDateChange={updateDueDate}
-                                                            rowIndex={index}
-                                                            onDragStart={handleDragStart}
-                                                            onDragOver={handleDragOver}
-                                                            onDragLeave={handleDragLeave}
-                                                            onDrop={handleDrop}
-                                                            isDragging={draggedIndex}
-                                                            dragOverIndex={dragOverIndex}
-                                                        />
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                            {column}
+                                                        </th>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {!hasData ? (
+                                                <tr>
+                                                    <td
+                                                        colSpan={tableColumnCount}
+                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
+                                                    >
+                                                        No records match the selected filters.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                displayRows.map((row, index) => (
+                                                    <TableRow
+                                                        key={row.id}
+                                                        row={row}
+                                                        columns={columns}
+                                                        isJumpToHighlight={jumpToTarget && String(row['Submittals Id'] ?? row.submittal_id ?? '') === jumpToTarget}
+                                                        formatCellValue={formatCellValue}
+                                                        formatDate={formatDate}
+                                                        onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
+                                                        onNotesChange={isAdmin ? updateNotes : undefined}
+                                                        onStatusChange={isAdmin ? updateStatus : undefined}
+                                                        onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
+                                                        procoreStatusOptions={submittalStatuses}
+                                                        selectedTab={selectedTab}
+                                                        onBump={isAdmin ? bumpSubmittal : undefined}
+                                                        onDueDateChange={isAdmin ? updateDueDate : undefined}
+                                                        onStepOrder={isAdmin ? stepSubmittal : undefined}
+                                                        allRows={rows}
+                                                        rowIndex={index}
+                                                        isAdmin={isAdmin}
+                                                    />
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
-            
-            {/* Reorder Confirmation Dialog */}
-            {showReorderConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-4">Confirm Re-Order</h2>
-                        <p className="text-gray-700 mb-6">
-                            This will reorder all items in each "Ball In Court" group so that the lowest order number (≥1) becomes 1, 
-                            and all subsequent items are renumbered sequentially (2, 3, 4...). 
-                            Decimal values (urgent items) will be ignored and remain unchanged.
-                        </p>
-                        <p className="text-gray-600 mb-6 text-sm">
-                            Example: If a group has orders [11, 12, 13, 14], they will become [1, 2, 3, 4].
-                        </p>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={handleReorderCancel}
-                                disabled={updating}
-                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleReorderConfirm}
-                                disabled={updating}
-                                className="px-4 py-2 bg-accent-600 text-white rounded-lg font-medium hover:bg-accent-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {updating ? 'Re-ordering...' : 'Confirm Re-Order'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 }
