@@ -348,5 +348,4 @@ if __name__ == "__main__":
             cfg.PROD_PROCORE_CLIENT_SECRET,
             cfg.PROCORE_DEV_WEBHOOK_URL,
         )
-        user_id = "14554506"
-        print(procore_client.get_user_information_by_id(user_id))
+        print(procore_client.get_company_users())
