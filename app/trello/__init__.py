@@ -74,17 +74,21 @@ def trello_webhook():
         # Skip unhandled webhooks
         if not event_info.get("handled"):
             action_type = event_info.get("action_type", "unknown")
-            app.logger.debug(f"Skipping unhandled webhook: {action_type}")
+            app.logger.info(f"Skipping unhandled webhook: {action_type}")
             return "", 200
 
-        # Log Trello webhook receipt with userId when available
-        trello_user_id = event_info.get("trello_user_id")
-        app.logger.info(
-            "Trello webhook received: event=%s, card_id=%s, trello_user_id=%s",
-            event_info.get("event"),
-            event_info.get("card_id"),
-            trello_user_id,
-        )
+        # If locked, enqueue the event for later processing and return 202
+        if sync_lock_manager.is_locked():
+            current_op = sync_lock_manager.get_current_operation()
+            try:
+                trello_event_queue.put_nowait(event_info)
+                thread_tracker.thread_rejected()
+                app.logger.info(f"Trello webhook queued due to active lock: {current_op}")
+                return jsonify({"status": "queued", "reason": f"lock_held_by_{current_op}"}), 202
+            except Full:
+                thread_tracker.thread_rejected()
+                app.logger.warning("Trello event queue is full; dropping event")
+                return jsonify({"status": "overloaded"}), 429
 
         def run_sync():
             thread_id = threading.current_thread().ident
@@ -92,12 +96,42 @@ def trello_webhook():
 
             try:
                 with app.app_context():
-                    app.logger.info("Trello sync started")
-                    sync_from_trello(event_info)
-                    app.logger.info("Trello sync completed successfully")
+                    # Double-check lock status before attempting acquisition
+                    # This handles race conditions where another operation started
+                    # between the initial check and thread execution
+                    if sync_lock_manager.is_locked():
+                        current_op = sync_lock_manager.get_current_operation()
+                        app.logger.info(f"Lock acquired by {current_op} before thread execution - queuing event")
+                        try:
+                            trello_event_queue.put_nowait(event_info)
+                        except Full:
+                            app.logger.warning("Queue full while requeuing - dropping event")
+                        duration = thread_tracker.thread_completed(thread_id, success=False)
+                        thread_tracker.thread_rejected()
+                        return
 
-                duration = thread_tracker.thread_completed(thread_id, success=True)
-                app.logger.info(f"Sync completed in {duration:.2f}s")
+                    # Try to acquire the sync lock in the thread
+                    try:
+                        with sync_lock_manager.acquire_sync_lock("Trello-Hook"):
+                            app.logger.info("Trello sync started with lock acquired")
+                            sync_from_trello(event_info)
+                            app.logger.info("Trello sync completed successfully")
+
+                        duration = thread_tracker.thread_completed(
+                            thread_id, success=True
+                        )
+                        app.logger.info(f"Sync completed in {duration:.2f}s")
+
+                    except RuntimeError as lock_error:
+                        # Lock acquisition failed - this shouldn't happen since we checked above
+                        # but it's possible another sync started between the check and thread execution
+                        app.logger.warning(
+                            f"Trello sync lock acquisition failed in thread: {lock_error}"
+                        )
+                        duration = thread_tracker.thread_completed(
+                            thread_id, success=False
+                        )
+                        thread_tracker.thread_rejected()  # Count as rejected
 
             except Exception as e:
                 duration = thread_tracker.thread_completed(thread_id, success=False)

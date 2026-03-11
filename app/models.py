@@ -444,7 +444,7 @@ class Releases(db.Model):
 
 
 def query_job_releases():
-    results = Releases.query.all()
+    results = Job.query.all()
     return pd.DataFrame(
         [
             {
@@ -459,8 +459,12 @@ def query_job_releases():
                 "BY": r.by,
                 "Released": r.released,
                 "Fab Order": r.fab_order,
-                "Stage": r.stage,
-                "Start install": r.start_install,  # Updated field name
+                "Cut start": r.cut_start,
+                "Fitup comp": r.fitup_comp,
+                "Welded": r.welded,
+                "Paint Comp": r.paint_comp,
+                "Ship": r.ship,
+                "Start install": r.start_install,
                 "Comp. ETA": r.comp_eta,
                 "Job Comp": r.job_comp,
                 "Invoiced": r.invoiced,
