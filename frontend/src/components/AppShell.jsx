@@ -22,6 +22,18 @@ function AppShell({ isAuthenticated }) {
         {/* Quick search */}
         <QuickSearch />
 
+        {/* Map shortcut */}
+        <button
+          type="button"
+          onClick={() => navigate('/jobsite-map')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/jobsite-map')
+            ? 'bg-accent-500 text-white'
+            : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+            }`}
+        >
+          Map
+        </button>
+
         {/* Centered title */}
         <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none">
           MHMW Brain
@@ -33,11 +45,10 @@ function AppShell({ isAuthenticated }) {
           <button
             type="button"
             onClick={() => navigate('/job-log')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-              isActive('/job-log')
-                ? 'bg-accent-500 text-white'
-                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-            }`}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/job-log')
+              ? 'bg-accent-500 text-white'
+              : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+              }`}
           >
             Job Log
           </button>
@@ -46,11 +57,10 @@ function AppShell({ isAuthenticated }) {
           <button
             type="button"
             onClick={() => navigate('/drafting-work-load')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-              isActive('/drafting-work-load')
-                ? 'bg-accent-500 text-white'
-                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-            }`}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/drafting-work-load')
+              ? 'bg-accent-500 text-white'
+              : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+              }`}
           >
             Drafting WL
           </button>
@@ -59,11 +69,10 @@ function AppShell({ isAuthenticated }) {
           <button
             type="button"
             onClick={() => navigate('/events')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-              isActive('/events')
-                ? 'bg-accent-500 text-white'
-                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-            }`}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/events')
+              ? 'bg-accent-500 text-white'
+              : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+              }`}
           >
             Events
           </button>
