@@ -21,6 +21,7 @@ class User(db.Model):
     first_name = db.Column(db.String(255), nullable=True)
     last_name = db.Column(db.String(255), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    password_set = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     procore_id = db.Column(db.String(255), unique=True, nullable=True)

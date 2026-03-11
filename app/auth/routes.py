@@ -1,7 +1,7 @@
 """Authentication routes for login, logout, and user management."""
 from flask import Blueprint, request, jsonify, session
 from app.models import User, db
-from app.auth.utils import verify_password, get_current_user
+from app.auth.utils import verify_password, get_current_user, hash_password
 from app.logging_config import get_logger
 from datetime import datetime
 
@@ -85,7 +85,7 @@ def get_current_user_info():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Not authenticated'}), 401
-        
+
         return jsonify({
             'id': user.id,
             'username': user.username,
@@ -95,6 +95,129 @@ def get_current_user_info():
         }), 200
     except Exception as e:
         logger.error(f"Error getting current user info: {e}", exc_info=True)
+        return jsonify({'error': 'An error occurred'}), 500
+
+
+@auth_bp.route('/check-user', methods=['POST'])
+def check_user():
+    """Check if a user exists and whether they need to set a password.
+
+    Request body: { "username": "<email>" }
+    Response: { "exists": true, "needs_password_setup": true/false }
+    or: { "exists": false }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        username = data.get('username')
+        if not username:
+            return jsonify({'error': 'Username is required'}), 400
+
+        # Look up user by username (email)
+        user = User.query.filter_by(username=username).first()
+
+        if not user:
+            logger.info(f"Check user: account not found for {username}")
+            return jsonify({'exists': False}), 200
+
+        if not user.is_active:
+            logger.info(f"Check user: account inactive for {username}")
+            return jsonify({'exists': True, 'needs_password_setup': False}), 200
+
+        needs_setup = not user.password_set
+        logger.info(f"Check user: {username} exists, needs_password_setup={needs_setup}")
+
+        return jsonify({
+            'exists': True,
+            'needs_password_setup': needs_setup
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error during check user: {e}", exc_info=True)
+        return jsonify({'error': 'An error occurred'}), 500
+
+
+@auth_bp.route('/set-password', methods=['POST'])
+def set_password():
+    """Set password for a user on first login.
+
+    Request body: {
+        "username": "<email>",
+        "new_password": "...",
+        "confirm_password": "..."
+    }
+
+    Validates:
+    - User exists
+    - password_set == False
+    - Passwords match
+    - Minimum length >= 8 chars
+
+    On success, sets password, marks password_set = True, creates session.
+    Returns same shape as login endpoint.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        username = data.get('username')
+        new_password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
+
+        if not username or not new_password or not confirm_password:
+            return jsonify({'error': 'Username and passwords are required'}), 400
+
+        # Find user
+        user = User.query.filter_by(username=username).first()
+
+        if not user:
+            logger.warning(f"Set password attempt for non-existent user: {username}")
+            return jsonify({'error': 'User not found'}), 404
+
+        if not user.is_active:
+            logger.warning(f"Set password attempt for inactive user: {username}")
+            return jsonify({'error': 'Account is inactive'}), 403
+
+        # Check if password has already been set
+        if user.password_set:
+            logger.warning(f"Set password attempt for user with password already set: {username}")
+            return jsonify({'error': 'Password has already been set for this account'}), 400
+
+        # Validate password match
+        if new_password != confirm_password:
+            return jsonify({'error': 'Passwords do not match'}), 400
+
+        # Validate minimum length
+        if len(new_password) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+        # Set password and mark as set
+        user.password_hash = hash_password(new_password)
+        user.password_set = True
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+
+        # Create session
+        session['user_id'] = user.id
+        session['username'] = user.username
+        session.permanent = True
+
+        logger.info(f"User {username} set password and logged in successfully")
+
+        return jsonify({
+            'status': 'success',
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'is_admin': user.is_admin
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error during set password: {e}", exc_info=True)
         return jsonify({'error': 'An error occurred'}), 500
 
 

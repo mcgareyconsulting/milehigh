@@ -9,7 +9,7 @@ from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, Submittals
+from app.models import Releases, db, ReleaseEvents, Submittals, User
 from app.auth.utils import login_required, get_current_user
 from datetime import datetime
 import json
@@ -1946,7 +1946,8 @@ def _resolve_event_user_names(all_events):
     user_by_id = {}
     if internal_ids:
         for u in User.query.filter(User.id.in_(internal_ids)).all():
-            user_by_id[u.id] = (u.name or u.username or f"User {u.id}").strip()
+            full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
+            user_by_id[u.id] = (full_name or u.username or f"User {u.id}").strip()
 
     result = {}
     for event in all_events:
