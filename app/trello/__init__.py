@@ -1,9 +1,11 @@
 from flask import Blueprint, request, current_app, jsonify
 from app.trello.utils import parse_webhook_data
 from app.trello.sync import sync_from_trello
+from app.sync_lock import sync_lock_manager
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
+from queue import Queue, Full, Empty
 import time
 
 
@@ -52,6 +54,8 @@ class ThreadTracker:
 # Global tracker and thread pool
 thread_tracker = ThreadTracker()
 executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="sync-")
+# Bounded in-memory queue to buffer Trello events when lock is busy
+trello_event_queue: Queue = Queue(maxsize=1000)
 
 # Blueprint for Trello routes
 trello_bp = Blueprint("trello", __name__)
@@ -119,3 +123,52 @@ def thread_stats():
         stats = thread_tracker.stats.copy()
 
     return jsonify(stats)
+
+
+def drain_trello_queue(max_items: int = 5):
+    """Drain up to max_items from the Trello event queue when lock is free."""
+    app = current_app._get_current_object()
+
+    if sync_lock_manager.is_locked():
+        return 0
+
+    drained = 0
+
+    while drained < max_items:
+        try:
+            event_info = trello_event_queue.get_nowait()
+        except Empty:
+            break
+
+        def run_sync_event(evt):
+            thread_id = threading.current_thread().ident
+            thread_tracker.thread_started(thread_id)
+            try:
+                with app.app_context():
+                    try:
+                        with sync_lock_manager.acquire_sync_lock("Trello-Queue"):
+                            app.logger.info("Drained Trello event started with lock acquired")
+                            sync_from_trello(evt)
+                            app.logger.info("Drained Trello event completed successfully")
+                        duration = thread_tracker.thread_completed(thread_id, success=True)
+                        app.logger.info(f"Drained sync completed in {duration:.2f}s")
+                    except RuntimeError as lock_error:
+                        # Could not acquire (race); requeue and stop draining
+                        app.logger.info(f"Queue drain lock contention: {lock_error}")
+                        try:
+                            trello_event_queue.put_nowait(evt)
+                        except Full:
+                            app.logger.warning("Queue full while requeuing drained event; dropping")
+                        thread_tracker.thread_completed(thread_id, success=False)
+                        return False
+            except Exception as e:
+                duration = thread_tracker.thread_completed(thread_id, success=False)
+                app.logger.error(f"Drained sync failed after {duration:.2f}s: {e}")
+                return True
+            return True
+
+        # Execute drained event in the pool to keep behavior consistent
+        future = executor.submit(run_sync_event, event_info)
+        drained += 1
+
+    return drained

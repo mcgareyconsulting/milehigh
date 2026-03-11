@@ -28,7 +28,12 @@ class Config:
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
-    # NOTE: OneDrive/Excel functionality removed - ONEDRIVE_* and SNAPSHOTS_DIR config removed
+
+    # OneDrive/Excel configuration
+    ONEDRIVE_USER_EMAIL = os.environ.get("ONEDRIVE_USER_EMAIL")
+    ONEDRIVE_FILE_PATH = os.environ.get("ONEDRIVE_FILE_PATH")
+    EXCEL_INDEX_ADJ = int(os.environ.get("EXCEL_INDEX_ADJ", 0))
+    SNAPSHOTS_DIR = os.environ.get("SNAPSHOTS_DIR", "snapshots")
 
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")

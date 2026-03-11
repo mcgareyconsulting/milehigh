@@ -21,6 +21,7 @@ class User(db.Model):
     first_name = db.Column(db.String(255), nullable=True)
     last_name = db.Column(db.String(255), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    password_set = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     procore_id = db.Column(db.String(255), unique=True, nullable=True)
@@ -264,6 +265,93 @@ class SyncLog(db.Model):
         return f"<SyncLog {self.operation_id} - {self.level} - {self.message[:50]}...>"
 
 
+class Job(db.Model):
+    """Legacy job log model - used by OneDrive → Trello pipeline."""
+    __tablename__ = "jobs"
+    __table_args__ = (db.UniqueConstraint("job", "release", name="_job_release_uc"),)
+    id = db.Column(db.Integer, primary_key=True)
+    # Job # and Release # for identifiers
+    job = db.Column(db.Integer, nullable=False)
+    release = db.Column(db.String(16), nullable=False)
+
+    # Excel columns
+    job_name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.String(256))
+    fab_hrs = db.Column(db.Float)
+    install_hrs = db.Column(db.Float)
+    paint_color = db.Column(db.String(64))
+    pm = db.Column(db.String(16))
+    by = db.Column(db.String(16))
+    released = db.Column(db.Date)
+    fab_order = db.Column(db.Float)
+    cut_start = db.Column(db.String(8))
+    fitup_comp = db.Column(db.String(8))
+    welded = db.Column(db.String(8))
+    paint_comp = db.Column(db.String(8))
+    ship = db.Column(db.String(8))  # Changed from ship_start to ship
+    start_install = db.Column(db.Date)  # Changed from install to start_install and Date type
+    start_install_formula = db.Column(db.String(256))  # New field for formula
+    start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
+    comp_eta = db.Column(db.Date)  # Changed from String to Date
+    job_comp = db.Column(db.String(8))
+    invoiced = db.Column(db.String(8))
+    notes = db.Column(db.String(256))
+
+    # Trello fields
+    trello_card_id = db.Column(db.String(64), unique=True, nullable=True)
+    trello_card_name = db.Column(db.String(256), nullable=True)
+    trello_list_id = db.Column(db.String(64), nullable=True)
+    trello_list_name = db.Column(db.String(128), nullable=True)
+    trello_card_description = db.Column(db.String(512), nullable=True)
+    trello_card_date = db.Column(db.Date, nullable=True)
+    viewer_url = db.Column(db.String(512), nullable=True)
+
+    # Changelog tracking
+    last_updated_at = db.Column(db.DateTime, nullable=True)
+    source_of_update = db.Column(db.String(16), nullable=True)  # 'Trello' or 'Excel' or 'System'
+
+    def __repr__(self):
+        return f"<Job {self.job} - {self.release} - {self.job_name}>"
+
+
+class JobChangeLog(db.Model):
+    """Tracks state changes and field updates for jobs over time."""
+    __tablename__ = 'job_change_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    job = db.Column(db.Integer, nullable=False)
+    release = db.Column(db.String(50))
+
+    # Change information
+    change_type = db.Column(db.String(50), nullable=False)  # "state_change", "field_change" (future)
+    from_value = db.Column(db.String(200))  # Previous state/value (None for initial)
+    to_value = db.Column(db.String(200), nullable=False)  # New state/value
+
+    # Context
+    field_name = db.Column(db.String(100))  # e.g., "fitup_comp", "state" for state changes
+
+    # Timing
+    changed_at = db.Column(db.DateTime, nullable=False)
+
+    # Traceability
+    operation_id = db.Column(db.String(36), nullable=True)  # Links to SyncOperation
+    source = db.Column(db.String(50), nullable=False)  # "Excel", "Trello", "Manual"
+
+    # Optional metadata
+    triggered_by = db.Column(db.String(100))  # What caused this change
+
+    # Indexes for efficient queries
+    __table_args__ = (
+        db.Index('idx_job_release', 'job', 'release'),
+        db.Index('idx_changed_at', 'changed_at'),
+        db.Index('idx_operation_id', 'operation_id'),
+        db.Index('idx_change_type', 'change_type'),
+    )
+
+    def __repr__(self):
+        return f"<JobChangeLog {self.job}-{self.release}: {self.from_value}→{self.to_value}>"
+
+
 class Releases(db.Model):
     __tablename__ = "releases"
     __table_args__ = (db.UniqueConstraint("job", "release", name="_job_release_uc"),)
@@ -495,7 +583,7 @@ class Jobs(db.Model):
       - Submittals.query.filter(Submittals.project_number == job_site.job_number)
     Relationships below provide the same via job_site.jobs and job_site.submittals.
     """
-    __tablename__ = 'jobs'
+    __tablename__ = 'job_sites'
     __table_args__ = (db.UniqueConstraint('job_number', name='_job_sites_job_number_uc'),)
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)

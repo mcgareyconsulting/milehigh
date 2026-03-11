@@ -1,5 +1,9 @@
 import os
+import atexit
+import time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
@@ -11,6 +15,7 @@ from app.brain import brain_bp
 from app.auth.routes import auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
+from app.onedrive import onedrive_bp
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -21,6 +26,109 @@ from app.logging_config import configure_logging, get_logger
 
 # Configure logging
 logger = configure_logging(log_level="INFO", log_file="logs/app.log")
+
+
+def init_scheduler(app):
+    """Initialize the scheduler to run the OneDrive poll every hour."""
+    from app.onedrive.utils import run_onedrive_poll
+    from app.sync_lock import sync_lock_manager
+    from app.trello import drain_trello_queue
+
+    # --- Prevent scheduler duplication in multi-worker environments ---
+    # Only run the scheduler on one instance
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and not os.environ.get("IS_RENDER_SCHEDULER"):
+        logger.info("Skipping scheduler startup on this worker")
+        return None
+
+    # --- Configure scheduler ---
+    executors = {"default": ThreadPoolExecutor(3)}
+    scheduler = BackgroundScheduler(executors=executors)
+
+    # --- Simple retry wrapper for transient errors ---
+    def retry_with_backoff(func, retries=3, base_delay=5):
+        for i in range(retries):
+            try:
+                return func()
+            except Exception as e:
+                if i == retries - 1:
+                    raise
+                delay = base_delay * (2 ** i)
+                logger.warning(
+                    "Retrying OneDrive poll after failure",
+                    attempt=i + 1,
+                    delay=delay,
+                    error=str(e)
+                )
+                time.sleep(delay)
+
+    # --- The actual scheduled task ---
+    def scheduled_run():
+        with app.app_context():
+            if sync_lock_manager.is_locked():
+                current_op = sync_lock_manager.get_current_operation()
+                logger.info("Skipping scheduled OneDrive poll - sync locked", current_operation=current_op)
+
+                try:
+                    drained = drain_trello_queue(max_items=3)
+                    if drained:
+                        logger.info("Drained Trello queue while OneDrive locked", drained=drained)
+                except Exception as e:
+                    logger.warning("Trello queue drain failed during skip", error=str(e))
+                return
+
+            try:
+                logger.info("Starting scheduled OneDrive poll")
+
+                # Pre-drain Trello queue
+                try:
+                    drained_pre = drain_trello_queue(max_items=2)
+                    if drained_pre:
+                        logger.info("Pre-drain Trello queue", drained=drained_pre)
+                except Exception:
+                    pass
+
+                # Run OneDrive poll with retry logic
+                retry_with_backoff(run_onedrive_poll)
+
+                # Post-drain Trello queue
+                try:
+                    drained_post = drain_trello_queue(max_items=5)
+                    if drained_post:
+                        logger.info("Post-drain Trello queue", drained=drained_post)
+                except Exception:
+                    pass
+
+                logger.info("Scheduled OneDrive poll completed successfully")
+
+            except RuntimeError as e:
+                logger.info("Scheduled OneDrive poll skipped due to runtime lock", error=str(e))
+            except Exception as e:
+                logger.error("Scheduled OneDrive poll failed", error=str(e))
+
+    # --- Add the main job (runs hourly on the hour) ---
+    scheduler.add_job(
+        func=scheduled_run,
+        trigger="cron",
+        minute="0",
+        hour="*",
+        id="onedrive_poll",
+        name="OneDrive Polling Job",
+        replace_existing=True,
+    )
+
+    # --- Optional heartbeat job to confirm scheduler alive ---
+    scheduler.add_job(
+        func=lambda: logger.info("Scheduler heartbeat: alive"),
+        trigger="interval",
+        minutes=30,
+        id="heartbeat",
+        replace_existing=True,
+    )
+
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown(wait=False))
+
+    logger.info("OneDrive polling scheduler started", schedule="every hour on the hour")
 
 
 def create_app():
@@ -116,7 +224,10 @@ def create_app():
         outbox_thread = threading.Thread(target=outbox_retry_worker, daemon=True, name="outbox-retry-worker")
         outbox_thread.start()
         logger.info("Outbox retry worker thread started successfully")
-        
+
+        # Initialize the scheduler for OneDrive polling
+        init_scheduler(app)
+
         # # Check if we need to seed the database (only if empty)
         # from app.models import Job
         # job_count = Job.query.count()
@@ -271,6 +382,7 @@ def create_app():
     # Register blueprints before catch-all so API routes (e.g. POST /api/auth/login) are matched first
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(procore_bp, url_prefix="/procore")
+    app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
     # app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(brain_bp, url_prefix="/brain")
     app.register_blueprint(auth_bp)
