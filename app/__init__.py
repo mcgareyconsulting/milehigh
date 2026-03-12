@@ -125,7 +125,7 @@ def init_scheduler(app):
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="38",
+        minute="*",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
@@ -297,7 +297,7 @@ def create_app():
         logger.info("Outbox retry worker thread started successfully")
 
         # Initialize the scheduler for OneDrive polling
-        init_scheduler(app)
+        # init_scheduler(app)  # Disabled - not running OneDrive poller in this deployment
 
         # # Check if we need to seed the database (only if empty)
         # from app.models import Job
