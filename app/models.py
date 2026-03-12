@@ -80,14 +80,18 @@ class Submittals(db.Model):
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_bic_update = db.Column(db.DateTime, nullable=True)  # Cached timestamp of last ball-in-court update from Procore
 
-    def get_last_ball_in_court_update_time(self):
+    def get_last_bic_from_events(self):
         """
-        Get the timestamp of the last 'updated' event from source 'Procore' 
+        Get the timestamp of the last 'updated' event from source 'Procore'
         where the payload contains 'ball_in_court'.
-        
+
+        This is the dynamic/audit method. For performance-critical list views,
+        use the cached last_bic_update column instead.
+
         Returns:
-            datetime or None: The created_at timestamp of the last ball_in_court update event, 
+            datetime or None: The created_at timestamp of the last ball_in_court update event,
                             or None if no such event exists
         """
         from app.models import SubmittalEvents
@@ -111,18 +115,20 @@ class Submittals(db.Model):
     def get_time_since_ball_in_court_update(self):
         """
         Calculate the time elapsed since the last ball_in_court update.
-        
+
         Returns:
             timedelta or None: The time difference from now, or None if no update event exists
         """
-        last_update = self.get_last_ball_in_court_update_time()
+        last_update = self.get_last_bic_from_events()
         if last_update:
             return datetime.utcnow() - last_update
         return None
 
     def to_dict(self):
-        last_ball_update = self.get_last_ball_in_court_update_time()
-        time_since_update = self.get_time_since_ball_in_court_update()
+        # Use cached last_bic_update column (populated by backfill migration M7)
+        # Do NOT call get_last_bic_from_events() here—it's expensive and only for audit/backfill
+        last_ball_update = self.last_bic_update
+        time_since_update = (datetime.utcnow() - last_ball_update) if last_ball_update else None
         
         # Calculate days since last ball in court update (aging report)
         days_since_ball_update = None
@@ -578,17 +584,17 @@ class ProjectManager(db.Model):
     color = db.Column(db.String(50), nullable=False, default='#888888')
 
 
-class Jobs(db.Model):
+class Projects(db.Model):
     """
-    Job site geofences. Links to job log and DWL by identifier value (job number),
+    Project/job site geofences. Links to job log and DWL by identifier value (job number),
     not by foreign key: jobs come from Excel/Trello (Releases.job), submittals from
     Procore (Submittals.project_number). Use job_number to query:
-      - Releases.query.filter(Releases.job == cast(Jobs.job_number, Integer))  # Releases.job is int
-      - Submittals.query.filter(Submittals.project_number == job_site.job_number)
-    Relationships below provide the same via job_site.jobs and job_site.submittals.
+      - Releases.query.filter(Releases.job == cast(Projects.job_number, Integer))  # Releases.job is int
+      - Submittals.query.filter(Submittals.project_number == project.job_number)
+    Relationships below provide the same via project.jobs and project.submittals.
     """
-    __tablename__ = 'job_sites'
-    __table_args__ = (db.UniqueConstraint('job_number', name='_job_sites_job_number_uc'),)
+    __tablename__ = 'projects'
+    __table_args__ = (db.UniqueConstraint('job_number', name='_projects_job_number_uc'),)
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     job_number = db.Column(db.String(100), nullable=False)
@@ -610,7 +616,7 @@ class Jobs(db.Model):
     # Relationship by value: job log rows where Releases.job equals this job_number (job_number is string, Releases.job is int)
     jobs = db.relationship(
         'Releases',
-        primaryjoin='cast(Jobs.job_number, Integer) == Releases.job',
+        primaryjoin='cast(Projects.job_number, Integer) == Releases.job',
         foreign_keys='Releases.job',
         lazy='dynamic',
         viewonly=True,
@@ -618,7 +624,7 @@ class Jobs(db.Model):
     # Relationship by value: DWL submittals where project_number == this job_number (both strings)
     submittals = db.relationship(
         'Submittals',
-        primaryjoin='Submittals.project_number == Jobs.job_number',
+        primaryjoin='Submittals.project_number == Projects.job_number',
         foreign_keys='Submittals.project_number',
         lazy='dynamic',
         viewonly=True,

@@ -1,6 +1,6 @@
 from app.brain import brain_bp
 from flask import jsonify
-from app.models import Jobs, ProjectManager, db
+from app.models import Projects, ProjectManager, db
 from app.auth.utils import login_required
 from app.logging_config import get_logger
 
@@ -13,25 +13,25 @@ def jobsites_map():
     """Return a GeoJSON FeatureCollection of all jobsites that have geofence polygons."""
     try:
         rows = (
-            db.session.query(Jobs, ProjectManager)
-            .outerjoin(ProjectManager, Jobs.pm_id == ProjectManager.id)
-            .filter(Jobs.geofence_geojson.isnot(None))
+            db.session.query(Projects, ProjectManager)
+            .outerjoin(ProjectManager, Projects.pm_id == ProjectManager.id)
+            .filter(Projects.geofence_geojson.isnot(None))
             .all()
         )
 
         features = []
-        for job, pm in rows:
+        for project, pm in rows:
             features.append({
                 "type": "Feature",
-                "geometry": job.geofence_geojson,
+                "geometry": project.geofence_geojson,
                 "properties": {
-                    "id": job.id,
-                    "job_name": job.name,
-                    "address": job.address,
+                    "id": project.id,
+                    "job_name": project.name,
+                    "address": project.address,
                     "pm_name": pm.name if pm else None,
                     "pm_color": pm.color if pm else "#888888",
-                    "latitude": job.latitude,
-                    "longitude": job.longitude,
+                    "latitude": project.latitude,
+                    "longitude": project.longitude,
                 },
             })
 

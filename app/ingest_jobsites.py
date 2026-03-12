@@ -1,6 +1,12 @@
+## To run this script
+# curl -X POST http://localhost:8000/admin/jobsites/regenerate-geofences \
+#   -H "Cookie: session=COOKIE_VALUE" \
+#   -H "Content-Type: application/json"
+
+
 import json
 from app import create_app
-from app.models import Jobs, db
+from app.models import Projects, db
 
 app = create_app()
 
@@ -9,36 +15,39 @@ with app.app_context():
         data = json.load(f)
 
     for site in data["jobsites"]:
-        existing = Jobs.query.filter_by(job_number=site["job_number"]).first()
+        existing = Projects.query.filter_by(job_number=site["job_number"]).first()
 
         if existing:
-            print(f"Skipping existing job {site['job_number']}")
+            print(f"Skipping existing project {site['job_number']}")
             continue
 
-        job = Jobs(
+        project = Projects(
             name=site["name"],
             job_number=site["job_number"],
             geometry=site["geometry"],
             address=site.get("address"),
             latitude=site.get("latitude"),
             longitude=site.get("longitude"),
+            radius_meters=site.get(
+                "radius_meters", 3218.68
+            ),  # Default to 2 miles if not provided
             pm_id=site.get("pm_id"),
             is_active=site.get("is_active", True),
             geofence_geojson=site.get("geofence_geojson"),
         )
 
-        db.session.add(job)
+        db.session.add(project)
 
     db.session.commit()
 
     # print("Import complete")
 
     # To update radius in bulk
-    # Grab jobs
-    # jobs = Jobs.query.all()
+    # Grab projects
+    # projects = Projects.query.all()
 
     # Update radius
-    # for job in jobs:
-    #     job.radius_meters = 3218.68
-    #     db.session.add(job)
+    # for project in projects:
+    #     project.radius_meters = 3218.68
+    #     db.session.add(project)
     # print("Updated radius")
