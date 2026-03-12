@@ -2,7 +2,6 @@ import os
 import atexit
 import time
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
@@ -43,7 +42,12 @@ def init_scheduler(app):
         return None
 
     # --- Configure scheduler ---
-    executors = {"default": ThreadPoolExecutor(3)}
+    executors = {
+        "default": {
+            "type": "threadpool",
+            "max_workers": 3,
+        }
+    }
     scheduler = BackgroundScheduler(executors=executors)
 
     # --- Simple retry wrapper for transient errors ---
@@ -117,14 +121,33 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error("Scheduled OneDrive poll failed", error=str(e))
 
-    # --- Add the main job (runs hourly on the hour) ---
+    # --- Add the main job (runs hourly at :30) ---
     scheduler.add_job(
         func=scheduled_run,
         trigger="cron",
-        minute="30",
+        minute="38",
         hour="*",
         id="onedrive_poll",
         name="OneDrive Polling Job",
+        replace_existing=True,
+    )
+
+    # --- Queue drainer job (runs every 5 minutes) ---
+    def queue_drainer():
+        with app.app_context():
+            try:
+                drained = drain_trello_queue(max_items=5)
+                if drained:
+                    logger.info("Trello queue drainer executed", items_drained=drained)
+            except Exception as e:
+                logger.warning("Trello queue drainer failed", error=str(e))
+
+    scheduler.add_job(
+        func=queue_drainer,
+        trigger="interval",
+        minutes=5,
+        id="trello_queue_drainer",
+        name="Trello Queue Drainer",
         replace_existing=True,
     )
 
@@ -140,7 +163,37 @@ def init_scheduler(app):
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
-    logger.info("OneDrive polling scheduler started", schedule="every hour on the hour")
+    # Log scheduler startup with all job details
+    logger.info("OneDrive polling scheduler started", schedule="every hour at :30")
+    logger.info(
+        "Scheduler jobs configured",
+        jobs=[
+            {
+                "id": "onedrive_poll",
+                "name": "OneDrive Polling Job",
+                "schedule": "Every hour at minute :30",
+                "description": "Sync OneDrive Excel to Trello, with Trello queue draining",
+            },
+            {
+                "id": "trello_queue_drainer",
+                "name": "Trello Queue Drainer",
+                "schedule": "Every 5 minutes",
+                "description": "Drain queued Trello events (when lock is free)",
+            },
+            {
+                "id": "heartbeat",
+                "name": "Scheduler Heartbeat",
+                "schedule": "Every 30 minutes",
+                "description": "Confirms scheduler is alive",
+            },
+        ],
+    )
+    logger.info(
+        "Scheduler configuration",
+        is_render_scheduler=os.environ.get("IS_RENDER_SCHEDULER"),
+        total_jobs=scheduler.get_jobs().__len__(),
+        executor_type="ThreadPoolExecutor(max_workers=3)",
+    )
 
 
 def create_app():

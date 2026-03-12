@@ -38,23 +38,36 @@ class OutboxService:
     def process_item(outbox_item):
         """
         Process a single outbox item by executing the external API call.
-        
+
         This method:
         1. Derives all necessary data from the associated event
         2. Executes the appropriate API call based on destination and action
         3. Handles retries with exponential backoff on failure
         4. Closes the associated event when processing succeeds
-        
+
         Args:
             outbox_item: Outbox model instance to process
-            
+
         Returns:
             bool: True if processing succeeded, False if it failed (and will retry)
         """
         from app.models import Releases, db
         from app.services.job_event_service import JobEventService
         from app.trello.api import update_trello_card, get_list_by_name
-        
+        from app.config import Config as cfg
+
+        # Check if outbound Trello is enabled (Job Log 2.0 shadow mode control)
+        if not cfg.TRELLO_OUTBOUND_ENABLED:
+            logger.info(
+                f"Outbound Trello disabled (shadow mode), skipping outbox {outbox_item.id}",
+                destination=outbox_item.destination,
+                action=outbox_item.action,
+            )
+            outbox_item.status = 'skipped'
+            outbox_item.error_message = "Outbound Trello disabled (shadow mode)"
+            db.session.commit()
+            return True
+
         # Mark as processing to prevent concurrent processing
         outbox_item.status = 'processing'
         db.session.commit()

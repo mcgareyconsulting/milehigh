@@ -1,28 +1,25 @@
-# Feature Name / Description
-Resort on Drafter Filter
+# Onedrive Tune Up
+This branch contains the merge I am working toward between main and my outpaced sandbox with new features.
+We need to confirm that the Onedrive Excel Poller is working on the scheduler and passing information correctly.
 
-# UI Location
-The Drafting Work Load is the target UI page. The filtering block at the top of the DWL lists out all drafters with submittals in either tab, Open or Draft. 
-The Resort button is in the upper right of this header feature on the DWL.
+# Onedrive
+- Onedrive run diffs against 'jobs' db table 
+- Then we hit the Trello API to update the card(s).
+- We write this event in Ops and Logs in DB
 
-# UI Needs
-The resort button should be disabled when drafter filter is 'All'
-Only active when we are filtering by a single drafter
+# Trello Webhooks
+- Webhooks currently disabled, previously writing back to Onedrive
+- Webhooks need to be updated to hit ReleaseEvents with source 'Trello' and the 'releases' table to update job log 2.0
 
-# Backend Needs
-The Resort button, which will compress the ordering of a drafter's submittal should be reworked to be drafter specific.
-Resort will compress a drafters submittal order list for 'Ordered' submittals only. Urgency should be auto cascading. We want to force a resort of ordered submittals occasionally. Example: Drafter list is 4-5-6-7-8. Admin pushes resort with that drafter filtered and result is 1-2-3-4-5, preserving order.
+# Job Log 2.0
+- New version of Onedrive effectively
+- Built on top of 'releases' table
+- Will accept and update based on Trello Webhooks
+- Will accept user actions that update 'releases' table
+- No outbound to Trello for now
 
+# Releases Table
+- Need to run a script that builds 'stage', 'stage_group', and 'banana_color'. This may exist somewhere already
 
-# Relevant Directories
-## Backend
-app/brain/drafting_work_load
-build in engine/routes/service style
-
-## Frontend
-frontend/src
-frontend/src/pages/DraftingWorkLoad.jsx
-frontend/src/hooks/useDataFetching.js
-frontend/src/hooks/useFilters.js *I think*
-frontend/src/service/draftingWorkLoadApi.js
-frontend/src/components/TableRow.jsx
+# Goal
+Onedrive is being deprecated, but in the short term must continue to operate. Therefore, we will use new Job Log 2.0 as a shadow mode that will handle Trello Webhooks, so it's semi live. Job Log actions update the 'releases' table, but all outbound to Trello API should be disabled. Must confirm that Onedrive scheduler is working and passing to Trello API. Must confirm that Trello Hooks are hitting Release Events and updating 'releases' table. 
