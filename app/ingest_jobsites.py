@@ -1,6 +1,6 @@
 ## To run this script
-# curl -X POST http://localhost:8000/admin/jobsites/regenerate-geofences \
-#   -H "Cookie: session=COOKIE_VALUE" \
+# curl -X POST http://mile-high-metal-works-trello-onedrive.onrender.com/admin/jobsites/regenerate-geofences \
+#   -H "Cookie: session=eyJfcGVybWFuZW50Ijp0cnVlLCJ1c2VyX2lkIjoyNSwidXNlcm5hbWUiOiJtY2dhcmV5Y29uc3VsdGluZ0BnbWFpbC5jb20ifQ.abRdRg.8fCLedpy8OpuHV49_0yfYYSXO3g" \
 #   -H "Content-Type: application/json"
 
 
