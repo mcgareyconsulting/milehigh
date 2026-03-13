@@ -311,13 +311,20 @@ def get_jobs():
         query = Releases.query
 
         # Apply archive filter
-        archive_cond = db.and_(
-            db.func.upper(db.func.trim(Releases.job_comp)) == 'X',
-            db.func.upper(db.func.trim(Releases.invoiced)) == 'X'
+        from datetime import date as _date, timedelta as _timedelta
+        archive_cond = db.or_(
+            db.and_(
+                db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
+                db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X'
+            ),
+            db.and_(
+                Releases.start_install.isnot(None),
+                Releases.start_install < _date.today() - _timedelta(days=60)
+            )
         )
         if archived:
             query = query.filter(archive_cond)
-            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X')")
+            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X', or start_install before today)")
         else:
             query = query.filter(~archive_cond)
             logger.info("[ARCHIVE] Excluding archived jobs")
@@ -570,13 +577,20 @@ def get_all_jobs():
         query = Releases.query
 
         # Apply archive filter
-        archive_cond = db.and_(
-            db.func.upper(db.func.trim(Releases.job_comp)) == 'X',
-            db.func.upper(db.func.trim(Releases.invoiced)) == 'X'
+        from datetime import date as _date, timedelta as _timedelta
+        archive_cond = db.or_(
+            db.and_(
+                db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
+                db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X'
+            ),
+            db.and_(
+                Releases.start_install.isnot(None),
+                Releases.start_install < _date.today() - _timedelta(days=60)
+            )
         )
         if archived:
             query = query.filter(archive_cond)
-            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X')")
+            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X', or start_install before today)")
         else:
             query = query.filter(~archive_cond)
             logger.info("[ARCHIVE] Excluding archived jobs")
