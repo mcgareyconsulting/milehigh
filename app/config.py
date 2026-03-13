@@ -62,9 +62,6 @@ class Config:
     # Admin PIN for health scan admin page
     ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
 
-    # Outbound Trello control (Job Log 2.0 shadow mode)
-    TRELLO_OUTBOUND_ENABLED = os.environ.get("TRELLO_OUTBOUND_ENABLED", "false").lower() == "true"
-
 
 class LocalConfig(Config):
     """Configuration for local development."""
