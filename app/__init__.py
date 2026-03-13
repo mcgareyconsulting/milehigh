@@ -28,7 +28,7 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 
 def init_scheduler(app):
-    """Initialize the scheduler to run the OneDrive poll every hour."""
+    """Initialize the background scheduler. OneDrive poll only runs in production."""
     from app.onedrive.utils import run_onedrive_poll
     from app.sync_lock import sync_lock_manager
     from app.trello import drain_trello_queue
@@ -40,6 +40,10 @@ def init_scheduler(app):
     ):
         logger.info("Skipping scheduler startup on this worker")
         return None
+
+    # --- Check environment ---
+    env = (os.environ.get("FLASK_ENV") or os.environ.get("ENVIRONMENT", "local")).lower()
+    is_production = env in ("production", "prod")
 
     # --- Configure scheduler ---
     executors = {
@@ -121,16 +125,19 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error("Scheduled OneDrive poll failed", error=str(e))
 
-    # --- Add the main job (runs hourly at :30) ---
-    scheduler.add_job(
-        func=scheduled_run,
-        trigger="cron",
-        minute="0",
-        hour="*",
-        id="onedrive_poll",
-        name="OneDrive Polling Job",
-        replace_existing=True,
-    )
+    # --- Add the main job (runs hourly at :00) if in production ---
+    if is_production:
+        scheduler.add_job(
+            func=scheduled_run,
+            trigger="cron",
+            minute="0",
+            hour="*",
+            id="onedrive_poll",
+            name="OneDrive Polling Job",
+            replace_existing=True,
+        )
+    else:
+        logger.info("OneDrive poll disabled — not production environment", environment=env)
 
     # --- Queue drainer job (runs every 5 minutes) ---
     def queue_drainer():
@@ -163,30 +170,34 @@ def init_scheduler(app):
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
+    # Build jobs list with conditional OneDrive poll
+    jobs_list = []
+    if is_production:
+        jobs_list.append({
+            "id": "onedrive_poll",
+            "name": "OneDrive Polling Job",
+            "schedule": "Every hour at minute :00",
+            "description": "Sync OneDrive Excel to Trello, with Trello queue draining",
+        })
+    jobs_list += [
+        {
+            "id": "trello_queue_drainer",
+            "name": "Trello Queue Drainer",
+            "schedule": "Every 5 minutes",
+            "description": "Drain queued Trello events (when lock is free)",
+        },
+        {
+            "id": "heartbeat",
+            "name": "Scheduler Heartbeat",
+            "schedule": "Every 30 minutes",
+            "description": "Confirms scheduler is alive",
+        },
+    ]
+
     # Log scheduler startup with all job details
-    logger.info("OneDrive polling scheduler started", schedule="every hour at :30")
     logger.info(
         "Scheduler jobs configured",
-        jobs=[
-            {
-                "id": "onedrive_poll",
-                "name": "OneDrive Polling Job",
-                "schedule": "Every hour at minute :30",
-                "description": "Sync OneDrive Excel to Trello, with Trello queue draining",
-            },
-            {
-                "id": "trello_queue_drainer",
-                "name": "Trello Queue Drainer",
-                "schedule": "Every 5 minutes",
-                "description": "Drain queued Trello events (when lock is free)",
-            },
-            {
-                "id": "heartbeat",
-                "name": "Scheduler Heartbeat",
-                "schedule": "Every 30 minutes",
-                "description": "Confirms scheduler is alive",
-            },
-        ],
+        jobs=jobs_list,
     )
     logger.info(
         "Scheduler configuration",
@@ -297,7 +308,7 @@ def create_app():
         logger.info("Outbox retry worker thread started successfully")
 
         # Initialize the scheduler for OneDrive polling
-        init_scheduler(app)  # Disabled - not running OneDrive poller in this deployment
+        init_scheduler(app)
 
         # # Check if we need to seed the database (only if empty)
         # from app.models import Job
