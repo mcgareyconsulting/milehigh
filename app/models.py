@@ -403,6 +403,7 @@ class Releases(db.Model):
     source_of_update = db.Column(
         db.String(16), nullable=True
     )  # 'Trello' or 'Excel' or 'System'
+    is_active = db.Column(db.Boolean, default=True, nullable=True)  # False = soft-deleted
 
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"
@@ -446,6 +447,7 @@ class Releases(db.Model):
             "viewer_url": self.viewer_url,
             "last_updated_at": self.last_updated_at,
             "source_of_update": self.source_of_update,
+            "is_active": self.is_active,
         }
 
 

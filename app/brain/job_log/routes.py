@@ -310,35 +310,39 @@ def get_jobs():
         # Base query
         query = Releases.query
 
-        # Apply archive filter
-        from datetime import date as _date, timedelta as _timedelta
-        archive_cond = db.or_(
-            db.and_(
-                db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
-                db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X'
-            ),
-            db.and_(
-                Releases.start_install.isnot(None),
-                Releases.start_install < _date.today() - _timedelta(days=60)
-            )
-        )
-        if archived:
-            query = query.filter(archive_cond)
-            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X', or start_install before today)")
-        else:
-            query = query.filter(~archive_cond)
-            logger.info("[ARCHIVE] Excluding archived jobs")
-
         # Apply timestamp filter if provided
         if since_param:
             try:
                 since_timestamp = datetime.fromisoformat(since_param.replace('Z', '+00:00'))
                 query = query.filter(Releases.last_updated_at > since_timestamp)
                 logger.info(f"[CURSOR] Filtering jobs updated after: {since_timestamp}")
+                # Cursor polls skip the archive filter so soft-deleted rows always propagate
             except (ValueError, TypeError) as e:
                 logger.warning(f"[CURSOR] Invalid since parameter: {since_param}, error: {e}. Fetching all jobs.")
-        else:
+                since_param = None  # fall through to full-load path
+
+        if not since_param:
             logger.info(f"[CURSOR] No since parameter provided - fetching all jobs (initial load)")
+            # Apply archive filter only on full loads
+            from datetime import date as _date, timedelta as _timedelta
+            archive_cond = db.or_(
+                db.and_(
+                    db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
+                    db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X'
+                ),
+                db.and_(
+                    Releases.start_install.isnot(None),
+                    Releases.start_install < _date.today() - _timedelta(days=60)
+                )
+            )
+            if archived:
+                query = query.filter(archive_cond)
+                logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X', or start_install before today)")
+            else:
+                query = query.filter(~archive_cond)
+                logger.info("[ARCHIVE] Excluding archived jobs")
+            # Exclude soft-deleted rows on full loads
+            query = query.filter(db.or_(Releases.is_active == True, Releases.is_active == None))
 
         # Order by last_updated_at, id for deterministic results
         query = query.order_by(Releases.last_updated_at.asc(), Releases.id.asc())
@@ -594,6 +598,9 @@ def get_all_jobs():
         else:
             query = query.filter(~archive_cond)
             logger.info("[ARCHIVE] Excluding archived jobs")
+
+        # Exclude soft-deleted rows
+        query = query.filter(db.or_(Releases.is_active == True, Releases.is_active == None))
 
         query = query.order_by(Releases.id.asc())
 
@@ -2364,6 +2371,7 @@ def delete_job(job, release):
         JSON object with success status (200) or error (404)
     """
     from app.models import Releases
+    from datetime import datetime
 
     try:
         job_record = Releases.query.filter_by(job=job, release=release).first()
@@ -2371,8 +2379,10 @@ def delete_job(job, release):
             logger.warning(f"Delete failed: Job not found: {job}-{release}")
             return jsonify({"error": "Job not found"}), 404
 
-        logger.info(f"Deleting job {job}-{release}")
-        db.session.delete(job_record)
+        logger.info(f"Soft-deleting job {job}-{release}")
+        job_record.is_active = False
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = 'Admin'
         db.session.commit()
 
         return jsonify({"message": "deleted"}), 200
@@ -2445,6 +2455,8 @@ def update_job_column(job, release):
 
         # Update the field
         setattr(job_record, db_field, converted_value)
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = 'Admin'
         db.session.commit()
 
         logger.info(f"Updated job {job}-{release} field {field} to {converted_value}")
