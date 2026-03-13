@@ -46,7 +46,10 @@ function DraftingWorkLoad() {
     const locationFilter = locationEnabled && userCoords ? userCoords : null;
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
-    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching(locationFilter, selectedTab);
+    // When a jump-to param is present, load all tabs so we can find the row regardless of its status
+    const hasJumpToParam = searchParams.has('highlight');
+    const tabForFetch = hasJumpToParam ? 'all' : selectedTab;
+    const { submittals, columns, loading, error: fetchError, lastUpdated, refetch } = useDataFetching(locationFilter, tabForFetch);
     const {
         updateOrderNumber,
         updateNotes,
@@ -176,7 +179,7 @@ function DraftingWorkLoad() {
     return (
         <>
             <style>{columnWidthStyles}</style>
-            <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="w-full h-screen flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900" style={{ width: '100%', minWidth: '100%' }}>
                 <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
                         {/* Title bar - fixed, does not scroll */}
