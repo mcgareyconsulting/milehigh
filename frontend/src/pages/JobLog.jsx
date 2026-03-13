@@ -6,6 +6,7 @@ import { useJobsFilters } from '../hooks/useJobsFilters';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
+import { checkAuth } from '../utils/auth';
 
 function JobLog() {
     const navigate = useNavigate();
@@ -21,6 +22,7 @@ function JobLog() {
     const [recalculateError, setRecalculateError] = useState(null);
     const [recalculateSuccess, setRecalculateSuccess] = useState(null);
     const [reviewMode, setReviewMode] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     // Use the filters hook
     const {
@@ -46,6 +48,20 @@ function JobLog() {
         setSelectedSubset,
     } = useJobsFilters(jobs);
 
+    // Fetch user auth info to check admin status
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            try {
+                const user = await checkAuth();
+                setIsAdmin(user?.is_admin || false);
+            } catch (err) {
+                console.error('Error fetching user info:', err);
+                setIsAdmin(false);
+            }
+        };
+        fetchUserInfo();
+    }, []);
+
     // Update fab order handler (refetch after update to show collision detection changes)
     const updateFabOrder = useCallback(async (job, release, fabOrder) => {
         try {
@@ -54,6 +70,18 @@ function JobLog() {
             await refetch(true);
         } catch (error) {
             // Error is already handled in the component, just rethrow
+            throw error;
+        }
+    }, [refetch]);
+
+    // Delete job handler
+    const handleDeleteJob = useCallback(async (row) => {
+        try {
+            await jobsApi.deleteJob(row['Job #'], row['Release #']);
+            // Refetch to remove the deleted row from the table
+            await refetch(true);
+        } catch (error) {
+            console.error('Failed to delete job:', error);
             throw error;
         }
     }, [refetch]);
@@ -865,13 +893,18 @@ function JobLog() {
                                                             </th>
                                                         );
                                                     })}
+                                                    {isAdmin && (
+                                                        <th className="px-2 py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                            Actions
+                                                        </th>
+                                                    )}
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {!hasData ? (
                                                     <tr>
                                                         <td
-                                                            colSpan={tableColumnCount}
+                                                            colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
                                                             className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
                                                         >
                                                             {hasJobsData
@@ -899,6 +932,8 @@ function JobLog() {
                                                             onUpdate={() => refetch(true)}
                                                             stageToGroup={stageToGroup}
                                                             stageGroupColors={stageGroupColors}
+                                                            isAdmin={isAdmin}
+                                                            onDelete={handleDeleteJob}
                                                         />
                                                     ))
                                                 )}
