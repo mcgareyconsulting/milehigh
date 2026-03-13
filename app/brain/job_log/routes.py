@@ -297,15 +297,30 @@ def get_jobs():
     from app.models import Releases
     from datetime import datetime
     
-    try:        
+    try:
         # Set limit
         limit = 1000  # Higher limit since we're filtering by timestamp
 
         # Get since parameter from query string
         since_param = request.args.get('since')
-        
+
+        # Get archived parameter from query string
+        archived = request.args.get('archived', 'false').lower() == 'true'
+
         # Base query
         query = Releases.query
+
+        # Apply archive filter
+        archive_cond = db.and_(
+            db.func.upper(db.func.trim(Releases.job_comp)) == 'X',
+            db.func.upper(db.func.trim(Releases.invoiced)) == 'X'
+        )
+        if archived:
+            query = query.filter(archive_cond)
+            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X')")
+        else:
+            query = query.filter(~archive_cond)
+            logger.info("[ARCHIVE] Excluding archived jobs")
 
         # Apply timestamp filter if provided
         if since_param:
@@ -541,16 +556,33 @@ def get_all_jobs():
         page = request.args.get('page', 1, type=int)
         if page < 1:
             page = 1
-        
+
+        # Get archived parameter from query string
+        archived = request.args.get('archived', 'false').lower() == 'true'
+
         # Set limit
         limit = 100
-        
+
         # Calculate offset
         offset = (page - 1) * limit
-        
+
         # Base query - order by id for consistent pagination
-        query = Releases.query.order_by(Releases.id.asc())
-        
+        query = Releases.query
+
+        # Apply archive filter
+        archive_cond = db.and_(
+            db.func.upper(db.func.trim(Releases.job_comp)) == 'X',
+            db.func.upper(db.func.trim(Releases.invoiced)) == 'X'
+        )
+        if archived:
+            query = query.filter(archive_cond)
+            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X')")
+        else:
+            query = query.filter(~archive_cond)
+            logger.info("[ARCHIVE] Excluding archived jobs")
+
+        query = query.order_by(Releases.id.asc())
+
         # Get total count for pagination info
         total_count = query.count()
         

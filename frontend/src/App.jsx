@@ -6,6 +6,7 @@ import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import Events from './pages/Events';
 import JobLog from './pages/JobLog';
+import Archive from './pages/Archive';
 import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
@@ -42,6 +43,7 @@ function AppContent() {
           <>
             <Route index element={<Navigate to="/job-log" replace />} />
             <Route path="job-log" element={<JobLog />} />
+            <Route path="archive" element={<Archive />} />
             <Route path="events" element={<Events />} />
             <Route path="drafting-work-load" element={<DraftingWorkLoad />} />
             <Route path="drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />

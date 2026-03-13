@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../utils/api';
 axios.defaults.withCredentials = true;
 
 class JobsApi {
-    async fetchAllJobs() {
+    async fetchAllJobs(archived = false) {
         try {
             const allJobs = [];
             let page = 1;
@@ -14,7 +14,7 @@ class JobsApi {
             // Fetch all pages until we have all the data
             while (hasMore) {
                 const response = await axios.get(`${API_BASE_URL}/brain/get-all-jobs`, {
-                    params: { page }
+                    params: { page, archived }
                 });
 
                 // Parse response data if it's a string (sometimes axios doesn't auto-parse)
@@ -47,9 +47,9 @@ class JobsApi {
         }
     }
 
-    async fetchData(sinceTimestamp = null) {
+    async fetchData(sinceTimestamp = null, archived = false) {
         try {
-            const params = {};
+            const params = { archived };
             if (sinceTimestamp) {
                 params.since = sinceTimestamp;
             }

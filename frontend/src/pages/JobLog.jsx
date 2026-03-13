@@ -583,6 +583,12 @@ function JobLog() {
                                         📋 PM Board
                                     </button>
                                     <button
+                                        onClick={() => navigate('/archive')}
+                                        className="px-4 py-2 bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 rounded-lg font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-600 transition-all flex items-center gap-2"
+                                    >
+                                        🗄️ Archive
+                                    </button>
+                                    <button
                                         onClick={handleReleaseClick}
                                         className="px-4 py-2 bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 rounded-lg font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-600 transition-all flex items-center gap-2"
                                     >
