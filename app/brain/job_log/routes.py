@@ -2445,6 +2445,8 @@ def update_job_column(job, release):
 
         # Update the field
         setattr(job_record, db_field, converted_value)
+        job_record.last_updated_at = datetime.utcnow()
+        job_record.source_of_update = 'Admin'
         db.session.commit()
 
         logger.info(f"Updated job {job}-{release} field {field} to {converted_value}")
