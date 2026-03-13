@@ -10,7 +10,7 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, Submittals, User
-from app.auth.utils import login_required, get_current_user
+from app.auth.utils import login_required, get_current_user, admin_required
 from datetime import datetime
 import json
 import hashlib
@@ -2313,5 +2313,146 @@ def trello_scan_create():
         return jsonify(results), 200
     except Exception as e:
         logger.error(f"Error in Trello scan and create: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================================================================
+# Admin Job Log Editing Endpoints
+# ==============================================================================
+
+# Editable field mapping: display name -> (db_field, type_converter)
+EDITABLE_FIELDS = {
+    "job": ("job", int),
+    "release": ("release", str),
+    "job_name": ("job_name", str),
+    "description": ("description", str),
+    "fab_hrs": ("fab_hrs", float),
+    "install_hrs": ("install_hrs", float),
+    "paint_color": ("paint_color", str),
+    "pm": ("pm", str),
+    "by": ("by", str),
+    "released": ("released", "date"),
+}
+
+
+@brain_bp.route("/jobs/<int:job>/<release>", methods=["DELETE"])
+@login_required
+@admin_required
+def delete_job(job, release):
+    """
+    Delete a job record by job number and release.
+
+    Parameters:
+        job: int - Job number
+        release: str - Release number
+
+    Returns:
+        JSON object with success status (200) or error (404)
+    """
+    from app.models import Releases
+
+    try:
+        job_record = Releases.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            logger.warning(f"Delete failed: Job not found: {job}-{release}")
+            return jsonify({"error": "Job not found"}), 404
+
+        logger.info(f"Deleting job {job}-{release}")
+        db.session.delete(job_record)
+        db.session.commit()
+
+        return jsonify({"message": "deleted"}), 200
+    except Exception as e:
+        logger.error(f"Error deleting job {job}-{release}: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@brain_bp.route("/jobs/<int:job>/<release>", methods=["PATCH"])
+@login_required
+@admin_required
+def update_job_column(job, release):
+    """
+    Update a specific column for a job record.
+
+    Parameters:
+        job: int - Job number
+        release: str - Release number
+
+    Request Body:
+        {
+            "field": "<field_name>",
+            "value": "<new_value>"
+        }
+
+    Returns:
+        JSON object with updated job data (200) or error (400, 404, 500)
+    """
+    from app.models import Releases
+    from datetime import datetime
+
+    try:
+        data = request.json or {}
+        field = data.get("field")
+        value = data.get("value")
+
+        if not field:
+            return jsonify({"error": "field is required"}), 400
+
+        # Validate field is editable
+        if field not in EDITABLE_FIELDS:
+            return jsonify({"error": f"field '{field}' is not editable"}), 400
+
+        # Get database field name and type converter
+        db_field, type_converter = EDITABLE_FIELDS[field]
+
+        # Find job record
+        job_record = Releases.query.filter_by(job=job, release=release).first()
+        if not job_record:
+            logger.warning(f"Update failed: Job not found: {job}-{release}")
+            return jsonify({"error": "Job not found"}), 404
+
+        # Coerce value to proper type
+        try:
+            if type_converter == "date":
+                # Parse YYYY-MM-DD format
+                if value:
+                    converted_value = datetime.strptime(value, "%Y-%m-%d").date()
+                else:
+                    converted_value = None
+            elif type_converter == int:
+                converted_value = int(value) if value is not None else None
+            elif type_converter == float:
+                converted_value = float(value) if value is not None else None
+            else:
+                converted_value = str(value) if value is not None else None
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": f"Invalid value for field '{field}': {str(e)}"}), 400
+
+        # Update the field
+        setattr(job_record, db_field, converted_value)
+        db.session.commit()
+
+        logger.info(f"Updated job {job}-{release} field {field} to {converted_value}")
+
+        # Return updated job record
+        job_data = {
+            'id': serialize_value(job_record.id),
+            'Job #': serialize_value(job_record.job),
+            'Release #': serialize_value(job_record.release),
+            'Job': serialize_value(job_record.job_name),
+            'Description': serialize_value(job_record.description),
+            'Fab Hrs': serialize_value(job_record.fab_hrs),
+            'Install HRS': serialize_value(job_record.install_hrs),
+            'Paint color': serialize_value(job_record.paint_color),
+            'PM': serialize_value(job_record.pm),
+            'BY': serialize_value(job_record.by),
+            'Released': serialize_value(job_record.released),
+        }
+
+        return jsonify(job_data), 200
+    except Exception as e:
+        logger.error(f"Error updating job {job}-{release}: {e}", exc_info=True)
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 

@@ -183,7 +183,7 @@ class JobsApi {
                 params.reference_date = referenceDate;
             }
             params.batch_size = batchSize;
-            
+
             const response = await axios.post(
                 `${API_BASE_URL}/brain/recalculate-scheduling`,
                 null,
@@ -192,6 +192,29 @@ class JobsApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to recalculate scheduling');
+        }
+    }
+
+    async deleteJob(job, release) {
+        try {
+            const response = await axios.delete(
+                `${API_BASE_URL}/brain/jobs/${job}/${release}`
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to delete job');
+        }
+    }
+
+    async updateJobColumn(job, release, field, value) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/jobs/${job}/${release}`,
+                { field, value }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update job column');
         }
     }
 
