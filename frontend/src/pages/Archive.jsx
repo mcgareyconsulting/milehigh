@@ -171,20 +171,23 @@ function Archive() {
                                             Stage Groups
                                         </h3>
                                         <div className="flex flex-wrap gap-1.5">
-                                            {stageOptions.map((stage) => (
-                                                <button
-                                                    key={stage}
-                                                    onClick={() => toggleStage(stage)}
-                                                    className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                                        selectedStages.includes(stage)
-                                                            ? `bg-white dark:bg-slate-700 text-white shadow-md`
-                                                            : 'bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 opacity-60 hover:opacity-75'
-                                                    }`}
-                                                    style={selectedStages.includes(stage) ? { backgroundColor: stageColors[stage] } : undefined}
-                                                >
-                                                    {stage}
-                                                </button>
-                                            ))}
+                                            {stageOptions.map((stage) => {
+                                                const isSelected = selectedStages.includes(stage.value);
+                                                const colors = stageColors[stage.value];
+                                                return (
+                                                    <button
+                                                        key={stage.value}
+                                                        onClick={() => toggleStage(stage.value)}
+                                                        className={`px-2 py-1 rounded text-xs font-semibold transition-all border ${
+                                                            isSelected
+                                                                ? colors?.selected ?? 'bg-white text-white shadow-md'
+                                                                : colors?.unselected ?? 'bg-gray-200 text-gray-700 opacity-60 hover:opacity-75'
+                                                        }`}
+                                                    >
+                                                        {stage.label}
+                                                    </button>
+                                                );
+                                            })}
                                             <button
                                                 onClick={resetFilters}
                                                 className="ml-auto px-2 py-1 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 rounded text-xs font-semibold hover:bg-gray-300 dark:hover:bg-slate-500 transition-all"
