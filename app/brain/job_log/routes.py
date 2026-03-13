@@ -472,7 +472,8 @@ def job_search():
             .all()
         )
         submittals = Submittals.query.filter(
-            Submittals.project_number.like(f"{job_param}%")
+            Submittals.project_number.like(f"{job_param}%"),
+            Submittals.status == 'Open'
         ).all()
 
         release_list = [

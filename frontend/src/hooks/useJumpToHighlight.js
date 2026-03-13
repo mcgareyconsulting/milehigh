@@ -19,6 +19,13 @@ function scrollRowInContainerIntoView(el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
+
+  // Ensure the container is actually scrollable
+  if (container.scrollHeight <= container.clientHeight) {
+    // Container is not scrollable, row is already visible
+    return;
+  }
+
   const rowRect = el.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
   const rowRelativeTop = rowRect.top - containerRect.top + container.scrollTop;
@@ -76,7 +83,11 @@ export function useJumpToHighlight({ loading, searchParams, mode, durationMs = J
         );
         if (el) {
           el.classList.add('jump-to-scroll-target');
-          scrollRowInContainerIntoView(el);
+          try {
+            scrollRowInContainerIntoView(el);
+          } catch (error) {
+            console.warn('Jump-to scroll failed:', error);
+          }
           setJumpToTarget(String(highlight));
           setTimeout(() => {
             el.classList.remove('jump-to-scroll-target');

@@ -6,7 +6,7 @@ import { getVisibleColumns } from '../utils/columns';
 
 /**
  * @param { { lat: number, lng: number } | null } locationFilter - when set, DWL is filtered by job_sites containing this point
- * @param { 'open' | 'draft' } tab - 'open' = Open status submittals; 'draft' = submittals not Open or Closed
+ * @param { 'open' | 'draft' | 'all' } tab - 'open' = Open status submittals; 'draft' = submittals not Open or Closed; 'all' = both tabs merged
  */
 export function useDataFetching(locationFilter = null, tab = 'open') {
     const [submittals, setSubmittals] = useState([]);

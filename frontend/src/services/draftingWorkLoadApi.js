@@ -12,7 +12,7 @@ class DraftingWorkLoadApi {
      */
     async fetchData(locationFilter = null, tab = 'open') {
         try {
-            const params = { tab: tab === 'draft' ? 'draft' : 'open' };
+            const params = { tab: (tab === 'draft' || tab === 'all') ? tab : 'open' };
             if (locationFilter && typeof locationFilter.lat === 'number' && typeof locationFilter.lng === 'number') {
                 params.lat = locationFilter.lat;
                 params.lng = locationFilter.lng;
