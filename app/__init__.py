@@ -297,7 +297,7 @@ def create_app():
         logger.info("Outbox retry worker thread started successfully")
 
         # Initialize the scheduler for OneDrive polling
-        # init_scheduler(app)  # Disabled - not running OneDrive poller in this deployment
+        init_scheduler(app)  # Disabled - not running OneDrive poller in this deployment
 
         # # Check if we need to seed the database (only if empty)
         # from app.models import Job
