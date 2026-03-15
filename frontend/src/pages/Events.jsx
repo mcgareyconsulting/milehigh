@@ -30,8 +30,11 @@ function Events() {
     }, [searchParams]);
 
     useEffect(() => {
-        fetchEvents();
         fetchFilters();
+    }, []);
+
+    useEffect(() => {
+        fetchEvents();
     }, [selectedDate, limit, selectedSource, submittalId, jobFilter, releaseFilter]);
 
     const fetchFilters = async () => {
@@ -202,11 +205,11 @@ function Events() {
                                         onChange={(e) => {
                                             const value = e.target.value;
                                             if (value === '') {
-                                                setLimit(50); // Default to 50 if empty
+                                                setLimit(50);
                                             } else {
                                                 const parsed = parseInt(value, 10);
-                                                if (!isNaN(parsed) && parsed >= 1 && parsed <= 200) {
-                                                    setLimit(parsed);
+                                                if (!isNaN(parsed)) {
+                                                    setLimit(Math.max(1, Math.min(200, parsed)));
                                                 }
                                             }
                                         }}

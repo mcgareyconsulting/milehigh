@@ -1937,26 +1937,33 @@ def sync_operation_logs(operation_id):
 def get_event_filters():
     """
     Get all distinct event dates and sources from ReleaseEvents and SubmittalEvents.
+    Dates are computed in Mountain Time to match the display timezone.
     """
     from app.models import ReleaseEvents, SubmittalEvents, db
-    from sqlalchemy import func
+    from zoneinfo import ZoneInfo
+    MT = ZoneInfo("America/Denver")
+    UTC = ZoneInfo("UTC")
     try:
-        # Dates from job (release) events
-        job_date_rows = (
-            db.session.query(func.date(ReleaseEvents.created_at))
-            .distinct()
+        # Dates from job (release) events — convert to Mountain Time before extracting date
+        job_ts_rows = (
+            db.session.query(ReleaseEvents.created_at)
             .filter(ReleaseEvents.created_at.isnot(None))
             .all()
         )
-        job_dates = {str(r[0]) for r in job_date_rows if r[0] is not None}
-        # Dates from submittal events (DWL/Procore, Brain-originated, etc.)
-        submittal_date_rows = (
-            db.session.query(func.date(SubmittalEvents.created_at))
-            .distinct()
+        job_dates = {
+            r[0].replace(tzinfo=UTC).astimezone(MT).date().isoformat()
+            for r in job_ts_rows if r[0] is not None
+        }
+        # Dates from submittal events — convert to Mountain Time before extracting date
+        submittal_ts_rows = (
+            db.session.query(SubmittalEvents.created_at)
             .filter(SubmittalEvents.created_at.isnot(None))
             .all()
         )
-        submittal_dates = {str(r[0]) for r in submittal_date_rows if r[0] is not None}
+        submittal_dates = {
+            r[0].replace(tzinfo=UTC).astimezone(MT).date().isoformat()
+            for r in submittal_ts_rows if r[0] is not None
+        }
         dates = sorted(job_dates | submittal_dates, reverse=True)
 
         # Sources from job events (Trello, Excel, System, etc.)
@@ -2030,13 +2037,17 @@ def get_events():
         job_query = ReleaseEvents.query
         submittal_query = SubmittalEvents.query
 
-        # Apply date range on created_at (inclusive)
+        # Apply date range on created_at (inclusive).
+        # Interpret start/end as Mountain Time day boundaries, convert to UTC for DB comparison.
+        from zoneinfo import ZoneInfo
+        MT = ZoneInfo("America/Denver")
+        UTC = ZoneInfo("UTC")
         if start_date:
-            start_dt = datetime.fromisoformat(start_date + "T00:00:00")
+            start_dt = datetime.fromisoformat(start_date + "T00:00:00").replace(tzinfo=MT).astimezone(UTC).replace(tzinfo=None)
             job_query = job_query.filter(ReleaseEvents.created_at >= start_dt)
             submittal_query = submittal_query.filter(SubmittalEvents.created_at >= start_dt)
         if end_date:
-            end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
+            end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999").replace(tzinfo=MT).astimezone(UTC).replace(tzinfo=None)
             job_query = job_query.filter(ReleaseEvents.created_at <= end_dt)
             submittal_query = submittal_query.filter(SubmittalEvents.created_at <= end_dt)
         
