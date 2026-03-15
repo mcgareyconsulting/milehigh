@@ -929,8 +929,8 @@ function JobLog() {
                                                         );
                                                     })}
                                                     {isAdmin && (
-                                                        <th className="px-2 py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
-                                                            Actions
+                                                        <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                            ⚙
                                                         </th>
                                                     )}
                                                 </tr>

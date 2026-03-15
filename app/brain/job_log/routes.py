@@ -390,11 +390,12 @@ def get_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'trello_card_id': serialize_value(job.trello_card_id),
+                    'is_active': serialize_value(job.is_active),
                 }
                 # Validate the job data
                 json.dumps(job_data)
                 job_list.append(job_data)
-                
+
             except Exception as record_error:
                 # Log the problematic record but continue processing
                 job_id = f"{job.job}-{job.release}" if hasattr(job, 'job') else f"id:{job.id}"

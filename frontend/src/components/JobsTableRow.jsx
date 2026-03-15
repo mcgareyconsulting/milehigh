@@ -257,6 +257,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             return;
         }
 
+        setShowActionMenu(false);
+
         try {
             onDelete && await onDelete(row);
         } catch (error) {
