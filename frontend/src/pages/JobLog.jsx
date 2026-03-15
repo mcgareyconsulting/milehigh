@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
@@ -23,6 +23,11 @@ function JobLog() {
     const [recalculateSuccess, setRecalculateSuccess] = useState(null);
     const [reviewMode, setReviewMode] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [showProjectsModal, setShowProjectsModal] = useState(false);
+    const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+    const projectsBtnRef = useRef(null);
+    const projectsPanelRef = useRef(null);
+    const actionsDropdownRef = useRef(null);
 
     // Use the filters hook
     const {
@@ -60,6 +65,23 @@ function JobLog() {
             }
         };
         fetchUserInfo();
+    }, []);
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        const handler = (e) => {
+            if (
+                !projectsBtnRef.current?.contains(e.target) &&
+                !projectsPanelRef.current?.contains(e.target)
+            ) {
+                setShowProjectsModal(false);
+            }
+            if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(e.target)) {
+                setShowActionsDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
     }, []);
 
     // Update fab order handler (refetch after update to show collision detection changes)
@@ -582,68 +604,6 @@ function JobLog() {
             <div className="w-full h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
                 <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
-                        <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-4 py-3 flex-shrink-0">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <h1 className="text-3xl font-bold text-white">Job Log 2.0</h1>
-                                    <img
-                                        src="/bananas-svgrepo-com.svg"
-                                        alt="banana"
-                                        className="w-7 h-7"
-                                        style={{ filter: 'brightness(0) invert(1)' }}
-                                    />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={handlePrint}
-                                        disabled={!hasData || loading}
-                                        className={`px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 ${!hasData || loading
-                                            ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
-                                            : 'bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-slate-600'
-                                            }`}
-                                    >
-                                        🖨️ Print
-                                    </button>
-                                    <button
-                                        onClick={() => navigate('/pm-board')}
-                                        className="px-4 py-2 bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 rounded-lg font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-600 transition-all flex items-center gap-2"
-                                    >
-                                        📋 PM Board
-                                    </button>
-                                    <button
-                                        onClick={() => navigate('/archive')}
-                                        className="px-4 py-2 bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 rounded-lg font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-600 transition-all flex items-center gap-2"
-                                    >
-                                        🗄️ Archive
-                                    </button>
-                                    <button
-                                        onClick={handleReleaseClick}
-                                        className="px-4 py-2 bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 rounded-lg font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-600 transition-all flex items-center gap-2"
-                                    >
-                                        📋 Release
-                                    </button>
-                                    <button
-                                        onClick={handleRecalculateScheduling}
-                                        disabled={recalculating}
-                                        className={`px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 ${recalculating
-                                            ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
-                                            : 'bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-slate-600'
-                                            }`}
-                                    >
-                                        {recalculating ? (
-                                            <>
-                                                <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-accent-600"></span>
-                                                Calculating...
-                                            </>
-                                        ) : (
-                                            <>
-                                                ⏱️ Refresh Schedule
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
 
                         {/* Success/Error Messages */}
                         {recalculateSuccess && (
@@ -663,153 +623,223 @@ function JobLog() {
                         )}
 
                         <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
-                            <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0">
-                                <div className="grid grid-cols-2 gap-x-1.5 gap-y-1">
-                                    {/* Top Left: Project Name */}
+                            <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
+
+                                {/* Row 1: Projects dropdown (left) + Actions dropdown (right) */}
+                                <div className="relative flex items-center justify-between">
+                                    {/* Projects button */}
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-800 dark:text-slate-200 mb-1">
-                                            Project Name
-                                        </label>
-                                        <div className="grid grid-cols-8 gap-1">
-                                            <button
-                                                onClick={() => setSelectedProjectNames([])}
-                                                className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectNames.length === 0
-                                                    ? 'bg-blue-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                                title="All"
-                                            >
-                                                All
-                                            </button>
-                                            {projectNameOptions.map((option) => {
-                                                const truncated = option.length > 15 ? option.substring(0, 15) : option;
-                                                return (
+                                        <button
+                                            ref={projectsBtnRef}
+                                            onClick={() => setShowProjectsModal(prev => !prev)}
+                                            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold border transition-all ${
+                                                selectedProjectNames.length > 0
+                                                    ? 'bg-blue-700 text-white border-blue-700'
+                                                    : 'bg-white dark:bg-slate-600 border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                            }`}
+                                        >
+                                            🗂️ Projects
+                                            {selectedProjectNames.length > 0 && (
+                                                <span className="bg-white/30 text-white text-[10px] font-bold px-1 rounded">
+                                                    {selectedProjectNames.length}
+                                                </span>
+                                            )}
+                                            <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                        {showProjectsModal && (
+                                            <div ref={projectsPanelRef} className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl p-2.5">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-bold text-gray-700 dark:text-slate-200">Filter by Project</span>
                                                     <button
-                                                        key={option}
-                                                        onClick={() => {
-                                                            setSelectedProjectNames(prev =>
-                                                                prev.includes(option)
-                                                                    ? prev.filter(name => name !== option)
-                                                                    : [...prev, option]
-                                                            );
-                                                        }}
-                                                        className={`px-0.5 py-0.5 rounded text-[9px] font-medium transition-all truncate ${selectedProjectNames.includes(option)
-                                                            ? 'bg-blue-700 text-white'
-                                                            : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                            }`}
-                                                        title={option}
+                                                        onClick={() => setShowProjectsModal(false)}
+                                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-sm leading-none"
                                                     >
-                                                        {truncated}
+                                                        ✕
                                                     </button>
-                                                );
-                                            })}
-                                        </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1">
+                                                    <button
+                                                        onClick={() => setSelectedProjectNames([])}
+                                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                                                            selectedProjectNames.length === 0
+                                                                ? 'bg-blue-700 text-white'
+                                                                : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                                        }`}
+                                                    >
+                                                        All
+                                                    </button>
+                                                    {projectNameOptions.map((option) => (
+                                                        <button
+                                                            key={option}
+                                                            onClick={() => {
+                                                                setSelectedProjectNames(prev =>
+                                                                    prev.includes(option)
+                                                                        ? prev.filter(name => name !== option)
+                                                                        : [...prev, option]
+                                                                );
+                                                            }}
+                                                            className={`max-w-[90px] truncate px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                                                                selectedProjectNames.includes(option)
+                                                                    ? 'bg-blue-700 text-white'
+                                                                    : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                                            }`}
+                                                            title={option}
+                                                        >
+                                                            {option}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* Top Right: Stage group filters + Review */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-800 dark:text-slate-200 mb-1">
-                                            Filters
-                                        </label>
-                                        <div className="flex flex-wrap gap-1.5 items-center">
-                                            <button
-                                                onClick={() => {
-                                                    setReviewMode(false);
-                                                    setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
-                                                }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
-                                                    ? 'bg-blue-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                            >
-                                                Job Order
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setReviewMode(false);
-                                                    setSelectedSubset(selectedSubset === 'complete' ? null : 'complete');
-                                                }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'complete'
-                                                    ? 'bg-violet-600 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                            >
-                                                Complete
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setReviewMode(false);
-                                                    setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
-                                                }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
-                                                    ? 'bg-emerald-600 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                            >
-                                                Ready to Ship
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setReviewMode(false);
-                                                    setSelectedSubset(selectedSubset === 'paint' ? null : 'paint');
-                                                }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint'
-                                                    ? 'bg-emerald-600 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                            >
-                                                Paint
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setReviewMode(false);
-                                                    setSelectedSubset(selectedSubset === 'paint_fab' ? null : 'paint_fab');
-                                                }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint_fab'
-                                                    ? 'bg-emerald-600 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                            >
-                                                Paint+Fab
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setReviewMode(false);
-                                                    setSelectedSubset(selectedSubset === 'fab' ? null : 'fab');
-                                                }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
-                                                    ? 'bg-blue-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                            >
-                                                Fab
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    const next = !reviewMode;
-                                                    if (next) {
-                                                        setSelectedSubset(null);
-                                                    }
-                                                    setReviewMode(next);
-                                                }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
-                                                    ? 'bg-blue-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                    }`}
-                                            >
-                                                Review
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Bottom Left: Reset Filters, Job #, Release #, Total */}
-                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                    {/* Stage filter buttons */}
+                                    <div className="flex items-center gap-1.5 flex-wrap flex-1 justify-center px-2">
                                         <button
                                             onClick={() => {
-                                                resetFilters();
                                                 setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
                                             }}
-                                            className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold hover:bg-gray-50 dark:hover:bg-slate-500 transition-all whitespace-nowrap"
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            Job Order
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'complete' ? null : 'complete');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'complete'
+                                                ? 'bg-violet-600 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            Complete
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            Ready to Ship
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'paint' ? null : 'paint');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint'
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            Paint
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'paint_fab' ? null : 'paint_fab');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint_fab'
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            Paint+Fab
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReviewMode(false);
+                                                setSelectedSubset(selectedSubset === 'fab' ? null : 'fab');
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            Fab
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const next = !reviewMode;
+                                                if (next) setSelectedSubset(null);
+                                                setReviewMode(next);
+                                            }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            Review
+                                        </button>
+                                    </div>
+
+                                    {/* Actions dropdown */}
+                                    <div className="relative" ref={actionsDropdownRef}>
+                                        <button
+                                            onClick={() => setShowActionsDropdown(prev => !prev)}
+                                            className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
+                                        >
+                                            ⚙️ Actions
+                                            <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                        {showActionsDropdown && (
+                                            <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl py-1 min-w-[160px]">
+                                                <button
+                                                    onClick={() => { handlePrint(); setShowActionsDropdown(false); }}
+                                                    disabled={!hasData || loading}
+                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    🖨️ Print
+                                                </button>
+                                                <button
+                                                    onClick={() => { navigate('/pm-board'); setShowActionsDropdown(false); }}
+                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                >
+                                                    📋 PM Board
+                                                </button>
+                                                <button
+                                                    onClick={() => { navigate('/archive'); setShowActionsDropdown(false); }}
+                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                >
+                                                    🗄️ Archive
+                                                </button>
+                                                <button
+                                                    onClick={() => { handleReleaseClick(); setShowActionsDropdown(false); }}
+                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                >
+                                                    📋 Release
+                                                </button>
+                                                <button
+                                                    onClick={() => { handleRecalculateScheduling(); setShowActionsDropdown(false); }}
+                                                    disabled={recalculating}
+                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    {recalculating ? (
+                                                        <><span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></span> Calculating...</>
+                                                    ) : (
+                                                        '⏱️ Refresh Schedule'
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Row 2: Search inputs + stats */}
+                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <button
+                                            onClick={() => { resetFilters(); setReviewMode(false); }}
+                                            className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
                                         >
                                             Reset Filters
                                         </button>
@@ -837,22 +867,23 @@ function JobLog() {
                                                 className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
                                         </div>
-                                        <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
-                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
-                                        </div>
                                     </div>
-
-                                    {/* Bottom Right: KPI chips + Last updated */}
-                                    <div className="flex items-center justify-end gap-2">
-                                        <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
+                                    <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                        <span>
+                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span>
                                             Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
-                                        </div>
-                                        <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span>
                                             Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
-                                        </div>
-                                        <div className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                                            Last updated: <span className="font-semibold text-gray-800 dark:text-slate-200">{formattedLastUpdated}</span>
-                                        </div>
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span className="text-gray-500 dark:text-slate-400 font-normal">
+                                            Last updated: <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                        </span>
                                     </div>
                                 </div>
                             </div>
