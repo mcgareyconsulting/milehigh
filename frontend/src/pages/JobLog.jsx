@@ -235,8 +235,8 @@ function JobLog() {
         'Job #': 3,
         'Release #': 3,
         'Job': 6,
-        'Description': 9,
-        'Fab Hrs': 5,
+        'Description': 7,
+        'Fab Hrs': 4,
         'Install HRS': 5,
         'Paint color': 6,
         'PM': 3,
@@ -244,12 +244,13 @@ function JobLog() {
         'Released': 5,
         'Fab Order': 6,
         'Stage': 9,
-        'Urgency': 8,
+        'Urgency': 7,
         'Start install': 5,
         'Comp. ETA': 5,
         'Job Comp': 5,
         'Invoiced': 5,
-        'Notes': 12,
+        'Notes': 10,
+        'Actions': 5,
     };
 
     // Filter and order columns based on defined order
@@ -601,7 +602,7 @@ function JobLog() {
 
     return (
         <>
-            <div className="w-full h-screen bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="w-full h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
                 <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
 
@@ -632,11 +633,10 @@ function JobLog() {
                                         <button
                                             ref={projectsBtnRef}
                                             onClick={() => setShowProjectsModal(prev => !prev)}
-                                            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold border transition-all ${
-                                                selectedProjectNames.length > 0
-                                                    ? 'bg-blue-700 text-white border-blue-700'
-                                                    : 'bg-white dark:bg-slate-600 border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                            }`}
+                                            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold border transition-all ${selectedProjectNames.length > 0
+                                                ? 'bg-blue-700 text-white border-blue-700'
+                                                : 'bg-white dark:bg-slate-600 border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                }`}
                                         >
                                             🗂️ Projects
                                             {selectedProjectNames.length > 0 && (
@@ -660,11 +660,10 @@ function JobLog() {
                                                 <div className="flex flex-wrap gap-1">
                                                     <button
                                                         onClick={() => setSelectedProjectNames([])}
-                                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
-                                                            selectedProjectNames.length === 0
-                                                                ? 'bg-blue-700 text-white'
-                                                                : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
-                                                        }`}
+                                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
+                                                            ? 'bg-blue-700 text-white'
+                                                            : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                                            }`}
                                                     >
                                                         All
                                                     </button>
@@ -678,11 +677,10 @@ function JobLog() {
                                                                         : [...prev, option]
                                                                 );
                                                             }}
-                                                            className={`max-w-[90px] truncate px-2.5 py-1 rounded text-xs font-medium transition-all ${
-                                                                selectedProjectNames.includes(option)
-                                                                    ? 'bg-blue-700 text-white'
-                                                                    : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
-                                                            }`}
+                                                            className={`max-w-[90px] truncate px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
+                                                                ? 'bg-blue-700 text-white'
+                                                                : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                                                }`}
                                                             title={option}
                                                         >
                                                             {option}
