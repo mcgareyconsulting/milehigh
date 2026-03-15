@@ -623,10 +623,10 @@ def update_submittal_due_date():
         
         if not success:
             return jsonify({"error": error_msg}), 400
-        
-        db.session.commit()
 
         new_due_date = submittal.due_date.isoformat() if submittal.due_date else None
+
+        db.session.commit()
         user = get_current_user()
         try:
             create_submittal_event(
