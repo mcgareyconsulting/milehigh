@@ -1102,11 +1102,22 @@ def update_banana_color(job, release):
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
         
+        old_banana_color = job_record.banana_color
+
         # Update banana_color
         job_record.banana_color = banana_color if banana_color else None
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
-        
+
+        from app.services.job_event_service import JobEventService
+        JobEventService.create(
+            job=job,
+            release=release,
+            action='updated',
+            source='Brain',
+            payload={'field': 'banana_color', 'old_value': old_banana_color, 'new_value': banana_color},
+        )
+
         # Commit changes
         db.session.commit()
         
@@ -1403,9 +1414,20 @@ def update_job_comp(job, release):
         if not job_record:
             return jsonify({"error": "Job not found"}), 404
 
+        old_job_comp = job_record.job_comp
         job_record.job_comp = job_comp_str
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = "Brain"
+
+        from app.services.job_event_service import JobEventService
+        JobEventService.create(
+            job=job,
+            release=release,
+            action='updated',
+            source='Brain',
+            payload={'field': 'job_comp', 'old_value': old_job_comp, 'new_value': job_comp_str},
+        )
+
         db.session.commit()
 
         return jsonify({"status": "success"}), 200
@@ -1437,9 +1459,20 @@ def update_invoiced(job, release):
         if not job_record:
             return jsonify({"error": "Job not found"}), 404
 
+        old_invoiced = job_record.invoiced
         job_record.invoiced = invoiced_str
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = "Brain"
+
+        from app.services.job_event_service import JobEventService
+        JobEventService.create(
+            job=job,
+            release=release,
+            action='updated',
+            source='Brain',
+            payload={'field': 'invoiced', 'old_value': old_invoiced, 'new_value': invoiced_str},
+        )
+
         db.session.commit()
 
         return jsonify({"status": "success"}), 200
@@ -2395,6 +2428,16 @@ def delete_job(job, release):
         job_record.is_active = False
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Admin'
+
+        from app.services.job_event_service import JobEventService
+        JobEventService.create(
+            job=job,
+            release=release,
+            action='deleted',
+            source='Brain',
+            payload={'job': job, 'release': release},
+        )
+
         db.session.commit()
 
         return jsonify({"message": "deleted"}), 200
@@ -2465,10 +2508,23 @@ def update_job_column(job, release):
         except (ValueError, TypeError) as e:
             return jsonify({"error": f"Invalid value for field '{field}': {str(e)}"}), 400
 
+        # Capture old value before overwriting
+        old_value = serialize_value(getattr(job_record, db_field, None))
+
         # Update the field
         setattr(job_record, db_field, converted_value)
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Admin'
+
+        from app.services.job_event_service import JobEventService
+        JobEventService.create(
+            job=job,
+            release=release,
+            action='updated',
+            source='Brain',
+            payload={'field': field, 'old_value': old_value, 'new_value': serialize_value(converted_value)},
+        )
+
         db.session.commit()
 
         logger.info(f"Updated job {job}-{release} field {field} to {converted_value}")
