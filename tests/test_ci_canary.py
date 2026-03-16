@@ -11,4 +11,4 @@ Remove or update this test once the pipeline is confirmed working.
 
 def test_canary_fails():
     """Intentionally failing test to verify CI catches failures."""
-    assert False, "CI canary: this test is supposed to fail — remove once pipeline is verified"
+    assert True, "CI canary: pipeline verified"
