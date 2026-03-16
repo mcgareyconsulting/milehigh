@@ -8,7 +8,8 @@ from datetime import datetime
 from app.brain.drafting_work_load.service import (
     DraftingWorkLoadService,
     SubmittalOrderingService,
-    UrgencyService
+    UrgencyService,
+    SubmittalOrderUpdate,
 )
 from app.models import Submittals
 from app import create_app
@@ -152,6 +153,34 @@ class TestDraftingWorkLoadService:
         assert success is False
         assert error is not None
 
+    @patch('app.brain.drafting_work_load.service.Submittals')
+    def test_get_dwl_submittals_open_tab(self, mock_submittals):
+        """Test that get_dwl_submittals(tab='open') filters by status=='Open'."""
+        mock_query_result = Mock()
+        mock_query_result.all.return_value = []
+        mock_submittals.query.filter.return_value = mock_query_result
+
+        result = DraftingWorkLoadService.get_dwl_submittals(None, tab='open')
+
+        assert result == []
+        mock_submittals.query.filter.assert_called_once()
+
+    @patch('app.brain.drafting_work_load.service.Submittals')
+    def test_get_dwl_submittals_with_job_numbers_filter(self, mock_submittals):
+        """Test that job_numbers_filter applies a second filter on project_number."""
+        mock_base = Mock()
+        mock_final = Mock()
+        fake_submittal = Mock()
+        mock_final.all.return_value = [fake_submittal]
+        mock_base.filter.return_value = mock_final
+        mock_submittals.query.filter.return_value = mock_base
+
+        result = DraftingWorkLoadService.get_dwl_submittals(['J001', 'J002'], tab='open')
+
+        assert len(result) == 1
+        # Verify the second filter (job_numbers) was applied
+        mock_base.filter.assert_called_once()
+
 
 # ==============================================================================
 # SUBMITTAL ORDERING SERVICE TESTS
@@ -159,7 +188,7 @@ class TestDraftingWorkLoadService:
 
 class TestSubmittalOrderingService:
     """Tests for SubmittalOrderingService methods."""
-    
+
     def test_safe_float_order_delegates_to_engine(self):
         """Test that safe_float_order delegates to engine."""
         result = SubmittalOrderingService.safe_float_order(12)
@@ -170,6 +199,54 @@ class TestSubmittalOrderingService:
         is_valid, error = SubmittalOrderingService.validate_order_number(1.0)
         assert is_valid is True
         assert error is None
+
+    def test_step_order_delegates_to_engine(self):
+        """Test that step_order calls the engine and returns (model, order) pairs."""
+        s1 = Mock()
+        s1.submittal_id = 'A'
+        s1.order_number = 1.0
+        s2 = Mock()
+        s2.submittal_id = 'B'
+        s2.order_number = 2.0
+
+        results = SubmittalOrderingService.step_order(s2, 'up', [s1, s2])
+
+        assert len(results) == 2
+        result_map = {subm.submittal_id: order for subm, order in results}
+        assert result_map['B'] == 1.0
+        assert result_map['A'] == 2.0
+
+    def test_resort_ordered_submittals_returns_model_pairs(self):
+        """Test that resort_ordered_submittals compresses and returns (model, order) pairs."""
+        s1 = Mock()
+        s1.submittal_id = 'A'
+        s1.order_number = 4.0
+        s2 = Mock()
+        s2.submittal_id = 'B'
+        s2.order_number = 7.0
+
+        results = SubmittalOrderingService.resort_ordered_submittals([s1, s2])
+
+        assert len(results) == 2
+        result_map = {subm.submittal_id: order for subm, order in results}
+        assert result_map['A'] == 1.0
+        assert result_map['B'] == 2.0
+
+    def test_calculate_updates_wraps_engine(self):
+        """Test that calculate_updates converts models→dicts→engine→models."""
+        s1 = Mock()
+        s1.submittal_id = 'A'
+        s1.order_number = 1.0
+
+        update_request = SubmittalOrderUpdate(
+            submittal_id='A', new_order=None, old_order=1.0, ball_in_court='Drafter A'
+        )
+        results = SubmittalOrderingService.calculate_updates(update_request, [s1])
+
+        assert len(results) == 1
+        subm, new_order = results[0]
+        assert subm.submittal_id == 'A'
+        assert new_order is None
 
 
 # ==============================================================================
@@ -573,8 +650,18 @@ class TestUrgencyService:
         mock_query.filter.return_value.all.return_value = [
             urgent1, urgent2, urgent3, urgent4
         ]
-        
+
         result = UrgencyService.bump_order_number_to_urgent(sample_record, "submittal_123", "Drafter A")
-        
+
         assert result is True
         assert sample_record.order_number == 0.9
+
+    def test_bump_unordered_to_ordered_appends_to_end(self, mock_query, sample_record):
+        """Test that a null order_number submittal gets 1.0 when no existing ordered submittals."""
+        sample_record.order_number = None
+        mock_query.filter.return_value.all.return_value = []
+
+        result = UrgencyService.bump_unordered_to_ordered(sample_record, "submittal_123", "Drafter A")
+
+        assert result is True
+        assert sample_record.order_number == 1.0

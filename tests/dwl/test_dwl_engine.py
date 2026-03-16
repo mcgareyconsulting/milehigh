@@ -7,6 +7,7 @@ from app.brain.drafting_work_load.engine import (
     DraftingWorkLoadEngine,
     SubmittalOrderingEngine,
     UrgencyEngine,
+    LocationEngine,
     SubmittalOrderUpdate
 )
 
@@ -194,21 +195,21 @@ class TestSubmittalOrderingEngine:
         assert regular[0]['submittal_id'] == '2'
 
     def test_handle_set_to_null_regular_compression(self):
-        """Test that setting to null does renumber regular submittals and compresses list."""
+        """Test that setting a regular (>= 1) submittal to null clears it only — no cascade on regular items."""
         submittal_data = {'submittal_id': '1', 'order_number': 1.0}
         all_group_submittals_data = [
             {'submittal_id': '1', 'order_number': 1.0},
             {'submittal_id': '2', 'order_number': 2.0},
             {'submittal_id': '3', 'order_number': 3.0},
         ]
-        
+
         updates = SubmittalOrderingEngine.handle_set_to_null(submittal_data, all_group_submittals_data)
-        
-        # Should update submittal 1 to None, and compress list
+
+        # Regular items have no cascade; only the target is set to None
         update_dict = {submittal_id: new_order for submittal_id, new_order in updates}
         assert update_dict['1'] is None
-        assert update_dict['2'] == 1.0  # Compress
-        assert update_dict['3'] == 2.0  # Compress
+        assert '2' not in update_dict
+        assert '3' not in update_dict
 
     def test_handle_set_to_null_urgency_compression(self):
         """Test that setting to null does renumber urgency submittals and compresses list."""
@@ -249,21 +250,21 @@ class TestSubmittalOrderingEngine:
         # The compression logic should reassign slots
 
     def test_handle_set_to_regular_renumbers(self):
-        """Test that setting to regular renumbers all regular positions."""
+        """Test that setting to regular is a direct assign — no renumbering of other items."""
         submittal_data = {'submittal_id': '1', 'order_number': 0.5}
         all_group_submittals_data = [
             {'submittal_id': '1', 'order_number': 0.5},
             {'submittal_id': '2', 'order_number': 1.0},
             {'submittal_id': '3', 'order_number': 2.0},
         ]
-        
+
         updates = SubmittalOrderingEngine.handle_set_to_regular(submittal_data, 2.0, all_group_submittals_data)
-        
-        # Should insert at position 2 and renumber
+
+        # Direct assign only — only the target submittal is updated
         update_dict = {submittal_id: new_order for submittal_id, new_order in updates}
         assert update_dict['1'] == 2.0
-        assert update_dict['2'] == 1.0
-        assert update_dict['3'] == 3.0
+        assert '2' not in update_dict
+        assert '3' not in update_dict
 
     def test_compress_orders_urgency_single_item(self):
         """Test compressing a single urgency item to 0.9."""
@@ -320,33 +321,28 @@ class TestSubmittalOrderingEngine:
         assert len(updates) == 0
 
     def test_compress_orders_regular_single_item(self):
-        """Test compressing a single regular item to 1.0."""
+        """Test that compress_orders ignores regular (>= 1) items — use compress_ordered_submittals instead."""
         submittals_data = [
             {'submittal_id': '1', 'order_number': 5.0},
         ]
-        
+
         updates = SubmittalOrderingEngine.compress_orders(submittals_data)
-        
-        assert len(updates) == 1
-        update_dict = {submittal_id: new_order for submittal_id, new_order in updates}
-        assert update_dict['1'] == 1.0
+
+        # compress_orders only handles urgency slots; regular items are untouched
+        assert len(updates) == 0
 
     def test_compress_orders_regular_multiple_items(self):
-        """Test compressing multiple regular items down to 1.0."""
+        """Test that compress_orders does not touch regular (>= 1) items."""
         submittals_data = [
             {'submittal_id': '1', 'order_number': 3.0},
             {'submittal_id': '2', 'order_number': 7.0},
             {'submittal_id': '3', 'order_number': 10.0},
         ]
-        
+
         updates = SubmittalOrderingEngine.compress_orders(submittals_data)
-        
-        assert len(updates) == 3
-        update_dict = {submittal_id: new_order for submittal_id, new_order in updates}
-        # Should compress to 1, 2, 3 in order
-        assert update_dict['1'] == 1.0
-        assert update_dict['2'] == 2.0
-        assert update_dict['3'] == 3.0
+
+        # compress_orders only handles urgency slots; regular items produce no updates
+        assert len(updates) == 0
 
     def test_compress_orders_regular_already_compressed(self):
         """Test that already compressed regular items don't get updated."""
@@ -362,42 +358,41 @@ class TestSubmittalOrderingEngine:
         assert len(updates) == 0
 
     def test_compress_orders_mixed_urgency_and_regular(self):
-        """Test compressing both urgency and regular items together."""
+        """Test that compress_orders compresses urgency slots only; regular items are left unchanged."""
         submittals_data = [
             {'submittal_id': 'urgent_1', 'order_number': 0.3},
             {'submittal_id': 'urgent_2', 'order_number': 0.6},
             {'submittal_id': 'regular_1', 'order_number': 5.0},
             {'submittal_id': 'regular_2', 'order_number': 8.0},
         ]
-        
+
         updates = SubmittalOrderingEngine.compress_orders(submittals_data)
-        
-        assert len(updates) == 4
+
         update_dict = {submittal_id: new_order for submittal_id, new_order in updates}
-        # Urgency should compress to 0.8, 0.9
+        # Urgency subset (2 items) compresses to 0.8, 0.9
         assert update_dict['urgent_1'] == pytest.approx(0.8, abs=0.001)
         assert update_dict['urgent_2'] == pytest.approx(0.9, abs=0.001)
-        # Regular should compress to 1, 2
-        assert update_dict['regular_1'] == 1.0
-        assert update_dict['regular_2'] == 2.0
+        # Regular items are untouched
+        assert 'regular_1' not in update_dict
+        assert 'regular_2' not in update_dict
 
     def test_compress_orders_with_null_values(self):
-        """Test that NULL order values are ignored."""
+        """Test that NULL order values and regular (>= 1) items are both ignored."""
         submittals_data = [
-            {'submittal_id': '1', 'order_number': 0.5},
-            {'submittal_id': '2', 'order_number': None},
-            {'submittal_id': '3', 'order_number': 3.0},
-            {'submittal_id': '4', 'order_number': None},
+            {'submittal_id': '1', 'order_number': 0.5},   # urgency → compressed
+            {'submittal_id': '2', 'order_number': None},   # null → ignored
+            {'submittal_id': '3', 'order_number': 3.0},   # regular → ignored by compress_orders
+            {'submittal_id': '4', 'order_number': None},   # null → ignored
         ]
-        
+
         updates = SubmittalOrderingEngine.compress_orders(submittals_data)
-        
-        # Should only update items with order numbers
-        assert len(updates) == 2
+
+        # Only the urgency item '1' is processed; null and regular items are skipped
+        assert len(updates) == 1
         update_dict = {submittal_id: new_order for submittal_id, new_order in updates}
         assert '1' in update_dict
-        assert '3' in update_dict
         assert '2' not in update_dict
+        assert '3' not in update_dict
         assert '4' not in update_dict
 
     def test_compress_orders_empty_list(self):
@@ -521,9 +516,178 @@ class TestUrgencyEngine:
             existing_urgent_submittals_data=[],
             existing_regular_submittals_data=[]
         )
-        
+
         assert can_bump is False
         assert new_order is None
         assert len(urgent_updates) == 0
         assert len(regular_updates) == 0
 
+    def test_calculate_bump_unordered_no_existing(self):
+        """Test that with no existing ordered submittals, unordered gets order 1.0."""
+        result = UrgencyEngine.calculate_bump_unordered_updates([])
+        assert result == 1.0
+
+    def test_calculate_bump_unordered_with_existing(self):
+        """Test that unordered submittal gets max(existing) + 1."""
+        existing = [
+            {'submittal_id': 'A', 'order_number': 2.0},
+            {'submittal_id': 'B', 'order_number': 4.0},
+        ]
+        result = UrgencyEngine.calculate_bump_unordered_updates(existing)
+        assert result == 5.0
+
+
+# ==============================================================================
+# SUBMITTAL ORDERING ENGINE — ADDITIONAL TESTS
+# ==============================================================================
+
+class TestSubmittalOrderingEngineExtra:
+    """Additional tests for SubmittalOrderingEngine methods not covered above."""
+
+    def test_compress_ordered_submittals_renumbers_from_one(self):
+        """Test that [4, 7, 10] compresses to [1, 2, 3]."""
+        data = [
+            {'submittal_id': 'A', 'order_number': 4.0},
+            {'submittal_id': 'B', 'order_number': 7.0},
+            {'submittal_id': 'C', 'order_number': 10.0},
+        ]
+        updates = SubmittalOrderingEngine.compress_ordered_submittals(data)
+        update_dict = {sid: order for sid, order in updates}
+        assert update_dict['A'] == 1.0
+        assert update_dict['B'] == 2.0
+        assert update_dict['C'] == 3.0
+
+    def test_compress_ordered_submittals_already_compressed(self):
+        """Test that [1, 2, 3] produces no updates."""
+        data = [
+            {'submittal_id': 'A', 'order_number': 1.0},
+            {'submittal_id': 'B', 'order_number': 2.0},
+            {'submittal_id': 'C', 'order_number': 3.0},
+        ]
+        updates = SubmittalOrderingEngine.compress_ordered_submittals(data)
+        assert len(updates) == 0
+
+    def test_compress_ordered_submittals_skips_urgency(self):
+        """Test that urgency items (< 1) are ignored."""
+        data = [
+            {'submittal_id': 'urgent', 'order_number': 0.9},
+            {'submittal_id': 'A', 'order_number': 5.0},
+            {'submittal_id': 'B', 'order_number': 8.0},
+        ]
+        updates = SubmittalOrderingEngine.compress_ordered_submittals(data)
+        update_dict = {sid: order for sid, order in updates}
+        assert 'urgent' not in update_dict
+        assert update_dict['A'] == 1.0
+        assert update_dict['B'] == 2.0
+
+    def test_calculate_step_updates_up(self):
+        """Test stepping up swaps with the adjacent lower-order item."""
+        group = [
+            {'submittal_id': 'A', 'order_number': 1.0},
+            {'submittal_id': 'B', 'order_number': 2.0},
+            {'submittal_id': 'C', 'order_number': 3.0},
+        ]
+        updates = SubmittalOrderingEngine.calculate_step_updates(group[1], 'up', group)
+        update_dict = {sid: order for sid, order in updates}
+        assert update_dict['B'] == 1.0
+        assert update_dict['A'] == 2.0
+
+    def test_calculate_step_updates_down(self):
+        """Test stepping down swaps with the adjacent higher-order item."""
+        group = [
+            {'submittal_id': 'A', 'order_number': 1.0},
+            {'submittal_id': 'B', 'order_number': 2.0},
+            {'submittal_id': 'C', 'order_number': 3.0},
+        ]
+        updates = SubmittalOrderingEngine.calculate_step_updates(group[1], 'down', group)
+        update_dict = {sid: order for sid, order in updates}
+        assert update_dict['B'] == 3.0
+        assert update_dict['C'] == 2.0
+
+    def test_calculate_step_updates_at_top_raises(self):
+        """Test that stepping up when already at top raises ValueError."""
+        group = [
+            {'submittal_id': 'A', 'order_number': 1.0},
+            {'submittal_id': 'B', 'order_number': 2.0},
+        ]
+        with pytest.raises(ValueError, match="Already at top"):
+            SubmittalOrderingEngine.calculate_step_updates(group[0], 'up', group)
+
+    def test_calculate_step_updates_null_order_raises(self):
+        """Test that stepping an unordered (null) submittal raises ValueError."""
+        submittal = {'submittal_id': 'A', 'order_number': None}
+        group = [submittal, {'submittal_id': 'B', 'order_number': 1.0}]
+        with pytest.raises(ValueError, match="unordered"):
+            SubmittalOrderingEngine.calculate_step_updates(submittal, 'up', group)
+
+    def test_calculate_updates_routes_to_null(self):
+        """Test that new_order=None routes to handle_set_to_null."""
+        group = [
+            {'submittal_id': 'A', 'order_number': 1.0},
+            {'submittal_id': 'B', 'order_number': 2.0},
+        ]
+        update_request = SubmittalOrderUpdate(
+            submittal_id='A', new_order=None, old_order=1.0, ball_in_court='Drafter A'
+        )
+        updates = SubmittalOrderingEngine.calculate_updates(update_request, group)
+        update_dict = {sid: order for sid, order in updates}
+        assert update_dict['A'] is None
+
+    def test_calculate_updates_routes_to_urgent(self):
+        """Test that new_order=0.5 routes to handle_set_to_urgent."""
+        group = [{'submittal_id': 'A', 'order_number': 2.0}]
+        update_request = SubmittalOrderUpdate(
+            submittal_id='A', new_order=0.5, old_order=2.0, ball_in_court='Drafter A'
+        )
+        updates = SubmittalOrderingEngine.calculate_updates(update_request, group)
+        update_dict = {sid: order for sid, order in updates}
+        # 0.5 is a valid urgency slot; compress_orders will assign it to 0.9 (only item)
+        assert 'A' in update_dict
+        assert 0 < update_dict['A'] < 1
+
+    def test_calculate_updates_routes_to_regular(self):
+        """Test that new_order=3.0 routes to handle_set_to_regular (direct assign)."""
+        group = [{'submittal_id': 'A', 'order_number': 1.0}]
+        update_request = SubmittalOrderUpdate(
+            submittal_id='A', new_order=3.0, old_order=1.0, ball_in_court='Drafter A'
+        )
+        updates = SubmittalOrderingEngine.calculate_updates(update_request, group)
+        update_dict = {sid: order for sid, order in updates}
+        assert update_dict['A'] == 3.0
+
+    def test_calculate_updates_submittal_not_in_group_raises(self):
+        """Test that a submittal not present in the group raises ValueError."""
+        group = [{'submittal_id': 'B', 'order_number': 1.0}]
+        update_request = SubmittalOrderUpdate(
+            submittal_id='A', new_order=2.0, old_order=1.0, ball_in_court='Drafter A'
+        )
+        with pytest.raises(ValueError, match="not found in group"):
+            SubmittalOrderingEngine.calculate_updates(update_request, group)
+
+
+# ==============================================================================
+# LOCATION ENGINE TESTS
+# ==============================================================================
+
+class TestLocationEngine:
+    """Tests for LocationEngine.point_in_polygon (pure ray-casting geometry)."""
+
+    # Simple unit square: [0,0] → [1,0] → [1,1] → [0,1] → [0,0]
+    SQUARE = [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]
+
+    def test_point_in_polygon_inside(self):
+        """Point clearly inside the polygon returns True."""
+        assert LocationEngine.point_in_polygon(0.5, 0.5, self.SQUARE) is True
+
+    def test_point_in_polygon_outside(self):
+        """Point clearly outside the polygon returns False."""
+        assert LocationEngine.point_in_polygon(2.0, 2.0, self.SQUARE) is False
+
+    def test_point_in_polygon_empty_coordinates(self):
+        """Empty coordinates list returns False."""
+        assert LocationEngine.point_in_polygon(0.5, 0.5, []) is False
+
+    def test_point_in_polygon_edge_case(self):
+        """Point very near (but inside) the boundary returns True."""
+        # (0.001, 0.5) is just inside the left edge of the unit square
+        assert LocationEngine.point_in_polygon(0.001, 0.5, self.SQUARE) is True

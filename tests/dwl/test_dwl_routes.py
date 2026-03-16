@@ -1,86 +1,13 @@
 """
 Tests for the Drafting Work Load routes (Flask endpoints).
 These tests verify HTTP request/response handling, authentication, and route logic.
+Shared fixtures (app, client, mock_admin_user, setup_auth, mock_submittal) live in conftest.py.
 """
 import pytest
 import json
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, date
-from app import create_app
 from app.models import Submittals, db
-
-
-@pytest.fixture
-def app():
-    """Create Flask application for testing. Uses in-memory SQLite only (TESTING=1 in conftest)."""
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    app.config["SECRET_KEY"] = "test-secret-key"
-
-    # Guard: never run drop_all against sandbox or production
-    uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
-    assert "sandbox" not in uri.lower() and "render.com" not in uri, (
-        "Tests must not use sandbox/production DB. Set TESTING=1 before create_app (see tests/conftest.py)."
-    )
-
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.session.remove()
-        db.drop_all()
-
-
-@pytest.fixture
-def mock_admin_user():
-    """Create a mock admin user for authentication."""
-    user = Mock()
-    user.id = 1
-    user.username = "test_admin"
-    user.is_admin = True
-    user.is_active = True
-    return user
-
-
-@pytest.fixture(autouse=True)
-def setup_auth(mock_admin_user):
-    """Automatically patch authentication for all tests."""
-    with patch('app.auth.utils.get_current_user', return_value=mock_admin_user):
-        yield
-
-
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return app.test_client()
-
-
-@pytest.fixture
-def mock_submittal():
-    """Create a mock submittal for testing."""
-    submittal = Mock(spec=Submittals)
-    submittal.submittal_id = "test_submittal_123"
-    submittal.status = "Open"
-    submittal.notes = None
-    submittal.submittal_drafting_status = ""
-    submittal.order_number = 1.0
-    submittal.ball_in_court = "Drafter A"
-    submittal.due_date = None
-    submittal.last_updated = None
-    
-    def to_dict():
-        return {
-            'submittal_id': submittal.submittal_id,
-            'status': submittal.status,
-            'notes': submittal.notes,
-            'submittal_drafting_status': submittal.submittal_drafting_status,
-            'order_number': submittal.order_number,
-            'ball_in_court': submittal.ball_in_court,
-            'due_date': submittal.due_date.isoformat() if submittal.due_date else None,
-        }
-    
-    submittal.to_dict = to_dict
-    return submittal
 
 
 # ==============================================================================
@@ -101,7 +28,7 @@ class TestGetDraftingWorkLoad:
         data = json.loads(response.data)
         assert 'submittals' in data
         assert len(data['submittals']) == 1
-        mock_service.get_dwl_submittals.assert_called_once_with(None)
+        mock_service.get_dwl_submittals.assert_called_once_with(None, tab='open')
 
     @patch('app.brain.drafting_work_load.routes.DraftingWorkLoadService')
     def test_get_drafting_work_load_filters_by_status(self, mock_service, client):
@@ -111,7 +38,7 @@ class TestGetDraftingWorkLoad:
         response = client.get('/brain/drafting-work-load')
 
         assert response.status_code == 200
-        mock_service.get_dwl_submittals.assert_called_once_with(None)
+        mock_service.get_dwl_submittals.assert_called_once_with(None, tab='open')
 
     @patch('app.brain.drafting_work_load.routes.DraftingWorkLoadService')
     def test_get_drafting_work_load_error_handling(self, mock_service, client):
@@ -387,12 +314,161 @@ class TestUpdateSubmittalDueDate:
     def test_update_due_date_invalid_format(self, mock_submittal_model, client, mock_submittal):
         """Test that invalid date format returns 400."""
         mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
-        
+
         response = client.put(
             '/brain/drafting-work-load/due-date',
             json={'submittal_id': 'test_123', 'due_date': '01/15/2024'},
             content_type='application/json'
         )
-        
+
         assert response.status_code == 400
 
+
+# ==============================================================================
+# POST /drafting-work-load/step TESTS
+# ==============================================================================
+
+class TestStepSubmittalOrder:
+    """Tests for POST /drafting-work-load/step endpoint."""
+
+    @patch('app.brain.drafting_work_load.routes.db')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_step_success(self, mock_submittal_model, mock_db, client, mock_submittal):
+        """Test successful step up returns 200 with swap details."""
+        mock_submittal.order_number = 2.0
+        mock_submittal.submittal_id = "test_submittal_123"
+        mock_submittal.ball_in_court = "Drafter A"
+
+        mock_neighbor = Mock(spec=Submittals)
+        mock_neighbor.submittal_id = "neighbor_456"
+        mock_neighbor.order_number = 1.0
+        mock_neighbor.ball_in_court = "Drafter A"
+
+        filter_by_chain = Mock()
+        filter_by_chain.first.return_value = mock_submittal
+        filter_by_chain.all.return_value = [mock_submittal, mock_neighbor]
+        mock_submittal_model.query.filter_by.return_value = filter_by_chain
+
+        response = client.post(
+            '/brain/drafting-work-load/step',
+            json={'submittal_id': 'test_submittal_123', 'direction': 'up'},
+            content_type='application/json'
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is True
+        assert 'updates' in data
+
+    def test_step_missing_submittal_id(self, client):
+        """Test that missing submittal_id returns 400."""
+        response = client.post(
+            '/brain/drafting-work-load/step',
+            json={'direction': 'up'},
+            content_type='application/json'
+        )
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert 'error' in data
+
+    def test_step_invalid_direction(self, client):
+        """Test that invalid direction returns 400."""
+        response = client.post(
+            '/brain/drafting-work-load/step',
+            json={'submittal_id': 'test_123', 'direction': 'sideways'},
+            content_type='application/json'
+        )
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert 'error' in data
+
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_step_submittal_not_found(self, mock_submittal_model, client):
+        """Test that non-existent submittal returns 404."""
+        mock_submittal_model.query.filter_by.return_value.first.return_value = None
+
+        response = client.post(
+            '/brain/drafting-work-load/step',
+            json={'submittal_id': 'nonexistent', 'direction': 'up'},
+            content_type='application/json'
+        )
+        assert response.status_code == 404
+        data = json.loads(response.data)
+        assert 'error' in data
+
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_step_at_top_returns_400(self, mock_submittal_model, client, mock_submittal):
+        """Test that stepping up when already at top returns 400."""
+        mock_submittal.order_number = 1.0
+        mock_submittal.submittal_id = "test_submittal_123"
+        mock_submittal.ball_in_court = "Drafter A"
+
+        filter_by_chain = Mock()
+        filter_by_chain.first.return_value = mock_submittal
+        # Only one item in the group — no lower-order neighbor to swap with
+        filter_by_chain.all.return_value = [mock_submittal]
+        mock_submittal_model.query.filter_by.return_value = filter_by_chain
+
+        response = client.post(
+            '/brain/drafting-work-load/step',
+            json={'submittal_id': 'test_submittal_123', 'direction': 'up'},
+            content_type='application/json'
+        )
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert 'error' in data
+
+
+# ==============================================================================
+# POST /drafting-work-load/resort TESTS
+# ==============================================================================
+
+class TestResortDrafterOrder:
+    """Tests for POST /drafting-work-load/resort endpoint."""
+
+    @patch('app.brain.drafting_work_load.routes.db')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_resort_success(self, mock_submittal_model, mock_db, client, mock_submittal):
+        """Test successful resort returns 200 with update list."""
+        mock_submittal.order_number = 3.0
+        mock_submittal.submittal_id = "test_submittal_123"
+        mock_submittal_model.query.filter_by.return_value.all.return_value = [mock_submittal]
+
+        response = client.post(
+            '/brain/drafting-work-load/resort',
+            json={'ball_in_court': 'Drafter A'},
+            content_type='application/json'
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is True
+        assert 'updates' in data
+
+    def test_resort_missing_ball_in_court(self, client):
+        """Test that missing ball_in_court returns 400."""
+        response = client.post(
+            '/brain/drafting-work-load/resort',
+            json={},
+            content_type='application/json'
+        )
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert 'error' in data
+
+
+# ==============================================================================
+# GET /drafting-work-load/submittal-statuses TESTS
+# ==============================================================================
+
+class TestGetSubmittalStatuses:
+    """Tests for GET /drafting-work-load/submittal-statuses endpoint."""
+
+    def test_get_statuses_returns_list(self, client):
+        """Test that GET returns 200 with a submittal_statuses list."""
+        response = client.get('/brain/drafting-work-load/submittal-statuses')
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert 'submittal_statuses' in data
+        assert isinstance(data['submittal_statuses'], list)
