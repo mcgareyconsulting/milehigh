@@ -2018,7 +2018,29 @@ def get_event_filters():
         sources_set.update(r[0] for r in submittal_source_rows)
         sources = sorted(sources_set)
 
-        return jsonify({'dates': dates, 'sources': sources, 'total': len(dates)}), 200
+        from app.models import User
+        user_id_rows = (
+            db.session.query(ReleaseEvents.internal_user_id)
+            .distinct()
+            .filter(ReleaseEvents.internal_user_id.isnot(None))
+            .all()
+        )
+        user_id_rows += (
+            db.session.query(SubmittalEvents.internal_user_id)
+            .distinct()
+            .filter(SubmittalEvents.internal_user_id.isnot(None))
+            .all()
+        )
+        internal_ids = {r[0] for r in user_id_rows if r[0] is not None}
+        users = []
+        if internal_ids:
+            for u in User.query.filter(User.id.in_(internal_ids)).all():
+                full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
+                display = full_name or u.username or f"User {u.id}"
+                users.append({'id': u.id, 'name': display})
+            users.sort(key=lambda x: x['name'])
+
+        return jsonify({'dates': dates, 'sources': sources, 'users': users, 'total': len(dates)}), 200
     except Exception as e:
         logger.error("Error in /events/filters endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
@@ -2067,6 +2089,7 @@ def get_events():
         submittal_id = request.args.get('submittal_id')  # Filter by submittal_id
         job = request.args.get('job', type=int)  # Filter by job number
         release = request.args.get('release')  # Filter by release
+        user_id = request.args.get('user_id', type=int)
 
         job_query = ReleaseEvents.query
         submittal_query = SubmittalEvents.query
@@ -2089,6 +2112,11 @@ def get_events():
         if source:
             job_query = job_query.filter(ReleaseEvents.source == source)
             submittal_query = submittal_query.filter(SubmittalEvents.source == source)
+
+        # Apply user filter
+        if user_id is not None:
+            job_query = job_query.filter(ReleaseEvents.internal_user_id == user_id)
+            submittal_query = submittal_query.filter(SubmittalEvents.internal_user_id == user_id)
         
         # Apply submittal_id filter (only applies to submittal events)
         # When filtering by submittal_id, exclude job events entirely
@@ -2148,6 +2176,7 @@ def get_events():
                 'submittal_id': submittal_id,
                 'job': job,
                 'release': release,
+                'user_id': user_id,
             }
         }), 200
     except Exception as e:

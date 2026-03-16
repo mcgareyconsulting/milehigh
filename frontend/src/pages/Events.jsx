@@ -13,6 +13,8 @@ function Events() {
     const [availableDates, setAvailableDates] = useState([]);
     const [selectedSource, setSelectedSource] = useState('');
     const [availableSources, setAvailableSources] = useState([]);
+    const [selectedUser, setSelectedUser] = useState('');
+    const [availableUsers, setAvailableUsers] = useState([]);
     const [limit, setLimit] = useState(50);
     const [expandedPayload, setExpandedPayload] = useState({});
     const [submittalId, setSubmittalId] = useState(searchParams.get('submittal_id') || '');
@@ -35,7 +37,7 @@ function Events() {
 
     useEffect(() => {
         fetchEvents();
-    }, [selectedDate, limit, selectedSource, submittalId, jobFilter, releaseFilter]);
+    }, [selectedDate, limit, selectedSource, submittalId, jobFilter, releaseFilter, selectedUser]);
 
     const fetchFilters = async () => {
         try {
@@ -46,6 +48,7 @@ function Events() {
             setAvailableDates(dates);
             const sources = response.data.sources;
             setAvailableSources(sources);
+            setAvailableUsers(response.data.users || []);
         } catch (err) {
             console.error('Error fetching filters:', err);
         }
@@ -71,6 +74,9 @@ function Events() {
             }
             if (releaseFilter) {
                 params.release = String(releaseFilter).trim();
+            }
+            if (selectedUser) {
+                params.user_id = selectedUser;
             }
             const response = await axios.get(`${API_BASE_URL}/brain/events`, { params });
             setEvents(response.data.events || []);
@@ -121,6 +127,7 @@ function Events() {
     const resetFilters = () => {
         setSelectedDate('');
         setSelectedSource('');
+        setSelectedUser('');
         setLimit(50);
         setSubmittalId('');
         setJobFilter('');
@@ -190,6 +197,21 @@ function Events() {
                                         <option value="">All Sources</option>
                                         {availableSources.map(source => (
                                             <option key={source} value={source}>{source}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex-1 min-w-[200px]">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                                        👤 Filter by User
+                                    </label>
+                                    <select
+                                        value={selectedUser}
+                                        onChange={(e) => setSelectedUser(e.target.value)}
+                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-500 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white dark:bg-slate-600 dark:text-slate-100 shadow-sm transition-all"
+                                    >
+                                        <option value="">All Users</option>
+                                        {availableUsers.map(user => (
+                                            <option key={user.id} value={user.id}>{user.name}</option>
                                         ))}
                                     </select>
                                 </div>
