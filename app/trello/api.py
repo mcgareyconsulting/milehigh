@@ -1805,7 +1805,9 @@ def get_member_by_id(member_id):
     return resp.json()
 
 
-if __name__ == "__main__":
-    id = "620bac8bbf1c5a35a47df981"
-    id = "6267ef3837196976dec44699"
-    print(get_member_by_id(id))
+def get_membership_by_board():
+    url = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/memberships"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    resp = requests.get(url, params=params)
+    resp.raise_for_status()
+    return resp.json()
