@@ -2,9 +2,8 @@ import { useState, useCallback } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
 /**
- * Determine zone of a submittal based on order_number
- * @param {Object} row - Row with order_number or ORDER #
- * @returns {string} - 'ordered' (>= 1), 'urgent' (0 < x < 1), or 'unordered' (null)
+ * Determine zone of a submittal based on order_number.
+ * 'ordered' (>= 1), 'urgent' (0 < x < 1), or 'unordered' (null)
  */
 function getSubmittalZone(row) {
     const order = parseFloat(row['ORDER #'] ?? row.order_number ?? 'NaN');
@@ -15,177 +14,193 @@ function getSubmittalZone(row) {
 }
 
 /**
- * Custom hook for managing drag and drop in DWL table
- * @param {Array} allRows - All rows (unfiltered)
- * @param {Function} refetch - Function to refetch data after drag
+ * Get the BIC string for a row.
+ */
+function getBic(row) {
+    return String(row.ball_in_court ?? row['BIC'] ?? '');
+}
+
+/**
+ * Get the order number for a row as a float, or NaN.
+ */
+function getOrder(row) {
+    return parseFloat(row['ORDER #'] ?? row.order_number ?? 'NaN');
+}
+
+/**
+ * Get the submittal ID for a row.
+ */
+function getId(row) {
+    return row['Submittals Id'] ?? row.submittal_id;
+}
+
+/**
+ * Find the minimum ordered (>= 1) order number in a BIC group.
+ * Returns Infinity if no ordered rows exist.
+ */
+function minOrderedInGroup(allRows, bic) {
+    let min = Infinity;
+    for (const r of allRows) {
+        if (getBic(r) !== bic) continue;
+        const o = getOrder(r);
+        if (!Number.isNaN(o) && o >= 1 && o < min) min = o;
+    }
+    return min;
+}
+
+/**
+ * Custom hook for managing drag and drop in DWL table.
+ *
+ * @param {Array} allRows - All rows (unfiltered submittals)
+ * @param {Function} refetch - Re-fetch data after a successful drop
  * @param {boolean} isAdmin - Whether current user is admin
  */
 export function useDWLDragAndDrop(allRows, refetch, isAdmin) {
     const [draggedRow, setDraggedRow] = useState(null);
     const [dragOverSubmittalId, setDragOverSubmittalId] = useState(null);
-    const [dragOverHalf, setDragOverHalf] = useState(null); // 'top' or 'bottom'
+    const [dragOverHalf, setDragOverHalf] = useState(null); // 'top' | 'bottom'
+
+    // ---- helpers to clear state ----
+    const clearDrag = useCallback(() => {
+        setDraggedRow(null);
+        setDragOverSubmittalId(null);
+        setDragOverHalf(null);
+    }, []);
+
+    // ---- handlers ----
 
     const handleDragStart = useCallback((e, row) => {
-        // Only allow if admin and not multi-assignee
-        const ballInCourt = row.ball_in_court ?? row['BIC'] ?? '';
-        const hasMultipleAssignees = String(ballInCourt).includes(',');
-
-        if (!isAdmin || hasMultipleAssignees) {
+        const bic = getBic(row);
+        if (!isAdmin || bic.includes(',')) {
             e.preventDefault();
             return;
         }
-
         setDraggedRow(row);
     }, [isAdmin]);
 
     const handleDragOver = useCallback((e, targetRow) => {
         e.preventDefault();
+        if (!draggedRow) { setDragOverSubmittalId(null); return; }
 
-        if (!draggedRow) {
-            setDragOverSubmittalId(null);
-            return;
-        }
-
-        // Reject cross-BIC drops
-        const draggedBic = draggedRow.ball_in_court ?? draggedRow['BIC'] ?? '';
-        const targetBic = targetRow.ball_in_court ?? targetRow['BIC'] ?? '';
-        if (String(draggedBic) !== String(targetBic)) {
-            setDragOverSubmittalId(null);
-            return;
-        }
-
-        // Reject multi-assignee targets
-        const hasMultipleAssignees = String(targetBic).includes(',');
-        if (hasMultipleAssignees) {
+        // Cross-BIC or multi-assignee target → reject
+        const draggedBic = getBic(draggedRow);
+        const targetBic = getBic(targetRow);
+        if (draggedBic !== targetBic || targetBic.includes(',')) {
             setDragOverSubmittalId(null);
             return;
         }
 
         // Determine top/bottom half
         const rect = e.currentTarget.getBoundingClientRect();
-        const midpoint = rect.height / 2;
-        const offsetY = e.clientY - rect.top;
-        const half = offsetY < midpoint ? 'top' : 'bottom';
+        const half = (e.clientY - rect.top) < (rect.height / 2) ? 'top' : 'bottom';
 
-        setDragOverSubmittalId(targetRow['Submittals Id'] ?? targetRow.submittal_id);
+        setDragOverSubmittalId(getId(targetRow));
         setDragOverHalf(half);
     }, [draggedRow]);
 
     const handleDragLeave = useCallback((e) => {
-        // Only clear when leaving the row (not child elements)
         if (!e.currentTarget.contains(e.relatedTarget)) {
             setDragOverSubmittalId(null);
             setDragOverHalf(null);
         }
     }, []);
 
-    const handleDragEnd = useCallback(() => {
-        setDraggedRow(null);
-        setDragOverSubmittalId(null);
-        setDragOverHalf(null);
-    }, []);
+    const handleDragEnd = useCallback(() => { clearDrag(); }, [clearDrag]);
 
-    const handleDrop = useCallback(async (e, targetRow, displayRows) => {
+    const handleDrop = useCallback(async (e, targetRow, rowsForLookup) => {
         e.preventDefault();
-
-        if (!draggedRow) {
-            setDraggedRow(null);
-            setDragOverSubmittalId(null);
-            setDragOverHalf(null);
-            return;
-        }
+        if (!draggedRow) { clearDrag(); return; }
 
         try {
-            const draggedId = draggedRow['Submittals Id'] ?? draggedRow.submittal_id;
-            const targetId = targetRow['Submittals Id'] ?? targetRow.submittal_id;
+            const draggedId = getId(draggedRow);
+            const bic = getBic(targetRow);
 
-            // Determine target zone
-            const targetZone = getSubmittalZone(targetRow);
-
+            // --- resolve zone and target_order ---
+            let targetZone = getSubmittalZone(targetRow);
             let targetOrder = null;
             let isNoOp = false;
 
+            const draggedZone = getSubmittalZone(draggedRow);
+            const draggedOrder = getOrder(draggedRow);
+
             if (targetZone === 'ordered') {
-                const draggedOrder = parseFloat(draggedRow['ORDER #'] ?? draggedRow.order_number);
-                const targetOrderNum = parseFloat(targetRow['ORDER #'] ?? targetRow.order_number);
+                const targetOrderNum = getOrder(targetRow);
 
-                // Determine which order number to use based on drop half
+                // "drop target above submittal 1" → urgency at 0.9
                 if (dragOverHalf === 'top') {
-                    targetOrder = targetOrderNum;
+                    const lowestOrdered = minOrderedInGroup(rowsForLookup, bic);
+                    if (targetOrderNum <= lowestOrdered) {
+                        // Dropping above the first ordered item → urgency
+                        targetZone = 'urgent';
+                        targetOrder = null;
+                    } else {
+                        targetOrder = targetOrderNum;
+                    }
                 } else {
-                    // Find next ordered row after target in same BIC group
-                    const bic = targetRow.ball_in_court ?? targetRow['BIC'] ?? '';
-                    const nextOrderedRow = displayRows
-                        .filter(r => {
-                            const rBic = r.ball_in_court ?? r['BIC'] ?? '';
-                            if (String(rBic) !== String(bic)) return false;
-                            const rOrder = parseFloat(r['ORDER #'] ?? r.order_number ?? 'NaN');
-                            if (Number.isNaN(rOrder) || rOrder < 1) return false;
-                            return rOrder > targetOrderNum;
-                        })
-                        .sort((a, b) => {
-                            const aOrder = parseFloat(a['ORDER #'] ?? a.order_number);
-                            const bOrder = parseFloat(b['ORDER #'] ?? b.order_number);
-                            return aOrder - bOrder;
-                        })[0];
-
-                    targetOrder = nextOrderedRow
-                        ? parseFloat(nextOrderedRow['ORDER #'] ?? nextOrderedRow.order_number)
-                        : null;
-                }
-
-                // No-op check for ordered zone
-                if (!Number.isNaN(draggedOrder)) {
-                    if (draggedOrder === targetOrder) {
-                        isNoOp = true;
-                    } else if (targetOrder !== null) {
-                        // Check if dragged is already immediately after target
-                        const nextAfterTarget = displayRows
-                            .filter(r => {
-                                const rBic = r.ball_in_court ?? r['BIC'] ?? '';
-                                const bic = targetRow.ball_in_court ?? targetRow['BIC'] ?? '';
-                                if (String(rBic) !== String(bic)) return false;
-                                const rOrder = parseFloat(r['ORDER #'] ?? r.order_number ?? 'NaN');
-                                if (Number.isNaN(rOrder) || rOrder <= targetOrder) return false;
-                                return true;
-                            })
-                            .sort((a, b) => {
-                                const aOrder = parseFloat(a['ORDER #'] ?? a.order_number);
-                                const bOrder = parseFloat(b['ORDER #'] ?? b.order_number);
-                                return aOrder - bOrder;
-                            })[0];
-
-                        if (nextAfterTarget && draggedId === (nextAfterTarget['Submittals Id'] ?? nextAfterTarget.submittal_id)) {
-                            isNoOp = true;
+                    // Bottom half: insert after this row = before the next ordered row
+                    let nextOrder = null;
+                    for (const r of rowsForLookup) {
+                        if (getBic(r) !== bic) continue;
+                        const o = getOrder(r);
+                        if (Number.isNaN(o) || o < 1) continue;
+                        if (o > targetOrderNum && (nextOrder === null || o < nextOrder)) {
+                            nextOrder = o;
                         }
                     }
+                    targetOrder = nextOrder; // null means append to end
                 }
-            } else if (targetZone === 'urgent' || targetZone === 'unordered') {
-                // No-op: dragged row already in that zone
-                const draggedZone = getSubmittalZone(draggedRow);
-                if (draggedZone === targetZone) {
-                    isNoOp = true;
+
+                // No-op checks (only relevant if we're still in ordered zone)
+                if (targetZone === 'ordered' && draggedZone === 'ordered' && !Number.isNaN(draggedOrder)) {
+                    if (targetOrder !== null && draggedOrder === targetOrder) {
+                        // Dropping exactly where it already is
+                        isNoOp = true;
+                    } else if (targetOrder !== null) {
+                        // Check: is the dragged row already the one right before targetOrder?
+                        // E.g., dragged=5, targetOrder=6 → no move needed
+                        let closestBelow = null;
+                        for (const r of rowsForLookup) {
+                            if (getBic(r) !== bic) continue;
+                            const o = getOrder(r);
+                            if (Number.isNaN(o) || o < 1 || o >= targetOrder) continue;
+                            if (closestBelow === null || o > closestBelow) closestBelow = o;
+                        }
+                        if (closestBelow !== null && closestBelow === draggedOrder) {
+                            isNoOp = true;
+                        }
+                    } else if (targetOrder === null) {
+                        // Appending to end — no-op if dragged is already the last ordered
+                        let maxOrdered = 0;
+                        for (const r of rowsForLookup) {
+                            if (getBic(r) !== bic) continue;
+                            const o = getOrder(r);
+                            if (!Number.isNaN(o) && o >= 1 && o > maxOrdered) maxOrdered = o;
+                        }
+                        if (draggedOrder >= maxOrdered) isNoOp = true;
+                    }
                 }
             }
 
-            if (isNoOp) {
-                setDraggedRow(null);
-                setDragOverSubmittalId(null);
-                setDragOverHalf(null);
-                return;
+            // Urgency zone — no-op if already urgent
+            if (targetZone === 'urgent' && draggedZone === 'urgent') {
+                isNoOp = true;
             }
 
-            // Call API
+            // Unordered zone — no-op if already unordered
+            if (targetZone === 'unordered' && draggedZone === 'unordered') {
+                isNoOp = true;
+            }
+
+            if (isNoOp) { clearDrag(); return; }
+
             await draftingWorkLoadApi.dragReorder(draggedId, targetZone, targetOrder);
             await refetch();
         } catch (error) {
             console.error('Drag reorder failed:', error);
         } finally {
-            setDraggedRow(null);
-            setDragOverSubmittalId(null);
-            setDragOverHalf(null);
+            clearDrag();
         }
-    }, [draggedRow, dragOverHalf, refetch]);
+    }, [draggedRow, dragOverHalf, refetch, clearDrag]);
 
     return {
         draggedRow,

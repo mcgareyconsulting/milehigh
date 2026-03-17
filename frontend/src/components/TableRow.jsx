@@ -731,7 +731,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             }
                         }
 
-                        // Drag handle props - will be passed from parent
                         const isDraggable = isAdmin && !hasMultipleAssignees;
 
                         return (
@@ -741,12 +740,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 style={customStyle}
                                 title={cellValue}
                                 draggable={isDraggable}
-                                onDragStart={(e) => {
-                                    // Drag handle only on Title cell
-                                    if (e.currentTarget === e.target && isDraggable) {
-                                        // Will be passed from parent via onDragStart prop
-                                    }
-                                }}
                             >
                                 <div className="flex items-center gap-1">
                                     {canStep && onStepOrder && (
