@@ -663,6 +663,7 @@ def drag_submittal_order():
         submittal_id = str(data.get('submittal_id', '')).strip()
         target_zone = str(data.get('target_zone', '')).strip()
         target_order = data.get('target_order')  # Can be None
+        insert_before = data.get('insert_before')  # bool or None (within-urgent drag only)
 
         if not submittal_id:
             return jsonify({"error": "submittal_id is required"}), 400
@@ -687,7 +688,7 @@ def drag_submittal_order():
 
         # Calculate drag updates
         updates = SubmittalOrderingService.calculate_drag_updates(
-            submittal, target_zone, target_order, all_group_submittals
+            submittal, target_zone, target_order, all_group_submittals, insert_before=insert_before
         )
 
         # Apply updates
