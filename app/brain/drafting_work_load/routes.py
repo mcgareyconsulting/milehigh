@@ -568,6 +568,8 @@ def update_submittal_procore_status():
             )
 
         submittal.status = new_status
+        if new_status == 'Closed':
+            submittal.order_number = None
         db.session.commit()
 
         return jsonify({
