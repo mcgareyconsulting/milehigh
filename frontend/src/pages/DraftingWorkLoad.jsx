@@ -43,6 +43,7 @@ function DraftingWorkLoad() {
     const { locationFilter } = useLocationContext();
     const [resorting, setResorting] = useState(false);
     const [resortError, setResortError] = useState(null);
+    const [isFilterMinimized, setIsFilterMinimized] = useState(false);
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
     // When a jump-to param is present, load all tabs so we can find the row regardless of its status
@@ -241,55 +242,134 @@ function DraftingWorkLoad() {
                                 </div>
                             </div>
                             <div className={`rounded-xl p-2 border border-gray-200 dark:border-slate-600 shadow-sm ${selectedTab === 'draft' ? 'bg-gradient-to-r from-gray-50 to-green-50 dark:from-slate-700 dark:to-slate-700' : 'bg-gradient-to-r from-gray-50 to-accent-50 dark:from-slate-700 dark:to-slate-700'}`}>
+                                {/* Filter header with chevron toggle */}
+                                <div className="flex items-center justify-between mb-2 px-1">
+                                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Filters</span>
+                                    <button
+                                        onClick={() => setIsFilterMinimized(v => !v)}
+                                        className="p-1 rounded hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
+                                        title={isFilterMinimized ? 'Expand filters' : 'Collapse filters'}
+                                    >
+                                        <span className="text-sm text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
+                                    </button>
+                                </div>
+
                                 <div className="flex flex-col gap-3">
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="flex flex-col gap-3">
-                                            <FilterButtonGroup
-                                                label="🎯 Ball In Court"
-                                                options={ballInCourtOptions}
-                                                selectedValue={selectedBallInCourt}
-                                                onSelect={setSelectedBallInCourt}
-                                                allOptionValue={ALL_OPTION_VALUE}
-                                            />
-                                            <FilterButtonGroup
-                                                label="👤 Submittal Manager"
-                                                options={submittalManagerOptions}
-                                                selectedValue={selectedSubmittalManager}
-                                                onSelect={setSelectedSubmittalManager}
-                                                allOptionValue={ALL_OPTION_VALUE}
-                                            />
+                                    {/* Show full filter panel when expanded */}
+                                    {!isFilterMinimized && (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="flex flex-col gap-3">
+                                                <FilterButtonGroup
+                                                    label="🎯 Ball In Court"
+                                                    options={ballInCourtOptions}
+                                                    selectedValue={selectedBallInCourt}
+                                                    onSelect={setSelectedBallInCourt}
+                                                    allOptionValue={ALL_OPTION_VALUE}
+                                                    minimized={false}
+                                                />
+                                                <FilterButtonGroup
+                                                    label="👤 Submittal Manager"
+                                                    options={submittalManagerOptions}
+                                                    selectedValue={selectedSubmittalManager}
+                                                    onSelect={setSelectedSubmittalManager}
+                                                    allOptionValue={ALL_OPTION_VALUE}
+                                                    minimized={false}
+                                                />
+                                            </div>
+                                            <div>
+                                                <FilterButtonGroup
+                                                    label="📁 Project Name"
+                                                    options={projectNameOptions}
+                                                    selectedValue={selectedProjectName}
+                                                    onSelect={setSelectedProjectName}
+                                                    allOptionValue={ALL_OPTION_VALUE}
+                                                    minimized={false}
+                                                />
+                                                <FilterButtonGroup
+                                                    label="📋 Procore Status"
+                                                    options={procoreStatusOptions}
+                                                    selectedValue={selectedProcoreStatus}
+                                                    onSelect={setSelectedProcoreStatus}
+                                                    allOptionValue={ALL_OPTION_VALUE}
+                                                    minimized={false}
+                                                />
+                                            </div>
                                         </div>
-                                        <div>
-                                            <FilterButtonGroup
-                                                label="📁 Project Name"
-                                                options={projectNameOptions}
-                                                selectedValue={selectedProjectName}
-                                                onSelect={setSelectedProjectName}
-                                                allOptionValue={ALL_OPTION_VALUE}
-                                            />
-                                            <FilterButtonGroup
-                                                label="📋 Procore Status"
-                                                options={procoreStatusOptions}
-                                                selectedValue={selectedProcoreStatus}
-                                                onSelect={setSelectedProcoreStatus}
-                                                allOptionValue={ALL_OPTION_VALUE}
-                                            />
+                                    )}
+
+                                    {/* Show minimized filter labels and summary */}
+                                    {isFilterMinimized && (
+                                        <div className="flex flex-col gap-2">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="flex flex-col gap-2">
+                                                    <FilterButtonGroup
+                                                        label="🎯 Ball In Court"
+                                                        options={ballInCourtOptions}
+                                                        selectedValue={selectedBallInCourt}
+                                                        onSelect={setSelectedBallInCourt}
+                                                        allOptionValue={ALL_OPTION_VALUE}
+                                                        minimized={true}
+                                                    />
+                                                    <FilterButtonGroup
+                                                        label="👤 Submittal Manager"
+                                                        options={submittalManagerOptions}
+                                                        selectedValue={selectedSubmittalManager}
+                                                        onSelect={setSelectedSubmittalManager}
+                                                        allOptionValue={ALL_OPTION_VALUE}
+                                                        minimized={true}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <FilterButtonGroup
+                                                        label="📁 Project Name"
+                                                        options={projectNameOptions}
+                                                        selectedValue={selectedProjectName}
+                                                        onSelect={setSelectedProjectName}
+                                                        allOptionValue={ALL_OPTION_VALUE}
+                                                        minimized={true}
+                                                    />
+                                                    <FilterButtonGroup
+                                                        label="📋 Procore Status"
+                                                        options={procoreStatusOptions}
+                                                        selectedValue={selectedProcoreStatus}
+                                                        onSelect={setSelectedProcoreStatus}
+                                                        allOptionValue={ALL_OPTION_VALUE}
+                                                        minimized={true}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Minimized summary bar */}
+                                            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-slate-300 flex-wrap">
+                                                {selectedBallInCourt !== ALL_OPTION_VALUE && (
+                                                    <span className="px-2 py-0.5 bg-accent-100 dark:bg-accent-900 text-accent-700 dark:text-accent-300 rounded-full font-medium">
+                                                        BIC: {selectedBallInCourt}
+                                                    </span>
+                                                )}
+                                                <span className="ml-auto text-gray-500 dark:text-slate-400">
+                                                    Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 pt-2">
-                                        <button
-                                            onClick={resetFilters}
-                                            className="px-2 py-1 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded text-xs font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all"
-                                        >
-                                            Reset Filters
-                                        </button>
-                                        <div className="px-2 py-1 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 text-gray-600 dark:text-slate-300 rounded text-xs font-medium shadow-sm">
-                                            Total: <span className="text-gray-900 dark:text-slate-100">{displayRows.length}</span> records
+                                    )}
+
+                                    {/* Bottom bar (Reset, Total count) - shown when expanded */}
+                                    {!isFilterMinimized && (
+                                        <div className="flex items-center gap-2 pt-2">
+                                            <button
+                                                onClick={resetFilters}
+                                                className="px-2 py-1 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded text-xs font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all"
+                                            >
+                                                Reset Filters
+                                            </button>
+                                            <div className="px-2 py-1 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 text-gray-600 dark:text-slate-300 rounded text-xs font-medium shadow-sm">
+                                                Total: <span className="text-gray-900 dark:text-slate-100">{displayRows.length}</span> records
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-slate-400 ml-auto">
+                                                Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-gray-500 dark:text-slate-400 ml-auto">
-                                            Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

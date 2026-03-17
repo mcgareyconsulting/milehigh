@@ -3,12 +3,13 @@ import React from 'react';
 /**
  * Reusable component for filter button groups
  */
-export function FilterButtonGroup({ label, options, selectedValue, onSelect, allOptionValue }) {
+export function FilterButtonGroup({ label, options, selectedValue, onSelect, allOptionValue, minimized = false }) {
     return (
         <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                 {label}
             </label>
+            {!minimized && (
             <div className="grid grid-cols-8 gap-1">
                 <button
                     onClick={() => onSelect(allOptionValue)}
@@ -34,6 +35,7 @@ export function FilterButtonGroup({ label, options, selectedValue, onSelect, all
                     </button>
                 ))}
             </div>
+            )}
         </div>
     );
 }
