@@ -305,15 +305,22 @@ class SubmittalOrderingService:
         return [(submittal_map[submittal_id], new_order) for submittal_id, new_order in updates]
 
     @staticmethod
-    def calculate_drag_updates(dragged_submittal, target_zone: str, target_order: Optional[float], all_group_submittals: List) -> List:
+    def calculate_drag_updates(
+        dragged_submittal,
+        target_zone: str,
+        target_order: Optional[float],
+        all_group_submittals: List,
+        insert_before: Optional[bool] = None,
+    ) -> List:
         """
         Calculate drag-and-drop reordering updates.
 
         Args:
             dragged_submittal: The submittal being dragged (ORM object)
             target_zone: 'ordered', 'urgent', or 'unordered'
-            target_order: Order number of target row (for ordered zone only); None = append to end
+            target_order: Order number of target row (for ordered zone and within-urgent); None = append to end
             all_group_submittals: List of all submittals in the group (ORM objects)
+            insert_before: For within-urgent drag only — True to insert before target, False to insert after
 
         Returns: List of (submittal, new_order_value) tuples
         """
@@ -323,7 +330,12 @@ class SubmittalOrderingService:
         if target_zone == 'ordered':
             updates = SubmittalOrderingEngine.calculate_drag_to_ordered(dragged_data, target_order, all_group_submittals_data)
         elif target_zone == 'urgent':
-            updates = SubmittalOrderingEngine.calculate_drag_to_urgent(dragged_data, all_group_submittals_data)
+            if target_order is not None and insert_before is not None:
+                updates = SubmittalOrderingEngine.calculate_drag_within_urgent(
+                    dragged_data, target_order, insert_before, all_group_submittals_data
+                )
+            else:
+                updates = SubmittalOrderingEngine.calculate_drag_to_urgent(dragged_data, all_group_submittals_data)
         elif target_zone == 'unordered':
             updates = SubmittalOrderingEngine.calculate_drag_to_unordered(dragged_data, all_group_submittals_data)
         else:

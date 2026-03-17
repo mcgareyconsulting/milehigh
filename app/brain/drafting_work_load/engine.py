@@ -530,6 +530,53 @@ class SubmittalOrderingEngine:
         """
         return SubmittalOrderingEngine.handle_set_to_null(dragged_data, all_submittals_data)
 
+    @staticmethod
+    def calculate_drag_within_urgent(
+        dragged_data: Dict,
+        target_slot: float,
+        insert_before: bool,
+        all_submittals_data: List[Dict]
+    ) -> List[Tuple[str, float]]:
+        """
+        Reorder within the urgent zone. Inserts dragged item before or after
+        the target item (identified by its current slot value), then recompresses
+        all urgent slots from 0.9 downward (oldest = lowest slot).
+        """
+        dragged_id = dragged_data.get('submittal_id')
+
+        # Collect all urgent items sorted ascending (most urgent first)
+        urgent = []
+        for s in all_submittals_data:
+            order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+            if order is not None and 0 < order < 1:
+                urgent.append((s, order))
+        urgent.sort(key=lambda x: x[1])
+
+        # Separate dragged from the rest
+        others = [(s, o) for s, o in urgent if s.get('submittal_id') != dragged_id]
+        dragged_entry = next(((s, o) for s, o in urgent if s.get('submittal_id') == dragged_id), None)
+        if dragged_entry is None:
+            raise ValueError(f"Dragged submittal {dragged_id} not found in urgent zone")
+
+        # Find insertion index relative to target
+        target_idx = next((i for i, (s, o) in enumerate(others) if abs(o - target_slot) < 0.001), None)
+        if target_idx is None:
+            raise ValueError(f"Target slot {target_slot} not found in urgent zone")
+
+        insert_idx = target_idx if insert_before else target_idx + 1
+        others.insert(insert_idx, dragged_entry)
+
+        # Recompress: fill from 0.9 downward
+        valid_slots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        total = len(others)
+        updates = []
+        for idx, (s, current_order) in enumerate(others):
+            slot_index = (len(valid_slots) - total) + idx
+            new_slot = valid_slots[slot_index]
+            if abs(current_order - new_slot) > 0.001:
+                updates.append((s.get('submittal_id'), new_slot))
+        return updates
+
 
 class UrgencyEngine:
     """Pure business logic for urgency-related operations."""

@@ -666,6 +666,83 @@ class TestSubmittalOrderingEngineExtra:
 
 
 # ==============================================================================
+# DRAG WITHIN URGENT TESTS
+# ==============================================================================
+
+class TestCalculateDragWithinUrgent:
+    """Tests for SubmittalOrderingEngine.calculate_drag_within_urgent."""
+
+    def _make_group(self, slots):
+        """Build a submittal list from a list of (id, order) tuples."""
+        return [{'submittal_id': sid, 'order_number': order} for sid, order in slots]
+
+    def test_drag_last_to_before_first(self):
+        """[0.7, 0.8, 0.9]: drag 0.9 before 0.7 → dragged ends at 0.7, others shift up."""
+        group = self._make_group([('A', 0.7), ('B', 0.8), ('C', 0.9)])
+        updates = SubmittalOrderingEngine.calculate_drag_within_urgent(
+            {'submittal_id': 'C', 'order_number': 0.9},
+            target_slot=0.7,
+            insert_before=True,
+            all_submittals_data=group,
+        )
+        update_dict = {sid: order for sid, order in updates}
+        # New order: [C, A, B] → compressed to [0.7, 0.8, 0.9]
+        assert update_dict.get('C') == pytest.approx(0.7, abs=0.001)
+        assert update_dict.get('A') == pytest.approx(0.8, abs=0.001)
+        assert update_dict.get('B') == pytest.approx(0.9, abs=0.001)
+
+    def test_drag_first_to_after_last(self):
+        """[0.7, 0.8, 0.9]: drag 0.7 after 0.9 → dragged ends at 0.9, others shift down."""
+        group = self._make_group([('A', 0.7), ('B', 0.8), ('C', 0.9)])
+        updates = SubmittalOrderingEngine.calculate_drag_within_urgent(
+            {'submittal_id': 'A', 'order_number': 0.7},
+            target_slot=0.9,
+            insert_before=False,
+            all_submittals_data=group,
+        )
+        update_dict = {sid: order for sid, order in updates}
+        # New order: [B, C, A] → compressed to [0.7, 0.8, 0.9]
+        assert update_dict.get('B') == pytest.approx(0.7, abs=0.001)
+        assert update_dict.get('C') == pytest.approx(0.8, abs=0.001)
+        assert update_dict.get('A') == pytest.approx(0.9, abs=0.001)
+
+    def test_no_change_when_already_in_position(self):
+        """Dragging an item to its own current position produces no updates."""
+        group = self._make_group([('A', 0.7), ('B', 0.8), ('C', 0.9)])
+        # A is first; dropping it before B (insert_before=True, target=0.8) → A stays at 0.7
+        updates = SubmittalOrderingEngine.calculate_drag_within_urgent(
+            {'submittal_id': 'A', 'order_number': 0.7},
+            target_slot=0.8,
+            insert_before=True,
+            all_submittals_data=group,
+        )
+        # A before B: order [A, B, C] → same as current → no updates
+        assert len(updates) == 0
+
+    def test_dragged_not_in_urgent_raises(self):
+        """Dragged submittal missing from urgent zone raises ValueError."""
+        group = self._make_group([('A', 0.8), ('B', 0.9)])
+        with pytest.raises(ValueError, match="not found in urgent zone"):
+            SubmittalOrderingEngine.calculate_drag_within_urgent(
+                {'submittal_id': 'Z', 'order_number': 0.7},
+                target_slot=0.8,
+                insert_before=True,
+                all_submittals_data=group,
+            )
+
+    def test_target_slot_not_found_raises(self):
+        """Target slot not in urgent zone raises ValueError."""
+        group = self._make_group([('A', 0.7), ('B', 0.9)])
+        with pytest.raises(ValueError, match="not found in urgent zone"):
+            SubmittalOrderingEngine.calculate_drag_within_urgent(
+                {'submittal_id': 'A', 'order_number': 0.7},
+                target_slot=0.5,  # not present
+                insert_before=True,
+                all_submittals_data=group,
+            )
+
+
+# ==============================================================================
 # LOCATION ENGINE TESTS
 # ==============================================================================
 

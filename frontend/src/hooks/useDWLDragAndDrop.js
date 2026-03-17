@@ -181,9 +181,27 @@ export function useDWLDragAndDrop(allRows, refetch, isAdmin) {
                 }
             }
 
-            // Urgency zone — no-op if already urgent
+            // Urgency zone — handle within-urgent reorder or no-op
             if (targetZone === 'urgent' && draggedZone === 'urgent') {
-                isNoOp = true;
+                const targetId = getId(targetRow);
+                if (draggedId === targetId) {
+                    isNoOp = true;
+                } else {
+                    const urgentItems = rowsForLookup
+                        .filter(r => getBic(r) === bic && getSubmittalZone(r) === 'urgent')
+                        .sort((a, b) => getOrder(a) - getOrder(b));
+                    const draggedIdx = urgentItems.findIndex(r => getId(r) === draggedId);
+                    const targetIdx  = urgentItems.findIndex(r => getId(r) === targetId);
+                    const insertBefore = dragOverHalf === 'top';
+                    if (insertBefore  && draggedIdx + 1 === targetIdx) isNoOp = true;
+                    if (!insertBefore && draggedIdx - 1 === targetIdx) isNoOp = true;
+                    if (!isNoOp) {
+                        targetOrder = getOrder(targetRow);
+                        await draftingWorkLoadApi.dragReorder(draggedId, 'urgent', targetOrder, insertBefore);
+                        await refetch();
+                        return;
+                    }
+                }
             }
 
             // Unordered zone — no-op if already unordered
