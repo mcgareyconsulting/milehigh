@@ -1,12 +1,14 @@
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { logout } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
+import { LocationProvider, useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
 
-function AppShell({ isAuthenticated }) {
+function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, toggleTheme } = useTheme();
+  const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
 
   const handleLogout = async () => {
     await logout();
@@ -41,6 +43,30 @@ function AppShell({ isAuthenticated }) {
 
         {/* Right cluster */}
         <div className="ml-auto flex items-center gap-2">
+          {/* Location filter button */}
+          <button
+            type="button"
+            onClick={handleLocationToggle}
+            disabled={locationRequesting}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
+              locationEnabled
+                ? 'bg-green-500 text-white hover:bg-green-600'
+                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+            } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+            title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
+          >
+            {locationRequesting ? (
+              <>
+                <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                Location…
+              </>
+            ) : locationEnabled ? (
+              <>📍 Location on</>
+            ) : (
+              <>📍 Location</>
+            )}
+          </button>
+
           {/* Job Log shortcut */}
           <button
             type="button"
@@ -117,6 +143,14 @@ function AppShell({ isAuthenticated }) {
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function AppShell({ isAuthenticated }) {
+  return (
+    <LocationProvider>
+      <AppShellInner isAuthenticated={isAuthenticated} />
+    </LocationProvider>
   );
 }
 
