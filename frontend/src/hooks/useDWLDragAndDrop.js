@@ -194,7 +194,7 @@ export function useDWLDragAndDrop(allRows, refetch, isAdmin) {
             if (isNoOp) { clearDrag(); return; }
 
             await draftingWorkLoadApi.dragReorder(draggedId, targetZone, targetOrder);
-            await refetch();
+            await refetch(true);
         } catch (error) {
             console.error('Drag reorder failed:', error);
         } finally {

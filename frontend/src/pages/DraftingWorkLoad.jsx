@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useDataFetching } from '../hooks/useDataFetching';
@@ -87,6 +87,9 @@ function DraftingWorkLoad() {
         fetchUserInfo();
     }, []);
 
+    // Ref for scroll container to preserve scroll position on bump
+    const scrollContainerRef = useRef(null);
+
     // Backend returns tab-specific data (open = Open status, draft = not Open/Closed), so use submittals as rows
     const rows = submittals;
 
@@ -148,6 +151,17 @@ function DraftingWorkLoad() {
     const handleGeneratePDF = useCallback(() => {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
     }, [displayRows, columns, lastUpdated]);
+
+    const handleBump = useCallback(async (submittalId) => {
+        const container = scrollContainerRef.current;
+        const scrollTop = container ? container.scrollTop : 0;
+        await bumpSubmittal(submittalId);
+        if (container) {
+            requestAnimationFrame(() => {
+                container.scrollTop = scrollTop;
+            });
+        }
+    }, [bumpSubmittal]);
 
     const formattedLastUpdated = useMemo(
         () => lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown',
@@ -307,6 +321,7 @@ function DraftingWorkLoad() {
                             <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
                                 {/* Scrollbar hidden via CSS; scroll still works with wheel/trackpad */}
                                 <div
+                                    ref={scrollContainerRef}
                                     className="dwl-table-scroll-hide-scrollbar flex-1 min-h-0 overflow-x-hidden"
                                     style={{ overflowY: 'auto' }}
                                 >
@@ -478,7 +493,7 @@ function DraftingWorkLoad() {
                                                             onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
                                                             procoreStatusOptions={submittalStatuses}
                                                             selectedTab={selectedTab}
-                                                            onBump={isAdmin ? bumpSubmittal : undefined}
+                                                            onBump={isAdmin ? handleBump : undefined}
                                                             onDueDateChange={isAdmin ? updateDueDate : undefined}
                                                             onStepOrder={isAdmin ? stepSubmittal : undefined}
                                                             allRows={rows}
