@@ -11,6 +11,7 @@ import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
 import { checkAuth } from '../utils/auth';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
+import { useLocationContext } from '../context/LocationContext';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
@@ -38,12 +39,9 @@ const columnWidthStyles = `
 
 function DraftingWorkLoad() {
     const [searchParams] = useSearchParams();
-    const [locationEnabled, setLocationEnabled] = useState(false);
-    const [userCoords, setUserCoords] = useState(null);
-    const [locationRequesting, setLocationRequesting] = useState(false);
+    const { locationFilter } = useLocationContext();
     const [resorting, setResorting] = useState(false);
     const [resortError, setResortError] = useState(null);
-    const locationFilter = locationEnabled && userCoords ? userCoords : null;
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
     // When a jump-to param is present, load all tabs so we can find the row regardless of its status
@@ -138,34 +136,6 @@ function DraftingWorkLoad() {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
     }, [displayRows, columns, lastUpdated]);
 
-    const handleLocationToggle = useCallback(() => {
-        if (locationEnabled) {
-            setLocationEnabled(false);
-            setUserCoords(null);
-            return;
-        }
-        setLocationRequesting(true);
-        if (!navigator.geolocation) {
-            setLocationRequesting(false);
-            return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setUserCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
-                setLocationEnabled(true);
-                setLocationRequesting(false);
-                // Do not refetch here: ref is still null until next render. The effect in
-                // useDataFetching will refetch when locationFilter (and ref) update.
-            },
-            () => {
-                setLocationRequesting(false);
-                setLocationEnabled(false);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    }, [locationEnabled, refetch]);
-
-
     const formattedLastUpdated = useMemo(
         () => lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown',
         [lastUpdated]
@@ -189,27 +159,6 @@ function DraftingWorkLoad() {
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={handleLocationToggle}
-                                        disabled={locationRequesting}
-                                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium shadow-sm transition-all ${locationEnabled
-                                            ? 'bg-green-500 text-white hover:bg-green-600'
-                                            : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600'
-                                            } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
-                                        title={locationEnabled ? 'Turn off location filter' : 'Filter submittals by your current location (job site)'}
-                                    >
-                                        {locationRequesting ? (
-                                            <>
-                                                <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                                Location…
-                                            </>
-                                        ) : locationEnabled ? (
-                                            <>📍 Filtering by location</>
-                                        ) : (
-                                            <>📍 Use my location</>
-                                        )}
-                                    </button>
                                     <button
                                         onClick={handleResort}
                                         disabled={selectedBallInCourt === ALL_OPTION_VALUE || resorting}
