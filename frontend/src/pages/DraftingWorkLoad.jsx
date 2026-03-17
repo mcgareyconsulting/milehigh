@@ -247,10 +247,12 @@ function DraftingWorkLoad() {
                                     <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Filters</span>
                                     <button
                                         onClick={() => setIsFilterMinimized(v => !v)}
-                                        className="p-1 rounded hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
+                                        className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
                                         title={isFilterMinimized ? 'Expand filters' : 'Collapse filters'}
                                     >
-                                        <span className="text-sm text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
+                                        <span className="text-xl leading-none text-gray-600 dark:text-slate-300">
+                                            {isFilterMinimized ? '▾' : '▴'}
+                                        </span>
                                     </button>
                                 </div>
 
@@ -297,59 +299,49 @@ function DraftingWorkLoad() {
                                         </div>
                                     )}
 
-                                    {/* Show minimized filter labels and summary */}
+                                    {/* Show minimized filter labels with inline badges */}
                                     {isFilterMinimized && (
-                                        <div className="flex flex-col gap-2">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div className="flex flex-col gap-2">
-                                                    <FilterButtonGroup
-                                                        label="🎯 Ball In Court"
-                                                        options={ballInCourtOptions}
-                                                        selectedValue={selectedBallInCourt}
-                                                        onSelect={setSelectedBallInCourt}
-                                                        allOptionValue={ALL_OPTION_VALUE}
-                                                        minimized={true}
-                                                    />
-                                                    <FilterButtonGroup
-                                                        label="👤 Submittal Manager"
-                                                        options={submittalManagerOptions}
-                                                        selectedValue={selectedSubmittalManager}
-                                                        onSelect={setSelectedSubmittalManager}
-                                                        allOptionValue={ALL_OPTION_VALUE}
-                                                        minimized={true}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <FilterButtonGroup
-                                                        label="📁 Project Name"
-                                                        options={projectNameOptions}
-                                                        selectedValue={selectedProjectName}
-                                                        onSelect={setSelectedProjectName}
-                                                        allOptionValue={ALL_OPTION_VALUE}
-                                                        minimized={true}
-                                                    />
-                                                    <FilterButtonGroup
-                                                        label="📋 Procore Status"
-                                                        options={procoreStatusOptions}
-                                                        selectedValue={selectedProcoreStatus}
-                                                        onSelect={setSelectedProcoreStatus}
-                                                        allOptionValue={ALL_OPTION_VALUE}
-                                                        minimized={true}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Minimized summary bar */}
-                                            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-slate-300 flex-wrap">
+                                        <div className="flex items-center gap-4 flex-wrap text-xs">
+                                            {/* Ball In Court */}
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">🎯 Ball In Court</span>
                                                 {selectedBallInCourt !== ALL_OPTION_VALUE && (
                                                     <span className="px-2 py-0.5 bg-accent-100 dark:bg-accent-900 text-accent-700 dark:text-accent-300 rounded-full font-medium">
-                                                        BIC: {selectedBallInCourt}
+                                                        {selectedBallInCourt}
                                                     </span>
                                                 )}
-                                                <span className="ml-auto text-gray-500 dark:text-slate-400">
-                                                    Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
-                                                </span>
                                             </div>
+                                            {/* Submittal Manager */}
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">👤 Submittal Manager</span>
+                                                {selectedSubmittalManager !== ALL_OPTION_VALUE && (
+                                                    <span className="px-2 py-0.5 bg-accent-100 dark:bg-accent-900 text-accent-700 dark:text-accent-300 rounded-full font-medium">
+                                                        {selectedSubmittalManager}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {/* Project Name */}
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">📁 Project Name</span>
+                                                {selectedProjectName !== ALL_OPTION_VALUE && (
+                                                    <span className="px-2 py-0.5 bg-accent-100 dark:bg-accent-900 text-accent-700 dark:text-accent-300 rounded-full font-medium">
+                                                        {selectedProjectName}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {/* Procore Status */}
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">📋 Procore Status</span>
+                                                {selectedProcoreStatus !== ALL_OPTION_VALUE && (
+                                                    <span className="px-2 py-0.5 bg-accent-100 dark:bg-accent-900 text-accent-700 dark:text-accent-300 rounded-full font-medium">
+                                                        {selectedProcoreStatus}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {/* Last updated - right-aligned */}
+                                            <span className="ml-auto text-gray-500 dark:text-slate-400">
+                                                Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                            </span>
                                         </div>
                                     )}
 
