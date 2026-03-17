@@ -1,10 +1,9 @@
-# Submittal Bump No Scroll
-When bumping a submittal to ordered or urgent, we do not want to scroll the container to where the submittal has been moved.
+# Minimize Drafting Work Load Header
+User would like a chevron toggle button that will minimize the drafting work load filter header. The minimize should hide all button filtering elements but not their headers. Additionally, the last updated at info at the bottom should also be displayed.
 
 # Frontend
-- When bumping a submittal, maintain scroll position in container.
-- Bumps happen in bulk usually, we do not want to have to continue to scroll down each time a submittal is bumped up.
+-Chevron toggle for minimizing drafting work load filter container
+- If filter applied to single ball in court, when minimized we want to show which ball in court filter is applied, in the case that a drafter is signed in and looking at their own work
 
-# Relevant Docs
-frontend/src/DraftingWorkLoad.jsx
-`
+# Relevant files
+frontend/src
