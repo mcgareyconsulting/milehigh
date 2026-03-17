@@ -595,32 +595,32 @@ def update_submittal_due_date():
         data = request.json
         submittal_id = data.get('submittal_id')
         due_date = data.get('due_date')
-        
+
         if submittal_id is None:
             return jsonify({
                 "error": "submittal_id is required"
             }), 400
-        
+
         # Allow None or empty string for blank due date
         if due_date is None or due_date == '':
             due_date = None
-        
+
         # Ensure submittal_id is a string for proper database comparison
         submittal_id = str(submittal_id)
-        
+
         submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
         if not submittal:
             return jsonify({
                 "error": "Submittal not found"
             }), 404
-        
+
         old_due_date = submittal.due_date.isoformat() if submittal.due_date else None
         # Update via service layer
         success, error_msg = DraftingWorkLoadService.update_due_date(
-            submittal, 
+            submittal,
             due_date
         )
-        
+
         if not success:
             return jsonify({"error": error_msg}), 400
 
@@ -637,7 +637,7 @@ def update_submittal_due_date():
             )
         except Exception as event_err:
             logger.warning("Failed to create SubmittalEvent for due date update: %s", event_err)
-        
+
         return jsonify({
             "success": True,
             "submittal_id": submittal_id,
@@ -648,6 +648,79 @@ def update_submittal_due_date():
         db.session.rollback()
         return jsonify({
             "error": "Failed to update due_date",
+            "details": str(exc)
+        }), 500
+
+
+@brain_bp.route("/drafting-work-load/drag-order", methods=["PUT"])
+@admin_required
+def drag_submittal_order():
+    """Handle drag-and-drop reordering of submittals"""
+    try:
+        data = request.json
+        submittal_id = str(data.get('submittal_id', '')).strip()
+        target_zone = str(data.get('target_zone', '')).strip()
+        target_order = data.get('target_order')  # Can be None
+
+        if not submittal_id:
+            return jsonify({"error": "submittal_id is required"}), 400
+
+        if target_zone not in ('ordered', 'urgent', 'unordered'):
+            return jsonify({"error": "target_zone must be 'ordered', 'urgent', or 'unordered'"}), 400
+
+        # Get the submittal
+        submittal = Submittals.query.filter_by(submittal_id=submittal_id).first()
+        if not submittal:
+            return jsonify({"error": "Submittal not found"}), 404
+
+        if not submittal.ball_in_court:
+            return jsonify({"error": "Submittal must have a ball_in_court value"}), 400
+
+        old_order = SubmittalOrderingService.safe_float_order(submittal.order_number)
+
+        # Get all submittals in the same group
+        all_group_submittals = Submittals.query.filter_by(
+            ball_in_court=submittal.ball_in_court
+        ).all()
+
+        # Calculate drag updates
+        updates = SubmittalOrderingService.calculate_drag_updates(
+            submittal, target_zone, target_order, all_group_submittals
+        )
+
+        # Apply updates
+        for subm, new_order_val in updates:
+            subm.order_number = new_order_val
+            subm.last_updated = datetime.utcnow()
+
+        db.session.commit()
+
+        user = get_current_user()
+        try:
+            create_submittal_event(
+                submittal_id, "updated",
+                {
+                    "drag_reorder": True,
+                    "target_zone": target_zone,
+                    "order_number": {"old": old_order, "new": submittal.order_number}
+                },
+                webhook_payload=None, source="Brain",
+                internal_user_id=user.id if user else None,
+            )
+        except Exception as event_err:
+            logger.warning("Failed to create SubmittalEvent for drag reorder: %s", event_err)
+
+        return jsonify({
+            "success": True,
+            "submittal_id": submittal_id,
+            "order_number": submittal.order_number
+        }), 200
+
+    except Exception as exc:
+        logger.error("Error dragging submittal order", error=str(exc))
+        db.session.rollback()
+        return jsonify({
+            "error": "Failed to drag submittal order",
             "details": str(exc)
         }), 500
 

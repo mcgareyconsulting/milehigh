@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isJumpToHighlight }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -231,8 +231,39 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     return (
         <>
             <tr
-                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-300 dark:border-slate-600 ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-300 dark:border-slate-600 ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''} ${
+                    isDragOver && dragOverHalf === 'top' ? 'border-t-2 border-t-blue-400' : ''
+                } ${isDragOver && dragOverHalf === 'bottom' ? 'border-b-2 border-b-blue-400' : ''}`}
                 data-submittal-id={submittalId}
+                onDragStart={(e) => {
+                    // Only allow drag from title cell
+                    const isTitle = e.target.closest('td')?.classList.contains('dwl-col-title');
+                    if (isTitle && onDragStart) {
+                        onDragStart(e, row);
+                    } else {
+                        e.preventDefault();
+                    }
+                }}
+                onDragOver={(e) => {
+                    if (onDragOver) {
+                        onDragOver(e, row);
+                    }
+                }}
+                onDragLeave={(e) => {
+                    if (onDragLeave) {
+                        onDragLeave(e);
+                    }
+                }}
+                onDragEnd={(e) => {
+                    if (onDragEnd) {
+                        onDragEnd(e);
+                    }
+                }}
+                onDrop={(e) => {
+                    if (onDrop) {
+                        onDrop(e, row, allRows);
+                    }
+                }}
             >
                 {columns.map((column) => {
                     const isOrderNumber = column === 'ORDER #';
@@ -672,7 +703,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle TITLE column - plain text display with optional up/down step arrows
+                    // Handle TITLE column - plain text display with optional up/down step arrows + drag handle
                     if (column === 'TITLE') {
                         const rawOrderVal = row['ORDER #'] ?? row.order_number;
                         const numericOrder = rawOrderVal !== null && rawOrderVal !== undefined
@@ -700,12 +731,22 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                             }
                         }
 
+                        // Drag handle props - will be passed from parent
+                        const isDraggable = isAdmin && !hasMultipleAssignees;
+
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-1 py-0.5 whitespace-normal text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 ${columnClass}`}
                                 style={customStyle}
                                 title={cellValue}
+                                draggable={isDraggable}
+                                onDragStart={(e) => {
+                                    // Drag handle only on Title cell
+                                    if (e.currentTarget === e.target && isDraggable) {
+                                        // Will be passed from parent via onDragStart prop
+                                    }
+                                }}
                             >
                                 <div className="flex items-center gap-1">
                                     {canStep && onStepOrder && (
@@ -724,7 +765,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                             >▼</button>
                                         </div>
                                     )}
-                                    <span className="text-center flex-1">{cellValue}</span>
+                                    <span className={`text-center flex-1 ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}>{cellValue}</span>
                                 </div>
                             </td>
                         );

@@ -304,6 +304,35 @@ class SubmittalOrderingService:
         submittal_map = {s.submittal_id: s for s in all_group_submittals}
         return [(submittal_map[submittal_id], new_order) for submittal_id, new_order in updates]
 
+    @staticmethod
+    def calculate_drag_updates(dragged_submittal, target_zone: str, target_order: Optional[float], all_group_submittals: List) -> List:
+        """
+        Calculate drag-and-drop reordering updates.
+
+        Args:
+            dragged_submittal: The submittal being dragged (ORM object)
+            target_zone: 'ordered', 'urgent', or 'unordered'
+            target_order: Order number of target row (for ordered zone only); None = append to end
+            all_group_submittals: List of all submittals in the group (ORM objects)
+
+        Returns: List of (submittal, new_order_value) tuples
+        """
+        dragged_data = SubmittalOrderingService._submittal_to_dict(dragged_submittal)
+        all_group_submittals_data = SubmittalOrderingService._submittals_to_dicts(all_group_submittals)
+
+        if target_zone == 'ordered':
+            updates = SubmittalOrderingEngine.calculate_drag_to_ordered(dragged_data, target_order, all_group_submittals_data)
+        elif target_zone == 'urgent':
+            updates = SubmittalOrderingEngine.calculate_drag_to_urgent(dragged_data, all_group_submittals_data)
+        elif target_zone == 'unordered':
+            updates = SubmittalOrderingEngine.calculate_drag_to_unordered(dragged_data, all_group_submittals_data)
+        else:
+            raise ValueError(f"Invalid target_zone: {target_zone}")
+
+        # Map back to model objects
+        submittal_map = {s.submittal_id: s for s in all_group_submittals}
+        return [(submittal_map[submittal_id], new_order) for submittal_id, new_order in updates]
+
 
 class UrgencyService:
     """Service for handling urgency-related business logic, including bumping and workflow checks."""
