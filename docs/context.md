@@ -1,10 +1,10 @@
-# Stage Dropdown Positional Open
-When opening the stage dropdown for a release in the Job Log, we want the dropdown to open relative to the position of the current stage in the dropdown, so the user does not need to scroll from the beginning but sees the next few relevant stages.
+# Submittal Bump No Scroll
+When bumping a submittal to ordered or urgent, we do not want to scroll the container to where the submittal has been moved.
 
 # Frontend
-- Stage dropdown has a 'positional open' relative to the current stage for that release.
-- Dropdown should open and behave normally, we just want to render the dropdown so the does not have to scroll to see the first previous and next few stages.
+- When bumping a submittal, maintain scroll position in container.
+- Bumps happen in bulk usually, we do not want to have to continue to scroll down each time a submittal is bumped up.
 
-# Important
-Dropdown behavior should stay the same, this is simply a quality of life improvement.
-
+# Relevant Docs
+frontend/src/DraftingWorkLoad.jsx
+`
