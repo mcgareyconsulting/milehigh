@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
@@ -196,6 +196,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [localBananaColor, setLocalBananaColor] = useState(row['Banana Color'] || null);
     const [updatingBananaColor, setUpdatingBananaColor] = useState(false);
     const [showStageDropdown, setShowStageDropdown] = useState(false);
+    const stageListRef = useRef(null);       // ref on the scrollable container div
+    const selectedStageRef = useRef(null);   // ref on the currently-selected option button
 
     // Local state for Job Comp and Invoiced (editable text)
     const [localJobComp, setLocalJobComp] = useState(row['Job Comp'] ?? '');
@@ -281,6 +283,16 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setJobCompInputValue(row['Job Comp'] ?? '');
         setInvoicedInputValue(row['Invoiced'] ?? '');
     }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Banana Color'], row['Job Comp'], row['Invoiced']]);
+
+    // Scroll to selected stage when dropdown opens
+    useEffect(() => {
+        if (showStageDropdown && stageListRef.current && selectedStageRef.current) {
+            const container = stageListRef.current;
+            const selected = selectedStageRef.current;
+            const offset = selected.offsetTop - container.clientHeight / 2 + selected.clientHeight / 2;
+            container.scrollTop = Math.max(0, offset);
+        }
+    }, [showStageDropdown]);
 
     const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
     const invoicedIsX = (localInvoiced || '').toString().trim().toUpperCase() === 'X';
@@ -757,7 +769,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                     onClick={() => setShowStageDropdown(false)}
                                                     aria-hidden="true"
                                                 />
-                                                <div className="absolute left-0 right-0 top-full mt-0.5 rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 min-w-[100px] max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col">
+                                                <div
+                                                    ref={stageListRef}
+                                                    className="absolute left-0 right-0 top-full mt-0.5 rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 min-w-[100px] max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col"
+                                                >
                                                     {(stageToGroup
                                                         ? [...stageOptions].sort((a, b) => {
                                                             const groupOrder = { FABRICATION: 0, READY_TO_SHIP: 1, COMPLETE: 2 };
@@ -772,6 +787,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                         return (
                                                             <button
                                                                 key={option.value}
+                                                                ref={isSelected ? selectedStageRef : null}
                                                                 type="button"
                                                                 onClick={() => {
                                                                     handleStageChange(option.value);
