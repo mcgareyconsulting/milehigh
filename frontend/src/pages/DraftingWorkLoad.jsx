@@ -4,6 +4,7 @@ import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useDataFetching } from '../hooks/useDataFetching';
 import { useMutations } from '../hooks/useMutations';
 import { useFilters } from '../hooks/useFilters';
+import { useDWLDragAndDrop } from '../hooks/useDWLDragAndDrop';
 import { TableRow } from '../components/TableRow';
 import { FilterButtonGroup } from '../components/FilterButtonGroup';
 import { AlertMessage } from '../components/AlertMessage';
@@ -111,6 +112,18 @@ function DraftingWorkLoad() {
         handleColumnSort,
         ALL_OPTION_VALUE,
     } = useFilters(rows);
+
+    // Use the drag-and-drop hook
+    const {
+        draggedRow,
+        dragOverSubmittalId,
+        dragOverHalf,
+        handleDragStart,
+        handleDragOver,
+        handleDragLeave,
+        handleDragEnd,
+        handleDrop,
+    } = useDWLDragAndDrop(rows, refetch, isAdmin);
 
     const jumpToTarget = useJumpToHighlight({
         loading,
@@ -448,28 +461,39 @@ function DraftingWorkLoad() {
                                                     </td>
                                                 </tr>
                                             ) : (
-                                                displayRows.map((row, index) => (
-                                                    <TableRow
-                                                        key={row.id}
-                                                        row={row}
-                                                        columns={columns}
-                                                        isJumpToHighlight={jumpToTarget && String(row['Submittals Id'] ?? row.submittal_id ?? '') === jumpToTarget}
-                                                        formatCellValue={formatCellValue}
-                                                        formatDate={formatDate}
-                                                        onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
-                                                        onNotesChange={isAdmin ? updateNotes : undefined}
-                                                        onStatusChange={isAdmin ? updateStatus : undefined}
-                                                        onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
-                                                        procoreStatusOptions={submittalStatuses}
-                                                        selectedTab={selectedTab}
-                                                        onBump={isAdmin ? bumpSubmittal : undefined}
-                                                        onDueDateChange={isAdmin ? updateDueDate : undefined}
-                                                        onStepOrder={isAdmin ? stepSubmittal : undefined}
-                                                        allRows={rows}
-                                                        rowIndex={index}
-                                                        isAdmin={isAdmin}
-                                                    />
-                                                ))
+                                                displayRows.map((row, index) => {
+                                                    const currentSubmittalId = row['Submittals Id'] ?? row.submittal_id;
+                                                    const isDragOver = dragOverSubmittalId === currentSubmittalId;
+                                                    return (
+                                                        <TableRow
+                                                            key={row.id}
+                                                            row={row}
+                                                            columns={columns}
+                                                            isJumpToHighlight={jumpToTarget && String(row['Submittals Id'] ?? row.submittal_id ?? '') === jumpToTarget}
+                                                            formatCellValue={formatCellValue}
+                                                            formatDate={formatDate}
+                                                            onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
+                                                            onNotesChange={isAdmin ? updateNotes : undefined}
+                                                            onStatusChange={isAdmin ? updateStatus : undefined}
+                                                            onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
+                                                            procoreStatusOptions={submittalStatuses}
+                                                            selectedTab={selectedTab}
+                                                            onBump={isAdmin ? bumpSubmittal : undefined}
+                                                            onDueDateChange={isAdmin ? updateDueDate : undefined}
+                                                            onStepOrder={isAdmin ? stepSubmittal : undefined}
+                                                            allRows={rows}
+                                                            rowIndex={index}
+                                                            isAdmin={isAdmin}
+                                                            onDragStart={isAdmin ? handleDragStart : undefined}
+                                                            onDragOver={isAdmin ? handleDragOver : undefined}
+                                                            onDragLeave={isAdmin ? handleDragLeave : undefined}
+                                                            onDragEnd={isAdmin ? handleDragEnd : undefined}
+                                                            onDrop={isAdmin ? handleDrop : undefined}
+                                                            isDragOver={isDragOver}
+                                                            dragOverHalf={dragOverHalf}
+                                                        />
+                                                    );
+                                                })
                                             )}
                                         </tbody>
                                     </table>

@@ -423,29 +423,163 @@ class SubmittalOrderingEngine:
     def calculate_updates(update_request: SubmittalOrderUpdate, all_group_submittals_data: List[Dict]) -> List[Tuple[str, Optional[float]]]:
         """
         Calculate all submittal updates needed for the requested change.
-        
+
         Args:
             update_request: SubmittalOrderUpdate value object
             all_group_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
-            
+
         Returns: List of (submittal_id, new_order_value) tuples
         """
         submittal_data = next(
             (s for s in all_group_submittals_data if s.get('submittal_id') == update_request.submittal_id),
             None
         )
-        
+
         if not submittal_data:
             raise ValueError(f"Submittal {update_request.submittal_id} not found in group")
-        
+
         new_order = update_request.new_order
-        
+
         if new_order is None:
             return SubmittalOrderingEngine.handle_set_to_null(submittal_data, all_group_submittals_data)
         elif new_order < 1:
             return SubmittalOrderingEngine.handle_set_to_urgent(submittal_data, new_order, all_group_submittals_data)
         else:
             return SubmittalOrderingEngine.handle_set_to_regular(submittal_data, new_order, all_group_submittals_data)
+
+    @staticmethod
+    def calculate_drag_to_ordered(dragged_data: Dict, target_order: Optional[float], all_submittals_data: List[Dict]) -> List[Tuple[str, Optional[float]]]:
+        """
+        Handle drag to ordered zone. Dragged row takes the target row's order number;
+        all rows at >= target order (excluding dragged) shift +1. If dragged row came
+        from urgency zone, apply urgency compression to remaining urgency items.
+
+        Args:
+            dragged_data: Dict with 'submittal_id' and 'order_number' keys
+            target_order: Order number of row being displaced (exact float value), or None to append to end
+            all_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
+
+        Returns: List of (submittal_id, new_order_value) tuples
+        """
+        updates = []
+        dragged_id = dragged_data.get('submittal_id')
+        old_order = SubmittalOrderingEngine.safe_float_order(dragged_data.get('order_number'))
+
+        if target_order is None:
+            # Append to end: max(ordered orders) + 1
+            ordered = [
+                SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                for s in all_submittals_data
+                if s.get('submittal_id') != dragged_id and
+                (v := SubmittalOrderingEngine.safe_float_order(s.get('order_number'))) is not None and v >= 1
+            ]
+            new_order_for_dragged = float(max(ordered) + 1) if ordered else 1.0
+            updates.append((dragged_id, new_order_for_dragged))
+        else:
+            # Insert before target: dragged gets target_order, all >= target shift +1
+            new_order_for_dragged = target_order
+            updates.append((dragged_id, new_order_for_dragged))
+
+            # Shift all ordered items with order >= target (excluding dragged) up by 1
+            for s in all_submittals_data:
+                if s.get('submittal_id') == dragged_id:
+                    continue
+                s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                if s_order is not None and s_order >= target_order:
+                    new_order = s_order + 1
+                    updates.append((s.get('submittal_id'), new_order))
+
+        # If dragged row came from urgency, compress remaining urgency items
+        if old_order is not None and 0 < old_order < 1:
+            # Use handle_set_to_null logic to compress urgency
+            urgency_updates = SubmittalOrderingEngine.handle_set_to_null(
+                {'submittal_id': dragged_id, 'order_number': old_order},
+                all_submittals_data
+            )
+            # Remove the dragged row's null update and merge urgency compression
+            for submittal_id, new_order in urgency_updates:
+                if submittal_id != dragged_id:
+                    # Check if this submittal is already in updates (don't duplicate)
+                    if not any(uid == submittal_id for uid, _ in updates):
+                        updates.append((submittal_id, new_order))
+
+        return updates
+
+    @staticmethod
+    def calculate_drag_to_urgent(dragged_data: Dict, all_submittals_data: List[Dict]) -> List[Tuple[str, Optional[float]]]:
+        """
+        Handle drag to urgent zone. New item gets 0.9. Uses adaptive shift logic:
+        only shifts items that need to move to make room for 0.9 (unlike handle_set_to_urgent
+        which re-sorts all urgency items from scratch).
+
+        Args:
+            dragged_data: Dict with 'submittal_id' and 'order_number' keys
+            all_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
+
+        Returns: List of (submittal_id, new_order_value) tuples
+        """
+        updates = []
+        dragged_id = dragged_data.get('submittal_id')
+
+        # New item gets 0.9
+        new_order_for_dragged = 0.9
+        updates.append((dragged_id, new_order_for_dragged))
+
+        # Check if 0.9 is occupied
+        existing_urgent = [
+            SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+            for s in all_submittals_data
+            if s.get('submittal_id') != dragged_id and
+            (v := SubmittalOrderingEngine.safe_float_order(s.get('order_number'))) is not None and
+            0 < v < 1
+        ]
+
+        slot_09_occupied = 0.9 in existing_urgent
+
+        if not slot_09_occupied:
+            # 0.9 is available, no shifts needed
+            pass
+        elif len(existing_urgent) < 9:
+            # 0.9 occupied but slots available: find highest available below 0.9, shift only items above it
+            all_slots = set([round(i * 0.1, 1) for i in range(1, 10)])
+            occupied_slots = set(existing_urgent)
+            available_below_09 = [s for s in sorted(all_slots - occupied_slots, reverse=True) if s < 0.9]
+
+            if available_below_09:
+                highest_available = available_below_09[0]
+                # Shift only items > highest_available down by 0.1
+                for s in all_submittals_data:
+                    if s.get('submittal_id') == dragged_id:
+                        continue
+                    s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                    if s_order is not None and 0 < s_order < 1 and s_order > highest_available:
+                        new_order = round(s_order - 0.1, 1)
+                        updates.append((s.get('submittal_id'), new_order))
+        else:
+            # All 9 slots filled: new item gets 1.0, all regular orders shift +1
+            updates[-1] = (dragged_id, 1.0)  # Update dragged to 1.0
+            for s in all_submittals_data:
+                if s.get('submittal_id') == dragged_id:
+                    continue
+                s_order = SubmittalOrderingEngine.safe_float_order(s.get('order_number'))
+                if s_order is not None and s_order >= 1:
+                    new_order = s_order + 1
+                    updates.append((s.get('submittal_id'), new_order))
+
+        return updates
+
+    @staticmethod
+    def calculate_drag_to_unordered(dragged_data: Dict, all_submittals_data: List[Dict]) -> List[Tuple[str, Optional[float]]]:
+        """
+        Handle drag to unordered zone. Equivalent to handle_set_to_null.
+
+        Args:
+            dragged_data: Dict with 'submittal_id' and 'order_number' keys
+            all_submittals_data: List of dicts with 'submittal_id' and 'order_number' keys
+
+        Returns: List of (submittal_id, new_order_value) tuples
+        """
+        return SubmittalOrderingEngine.handle_set_to_null(dragged_data, all_submittals_data)
 
 
 class UrgencyEngine:

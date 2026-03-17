@@ -159,6 +159,22 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Drag-and-drop reorder submittal
+     */
+    async dragReorder(submittalId, targetZone, targetOrder) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/drag-order`, {
+                submittal_id: submittalId,
+                target_zone: targetZone,
+                target_order: targetOrder
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to drag reorder submittal ${submittalId}`);
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {
