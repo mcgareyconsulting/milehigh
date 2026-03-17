@@ -18,7 +18,7 @@ def login():
         if not data:
             return jsonify({'error': 'No JSON data provided'}), 400
         
-        username = data.get('username')
+        username = data.get('username', '').lower()
         password = data.get('password')
         
         if not username or not password:
@@ -111,7 +111,7 @@ def check_user():
         if not data:
             return jsonify({'error': 'No JSON data provided'}), 400
 
-        username = data.get('username')
+        username = data.get('username', '').lower()
         if not username:
             return jsonify({'error': 'Username is required'}), 400
 
@@ -163,7 +163,7 @@ def set_password():
         if not data:
             return jsonify({'error': 'No JSON data provided'}), 400
 
-        username = data.get('username')
+        username = data.get('username', '').lower()
         new_password = data.get('new_password')
         confirm_password = data.get('confirm_password')
 
