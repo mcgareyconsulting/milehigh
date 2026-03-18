@@ -1,6 +1,16 @@
-# Event Deduplication Bug
-It appears we have a bug in event deduplication. When testing, we often move stages back and forth in the Job Log 2.0 to see how it affects the UI and Trello. The current event deduplication system blocks this back and forth.
+# Need roles for user of type drafter
+Drafters are specific user type and need expanded usage of Brain functionality.
 
-# Tasks
-- Report how event deduplication for ReleaseEvents is currently implemented. 
-- Provide solutions for making deduplication improvments related to bug.
+# Changes
+Drafters need ablity to use Brain side Comp Status, Due Date, and Notes setting fields in the DraftingWorkLoad.jsx document.
+No Procore API calls, no submittal ordering
+DWL filtering unaffected
+
+# Database
+Need help determing appropriate way to implement this user role in the users table.
+
+# Migrations
+Will also need migration to update db table per your changes.
+
+# Important
+Drafter will not be able to use Brain side Procore API calls for status field or manipulate submittal order in any way
