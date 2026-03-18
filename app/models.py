@@ -24,6 +24,7 @@ class User(db.Model):
     password_set = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    is_drafter = db.Column(db.Boolean, default=False, nullable=False)
     procore_id = db.Column(db.String(255), unique=True, nullable=True)
     trello_id = db.Column(db.String(255), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

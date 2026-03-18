@@ -56,10 +56,11 @@ def login():
             'user': {
                 'id': user.id,
                 'username': user.username,
-                'is_admin': user.is_admin
+                'is_admin': user.is_admin,
+                'is_drafter': user.is_drafter
             }
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error during login: {e}", exc_info=True)
         return jsonify({'error': 'An error occurred during login'}), 500
@@ -90,6 +91,7 @@ def get_current_user_info():
             'id': user.id,
             'username': user.username,
             'is_admin': user.is_admin,
+            'is_drafter': user.is_drafter,
             'is_active': user.is_active,
             'last_login': user.last_login.isoformat() if user.last_login else None
         }), 200
@@ -212,7 +214,8 @@ def set_password():
             'user': {
                 'id': user.id,
                 'username': user.username,
-                'is_admin': user.is_admin
+                'is_admin': user.is_admin,
+                'is_drafter': user.is_drafter
             }
         }), 200
 

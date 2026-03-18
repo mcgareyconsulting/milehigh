@@ -9,7 +9,7 @@ from app.brain.drafting_work_load.service import (
 )
 from app.logging_config import get_logger
 from app.models import Submittals, ProcoreOutbox, db
-from app.auth.utils import login_required, admin_required, get_current_user
+from app.auth.utils import login_required, admin_required, drafter_or_admin_required, get_current_user
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
 from app.procore.helpers import create_submittal_event
@@ -149,7 +149,7 @@ def update_submittal_order():
         }), 500
 
 @brain_bp.route("/drafting-work-load/notes", methods=["PUT"])
-@admin_required
+@drafter_or_admin_required
 def update_submittal_notes():
     """Update the notes for a submittal"""
     try:
@@ -202,7 +202,7 @@ def update_submittal_notes():
         }), 500
 
 @brain_bp.route("/drafting-work-load/submittal-drafting-status", methods=["PUT"])
-@admin_required
+@drafter_or_admin_required
 def update_submittal_drafting_status():
     """Update the submittal_drafting_status for a submittal"""
     try:
@@ -590,7 +590,7 @@ def update_submittal_procore_status():
 
 
 @brain_bp.route("/drafting-work-load/due-date", methods=["PUT"])
-@admin_required
+@drafter_or_admin_required
 def update_submittal_due_date():
     """Update the due_date for a submittal"""
     try:
