@@ -117,3 +117,22 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def drafter_or_admin_required(f):
+    """
+    Decorator to require drafter or admin privileges for a route.
+
+    Returns 401 Unauthorized if user is not logged in.
+    Returns 403 Forbidden if user is neither admin nor drafter.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        if not user.is_admin and not user.is_drafter:
+            logger.warning(f"User {user.username} attempted to access drafter/admin route without privileges")
+            return jsonify({'error': 'Drafter or admin privileges required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+

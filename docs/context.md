@@ -1,9 +1,16 @@
-# Minimize Drafting Work Load Header
-User would like a chevron toggle button that will minimize the drafting work load filter header. The minimize should hide all button filtering elements but not their headers. Additionally, the last updated at info at the bottom should also be displayed.
+# Need roles for user of type drafter
+Drafters are specific user type and need expanded usage of Brain functionality.
 
-# Frontend
--Chevron toggle for minimizing drafting work load filter container
-- If filter applied to single ball in court, when minimized we want to show which ball in court filter is applied, in the case that a drafter is signed in and looking at their own work
+# Changes
+Drafters need ablity to use Brain side Comp Status, Due Date, and Notes setting fields in the DraftingWorkLoad.jsx document.
+No Procore API calls, no submittal ordering
+DWL filtering unaffected
 
-# Relevant files
-frontend/src
+# Database
+Need help determing appropriate way to implement this user role in the users table.
+
+# Migrations
+Will also need migration to update db table per your changes.
+
+# Important
+Drafter will not be able to use Brain side Procore API calls for status field or manipulate submittal order in any way

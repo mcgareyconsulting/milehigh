@@ -68,19 +68,23 @@ function DraftingWorkLoad() {
             .catch((err) => console.error('Failed to fetch submittal statuses:', err));
     }, []);
 
-    // User admin status
+    // User role status
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isDrafter, setIsDrafter] = useState(false);
     const [userLoading, setUserLoading] = useState(true);
+    const canEditDrafterFields = isAdmin || isDrafter;
 
-    // Fetch user info to check admin status
+    // Fetch user info to check role status
     useEffect(() => {
         const fetchUserInfo = async () => {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setIsDrafter(user?.is_drafter || false);
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
+                setIsDrafter(false);
             } finally {
                 setUserLoading(false);
             }
@@ -187,6 +191,7 @@ function DraftingWorkLoad() {
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
                                 </div>
                                 <div className="flex items-center gap-3">
+                                    {isAdmin && (
                                     <button
                                         onClick={handleResort}
                                         disabled={selectedBallInCourt === ALL_OPTION_VALUE || resorting}
@@ -201,6 +206,7 @@ function DraftingWorkLoad() {
                                     >
                                         {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
                                     </button>
+                                    )}
                                     <button
                                         onClick={handleGeneratePDF}
                                         disabled={!hasData || loading}
@@ -560,17 +566,18 @@ function DraftingWorkLoad() {
                                                             formatCellValue={formatCellValue}
                                                             formatDate={formatDate}
                                                             onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
-                                                            onNotesChange={isAdmin ? updateNotes : undefined}
-                                                            onStatusChange={isAdmin ? updateStatus : undefined}
+                                                            onNotesChange={canEditDrafterFields ? updateNotes : undefined}
+                                                            onStatusChange={canEditDrafterFields ? updateStatus : undefined}
                                                             onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
                                                             procoreStatusOptions={submittalStatuses}
                                                             selectedTab={selectedTab}
                                                             onBump={isAdmin ? handleBump : undefined}
-                                                            onDueDateChange={isAdmin ? updateDueDate : undefined}
+                                                            onDueDateChange={canEditDrafterFields ? updateDueDate : undefined}
                                                             onStepOrder={isAdmin ? stepSubmittal : undefined}
                                                             allRows={rows}
                                                             rowIndex={index}
                                                             isAdmin={isAdmin}
+                                                            isDrafter={isDrafter}
                                                             onDragStart={isAdmin ? handleDragStart : undefined}
                                                             onDragOver={isAdmin ? handleDragOver : undefined}
                                                             onDragLeave={isAdmin ? handleDragLeave : undefined}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -12,6 +12,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
     const dueDateInputRef = useRef(null);
+
+    const canEditDrafterFields = isAdmin || isDrafter;
 
     const submittalId = row['Submittals Id'] || row.submittal_id;
     const ballInCourt = row.ball_in_court ?? row['BIC'] ?? '';
@@ -67,8 +69,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     };
 
     const handleNotesFocus = () => {
-        // Only allow editing if user is admin
-        if (!isAdmin) {
+        // Only allow editing if user is admin or drafter
+        if (!canEditDrafterFields) {
             return;
         }
         const currentValue = row['NOTES'] ?? row.notes ?? '';
@@ -116,8 +118,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     }, [editingDueDate]);
 
     const handleDueDateFocus = () => {
-        // Only allow editing if user is admin
-        if (!isAdmin) {
+        // Only allow editing if user is admin or drafter
+        if (!canEditDrafterFields) {
             return;
         }
         const currentValue = row['DUE DATE'] ?? row.due_date ?? '';
@@ -454,12 +456,12 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
                                 draggable={false}
-                                onClick={isAdmin ? handleNotesFocus : undefined}
+                                onClick={canEditDrafterFields ? handleNotesFocus : undefined}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title={isAdmin ? "Click to edit notes" : "Read-only (admin only)"}
+                                title={canEditDrafterFields ? "Click to edit notes" : "Read-only"}
                             >
                                 <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
-                                    isAdmin 
+                                    canEditDrafterFields
                                         ? hasNotes
                                             ? 'border-gray-200 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 hover:bg-white dark:hover:bg-slate-500 hover:border-accent-300 text-gray-800 dark:text-slate-200 cursor-text'
                                             : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
@@ -535,17 +537,17 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 <select
                                     value={currentStatus || ''}
                                     onChange={(e) => {
-                                        if (isAdmin && submittalId && onStatusChange) {
+                                        if (canEditDrafterFields && submittalId && onStatusChange) {
                                             onStatusChange(submittalId, e.target.value);
                                         }
                                     }}
-                                    disabled={!isAdmin}
+                                    disabled={!canEditDrafterFields}
                                     className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded text-center ${
-                                        isAdmin 
+                                        canEditDrafterFields
                                             ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer'
                                             : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 cursor-not-allowed opacity-75'
                                     }`}
-                                    title={isAdmin ? "Select drafting status (HOLD / NEED VIF / STARTED)" : "Read-only (admin only)"}
+                                    title={canEditDrafterFields ? "Select drafting status (HOLD / NEED VIF / STARTED)" : "Read-only"}
                                 >
                                     <option value="">—</option>
                                     {statusOptions.map((option) => (
@@ -592,12 +594,12 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-due-date`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
-                                onClick={isAdmin ? handleDueDateFocus : undefined}
+                                onClick={canEditDrafterFields ? handleDueDateFocus : undefined}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title={isAdmin ? "Click to edit due date" : "Read-only (admin only)"}
+                                title={canEditDrafterFields ? "Click to edit due date" : "Read-only"}
                             >
                                 <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
-                                    isAdmin
+                                    canEditDrafterFields
                                         ? hasDueDate
                                             ? 'border-red-300 dark:border-red-700 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/50 hover:border-red-400 text-red-900 dark:text-red-200 font-medium cursor-text'
                                             : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
@@ -605,7 +607,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                             ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 font-medium cursor-default'
                                             : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default'
                                 }`}>
-                                    {hasDueDate ? formattedDate : <span className="italic">{isAdmin ? "Click to add..." : "—"}</span>}
+                                    {hasDueDate ? formattedDate : <span className="italic">{canEditDrafterFields ? "Click to add..." : "—"}</span>}
                                 </div>
                             </td>
                         );
