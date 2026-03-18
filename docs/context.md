@@ -1,9 +1,6 @@
-# Minimize Drafting Work Load Header
-User would like a chevron toggle button that will minimize the drafting work load filter header. The minimize should hide all button filtering elements but not their headers. Additionally, the last updated at info at the bottom should also be displayed.
+# Event Deduplication Bug
+It appears we have a bug in event deduplication. When testing, we often move stages back and forth in the Job Log 2.0 to see how it affects the UI and Trello. The current event deduplication system blocks this back and forth.
 
-# Frontend
--Chevron toggle for minimizing drafting work load filter container
-- If filter applied to single ball in court, when minimized we want to show which ball in court filter is applied, in the case that a drafter is signed in and looking at their own work
-
-# Relevant files
-frontend/src
+# Tasks
+- Report how event deduplication for ReleaseEvents is currently implemented. 
+- Provide solutions for making deduplication improvments related to bug.
