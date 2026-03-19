@@ -1,5 +1,2 @@
-# Fix
-Minimize function on the jog log filter header needs a tune up. 
-Need more characters assigned to the project names in the filter.
-Action dropdown should also be expanded, no dropdown
-
+# Functionality
+Would love to add job and release search funtionality - reset filters and last updated at line, basically bottom line of job log filtering header to the minimal view, so client can still search when in minimal view.
