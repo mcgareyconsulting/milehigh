@@ -1,16 +1,11 @@
-# Need roles for user of type drafter
-Drafters are specific user type and need expanded usage of Brain functionality.
+# Minimize Job Log Header
+Undo Actions and Project Button compressions on the Job Log and replace with a minimize behavior reflecting the minimize utility on the Drafting Work Load.
 
-# Changes
-Drafters need ablity to use Brain side Comp Status, Due Date, and Notes setting fields in the DraftingWorkLoad.jsx document.
-No Procore API calls, no submittal ordering
-DWL filtering unaffected
+# Frontend
+app/frontend/src/pages/JobLog.jsx
 
-# Database
-Need help determing appropriate way to implement this user role in the users table.
-
-# Migrations
-Will also need migration to update db table per your changes.
-
-# Important
-Drafter will not be able to use Brain side Procore API calls for status field or manipulate submittal order in any way
+# Filter header layout
+First row of the filter header on the Job Log should contain 15 character buttons for all project names.
+Actions and Filter should be the row below, two column layout.
+Need a large chevron in the upper right corner, allowing collapse of entire filter header.
+Active filters should be noted in some way when filter header is minimzed.

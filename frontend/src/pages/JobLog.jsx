@@ -23,10 +23,8 @@ function JobLog() {
     const [recalculateSuccess, setRecalculateSuccess] = useState(null);
     const [reviewMode, setReviewMode] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
-    const [showProjectsModal, setShowProjectsModal] = useState(false);
+    const [isFilterMinimized, setIsFilterMinimized] = useState(false);
     const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-    const projectsBtnRef = useRef(null);
-    const projectsPanelRef = useRef(null);
     const actionsDropdownRef = useRef(null);
 
     // Use the filters hook
@@ -70,12 +68,6 @@ function JobLog() {
     // Close dropdowns on outside click
     useEffect(() => {
         const handler = (e) => {
-            if (
-                !projectsBtnRef.current?.contains(e.target) &&
-                !projectsPanelRef.current?.contains(e.target)
-            ) {
-                setShowProjectsModal(false);
-            }
             if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(e.target)) {
                 setShowActionsDropdown(false);
             }
@@ -626,264 +618,312 @@ function JobLog() {
                         <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
                             <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
 
-                                {/* Row 1: Projects dropdown (left) + Actions dropdown (right) */}
-                                <div className="relative flex items-center justify-between">
-                                    {/* Projects button */}
-                                    <div>
-                                        <button
-                                            ref={projectsBtnRef}
-                                            onClick={() => setShowProjectsModal(prev => !prev)}
-                                            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold border transition-all ${selectedProjectNames.length > 0
-                                                ? 'bg-blue-700 text-white border-blue-700'
-                                                : 'bg-white dark:bg-slate-600 border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            🗂️ Projects
-                                            {selectedProjectNames.length > 0 && (
-                                                <span className="bg-white/30 text-white text-[10px] font-bold px-1 rounded">
-                                                    {selectedProjectNames.length}
+                                {/* Minimized summary row */}
+                                {isFilterMinimized && (
+                                    <div className="flex items-center gap-3 flex-wrap text-xs">
+                                        {/* Projects badges */}
+                                        {selectedProjectNames.length > 0 && (
+                                            <div className="flex items-center gap-1 flex-wrap">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">🗂️ Projects:</span>
+                                                {selectedProjectNames.map(name => (
+                                                    <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                        {name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {/* Stage badge */}
+                                        {selectedSubset !== null && (
+                                            <div className="flex items-center gap-1">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Stage:</span>
+                                                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                    {selectedSubset}
                                                 </span>
-                                            )}
-                                            <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                        </button>
-                                        {showProjectsModal && (
-                                            <div ref={projectsPanelRef} className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl p-2.5">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-xs font-bold text-gray-700 dark:text-slate-200">Filter by Project</span>
-                                                    <button
-                                                        onClick={() => setShowProjectsModal(false)}
-                                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-sm leading-none"
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                </div>
-                                                <div className="flex flex-wrap gap-1">
-                                                    <button
-                                                        onClick={() => setSelectedProjectNames([])}
-                                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
-                                                            ? 'bg-blue-700 text-white'
-                                                            : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
-                                                            }`}
-                                                    >
-                                                        All
-                                                    </button>
-                                                    {projectNameOptions.map((option) => (
+                                            </div>
+                                        )}
+                                        {reviewMode && (
+                                            <div className="flex items-center gap-1">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Stage:</span>
+                                                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                    Review
+                                                </span>
+                                            </div>
+                                        )}
+                                        {/* Job # badge */}
+                                        {jobNumberSearch !== '' && (
+                                            <div className="flex items-center gap-1">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Job #:</span>
+                                                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                    {jobNumberSearch}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {/* Release # badge */}
+                                        {releaseNumberSearch !== '' && (
+                                            <div className="flex items-center gap-1">
+                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Release #:</span>
+                                                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                    {releaseNumberSearch}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {/* Total count + expand chevron */}
+                                        <div className="ml-auto flex items-center gap-2">
+                                            <span className="font-semibold text-gray-700 dark:text-slate-200">
+                                                Total: <span className="font-bold text-gray-900 dark:text-slate-100">{displayJobs.length}</span>
+                                            </span>
+                                            <button
+                                                onClick={() => setIsFilterMinimized(false)}
+                                                className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
+                                                title="Expand filters"
+                                            >
+                                                <span className="text-xl leading-none text-gray-600 dark:text-slate-300">▾</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Expanded filter rows */}
+                                {!isFilterMinimized && (
+                                    <>
+                                        {/* Row 1: Project name buttons inline */}
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                            <button
+                                                onClick={() => setSelectedProjectNames([])}
+                                                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
+                                                    ? 'bg-blue-700 text-white'
+                                                    : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                                    }`}
+                                            >
+                                                All
+                                            </button>
+                                            {projectNameOptions.map((option) => (
+                                                <button
+                                                    key={option}
+                                                    onClick={() => {
+                                                        setSelectedProjectNames(prev =>
+                                                            prev.includes(option)
+                                                                ? prev.filter(name => name !== option)
+                                                                : [...prev, option]
+                                                        );
+                                                    }}
+                                                    className={`max-w-[90px] truncate px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
+                                                        ? 'bg-blue-700 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                                        }`}
+                                                    title={option}
+                                                >
+                                                    {option}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Row 2: Actions (left) + Stage filters (center-right) + Chevron (far right) */}
+                                        <div className="flex items-center gap-1.5">
+                                            {/* Actions dropdown */}
+                                            <div className="relative" ref={actionsDropdownRef}>
+                                                <button
+                                                    onClick={() => setShowActionsDropdown(prev => !prev)}
+                                                    className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
+                                                >
+                                                    ⚙️ Actions
+                                                    <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                </button>
+                                                {showActionsDropdown && (
+                                                    <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl py-1 min-w-[160px]">
                                                         <button
-                                                            key={option}
-                                                            onClick={() => {
-                                                                setSelectedProjectNames(prev =>
-                                                                    prev.includes(option)
-                                                                        ? prev.filter(name => name !== option)
-                                                                        : [...prev, option]
-                                                                );
-                                                            }}
-                                                            className={`max-w-[90px] truncate px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
-                                                                ? 'bg-blue-700 text-white'
-                                                                : 'bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600'
-                                                                }`}
-                                                            title={option}
+                                                            onClick={() => { handlePrint(); setShowActionsDropdown(false); }}
+                                                            disabled={!hasData || loading}
+                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                                                         >
-                                                            {option}
+                                                            🖨️ Print
                                                         </button>
-                                                    ))}
+                                                        <button
+                                                            onClick={() => { navigate('/pm-board'); setShowActionsDropdown(false); }}
+                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                        >
+                                                            📋 PM Board
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { navigate('/archive'); setShowActionsDropdown(false); }}
+                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                        >
+                                                            🗄️ Archive
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { handleReleaseClick(); setShowActionsDropdown(false); }}
+                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                        >
+                                                            📋 Release
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { handleRecalculateScheduling(); setShowActionsDropdown(false); }}
+                                                            disabled={recalculating}
+                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        >
+                                                            {recalculating ? (
+                                                                <><span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></span> Calculating...</>
+                                                            ) : (
+                                                                '⏱️ Refresh Schedule'
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Stage filter buttons */}
+                                            <div className="flex items-center gap-1.5 flex-wrap flex-1 justify-center">
+                                                <button
+                                                    onClick={() => {
+                                                        setReviewMode(false);
+                                                        setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
+                                                        ? 'bg-blue-700 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                        }`}
+                                                >
+                                                    Job Order
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setReviewMode(false);
+                                                        setSelectedSubset(selectedSubset === 'complete' ? null : 'complete');
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'complete'
+                                                        ? 'bg-violet-600 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                        }`}
+                                                >
+                                                    Complete
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setReviewMode(false);
+                                                        setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
+                                                        ? 'bg-emerald-600 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                        }`}
+                                                >
+                                                    Ready to Ship
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setReviewMode(false);
+                                                        setSelectedSubset(selectedSubset === 'paint' ? null : 'paint');
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint'
+                                                        ? 'bg-emerald-600 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                        }`}
+                                                >
+                                                    Paint
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setReviewMode(false);
+                                                        setSelectedSubset(selectedSubset === 'paint_fab' ? null : 'paint_fab');
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint_fab'
+                                                        ? 'bg-emerald-600 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                        }`}
+                                                >
+                                                    Paint+Fab
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setReviewMode(false);
+                                                        setSelectedSubset(selectedSubset === 'fab' ? null : 'fab');
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
+                                                        ? 'bg-blue-700 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                        }`}
+                                                >
+                                                    Fab
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const next = !reviewMode;
+                                                        if (next) setSelectedSubset(null);
+                                                        setReviewMode(next);
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
+                                                        ? 'bg-blue-700 text-white'
+                                                        : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                        }`}
+                                                >
+                                                    Review
+                                                </button>
+                                            </div>
+
+                                            {/* Chevron collapse button */}
+                                            <button
+                                                onClick={() => setIsFilterMinimized(true)}
+                                                className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex-shrink-0"
+                                                title="Collapse filters"
+                                            >
+                                                <span className="text-xl leading-none text-gray-600 dark:text-slate-300">▴</span>
+                                            </button>
+                                        </div>
+
+                                        {/* Row 3: Search inputs + stats */}
+                                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <button
+                                                    onClick={() => { resetFilters(); setReviewMode(false); }}
+                                                    className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                                >
+                                                    Reset Filters
+                                                </button>
+                                                <div className="flex items-center gap-1.5">
+                                                    <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                        Job #:
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={jobNumberSearch}
+                                                        onChange={(e) => setJobNumberSearch(e.target.value)}
+                                                        placeholder="Job #..."
+                                                        className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                        Release #:
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={releaseNumberSearch}
+                                                        onChange={(e) => setReleaseNumberSearch(e.target.value)}
+                                                        placeholder="Release #..."
+                                                        className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                    />
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-
-                                    {/* Stage filter buttons */}
-                                    <div className="flex items-center gap-1.5 flex-wrap flex-1 justify-center px-2">
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Job Order
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'complete' ? null : 'complete');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'complete'
-                                                ? 'bg-violet-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Complete
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Ready to Ship
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'paint' ? null : 'paint');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Paint
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'paint_fab' ? null : 'paint_fab');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint_fab'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Paint+Fab
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'fab' ? null : 'fab');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Fab
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                const next = !reviewMode;
-                                                if (next) setSelectedSubset(null);
-                                                setReviewMode(next);
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Review
-                                        </button>
-                                    </div>
-
-                                    {/* Actions dropdown */}
-                                    <div className="relative" ref={actionsDropdownRef}>
-                                        <button
-                                            onClick={() => setShowActionsDropdown(prev => !prev)}
-                                            className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
-                                        >
-                                            ⚙️ Actions
-                                            <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                        </button>
-                                        {showActionsDropdown && (
-                                            <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl py-1 min-w-[160px]">
-                                                <button
-                                                    onClick={() => { handlePrint(); setShowActionsDropdown(false); }}
-                                                    disabled={!hasData || loading}
-                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                >
-                                                    🖨️ Print
-                                                </button>
-                                                <button
-                                                    onClick={() => { navigate('/pm-board'); setShowActionsDropdown(false); }}
-                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
-                                                >
-                                                    📋 PM Board
-                                                </button>
-                                                <button
-                                                    onClick={() => { navigate('/archive'); setShowActionsDropdown(false); }}
-                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
-                                                >
-                                                    🗄️ Archive
-                                                </button>
-                                                <button
-                                                    onClick={() => { handleReleaseClick(); setShowActionsDropdown(false); }}
-                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
-                                                >
-                                                    📋 Release
-                                                </button>
-                                                <button
-                                                    onClick={() => { handleRecalculateScheduling(); setShowActionsDropdown(false); }}
-                                                    disabled={recalculating}
-                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                >
-                                                    {recalculating ? (
-                                                        <><span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></span> Calculating...</>
-                                                    ) : (
-                                                        '⏱️ Refresh Schedule'
-                                                    )}
-                                                </button>
+                                            <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                                <span>
+                                                    Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
+                                                </span>
+                                                <span className="text-gray-300 dark:text-slate-500">|</span>
+                                                <span>
+                                                    Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                                                </span>
+                                                <span className="text-gray-300 dark:text-slate-500">|</span>
+                                                <span>
+                                                    Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                                </span>
+                                                <span className="text-gray-300 dark:text-slate-500">|</span>
+                                                <span className="text-gray-500 dark:text-slate-400 font-normal">
+                                                    Last updated: <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                                </span>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Row 2: Search inputs + stats */}
-                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                        <button
-                                            onClick={() => { resetFilters(); setReviewMode(false); }}
-                                            className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
-                                        >
-                                            Reset Filters
-                                        </button>
-                                        <div className="flex items-center gap-1.5">
-                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                                                Job #:
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={jobNumberSearch}
-                                                onChange={(e) => setJobNumberSearch(e.target.value)}
-                                                placeholder="Job #..."
-                                                className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                            />
                                         </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                                                Release #:
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={releaseNumberSearch}
-                                                onChange={(e) => setReleaseNumberSearch(e.target.value)}
-                                                placeholder="Release #..."
-                                                className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
-                                        <span>
-                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
-                                        </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span>
-                                            Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
-                                        </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span>
-                                            Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
-                                        </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span className="text-gray-500 dark:text-slate-400 font-normal">
-                                            Last updated: <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
-                                        </span>
-                                    </div>
-                                </div>
+                                    </>
+                                )}
                             </div>
 
 
