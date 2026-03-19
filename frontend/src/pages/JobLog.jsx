@@ -616,52 +616,44 @@ function JobLog() {
                                 {/* Minimized summary row */}
                                 {isFilterMinimized && (
                                     <div className="flex items-center gap-3 flex-wrap text-xs">
-                                        {/* Projects badges */}
-                                        {selectedProjectNames.length > 0 && (
-                                            <div className="flex items-center gap-1 flex-wrap">
-                                                <span className="font-semibold text-gray-600 dark:text-slate-300">🗂️ Projects:</span>
-                                                {selectedProjectNames.map(name => (
-                                                    <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                        {name}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {/* Stage badge */}
-                                        {selectedSubset !== null && (
-                                            <div className="flex items-center gap-1">
-                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Stage:</span>
+                                        {/* Projects group */}
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                            <span className="font-semibold text-gray-500 dark:text-slate-400">🗂️ Projects</span>
+                                            {selectedProjectNames.map(name => (
+                                                <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                    {name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        {/* Actions group */}
+                                        <span className="font-semibold text-gray-500 dark:text-slate-400">Actions</span>
+                                        {/* Stage group */}
+                                        <div className="flex items-center gap-1">
+                                            <span className="font-semibold text-gray-500 dark:text-slate-400">Stage</span>
+                                            {selectedSubset !== null && (
                                                 <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
                                                     {selectedSubset}
                                                 </span>
-                                            </div>
-                                        )}
-                                        {reviewMode && (
-                                            <div className="flex items-center gap-1">
-                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Stage:</span>
+                                            )}
+                                            {reviewMode && (
                                                 <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
                                                     Review
                                                 </span>
-                                            </div>
-                                        )}
-                                        {/* Job # badge */}
-                                        {jobNumberSearch !== '' && (
-                                            <div className="flex items-center gap-1">
-                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Job #:</span>
+                                            )}
+                                        </div>
+                                        {/* Search group */}
+                                        <div className="flex items-center gap-1">
+                                            {jobNumberSearch !== '' && (
                                                 <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                    {jobNumberSearch}
+                                                    Job # {jobNumberSearch}
                                                 </span>
-                                            </div>
-                                        )}
-                                        {/* Release # badge */}
-                                        {releaseNumberSearch !== '' && (
-                                            <div className="flex items-center gap-1">
-                                                <span className="font-semibold text-gray-600 dark:text-slate-300">Release #:</span>
+                                            )}
+                                            {releaseNumberSearch !== '' && (
                                                 <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                    {releaseNumberSearch}
+                                                    Release # {releaseNumberSearch}
                                                 </span>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                         {/* Total count + expand chevron */}
                                         <div className="ml-auto flex items-center gap-2">
                                             <span className="font-semibold text-gray-700 dark:text-slate-200">
@@ -674,6 +666,61 @@ function JobLog() {
                                             >
                                                 <span className="text-xl leading-none text-gray-600 dark:text-slate-300">▾</span>
                                             </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Minimized search row — always visible when minimized */}
+                                {isFilterMinimized && (
+                                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <div className="flex items-center gap-1.5">
+                                                <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                    Job #:
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={jobNumberSearch}
+                                                    onChange={(e) => setJobNumberSearch(e.target.value)}
+                                                    placeholder="Job #..."
+                                                    className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                    Release #:
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={releaseNumberSearch}
+                                                    onChange={(e) => setReleaseNumberSearch(e.target.value)}
+                                                    placeholder="Release #..."
+                                                    className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={() => { resetFilters(); setReviewMode(false); }}
+                                                className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                            >
+                                                Reset Filters
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                            <span>
+                                                Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
+                                            </span>
+                                            <span className="text-gray-300 dark:text-slate-500">|</span>
+                                            <span>
+                                                Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                                            </span>
+                                            <span className="text-gray-300 dark:text-slate-500">|</span>
+                                            <span>
+                                                Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                            </span>
+                                            <span className="text-gray-300 dark:text-slate-500">|</span>
+                                            <span className="text-gray-500 dark:text-slate-400 font-normal">
+                                                Last updated: <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                            </span>
                                         </div>
                                     </div>
                                 )}
