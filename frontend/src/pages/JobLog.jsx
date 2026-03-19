@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
@@ -21,11 +21,13 @@ function JobLog() {
     const [recalculating, setRecalculating] = useState(false);
     const [recalculateError, setRecalculateError] = useState(null);
     const [recalculateSuccess, setRecalculateSuccess] = useState(null);
-    const [reviewMode, setReviewMode] = useState(false);
+    const [reviewMode, setReviewMode] = useState(
+        () => localStorage.getItem('jl_reviewMode') === 'true'
+    );
     const [isAdmin, setIsAdmin] = useState(false);
-    const [isFilterMinimized, setIsFilterMinimized] = useState(false);
-    const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-    const actionsDropdownRef = useRef(null);
+    const [isFilterMinimized, setIsFilterMinimized] = useState(
+        () => localStorage.getItem('jl_minimized') === 'true'
+    );
 
     // Use the filters hook
     const {
@@ -65,16 +67,9 @@ function JobLog() {
         fetchUserInfo();
     }, []);
 
-    // Close dropdowns on outside click
-    useEffect(() => {
-        const handler = (e) => {
-            if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(e.target)) {
-                setShowActionsDropdown(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
+    // Persist filter panel state to localStorage
+    useEffect(() => { localStorage.setItem('jl_minimized', isFilterMinimized); }, [isFilterMinimized]);
+    useEffect(() => { localStorage.setItem('jl_reviewMode', reviewMode); }, [reviewMode]);
 
     // Update fab order handler (refetch after update to show collision detection changes)
     const updateFabOrder = useCallback(async (job, release, fabOrder) => {
@@ -686,11 +681,11 @@ function JobLog() {
                                 {/* Expanded filter rows */}
                                 {!isFilterMinimized && (
                                     <>
-                                        {/* Row 1: Project name buttons inline */}
-                                        <div className="flex items-center gap-1 flex-wrap">
+                                        {/* Row 1: Project name buttons — grid layout for uniform width */}
+                                        <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
                                             <button
                                                 onClick={() => setSelectedProjectNames([])}
-                                                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
+                                                className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
                                                     ? 'bg-blue-700 text-white'
                                                     : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
                                                     }`}
@@ -707,68 +702,57 @@ function JobLog() {
                                                                 : [...prev, option]
                                                         );
                                                     }}
-                                                    className={`max-w-[90px] truncate px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
+                                                    className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
                                                         ? 'bg-blue-700 text-white'
                                                         : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
                                                         }`}
                                                     title={option}
                                                 >
-                                                    {option}
+                                                    {option.length > 20 ? option.slice(0, 20) + '…' : option}
                                                 </button>
                                             ))}
                                         </div>
 
                                         {/* Row 2: Actions (left) + Stage filters (center-right) + Chevron (far right) */}
                                         <div className="flex items-center gap-1.5">
-                                            {/* Actions dropdown */}
-                                            <div className="relative" ref={actionsDropdownRef}>
+                                            {/* Action buttons inline */}
+                                            <div className="flex items-center gap-1.5">
                                                 <button
-                                                    onClick={() => setShowActionsDropdown(prev => !prev)}
-                                                    className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
+                                                    onClick={handlePrint}
+                                                    disabled={!hasData || loading}
+                                                    className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
                                                 >
-                                                    ⚙️ Actions
-                                                    <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                    🖨️ Print
                                                 </button>
-                                                {showActionsDropdown && (
-                                                    <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl py-1 min-w-[160px]">
-                                                        <button
-                                                            onClick={() => { handlePrint(); setShowActionsDropdown(false); }}
-                                                            disabled={!hasData || loading}
-                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        >
-                                                            🖨️ Print
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { navigate('/pm-board'); setShowActionsDropdown(false); }}
-                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
-                                                        >
-                                                            📋 PM Board
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { navigate('/archive'); setShowActionsDropdown(false); }}
-                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
-                                                        >
-                                                            🗄️ Archive
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { handleReleaseClick(); setShowActionsDropdown(false); }}
-                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
-                                                        >
-                                                            📋 Release
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { handleRecalculateScheduling(); setShowActionsDropdown(false); }}
-                                                            disabled={recalculating}
-                                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        >
-                                                            {recalculating ? (
-                                                                <><span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></span> Calculating...</>
-                                                            ) : (
-                                                                '⏱️ Refresh Schedule'
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                <button
+                                                    onClick={() => navigate('/pm-board')}
+                                                    className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                                >
+                                                    📋 PM Board
+                                                </button>
+                                                <button
+                                                    onClick={() => navigate('/archive')}
+                                                    className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                                >
+                                                    🗄️ Archive
+                                                </button>
+                                                <button
+                                                    onClick={handleReleaseClick}
+                                                    className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                                >
+                                                    📋 Release
+                                                </button>
+                                                <button
+                                                    onClick={handleRecalculateScheduling}
+                                                    disabled={recalculating}
+                                                    className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    {recalculating ? (
+                                                        <><span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></span> Calculating...</>
+                                                    ) : (
+                                                        '⏱️ Refresh Schedule'
+                                                    )}
+                                                </button>
                                             </div>
 
                                             {/* Stage filter buttons */}

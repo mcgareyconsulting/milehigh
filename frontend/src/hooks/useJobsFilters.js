@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 
 const _FAB_MODIFIER = {
     'Released': 1.0,
@@ -29,12 +29,32 @@ function _parseJobComp(val) {
  * @returns {Object} Filter state, options, handlers, and filtered rows
  */
 export function useJobsFilters(jobs = []) {
-    // Filter state
-    const [selectedProjectNames, setSelectedProjectNames] = useState([]); // Multi-select; empty = all
+    // Filter state (persisted to localStorage)
+    const [selectedProjectNames, setSelectedProjectNames] = useState(
+        () => JSON.parse(localStorage.getItem('jl_projects') || '[]')
+    );
     const [selectedStages, setSelectedStages] = useState([]); // Array of selected stage values
-    const [jobNumberSearch, setJobNumberSearch] = useState('');
-    const [releaseNumberSearch, setReleaseNumberSearch] = useState('');
-    const [selectedSubset, setSelectedSubset] = useState(null); // 'job_order', 'complete', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
+    const [jobNumberSearch, setJobNumberSearch] = useState(
+        () => localStorage.getItem('jl_jobNum') || ''
+    );
+    const [releaseNumberSearch, setReleaseNumberSearch] = useState(
+        () => localStorage.getItem('jl_releaseNum') || ''
+    );
+    const [selectedSubset, setSelectedSubset] = useState(
+        () => localStorage.getItem('jl_subset') || null
+    ); // 'job_order', 'complete', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
+
+    // Sync filter state to localStorage
+    useEffect(() => { localStorage.setItem('jl_projects', JSON.stringify(selectedProjectNames)); }, [selectedProjectNames]);
+    useEffect(() => { localStorage.setItem('jl_jobNum', jobNumberSearch); }, [jobNumberSearch]);
+    useEffect(() => { localStorage.setItem('jl_releaseNum', releaseNumberSearch); }, [releaseNumberSearch]);
+    useEffect(() => {
+        if (selectedSubset === null) {
+            localStorage.removeItem('jl_subset');
+        } else {
+            localStorage.setItem('jl_subset', selectedSubset);
+        }
+    }, [selectedSubset]);
 
     /**
      * Check if a job matches all selected filters
@@ -342,6 +362,10 @@ export function useJobsFilters(jobs = []) {
         setJobNumberSearch('');
         setReleaseNumberSearch('');
         setSelectedSubset(null);
+        localStorage.removeItem('jl_projects');
+        localStorage.removeItem('jl_jobNum');
+        localStorage.removeItem('jl_releaseNum');
+        localStorage.removeItem('jl_subset');
     }, []);
 
     return {
