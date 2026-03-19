@@ -57,6 +57,18 @@ class UpdateFabOrderCommand:
             logger.warning(f"Job {self.job_id}-{self.release} has NaN fab_order, converting to None")
             old_fab_order = None
 
+        # 1b. Clamp fab_order to stage bounds (implicit stage ordering)
+        if self.fab_order is not None and job_record.stage not in ('Hold', None):
+            from app.api.helpers import get_fab_order_bounds, clamp_fab_order
+            lower, upper = get_fab_order_bounds(job_record.stage, self.job_id, self.release)
+            clamped = clamp_fab_order(self.fab_order, lower, upper)
+            if clamped != self.fab_order:
+                logger.info(
+                    f"fab_order clamped for job {self.job_id}-{self.release}: "
+                    f"{self.fab_order} -> {clamped} (stage={job_record.stage}, lower={lower}, upper={upper})"
+                )
+                self.fab_order = clamped
+
         # 2️⃣ Collision detection: Cascade bump - shift all jobs with fab_order >= target value up by 1
         if self.fab_order is not None:
             from sqlalchemy import or_
