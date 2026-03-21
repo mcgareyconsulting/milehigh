@@ -324,22 +324,11 @@ def get_jobs():
         if not since_param:
             logger.info(f"[CURSOR] No since parameter provided - fetching all jobs (initial load)")
             # Apply archive filter only on full loads
-            from datetime import date as _date, timedelta as _timedelta
-            archive_cond = db.or_(
-                db.and_(
-                    db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
-                    db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X'
-                ),
-                db.and_(
-                    Releases.start_install.isnot(None),
-                    Releases.start_install < _date.today() - _timedelta(days=60)
-                )
-            )
             if archived:
-                query = query.filter(archive_cond)
-                logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X', or start_install before today)")
+                query = query.filter(Releases.is_archived == True)
+                logger.info("[ARCHIVE] Filtering to archived jobs (is_archived=True)")
             else:
-                query = query.filter(~archive_cond)
+                query = query.filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))
                 logger.info("[ARCHIVE] Excluding archived jobs")
             # Exclude soft-deleted rows on full loads
             query = query.filter(db.or_(Releases.is_active == True, Releases.is_active == None))
@@ -391,6 +380,7 @@ def get_jobs():
                     'viewer_url': serialize_value(job.viewer_url),
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
+                    'is_archived': serialize_value(job.is_archived),
                 }
                 # Validate the job data
                 json.dumps(job_data)
@@ -582,22 +572,11 @@ def get_all_jobs():
         query = Releases.query
 
         # Apply archive filter
-        from datetime import date as _date, timedelta as _timedelta
-        archive_cond = db.or_(
-            db.and_(
-                db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
-                db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X'
-            ),
-            db.and_(
-                Releases.start_install.isnot(None),
-                Releases.start_install < _date.today() - _timedelta(days=60)
-            )
-        )
         if archived:
-            query = query.filter(archive_cond)
-            logger.info("[ARCHIVE] Filtering to archived jobs (both job_comp and invoiced = 'X', or start_install before today)")
+            query = query.filter(Releases.is_archived == True)
+            logger.info("[ARCHIVE] Filtering to archived jobs (is_archived=True)")
         else:
-            query = query.filter(~archive_cond)
+            query = query.filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))
             logger.info("[ARCHIVE] Excluding archived jobs")
 
         # Exclude soft-deleted rows
@@ -652,11 +631,12 @@ def get_all_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'trello_card_id': serialize_value(job.trello_card_id),
+                    'is_archived': serialize_value(job.is_archived),
                 }
                 # Validate the job data
                 json.dumps(job_data)
                 job_list.append(job_data)
-                
+
             except Exception as record_error:
                 # Log the problematic record but continue processing
                 job_id = f"{job.job}-{job.release}" if hasattr(job, 'job') else f"id:{job.id}"
@@ -669,7 +649,7 @@ def get_all_jobs():
                 })
                 logger.warning(error_msg, exc_info=True)
                 continue
-        
+
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
         from app.api.helpers import add_scheduling_fields_to_jobs
@@ -938,6 +918,32 @@ def update_stage(job, release):
         if stage == 'Hold':
             job_record.banana_color = 'red'
 
+        # If stage set to Complete, auto-set job_comp to 'X' and clear fab_order
+        comp_extras = {}
+        if stage == 'Complete':
+            current_job_comp = (job_record.job_comp or '').strip().upper()
+            if current_job_comp != 'X':
+                old_jc = job_record.job_comp
+                job_record.job_comp = 'X'
+                JobEventService.create(
+                    job=job, release=release,
+                    action='updated', source='Brain',
+                    payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': 'X', 'reason': 'stage_set_to_complete'},
+                )
+                comp_extras['job_comp'] = 'X'
+
+            if job_record.fab_order is not None:
+                old_fab = job_record.fab_order
+                job_record.fab_order = None
+                fab_evt = JobEventService.create(
+                    job=job, release=release,
+                    action='update_fab_order', source='Brain',
+                    payload={'from': old_fab, 'to': None, 'reason': 'stage_change_to_complete'},
+                )
+                if fab_evt:
+                    JobEventService.close(fab_evt.id)
+                comp_extras['fab_order'] = None
+
         # Update job metadata
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
@@ -1042,10 +1048,11 @@ def update_stage(job, release):
             'release': release,
             'event_id': event.id
         })
-        
+
         return jsonify({
             'status': 'success',
-            'event_id': event.id
+            'event_id': event.id,
+            **comp_extras
         }), 200
     except Exception as e:
         # Log critical failure
@@ -1442,9 +1449,36 @@ def update_job_comp(job, release):
             payload={'field': 'job_comp', 'old_value': old_job_comp, 'new_value': job_comp_str},
         )
 
+        # If job_comp set to 'X', auto-set stage to Complete and clear fab_order
+        response_extras = {}
+        if job_comp_str and job_comp_str.upper() == 'X':
+            current_stage = job_record.stage or 'Released'
+            if current_stage != 'Complete':
+                update_job_stage_fields(job_record, 'Complete')
+                JobEventService.create(
+                    job=job, release=release,
+                    action='update_stage', source='Brain',
+                    payload={'from': current_stage, 'to': 'Complete', 'reason': 'job_comp_set_to_x'},
+                )
+                response_extras['stage'] = 'Complete'
+                from app.api.helpers import get_stage_group_from_stage
+                response_extras['stage_group'] = get_stage_group_from_stage('Complete')
+
+            if job_record.fab_order is not None:
+                old_fab = job_record.fab_order
+                job_record.fab_order = None
+                fab_event = JobEventService.create(
+                    job=job, release=release,
+                    action='update_fab_order', source='Brain',
+                    payload={'from': old_fab, 'to': None, 'reason': 'job_comp_complete'},
+                )
+                if fab_event:
+                    JobEventService.close(fab_event.id)
+                response_extras['fab_order'] = None
+
         db.session.commit()
 
-        return jsonify({"status": "success"}), 200
+        return jsonify({"status": "success", **response_extras}), 200
     except Exception as e:
         logger.error("update_job_comp failed", exc_info=True, extra={"job": job, "release": release, "error": str(e)})
         db.session.rollback()
@@ -2593,3 +2627,68 @@ def update_job_column(job, release):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
+# ==============================================================================
+# Archive Management
+# ==============================================================================
+
+def _archivable_query():
+    """Return query for active, non-archived releases where both job_comp='X' and invoiced='X'."""
+    return Releases.query.filter(
+        db.func.upper(db.func.trim(db.func.coalesce(Releases.job_comp, ''))) == 'X',
+        db.func.upper(db.func.trim(db.func.coalesce(Releases.invoiced, ''))) == 'X',
+        db.or_(Releases.is_archived == False, Releases.is_archived == None),
+        db.or_(Releases.is_active == True, Releases.is_active == None),
+    )
+
+
+@brain_bp.route("/archive-preview", methods=["GET"])
+@admin_required
+def archive_preview():
+    """Preview releases eligible for archival (both job_comp and invoiced = 'X', not yet archived)."""
+    try:
+        releases = _archivable_query().order_by(Releases.job, Releases.release).all()
+        items = []
+        for r in releases:
+            items.append({
+                'job': r.job,
+                'release': r.release,
+                'job_name': r.job_name,
+                'description': r.description,
+                'stage': r.stage or 'Released',
+            })
+        return jsonify({'count': len(items), 'releases': items}), 200
+    except Exception as e:
+        logger.error("archive_preview failed", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@brain_bp.route("/archive-confirm", methods=["POST"])
+@admin_required
+def archive_confirm():
+    """Archive all eligible releases (both job_comp and invoiced = 'X', not yet archived)."""
+    from app.services.job_event_service import JobEventService
+
+    try:
+        releases = _archivable_query().all()
+        count = 0
+        now = datetime.utcnow()
+        for r in releases:
+            r.is_archived = True
+            r.last_updated_at = now
+            r.source_of_update = 'Brain'
+            JobEventService.create(
+                job=r.job,
+                release=r.release,
+                action='archived',
+                source='Brain',
+                payload={'reason': 'admin_send_to_archive'},
+            )
+            count += 1
+        db.session.commit()
+        logger.info(f"Archived {count} releases via admin action")
+        return jsonify({'status': 'success', 'count': count}), 200
+    except Exception as e:
+        logger.error("archive_confirm failed", exc_info=True)
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

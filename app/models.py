@@ -405,6 +405,7 @@ class Releases(db.Model):
         db.String(16), nullable=True
     )  # 'Trello' or 'Excel' or 'System'
     is_active = db.Column(db.Boolean, default=True, nullable=True)  # False = soft-deleted
+    is_archived = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
 
     def __repr__(self):
         return f"<Job {self.job} - {self.release} - {self.job_name}>"
