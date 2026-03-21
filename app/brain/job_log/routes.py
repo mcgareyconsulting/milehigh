@@ -983,6 +983,38 @@ def update_stage(job, release):
                     # Close event if no outbox item was created
                     JobEventService.close(fab_order_event.id)
 
+        elif (
+            new_stage_group == old_stage_group
+            and new_stage_group in ('FABRICATION', 'READY_TO_SHIP')
+            and stage not in ('Hold', None)
+            and job_record.fab_order is not None
+        ):
+            from app.api.helpers import get_fab_order_bounds, clamp_fab_order
+            lower, upper = get_fab_order_bounds(stage, job, release)
+            clamped = clamp_fab_order(job_record.fab_order, lower, upper, strict_upper=True)
+            if clamped != job_record.fab_order:
+                logger.info(
+                    f"fab_order clamped after stage change for job {job}-{release}: "
+                    f"{job_record.fab_order} -> {clamped} (new stage={stage})"
+                )
+                old_fab_for_implicit = job_record.fab_order
+                job_record.fab_order = clamped
+                implicit_event = JobEventService.create(
+                    job=job, release=release,
+                    action='update_fab_order', source='Brain',
+                    payload={'from': old_fab_for_implicit, 'to': clamped,
+                             'reason': 'stage_change_implicit_clamp'}
+                )
+                if implicit_event:
+                    if job_record.trello_card_id:
+                        try:
+                            OutboxService.add(destination='trello', action='update_fab_order',
+                                              event_id=implicit_event.id)
+                        except Exception as e:
+                            logger.error(f"Outbox failed for implicit clamp event: {e}", exc_info=True)
+                    else:
+                        JobEventService.close(implicit_event.id)
+
         # Add Trello update to outbox (async - will be processed by outbox service)
         # DB changes are committed first, then outbox handles Trello updates asynchronously
         # This ensures DB changes are never lost due to Trello API failures

@@ -35,6 +35,135 @@ STAGE_TO_GROUP = {
     "Complete": "COMPLETE",
 }
 
+# Ordered stage progression per group (for implicit ordering enforcement)
+STAGE_ORDER = {
+    "FABRICATION": [
+        "Released",
+        "Cut start",
+        "Material Ordered",
+        "Fit Up Complete.",
+        "Welded",
+    ],
+    "READY_TO_SHIP": [
+        "Welded QC",
+        "Paint complete",
+        "Store at MHMW for shipping",
+        "Shipping planning",
+    ],
+}
+
+STAGE_ORDER_EXEMPT = {"Hold"}
+
+
+def _normalize_stage(stage: Optional[str]) -> Optional[str]:
+    """Resolve a stage name (including variants) to the canonical key in STAGE_TO_GROUP."""
+    if not stage:
+        return None
+    if stage in STAGE_TO_GROUP:
+        return stage
+    stage_lower = stage.lower()
+    for key in STAGE_TO_GROUP:
+        if key.lower() == stage_lower:
+            return key
+    return None
+
+
+def _get_all_variants_for_stages(canonical_stages: List[str]) -> List[str]:
+    """Given canonical stage names, return all variant strings from STAGE_TO_GROUP that match."""
+    result = []
+    canonical_lower = {s.lower() for s in canonical_stages}
+    for variant in STAGE_TO_GROUP:
+        if variant.lower() in canonical_lower:
+            result.append(variant)
+    return result
+
+
+def get_stage_position(stage: Optional[str]) -> Optional[int]:
+    """Return 0-based index of a stage in its group's STAGE_ORDER list, or None if exempt/unordered."""
+    normalized = _normalize_stage(stage)
+    if normalized is None or normalized in STAGE_ORDER_EXEMPT:
+        return None
+    group = STAGE_TO_GROUP.get(normalized)
+    if group not in STAGE_ORDER:
+        return None
+    order_list = STAGE_ORDER[group]
+    normalized_lower = normalized.lower()
+    for i, s in enumerate(order_list):
+        if s.lower() == normalized_lower:
+            return i
+    return None
+
+
+def get_fab_order_bounds(stage: Optional[str], current_job_id: int, current_release: str):
+    """
+    Return (lower_bound, upper_bound) fab_order constraints for a job's stage.
+
+    lower_bound = MAX fab_order of jobs in earlier stages (None if none exist)
+    upper_bound = MIN fab_order of jobs in later stages (None if none exist)
+    Returns (None, None) for Hold, COMPLETE, or unrecognized stages.
+    """
+    from sqlalchemy import func, or_
+    from app.models import Releases, db
+
+    normalized = _normalize_stage(stage)
+    if normalized is None or normalized in STAGE_ORDER_EXEMPT:
+        return (None, None)
+
+    group = STAGE_TO_GROUP.get(normalized)
+    if group not in STAGE_ORDER:
+        return (None, None)
+
+    position = get_stage_position(normalized)
+    if position is None:
+        return (None, None)
+
+    order_list = STAGE_ORDER[group]
+
+    lower_bound = None
+    earlier_stages = order_list[:position]
+    if earlier_stages:
+        earlier_variants = _get_all_variants_for_stages(earlier_stages)
+        if earlier_variants:
+            lower_bound = db.session.query(func.max(Releases.fab_order)).filter(
+                Releases.stage.in_(earlier_variants),
+                Releases.fab_order.isnot(None),
+                or_(
+                    Releases.job != current_job_id,
+                    Releases.release != current_release
+                )
+            ).scalar()
+
+    upper_bound = None
+    later_stages = order_list[position + 1:]
+    if later_stages:
+        later_variants = _get_all_variants_for_stages(later_stages)
+        if later_variants:
+            upper_bound = db.session.query(func.min(Releases.fab_order)).filter(
+                Releases.stage.in_(later_variants),
+                Releases.fab_order.isnot(None),
+                or_(
+                    Releases.job != current_job_id,
+                    Releases.release != current_release
+                )
+            ).scalar()
+
+    return (lower_bound, upper_bound)
+
+
+def clamp_fab_order(value, lower, upper, strict_upper=False):
+    """Clamp a fab_order value to stay within stage bounds.
+
+    strict_upper=True: clamp when value >= upper (stage change path, no collision detection)
+    strict_upper=False: clamp only when value > upper (command path, collision handles ties)
+    """
+    if lower is not None and value <= lower:
+        return lower + 1
+    if upper is not None:
+        threshold_hit = (value >= upper) if strict_upper else (value > upper)
+        if threshold_hit:
+            return upper - 1
+    return value
+
 
 def get_stage_group_from_stage(stage: Optional[str]) -> Optional[str]:
     """
