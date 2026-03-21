@@ -151,21 +151,9 @@ class UpdateFabOrderCommand:
                         job_to_bump.fab_order = new_bump_value
                         job_to_bump.last_updated_at = datetime.utcnow()
                         job_to_bump.source_of_update = self.source_of_update
-                        
-                        # Create outbox item for bumped job if it has a Trello card
-                        if job_to_bump.trello_card_id:
-                            try:
-                                OutboxService.add(
-                                    destination='trello',
-                                    action='update_fab_order',
-                                    event_id=bump_event.id
-                                )
-                                logger.debug(f"Outbox item created for bumped job {job_to_bump.job}-{job_to_bump.release}")
-                            except Exception as outbox_error:
-                                logger.error(f"Failed to create outbox for bumped job event {bump_event.id}: {outbox_error}", exc_info=True)
-                        else:
-                            # Close event if no outbox item was created
-                            JobEventService.close(bump_event.id)
+
+                        # Trello fab_order sync disabled during testing — close event without outbox
+                        JobEventService.close(bump_event.id)
 
         # 3️⃣ Create event for the current job (handles deduplication, logging internally)
         # Ensure payload values are valid (not NaN) - convert to None if needed
@@ -193,33 +181,8 @@ class UpdateFabOrderCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 
-        # 5️⃣ Add Trello update to outbox (async - will be processed by outbox service)
-        # DB changes are committed first, then outbox handles Trello updates asynchronously
-        # This ensures DB changes are never lost due to Trello API failures
-        outbox_item_created = False
-        
-        if job_record.trello_card_id:
-            try:
-                # Create outbox item - will be processed asynchronously by outbox service
-                OutboxService.add(
-                    destination='trello',
-                    action='update_fab_order',
-                    event_id=event.id
-                )
-                outbox_item_created = True
-                logger.info(f"Outbox item created for Trello fab_order update (job {self.job_id}-{self.release})")
-            except Exception as outbox_error:
-                # Log error but don't fail the operation - DB update is more important
-                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
-        else:
-            logger.warning(
-                f"Job {self.job_id}-{self.release} has no trello_card_id, skipping Trello update",
-                extra={'job': self.job_id, 'release': self.release}
-            )
-        
-        # 6️⃣ Close event only if no outbox item was created
-        if not outbox_item_created:
-            JobEventService.close(event.id)
+        # 5️⃣ Trello fab_order sync disabled during testing — close event without queueing outbox
+        JobEventService.close(event.id)
         
         # 7️⃣ Commit all DB changes first (this is the critical operation)
         db.session.commit()

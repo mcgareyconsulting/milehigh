@@ -968,20 +968,8 @@ def update_stage(job, release):
                 # Update fab_order
                 job_record.fab_order = fab_order_to_set
                 
-                # Create outbox item for fab_order update if job has Trello card
-                if job_record.trello_card_id:
-                    try:
-                        OutboxService.add(
-                            destination='trello',
-                            action='update_fab_order',
-                            event_id=fab_order_event.id
-                        )
-                        logger.info(f"Outbox item created for fab_order update (job {job}-{release})")
-                    except Exception as outbox_error:
-                        logger.error(f"Failed to create outbox for fab_order event {fab_order_event.id}: {outbox_error}", exc_info=True)
-                else:
-                    # Close event if no outbox item was created
-                    JobEventService.close(fab_order_event.id)
+                # Trello fab_order sync disabled during testing — close event without queueing outbox
+                JobEventService.close(fab_order_event.id)
 
         elif (
             new_stage_group == old_stage_group
@@ -1006,14 +994,8 @@ def update_stage(job, release):
                              'reason': 'stage_change_implicit_clamp'}
                 )
                 if implicit_event:
-                    if job_record.trello_card_id:
-                        try:
-                            OutboxService.add(destination='trello', action='update_fab_order',
-                                              event_id=implicit_event.id)
-                        except Exception as e:
-                            logger.error(f"Outbox failed for implicit clamp event: {e}", exc_info=True)
-                    else:
-                        JobEventService.close(implicit_event.id)
+                    # Trello fab_order sync disabled during testing — close event without queueing outbox
+                    JobEventService.close(implicit_event.id)
 
         # Add Trello update to outbox (async - will be processed by outbox service)
         # DB changes are committed first, then outbox handles Trello updates asynchronously

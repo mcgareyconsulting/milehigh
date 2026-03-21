@@ -1,8 +1,13 @@
-# Implicit Stage Fab Ordering
-Stage and fab order confusion on job log needs cleanup. We will provide an implicit soft-lock fab ordering per stage. Example, welded jobs hold fab order 9-13, fit up comp which is one step before welded cannot hold a value greater than 14. 
+# Fab Order Testing
+We are testing fab order functionality. In the short term, we want to refrain from passing Brain Fab Order updates for releases to Trello API. 
 
-# Backend
-- Build tighter logical constraints on fab ordering. There should be no intermingling of releases because a fab order outpaces. 
-- Ask clarifying questions but structured fab ordering on stage order should make sense.
+# Desired Behavior
+- Track Event and Update DB
+- Do NOT send Trello API call to update Fab Order custom field
+- Onedrive updates will still update Fab Order
 
+# Important
+- This is a Brain -> Trello disablement only! 
 
+# Relevant Files
+app/brain/job_log/engine/routes/services
