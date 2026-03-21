@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
@@ -8,44 +8,43 @@ function Archive() {
     const navigate = useNavigate();
     const { jobs, columns, loading, error: fetchError, refetch } = useArchiveDataFetching();
 
+    const [isFilterMinimized, setIsFilterMinimized] = useState(
+        () => localStorage.getItem('ar_minimized') === 'true'
+    );
+
+    useEffect(() => {
+        localStorage.setItem('ar_minimized', isFilterMinimized);
+    }, [isFilterMinimized]);
+
     // Use the filters hook
     const {
         selectedProjectNames,
-        selectedStages,
         jobNumberSearch,
         releaseNumberSearch,
         setSelectedProjectNames,
-        setSelectedStages,
         setJobNumberSearch,
         setReleaseNumberSearch,
         projectNameOptions,
-        stageOptions,
-        stageColors,
         stageToGroup,
         stageGroupColors,
         displayJobs,
         totalFabHrs,
         totalInstallHrs,
         resetFilters,
-        toggleStage,
     } = useJobsFilters(jobs);
 
     const formatDate = (dateValue) => {
         if (!dateValue) return '—';
         try {
-            // Handle ISO date strings (YYYY-MM-DD) - parse directly to avoid timezone issues
             if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
-                // Extract date parts directly from ISO string to avoid timezone conversion
                 const parts = dateValue.split('T')[0].split('-');
                 if (parts.length === 3) {
                     const year = parts[0];
                     const month = parts[1];
                     const day = parts[2];
-                    // Return in MM/DD/YY format
                     return `${month}/${day}/${year.slice(-2)}`;
                 }
             }
-            // Fallback to Date object parsing for other formats
             const date = new Date(dateValue);
             if (isNaN(date.getTime())) return '—';
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -64,7 +63,6 @@ function Archive() {
         if (Array.isArray(value)) {
             return value.join(', ');
         }
-        // Format Fab Hrs and Install HRS to 2 decimal places
         if (columnName === 'Fab Hrs' || columnName === 'Install HRS') {
             const numValue = parseFloat(value);
             if (!isNaN(numValue)) {
@@ -74,11 +72,9 @@ function Archive() {
         return value;
     };
 
-    // Check if we have data to display
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
 
-    // Define column order explicitly
     const columnOrder = [
         'Job #',
         'Release #',
@@ -121,15 +117,12 @@ function Archive() {
         'Notes': 12,
     };
 
-    // Filter and order columns based on defined order
     const columnHeaders = useMemo(() => {
-        // Only include columns that exist in the data and are in our defined order
         return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
     }, [columns]);
 
     const tableColumnCount = columnHeaders.length;
 
-    // Normalize column width percentages so visible columns sum to 100%
     const columnWidthPercents = useMemo(() => {
         const defaultWeight = 5;
         const total = columnHeaders.reduce((sum, col) => sum + (COLUMN_WIDTH_PERCENT[col] ?? defaultWeight), 0);
@@ -142,70 +135,71 @@ function Archive() {
     }, [columnHeaders]);
 
     return (
-        <div className="h-full flex flex-col bg-[#f8fafc] dark:bg-slate-900">
-            <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-hidden flex flex-col">
-                    <div className="bg-gradient-to-r from-accent-500 to-accent-600 text-white shadow-md">
-                        <div className="px-6 py-6 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-3xl font-bold text-white">Archived Jobs</h1>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => navigate('/job-log')}
-                                    className="px-4 py-2 bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 rounded-lg font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-600 transition-all flex items-center gap-2"
-                                >
-                                    📋 Job Log
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+        <div className="w-full h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
+            <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
 
-                    <div className="flex-1 overflow-hidden flex flex-col">
-                        <div className="flex-1 flex flex-col m-4 gap-4">
-                            {/* Filter Section */}
-                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm">
-                                <div className="p-4">
-                                    <div className="mb-3">
-                                        <h3 className="text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">
-                                            Stage Groups
-                                        </h3>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {stageOptions.map((stage) => {
-                                                const isSelected = selectedStages.includes(stage.value);
-                                                const colors = stageColors[stage.value];
-                                                return (
-                                                    <button
-                                                        key={stage.value}
-                                                        onClick={() => toggleStage(stage.value)}
-                                                        className={`px-2 py-1 rounded text-xs font-semibold transition-all border ${
-                                                            isSelected
-                                                                ? colors?.selected ?? 'bg-white text-white shadow-md'
-                                                                : colors?.unselected ?? 'bg-gray-200 text-gray-700 opacity-60 hover:opacity-75'
-                                                        }`}
-                                                    >
-                                                        {stage.label}
-                                                    </button>
-                                                );
-                                            })}
-                                            <button
-                                                onClick={resetFilters}
-                                                className="ml-auto px-2 py-1 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 rounded text-xs font-semibold hover:bg-gray-300 dark:hover:bg-slate-500 transition-all"
-                                            >
-                                                Reset All
-                                            </button>
-                                        </div>
+                    <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
+                        <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
+
+                            {/* Minimized summary row */}
+                            {isFilterMinimized && (
+                                <div className="flex items-center gap-3 flex-wrap text-xs">
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                        <span className="font-semibold text-gray-500 dark:text-slate-400">🗂️ Projects</span>
+                                        {selectedProjectNames.map(name => (
+                                            <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                {name}
+                                            </span>
+                                        ))}
                                     </div>
+                                    <div className="flex items-center gap-1">
+                                        {jobNumberSearch !== '' && (
+                                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                Job # {jobNumberSearch}
+                                            </span>
+                                        )}
+                                        {releaseNumberSearch !== '' && (
+                                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                Release # {releaseNumberSearch}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="ml-auto flex items-center gap-2">
+                                        <span className="font-semibold text-gray-700 dark:text-slate-200">
+                                            Total: <span className="font-bold text-gray-900 dark:text-slate-100">{displayJobs.length}</span>
+                                        </span>
+                                        <button
+                                            onClick={() => setIsFilterMinimized(false)}
+                                            className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
+                                            title="Expand filters"
+                                        >
+                                            <span className="text-xl leading-none text-gray-600 dark:text-slate-300">▾</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
-                                    <div className="flex gap-2 flex-wrap">
-                                        <div className="flex gap-2">
+                            {/* Minimized search row — always visible when minimized */}
+                            {isFilterMinimized && (
+                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-1.5">
+                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                Job #:
+                                            </label>
                                             <input
                                                 type="text"
                                                 value={jobNumberSearch}
                                                 onChange={(e) => setJobNumberSearch(e.target.value)}
                                                 placeholder="Job #..."
-                                                className="w-24 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                Release #:
+                                            </label>
                                             <input
                                                 type="text"
                                                 value={releaseNumberSearch}
@@ -214,105 +208,224 @@ function Archive() {
                                                 className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
                                         </div>
-                                        <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
+                                        <button
+                                            onClick={resetFilters}
+                                            className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                        >
+                                            Reset Filters
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                        <span>
                                             Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
-                                        </div>
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span>
+                                            Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span>
+                                            Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
 
-                                        {/* Right side KPI chips */}
-                                        <div className="flex items-center justify-end gap-2 ml-auto">
-                                            <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
-                                                Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                            {/* Expanded filter rows */}
+                            {!isFilterMinimized && (
+                                <>
+                                    {/* Row 1: Project name grid */}
+                                    <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+                                        <button
+                                            onClick={() => setSelectedProjectNames([])}
+                                            className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                                }`}
+                                        >
+                                            All
+                                        </button>
+                                        {projectNameOptions.map((option) => (
+                                            <button
+                                                key={option}
+                                                onClick={() => {
+                                                    setSelectedProjectNames(prev =>
+                                                        prev.includes(option)
+                                                            ? prev.filter(name => name !== option)
+                                                            : [...prev, option]
+                                                    );
+                                                }}
+                                                className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
+                                                    ? 'bg-blue-700 text-white'
+                                                    : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                                    }`}
+                                                title={option}
+                                            >
+                                                {option.length > 20 ? option.slice(0, 20) + '…' : option}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Row 2: Actions + chevron */}
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                onClick={() => navigate('/job-log')}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                            >
+                                                📋 Job Log
+                                            </button>
+                                            <button
+                                                onClick={() => refetch()}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                            >
+                                                ⟳ Refresh
+                                            </button>
+                                        </div>
+                                        <div className="ml-auto">
+                                            <button
+                                                onClick={() => setIsFilterMinimized(true)}
+                                                className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
+                                                title="Collapse filters"
+                                            >
+                                                <span className="text-xl leading-none text-gray-600 dark:text-slate-300">▴</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Row 3: Reset + search + stats */}
+                                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <button
+                                                onClick={resetFilters}
+                                                className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                            >
+                                                Reset Filters
+                                            </button>
+                                            <div className="flex items-center gap-1.5">
+                                                <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                    Job #:
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={jobNumberSearch}
+                                                    onChange={(e) => setJobNumberSearch(e.target.value)}
+                                                    placeholder="Job #..."
+                                                    className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                />
                                             </div>
-                                            <div className="px-2 py-0.5 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded text-xs font-semibold">
-                                                Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                    Release #:
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={releaseNumberSearch}
+                                                    onChange={(e) => setReleaseNumberSearch(e.target.value)}
+                                                    placeholder="Release #..."
+                                                    className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                />
                                             </div>
                                         </div>
+                                        <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                            <span>
+                                                Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
+                                            </span>
+                                            <span className="text-gray-300 dark:text-slate-500">|</span>
+                                            <span>
+                                                Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                                            </span>
+                                            <span className="text-gray-300 dark:text-slate-500">|</span>
+                                            <span>
+                                                Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {loading && (
+                            <div className="text-center py-12">
+                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
+                                <p className="text-gray-600 font-medium">Loading archived jobs...</p>
+                            </div>
+                        )}
+
+                        {fetchError && !loading && (
+                            <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded-lg shadow-sm">
+                                <div className="flex items-start">
+                                    <span className="text-xl mr-3">⚠️</span>
+                                    <div>
+                                        <p className="font-semibold">Unable to load archived jobs</p>
+                                        <p className="text-sm mt-1">{fetchError}</p>
                                     </div>
                                 </div>
                             </div>
+                        )}
 
-                            {loading && (
-                                <div className="text-center py-12">
-                                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
-                                    <p className="text-gray-600 font-medium">Loading archived jobs...</p>
-                                </div>
-                            )}
-
-                            {fetchError && !loading && (
-                                <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded-lg shadow-sm">
-                                    <div className="flex items-start">
-                                        <span className="text-xl mr-3">⚠️</span>
-                                        <div>
-                                            <p className="font-semibold">Unable to load archived jobs</p>
-                                            <p className="text-sm mt-1">{fetchError}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {!loading && !fetchError && (
-                                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <div className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
-                                        <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
-                                            <thead className="sticky top-0 z-10">
-                                                <tr>
-                                                    {columnHeaders.map((column) => {
-                                                        const isReleaseNumber = column === 'Release #';
-                                                        const displayHeader = column === 'Release #' ? 'rel. #' : column;
-                                                        const colWidthPct = columnWidthPercents[column];
-                                                        return (
-                                                            <th
-                                                                key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
-                                                                style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
-                                                            >
-                                                                {displayHeader}
-                                                            </th>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {!hasData ? (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={tableColumnCount}
-                                                            className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
+                        {!loading && !fetchError && (
+                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                                <div className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                    <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
+                                        <thead className="sticky top-0 z-10">
+                                            <tr>
+                                                {columnHeaders.map((column) => {
+                                                    const isReleaseNumber = column === 'Release #';
+                                                    const displayHeader = column === 'Release #' ? 'rel. #' : column;
+                                                    const colWidthPct = columnWidthPercents[column];
+                                                    return (
+                                                        <th
+                                                            key={column}
+                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                            style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
-                                                            {hasJobsData
-                                                                ? 'No records match the selected filters.'
-                                                                : 'No archived records found.'
-                                                            }
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    displayJobs.map((row, index) => (
-                                                        <JobsTableRow
-                                                            key={row.id}
-                                                            row={row}
-                                                            columns={columnHeaders}
-                                                            isJumpToHighlight={false}
-                                                            formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
-                                                            formatDate={formatDate}
-                                                            rowIndex={index}
-                                                            onDragStart={() => { }}
-                                                            onDragOver={() => { }}
-                                                            onDragLeave={() => { }}
-                                                            onDrop={() => { }}
-                                                            isDragging={null}
-                                                            dragOverIndex={null}
-                                                            onUpdate={() => refetch()}
-                                                            stageToGroup={stageToGroup}
-                                                            stageGroupColors={stageGroupColors}
-                                                        />
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                            {displayHeader}
+                                                        </th>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {!hasData ? (
+                                                <tr>
+                                                    <td
+                                                        colSpan={tableColumnCount}
+                                                        className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
+                                                    >
+                                                        {hasJobsData
+                                                            ? 'No records match the selected filters.'
+                                                            : 'No archived records found.'
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                displayJobs.map((row, index) => (
+                                                    <JobsTableRow
+                                                        key={row.id}
+                                                        row={row}
+                                                        columns={columnHeaders}
+                                                        isJumpToHighlight={false}
+                                                        formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
+                                                        formatDate={formatDate}
+                                                        rowIndex={index}
+                                                        onDragStart={() => { }}
+                                                        onDragOver={() => { }}
+                                                        onDragLeave={() => { }}
+                                                        onDrop={() => { }}
+                                                        isDragging={null}
+                                                        dragOverIndex={null}
+                                                        onUpdate={() => refetch()}
+                                                        stageToGroup={stageToGroup}
+                                                        stageGroupColors={stageGroupColors}
+                                                    />
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
