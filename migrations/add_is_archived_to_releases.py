@@ -18,19 +18,15 @@ from app.models import db
 
 app = create_app()
 
+# PostgreSQL: ADD COLUMN IF NOT EXISTS (supported since Postgres 9.6)
 ADD_COLUMN_SQL = """
-IF NOT EXISTS (
-    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = 'releases' AND COLUMN_NAME = 'is_archived'
-)
-BEGIN
-    ALTER TABLE releases ADD is_archived BIT NOT NULL DEFAULT 0;
-END
+ALTER TABLE releases
+ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
 """
 
 BACKFILL_SQL = """
 UPDATE releases
-SET is_archived = 1
+SET is_archived = TRUE
 WHERE UPPER(TRIM(COALESCE(job_comp, ''))) = 'X'
   AND UPPER(TRIM(COALESCE(invoiced, ''))) = 'X';
 """
