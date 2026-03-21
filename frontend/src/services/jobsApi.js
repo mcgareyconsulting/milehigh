@@ -219,6 +219,24 @@ class JobsApi {
     }
 
 
+    async getArchivePreview() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/archive-preview`);
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch archive preview');
+        }
+    }
+
+    async confirmArchive() {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/archive-confirm`);
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to archive releases');
+        }
+    }
+
     /**
      * Handle API errors
      */

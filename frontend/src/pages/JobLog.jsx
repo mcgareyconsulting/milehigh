@@ -28,6 +28,9 @@ function JobLog() {
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('jl_minimized') === 'true'
     );
+    const [showArchiveModal, setShowArchiveModal] = useState(false);
+    const [archivePreview, setArchivePreview] = useState(null);
+    const [archiving, setArchiving] = useState(false);
 
     // Use the filters hook
     const {
@@ -783,6 +786,22 @@ function JobLog() {
                                                 >
                                                     🗄️ Archive
                                                 </button>
+                                                {isAdmin && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                const data = await jobsApi.getArchivePreview();
+                                                                setArchivePreview(data);
+                                                                setShowArchiveModal(true);
+                                                            } catch (err) {
+                                                                alert(`Failed to load archive preview: ${err.message}`);
+                                                            }
+                                                        }}
+                                                        className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                                                    >
+                                                        Send to Archive
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={handleReleaseClick}
                                                     className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
@@ -1051,6 +1070,92 @@ function JobLog() {
                         </div>
                     </div>
                 </div>
+
+                {/* Archive Modal */}
+                {showArchiveModal && archivePreview && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+                            <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 rounded-t-xl">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-bold text-white">Send to Archive</h2>
+                                    <button
+                                        onClick={() => setShowArchiveModal(false)}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                        disabled={archiving}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="p-6 overflow-y-auto flex-1">
+                                {archivePreview.count === 0 ? (
+                                    <p className="text-gray-600 dark:text-slate-300">No releases are eligible for archival. Releases need both Job Comp and Invoiced set to &apos;X&apos;.</p>
+                                ) : (
+                                    <>
+                                        <p className="mb-4 text-sm text-gray-700 dark:text-slate-300">
+                                            <strong>{archivePreview.count}</strong> release{archivePreview.count !== 1 ? 's' : ''} will be moved to the archive:
+                                        </p>
+                                        <div className="max-h-64 overflow-y-auto border border-gray-200 dark:border-slate-600 rounded">
+                                            <table className="w-full text-xs">
+                                                <thead className="bg-gray-100 dark:bg-slate-700 sticky top-0">
+                                                    <tr>
+                                                        <th className="px-2 py-1 text-left">Job #</th>
+                                                        <th className="px-2 py-1 text-left">Release</th>
+                                                        <th className="px-2 py-1 text-left">Name</th>
+                                                        <th className="px-2 py-1 text-left">Description</th>
+                                                        <th className="px-2 py-1 text-left">Stage</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {archivePreview.releases.map((r, i) => (
+                                                        <tr key={`${r.job}-${r.release}`} className={i % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-gray-50 dark:bg-slate-750'}>
+                                                            <td className="px-2 py-1">{r.job}</td>
+                                                            <td className="px-2 py-1">{r.release}</td>
+                                                            <td className="px-2 py-1">{r.job_name}</td>
+                                                            <td className="px-2 py-1">{r.description}</td>
+                                                            <td className="px-2 py-1">{r.stage}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-600 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowArchiveModal(false)}
+                                    className="px-4 py-2 rounded text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600"
+                                    disabled={archiving}
+                                >
+                                    Cancel
+                                </button>
+                                {archivePreview.count > 0 && (
+                                    <button
+                                        onClick={async () => {
+                                            setArchiving(true);
+                                            try {
+                                                const result = await jobsApi.confirmArchive();
+                                                setShowArchiveModal(false);
+                                                setArchivePreview(null);
+                                                refetch();
+                                                alert(`Successfully archived ${result.count} release${result.count !== 1 ? 's' : ''}.`);
+                                            } catch (err) {
+                                                alert(`Failed to archive: ${err.message}`);
+                                            } finally {
+                                                setArchiving(false);
+                                            }
+                                        }}
+                                        disabled={archiving}
+                                        className="px-4 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {archiving ? 'Archiving...' : `Confirm Archive (${archivePreview.count})`}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Release Modal */}
                 {showReleaseModal && (

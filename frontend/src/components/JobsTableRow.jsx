@@ -304,10 +304,19 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const handleStageChange = async (newStage) => {
         const oldStage = localStage;
         const oldBananaColor = localBananaColor;
+        const oldJobComp = localJobComp;
+        const oldFabOrder = localFabOrder;
         setLocalStage(newStage); // Optimistic update
         // Auto-flag Hold as urgent (red banana)
         if (newStage === 'Hold') {
             setLocalBananaColor('red');
+        }
+        // If setting to Complete, optimistically update job_comp and fab_order
+        if (newStage === 'Complete') {
+            setLocalJobComp('X');
+            setJobCompInputValue('X');
+            setLocalFabOrder(null);
+            setFabOrderInputValue('');
         }
         setUpdatingStage(true);
 
@@ -330,6 +339,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             // Revert on error
             setLocalStage(oldStage);
             setLocalBananaColor(oldBananaColor);
+            setLocalJobComp(oldJobComp);
+            setJobCompInputValue(oldJobComp ?? '');
+            setLocalFabOrder(oldFabOrder);
+            setFabOrderInputValue(oldFabOrder === null || oldFabOrder === undefined ? '' : String(oldFabOrder));
             alert(`Failed to update stage: ${error.message}`);
         } finally {
             setUpdatingStage(false);
@@ -435,7 +448,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
     const handleJobCompChange = async (newValue) => {
         const oldValue = localJobComp ?? '';
+        const oldStage = localStage;
+        const oldFabOrder = localFabOrder;
         setLocalJobComp(newValue);
+        // If setting to 'X', optimistically update stage and fab_order
+        if (newValue.trim().toUpperCase() === 'X') {
+            setLocalStage('Complete');
+            setLocalFabOrder(null);
+            setFabOrderInputValue('');
+        }
         setUpdatingJobComp(true);
         try {
             await jobsApi.updateJobComp(row['Job #'], row['Release #'], newValue);
@@ -443,6 +464,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         } catch (err) {
             setLocalJobComp(oldValue);
             setJobCompInputValue(oldValue);
+            setLocalStage(oldStage);
+            setLocalFabOrder(oldFabOrder);
+            setFabOrderInputValue(oldFabOrder === null || oldFabOrder === undefined ? '' : String(oldFabOrder));
             alert(`Failed to update job comp: ${err.message}`);
         } finally {
             setUpdatingJobComp(false);
@@ -860,8 +884,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                             e.target.blur();
                                         }
                                     }}
-                                    disabled={updatingFabOrder}
-                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''}`}
+                                    disabled={updatingFabOrder || isGrayed}
+                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
                                     style={{ minWidth: '60px' }}
                                 />
