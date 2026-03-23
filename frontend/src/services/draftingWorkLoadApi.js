@@ -177,6 +177,30 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Preview adding a Procore project (no DB writes)
+     */
+    async previewAddProject(projectId) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/admin/procore/add-project/preview`, { project_id: projectId });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to preview project ${projectId}`);
+        }
+    }
+
+    /**
+     * Confirm adding a Procore project (creates webhook + syncs submittals)
+     */
+    async confirmAddProject(projectId) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/admin/procore/add-project/confirm`, { project_id: projectId });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to add project ${projectId}`);
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {
