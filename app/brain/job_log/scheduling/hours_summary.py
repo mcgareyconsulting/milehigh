@@ -54,12 +54,16 @@ def calculate_total_fab_hrs(jobs: list[dict]) -> float:
 
 
 def calculate_total_install_hrs(jobs: list[dict]) -> float:
-    """Sum remaining installation hours across all jobs.
+    """Sum remaining installation hours across Welded-or-later jobs only.
 
+    Only jobs where fabrication is complete (get_fab_modifier == 0.0) are included.
     remaining = Install HRS * (1 - job_comp_fraction)
     """
     total = 0.0
     for job in jobs:
+        stage = job.get('Stage') or ''
+        if get_fab_modifier(stage) > 0.0:
+            continue  # still in fabrication — exclude from install planning
         install_hrs = job.get('Install HRS') or 0
         comp = _parse_job_comp(job.get('Job Comp'))
         try:
