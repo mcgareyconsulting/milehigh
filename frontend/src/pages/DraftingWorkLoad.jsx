@@ -8,6 +8,7 @@ import { useDWLDragAndDrop } from '../hooks/useDWLDragAndDrop';
 import { TableRow } from '../components/TableRow';
 import { FilterButtonGroup } from '../components/FilterButtonGroup';
 import { AlertMessage } from '../components/AlertMessage';
+import { AddProjectModal } from '../components/AddProjectModal';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
 import { checkAuth } from '../utils/auth';
@@ -43,6 +44,7 @@ function DraftingWorkLoad() {
     const { locationFilter } = useLocationContext();
     const [resorting, setResorting] = useState(false);
     const [resortError, setResortError] = useState(null);
+    const [addProjectOpen, setAddProjectOpen] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(false);
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
@@ -191,6 +193,15 @@ function DraftingWorkLoad() {
                                     <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
                                 </div>
                                 <div className="flex items-center gap-3">
+                                    {isAdmin && (
+                                    <button
+                                        onClick={() => setAddProjectOpen(true)}
+                                        className="inline-flex items-center px-4 py-2 rounded-lg font-medium shadow-sm transition-all bg-white dark:bg-slate-700 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-slate-600 cursor-pointer"
+                                        title="Add a new Procore project to the system"
+                                    >
+                                        + Add Project
+                                    </button>
+                                    )}
                                     {isAdmin && (
                                     <button
                                         onClick={handleResort}
@@ -597,6 +608,7 @@ function DraftingWorkLoad() {
                     </div>
                 </div>
             </div>
+        <AddProjectModal isOpen={addProjectOpen} onClose={() => setAddProjectOpen(false)} />
         </>
     );
 }
