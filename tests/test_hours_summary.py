@@ -126,32 +126,53 @@ class TestCalculateTotalFabHrs:
 
 class TestCalculateTotalInstallHrs:
     def test_zero_comp_full_hours(self):
-        jobs = [{'Install HRS': 50, 'Job Comp': 0.0}]
+        jobs = [{'Install HRS': 50, 'Job Comp': 0.0, 'Stage': 'Welded'}]
         assert calculate_total_install_hrs(jobs) == pytest.approx(50.0)
 
     def test_full_comp_zero_remaining(self):
-        jobs = [{'Install HRS': 50, 'Job Comp': 1.0}]
+        jobs = [{'Install HRS': 50, 'Job Comp': 1.0, 'Stage': 'Welded'}]
         assert calculate_total_install_hrs(jobs) == pytest.approx(0.0)
 
     def test_partial_comp(self):
-        jobs = [{'Install HRS': 100, 'Job Comp': 0.75}]
+        jobs = [{'Install HRS': 100, 'Job Comp': 0.75, 'Stage': 'Paint Complete'}]
         assert calculate_total_install_hrs(jobs) == pytest.approx(25.0)
 
     def test_multi_job_sum(self):
         jobs = [
-            {'Install HRS': 100, 'Job Comp': 0.0},   # 100 * 1.0 = 100
-            {'Install HRS': 80,  'Job Comp': 0.5},   # 80  * 0.5 = 40
-            {'Install HRS': 60,  'Job Comp': 1.0},   # 60  * 0.0 = 0
+            {'Install HRS': 100, 'Job Comp': 0.0, 'Stage': 'Welded'},        # 100 * 1.0 = 100
+            {'Install HRS': 80,  'Job Comp': 0.5, 'Stage': 'Ship Planning'},  # 80  * 0.5 = 40
+            {'Install HRS': 60,  'Job Comp': 1.0, 'Stage': 'Complete'},       # 60  * 0.0 = 0
         ]
         assert calculate_total_install_hrs(jobs) == pytest.approx(140.0)
 
     def test_missing_install_hrs_treated_as_zero(self):
-        jobs = [{'Job Comp': '0'}]
+        jobs = [{'Job Comp': '0', 'Stage': 'Welded'}]
         assert calculate_total_install_hrs(jobs) == pytest.approx(0.0)
 
     def test_null_job_comp_treated_as_zero(self):
-        jobs = [{'Install HRS': 40, 'Job Comp': None}]
+        jobs = [{'Install HRS': 40, 'Job Comp': None, 'Stage': 'Ship Complete'}]
         assert calculate_total_install_hrs(jobs) == pytest.approx(40.0)
 
     def test_empty_list(self):
         assert calculate_total_install_hrs([]) == pytest.approx(0.0)
+
+    def test_pre_welded_stages_excluded(self):
+        jobs = [
+            {'Install HRS': 100, 'Job Comp': 0.0, 'Stage': 'Released'},
+            {'Install HRS': 80,  'Job Comp': 0.0, 'Stage': 'Cut Start'},
+            {'Install HRS': 60,  'Job Comp': 0.0, 'Stage': 'Fit Up Complete'},
+        ]
+        assert calculate_total_install_hrs(jobs) == pytest.approx(0.0)
+
+    def test_unknown_stage_excluded(self):
+        jobs = [{'Install HRS': 50, 'Job Comp': 0.0, 'Stage': 'Some Unknown Stage'}]
+        assert calculate_total_install_hrs(jobs) == pytest.approx(0.0)
+
+    def test_mixed_stages_only_welded_or_later_count(self):
+        jobs = [
+            {'Install HRS': 100, 'Job Comp': 0.0, 'Stage': 'Released'},       # excluded
+            {'Install HRS': 80,  'Job Comp': 0.0, 'Stage': 'Cut Start'},      # excluded
+            {'Install HRS': 60,  'Job Comp': 0.0, 'Stage': 'Welded'},         # 60 * 1.0 = 60
+            {'Install HRS': 40,  'Job Comp': 0.5, 'Stage': 'Paint Complete'}, # 40 * 0.5 = 20
+        ]
+        assert calculate_total_install_hrs(jobs) == pytest.approx(80.0)

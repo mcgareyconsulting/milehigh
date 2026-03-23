@@ -1,11 +1,12 @@
-# Archive View Styling
-Need an update to how the archive view is styling and how the filtering functionality works
+# Job Log Install Hours Update
+Client wants to see install hours only after a project runs through fabrication
 
-# Filters
-- Drop Stage Filter as all will be Complete
-- Add Project Name filter, identical build to Job Log with the nice grid for all project names
-- Minimize Chevron
-- We also want a Job and Release Search, same as Job Log.
+# Backend
+Total Install Hours should be calculated for stages Welded or later in the pipeline.
+Calculating Total Install Hours for projects in the fabrication stages is giving inaccurate results for short term installation planning needs.
 
-# Ask Clarifying Questions
+# Frontend
+UI is unaffected
 
+# Relevant Files
+app/brain/job_log/
