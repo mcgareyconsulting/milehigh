@@ -234,8 +234,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         <>
             <tr
                 className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-300 dark:border-slate-600 ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''} ${
-                    isDragOver && dragOverHalf === 'top' ? 'border-t-2 border-t-blue-400' : ''
-                } ${isDragOver && dragOverHalf === 'bottom' ? 'border-b-2 border-b-blue-400' : ''}`}
+                    isDragOver && dragOverHalf === 'top' ? 'border-t-2 border-t-blue-400 dark:border-t-blue-300 bg-blue-50 dark:bg-blue-900/30' : ''
+                } ${isDragOver && dragOverHalf === 'bottom' ? 'border-b-2 border-b-blue-400 dark:border-b-blue-300 bg-blue-50 dark:bg-blue-900/30' : ''}`}
                 data-submittal-id={submittalId}
                 onDragStart={(e) => {
                     // Only allow drag from title cell
