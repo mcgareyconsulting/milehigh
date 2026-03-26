@@ -38,10 +38,12 @@ function JobLog() {
         selectedStages,
         jobNumberSearch,
         releaseNumberSearch,
+        nameDescSearch,
         setSelectedProjectNames,
         setSelectedStages,
         setJobNumberSearch,
         setReleaseNumberSearch,
+        setNameDescSearch,
         projectNameOptions,
         stageOptions,
         stageColors,
@@ -656,6 +658,11 @@ function JobLog() {
                                                     Release # {releaseNumberSearch}
                                                 </span>
                                             )}
+                                            {nameDescSearch !== '' && (
+                                                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                    Name: {nameDescSearch}
+                                                </span>
+                                            )}
                                         </div>
                                         {/* Total count + expand chevron */}
                                         <div className="ml-auto flex items-center gap-2">
@@ -951,6 +958,18 @@ function JobLog() {
                                                         onChange={(e) => setReleaseNumberSearch(e.target.value)}
                                                         placeholder="Release #..."
                                                         className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                                        Name / Desc:
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={nameDescSearch}
+                                                        onChange={(e) => setNameDescSearch(e.target.value)}
+                                                        placeholder="Search name or description..."
+                                                        className="w-48 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                                     />
                                                 </div>
                                             </div>

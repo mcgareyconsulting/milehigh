@@ -1,12 +1,11 @@
-# Job Log Install Hours Update
-Client wants to see install hours only after a project runs through fabrication
-
-# Backend
-Total Install Hours should be calculated for stages Welded or later in the pipeline.
-Calculating Total Install Hours for projects in the fabrication stages is giving inaccurate results for short term installation planning needs.
+# Name-Description Search
+In addition to Job number search on the Job Log, I would like to add a name and description search
 
 # Frontend
-UI is unaffected
+This search should be placed somewhere in the filter header and collapsable when the filter header is minimed. Reset filters should affect it the same way other filters are affected.
+
+# Ask Clarifying Questions
 
 # Relevant Files
 app/brain/job_log/
+app/frontend/src/pages/JobLog.jsx
