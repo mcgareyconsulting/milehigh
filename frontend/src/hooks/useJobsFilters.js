@@ -40,6 +40,9 @@ export function useJobsFilters(jobs = []) {
     const [releaseNumberSearch, setReleaseNumberSearch] = useState(
         () => localStorage.getItem('jl_releaseNum') || ''
     );
+    const [nameDescSearch, setNameDescSearch] = useState(
+        () => localStorage.getItem('jl_nameDesc') || ''
+    );
     const [selectedSubset, setSelectedSubset] = useState(
         () => localStorage.getItem('jl_subset') || null
     ); // 'job_order', 'complete', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
@@ -48,6 +51,7 @@ export function useJobsFilters(jobs = []) {
     useEffect(() => { localStorage.setItem('jl_projects', JSON.stringify(selectedProjectNames)); }, [selectedProjectNames]);
     useEffect(() => { localStorage.setItem('jl_jobNum', jobNumberSearch); }, [jobNumberSearch]);
     useEffect(() => { localStorage.setItem('jl_releaseNum', releaseNumberSearch); }, [releaseNumberSearch]);
+    useEffect(() => { localStorage.setItem('jl_nameDesc', nameDescSearch); }, [nameDescSearch]);
     useEffect(() => {
         if (selectedSubset === null) {
             localStorage.removeItem('jl_subset');
@@ -87,6 +91,14 @@ export function useJobsFilters(jobs = []) {
             }
         }
 
+        // Filter by name / description (partial match on either field)
+        if (nameDescSearch.trim() !== '') {
+            const q = nameDescSearch.trim().toLowerCase();
+            const inName = (job['Job'] || '').toLowerCase().includes(q);
+            const inDesc = (job['Description'] || '').toLowerCase().includes(q);
+            if (!inName && !inDesc) return false;
+        }
+
         // Filter by Stage (multiselect - must match any selected stage)
         // If empty array, show all stages
         if (selectedStages.length > 0) {
@@ -97,7 +109,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return true;
-    }, [selectedProjectNames, jobNumberSearch, releaseNumberSearch, selectedStages]);
+    }, [selectedProjectNames, jobNumberSearch, releaseNumberSearch, nameDescSearch, selectedStages]);
 
     /**
      * Sort jobs by fab order (for subset-specific sorting)
@@ -361,10 +373,12 @@ export function useJobsFilters(jobs = []) {
         setSelectedStages([]);
         setJobNumberSearch('');
         setReleaseNumberSearch('');
+        setNameDescSearch('');
         setSelectedSubset(null);
         localStorage.removeItem('jl_projects');
         localStorage.removeItem('jl_jobNum');
         localStorage.removeItem('jl_releaseNum');
+        localStorage.removeItem('jl_nameDesc');
         localStorage.removeItem('jl_subset');
     }, []);
 
@@ -374,6 +388,7 @@ export function useJobsFilters(jobs = []) {
         selectedStages,
         jobNumberSearch,
         releaseNumberSearch,
+        nameDescSearch,
         selectedSubset,
 
         // Filter setters
@@ -381,6 +396,7 @@ export function useJobsFilters(jobs = []) {
         setSelectedStages,
         setJobNumberSearch,
         setReleaseNumberSearch,
+        setNameDescSearch,
         setSelectedSubset,
 
         // Filter options
