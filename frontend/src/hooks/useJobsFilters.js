@@ -149,41 +149,29 @@ export function useJobsFilters(jobs = []) {
     }, []);
 
     /**
-     * Filter and sort jobs by stage_group independently
-     * Each stage_group is sorted separately by fab_order, then combined in order
+     * Filter jobs by stage_groups and sort by unified fab_order
      */
-    const filterAndSortByStageGroups = useCallback((jobsToFilter, stageGroups) => {
-        const result = [];
-        // Process each stage_group independently in order
-        for (const stageGroup of stageGroups) {
-            const filtered = jobsToFilter.filter(job => {
-                const jobStageGroup = String(job['Stage Group'] ?? '').trim();
-                return jobStageGroup === stageGroup;
-            });
-            const sorted = sortByFabOrder(filtered);
-            result.push(...sorted);
-        }
-        return result;
+    const filterByStageGroups = useCallback((jobsToFilter, stageGroups) => {
+        const filtered = jobsToFilter.filter(job => {
+            const jobStageGroup = String(job['Stage Group'] ?? '').trim();
+            return stageGroups.includes(jobStageGroup);
+        });
+        return sortByFabOrder(filtered);
     }, [sortByFabOrder]);
 
     /**
-     * Filter jobs into Job Order subset (COMPLETE, READY_TO_SHIP, FABRICATION stage_groups)
-     * Each stage_group is sorted independently by fab_order
+     * Job Order subset: all active releases sorted by unified fab_order
      */
     const getJobOrderSubset = useCallback((jobsToFilter) => {
-        return filterAndSortByStageGroups(jobsToFilter, ['COMPLETE', 'READY_TO_SHIP', 'FABRICATION']);
-    }, [filterAndSortByStageGroups]);
+        return sortByFabOrder([...jobsToFilter]);
+    }, [sortByFabOrder]);
 
     /**
      * Filter jobs into Fab subset (FABRICATION stage_group)
      */
     const getFabSubset = useCallback((jobsToFilter) => {
-        const filtered = jobsToFilter.filter(job => {
-            const stageGroup = String(job['Stage Group'] ?? '').trim();
-            return stageGroup === 'FABRICATION';
-        });
-        return sortByFabOrder(filtered);
-    }, [sortByFabOrder]);
+        return filterByStageGroups(jobsToFilter, ['FABRICATION']);
+    }, [filterByStageGroups]);
 
     /**
      * Filtered and sorted jobs for display based on selected subset
@@ -201,14 +189,14 @@ export function useJobsFilters(jobs = []) {
         let result = [];
 
         if (selectedSubset === 'job_order') {
-            // Job Order: COMPLETE, READY_TO_SHIP, and FABRICATION stage_groups
+            // Job Order: all releases sorted by unified fab_order
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'complete') {
             // Complete: COMPLETE stage_group only, ascending fab order
-            result = filterAndSortByStageGroups(baseFiltered, ['COMPLETE']);
+            result = filterByStageGroups(baseFiltered, ['COMPLETE']);
         } else if (selectedSubset === 'ready_to_ship') {
-            // Ready to Ship: READY_TO_SHIP stage_group + FABRICATION stage_group (trailing filter)
-            result = filterAndSortByStageGroups(baseFiltered, ['READY_TO_SHIP', 'FABRICATION']);
+            // Ready to Ship: READY_TO_SHIP + FABRICATION stage_groups, unified fab_order
+            result = filterByStageGroups(baseFiltered, ['READY_TO_SHIP', 'FABRICATION']);
         } else if (selectedSubset === 'paint') {
             // Paint: only stages "Paint complete" and "Welded QC", ascending fab order
             const paintStages = ['Paint complete', 'Welded QC'];
@@ -227,7 +215,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterAndSortByStageGroups]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder]);
 
     /**
      * Extract unique project name (Job) options from jobs

@@ -51,17 +51,31 @@ class UpdateFabOrderCommand:
         # Capture old state for payload
         import math
         old_fab_order = job_record.fab_order
-        
+
         # Ensure old_fab_order is not NaN for JSON serialization
         if isinstance(old_fab_order, float) and math.isnan(old_fab_order):
             logger.warning(f"Job {self.job_id}-{self.release} has NaN fab_order, converting to None")
             old_fab_order = None
 
-        # 1b. Clamp fab_order to stage bounds (implicit stage ordering)
-        if self.fab_order is not None and job_record.stage not in ('Hold', None):
-            from app.api.helpers import get_fab_order_bounds, clamp_fab_order
+        # 1b. Fixed-tier guard: stages with auto-assigned fab_order
+        from app.api.helpers import get_fixed_tier, get_fab_order_bounds, clamp_fab_order
+        tier = get_fixed_tier(job_record.stage)
+        if tier is not None:
+            # Fixed-tier stages always get the tier value — skip clamping and collision
+            self.fab_order = tier
+            logger.info(
+                f"Job {self.job_id}-{self.release} is fixed tier {tier} "
+                f"(stage={job_record.stage}), overriding fab_order to {tier}"
+            )
+        elif self.fab_order is not None and job_record.stage not in ('Hold', None):
+            # 1c. Clamp fab_order to stage bounds (unified ordering)
             lower, upper = get_fab_order_bounds(job_record.stage, self.job_id, self.release)
+            # Ensure dynamic fab_order is at least 3 (1 and 2 are reserved for fixed tiers)
+            if self.fab_order < 3:
+                self.fab_order = 3
             clamped = clamp_fab_order(self.fab_order, lower, upper)
+            if clamped < 3:
+                clamped = 3
             if clamped != self.fab_order:
                 logger.info(
                     f"fab_order clamped for job {self.job_id}-{self.release}: "
@@ -70,15 +84,16 @@ class UpdateFabOrderCommand:
                 self.fab_order = clamped
 
         # 2️⃣ Collision detection: Cascade bump - shift all jobs with fab_order >= target value up by 1
-        if self.fab_order is not None:
+        # Only for dynamic stages (fab_order >= 3); fixed tiers share values and don't cascade
+        if self.fab_order is not None and self.fab_order > 2:
             from sqlalchemy import or_
-            # Find all jobs in the same stage_group with fab_order >= target value (excluding current job)
-            # We need to bump these jobs up by 1 to make room for the new value
-            # Exclude None and ensure we only get valid numeric values
+            # Find ALL dynamic releases with fab_order >= target value (excluding current job)
+            # No stage_group filter — unified ordering across all releases
+            # Exclude fixed-tier fab_orders (1, 2) which are shared values
             jobs_to_bump = Releases.query.filter(
-                Releases.stage_group == job_record.stage_group,
                 Releases.fab_order.isnot(None),
                 Releases.fab_order >= self.fab_order,
+                Releases.fab_order > 2,
                 or_(
                     Releases.job != self.job_id,
                     Releases.release != self.release

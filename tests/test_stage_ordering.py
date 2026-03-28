@@ -1,11 +1,11 @@
 """
-Tests for implicit stage ordering (fab_order clamping).
+Tests for unified fab_order ordering.
 
 Covers:
-- Pure utility functions (_normalize_stage, get_stage_position, clamp_fab_order)
-- get_fab_order_bounds DB queries
-- Integration: UpdateFabOrderCommand clamping
-- Integration: stage change route clamping
+- Pure utility functions (_normalize_stage, get_stage_position, clamp_fab_order, get_fixed_tier)
+- get_fab_order_bounds DB queries (unified across all dynamic stages)
+- Integration: UpdateFabOrderCommand clamping and collision cascade
+- Integration: stage change route — fixed tiers and dynamic assignment
 """
 import pytest
 from unittest.mock import Mock, patch
@@ -18,6 +18,9 @@ from app.api.helpers import (
     get_stage_position,
     get_fab_order_bounds,
     clamp_fab_order,
+    get_fixed_tier,
+    DYNAMIC_STAGE_ORDER,
+    FIXED_TIER_STAGES,
 )
 
 
@@ -86,8 +89,6 @@ def test_normalize_stage_exact():
 
 
 def test_normalize_stage_variant():
-    # "Cut Start" is stored in STAGE_TO_GROUP as-is but "Cut start" is also there.
-    # _normalize_stage does exact match first; "Cut Start" is in STAGE_TO_GROUP so returns it.
     result = _normalize_stage("CUT START")
     assert result is not None
     assert result.lower() == "cut start"
@@ -101,22 +102,52 @@ def test_normalize_stage_none():
     assert _normalize_stage(None) is None
 
 
-def test_get_stage_position():
-    assert get_stage_position("Released") == 0
-    assert get_stage_position("Cut start") == 1
-    assert get_stage_position("Material Ordered") == 2
-    assert get_stage_position("Fit Up Complete.") == 3
-    assert get_stage_position("Welded") == 4
-    assert get_stage_position("Hold") is None
+def test_get_stage_position_dynamic_stages():
+    """Dynamic stages return their position in DYNAMIC_STAGE_ORDER."""
+    assert get_stage_position("Welded QC") == 0
+    assert get_stage_position("Welded") == 1
+    assert get_stage_position("Fit Up Complete.") == 2
+    assert get_stage_position("Material Ordered") == 3
+    assert get_stage_position("Cut start") == 4
+    assert get_stage_position("Released") == 5
+
+
+def test_get_stage_position_fixed_tiers_return_none():
+    """Fixed-tier stages are not in the dynamic order."""
     assert get_stage_position("Shipping Complete") is None
+    assert get_stage_position("Shipping completed") is None
+    assert get_stage_position("Complete") is None
+    assert get_stage_position("Paint complete") is None
+    assert get_stage_position("Store at MHMW for shipping") is None
+    assert get_stage_position("Shipping planning") is None
+
+
+def test_get_stage_position_hold_exempt():
+    assert get_stage_position("Hold") is None
+
+
+def test_get_stage_position_none():
     assert get_stage_position(None) is None
 
 
-def test_get_stage_position_ready_to_ship():
-    assert get_stage_position("Welded QC") == 0
-    assert get_stage_position("Paint complete") == 1
-    assert get_stage_position("Store at MHMW for shipping") == 2
-    assert get_stage_position("Shipping planning") == 3
+def test_get_fixed_tier():
+    """Fixed-tier stages return their tier value."""
+    assert get_fixed_tier("Shipping completed") == 1
+    assert get_fixed_tier("Shipping Complete") == 1
+    assert get_fixed_tier("Complete") == 1
+    assert get_fixed_tier("Paint complete") == 2
+    assert get_fixed_tier("Paint Complete") == 2
+    assert get_fixed_tier("Store at MHMW for shipping") == 2
+    assert get_fixed_tier("Shipping planning") == 2
+
+
+def test_get_fixed_tier_dynamic_stages_return_none():
+    """Dynamic stages are not fixed tiers."""
+    assert get_fixed_tier("Released") is None
+    assert get_fixed_tier("Cut start") is None
+    assert get_fixed_tier("Welded") is None
+    assert get_fixed_tier("Welded QC") is None
+    assert get_fixed_tier("Hold") is None
 
 
 def test_clamp_below_lower():
@@ -136,71 +167,78 @@ def test_clamp_no_bounds():
 
 
 def test_clamp_at_lower_boundary():
-    # value == lower → clamp to lower + 1
     assert clamp_fab_order(10, lower=10, upper=None) == 11
 
 
 def test_clamp_at_upper_boundary():
-    # value == upper, strict_upper=False (default) → no clamp (collision will handle it)
     assert clamp_fab_order(15, lower=None, upper=15) == 15
 
 
 def test_clamp_at_upper_boundary_strict():
-    # value == upper, strict_upper=True (stage change path) → clamp to upper - 1
     assert clamp_fab_order(15, lower=None, upper=15, strict_upper=True) == 14
 
 
 def test_clamp_above_upper_strict():
-    # value > upper, strict_upper=True → same result as default
     assert clamp_fab_order(20, lower=None, upper=15, strict_upper=True) == 14
 
 
 # ---------------------------------------------------------------------------
-# get_fab_order_bounds DB tests
+# get_fab_order_bounds DB tests (unified across all dynamic stages)
 # ---------------------------------------------------------------------------
 
-def test_bounds_released_only_later_stages(app):
-    """Released (pos=0): no earlier stages; upper=min of Welded jobs."""
+def test_bounds_welded_qc_no_earlier_stages(app):
+    """Welded QC (pos=0): no earlier dynamic stages; upper=min of Welded jobs."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 50)
-        make_release(2, "A", "Welded", "FABRICATION", 60)
+        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(2, "A", "Welded", "FABRICATION", 15)
+        db.session.commit()
+
+        lower, upper = get_fab_order_bounds("Welded QC", 99, "Z")
+        assert lower is None
+        assert upper == 10
+
+
+def test_bounds_released_only_earlier_stages(app):
+    """Released (pos=5, last): lower=max of all earlier stages; no later stages."""
+    with app.app_context():
+        make_release(1, "A", "Cut start", "FABRICATION", 20)
+        make_release(2, "A", "Material Ordered", "FABRICATION", 15)
         db.session.commit()
 
         lower, upper = get_fab_order_bounds("Released", 99, "Z")
-        assert lower is None
-        assert upper == 50
-
-
-def test_bounds_welded_only_earlier_stages(app):
-    """Welded (pos=4): lower=max of Released jobs; no later stages."""
-    with app.app_context():
-        make_release(1, "A", "Released", "FABRICATION", 1)
-        make_release(2, "A", "Released", "FABRICATION", 2)
-        db.session.commit()
-
-        lower, upper = get_fab_order_bounds("Welded", 99, "Z")
-        assert lower == 2
+        assert lower == 20  # max of all earlier stages
         assert upper is None
 
 
-def test_bounds_cut_start_between_stages(app):
-    """Cut start (pos=1): lower=max(Released), upper=min(Material Ordered onward)."""
+def test_bounds_welded_between_stages(app):
+    """Welded (pos=1): lower=max(Welded QC), upper=min(Fit Up Complete onward)."""
     with app.app_context():
-        make_release(1, "A", "Released", "FABRICATION", 1)
-        make_release(2, "A", "Material Ordered", "FABRICATION", 5)
-        make_release(3, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
+        make_release(2, "A", "Fit Up Complete.", "FABRICATION", 20)
+        make_release(3, "A", "Released", "FABRICATION", 30)
         db.session.commit()
 
-        lower, upper = get_fab_order_bounds("Cut start", 99, "Z")
-        assert lower == 1
-        assert upper == 5
+        lower, upper = get_fab_order_bounds("Welded", 99, "Z")
+        assert lower == 5   # max of Welded QC
+        assert upper == 20  # min of Fit Up Complete
+
+
+def test_bounds_cross_group_unified(app):
+    """Bounds work across old stage_groups — Welded QC and Welded are neighbors."""
+    with app.app_context():
+        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
+        make_release(2, "A", "Fit Up Complete.", "FABRICATION", 15)
+        db.session.commit()
+
+        lower, upper = get_fab_order_bounds("Welded", 99, "Z")
+        assert lower == 5
+        assert upper == 15
 
 
 def test_bounds_hold_exempt(app):
     """Hold is exempt — always returns (None, None)."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 5)
-        make_release(2, "A", "Welded", "FABRICATION", 20)
         db.session.commit()
 
         lower, upper = get_fab_order_bounds("Hold", 99, "Z")
@@ -208,120 +246,252 @@ def test_bounds_hold_exempt(app):
         assert upper is None
 
 
-def test_bounds_self_excluded(app):
-    """Current job is excluded from the query."""
+def test_bounds_fixed_tier_exempt(app):
+    """Fixed-tier stages return (None, None)."""
     with app.app_context():
-        # Only job in the DB is the current job itself
-        make_release(10, "A", "Released", "FABRICATION", 5)
+        make_release(1, "A", "Released", "FABRICATION", 5)
         db.session.commit()
 
-        lower, upper = get_fab_order_bounds("Welded", 10, "A")
-        # Released job is the current job — excluded → lower should be None
+        lower, upper = get_fab_order_bounds("Shipping completed", 99, "Z")
+        assert lower is None
+        assert upper is None
+
+        lower, upper = get_fab_order_bounds("Paint complete", 99, "Z")
         assert lower is None
         assert upper is None
 
 
-def test_bounds_variant_stage_name_matched(app):
-    """DB stores 'Cut Start' (capital S) — variant should still be matched."""
+def test_bounds_self_excluded(app):
+    """Current job is excluded from the query."""
     with app.app_context():
-        # Store with variant name
-        make_release(1, "A", "Cut Start", "FABRICATION", 3)
-        make_release(2, "A", "Welded", "FABRICATION", 10)
+        make_release(10, "A", "Welded QC", "READY_TO_SHIP", 5)
         db.session.commit()
 
-        lower, upper = get_fab_order_bounds("Material Ordered", 99, "Z")
-        assert lower == 3   # Cut Start variant matched
-        assert upper == 10
+        lower, upper = get_fab_order_bounds("Welded", 10, "A")
+        assert lower is None
+        assert upper is None
 
 
 # ---------------------------------------------------------------------------
-# Integration: UpdateFabOrderCommand clamping
+# Integration: UpdateFabOrderCommand
 # ---------------------------------------------------------------------------
 
 def test_fab_order_clamped_above_later_stage(app):
-    """Released job tries fab_order=60 when Welded is at 50 → stored as 49."""
+    """Welded QC tries fab_order=25 when Welded is at 10 → clamped to 9."""
     with app.app_context():
-        released = make_release(1, "A", "Released", "FABRICATION", 1)
-        make_release(2, "A", "Welded", "FABRICATION", 50)
+        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
+        make_release(2, "A", "Welded", "FABRICATION", 10)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=60)
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=25)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            result = cmd.execute()
+
+        db.session.refresh(wqc)
+        assert wqc.fab_order == 9
+
+
+def test_fab_order_clamped_below_earlier_stage(app):
+    """Released tries fab_order=3 when Cut start is at 20 → clamped to 21."""
+    with app.app_context():
+        make_release(1, "A", "Cut start", "FABRICATION", 20)
+        released = make_release(2, "A", "Released", "FABRICATION", 30)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=3)
         with patch('app.services.outbox_service.OutboxService.add'):
             result = cmd.execute()
 
         db.session.refresh(released)
-        assert released.fab_order == 49
+        assert released.fab_order == 21
 
 
-def test_fab_order_clamped_below_earlier_stage(app):
-    """Welded job tries fab_order=0 when Released is at 10 → stored as 11."""
+def test_fab_order_min_is_3(app):
+    """Dynamic fab_order is always at least 3 (1 and 2 are reserved)."""
     with app.app_context():
-        make_release(1, "A", "Released", "FABRICATION", 10)
-        welded = make_release(2, "A", "Welded", "FABRICATION", 40)
+        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=0)
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=1)
         with patch('app.services.outbox_service.OutboxService.add'):
             result = cmd.execute()
 
-        db.session.refresh(welded)
-        assert welded.fab_order == 11
+        db.session.refresh(wqc)
+        assert wqc.fab_order >= 3
+
+
+def test_fixed_tier_overrides_input(app):
+    """Fixed-tier stage always gets the tier value regardless of input."""
+    with app.app_context():
+        complete = make_release(1, "A", "Complete", "COMPLETE", None)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=99)
+        result = cmd.execute()
+
+        db.session.refresh(complete)
+        assert complete.fab_order == 1
+
+
+def test_fixed_tier_paint_complete(app):
+    """Paint complete always gets fab_order=2."""
+    with app.app_context():
+        pc = make_release(1, "A", "Paint complete", "READY_TO_SHIP", None)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=50)
+        result = cmd.execute()
+
+        db.session.refresh(pc)
+        assert pc.fab_order == 2
 
 
 def test_hold_not_clamped(app):
     """Hold job ignores bounds entirely."""
     with app.app_context():
-        released = make_release(1, "A", "Released", "FABRICATION", 5)
+        make_release(1, "A", "Released", "FABRICATION", 5)
         hold_job = make_release(2, "A", "Hold", "FABRICATION", None)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=1)
+        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=3)
         result = cmd.execute()
 
         db.session.refresh(hold_job)
-        # Should be stored as-is (no clamping) — value 1 is below Released at 5
-        # but Hold is exempt; collision detection may bump Released, that's fine
-        assert hold_job.fab_order == 1
+        assert hold_job.fab_order == 3
 
 
-def test_in_range_unchanged(app):
-    """Value within valid range → no clamp, no collision cascade from boundaries."""
+def test_collision_cascade_unified(app):
+    """Collision cascade works across all dynamic stages (not per stage_group)."""
     with app.app_context():
-        make_release(1, "A", "Released", "FABRICATION", 1)
-        cut_start = make_release(2, "A", "Cut start", "FABRICATION", 5)
-        make_release(3, "A", "Welded", "FABRICATION", 10)
+        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
+        welded = make_release(2, "A", "Welded", "FABRICATION", 5)
+        fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 7)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=5)
-        result = cmd.execute()
+        # Set Welded QC to 5 — should bump Welded and Fit Up
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
 
-        db.session.refresh(cut_start)
-        assert cut_start.fab_order == 5
+        db.session.refresh(wqc)
+        db.session.refresh(welded)
+        db.session.refresh(fitup)
+        assert wqc.fab_order == 5
+        assert welded.fab_order == 6
+        assert fitup.fab_order == 8
+
+
+def test_collision_does_not_bump_fixed_tiers(app):
+    """Fixed-tier releases (fab_order 1, 2) are never bumped by collision cascade."""
+    with app.app_context():
+        complete = make_release(1, "A", "Complete", "COMPLETE", 1)
+        paint = make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
+        wqc = make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
+        welded = make_release(4, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=3, release="A", fab_order=3)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        db.session.refresh(complete)
+        db.session.refresh(paint)
+        db.session.refresh(wqc)
+        db.session.refresh(welded)
+        assert complete.fab_order == 1  # unchanged
+        assert paint.fab_order == 2     # unchanged
+        assert wqc.fab_order == 3
+        assert welded.fab_order == 6
+
+
+def test_full_chain_ordering_preserved(app):
+    """After collision cascade, stage ordering is maintained across all dynamic stages."""
+    with app.app_context():
+        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
+        welded = make_release(2, "A", "Welded", "FABRICATION", 5)
+        fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 8)
+        released = make_release(4, "A", "Released", "FABRICATION", 12)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        db.session.refresh(wqc)
+        db.session.refresh(welded)
+        db.session.refresh(fitup)
+        db.session.refresh(released)
+        assert wqc.fab_order < welded.fab_order
+        assert welded.fab_order < fitup.fab_order
+        assert fitup.fab_order < released.fab_order
 
 
 # ---------------------------------------------------------------------------
-# Integration: stage change route clamping
+# Integration: stage change route
 # ---------------------------------------------------------------------------
 
-def test_stage_change_triggers_clamp(client, app):
-    """Released job at fab_order=20 moves to Cut start when Welded is at 5 → clamped to 4.
+def test_stage_change_to_complete_sets_tier_1(client, app):
+    """Moving to Complete auto-sets fab_order=1 and job_comp='X'."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 10)
+        db.session.commit()
 
-    Cut start (pos=1) upper bound = min(Material Ordered...Welded) = 5.
-    Since 20 >= 5, clamps to 5 - 1 = 4.
-    """
+    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
+        resp = client.patch(
+            '/brain/update-stage/1/A',
+            json={'stage': 'Complete'},
+            content_type='application/json'
+        )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 1
+        assert job.job_comp == 'X'
+
+
+def test_stage_change_to_paint_complete_sets_tier_2(client, app):
+    """Moving to Paint complete auto-sets fab_order=2."""
+    with app.app_context():
+        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
+        db.session.commit()
+
+    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
+        resp = client.patch(
+            '/brain/update-stage/1/A',
+            json={'stage': 'Paint complete'},
+            content_type='application/json'
+        )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 2
+
+
+def test_stage_change_to_dynamic_appends(client, app):
+    """Moving to a dynamic stage appends at end of that stage's block."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 20)
         make_release(2, "A", "Welded", "FABRICATION", 5)
+        make_release(3, "A", "Welded", "FABRICATION", 6)
         db.session.commit()
 
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
         resp = client.patch(
             '/brain/update-stage/1/A',
-            json={'stage': 'Cut start'},
+            json={'stage': 'Welded'},
             content_type='application/json'
         )
 
@@ -329,39 +499,14 @@ def test_stage_change_triggers_clamp(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        # upper bound for Cut start = min(Welded) = 5 → clamped to 5 - 1 = 4
-        assert job.fab_order == 4
+        # max in Welded = 6, so new fab_order = 7
+        assert job.fab_order == 7
 
 
-def test_stage_change_same_group_no_clamp_needed(client, app):
-    """Cut start at fab_order=8 moves to Material Ordered; bounds allow 8 → unchanged."""
+def test_stage_change_to_empty_dynamic_stage(client, app):
+    """Moving to an empty dynamic stage gets lower_bound + 1 or 3."""
     with app.app_context():
-        make_release(1, "A", "Cut start", "FABRICATION", 8)
-        make_release(2, "A", "Released", "FABRICATION", 1)
-        make_release(3, "A", "Welded", "FABRICATION", 10)
-        db.session.commit()
-
-    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
-        resp = client.patch(
-            '/brain/update-stage/1/A',
-            json={'stage': 'Material Ordered'},
-            content_type='application/json'
-        )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        # bounds for Material Ordered: lower=max(Released,Cut start excluding self)=1, upper=min(Welded)=10
-        # 8 is in range → unchanged
-        assert job.fab_order == 8
-
-
-def test_fab_to_ready_to_ship_unaffected(client, app):
-    """Existing FABRICATION→READY_TO_SHIP logic still assigns max+1 correctly."""
-    with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
-        make_release(2, "A", "Welded QC", "READY_TO_SHIP", 3)
+        make_release(1, "A", "Released", "FABRICATION", 10)
         db.session.commit()
 
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
@@ -375,88 +520,20 @@ def test_fab_to_ready_to_ship_unaffected(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        # max in READY_TO_SHIP = 3, so new fab_order = 4
-        assert job.fab_order == 4
+        # Welded QC is pos 0, no earlier stages → lower_bound = None → fab_order = 3
+        assert job.fab_order == 3
 
 
-# ---------------------------------------------------------------------------
-# Section A: Boundary behavior (>= vs > upper bound)
-# ---------------------------------------------------------------------------
-
-def test_clamp_at_upper_boundary_with_collision(app):
-    """Released A tries fab_order=5, Welded B is at 5.
-    With strict_upper=False (command path): no clamp; collision bumps Welded to 6.
-    Final: Released=5, Welded=6.
-    """
+def test_stage_change_to_welded_qc_with_earlier_empty(client, app):
+    """Welded QC with no earlier stages starts at 3."""
     with app.app_context():
-        released = make_release(1, "A", "Released", "FABRICATION", 1)
-        welded = make_release(2, "A", "Welded", "FABRICATION", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(released)
-        db.session.refresh(welded)
-        assert released.fab_order == 5
-        assert welded.fab_order == 6
-
-
-def test_clamp_above_upper_with_collision(app):
-    """Released A tries fab_order=10, Welded B is at 5.
-    10 > 5 → clamped to 4. Collision bumps Welded from 5 to 6 (Welded >= clamped value 4).
-    Final: Released=4, Welded=6.
-    """
-    with app.app_context():
-        released = make_release(1, "A", "Released", "FABRICATION", 1)
-        welded = make_release(2, "A", "Welded", "FABRICATION", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(released)
-        db.session.refresh(welded)
-        assert released.fab_order == 4
-        assert welded.fab_order == 6
-
-
-def test_lower_bound_same_position_always_clamped(app):
-    """Welded B tries to move to position 10 (same as Released A).
-    Lower bound clamp must fire: 10 <= 10 → clamped to 11.
-    (Allowing same-position would let collision bump Released UP → intermingling.)
-    """
-    with app.app_context():
-        make_release(1, "A", "Released", "FABRICATION", 10)
-        welded = make_release(2, "A", "Welded", "FABRICATION", 15)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=10)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(welded)
-        assert welded.fab_order == 11
-
-
-def test_clamp_strict_upper_for_stage_change(client, app):
-    """Released A at fab_order=5 moves to Cut start when another job is Welded at 5.
-    Stage change path uses strict_upper=True: 5 >= 5 → clamped to 4.
-    """
-    with app.app_context():
-        make_release(1, "A", "Released", "FABRICATION", 5)
-        make_release(2, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Welded", "FABRICATION", 5)
         db.session.commit()
 
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
         resp = client.patch(
             '/brain/update-stage/1/A',
-            json={'stage': 'Cut start'},
+            json={'stage': 'Welded QC'},
             content_type='application/json'
         )
 
@@ -464,170 +541,24 @@ def test_clamp_strict_upper_for_stage_change(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == 4
+        assert job.fab_order == 3
 
 
-# ---------------------------------------------------------------------------
-# Section B: Cascade correctness
-# ---------------------------------------------------------------------------
-
-def test_cascade_bumped_cut_start_stays_below_welded(app):
-    """Released=1, Cut start=9, Welded=10. Set Released to 9.
-    Released clamped: upper=min(Cut start,Welded)=9, but 9 is not > 9 so no clamp → stays 9.
-    Collision bumps Cut start from 9→10, then Welded from 10→11.
-    Final: Released=9, Cut start=10, Welded=11; ordering maintained.
-    """
+def test_stage_change_to_shipping_planning_sets_tier_2(client, app):
+    """Shipping planning is a fixed tier 2 stage."""
     with app.app_context():
-        released = make_release(1, "A", "Released", "FABRICATION", 1)
-        cut_start = make_release(2, "A", "Cut start", "FABRICATION", 9)
-        welded = make_release(3, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Welded", "FABRICATION", 10)
         db.session.commit()
 
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=9)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
+    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
+        resp = client.patch(
+            '/brain/update-stage/1/A',
+            json={'stage': 'Shipping planning'},
+            content_type='application/json'
+        )
 
-        db.session.refresh(released)
-        db.session.refresh(cut_start)
-        db.session.refresh(welded)
-        assert released.fab_order < cut_start.fab_order
-        assert cut_start.fab_order < welded.fab_order
+    assert resp.status_code == 200
 
-
-def test_full_chain_ordering_preserved(app):
-    """Released=1, Cut start=5, Material Ordered=8, Welded=10. Set Released to 5.
-    After collision cascade, ordering Released < Cut start < Material Ordered < Welded must hold.
-    """
     with app.app_context():
-        released = make_release(1, "A", "Released", "FABRICATION", 1)
-        cut_start = make_release(2, "A", "Cut start", "FABRICATION", 5)
-        mat_ordered = make_release(3, "A", "Material Ordered", "FABRICATION", 8)
-        welded = make_release(4, "A", "Welded", "FABRICATION", 10)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(released)
-        db.session.refresh(cut_start)
-        db.session.refresh(mat_ordered)
-        db.session.refresh(welded)
-        assert released.fab_order < cut_start.fab_order
-        assert cut_start.fab_order < mat_ordered.fab_order
-        assert mat_ordered.fab_order < welded.fab_order
-
-
-def test_multiple_releases_and_welded(app):
-    """Released A=1, Released B=2, Welded=5. Set Released A to 5.
-    A lands at 5; collision bumps Welded. A and B always < Welded.
-    """
-    with app.app_context():
-        rel_a = make_release(1, "A", "Released", "FABRICATION", 1)
-        rel_b = make_release(2, "A", "Released", "FABRICATION", 2)
-        welded = make_release(3, "A", "Welded", "FABRICATION", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(rel_a)
-        db.session.refresh(rel_b)
-        db.session.refresh(welded)
-        assert rel_a.fab_order == 5
-        assert rel_a.fab_order < welded.fab_order
-        assert rel_b.fab_order < welded.fab_order
-
-
-# ---------------------------------------------------------------------------
-# Section C: Pre-existing intermingling corrected
-# ---------------------------------------------------------------------------
-
-def test_intermingling_corrected_on_update(app):
-    """Released A=50 (wrong — above Welded B=5). Set Released A to 20.
-    Upper bound for Released = min(Welded) = 5. 20 > 5 → clamped to 4.
-    Collision bumps Welded from 5 → 5 (not triggered since clamped value 4 < 5).
-    Final: Released=4, Welded=5; A < B.
-    """
-    with app.app_context():
-        released = make_release(1, "A", "Released", "FABRICATION", 50)
-        welded = make_release(2, "A", "Welded", "FABRICATION", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=20)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(released)
-        db.session.refresh(welded)
-        assert released.fab_order < welded.fab_order
-
-
-def test_intermingling_not_worsened_by_unrelated_update(app):
-    """Released A=1, Released B=50 (bad), Welded C=10. Set Released A to 2.
-    A is within bounds → no clamp. B and C unchanged. A < C even if B is still bad.
-    """
-    with app.app_context():
-        rel_a = make_release(1, "A", "Released", "FABRICATION", 1)
-        rel_b = make_release(2, "A", "Released", "FABRICATION", 50)
-        welded = make_release(3, "A", "Welded", "FABRICATION", 10)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=2)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(rel_a)
-        db.session.refresh(rel_b)
-        db.session.refresh(welded)
-        assert rel_a.fab_order == 2
-        assert rel_a.fab_order < welded.fab_order
-
-
-# ---------------------------------------------------------------------------
-# Section D: READY_TO_SHIP group parity
-# ---------------------------------------------------------------------------
-
-def test_ready_to_ship_clamp_above_later_stage(app):
-    """Welded QC=1, Shipping planning=5. Set Welded QC to 10.
-    10 > 5 → clamped to 4.
-    """
-    with app.app_context():
-        welded_qc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 1)
-        make_release(2, "A", "Shipping planning", "READY_TO_SHIP", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(welded_qc)
-        assert welded_qc.fab_order == 4
-
-
-def test_ready_to_ship_at_exact_later_position(app):
-    """Welded QC=1, Shipping planning=5. Set Welded QC to 5.
-    5 is not > 5 (strict_upper=False default) → no clamp. Collision bumps Shipping planning to 6.
-    Final: Welded QC=5, Shipping planning=6.
-    """
-    with app.app_context():
-        welded_qc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 1)
-        shipping = make_release(2, "A", "Shipping planning", "READY_TO_SHIP", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(welded_qc)
-        db.session.refresh(shipping)
-        assert welded_qc.fab_order == 5
-        assert shipping.fab_order == 6
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 2
