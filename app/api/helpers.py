@@ -155,6 +155,7 @@ def get_fab_order_bounds(stage: Optional[str], current_job_id: int, current_rele
             lower_bound = db.session.query(func.max(Releases.fab_order)).filter(
                 Releases.stage.in_(earlier_variants),
                 Releases.fab_order.isnot(None),
+                Releases.is_archived != True,  # noqa: E712
                 or_(
                     Releases.job != current_job_id,
                     Releases.release != current_release
@@ -169,6 +170,7 @@ def get_fab_order_bounds(stage: Optional[str], current_job_id: int, current_rele
             upper_bound = db.session.query(func.min(Releases.fab_order)).filter(
                 Releases.stage.in_(later_variants),
                 Releases.fab_order.isnot(None),
+                Releases.is_archived != True,  # noqa: E712
                 or_(
                     Releases.job != current_job_id,
                     Releases.release != current_release

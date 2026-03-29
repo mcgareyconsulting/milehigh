@@ -367,7 +367,7 @@ def test_hold_not_clamped(app):
 
 
 def test_collision_cascade_unified(app):
-    """Collision cascade works across all dynamic stages (not per stage_group)."""
+    """Bounded cascade: moving later only bumps jobs in (old, target] range."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
         welded = make_release(2, "A", "Welded", "FABRICATION", 5)
@@ -375,7 +375,7 @@ def test_collision_cascade_unified(app):
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        # Set Welded QC to 5 — should bump Welded and Fit Up
+        # Set Welded QC from 3 to 5 (moving later) — only welded at 5 is in (3, 5]
         cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
         with patch('app.services.outbox_service.OutboxService.add'):
             cmd.execute()
@@ -384,8 +384,8 @@ def test_collision_cascade_unified(app):
         db.session.refresh(welded)
         db.session.refresh(fitup)
         assert wqc.fab_order == 5
-        assert welded.fab_order == 6
-        assert fitup.fab_order == 8
+        assert welded.fab_order == 4   # bumped down by 1
+        assert fitup.fab_order == 7    # outside range, unchanged
 
 
 def test_collision_does_not_bump_fixed_tiers(app):
@@ -409,11 +409,11 @@ def test_collision_does_not_bump_fixed_tiers(app):
         assert complete.fab_order == 1  # unchanged
         assert paint.fab_order == 2     # unchanged
         assert wqc.fab_order == 3
-        assert welded.fab_order == 6
+        assert welded.fab_order == 5    # outside range [3, 4), unchanged
 
 
-def test_full_chain_ordering_preserved(app):
-    """After collision cascade, stage ordering is maintained across all dynamic stages."""
+def test_full_chain_bounded_cascade(app):
+    """Moving later only bumps jobs in (old, target] — jobs outside range unchanged."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
         welded = make_release(2, "A", "Welded", "FABRICATION", 5)
@@ -422,6 +422,7 @@ def test_full_chain_ordering_preserved(app):
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        # Move WQC from 3 to 5 (later) — only welded at 5 is in (3, 5]
         cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
         with patch('app.services.outbox_service.OutboxService.add'):
             cmd.execute()
@@ -430,9 +431,10 @@ def test_full_chain_ordering_preserved(app):
         db.session.refresh(welded)
         db.session.refresh(fitup)
         db.session.refresh(released)
-        assert wqc.fab_order < welded.fab_order
-        assert welded.fab_order < fitup.fab_order
-        assert fitup.fab_order < released.fab_order
+        assert wqc.fab_order == 5
+        assert welded.fab_order == 4   # bumped down (in range)
+        assert fitup.fab_order == 8    # unchanged (outside range)
+        assert released.fab_order == 12  # unchanged (outside range)
 
 
 # ---------------------------------------------------------------------------
@@ -809,7 +811,7 @@ def test_endpoint_fab_order_very_large_honoured(client, app):
 # ---------------------------------------------------------------------------
 
 def test_endpoint_cascade_single_bump(client, app):
-    """One job bumped when target fab_order is occupied."""
+    """One job bumped when target fab_order is occupied — moving later swaps positions."""
     with app.app_context():
         make_release(1, "A", "Welded", "FABRICATION", 5)
         make_release(2, "A", "Welded", "FABRICATION", 6)
@@ -827,11 +829,11 @@ def test_endpoint_cascade_single_bump(client, app):
         job1 = Releases.query.filter_by(job=1, release="A").first()
         job2 = Releases.query.filter_by(job=2, release="A").first()
         assert job1.fab_order == 6
-        assert job2.fab_order == 7
+        assert job2.fab_order == 5   # bumped down (was in range (5, 6])
 
 
 def test_endpoint_cascade_multiple_consecutive(client, app):
-    """Chain of consecutive jobs all bump up by 1."""
+    """Moving later: only jobs in (old, target] range are bumped down."""
     with app.app_context():
         make_release(1, "A", "Welded", "FABRICATION", 3)
         make_release(2, "A", "Welded", "FABRICATION", 5)
@@ -839,6 +841,7 @@ def test_endpoint_cascade_multiple_consecutive(client, app):
         make_release(4, "A", "Welded", "FABRICATION", 7)
         db.session.commit()
 
+    # Job 1 moves from 3 to 5 — range (3, 5] includes only job 2
     resp = client.patch(
         '/brain/update-fab-order/1/A',
         json={'fab_order': 5},
@@ -853,13 +856,13 @@ def test_endpoint_cascade_multiple_consecutive(client, app):
         job3 = Releases.query.filter_by(job=3, release="A").first()
         job4 = Releases.query.filter_by(job=4, release="A").first()
         assert job1.fab_order == 5
-        assert job2.fab_order == 6
-        assert job3.fab_order == 7
-        assert job4.fab_order == 8
+        assert job2.fab_order == 4   # bumped down (in range)
+        assert job3.fab_order == 6   # unchanged (outside range)
+        assert job4.fab_order == 7   # unchanged (outside range)
 
 
 def test_endpoint_cascade_with_gaps(client, app):
-    """Jobs above target bump even with gaps between them."""
+    """Moving later with gaps: only jobs in (old, target] are bumped down."""
     with app.app_context():
         make_release(1, "A", "Welded", "FABRICATION", 3)
         make_release(2, "A", "Welded", "FABRICATION", 5)
@@ -867,6 +870,7 @@ def test_endpoint_cascade_with_gaps(client, app):
         make_release(4, "A", "Welded", "FABRICATION", 12)
         db.session.commit()
 
+    # Job 1 moves from 3 to 5 — range (3, 5] includes only job 2
     resp = client.patch(
         '/brain/update-fab-order/1/A',
         json={'fab_order': 5},
@@ -881,9 +885,9 @@ def test_endpoint_cascade_with_gaps(client, app):
         job3 = Releases.query.filter_by(job=3, release="A").first()
         job4 = Releases.query.filter_by(job=4, release="A").first()
         assert job1.fab_order == 5
-        assert job2.fab_order == 6
-        assert job3.fab_order == 9
-        assert job4.fab_order == 13
+        assert job2.fab_order == 4   # bumped down (in range)
+        assert job3.fab_order == 8   # unchanged (outside range)
+        assert job4.fab_order == 12  # unchanged (outside range)
 
 
 def test_endpoint_cascade_swap_within_stage(client, app):
@@ -934,7 +938,7 @@ def test_endpoint_cascade_skips_fixed_tiers(client, app):
         assert complete.fab_order == 1  # unchanged
         assert paint.fab_order == 2     # unchanged
         assert wqc.fab_order == 3
-        assert welded.fab_order == 6
+        assert welded.fab_order == 5    # outside range [3, 4), unchanged
 
 
 def test_endpoint_cascade_many_jobs(client, app):
@@ -1140,3 +1144,154 @@ def test_endpoint_reorder_same_job_twice(client, app):
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
         assert job.fab_order == 4
+
+
+# ---------------------------------------------------------------------------
+# Bounded cascade tests
+# ---------------------------------------------------------------------------
+
+def test_cascade_move_earlier_bounded(app):
+    """Moving earlier: only jobs in [target, old) are bumped up."""
+    with app.app_context():
+        jobs = []
+        # Create jobs at positions 25, 26, 27, 28, 29, 30, 40, 41, 42
+        for i, pos in enumerate([25, 26, 27, 28, 29, 30, 40, 41, 42]):
+            jobs.append(make_release(i + 1, "A", "Welded", "FABRICATION", pos))
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        # Move job at 40 (job 7) to 27 — range [27, 40) includes jobs at 27, 28, 29, 30
+        cmd = UpdateFabOrderCommand(job_id=7, release="A", fab_order=27)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        for j in jobs:
+            db.session.refresh(j)
+
+        assert jobs[0].fab_order == 25   # unchanged (below range)
+        assert jobs[1].fab_order == 26   # unchanged (below range)
+        assert jobs[2].fab_order == 28   # bumped +1 (was 27, in [27, 40))
+        assert jobs[3].fab_order == 29   # bumped +1 (was 28, in [27, 40))
+        assert jobs[4].fab_order == 30   # bumped +1 (was 29, in [27, 40))
+        assert jobs[5].fab_order == 31   # bumped +1 (was 30, in [27, 40))
+        assert jobs[6].fab_order == 27   # target job
+        assert jobs[7].fab_order == 41   # unchanged (>= old, outside range)
+        assert jobs[8].fab_order == 42   # unchanged (>= old, outside range)
+
+
+def test_cascade_move_later_bounded(app):
+    """Moving later: only jobs in (old, target] are bumped down."""
+    with app.app_context():
+        jobs = []
+        for i, pos in enumerate([8, 9, 10, 11, 12, 13, 14, 15, 16]):
+            jobs.append(make_release(i + 1, "A", "Welded", "FABRICATION", pos))
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        # Move job at 10 (job 3) to 15 — range (10, 15] includes jobs at 11, 12, 13, 14, 15
+        cmd = UpdateFabOrderCommand(job_id=3, release="A", fab_order=15)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        for j in jobs:
+            db.session.refresh(j)
+
+        assert jobs[0].fab_order == 8    # unchanged (below old)
+        assert jobs[1].fab_order == 9    # unchanged (below old)
+        assert jobs[2].fab_order == 15   # target job
+        assert jobs[3].fab_order == 10   # bumped -1 (was 11, in (10, 15])
+        assert jobs[4].fab_order == 11   # bumped -1 (was 12, in (10, 15])
+        assert jobs[5].fab_order == 12   # bumped -1 (was 13, in (10, 15])
+        assert jobs[6].fab_order == 13   # bumped -1 (was 14, in (10, 15])
+        assert jobs[7].fab_order == 14   # bumped -1 (was 15, in (10, 15])
+        assert jobs[8].fab_order == 16   # unchanged (above target)
+
+
+def test_cascade_move_by_one(app):
+    """Moving by one position: only the single adjacent job is bumped."""
+    with app.app_context():
+        job_a = make_release(1, "A", "Welded", "FABRICATION", 40)
+        job_b = make_release(2, "A", "Welded", "FABRICATION", 41)
+        job_c = make_release(3, "A", "Welded", "FABRICATION", 42)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        # Move job at 40 to 41 — range (40, 41] includes only job_b
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=41)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        db.session.refresh(job_a)
+        db.session.refresh(job_b)
+        db.session.refresh(job_c)
+        assert job_a.fab_order == 41
+        assert job_b.fab_order == 40   # bumped down
+        assert job_c.fab_order == 42   # unchanged
+
+
+def test_cascade_first_assignment(app):
+    """First-time assignment (None → value): inserts at target, bumps >= target up."""
+    with app.app_context():
+        target = make_release(1, "A", "Welded", "FABRICATION", None)
+        job_at_10 = make_release(2, "A", "Welded", "FABRICATION", 10)
+        job_at_11 = make_release(3, "A", "Welded", "FABRICATION", 11)
+        job_at_9 = make_release(4, "A", "Welded", "FABRICATION", 9)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        db.session.refresh(target)
+        db.session.refresh(job_at_10)
+        db.session.refresh(job_at_11)
+        db.session.refresh(job_at_9)
+        assert target.fab_order == 10
+        assert job_at_10.fab_order == 11  # bumped +1
+        assert job_at_11.fab_order == 12  # bumped +1
+        assert job_at_9.fab_order == 9    # unchanged (below target)
+
+
+def test_cascade_same_value_noop(app):
+    """Setting fab_order to same value triggers no cascade."""
+    with app.app_context():
+        job_a = make_release(1, "A", "Welded", "FABRICATION", 10)
+        job_b = make_release(2, "A", "Welded", "FABRICATION", 11)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        db.session.refresh(job_a)
+        db.session.refresh(job_b)
+        assert job_a.fab_order == 10  # unchanged
+        assert job_b.fab_order == 11  # unchanged
+
+
+def test_cascade_ignores_archived(app):
+    """Archived releases are not bumped by cascade."""
+    with app.app_context():
+        target = make_release(1, "A", "Welded", "FABRICATION", 15)
+        active_job = make_release(2, "A", "Welded", "FABRICATION", 10)
+        archived_job = Releases(
+            job=3, release="A", job_name="Archived", stage="Welded",
+            stage_group="FABRICATION", fab_order=10, is_archived=True,
+        )
+        db.session.add(archived_job)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        # Move from 15 to 10 (earlier) — range [10, 15)
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
+        with patch('app.services.outbox_service.OutboxService.add'):
+            cmd.execute()
+
+        db.session.refresh(target)
+        db.session.refresh(active_job)
+        db.session.refresh(archived_job)
+        assert target.fab_order == 10
+        assert active_job.fab_order == 11   # bumped +1 (active, in range)
+        assert archived_job.fab_order == 10  # unchanged (archived)

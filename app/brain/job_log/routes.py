@@ -901,6 +901,7 @@ def update_stage(job, release):
                 max_in_stage = db.session.query(func.max(Releases.fab_order)).filter(
                     Releases.stage.in_(stage_variants),
                     Releases.fab_order.isnot(None),
+                    Releases.is_archived != True,  # noqa: E712
                     or_(Releases.job != job, Releases.release != release)
                 ).scalar()
 
@@ -2667,6 +2668,7 @@ def archive_confirm():
         now = datetime.utcnow()
         for r in releases:
             r.is_archived = True
+            r.fab_order = None
             r.last_updated_at = now
             r.source_of_update = 'Brain'
             JobEventService.create(

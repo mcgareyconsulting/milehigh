@@ -71,86 +71,92 @@ class UpdateFabOrderCommand:
             # Ensure dynamic fab_order is at least 3 (1 and 2 are reserved for fixed tiers)
             self.fab_order = 3
 
-        # 2️⃣ Collision detection: Cascade bump - shift all jobs with fab_order >= target value up by 1
+        # 2️⃣ Directional, bounded cascade — only bump jobs between old and new positions
         # Only for dynamic stages (fab_order >= 3); fixed tiers share values and don't cascade
         if self.fab_order is not None and self.fab_order > 2:
             from sqlalchemy import or_
-            # Find ALL dynamic releases with fab_order >= target value (excluding current job)
-            # No stage_group filter — unified ordering across all releases
-            # Exclude fixed-tier fab_orders (1, 2) which are shared values
-            jobs_to_bump = Releases.query.filter(
+
+            # Base filter: non-archived, non-null, dynamic fab_order, not the current job
+            base_filter = [
                 Releases.fab_order.isnot(None),
-                Releases.fab_order >= self.fab_order,
                 Releases.fab_order > 2,
-                or_(
-                    Releases.job != self.job_id,
-                    Releases.release != self.release
-                )
-            ).order_by(Releases.fab_order.desc()).all()
-            
+                Releases.is_archived != True,  # noqa: E712
+                or_(Releases.job != self.job_id, Releases.release != self.release),
+            ]
+
+            target = self.fab_order
+            old = old_fab_order  # captured at line 53
+
+            # Determine direction and scope of cascade
+            old_is_valid = old is not None and not (isinstance(old, float) and math.isnan(old))
+
+            if old_is_valid and old != target:
+                if target < old:
+                    # Moving earlier: bump [target, old) up by +1
+                    jobs_to_bump = Releases.query.filter(
+                        *base_filter,
+                        Releases.fab_order >= target,
+                        Releases.fab_order < old,
+                    ).order_by(Releases.fab_order.desc()).all()
+                    bump_delta = 1
+                else:
+                    # Moving later: bump (old, target] down by -1
+                    jobs_to_bump = Releases.query.filter(
+                        *base_filter,
+                        Releases.fab_order > old,
+                        Releases.fab_order <= target,
+                    ).order_by(Releases.fab_order.asc()).all()
+                    bump_delta = -1
+            elif not old_is_valid:
+                # First assignment (None/NaN): insert at target, bump >= target up by +1
+                jobs_to_bump = Releases.query.filter(
+                    *base_filter,
+                    Releases.fab_order >= target,
+                ).order_by(Releases.fab_order.desc()).all()
+                bump_delta = 1
+            else:
+                # Same value — no cascade
+                jobs_to_bump = []
+                bump_delta = 0
+
             if jobs_to_bump:
                 logger.info(
-                    f"Collision detected: {len(jobs_to_bump)} job(s) with fab_order >= {self.fab_order} "
-                    f"will be bumped up by 1 to make room for job {self.job_id}-{self.release}"
+                    f"Bounded cascade: {len(jobs_to_bump)} job(s) will be shifted by {bump_delta:+d} "
+                    f"(old={old}, target={target}) for job {self.job_id}-{self.release}"
                 )
-                
-                # Process each job that needs to be bumped, starting from highest to lowest
+
                 for job_to_bump in jobs_to_bump:
                     old_bump_value = job_to_bump.fab_order
-                    
-                    # Handle None or NaN values - convert to None for JSON serialization
-                    if old_bump_value is None:
-                        # Skip jobs with None fab_order (they shouldn't be in the bump list anyway)
-                        logger.warning(
-                            f"Skipping bump for job {job_to_bump.job}-{job_to_bump.release} "
-                            f"because fab_order is None"
-                        )
+
+                    if old_bump_value is None or (isinstance(old_bump_value, float) and math.isnan(old_bump_value)):
                         continue
-                    
-                    # Check for NaN
-                    if isinstance(old_bump_value, float) and math.isnan(old_bump_value):
-                        logger.warning(
-                            f"Skipping bump for job {job_to_bump.job}-{job_to_bump.release} "
-                            f"because fab_order is NaN"
-                        )
-                        continue
-                    
-                    new_bump_value = old_bump_value + 1
-                    
-                    # Ensure new_bump_value is not NaN
-                    if isinstance(new_bump_value, float) and math.isnan(new_bump_value):
-                        logger.error(
-                            f"Calculated NaN for new_bump_value for job {job_to_bump.job}-{job_to_bump.release}. "
-                            f"old_bump_value: {old_bump_value}"
-                        )
-                        continue
-                    
+
+                    new_bump_value = old_bump_value + bump_delta
+
+                    # Never push below the dynamic floor
+                    if new_bump_value < 3:
+                        new_bump_value = 3
+
                     logger.debug(
                         f"Bumping job {job_to_bump.job}-{job_to_bump.release} "
                         f"from {old_bump_value} to {new_bump_value}"
                     )
-                    
-                    # Create event for the bumped job
-                    # Ensure payload values are valid (not NaN) - convert to None if needed
-                    payload_from = None if (isinstance(old_bump_value, float) and math.isnan(old_bump_value)) else old_bump_value
-                    payload_to = None if (isinstance(new_bump_value, float) and math.isnan(new_bump_value)) else new_bump_value
-                    
+
                     bump_event = JobEventService.create(
                         job=job_to_bump.job,
                         release=job_to_bump.release,
                         action='update_fab_order',
                         source=self.source,
                         payload={
-                            'from': payload_from,
-                            'to': payload_to,
+                            'from': old_bump_value,
+                            'to': new_bump_value,
                             'reason': 'collision_resolution_cascade'
                         }
                     )
-                    
+
                     if bump_event is None:
                         logger.warning(f"Event already exists for bumped job {job_to_bump.job}-{job_to_bump.release}")
                     else:
-                        # Update bumped job
                         job_to_bump.fab_order = new_bump_value
                         job_to_bump.last_updated_at = datetime.utcnow()
                         job_to_bump.source_of_update = self.source_of_update
