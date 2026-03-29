@@ -1,25 +1,19 @@
 import { useState, useCallback } from 'react';
 
 /**
- * Get the staging subset that a job belongs to based on its stage_group
- * @param {Object} job - The job object
- * @returns {string} - 'job_order', 'ready_to_ship', 'fab', or null
+ * All jobs share one unified fab_order pool.
+ * Fixed-tier stages (fab_order 1 or 2) are not draggable.
  */
-function getJobStagingSubset(job) {
-    const stageGroup = String(job['Stage Group'] ?? '').trim();
+const FIXED_TIER_STAGES = new Set([
+    'Shipping completed', 'Shipping Complete', 'Complete',
+    'Paint complete', 'Paint Complete',
+    'Store at MHMW for shipping', 'Store at Shop',
+    'Shipping planning', 'Shipping Planning',
+]);
 
-    // Fab subset: FABRICATION stage_group
-    if (stageGroup === 'FABRICATION') {
-        return 'fab';
-    }
-
-    // Ready to Ship: READY_TO_SHIP stage_group
-    if (stageGroup === 'READY_TO_SHIP') {
-        return 'ready_to_ship';
-    }
-
-    // Job Order: all jobs (fallback, includes COMPLETE and any unmapped jobs)
-    return 'job_order';
+function isFixedTierJob(job) {
+    const stage = String(job['Stage'] ?? '').trim();
+    return FIXED_TIER_STAGES.has(stage);
 }
 
 /**
@@ -42,48 +36,23 @@ function parseFabOrder(job, fallback = 999999) {
  * Calculate a new "top bump" fab order when moving a job above the current #1
  * for a given staging subset group.
  */
-function calculateTopFabOrder(draggedJob, allJobs, selectedSubset) {
-    const draggedSubset = selectedSubset || getJobStagingSubset(draggedJob);
+function calculateTopFabOrder(draggedJob, allJobs) {
+    // Only consider dynamic jobs (fab_order > 2)
+    const dynamicJobs = allJobs.filter(job => !isFixedTierJob(job));
 
-    // Filter jobs to only those in the same staging subset
-    const sameSubsetJobs = allJobs.filter(job => {
-        const jobSubset = selectedSubset || getJobStagingSubset(job);
-        return jobSubset === draggedSubset;
-    });
-
-    if (sameSubsetJobs.length === 0) {
-        return 0.5;
+    if (dynamicJobs.length === 0) {
+        return 3;
     }
 
     // Sort by current fab order
-    const sortedJobs = [...sameSubsetJobs].sort((a, b) => {
+    const sortedJobs = [...dynamicJobs].sort((a, b) => {
         const orderA = parseFabOrder(a);
         const orderB = parseFabOrder(b);
         return orderA - orderB;
     });
 
-    const first = sortedJobs[0];
-    const firstOrder = parseFabOrder(first, 1);
-
-    // If the first order is an integer >= 1, just use 0.5
-    if (firstOrder >= 1) {
-        return 0.5;
-    }
-
-    // Otherwise, find the smallest positive order and halve it
-    let minPositive = Infinity;
-    for (const job of sortedJobs) {
-        const val = parseFabOrder(job);
-        if (!isNaN(val) && val > 0 && val < minPositive) {
-            minPositive = val;
-        }
-    }
-
-    const base = minPositive === Infinity ? 1 : minPositive;
-    const newOrder = base / 2;
-
-    // Round to reasonable precision (4 decimal places)
-    return Math.round(newOrder * 10000) / 10000;
+    // Dynamic fab_orders start at 3, so top position is 3
+    return 3;
 }
 
 /**
@@ -107,17 +76,14 @@ export function useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSu
         e.preventDefault();
         if (draggedJob) {
             const targetJob = displayJobs[index];
-            const draggedSubset = selectedSubset || getJobStagingSubset(draggedJob);
-            const targetSubset = selectedSubset || getJobStagingSubset(targetJob);
-
-            // Only allow drag over if same staging subset
-            if (draggedSubset === targetSubset) {
-                setDragOverIndex(index);
-            } else {
+            // Don't allow dropping onto fixed-tier jobs
+            if (isFixedTierJob(targetJob)) {
                 setDragOverIndex(null);
+            } else {
+                setDragOverIndex(index);
             }
         }
-    }, [draggedJob, displayJobs, selectedSubset]);
+    }, [draggedJob, displayJobs]);
 
     const handleDragLeave = useCallback((e) => {
         // Only clear if we're actually leaving the row (not just moving between child elements)
@@ -131,28 +97,22 @@ export function useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSu
 
         if (!draggedJob) return;
 
-        const draggedSubset = selectedSubset || getJobStagingSubset(draggedJob);
-        const targetSubset = selectedSubset || getJobStagingSubset(targetJob);
-
-        // Only allow drop if same staging subset
-        if (draggedSubset !== targetSubset) {
+        // Don't allow dropping fixed-tier jobs or dropping onto fixed-tier targets
+        if (isFixedTierJob(draggedJob) || isFixedTierJob(targetJob)) {
             setDraggedIndex(null);
             setDragOverIndex(null);
             setDraggedJob(null);
             return;
         }
 
-        // Work with all jobs in this staging subset group, sorted by current fab order
+        // Work with all dynamic jobs (fab_order > 2), sorted by fab_order
         const draggedJobId = getJobId(draggedJob);
         const targetJobId = getJobId(targetJob);
 
-        const sameSubsetJobs = jobs.filter(job => {
-            const jobSubset = selectedSubset || getJobStagingSubset(job);
-            return jobSubset === draggedSubset;
-        });
+        const dynamicJobs = jobs.filter(job => !isFixedTierJob(job));
 
         // Sort by fab order (nulls at end)
-        const sortedGroup = [...sameSubsetJobs].sort((a, b) => {
+        const sortedGroup = [...dynamicJobs].sort((a, b) => {
             const orderA = parseFabOrder(a);
             const orderB = parseFabOrder(b);
             return orderA - orderB;
@@ -174,10 +134,8 @@ export function useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSu
         // Determine where to insert based on drag direction
         let insertIndex;
         if (draggedPosition < targetPosition) {
-            // Dragging down - insert after target (target position stays same after removing dragged)
             insertIndex = targetPosition;
         } else {
-            // Dragging up - insert before target (target position stays same after removing dragged)
             insertIndex = targetPosition;
         }
 
@@ -188,50 +146,27 @@ export function useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSu
             ...groupWithoutDragged.slice(insertIndex)
         ];
 
-        // Calculate new fab order based on position in the new sorted group
+        // Calculate new fab order: position + 3 (dynamic range starts at 3)
         let newFabOrder;
 
-        // Check if we're inserting at the top (position 0)
         if (insertIndex === 0) {
-            // If there are jobs with decimal orders (< 1) at the top, use decimal bumping
-            const firstJob = newSortedGroup.length > 1 ? newSortedGroup[1] : null;
-            if (firstJob) {
-                const firstOrder = parseFabOrder(firstJob, 1);
-                if (firstOrder < 1) {
-                    // Use decimal bumping
-                    newFabOrder = calculateTopFabOrder(draggedJob, jobs, selectedSubset);
-                } else {
-                    // First job has order >= 1, so we become #1
-                    newFabOrder = 1;
-                }
-            } else {
-                // No other jobs, become #1
-                newFabOrder = 1;
-            }
+            // Top of dynamic range
+            newFabOrder = 3;
         } else {
-            // Inserting in middle or end
-            // Count how many jobs with order >= 1 come before this position in the new sorted group
-            let countBefore = 0;
-            for (let i = 0; i < insertIndex; i++) {
-                const job = newSortedGroup[i];
-                const order = parseFabOrder(job, 999999);
-                // Only count jobs with integer orders >= 1 (not decimals, not null)
-                if (order >= 1 && order < 999999) {
-                    countBefore += 1;
-                }
-            }
-            // The new fab order is countBefore + 1
-            newFabOrder = countBefore + 1;
+            // Use the fab_order of the job before this position + 1
+            const jobBefore = newSortedGroup[insertIndex - 1];
+            const orderBefore = parseFabOrder(jobBefore, 2);
+            newFabOrder = Math.max(3, Math.floor(orderBefore) + 1);
         }
 
-        // Update the dragged job
+        // Update the dragged job — backend handles collision cascade
         await updateFabOrder(draggedJob['Job #'], draggedJob['Release #'], newFabOrder);
 
         // Reset drag state
         setDraggedIndex(null);
         setDragOverIndex(null);
         setDraggedJob(null);
-    }, [draggedJob, jobs, updateFabOrder, selectedSubset]);
+    }, [draggedJob, jobs, updateFabOrder]);
 
     return {
         draggedIndex,

@@ -35,7 +35,24 @@ STAGE_TO_GROUP = {
     "Complete": "COMPLETE",
 }
 
-# Ordered stage progression per group (for implicit ordering enforcement)
+# Fixed tiers: stages auto-assigned to a shared fab_order value (not user-orderable)
+FIXED_TIER_STAGES = {
+    1: ["Shipping completed", "Shipping Complete", "Complete"],
+    2: ["Paint complete", "Paint Complete", "Store at MHMW for shipping", "Store at Shop", "Shipping planning", "Shipping Planning"],
+}
+
+# Dynamic stages ordered by priority (lower index = lower fab_order = closer to completion)
+# fab_order 3+ is assigned sequentially within each stage block
+DYNAMIC_STAGE_ORDER = [
+    "Welded QC",
+    "Welded",
+    "Fit Up Complete.",
+    "Material Ordered",
+    "Cut start",
+    "Released",
+]
+
+# Legacy compat: kept for any code referencing STAGE_ORDER
 STAGE_ORDER = {
     "FABRICATION": [
         "Released",
@@ -79,18 +96,29 @@ def _get_all_variants_for_stages(canonical_stages: List[str]) -> List[str]:
 
 
 def get_stage_position(stage: Optional[str]) -> Optional[int]:
-    """Return 0-based index of a stage in its group's STAGE_ORDER list, or None if exempt/unordered."""
+    """Return 0-based index of a stage in DYNAMIC_STAGE_ORDER, or None if exempt/fixed-tier."""
     normalized = _normalize_stage(stage)
     if normalized is None or normalized in STAGE_ORDER_EXEMPT:
         return None
-    group = STAGE_TO_GROUP.get(normalized)
-    if group not in STAGE_ORDER:
+    # Fixed-tier stages are not in the dynamic order
+    if get_fixed_tier(normalized) is not None:
         return None
-    order_list = STAGE_ORDER[group]
     normalized_lower = normalized.lower()
-    for i, s in enumerate(order_list):
+    for i, s in enumerate(DYNAMIC_STAGE_ORDER):
         if s.lower() == normalized_lower:
             return i
+    return None
+
+
+def get_fixed_tier(stage: Optional[str]) -> Optional[int]:
+    """Return the fixed tier value (1 or 2) for a stage, or None if it's a dynamic stage."""
+    if not stage:
+        return None
+    stage_lower = stage.lower()
+    for tier, stages in FIXED_TIER_STAGES.items():
+        for s in stages:
+            if s.lower() == stage_lower:
+                return tier
     return None
 
 
@@ -98,9 +126,10 @@ def get_fab_order_bounds(stage: Optional[str], current_job_id: int, current_rele
     """
     Return (lower_bound, upper_bound) fab_order constraints for a job's stage.
 
-    lower_bound = MAX fab_order of jobs in earlier stages (None if none exist)
-    upper_bound = MIN fab_order of jobs in later stages (None if none exist)
-    Returns (None, None) for Hold, COMPLETE, or unrecognized stages.
+    Uses the unified DYNAMIC_STAGE_ORDER (not per-group).
+    lower_bound = MAX fab_order of jobs in earlier dynamic stages
+    upper_bound = MIN fab_order of jobs in later dynamic stages
+    Returns (None, None) for Hold, fixed-tier, or unrecognized stages.
     """
     from sqlalchemy import func, or_
     from app.models import Releases, db
@@ -109,18 +138,17 @@ def get_fab_order_bounds(stage: Optional[str], current_job_id: int, current_rele
     if normalized is None or normalized in STAGE_ORDER_EXEMPT:
         return (None, None)
 
-    group = STAGE_TO_GROUP.get(normalized)
-    if group not in STAGE_ORDER:
+    # Fixed-tier stages don't participate in bounds
+    if get_fixed_tier(normalized) is not None:
         return (None, None)
 
     position = get_stage_position(normalized)
     if position is None:
         return (None, None)
 
-    order_list = STAGE_ORDER[group]
-
+    # Use unified DYNAMIC_STAGE_ORDER for bounds
     lower_bound = None
-    earlier_stages = order_list[:position]
+    earlier_stages = DYNAMIC_STAGE_ORDER[:position]
     if earlier_stages:
         earlier_variants = _get_all_variants_for_stages(earlier_stages)
         if earlier_variants:
@@ -134,7 +162,7 @@ def get_fab_order_bounds(stage: Optional[str], current_job_id: int, current_rele
             ).scalar()
 
     upper_bound = None
-    later_stages = order_list[position + 1:]
+    later_stages = DYNAMIC_STAGE_ORDER[position + 1:]
     if later_stages:
         later_variants = _get_all_variants_for_stages(later_stages)
         if later_variants:

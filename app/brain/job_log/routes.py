@@ -869,47 +869,57 @@ def update_stage(job, release):
             logger.info(f"Event already exists for job {job}-{release} to stage {stage}")
             return jsonify({'error': 'Event already exists'}), 400
         
-        # Capture old stage_group before updating (needed for fab_order logic)
-        from app.api.helpers import get_stage_group_from_stage
+        # Capture old stage_group before updating (needed for logging)
+        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, _normalize_stage, _get_all_variants_for_stages, get_fab_order_bounds, DYNAMIC_STAGE_ORDER
         old_stage_group = job_record.stage_group
         new_stage_group = get_stage_group_from_stage(stage)
-        
+
         logger.info(
             f"Stage change for job {job}-{release}: "
             f"old_stage_group={old_stage_group}, new_stage_group={new_stage_group}, "
             f"old_stage={old_stage}, new_stage={stage}"
         )
-        
-        # If moving FROM FABRICATION TO READY_TO_SHIP, set fab_order to max+1 in READY_TO_SHIP group
-        # This only applies to FABRICATION -> READY_TO_SHIP transitions
-        # COMPLETE stages get absolute values (not relative to max)
+
+        # --- Unified fab_order assignment on stage change ---
         fab_order_to_set = None
-        old_fab_order_for_update = None
-        if old_stage_group == 'FABRICATION' and new_stage_group == 'READY_TO_SHIP':
-            from sqlalchemy import func, or_
-            old_fab_order_for_update = job_record.fab_order
-            
-            # Find the maximum fab_order in the READY_TO_SHIP group (excluding current job)
-            # Query the database BEFORE updating stage_group in memory
-            # Use or_ to exclude current job: (job != current) OR (release != current)
-            max_fab_order = db.session.query(func.max(Releases.fab_order)).filter(
-                Releases.stage_group == 'READY_TO_SHIP',
-                Releases.fab_order.isnot(None),
-                or_(
-                    Releases.job != job,
-                    Releases.release != release
-                )
-            ).scalar()
-            
-            # Calculate new fab_order (max + 1, or 1 if no jobs exist)
-            fab_order_to_set = (max_fab_order + 1) if max_fab_order is not None else 1
-            
+        old_fab_order_for_update = job_record.fab_order
+
+        tier = get_fixed_tier(stage)
+        if tier is not None:
+            # Fixed-tier stage: auto-assign the tier value
+            fab_order_to_set = tier
             logger.info(
-                f"Job {job}-{release} moving from FABRICATION to READY_TO_SHIP. "
-                f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set} "
-                f"(max in READY_TO_SHIP group: {max_fab_order})"
+                f"Job {job}-{release} moving to fixed tier {tier} stage '{stage}'. "
+                f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
             )
-        
+        elif stage not in ('Hold', None):
+            # Dynamic stage: append to end of that stage's block
+            normalized = _normalize_stage(stage)
+            if normalized is not None:
+                from sqlalchemy import func, or_
+                stage_variants = _get_all_variants_for_stages([normalized])
+                max_in_stage = db.session.query(func.max(Releases.fab_order)).filter(
+                    Releases.stage.in_(stage_variants),
+                    Releases.fab_order.isnot(None),
+                    or_(Releases.job != job, Releases.release != release)
+                ).scalar()
+
+                if max_in_stage is not None:
+                    fab_order_to_set = max_in_stage + 1
+                else:
+                    # Stage is empty — find max of earlier dynamic stages, or start at 3
+                    lower_bound, _ = get_fab_order_bounds(stage, job, release)
+                    fab_order_to_set = (lower_bound + 1) if lower_bound is not None else 3
+
+                # Ensure dynamic fab_order is at least 3
+                if fab_order_to_set < 3:
+                    fab_order_to_set = 3
+
+                logger.info(
+                    f"Job {job}-{release} moving to dynamic stage '{stage}'. "
+                    f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
+                )
+
         # Update job fields (this will update stage_group)
         update_job_stage_fields(job_record, stage)
 
@@ -918,7 +928,7 @@ def update_stage(job, release):
         if stage == 'Hold':
             job_record.banana_color = 'red'
 
-        # If stage set to Complete, auto-set job_comp to 'X' and clear fab_order
+        # If stage set to Complete, auto-set job_comp to 'X'
         comp_extras = {}
         if stage == 'Complete':
             current_job_comp = (job_record.job_comp or '').strip().upper()
@@ -932,30 +942,16 @@ def update_stage(job, release):
                 )
                 comp_extras['job_comp'] = 'X'
 
-            if job_record.fab_order is not None:
-                old_fab = job_record.fab_order
-                job_record.fab_order = None
-                fab_evt = JobEventService.create(
-                    job=job, release=release,
-                    action='update_fab_order', source='Brain',
-                    payload={'from': old_fab, 'to': None, 'reason': 'stage_change_to_complete'},
-                )
-                if fab_evt:
-                    JobEventService.close(fab_evt.id)
-                comp_extras['fab_order'] = None
-
         # Update job metadata
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
-        
-        # If we calculated a new fab_order, set it now
-        if fab_order_to_set is not None:
-            
+
+        # Apply the calculated fab_order
+        if fab_order_to_set is not None and fab_order_to_set != old_fab_order_for_update:
             # Ensure payload values are valid (not NaN) - convert to None if needed
             payload_from = None if (isinstance(old_fab_order_for_update, float) and math.isnan(old_fab_order_for_update)) else old_fab_order_for_update
             payload_to = None if (isinstance(fab_order_to_set, float) and math.isnan(fab_order_to_set)) else fab_order_to_set
-            
-            # Create event for fab_order update
+
             fab_order_event = JobEventService.create(
                 job=job,
                 release=release,
@@ -964,44 +960,16 @@ def update_stage(job, release):
                 payload={
                     'from': payload_from,
                     'to': payload_to,
-                    'reason': 'stage_change_fab_to_ready_to_ship'
+                    'reason': 'stage_change_unified'
                 }
             )
-            
+
             if fab_order_event is None:
                 logger.warning(f"Event already exists for fab_order update on job {job}-{release}")
             else:
-                # Update fab_order
                 job_record.fab_order = fab_order_to_set
-                
-                # Trello fab_order sync disabled during testing — close event without queueing outbox
                 JobEventService.close(fab_order_event.id)
-
-        elif (
-            new_stage_group == old_stage_group
-            and new_stage_group in ('FABRICATION', 'READY_TO_SHIP')
-            and stage not in ('Hold', None)
-            and job_record.fab_order is not None
-        ):
-            from app.api.helpers import get_fab_order_bounds, clamp_fab_order
-            lower, upper = get_fab_order_bounds(stage, job, release)
-            clamped = clamp_fab_order(job_record.fab_order, lower, upper, strict_upper=True)
-            if clamped != job_record.fab_order:
-                logger.info(
-                    f"fab_order clamped after stage change for job {job}-{release}: "
-                    f"{job_record.fab_order} -> {clamped} (new stage={stage})"
-                )
-                old_fab_for_implicit = job_record.fab_order
-                job_record.fab_order = clamped
-                implicit_event = JobEventService.create(
-                    job=job, release=release,
-                    action='update_fab_order', source='Brain',
-                    payload={'from': old_fab_for_implicit, 'to': clamped,
-                             'reason': 'stage_change_implicit_clamp'}
-                )
-                if implicit_event:
-                    # Trello fab_order sync disabled during testing — close event without queueing outbox
-                    JobEventService.close(implicit_event.id)
+                comp_extras['fab_order'] = fab_order_to_set
 
         # Add Trello update to outbox (async - will be processed by outbox service)
         # DB changes are committed first, then outbox handles Trello updates asynchronously
@@ -2415,6 +2383,30 @@ def trello_sync():
         return jsonify(results), 200
     except Exception as e:
         logger.error(f"Error in Trello sync: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@brain_bp.route("/renumber-fab-orders", methods=["POST"])
+@login_required
+def renumber_fab_orders_route():
+    """
+    One-time migration to renumber fab_orders for the unified ordering scheme.
+
+    Query Parameters:
+        dry_run (bool): If true, only report what would change (default: false)
+
+    Returns:
+        JSON object with migration stats
+    """
+    try:
+        from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
+
+        dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+        logger.info(f"Renumber fab_orders endpoint called (dry_run={dry_run})")
+
+        stats = renumber_fab_orders(dry_run=dry_run)
+        return jsonify({"status": "success", "stats": stats, "dry_run": dry_run}), 200
+    except Exception as e:
+        logger.error(f"Error in renumber fab_orders: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @brain_bp.route("/trello-scan-create", methods=["POST"])
