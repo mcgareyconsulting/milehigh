@@ -350,7 +350,10 @@ export function useJobsFilters(jobs = []) {
     [jobs]);
 
     const totalInstallHrs = useMemo(() =>
-        jobs.reduce((sum, job) => sum + (job['Install HRS'] || 0) * (1.0 - _parseJobComp(job['Job Comp'])), 0),
+        jobs.reduce((sum, job) => {
+            if (_getFabModifier(job['Stage'] || '') > 0.0) return sum;
+            return sum + (job['Install HRS'] || 0) * (1.0 - _parseJobComp(job['Job Comp']));
+        }, 0),
     [jobs]);
 
     /**
