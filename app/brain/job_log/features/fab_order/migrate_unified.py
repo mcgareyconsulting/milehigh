@@ -33,10 +33,16 @@ def renumber_fab_orders(dry_run=False):
     """
     stats = {'fixed_tier_1': 0, 'fixed_tier_2': 0, 'dynamic': 0, 'total': 0}
 
+    # Only renumber active, non-archived releases
+    active_filter = (
+        (Releases.is_archived == False) &  # noqa: E712
+        ((Releases.is_active == True) | (Releases.is_active.is_(None)))  # noqa: E712
+    )
+
     # Step 1: Set fixed tier 1 (Complete stages)
     tier_1_stages = FIXED_TIER_STAGES[1]
     tier_1_variants = _get_all_variants_for_stages(tier_1_stages)
-    tier_1_releases = Releases.query.filter(Releases.stage.in_(tier_1_variants)).all()
+    tier_1_releases = Releases.query.filter(active_filter, Releases.stage.in_(tier_1_variants)).all()
     for r in tier_1_releases:
         if r.fab_order != 1:
             logger.info(f"Tier 1: {r.job}-{r.release} ({r.stage}) fab_order {r.fab_order} -> 1")
@@ -46,7 +52,7 @@ def renumber_fab_orders(dry_run=False):
     # Step 2: Set fixed tier 2 (Paint complete, Store, Shipping planning)
     tier_2_stages = FIXED_TIER_STAGES[2]
     tier_2_variants = _get_all_variants_for_stages(tier_2_stages)
-    tier_2_releases = Releases.query.filter(Releases.stage.in_(tier_2_variants)).all()
+    tier_2_releases = Releases.query.filter(active_filter, Releases.stage.in_(tier_2_variants)).all()
     for r in tier_2_releases:
         if r.fab_order != 2:
             logger.info(f"Tier 2: {r.job}-{r.release} ({r.stage}) fab_order {r.fab_order} -> 2")
@@ -59,6 +65,7 @@ def renumber_fab_orders(dry_run=False):
         variants = _get_all_variants_for_stages([stage_name])
         # Get releases in this stage, sorted by current fab_order (preserving relative order)
         stage_releases = Releases.query.filter(
+            active_filter,
             Releases.stage.in_(variants)
         ).order_by(Releases.fab_order.asc().nullslast()).all()
 

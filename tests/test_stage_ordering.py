@@ -562,3 +562,581 @@ def test_stage_change_to_shipping_planning_sets_tier_2(client, app):
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
         assert job.fab_order == 2
+
+
+# ---------------------------------------------------------------------------
+# PATCH /brain/update-fab-order — endpoint happy path
+# ---------------------------------------------------------------------------
+
+def test_endpoint_fab_order_update_success(client, app):
+    """Basic PATCH returns 200 with status and event_id, DB updated."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 10)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['status'] == 'success'
+    assert isinstance(data['event_id'], int)
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 5
+
+
+def test_endpoint_fab_order_null_clears(client, app):
+    """Sending null clears fab_order to None."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 10)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': None},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order is None
+
+
+def test_endpoint_fab_order_integer_value(client, app):
+    """Integer input accepted and stored."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 7},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 7
+
+
+def test_endpoint_fab_order_float_value(client, app):
+    """Float input accepted."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 7.5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 7.5
+
+
+# ---------------------------------------------------------------------------
+# PATCH /brain/update-fab-order — validation & errors
+# ---------------------------------------------------------------------------
+
+def test_endpoint_fab_order_string_returns_400(client, app):
+    """String fab_order returns 400."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 'abc'},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 400
+    assert 'must be a number' in resp.get_json()['error']
+
+
+def test_endpoint_fab_order_empty_string_returns_400(client, app):
+    """Empty string fab_order returns 400."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': ''},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 400
+
+
+def test_endpoint_fab_order_list_returns_400(client, app):
+    """List fab_order returns 400."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': [1, 2, 3]},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 400
+
+
+def test_endpoint_fab_order_dict_returns_400(client, app):
+    """Dict fab_order returns 400."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': {'value': 5}},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 400
+
+
+def test_endpoint_fab_order_nonexistent_job_returns_404(client, app):
+    """Missing job returns 404."""
+    with app.app_context():
+        pass  # no jobs created
+
+    resp = client.patch(
+        '/brain/update-fab-order/9999/A',
+        json={'fab_order': 5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 404
+    assert 'not found' in resp.get_json()['error'].lower()
+
+
+def test_endpoint_fab_order_empty_json_clears(client, app):
+    """Empty JSON body (no fab_order key) clears fab_order to None."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 10)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order is None
+
+
+def test_endpoint_fab_order_negative_clamped_to_3(client, app):
+    """Negative fab_order is clamped to 3 for dynamic stages."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 10)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': -5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order >= 3
+
+
+def test_endpoint_fab_order_zero_clamped_to_3(client, app):
+    """Zero fab_order is clamped to 3 for dynamic stages."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 10)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 0},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order >= 3
+
+
+def test_endpoint_fab_order_very_large_clamped(client, app):
+    """Very large fab_order clamped below later stage."""
+    with app.app_context():
+        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
+        make_release(2, "A", "Welded", "FABRICATION", 10)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 999999},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order < 10  # clamped below Welded's value
+
+
+# ---------------------------------------------------------------------------
+# PATCH /brain/update-fab-order — collision cascade via endpoint
+# ---------------------------------------------------------------------------
+
+def test_endpoint_cascade_single_bump(client, app):
+    """One job bumped when target fab_order is occupied."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(2, "A", "Welded", "FABRICATION", 6)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 6},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job1 = Releases.query.filter_by(job=1, release="A").first()
+        job2 = Releases.query.filter_by(job=2, release="A").first()
+        assert job1.fab_order == 6
+        assert job2.fab_order == 7
+
+
+def test_endpoint_cascade_multiple_consecutive(client, app):
+    """Chain of consecutive jobs all bump up by 1."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 3)
+        make_release(2, "A", "Welded", "FABRICATION", 5)
+        make_release(3, "A", "Welded", "FABRICATION", 6)
+        make_release(4, "A", "Welded", "FABRICATION", 7)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job1 = Releases.query.filter_by(job=1, release="A").first()
+        job2 = Releases.query.filter_by(job=2, release="A").first()
+        job3 = Releases.query.filter_by(job=3, release="A").first()
+        job4 = Releases.query.filter_by(job=4, release="A").first()
+        assert job1.fab_order == 5
+        assert job2.fab_order == 6
+        assert job3.fab_order == 7
+        assert job4.fab_order == 8
+
+
+def test_endpoint_cascade_with_gaps(client, app):
+    """Jobs above target bump even with gaps between them."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 3)
+        make_release(2, "A", "Welded", "FABRICATION", 5)
+        make_release(3, "A", "Welded", "FABRICATION", 8)
+        make_release(4, "A", "Welded", "FABRICATION", 12)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job1 = Releases.query.filter_by(job=1, release="A").first()
+        job2 = Releases.query.filter_by(job=2, release="A").first()
+        job3 = Releases.query.filter_by(job=3, release="A").first()
+        job4 = Releases.query.filter_by(job=4, release="A").first()
+        assert job1.fab_order == 5
+        assert job2.fab_order == 6
+        assert job3.fab_order == 9
+        assert job4.fab_order == 13
+
+
+def test_endpoint_cascade_swap_within_stage(client, app):
+    """Two same-stage jobs effectively swap when one takes the other's position."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(2, "A", "Welded", "FABRICATION", 6)
+        db.session.commit()
+
+    # Move job 2 to position 5 (where job 1 is)
+    resp = client.patch(
+        '/brain/update-fab-order/2/A',
+        json={'fab_order': 5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job1 = Releases.query.filter_by(job=1, release="A").first()
+        job2 = Releases.query.filter_by(job=2, release="A").first()
+        assert job2.fab_order == 5
+        assert job1.fab_order == 6
+
+
+def test_endpoint_cascade_skips_fixed_tiers(client, app):
+    """Fixed-tier jobs (fab_order 1, 2) are never bumped by cascade."""
+    with app.app_context():
+        make_release(1, "A", "Complete", "COMPLETE", 1)
+        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
+        make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
+        make_release(4, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/3/A',
+        json={'fab_order': 3},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        complete = Releases.query.filter_by(job=1, release="A").first()
+        paint = Releases.query.filter_by(job=2, release="A").first()
+        wqc = Releases.query.filter_by(job=3, release="A").first()
+        welded = Releases.query.filter_by(job=4, release="A").first()
+        assert complete.fab_order == 1  # unchanged
+        assert paint.fab_order == 2     # unchanged
+        assert wqc.fab_order == 3
+        assert welded.fab_order == 6
+
+
+def test_endpoint_cascade_many_jobs(client, app):
+    """10 dynamic jobs all cascade correctly."""
+    with app.app_context():
+        # Create 10 jobs at fab_orders 3-12, plus the job that will be inserted
+        for i in range(10):
+            make_release(i + 2, "A", "Welded", "FABRICATION", 3 + i)
+        make_release(100, "A", "Welded", "FABRICATION", 50)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/100/A',
+        json={'fab_order': 3},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        inserter = Releases.query.filter_by(job=100, release="A").first()
+        assert inserter.fab_order == 3
+
+        # All 10 original jobs should have bumped up by 1
+        for i in range(10):
+            job = Releases.query.filter_by(job=i + 2, release="A").first()
+            assert job.fab_order == 4 + i
+
+
+# ---------------------------------------------------------------------------
+# Migration: renumber_fab_orders
+# ---------------------------------------------------------------------------
+
+def test_renumber_sets_fixed_tiers(app):
+    """renumber_fab_orders sets Complete->1, Paint complete->2."""
+    with app.app_context():
+        make_release(1, "A", "Complete", "COMPLETE", 50)
+        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 99)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
+        renumber_fab_orders()
+
+        c = Releases.query.filter_by(job=1, release="A").first()
+        p = Releases.query.filter_by(job=2, release="A").first()
+        assert c.fab_order == 1
+        assert p.fab_order == 2
+
+
+def test_renumber_dynamic_sequential(app):
+    """Dynamic stages numbered sequentially starting at 3, in DYNAMIC_STAGE_ORDER."""
+    with app.app_context():
+        make_release(1, "A", "Released", "FABRICATION", 99)
+        make_release(2, "A", "Welded QC", "READY_TO_SHIP", 50)
+        make_release(3, "A", "Cut start", "FABRICATION", 75)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
+        renumber_fab_orders()
+
+        wqc = Releases.query.filter_by(job=2, release="A").first()
+        cut = Releases.query.filter_by(job=3, release="A").first()
+        rel = Releases.query.filter_by(job=1, release="A").first()
+
+        # Welded QC (pos 0) < Cut start (pos 4) < Released (pos 5)
+        assert wqc.fab_order == 3
+        assert cut.fab_order == 4
+        assert rel.fab_order == 5
+
+
+def test_renumber_preserves_relative_order(app):
+    """Within a stage, relative order by original fab_order is preserved."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 20)
+        make_release(2, "A", "Welded", "FABRICATION", 10)
+        make_release(3, "A", "Welded", "FABRICATION", 15)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
+        renumber_fab_orders()
+
+        j1 = Releases.query.filter_by(job=1, release="A").first()
+        j2 = Releases.query.filter_by(job=2, release="A").first()
+        j3 = Releases.query.filter_by(job=3, release="A").first()
+
+        # Original order: job2(10) < job3(15) < job1(20) — preserved
+        assert j2.fab_order < j3.fab_order < j1.fab_order
+
+
+def test_renumber_dry_run_no_commit(app):
+    """dry_run=True rolls back without changing the DB."""
+    with app.app_context():
+        make_release(1, "A", "Complete", "COMPLETE", 50)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
+        stats = renumber_fab_orders(dry_run=True)
+
+        assert stats['total'] > 0
+
+        c = Releases.query.filter_by(job=1, release="A").first()
+        assert c.fab_order == 50  # unchanged
+
+
+def test_renumber_returns_stats(app):
+    """Stats dict has correct counts."""
+    with app.app_context():
+        make_release(1, "A", "Complete", "COMPLETE", 50)
+        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 99)
+        make_release(3, "A", "Welded", "FABRICATION", 75)
+        make_release(4, "A", "Released", "FABRICATION", 80)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
+        stats = renumber_fab_orders()
+
+        assert stats['fixed_tier_1'] == 1
+        assert stats['fixed_tier_2'] == 1
+        assert stats['dynamic'] == 2
+        assert stats['total'] == 4
+
+
+def test_renumber_idempotent(app):
+    """Already-correct data returns total=0."""
+    with app.app_context():
+        make_release(1, "A", "Complete", "COMPLETE", 1)
+        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
+        make_release(3, "A", "Welded QC", "READY_TO_SHIP", 3)
+        make_release(4, "A", "Released", "FABRICATION", 4)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
+        stats = renumber_fab_orders()
+
+        assert stats['total'] == 0
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+def test_endpoint_hold_no_clamping(client, app):
+    """Hold stage skips bounds check via endpoint."""
+    with app.app_context():
+        make_release(1, "A", "Released", "FABRICATION", 5)
+        make_release(2, "A", "Hold", "FABRICATION", 20)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/2/A',
+        json={'fab_order': 3},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=2, release="A").first()
+        assert job.fab_order == 3
+
+
+def test_endpoint_none_stage_no_clamping(client, app):
+    """None stage skips bounds check via endpoint."""
+    with app.app_context():
+        r = Releases(job=1, release="A", job_name="Test", stage=None,
+                     stage_group=None, fab_order=10)
+        db.session.add(r)
+        db.session.commit()
+
+    resp = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 5},
+        content_type='application/json'
+    )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 5
+
+
+def test_endpoint_reorder_same_job_twice(client, app):
+    """Sequential updates to the same job both succeed."""
+    with app.app_context():
+        make_release(1, "A", "Welded", "FABRICATION", 5)
+        db.session.commit()
+
+    resp1 = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 8},
+        content_type='application/json'
+    )
+    assert resp1.status_code == 200
+
+    resp2 = client.patch(
+        '/brain/update-fab-order/1/A',
+        json={'fab_order': 4},
+        content_type='application/json'
+    )
+    assert resp2.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
+        assert job.fab_order == 4
