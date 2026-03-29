@@ -276,8 +276,8 @@ def test_bounds_self_excluded(app):
 # Integration: UpdateFabOrderCommand
 # ---------------------------------------------------------------------------
 
-def test_fab_order_clamped_above_later_stage(app):
-    """Welded QC tries fab_order=25 when Welded is at 10 → clamped to 9."""
+def test_fab_order_manual_edit_no_stage_clamp(app):
+    """Manual edit honours the requested fab_order — no stage-based clamping."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
         make_release(2, "A", "Welded", "FABRICATION", 10)
@@ -289,11 +289,11 @@ def test_fab_order_clamped_above_later_stage(app):
             result = cmd.execute()
 
         db.session.refresh(wqc)
-        assert wqc.fab_order == 9
+        assert wqc.fab_order == 25
 
 
-def test_fab_order_clamped_below_earlier_stage(app):
-    """Released tries fab_order=3 when Cut start is at 20 → clamped to 21."""
+def test_fab_order_manual_edit_honours_low_value(app):
+    """Released can be manually set to fab_order=3 even with earlier stages above it."""
     with app.app_context():
         make_release(1, "A", "Cut start", "FABRICATION", 20)
         released = make_release(2, "A", "Released", "FABRICATION", 30)
@@ -305,7 +305,7 @@ def test_fab_order_clamped_below_earlier_stage(app):
             result = cmd.execute()
 
         db.session.refresh(released)
-        assert released.fab_order == 21
+        assert released.fab_order == 3
 
 
 def test_fab_order_min_is_3(app):
@@ -784,8 +784,8 @@ def test_endpoint_fab_order_zero_clamped_to_3(client, app):
         assert job.fab_order >= 3
 
 
-def test_endpoint_fab_order_very_large_clamped(client, app):
-    """Very large fab_order clamped below later stage."""
+def test_endpoint_fab_order_very_large_honoured(client, app):
+    """Very large fab_order is honoured for manual edits (no stage clamping)."""
     with app.app_context():
         make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
         make_release(2, "A", "Welded", "FABRICATION", 10)
@@ -801,7 +801,7 @@ def test_endpoint_fab_order_very_large_clamped(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order < 10  # clamped below Welded's value
+        assert job.fab_order == 999999
 
 
 # ---------------------------------------------------------------------------

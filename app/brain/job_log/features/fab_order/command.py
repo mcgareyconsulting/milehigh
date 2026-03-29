@@ -58,30 +58,18 @@ class UpdateFabOrderCommand:
             old_fab_order = None
 
         # 1b. Fixed-tier guard: stages with auto-assigned fab_order
-        from app.api.helpers import get_fixed_tier, get_fab_order_bounds, clamp_fab_order
+        from app.api.helpers import get_fixed_tier
         tier = get_fixed_tier(job_record.stage)
         if tier is not None:
-            # Fixed-tier stages always get the tier value — skip clamping and collision
+            # Fixed-tier stages always get the tier value — skip collision detection
             self.fab_order = tier
             logger.info(
                 f"Job {self.job_id}-{self.release} is fixed tier {tier} "
                 f"(stage={job_record.stage}), overriding fab_order to {tier}"
             )
-        elif self.fab_order is not None and job_record.stage not in ('Hold', None):
-            # 1c. Clamp fab_order to stage bounds (unified ordering)
-            lower, upper = get_fab_order_bounds(job_record.stage, self.job_id, self.release)
+        elif self.fab_order is not None and self.fab_order < 3:
             # Ensure dynamic fab_order is at least 3 (1 and 2 are reserved for fixed tiers)
-            if self.fab_order < 3:
-                self.fab_order = 3
-            clamped = clamp_fab_order(self.fab_order, lower, upper)
-            if clamped < 3:
-                clamped = 3
-            if clamped != self.fab_order:
-                logger.info(
-                    f"fab_order clamped for job {self.job_id}-{self.release}: "
-                    f"{self.fab_order} -> {clamped} (stage={job_record.stage}, lower={lower}, upper={upper})"
-                )
-                self.fab_order = clamped
+            self.fab_order = 3
 
         # 2️⃣ Collision detection: Cascade bump - shift all jobs with fab_order >= target value up by 1
         # Only for dynamic stages (fab_order >= 3); fixed tiers share values and don't cascade
