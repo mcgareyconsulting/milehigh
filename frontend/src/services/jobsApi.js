@@ -228,6 +228,15 @@ class JobsApi {
         }
     }
 
+    async unarchiveRelease(job, release) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/unarchive/${job}/${release}`);
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to unarchive release');
+        }
+    }
+
     async confirmArchive() {
         try {
             const response = await axios.post(`${API_BASE_URL}/brain/archive-confirm`);

@@ -73,11 +73,11 @@ export function useJobsDataFetching() {
 
                 // Update or add jobs from the new list
                 newJobsList.forEach(newJob => {
-                    if (newJob.is_active === false) {
-                        // Soft-deleted — remove from local state
+                    if (newJob.is_active === false || newJob.is_archived === true) {
+                        // Soft-deleted or archived — remove from active job log
                         if (jobsMap.has(newJob.id)) {
                             jobsMap.delete(newJob.id);
-                            console.log(`[CURSOR] Removing deleted job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
+                            console.log(`[CURSOR] Removing ${newJob.is_archived ? 'archived' : 'deleted'} job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
                         }
                         return;
                     }

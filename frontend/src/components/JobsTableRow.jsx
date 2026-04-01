@@ -5,7 +5,7 @@ import { JobDetailsModal } from './JobDetailsModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, tableScrollRef = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [showActionMenu, setShowActionMenu] = useState(false);
@@ -268,6 +268,21 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         } catch (error) {
             console.error('Failed to delete job:', error);
             alert('Failed to delete job: ' + error.message);
+        }
+    };
+
+    const handleUnarchiveRow = async () => {
+        if (!window.confirm(`Unarchive job ${row['Job #']}-${row['Release #']}? This will move it back to the active job log.`)) {
+            return;
+        }
+
+        setShowActionMenu(false);
+
+        try {
+            onUnarchive && await onUnarchive(row);
+        } catch (error) {
+            console.error('Failed to unarchive job:', error);
+            alert('Failed to unarchive job: ' + error.message);
         }
     };
 
@@ -1194,18 +1209,29 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     onClick={() => setShowActionMenu(false)}
                                 />
                                 <ul className="absolute right-0 z-20 bg-white dark:bg-slate-700 shadow-lg rounded border border-gray-200 dark:border-slate-600">
-                                    <li
-                                        onClick={() => handleEditColumn('job_name')}
-                                        className="px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
-                                    >
-                                        Edit column…
-                                    </li>
-                                    <li
-                                        onClick={handleDeleteRow}
-                                        className="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
-                                    >
-                                        Delete row
-                                    </li>
+                                    {onUnarchive ? (
+                                        <li
+                                            onClick={handleUnarchiveRow}
+                                            className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
+                                        >
+                                            Unarchive
+                                        </li>
+                                    ) : (
+                                        <>
+                                            <li
+                                                onClick={() => handleEditColumn('job_name')}
+                                                className="px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
+                                            >
+                                                Edit column…
+                                            </li>
+                                            <li
+                                                onClick={handleDeleteRow}
+                                                className="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
+                                            >
+                                                Delete row
+                                            </li>
+                                        </>
+                                    )}
                                 </ul>
                             </>
                         )}

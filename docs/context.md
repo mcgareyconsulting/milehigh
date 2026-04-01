@@ -1,14 +1,16 @@
-# Stage/Status Scroll Wheel Behavior
-User wants improved dropdown / scroll wheel behavior on the stage column of the job log.
+# Unarchive / Urgency on Print
+Two changes: 
+Just like the admin edit/delete row on the active Job Log, I would love to add a settings gear for admin users to the archive page. Each release should get that settings gear, with one action 'Unarchive'.
+Also need to add the urgency bananas with color to the print functionality on the job log, that column is curently omitted and needs to be added to the print
 
-# Improved Behavior
-- User wants the Stage dropdown to roll over and behave like a wheel. 
-- When opened, the current stage should be at the top, with the next logical stage next, obviously.
-- The dropdown will roll over like a wheel, maintaining focus on current stage and next logical stage.
+# Unarchive
+- Admin only action clickable thorugh the settings gear
+- should identically reflect admin action/setting behavior on the active job log.
+- Admin only
+- Unarchive is only action, which will set is_archived=false and move a release back to the active job log
 
-# Bugs
-- When interacting with the dropdown at the bottom of the releases table, the dropdown will extend below the table element and be inaccessible.
-- In this case, the dropdown should expand upward instead of downward. We never want the dropdown element to render outside of the releases table
-- There are occasionally scrolling lockouts with an open dropdown. I have occasionally opened a dropdown, scrolled the table to far, so the dropdown is not visible and this locks the scroll on the actual page. Need to tighten up the dropdown behavior overall
+# Urgency Column on Print
+- Job log print functionality does not inherent the urgency column. 
+- Urgency column should be identical to the active job log, so we wnat to see bananas and color of the banans on the print
 
 # Ask Clarifying Questions
