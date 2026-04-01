@@ -1,14 +1,13 @@
-# Fab Ordering Bug
-I have a continual fab ordering bug on the job log. When a release moves stages, say 'Released' to 'Fit Up Complete.' I want the fab order for that release to snap to the bottom of its newly assigned stage. Let's say its 45 but jumps into a stage with values 12-28. The newly moved stage should snap to 29.
-
-# Bugs
-The last two versions have had very different bugs. usually, the stage move shoves the release to the bottom of the table, like 15 -> 128, wild.
-Now, for whatever reason, I am getting 0s and -1s when changing a releases stage.
-
-# Current Functionality
-- Every release with a stage in the fabrication group needs a fab order number in the subset 4-X where X is number of releases in fabrication group. We are allowing duplicates, these are tagged orange and acceptable. There is currently no cascade effect if a release is changed from 13-12, we accept the duplicate on 12 without reording the old 12 release.
+# Start Install Cascade
+Releases on the job log without a specifically set red date should have a start install date that cascades and adjusts as releases change staging. This is an application of the fabrication hours function. The current stage of a release has an impact on the fabrication hours it has left, compared against the fab hours placed in the bid. Releases that change stages have less fabrication, which means we adjust the start installation dates for releases behind it in the pipeline. This is an estimation tool.
 
 # Goal
-I do not want stage crossover when filtering by fab orders right. So i want to be able to run all my filtes off of fab order without stage bleed. Example of stage bleed: Fab order 13-14-15 would be stages Paint complete - Welded - Paint complete. we do not want this, there should be clear separation between stages aroudn the fab order, which is the purpose of the stage bounding.
+- Confirm that releases with 'red date'/confirmed start install date are not affecting start install cascade. 
+- Want to confirm the application of the start install cascade formulas for releases.
+- Total fabrication hours and total install hours calculations are correct, so we can confidently build upon those pieces of the start install cascade formula.
+- Please verify with me the setup of the start install cascade
+- This cascade should run dynamically, without input from the user. Currently, the user must push reschedule.
+- If you are comparing against current db values, it appears that the formula is working correctly and dates are close, but red dates might be impacting.
 
-# Ask Clarifying Questions
+# Potential Trip UP
+- It could be the case that start install is workign perfectly, but the previously broken fabrication order on releases and out of date data have made it appear that the start install cascade is working incorrectly. We probalby need to make it dynamic, but highly likely that the formula is fine and my client needs to do a better job of keeping fab orders up to date.

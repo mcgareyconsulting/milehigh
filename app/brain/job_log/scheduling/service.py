@@ -37,9 +37,14 @@ def update_job_scheduling_fields(
     Returns:
         Job: Updated job record
     """
+    # Protect hard dates (red dates) — never overwrite user-set dates
+    if job.start_install_formulaTF is False:
+        logger.debug(f"Skipping scheduling update for hard-date job {job.job}-{job.release}")
+        return job
+
     if reference_date is None:
         reference_date = date.today()
-    
+
     # Fetch all jobs if not provided (needed for hours_in_front calculation)
     if all_jobs is None:
         all_jobs = Releases.query.all()
@@ -151,9 +156,13 @@ def recalculate_all_jobs_scheduling(
     
     for i, (job, scheduling) in enumerate(zip(all_jobs, jobs_with_scheduling)):
         try:
+            # Skip hard-date releases — their dates are user-set and must not be overwritten
+            if job.start_install_formulaTF is False:
+                continue
+
             old_start_install = job.start_install
             old_comp_eta = job.comp_eta
-            
+
             # Update calculated fields
             job.start_install = scheduling.get('install_start_date')
             job.comp_eta = scheduling.get('install_complete_date')
