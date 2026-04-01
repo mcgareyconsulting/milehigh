@@ -1,16 +1,14 @@
-# Job Comp / Invoiced Columns Improvements
-Job Comp interaction with Status Complete and Job Comp / Invoiced column behavior is slightly off relative to desired outcomes.
+# Stage/Status Scroll Wheel Behavior
+User wants improved dropdown / scroll wheel behavior on the stage column of the job log.
 
-# Job Comp / Invoiced Numerical values
-- when a number is placed in the job comp or invoiced columns '90' we want to mask or update this value to show 90%. Currently, we are accepting 0.9, which mathematically is equivalent, but the user wants a differnet view.
-- User will enter 90 in the Job Comp cell for a particular release. This hsould as 90%. Obviously the start install timings etc should not have their math affected.
+# Improved Behavior
+- User wants the Stage dropdown to roll over and behave like a wheel. 
+- When opened, the current stage should be at the top, with the next logical stage next, obviously.
+- The dropdown will roll over like a wheel, maintaining focus on current stage and next logical stage.
 
-# Job Comp <-> Complete Status
-- Currently an 'X' in Job Comp or Status 'Complete' will affect the other 'X' -> 'Complete' or 'Complete' -> 'X'
-- If we are 'X' and 'Complete' and the 'X' is removed from Job Comp or the status is changed away from 'Complete' the other column must reflect this change. There is a bug where status is 'Complete' and then changed back, but the 'X' in Job Comp is retained incorrectly.
+# Bugs
+- When interacting with the dropdown at the bottom of the releases table, the dropdown will extend below the table element and be inaccessible.
+- In this case, the dropdown should expand upward instead of downward. We never want the dropdown element to render outside of the releases table
+- There are occasionally scrolling lockouts with an open dropdown. I have occasionally opened a dropdown, scrolled the table to far, so the dropdown is not visible and this locks the scroll on the actual page. Need to tighten up the dropdown behavior overall
 
-# UI behavior
-- I also want to confirm that an 'X' in Job Comp will gray out the row, but a row is not collected in the Archive function until Job Comp and Invoiced both show 'X'
-
-
-# Ask Clarifying Questionzs
+# Ask Clarifying Questions
