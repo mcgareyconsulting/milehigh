@@ -577,7 +577,7 @@ function DraftingWorkLoad() {
                                                             formatCellValue={formatCellValue}
                                                             formatDate={formatDate}
                                                             onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
-                                                            onNotesChange={canEditDrafterFields ? updateNotes : undefined}
+                                                            onNotesChange={updateNotes}
                                                             onStatusChange={canEditDrafterFields ? updateStatus : undefined}
                                                             onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
                                                             procoreStatusOptions={submittalStatuses}

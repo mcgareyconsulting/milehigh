@@ -149,7 +149,7 @@ def update_submittal_order():
         }), 500
 
 @brain_bp.route("/drafting-work-load/notes", methods=["PUT"])
-@drafter_or_admin_required
+@login_required
 def update_submittal_notes():
     """Update the notes for a submittal"""
     try:

@@ -69,10 +69,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     };
 
     const handleNotesFocus = () => {
-        // Only allow editing if user is admin or drafter
-        if (!canEditDrafterFields) {
-            return;
-        }
         const currentValue = row['NOTES'] ?? row.notes ?? '';
         setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
         setEditingNotes(true);
