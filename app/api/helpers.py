@@ -187,11 +187,14 @@ def clamp_fab_order(value, lower, upper, strict_upper=False):
     strict_upper=False: clamp only when value > upper (command path, collision handles ties)
     """
     if lower is not None and value <= lower:
-        return lower + 1
+        value = lower + 1
     if upper is not None:
         threshold_hit = (value >= upper) if strict_upper else (value > upper)
         if threshold_hit:
-            return upper - 1
+            value = upper - 1
+    # Tiers 1-2 are reserved; dynamic fab_order must be >= 3
+    if value < 3:
+        value = 3
     return value
 
 

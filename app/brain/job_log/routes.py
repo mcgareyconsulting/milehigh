@@ -893,7 +893,7 @@ def update_stage(job, release):
                 f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
             )
         elif stage not in ('Hold', None):
-            # Dynamic stage: append to end of that stage's block
+            # Dynamic stage: append to end of that stage's block, respecting bounds
             normalized = _normalize_stage(stage)
             if normalized is not None:
                 from sqlalchemy import func, or_
@@ -905,16 +905,33 @@ def update_stage(job, release):
                     or_(Releases.job != job, Releases.release != release)
                 ).scalar()
 
-                if max_in_stage is not None:
-                    fab_order_to_set = max_in_stage + 1
-                else:
-                    # Stage is empty — find max of earlier dynamic stages, or start at 3
-                    lower_bound, _ = get_fab_order_bounds(stage, job, release)
-                    fab_order_to_set = (lower_bound + 1) if lower_bound is not None else 3
+                # Get bounds to prevent stage bleed
+                lower_bound, upper_bound = get_fab_order_bounds(stage, job, release)
 
-                # Ensure dynamic fab_order is at least 3
-                if fab_order_to_set < 3:
-                    fab_order_to_set = 3
+                if max_in_stage is not None:
+                    candidate = max_in_stage + 1
+                else:
+                    # Stage is empty — place after earlier stages
+                    candidate = (lower_bound + 1) if lower_bound is not None else 3
+
+                # Only clamp when upper_bound is above max_in_stage (healthy gap).
+                # If upper_bound <= max_in_stage, legacy bleed already exists —
+                # appending at max_in_stage + 1 is the safest placement.
+                healthy_gap = max_in_stage is None or (upper_bound is not None and upper_bound > max_in_stage)
+                if upper_bound is not None and candidate >= upper_bound and healthy_gap:
+                    if max_in_stage is not None:
+                        # Squeeze between max_in_stage and upper_bound
+                        candidate = (max_in_stage + upper_bound) / 2.0
+                    else:
+                        # Empty stage but upper_bound is tight
+                        effective_lower = lower_bound if lower_bound is not None else 2
+                        candidate = (effective_lower + upper_bound) / 2.0
+
+                # Floor: dynamic fab_order must be >= 3
+                if candidate < 3:
+                    candidate = 3
+
+                fab_order_to_set = candidate
 
                 logger.info(
                     f"Job {job}-{release} moving to dynamic stage '{stage}'. "
