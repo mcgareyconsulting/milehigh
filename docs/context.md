@@ -1,14 +1,19 @@
-# Fab Order Ordering 
-Bug in fab ordering on the job log -> releases table
+# Improved Search Bar
+User needs an improved search bar on the Job Log. Instead of job/release/name/desc search, we should have one search bar that handles all of these search functionalities. Additionally, we should have an identical search functionality on the archive page of hte Job Log.
 
-# Staging
-All staging barriers seem to be working appropriately. The goal is that fab order does not mix across stages. Welded QC -> Welded -> ... -> Released has a clear 3-X list.
+# Search Bar
+- Compress job and release search into name/desc search. 
+- If need be, keep the numerical and alphabetical searches separate
+- Ideally, one search bar handles project number search '400' and name search 'Banyon High Point'
+- My client is interested in loose keyword search, so everything to lower. 'Banyon-High Point' should be searchable with 'banyon high'.
 
-# Manual Fab Ordering
-## Bug
-- Updating the Fab Order of one release triggers a cascade that reorders all releases and resulted in bleeding extra releases into the job log. I changed 40-41 for one release in 'Released' stage. So one step fab order change for one release reordered ALL releases and bloated 50 records to the job log? Went from 273 active releases to 323 listed after the reordering completed. Not what we are looking for.
+# Archive
+- Archive page should have same search functionality as regular job log.
 
-## Goal
-- User will need to make small step reordering changes. So 30 needs bumped to 27 or something like that. We want to move 30 to 27 and bump 27-28-29 down one respectively. There should be no global cascading effect. If a release's stage is changed, it should bump to N+1 for the 3-X fab order number subset that the new stage occupies at that time.
+# Reset filters button
+- We want a slightly expanded reset filters button. So just larger text basically, start one size up
+
+# Overall UI
+The minimize function should compress the project names on job log and archive, but the search and filters bottom row should stay visible.
 
 # Ask Clarifying Questions
