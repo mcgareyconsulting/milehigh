@@ -1040,7 +1040,17 @@ def update_stage(job, release):
         
         # Commit all DB changes first (this is the critical operation)
         db.session.commit()
-        
+
+        # Trigger start install cascade — stage change affects all formula-driven dates
+        try:
+            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+            recalculate_all_jobs_scheduling()
+        except Exception as cascade_err:
+            logger.error(
+                f"Scheduling cascade failed after stage change for {job}-{release}: {cascade_err}",
+                exc_info=True
+            )
+
         logger.info(f"update_stage completed successfully", extra={
             'job': job,
             'release': release,
