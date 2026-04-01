@@ -43,7 +43,7 @@ def get_expected_trello_list_from_stage(stage: Optional[str]) -> Optional[str]:
     # Special mappings for untracked stages (no dedicated Trello list)
     if stage == 'Cut start':
         return 'Released'  # Map to first tracked list
-    if stage == 'Welded QC':
+    if stage in ('Welded', 'Welded QC'):
         return 'Fit Up Complete.'  # Map to previous tracked stage
     if stage == 'Complete':
         return 'Shipping completed'  # Map to final tracked list

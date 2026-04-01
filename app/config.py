@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv(Path('/Users/danielmcgarey/Desktop/mhmw/trello_sharepoint/.env'))
+load_dotenv(Path('/Users/danielmcgarey/Desktop/MHMW/milehigh/.env'))
 
 # Define frontend build directory
 FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
