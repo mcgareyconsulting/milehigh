@@ -193,6 +193,22 @@ function JobLog() {
         return sorted;
     }, [displayJobs, reviewMode]);
 
+    // Compute set of fab_order values >= 4 that appear on more than one release
+    const duplicateFabOrders = useMemo(() => {
+        const counts = {};
+        for (const row of reviewDisplayJobs) {
+            const fo = row['Fab Order'];
+            if (fo != null && fo >= 4) {
+                counts[fo] = (counts[fo] || 0) + 1;
+            }
+        }
+        const dupes = new Set();
+        for (const [val, count] of Object.entries(counts)) {
+            if (count > 1) dupes.add(Number(val));
+        }
+        return dupes;
+    }, [reviewDisplayJobs]);
+
     // Define column order explicitly
     const columnOrder = [
         'Job #',
@@ -983,6 +999,7 @@ function JobLog() {
                                                             isAdmin={isAdmin}
                                                             onDelete={handleDeleteJob}
                                                             tableScrollRef={tableScrollRef}
+                                                            duplicateFabOrders={duplicateFabOrders}
                                                         />
                                                     ))
                                                 )}
