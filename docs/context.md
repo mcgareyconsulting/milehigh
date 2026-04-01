@@ -1,19 +1,16 @@
-# Improved Search Bar
-User needs an improved search bar on the Job Log. Instead of job/release/name/desc search, we should have one search bar that handles all of these search functionalities. Additionally, we should have an identical search functionality on the archive page of hte Job Log.
+# Job Comp / Invoiced Columns Improvements
+Job Comp interaction with Status Complete and Job Comp / Invoiced column behavior is slightly off relative to desired outcomes.
 
-# Search Bar
-- Compress job and release search into name/desc search. 
-- If need be, keep the numerical and alphabetical searches separate
-- Ideally, one search bar handles project number search '400' and name search 'Banyon High Point'
-- My client is interested in loose keyword search, so everything to lower. 'Banyon-High Point' should be searchable with 'banyon high'.
+# Job Comp / Invoiced Numerical values
+- when a number is placed in the job comp or invoiced columns '90' we want to mask or update this value to show 90%. Currently, we are accepting 0.9, which mathematically is equivalent, but the user wants a differnet view.
+- User will enter 90 in the Job Comp cell for a particular release. This hsould as 90%. Obviously the start install timings etc should not have their math affected.
 
-# Archive
-- Archive page should have same search functionality as regular job log.
+# Job Comp <-> Complete Status
+- Currently an 'X' in Job Comp or Status 'Complete' will affect the other 'X' -> 'Complete' or 'Complete' -> 'X'
+- If we are 'X' and 'Complete' and the 'X' is removed from Job Comp or the status is changed away from 'Complete' the other column must reflect this change. There is a bug where status is 'Complete' and then changed back, but the 'X' in Job Comp is retained incorrectly.
 
-# Reset filters button
-- We want a slightly expanded reset filters button. So just larger text basically, start one size up
+# UI behavior
+- I also want to confirm that an 'X' in Job Comp will gray out the row, but a row is not collected in the Archive function until Job Comp and Invoiced both show 'X'
 
-# Overall UI
-The minimize function should compress the project names on job log and archive, but the search and filters bottom row should stay visible.
 
-# Ask Clarifying Questions
+# Ask Clarifying Questionzs
