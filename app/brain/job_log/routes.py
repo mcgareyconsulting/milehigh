@@ -2710,6 +2710,38 @@ def archive_preview():
         return jsonify({'error': str(e)}), 500
 
 
+@brain_bp.route("/unarchive/<int:job>/<release>", methods=["POST"])
+@admin_required
+def unarchive_release(job, release):
+    """Unarchive a single release (set is_archived=False)."""
+    from app.services.job_event_service import JobEventService
+
+    try:
+        r = Releases.query.filter_by(job=job, release=str(release)).first()
+        if not r:
+            return jsonify({'error': f'Release {job}-{release} not found'}), 404
+        if not r.is_archived:
+            return jsonify({'error': f'Release {job}-{release} is not archived'}), 400
+
+        r.is_archived = False
+        r.last_updated_at = datetime.utcnow()
+        r.source_of_update = 'Brain'
+        JobEventService.create(
+            job=r.job,
+            release=r.release,
+            action='unarchived',
+            source='Brain',
+            payload={'reason': 'admin_unarchive'},
+        )
+        db.session.commit()
+        logger.info(f"Unarchived release {job}-{release} via admin action")
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        logger.error(f"unarchive_release failed for {job}-{release}", exc_info=True)
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @brain_bp.route("/archive-confirm", methods=["POST"])
 @admin_required
 def archive_confirm():

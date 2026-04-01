@@ -3,14 +3,29 @@ import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { jobsApi } from '../services/jobsApi';
+import { checkAuth } from '../utils/auth';
 
 function Archive() {
     const navigate = useNavigate();
     const { jobs, columns, loading, error: fetchError, refetch } = useArchiveDataFetching();
 
+    const [isAdmin, setIsAdmin] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('ar_minimized') === 'true'
     );
+
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            try {
+                const user = await checkAuth();
+                setIsAdmin(user?.is_admin || false);
+            } catch {
+                setIsAdmin(false);
+            }
+        };
+        fetchUserInfo();
+    }, []);
 
     useEffect(() => {
         localStorage.setItem('ar_minimized', isFilterMinimized);
@@ -68,6 +83,11 @@ function Archive() {
             }
         }
         return value;
+    };
+
+    const handleUnarchiveJob = async (row) => {
+        await jobsApi.unarchiveRelease(row['Job #'], row['Release #']);
+        refetch();
     };
 
     const hasData = displayJobs.length > 0;
@@ -290,13 +310,18 @@ function Archive() {
                                                         </th>
                                                     );
                                                 })}
+                                                {isAdmin && (
+                                                    <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                        ⚙
+                                                    </th>
+                                                )}
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {!hasData ? (
                                                 <tr>
                                                     <td
-                                                        colSpan={tableColumnCount}
+                                                        colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
                                                         className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
                                                     >
                                                         {hasJobsData
@@ -324,6 +349,8 @@ function Archive() {
                                                         onUpdate={() => refetch()}
                                                         stageToGroup={stageToGroup}
                                                         stageGroupColors={stageGroupColors}
+                                                        isAdmin={isAdmin}
+                                                        onUnarchive={handleUnarchiveJob}
                                                     />
                                                 ))
                                             )}
