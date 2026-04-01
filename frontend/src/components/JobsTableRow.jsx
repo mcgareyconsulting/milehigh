@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, tableScrollRef = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [showActionMenu, setShowActionMenu] = useState(false);
@@ -196,8 +196,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [localBananaColor, setLocalBananaColor] = useState(row['Banana Color'] || null);
     const [updatingBananaColor, setUpdatingBananaColor] = useState(false);
     const [showStageDropdown, setShowStageDropdown] = useState(false);
+    const [dropdownDirection, setDropdownDirection] = useState('down');
     const stageListRef = useRef(null);       // ref on the scrollable container div
     const selectedStageRef = useRef(null);   // ref on the currently-selected option button
+    const stageTriggerRef = useRef(null);    // ref on the dropdown trigger button
 
     // Local state for Job Comp and Invoiced (editable text)
     const [localJobComp, setLocalJobComp] = useState(row['Job Comp'] ?? '');
@@ -284,14 +286,54 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setInvoicedInputValue(row['Invoiced'] ?? '');
     }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Banana Color'], row['Job Comp'], row['Invoiced']]);
 
-    // Scroll to selected stage when dropdown opens
+    // Rotate stage options so current stage is at top (wheel behavior)
+    const rotatedStageOptions = useMemo(() => {
+        const baseOptions = stageToGroup
+            ? [...stageOptions].sort((a, b) => {
+                const groupOrder = { FABRICATION: 0, READY_TO_SHIP: 1, COMPLETE: 2 };
+                const ga = stageToGroup[a.value] ?? 'FABRICATION';
+                const gb = stageToGroup[b.value] ?? 'FABRICATION';
+                return (groupOrder[ga] ?? 0) - (groupOrder[gb] ?? 0);
+              })
+            : stageOptions;
+
+        const idx = baseOptions.findIndex(o => o.value === localStage);
+        if (idx <= 0) return baseOptions;
+        return [...baseOptions.slice(idx), ...baseOptions.slice(0, idx)];
+    }, [localStage, stageToGroup]);
+
+    // Determine dropdown direction (up/down) when opened
     useEffect(() => {
-        if (showStageDropdown && stageListRef.current && selectedStageRef.current) {
-            const container = stageListRef.current;
-            const selected = selectedStageRef.current;
-            const offset = selected.offsetTop - container.clientHeight / 2 + selected.clientHeight / 2;
-            container.scrollTop = Math.max(0, offset);
+        if (!showStageDropdown || !stageTriggerRef.current) return;
+
+        const scrollContainer = tableScrollRef?.current;
+        if (!scrollContainer) { setDropdownDirection('down'); return; }
+
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const buttonRect = stageTriggerRef.current.getBoundingClientRect();
+        const dropdownMaxHeight = 256; // max-h-64 = 16rem = 256px
+
+        const spaceBelow = containerRect.bottom - buttonRect.bottom;
+        const spaceAbove = buttonRect.top - containerRect.top;
+
+        if (spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow) {
+            setDropdownDirection('up');
+        } else {
+            setDropdownDirection('down');
         }
+    }, [showStageDropdown]);
+
+    // Close dropdown when table scrolls
+    useEffect(() => {
+        if (!showStageDropdown) return;
+
+        const scrollContainer = tableScrollRef?.current;
+        if (!scrollContainer) return;
+
+        const handleScroll = () => setShowStageDropdown(false);
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+
+        return () => scrollContainer.removeEventListener('scroll', handleScroll);
     }, [showStageDropdown]);
 
     const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
@@ -792,6 +834,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 <div className="flex items-center justify-center">
                                     <div className="relative flex-1 min-w-0 max-w-full">
                                         <button
+                                            ref={stageTriggerRef}
                                             type="button"
                                             onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
                                             disabled={updatingStage}
@@ -809,17 +852,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                 />
                                                 <div
                                                     ref={stageListRef}
-                                                    className="absolute left-0 right-0 top-full mt-0.5 rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 min-w-[100px] max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col"
+                                                    className={`absolute left-0 right-0 ${dropdownDirection === 'up' ? 'bottom-full mb-0.5' : 'top-full mt-0.5'} rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 min-w-[100px] max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col`}
                                                 >
-                                                    {(stageToGroup
-                                                        ? [...stageOptions].sort((a, b) => {
-                                                            const groupOrder = { FABRICATION: 0, READY_TO_SHIP: 1, COMPLETE: 2 };
-                                                            const ga = stageToGroup[a.value] ?? 'FABRICATION';
-                                                            const gb = stageToGroup[b.value] ?? 'FABRICATION';
-                                                            return (groupOrder[ga] ?? 0) - (groupOrder[gb] ?? 0);
-                                                          })
-                                                        : stageOptions
-                                                    ).map((option) => {
+                                                    {rotatedStageOptions.map((option) => {
                                                         const optionColors = getStageColors(option.value);
                                                         const isSelected = option.value === localStage;
                                                         return (

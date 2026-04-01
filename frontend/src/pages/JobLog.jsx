@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
@@ -31,6 +31,7 @@ function JobLog() {
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [archivePreview, setArchivePreview] = useState(null);
     const [archiving, setArchiving] = useState(false);
+    const tableScrollRef = useRef(null);
 
     // Use the filters hook
     const {
@@ -882,7 +883,7 @@ function JobLog() {
 
                             {!loading && !fetchError && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <div className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                    <div ref={tableScrollRef} className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
                                         <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                             <thead className="sticky top-0 z-10">
                                                 <tr>
@@ -942,6 +943,7 @@ function JobLog() {
                                                             stageGroupColors={stageGroupColors}
                                                             isAdmin={isAdmin}
                                                             onDelete={handleDeleteJob}
+                                                            tableScrollRef={tableScrollRef}
                                                         />
                                                     ))
                                                 )}
