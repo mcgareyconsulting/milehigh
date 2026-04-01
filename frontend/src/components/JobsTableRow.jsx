@@ -296,8 +296,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
     const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
     const invoicedIsX = (localInvoiced || '').toString().trim().toUpperCase() === 'X';
-    const isBothX = jobCompIsX && invoicedIsX;
-    const isGrayed = isComplete || isBothX;
+    const isGrayed = isComplete || jobCompIsX;
     const rowBgClass = isGrayed ? 'bg-gray-300 dark:bg-slate-600' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-100 dark:bg-slate-700/80');
 
     // Handle stage change
@@ -317,6 +316,13 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             setJobCompInputValue('X');
             setLocalFabOrder(null);
             setFabOrderInputValue('');
+        }
+        // If changing away from Complete, clear job_comp 'X'
+        if (oldStage === 'Complete' && newStage !== 'Complete') {
+            if ((localJobComp || '').trim().toUpperCase() === 'X') {
+                setLocalJobComp('');
+                setJobCompInputValue('');
+            }
         }
         setUpdatingStage(true);
 
@@ -457,9 +463,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             setLocalFabOrder(null);
             setFabOrderInputValue('');
         }
+        // If clearing 'X', optimistically show stage reverting (actual stage comes from API)
+        const oldWasX = (oldValue || '').trim().toUpperCase() === 'X';
+        const newIsX = newValue.trim().toUpperCase() === 'X';
+        const clearingX = oldWasX && !newIsX && localStage === 'Complete';
         setUpdatingJobComp(true);
         try {
-            await jobsApi.updateJobComp(row['Job #'], row['Release #'], newValue);
+            const result = await jobsApi.updateJobComp(row['Job #'], row['Release #'], newValue);
+            // Apply the reverted stage from the backend (looked up from release_events)
+            if (clearingX && result?.stage) {
+                setLocalStage(result.stage);
+            }
             if (onUpdate) onUpdate();
         } catch (err) {
             setLocalJobComp(oldValue);

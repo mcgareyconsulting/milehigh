@@ -930,6 +930,7 @@ def update_stage(job, release):
             job_record.banana_color = 'red'
 
         # If stage set to Complete, auto-set job_comp to 'X'
+        # If stage changed away from Complete, clear job_comp 'X'
         comp_extras = {}
         if stage == 'Complete':
             current_job_comp = (job_record.job_comp or '').strip().upper()
@@ -942,6 +943,17 @@ def update_stage(job, release):
                     payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': 'X', 'reason': 'stage_set_to_complete'},
                 )
                 comp_extras['job_comp'] = 'X'
+        elif old_stage == 'Complete' and stage != 'Complete':
+            current_job_comp = (job_record.job_comp or '').strip().upper()
+            if current_job_comp == 'X':
+                old_jc = job_record.job_comp
+                job_record.job_comp = None
+                JobEventService.create(
+                    job=job, release=release,
+                    action='updated', source='Brain',
+                    payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': None, 'reason': 'stage_changed_from_complete'},
+                )
+                comp_extras['job_comp'] = None
 
         # Update job metadata
         job_record.last_updated_at = datetime.utcnow()
@@ -1399,6 +1411,13 @@ def update_job_comp(job, release):
     try:
         raw = request.json.get("job_comp")
         job_comp_str = _normalize_short_field(raw)
+        # Normalize numeric values to percentage display (e.g. "90" → "90%")
+        if job_comp_str and job_comp_str.upper() != 'X':
+            try:
+                num = float(job_comp_str.rstrip('%'))
+                job_comp_str = f"{num:g}%"
+            except ValueError:
+                pass
 
         job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
@@ -1418,9 +1437,37 @@ def update_job_comp(job, release):
             payload={'field': 'job_comp', 'old_value': old_job_comp, 'new_value': job_comp_str},
         )
 
-        # If job_comp set to 'X', auto-set stage to Complete and clear fab_order
+        # If job_comp cleared from 'X', revert stage to what it was before Complete
         response_extras = {}
-        if job_comp_str and job_comp_str.upper() == 'X':
+        old_was_x = old_job_comp and old_job_comp.strip().upper() == 'X'
+        new_is_x = job_comp_str and job_comp_str.upper() == 'X'
+        if old_was_x and not new_is_x:
+            current_stage = job_record.stage or 'Released'
+            if current_stage == 'Complete':
+                # Look up the stage before Complete from release_events
+                from app.models import ReleaseEvents
+                recent_stage_events = ReleaseEvents.query.filter_by(
+                    job=job, release=release, action='update_stage'
+                ).order_by(ReleaseEvents.created_at.desc()).limit(20).all()
+
+                revert_stage = 'Released'
+                for evt in recent_stage_events:
+                    if evt.payload.get('to') == 'Complete' and evt.payload.get('from'):
+                        revert_stage = evt.payload['from']
+                        break
+
+                update_job_stage_fields(job_record, revert_stage)
+                JobEventService.create(
+                    job=job, release=release,
+                    action='update_stage', source='Brain',
+                    payload={'from': 'Complete', 'to': revert_stage, 'reason': 'job_comp_cleared'},
+                )
+                response_extras['stage'] = revert_stage
+                from app.api.helpers import get_stage_group_from_stage
+                response_extras['stage_group'] = get_stage_group_from_stage(revert_stage)
+
+        # If job_comp set to 'X', auto-set stage to Complete and clear fab_order
+        if new_is_x:
             current_stage = job_record.stage or 'Released'
             if current_stage != 'Complete':
                 update_job_stage_fields(job_record, 'Complete')
@@ -1471,6 +1518,13 @@ def update_invoiced(job, release):
     try:
         raw = request.json.get("invoiced")
         invoiced_str = _normalize_short_field(raw)
+        # Normalize numeric values to percentage display (e.g. "90" → "90%")
+        if invoiced_str and invoiced_str.upper() != 'X':
+            try:
+                num = float(invoiced_str.rstrip('%'))
+                invoiced_str = f"{num:g}%"
+            except ValueError:
+                pass
 
         job_record = Releases.query.filter_by(job=job, release=release).first()
         if not job_record:
