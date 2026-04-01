@@ -425,7 +425,7 @@ def get_jobs():
         latest_timestamp = None
         if jobs:
             latest_job = jobs[-1]
-            latest_timestamp = latest_job.last_updated_at.isoformat()
+            latest_timestamp = latest_job.last_updated_at.isoformat() if latest_job.last_updated_at else None
             logger.info(f"[CURSOR] Latest job timestamp: {latest_timestamp}")
 
         # Build response

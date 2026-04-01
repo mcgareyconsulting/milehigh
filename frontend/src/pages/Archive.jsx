@@ -19,11 +19,9 @@ function Archive() {
     // Use the filters hook
     const {
         selectedProjectNames,
-        jobNumberSearch,
-        releaseNumberSearch,
+        search,
         setSelectedProjectNames,
-        setJobNumberSearch,
-        setReleaseNumberSearch,
+        setSearch,
         projectNameOptions,
         stageToGroup,
         stageGroupColors,
@@ -142,207 +140,115 @@ function Archive() {
                     <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
                         <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
 
-                            {/* Minimized summary row */}
-                            {isFilterMinimized && (
-                                <div className="flex items-center gap-3 flex-wrap text-xs">
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                        <span className="font-semibold text-gray-500 dark:text-slate-400">🗂️ Projects</span>
-                                        {selectedProjectNames.map(name => (
-                                            <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                {name}
-                                            </span>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {jobNumberSearch !== '' && (
-                                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                Job # {jobNumberSearch}
-                                            </span>
-                                        )}
-                                        {releaseNumberSearch !== '' && (
-                                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                Release # {releaseNumberSearch}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="ml-auto flex items-center gap-2">
-                                        <span className="font-semibold text-gray-700 dark:text-slate-200">
-                                            Total: <span className="font-bold text-gray-900 dark:text-slate-100">{displayJobs.length}</span>
+                            {/* Minimized project pills — show selected projects when collapsed */}
+                            {isFilterMinimized && selectedProjectNames.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap text-xs">
+                                    <span className="font-semibold text-gray-500 dark:text-slate-400">Projects:</span>
+                                    {selectedProjectNames.map(name => (
+                                        <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                            {name}
                                         </span>
-                                        <button
-                                            onClick={() => setIsFilterMinimized(false)}
-                                            className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
-                                            title="Expand filters"
-                                        >
-                                            <span className="text-xl leading-none text-gray-600 dark:text-slate-300">▾</span>
-                                        </button>
-                                    </div>
+                                    ))}
                                 </div>
                             )}
 
-                            {/* Minimized search row — always visible when minimized */}
-                            {isFilterMinimized && (
-                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                        <div className="flex items-center gap-1.5">
-                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                                                Job #:
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={jobNumberSearch}
-                                                onChange={(e) => setJobNumberSearch(e.target.value)}
-                                                placeholder="Job #..."
-                                                className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                            />
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                                                Release #:
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={releaseNumberSearch}
-                                                onChange={(e) => setReleaseNumberSearch(e.target.value)}
-                                                placeholder="Release #..."
-                                                className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                            />
-                                        </div>
-                                        <button
-                                            onClick={resetFilters}
-                                            className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
-                                        >
-                                            Reset Filters
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
-                                        <span>
-                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
-                                        </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span>
-                                            Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
-                                        </span>
-                                        <span className="text-gray-300 dark:text-slate-500">|</span>
-                                        <span>
-                                            Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Expanded filter rows */}
+                            {/* Row 1: Project name buttons — only visible when expanded */}
                             {!isFilterMinimized && (
-                                <>
-                                    {/* Row 1: Project name grid */}
-                                    <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+                                <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+                                    <button
+                                        onClick={() => setSelectedProjectNames([])}
+                                        className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
+                                            ? 'bg-blue-700 text-white'
+                                            : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
+                                            }`}
+                                    >
+                                        All
+                                    </button>
+                                    {projectNameOptions.map((option) => (
                                         <button
-                                            onClick={() => setSelectedProjectNames([])}
-                                            className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
+                                            key={option}
+                                            onClick={() => {
+                                                setSelectedProjectNames(prev =>
+                                                    prev.includes(option)
+                                                        ? prev.filter(name => name !== option)
+                                                        : [...prev, option]
+                                                );
+                                            }}
+                                            className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
                                                 }`}
+                                            title={option}
                                         >
-                                            All
+                                            {option.length > 20 ? option.slice(0, 20) + '…' : option}
                                         </button>
-                                        {projectNameOptions.map((option) => (
-                                            <button
-                                                key={option}
-                                                onClick={() => {
-                                                    setSelectedProjectNames(prev =>
-                                                        prev.includes(option)
-                                                            ? prev.filter(name => name !== option)
-                                                            : [...prev, option]
-                                                    );
-                                                }}
-                                                className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.includes(option)
-                                                    ? 'bg-blue-700 text-white'
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
-                                                    }`}
-                                                title={option}
-                                            >
-                                                {option.length > 20 ? option.slice(0, 20) + '…' : option}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {/* Row 2: Actions + chevron */}
-                                    <div className="flex items-center gap-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <button
-                                                onClick={() => navigate('/job-log')}
-                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
-                                            >
-                                                📋 Job Log
-                                            </button>
-                                            <button
-                                                onClick={() => refetch()}
-                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
-                                            >
-                                                ⟳ Refresh
-                                            </button>
-                                        </div>
-                                        <div className="ml-auto">
-                                            <button
-                                                onClick={() => setIsFilterMinimized(true)}
-                                                className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
-                                                title="Collapse filters"
-                                            >
-                                                <span className="text-xl leading-none text-gray-600 dark:text-slate-300">▴</span>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Row 3: Reset + search + stats */}
-                                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                            <button
-                                                onClick={resetFilters}
-                                                className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
-                                            >
-                                                Reset Filters
-                                            </button>
-                                            <div className="flex items-center gap-1.5">
-                                                <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                                                    Job #:
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={jobNumberSearch}
-                                                    onChange={(e) => setJobNumberSearch(e.target.value)}
-                                                    placeholder="Job #..."
-                                                    className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                                                    Release #:
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={releaseNumberSearch}
-                                                    onChange={(e) => setReleaseNumberSearch(e.target.value)}
-                                                    placeholder="Release #..."
-                                                    className="w-28 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
-                                            <span>
-                                                Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
-                                            </span>
-                                            <span className="text-gray-300 dark:text-slate-500">|</span>
-                                            <span>
-                                                Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
-                                            </span>
-                                            <span className="text-gray-300 dark:text-slate-500">|</span>
-                                            <span>
-                                                Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </>
+                                    ))}
+                                </div>
                             )}
+
+                            {/* Row 2: Actions + chevron — always visible */}
+                            <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        onClick={() => navigate('/job-log')}
+                                        className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                    >
+                                        📋 Job Log
+                                    </button>
+                                    <button
+                                        onClick={() => refetch()}
+                                        className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                    >
+                                        ⟳ Refresh
+                                    </button>
+                                </div>
+                                <div className="ml-auto">
+                                    <button
+                                        onClick={() => setIsFilterMinimized(!isFilterMinimized)}
+                                        className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
+                                        title={isFilterMinimized ? "Expand projects" : "Collapse projects"}
+                                    >
+                                        <span className="text-xl leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Row 3: Reset + search + stats — always visible */}
+                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <button
+                                        onClick={resetFilters}
+                                        className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                    >
+                                        Reset Filters
+                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                        <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                                            Search:
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            placeholder="Job #, release, name, description..."
+                                            className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                    <span>
+                                        Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
+                                    </span>
+                                    <span className="text-gray-300 dark:text-slate-500">|</span>
+                                    <span>
+                                        Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalFabHrs.toFixed(2)}</span>
+                                    </span>
+                                    <span className="text-gray-300 dark:text-slate-500">|</span>
+                                    <span>
+                                        Install HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{totalInstallHrs.toFixed(2)}</span>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
                         {loading && (
