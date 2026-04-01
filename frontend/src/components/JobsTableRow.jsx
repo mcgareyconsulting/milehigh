@@ -5,7 +5,7 @@ import { JobDetailsModal } from './JobDetailsModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [showActionMenu, setShowActionMenu] = useState(false);
@@ -904,10 +904,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // Handle Fab Order column with editable input
                     if (column === 'Fab Order') {
                         const displayValue = localFabOrder === null || localFabOrder === undefined ? '—' : formatCellValue(localFabOrder, column);
+                        const isDuplicateFabOrder = duplicateFabOrders && localFabOrder != null && localFabOrder >= 4 && duplicateFabOrders.has(localFabOrder);
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-300 dark:border-slate-600 text-center`}
+                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-300 dark:border-slate-600 text-center`}
+                                style={isDuplicateFabOrder ? { backgroundColor: '#f97316' } : undefined}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -949,7 +951,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingFabOrder || isGrayed}
-                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'bg-orange-400 text-white font-bold' : 'bg-white dark:bg-slate-700'} text-gray-900 dark:text-slate-100 text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
                                     style={{ minWidth: '60px' }}
                                 />
