@@ -58,18 +58,21 @@ class UpdateFabOrderCommand:
             old_fab_order = None
 
         # 1b. Fixed-tier guard: stages with auto-assigned fab_order
-        from app.api.helpers import get_fixed_tier
+        from app.api.helpers import get_fixed_tier, get_fab_order_bounds, clamp_fab_order
         tier = get_fixed_tier(job_record.stage)
         if tier is not None:
-            # Fixed-tier stages always get the tier value — skip collision detection
             self.fab_order = tier
             logger.info(
                 f"Job {self.job_id}-{self.release} is fixed tier {tier} "
                 f"(stage={job_record.stage}), overriding fab_order to {tier}"
             )
-        elif self.fab_order is not None and self.fab_order < 3:
-            # Ensure dynamic fab_order is at least 3 (1 and 2 are reserved for fixed tiers)
-            self.fab_order = 3
+        elif self.fab_order is not None:
+            lower_bound, upper_bound = get_fab_order_bounds(
+                job_record.stage, self.job_id, self.release
+            )
+            self.fab_order = clamp_fab_order(
+                self.fab_order, lower_bound, upper_bound, strict_upper=False
+            )
 
         # 2️⃣ Create event for the current job (handles deduplication, logging internally)
         # Ensure payload values are valid (not NaN) - convert to None if needed
