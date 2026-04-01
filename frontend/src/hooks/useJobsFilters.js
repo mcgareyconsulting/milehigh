@@ -89,6 +89,20 @@ export function useJobsFilters(jobs = []) {
     }, [selectedProjectNames, search, selectedStages]);
 
     /**
+     * Stage priority for tiebreaking when fab_order values are equal
+     * (e.g. all Ready-to-Ship fixed-tier stages share fab_order = 2)
+     */
+    const STAGE_SORT_PRIORITY = {
+        'Shipping planning': 1,
+        'Shipping Planning': 1,
+        'Store at MHMW for shipping': 2,
+        'Store at Shop': 2,
+        'Paint complete': 3,
+        'Paint Complete': 3,
+        'Welded QC': 4,
+    };
+
+    /**
      * Sort jobs by fab order (for subset-specific sorting)
      */
     const sortByFabOrder = useCallback((jobs) => {
@@ -103,7 +117,11 @@ export function useJobsFilters(jobs = []) {
             const numA = Number(fabOrderA);
             const numB = Number(fabOrderB);
             if (!isNaN(numA) && !isNaN(numB)) {
-                return numA - numB;
+                if (numA !== numB) return numA - numB;
+                // Tiebreak by stage priority within the same fab_order
+                const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
+                const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
+                return prioA - prioB;
             }
             return String(fabOrderA).localeCompare(String(fabOrderB));
         });
