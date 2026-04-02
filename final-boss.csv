@@ -1,0 +1,310 @@
+Job #,Release #,Job,Description,Fab Hrs,Install HRS,Paint color,PM,BY,Released,Fab Order,Cut start,Fitup comp,Welded,Paint Comp,Ship,Start install,Comp. ETA,Job Comp,Invoiced,Notes
+170,295,Garrett -Banyan High Point,Building 6 Canopy,0,16,Red Oxide Primed,RL,CBA,6/19,1,X,X,X,X,X,4/7,4/8,90%,MFP,
+170,123,Garrett -Banyan High Point,Bld 6 Balcony Rails,105.5,93.8,Railing Black,RL,DCR,11/14,1,X,X,X,X,X,2/25,3/4,50%,MFP,Powdered Waiting On Hardware
+170,405,Garrett -Banyan High Point,Bld 1 Garage Rails,123.5,114,Railing Black,RL,DCR,2/27,1,X,X,X,X,X,4/7,4/16,75%,MFP,
+170,627,Garrett -Banyan High Point,Light String Posts,12,16,Railing Black,RL,DCR,7/29,1,X,X,X,X,X,4/7,4/8,O,MFP,QC Done
+170,457,Garrett -Banyan High Point,Pool Courtyard Trellis,67.5,68.5,Red Oxide Primed,RL,FMW,6/3,2,X,X,X,X,O,4/7,4/13,,MFP,QC Done
+170,436,Garrett -Banyan High Point,Bld 1 North Exterior Stair Rail,14.1,13.7,Railing Black,RL,DCR,3/11,2,X,X,X,X,RS,4/7,4/7,,M,QC Done
+170,451,Garrett -Banyan High Point,Trellis B,45.6,46.6,Red Oxide Primed,RL,FMW,6/3,2,X,X,X,X,O,4/7,4/9,,MFP,QC Done Embeds on site
+170,412,Garrett -Banyan High Point,Bld 2 Garage Rails,151.4,140.1,Railing Black,RL,DCR,3/4,13,X,X,X,O,,4/7,4/17,,MF,
+170,448,Garrett -Banyan High Point,Bld 3 West Exterior Stair Rail,7.8,7.5,Railing Black,RL,DCR,3/10,14,X,X,X,O,,4/7,4/7,,MF,Qc done
+170,456,Garrett -Banyan High Point,Bld 6 East Exterior Stair Rail,3.5,3.5,Railing Black,RL,DCR,3/13,15,X,X,X,O,,4/7,4/7,,MF,
+170,425,Garrett -Banyan High Point,Bld 2 North Ramp Rail,23.3,22.9,Railing Black,RL,DCR,3/6,19,X,X,X,O,,4/7,4/8,,M,Qc done
+170,462,Garrett -Banyan High Point,Main Entrance Ramp Rails,23.6,13.5,Railing Black,RL,RJA,3/18,21,X,X,X,O,,4/7,4/7,,M,Qc Done
+170,461,Garrett -Banyan High Point,Bld 6 Westside Exterior Rail,7.5,7.3,Railing Black,RL,DCR,3/17,24,X,X,O,,,4/8,4/8,,,Qc Done
+170,463,Garrett -Banyan High Point,Bld 2 Eastside Exterior Stair Rail,7.9,7.7,Railing Black,RL,DCR,3/17,32,X,X,O,,,4/8,4/8,,,grabs are fabbed
+170,460,Garrett -Banyan High Point,Bld 3&6 Site Ramp Rail,5,10,Railing Black,RL,DCR,3/17,34,X,O,,,,4/8,4/8,,M,
+170,446,Garrett -Banyan High Point,Bld 3 North Ramp Rail,3.5,7,Railing Black,RL,DCR,3/10,38,X,O,,,,4/8,4/8,,M,
+170,453,Garrett -Banyan High Point,Bld 5 North Exterior Stair Rail,1.5,1.5,Railing Black,RL,DCR,3/11,42,X,X,O,,,4/8,4/8,,,
+170,454,Garrett -Banyan High Point,Bld 3 Garage Rail,152.5,131,Railing Black,RL,DCR,3/30,53,,,,,,4/8,4/20,,,
+170,860,Garrett -Banyan High Point,Leasing Clubhouse Rails,14,8,Railing Black,RL,DCR,11/5,,X,X,X,X,X,4/8,4/8,X,X,QC Done
+170,393,Garrett -Banyan High Point,Balcony Divider Bld 1,4.5,4,Railing Black,RL,DCR,2/20,,X,X,X,X,X,4/8,4/8,X,X,Qc Done
+170,906,Garrett -Banyan High Point,Bld 3 Balcony Rail,105.5,93.8,Railing Black,RL,DCR,11/5,,X,X,X,X,X,4/8,4/15,X,X,QC Done
+170,397,Garrett -Banyan High Point,Balcony Divider Bld 2,2.8,2.5,Railing Black,RL,DCR,2/20,,X,X,X,X,X,4/8,4/8,X,X,QC Done
+170,350,Garrett -Banyan High Point,Bld 1 Westside Exterior Rail,6.6,6.4,Railing Black,RL,DCR,2/5,,X,X,X,X,X,4/8,4/8,X,O,QC Done
+170,181,Garrett -Banyan High Point,Bearing Angles,1,1,Red Oxide Primed,RL,DCR,1/19,,X,X,X,X,X,4/8,4/8,X,O,NEED CO
+170,348,Garrett -Banyan High Point,Bld 4 FDC Rail,1.5,3,Railing Black,RL,DCR,2/5,,X,X,X,X,X,4/8,4/8,X,O,NEED CO
+170,827,Garrett -Banyan High Point,Steel Monument Tube,0.5,0,Red Oxide Primed,RL,DCR,10/8,,X,X,X,X,X,10/14,10/14,X,O,NEED CO
+190,881,Hinton - Metro Center,Pool Fence,64.9,64.9,Railing Black,GA,DCR,12/2,1,X,X,X,X,X,12/21,12/25,90%,MFP,
+190,320,Hinton - Metro Center,Stair Core 5A,83.8,82.7,Red Oxide Primed,GA,DCR,3/18,1,X,X,X,X,X,4/8,4/15,90%,90%,All but WHR
+190,337,Hinton - Metro Center,Stair Core 5B,83.8,82.7,Red Oxide Primed,GA,DCR,3/28,1,X,X,X,X,X,4/8,4/15,90%,90%,All but WHR
+190,398,Hinton - Metro Center,Bld 5 Remaining Balcony Rails,12.5,12.5,Railing Black,GA,DCR,2/23,2,X,X,X,X,O,4/8,4/8,,,QC Done
+190,484,Hinton - Metro Center,Bld 4 North Stoop Stairs,59.7,57.3,Railing Black,GA,DCR,3/27,50.6,O,,,,,4/8,4/13,,,
+190,475,Hinton - Metro Center,RFI 263 Bld 2 Sidewalk chases,24,8,Galvanized,GA,CBA,3/31,58,X,O,,,,4/22,4/22,,,
+290,153,Martin Residence,Front Entry Trellis,30.9,51.3,Red Oxide Primed,GA,DCR,3/5,27,X,X,O,,,4/9,4/14,,,
+320,843,Thompson Thrift - Landing at Lemay,CO#05 Balcony Gates,21,20,Factory Black,DR,CBA,10/9,1,X,X,X,X,X,4/9,4/10,75%,,NEED CO
+320,246,Thompson Thrift - Landing at Lemay,Building 18 Patio & Balcony Ultralox Rails Sheet 1 of 2,9.9,115.5,Factory Black,DR,CBA,1/20,,X,X,X,X,X,4/9,4/20,X,O,3rd Target 2nd week of feb install
+320,V738,Thompson Thrift - Landing at Lemay,Additional Panels and Parts Building #14 Balconies,2,0,Railing Black 38/81009,DR,DR,3/6,,X,X,X,X,X,3/11,3/11,X,O,No Charge or CO?
+320,337,Thompson Thrift - Landing at Lemay,Trash Room Site Rails,25.2,21.3,Railing Black,DR,DCR,2/20,,X,X,X,X,X,2/26,2/27,X,O,No Charge or CO?
+320,V116,Thompson Thrift - Landing at Lemay,Custom Grab Rail Brackets,,,Ultralok Black,DR,DR,9/8,,X,X,X,X,X,4/9,4/9,X,O,
+320,V708,Thompson Thrift - Landing at Lemay,Additional Pool Ramp Rail Material,1,4,Red Ox,DR,DR,10/27,,X,X,X,X,X,4/9,4/9,X,O,No Charge or CO?
+330,325,Brinkmann - Aspendale Littleton Senior,Courtyard Trellis,20,24,Railling Black 38/81009,RL,CBA,2/27,77,Hold,,,,,3/10,3/11,,,"HOLD, Ownership called 3/9. possible design change"
+330,458,Brinkmann - Aspendale Littleton Senior,Balcony Divider Screen PT3,0.6,8,Railing Black,RL,DCR,3/13,,X,X,X,X,X,3/20,3/20,X,O,HOT
+330,465,Brinkmann - Aspendale Littleton Senior,Balcony Divider Screen PT4,0.6,8,Railing Black,RL,DCR,3/18,,X,X,X,X,X,3/27,3/27,X,O,HOT
+330,395,Brinkmann - Aspendale Littleton Senior,NorthEast Site Rail,9.8,8.3,Railing Black,RL,DR,2/19,,X,X,X,X,X,3/10,3/10,X,X,HOT
+330,394,Brinkmann - Aspendale Littleton Senior,NorthWest Site Rail,17.1,14.4,Railing Black,RL,DCR,2/20,,X,X,X,X,X,3/10,3/10,X,X,HOT
+340,419,AMLI - Littleton Village II,Garage Bollards,18,18,Safety Yellow,DR,DCR,5/14,1,X,X,X,X,X,4/9,4/10,O,MFP,Waiting on concrete
+340,V554,AMLI - Littleton Village II,RFI #300 Beams,,,Intumescent paint,DR,DR,3/10,1,X,X,X,X,X,3/11,3/11,O,,
+340,147,AMLI - Littleton Village II,Fitness stair,13.9,15.3,Red Oxide Primed,DR,CBA,12/2,2,X,X,X,X,ST,1/20,1/20,,MFP,
+340,157,AMLI - Littleton Village II,Amenity Stair,20.3,30.2,Red Oxide Primed,DR,CBA,12/2,2,X,X,X,X,ST,1/20,1/21,,MFP,
+340,481,AMLI - Littleton Village II,Garage Awning,6,20,Railing Black,DR,DCR,3/30,54,O,,,,,4/9,4/10,,,
+340,164,AMLI - Littleton Village II,Superior Decks Steel Hung Balconys,27,108,Black by Superior Decks,DR,DR,11/26,80.555,-,,,,,4/1,4/9,,,On site need to release rails
+340,409,AMLI - Littleton Village II,Stair Core B Guard Rails,48.1,43.6,Red Oxide Primed,DR,CBA,5/9,,X,X,X,X,X,2/4,2/6,X,X,
+340,415,AMLI - Littleton Village II,Structural Framing at Leasing Fireplace,7.5,8.3,Red Oxide Primed,DR,FMW,5/21,,X,X,X,X,X,4/9,4/9,X,MFP,
+340,229,AMLI - Littleton Village II,Garage Parapet & OSHA Rail,112.5,112.5,Railing Black,DR,DCR,1/22,,X,X,X,X,X,2/26,3/9,X,O,
+340,327,AMLI - Littleton Village II,RFI 240 Missing Beam,1.3,0.8,Red Qxide Prime,DR,DTS,2/4,,X,X,X,X,X,2/26,2/26,X,O,
+340,V918,AMLI - Littleton Village II,Missed Flitch Beams Over East Breezeway,5,0,Red Ox,DR,DR,2/19,,X,X,X,X,X,2/19,2/19,X,O,
+340,869,AMLI - Littleton Village II,CO#13 Misc. Steel Fixes,2.8,17.4,Red Oxide Primed,DR,CBA,10/23,,X,X,X,X,X,4/9,4/10,X,O,NEED CO
+370,570,Fairfield Development - Vista Highlands,Bld 11 Ultralox Remainder Balcony Rails,10.1,48.1,Factory Black,GA,CBA,12/17,1,X,X,X,X,X,4/9,4/14,50%,MFP,
+370,568,Fairfield Development - Vista Highlands,Bld 10 Ultralox Remainder Balcony Rails,10.7,50.3,Factory Black,GA,CBA,12/17,1,X,X,X,X,X,4/9,4/14,90%,X,
+370,263,Fairfield Development - Vista Highlands,Festoon Light Poles,19.3,22,Railing Black,GA,RJA,1/8,1,X,X,X,X,X,4/9,4/10,O,MFP,
+370,566,Fairfield Development - Vista Highlands,Bld 9 Ultralox Remainder Balcony Rails,10.1,48.1,Factory Black,GA,CBA,12/23,1,X,X,X,X,X,4/9,4/14,20%,,
+370,498,Fairfield Development - Vista Highlands,Roof Access Ladder Type A Bld 7,0,6,Railing Black,GA,RJA,6/17,1,X,X,X,X,X,4/9,4/9,O,MFP,Need updated prints
+370,216,Fairfield Development - Vista Highlands,Bld 4 Trash Enclosure Gates,9,16,Primed Finish,GA,RJA,12/18,1,X,X,X,X,X,4/9,4/10,O,,QC Done
+370,572,Fairfield Development - Vista Highlands,Bld 12 Ultralox Remainder Balcony Rails,8.8,40.9,Factory Black,GA,CBA,12/17,1,X,X,X,X,X,3/16,3/18,O,,
+370,502,Fairfield Development - Vista Highlands,Roof Access Ladder Type A Bld 11,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,506,Fairfield Development - Vista Highlands,Roof Access Ladder Type B Bld 5,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,508,Fairfield Development - Vista Highlands,Roof Access Ladder Type B Bld 13,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,509,Fairfield Development - Vista Highlands,Roof Access Ladder Type C Bld 10,0,9,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,534,Fairfield Development - Vista Highlands,Bulk Roof Ladder Pack,90,0,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,10 Powdered And Hardware Pulled. 9/2/25 (TJ SHIPPED 4 12/12)
+370,474,Fairfield Development - Vista Highlands,Roof Access Ladder Type A Bld 4,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,500,Fairfield Development - Vista Highlands,Roof Access Ladder Type A Bld 8,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,497,Fairfield Development - Vista Highlands,Roof Access Ladder Type A Bld 6,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,501,Fairfield Development - Vista Highlands,Roof Access Ladder Type A Bld 9,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,507,Fairfield Development - Vista Highlands,Roof Access Ladder Type B Bld 12,0,6,Railing Black,GA,RJA,6/17,2,X,X,X,X,O,4/9,4/9,,MFP,
+370,217,Fairfield Development - Vista Highlands,Bld 7 Stair 1 Rails,15,12,Railing Black,GA,RJA,1/5,2,X,X,X,X,O,4/9,4/9,,,QC Done
+370,205,Fairfield Development - Vista Highlands,Bld 6 Stair 2 Rails,12.5,10,Railing Black,GA,RJA,12/22,2,X,X,X,X,O,4/9,4/9,,,
+370,218,Fairfield Development - Vista Highlands,Bld 7 Stair 2 Rails,12.5,10,Railing Black,GA,RJA,1/5,2,X,X,X,X,O,4/9,4/9,,,QC Done
+370,243,Fairfield Development - Vista Highlands,Bld 9 Stair 1 Rails,10,8,Railing Black,GA,DCR,12/24,2,X,X,X,X,O,4/9,4/9,,,
+370,202,Fairfield Development - Vista Highlands,Bld 6 Stair 1 Rails,15,12,Railing Black,GA,RJA,12/22,2,X,X,X,X,O,4/9,4/9,,,
+370,244,Fairfield Development - Vista Highlands,Bld 9 Stair 2 Rails,10,8,Railing Black,GA,DCR,12/24,4,X,X,X,O,,4/9,4/9,,,QC Done
+370,262,Fairfield Development - Vista Highlands,Bld 12 Stair 2 Rail,5,4,Railing Black,GA,DCR,1/6,10,X,X,X,O,,4/9,4/9,,,QC Done
+370,261,Fairfield Development - Vista Highlands,Bld 12 Stair 1 Rail,5,4,Railing Black,GA,DCR,1/6,11,X,X,X,O,,4/9,4/9,,,QC Done
+370,470,Fairfield Development - Vista Highlands,Trellis B,16,24,Railling Black 38/81009,GA,CBA,3/24,49,X,O,,,,4/9,4/10,,,Material is here
+370,249,Fairfield Development - Vista Highlands,Bld 10 Stair Rail 3,10,8,Railing Black,GA,DCR,1/5,80.555,-,,,,,4/9,4/9,,,Build in numerical order
+370,238,Fairfield Development - Vista Highlands,Bld 8 Stair 1 Rails,12.5,10,Railing Black,GA,RJA,1/6,80.555,-,,,,,4/9,4/9,,,Build in numerical order
+370,247,Fairfield Development - Vista Highlands,Bld 10 Stair Rail 1,10,8,Railing Black,GA,DCR,1/5,80.555,-,,,,,4/9,4/9,,,Build in numerical order
+370,254,Fairfield Development - Vista Highlands,Bld 11 Stair 1 Rails,10,8,Railing Black,GA,DCR,1/6,80.555,-,,,,,4/9,4/9,,,Build in numerical order
+370,255,Fairfield Development - Vista Highlands,Bld 11 Stair 2 Rails,10,8,Railing Black,GA,DCR,1/6,80.555,-,,,,,4/10,4/10,,,Build in numerical order
+370,248,Fairfield Development - Vista Highlands,Bld 10 Stair Rail 2,10,8,Railing Black,GA,DCR,1/5,80.555,-,,,,,4/10,4/10,,,Build in numerical order
+370,242,Fairfield Development - Vista Highlands,Bld 8 Stair 2 Rails,10,8,Railing Black,GA,RJA,1/6,80.555,-,,,,,4/10,4/10,,,Build in numerical order
+370,415,Fairfield Development - Vista Highlands,CO#5 - Garage Bollards,2,2,Red Oxide Prime,GA,DTS,3/4,,X,X,X,X,X,4/10,4/10,X,O,HOT
+370,139,Fairfield Development - Vista Highlands,Bld 14 Trash Enclosure Gates,9,16,Primed Finish,GA,RJA,11/21,,X,X,X,X,X,12/15,12/16,X,X,
+370,146,Fairfield Development - Vista Highlands,Trellis B Embeds Dropshipped,1.5,0,Raw,GA,CBA,11/20,,X,X,X,X,X,4/10,4/10,X,X,
+370,785,Fairfield Development - Vista Highlands,Trellis A Embeds Dropshipped,1.8,0,RAW,GA,DCR,9/24,,X,X,X,X,X,4/10,,X,X,
+370,850,Fairfield Development - Vista Highlands,Bld 5 Stair 1 Rails,5,4,Railing Black,GA,DCR,10/20,,X,X,X,X,X,4/10,4/10,X,X,
+370,851,Fairfield Development - Vista Highlands,Bld 5 Stair 2 Rails,5,4,Railing Black,GA,DCR,10/20,,X,X,X,X,X,4/10,4/10,X,X,
+370,505,Fairfield Development - Vista Highlands,Roof Access Ladder Type B Bld 3,0,6,Railing Black,GA,RJA,6/17,,X,X,X,X,X,4/10,4/10,X,MFP,
+370,196,Fairfield Development - Vista Highlands,Bld 2 Stair 2 Rails,5,4,Railing Black,GA,RJA,12/18,,X,X,X,X,X,4/10,4/10,X,O,
+370,200,Fairfield Development - Vista Highlands,Bld 2 Stair 1 Rails,5,4,Railing Black,GA,RJA,12/18,,X,X,X,X,X,4/10,4/10,X,O,
+370,286,Fairfield Development - Vista Highlands,Clubhouse Site Handrails,5.7,3.5,Railing Black,GA,RJA,1/14,,X,X,X,X,X,2/3,2/3,X,O,
+380,252,Brinkman - Marshall Pointe,Garage Low Wall Rails,50.1,40.1,Railing Black,GA,RJA,2/4,1,X,X,X,X,X,4/10,4/14,O,MFP,
+380,109,Brinkman - Marshall Pointe,Garage Rails,10.3,10,Powder Coated Railing Black,GA,RJA,11/19,1,X,X,X,X,X,4/10,4/10,90%,90%,All but WHR
+380,778,Brinkman - Marshall Pointe,Roof Canopy,37.6,84.4,Primed Finish,GA,RJA,11/7,1,X,X,X,X,X,12/3,12/10,90%,90%,Painted Waiting On Clevis Assembly
+380,864,Brinkman - Marshall Pointe,North Courtyard Balcony Rails P1 of 4,26.2,131.1,Factory Black,GA,CBA,10/27,1,X,X,X,X,X,11/17,11/27,75%,80%,
+380,542,Brinkman - Marshall Pointe,Bollards - Drop Shipped,73,0,Safety Yellow,GA,RJA,7/14,2,X,X,X,X,O,4/10,4/10,,50%,93 pcs delivered
+380,514,Brinkman - Marshall Pointe,Roof Curb Step,2,2,Galvanized,GA,RJA,8/7,2,X,X,X,X,O,4/10,4/10,,,
+380,V606,Brinkman - Marshall Pointe,Garage Screen Slip Top Cap,2,1,Railing Black,GA,GA,3/25,23.5,X,X,X,O,,4/10,4/10,,,
+380,260,Brinkman - Marshall Pointe,South Courtyard Balcony Rails P1 of 3,16.1,72.2,Factory Black,GA,CBA,1/8,41,X,O,,,,4/1,4/7,,,
+380,488,Brinkman - Marshall Pointe,South Exterior Ultralox Balcony Rails P1 of 4,31,154.7,Ultralox Black,GA,CBA,3/31,47.1,-,,,,,4/8,4/21,,,
+380,477,Brinkman - Marshall Pointe,RFI #317 - Garage Canopy,0,18,Red Oxide Prime,GA,DTS,3/25,51,X,,,,,4/16,4/17,,,"bent plates are here, leave beam RAW"
+380,997,Brinkman - Marshall Pointe,Coulmns at Garage Entry,3.5,4,Red Oxide Primed,GA,CBA,3/27,56,X,O,,,,4/16,4/16,,,Need to make sure we make the 16th day
+380,258,Brinkman - Marshall Pointe,North East Ultralox Balcony Rails P1 of 2,12.1,54.3,Factory Black,GA,CBA,1/7,80.555,-,,,,,4/10,4/15,,,
+380,259,Brinkman - Marshall Pointe,North West Ultralox Balcony Rails P1 of 3,12.8,57.4,Factory Black,GA,CBA,1/13,,X,X,X,X,X,4/10,4/15,X,80%,Next in order
+380,257,Brinkman - Marshall Pointe,North Ultralox Balcony Rails P1 of 2,13.3,59.8,Factory Black,GA,CBA,1/7,,X,X,X,X,X,4/10,4/15,X,80%,1st priority
+390,419,Thompson Thrift - Heritage on Hover,Bld E West Stair Core,21.3,18.5,Ralling Black 38/81009,RL,CBA,3/6,1,X,X,X,X,X,4/1,4/2,O,,Qc done/ Ship Monday 3/30
+390,418,Thompson Thrift - Heritage on Hover,Bld E Middle Stair Core,21.3,18.5,Ralling Black 38/81009,RL,CBA,3/6,1,X,X,X,X,X,4/1,4/2,O,,Qc done/ Ship Monday 3/30
+390,417,Thompson Thrift - Heritage on Hover,Bld E East Stair Core,21.3,18.5,Ralling Black 38/81009,RL,CBA,3/5,1,X,X,X,X,X,3/26,3/27,O,,Qc done/ Ship Monday 3/30
+390,427,Thompson Thrift - Heritage on Hover,Bld J West Stair,21.3,18.5,Railling Black 38/81009,RL,CBA,3/10,16,X,X,X,O,,4/3,4/6,,,Qc done
+390,428,Thompson Thrift - Heritage on Hover,Bld J Middle Stair,21.3,18.5,Ralling Black 38/81009,RL,CBA,3/12,17,X,X,X,O,,4/3,4/6,,l,Qc done
+390,429,Thompson Thrift - Heritage on Hover,Bld J East Stair,21.3,18.5,Ralling Black 38/81009,RL,CBA,3/12,18,X,X,X,O,,4/3,4/6,,,Qc done
+390,332,Thompson Thrift - Heritage on Hover,Bld D East Stair Core,21.3,18.5,Ralling Black 38/81009,RL,CBA,1/28,,X,X,X,X,X,3/6,3/9,X,O,Need to hold 3/6 date for install
+390,345,Thompson Thrift - Heritage on Hover,Bld D West Stair Core,21.3,18.5,Railling Black 38/81009,RL,CBA,2/4,,X,X,X,X,X,3/6,3/9,X,O,QC Done Need to hold 3/6 for install
+390,333,Thompson Thrift - Heritage on Hover,Bld D Middle Stair Core,21.3,18.5,Ralling Black 38/81009,RL,CBA,1/28,,X,X,X,X,X,3/6,3/9,X,O,QC Done Need to hold 3/6 for install
+400,998,Mountain West Contractors - Fieldhouse (Idaho Springs),Exterior Site Rails,117,151.3,Railing Black,RL,DCR,2/18,1,X,X,X,X,X,3/6,3/19,90%,,wire mesh is here in dog house
+400,364,Mountain West Contractors - Fieldhouse (Idaho Springs),Building 1 Stair Core 1,35.9,34.9,Railing Black,RL,SDO,4/21,1,X,X,X,X,X,5/28,5/30,90%,90%,All but WHR
+400,367,Mountain West Contractors - Fieldhouse (Idaho Springs),Building 1 Stair Core 2,43.1,41.6,Railing Black,RL,SDO,4/21,1,X,X,X,X,X,5/28,5/30,90%,90%,All but WHR
+400,368,Mountain West Contractors - Fieldhouse (Idaho Springs),Building 2 Stair Core 3,54,52.6,Railing Black,RL,SDO,4/16,1,X,X,X,X,X,5/12,5/15,90%,90%,All but WHR
+400,372,Mountain West Contractors - Fieldhouse (Idaho Springs),Building 2 Stair Core 4,61.7,59.6,Railing Black,RL,SDO,4/18,1,X,X,X,X,X,5/12,5/15,90%,90%,All but WHR
+400,497,Mountain West Contractors - Fieldhouse (Idaho Springs),Bld 1 Ramp Rails,11.3,15.5,Railing Black,RL,DCR,4/1,80.555,-,,,,,4/10,4/10,,,
+400,352,Mountain West Contractors - Fieldhouse (Idaho Springs),Bld 3 Ladder & Guardrail,39.8,29.5,Railing Black,RL,DCR,2/17,,X,X,X,X,X,3/6,3/9,X,X,wire mesh is here in dog house/ onsite no later than 3/11
+400,392,Mountain West Contractors - Fieldhouse (Idaho Springs),Stringer Closure,2.5,49.1,Railing Black,RL,DCR,2/19,,X,X,X,X,X,4/10,4/15,X,X,
+400,391,Mountain West Contractors - Fieldhouse (Idaho Springs),Riser Plates,30,30,Railing Black,RL,DCR,2/19,,X,X,X,X,X,4/10,4/13,X,X,
+410,190,Lennar - Columnbine Square,Elevator Misc Metal Bld 5,10.9,11.8,Red Oxide Primed,RL,DEP,12/10,1,X,X,X,X,X,4/10,4/10,O,,QC Done
+410,128,Lennar - Columnbine Square,Bld 2 Stair 3,48,48.8,Red Oxide Primed,RL,CBA,1/5,1,X,X,X,X,X,4/10,4/15,90%,,All but WHR
+410,807,Lennar - Columnbine Square,Bldg 2 Level 1 Elevator Divider,0.3,0.5,Red Oxide Prime,RL,DTS,10/1,1,X,X,X,X,X,4/10,4/10,O,,Material here 10-13
+410,207,Lennar - Columnbine Square,Bld 3 Landing Extention Rail,1.5,1,Red Oxide Primed,RL,CBA,3/10,1,X,X,X,X,X,3/27,3/27,O,,
+410,126,Lennar - Columnbine Square,Bld 2 Stair 1,48,48.8,Red Oxide Primed,RL,CBA,12/15,1,X,X,X,X,X,4/10,4/15,O,,QC Done
+410,127,Lennar - Columnbine Square,Bld 2 Stair 2,48,48.8,Red Oxide Primed,RL,CBA,12/15,1,X,X,X,X,X,1/16,1/21,O,,QC Done
+410,319,Lennar - Columnbine Square,Elevator Door Columns Bld 2,6,12,Red Oxide Primed,RL,DCR,1/26,1,X,X,X,X,X,2/4,2/4,50%,,QC Done
+410,234,Lennar - Columnbine Square,Bld 5 Vestibule Area Structural Steel,7.1,11.7,1 HR Intumescent,RL,RJA,1/20,1,X,X,X,X,X,3/27,3/27,O,,QC Done
+410,267,Lennar - Columnbine Square,Bld 5 Trash Room Steel,8.4,11.9,1HR Intumescent,RL,RJA,2/27,1,X,X,X,X,X,3/27,3/27,O,,Qc Done
+410,130,Lennar - Columnbine Square,Bld 4 Stair 2,36.3,34.9,Red Oxide Primed,RL,CBA,11/18,1,X,X,X,X,X,4/10,4/14,90%,,All But WHR
+410,129,Lennar - Columnbine Square,Bld 4 Stair 1,36.3,34.9,Red Oxide Primed,RL,CBA,11/18,1,X,X,X,X,X,4/10,4/14,90%,,All but WHR
+410,134,Lennar - Columnbine Square,Bld 6 Stair 1,36.3,34.9,Red Oxide Primed,RL,CBA,11/18,1,X,X,X,X,X,3/20,3/24,90%,,All but WHR
+410,135,Lennar - Columnbine Square,Bld 6 Stair 2,36.3,34.9,Red Oxide Primed,RL,CBA,11/18,1,X,X,X,X,X,3/20,3/24,90%,,All but WHR
+410,399,Lennar - Columnbine Square,Bld 1 Roof Ladder,3,3,Red Oxide Primed,RL,DCR,2/24,1,X,X,X,X,X,3/27,3/27,O,MFP,
+410,400,Lennar - Columnbine Square,Bld 3 Roof Ladder,3,3,Red Oxide Primed,RL,DCR,2/24,1,X,X,X,X,X,3/27,3/27,O,MFP,
+410,676,Lennar - Columnbine Square,HD Embeds Bld 2 Install,0,43.8,RAW,RL,DCR,8/21,1,X,X,X,X,X,4/10,4/14,O,,All thread only
+410,681,Lennar - Columnbine Square,HD Embeds Bld 5 Install,0,29.1,RAW,RL,DCR,8/21,1,X,X,X,X,X,4/10,4/13,O,,
+410,683,Lennar - Columnbine Square,HD Embeds Bld 6 Install,0,7.7,RAW,RL,DCR,8/21,1,X,X,X,X,X,4/10,4/10,O,,
+410,697,Lennar - Columnbine Square,Bld 3 Stair 1,40,40.3,Red Oxide Primed,RL,CBA,8/11,1,X,X,X,X,X,4/10,4/14,90%,90%,All but WHR
+410,698,Lennar - Columnbine Square,Bld 3 Stair 2,36.3,34.9,Red Oxide Primed,RL,CBA,8/12,1,X,X,X,X,X,4/10,4/14,90%,90%,All but WHR
+410,699,Lennar - Columnbine Square,Bld 3 Stair 3,36.3,34.9,Red Oxide Primed,RL,CBA,8/21,1,X,X,X,X,X,4/10,4/14,90%,90%,All but WHR
+410,106,Lennar - Columnbine Square,Bld 1 Stair 1,36.3,34.9,Red Oxide Primed,RL,CBA,11/10,1,X,X,X,X,X,12/5,12/9,90%,90%,All but WHR
+410,107,Lennar - Columnbine Square,Bld 1 Stair 2,36.3,34.9,Red Oxide Primed,RL,CBA,11/10,1,X,X,X,X,X,12/5,12/9,90%,90%,All but WHR
+410,679,Lennar - Columnbine Square,HD Embeds Bld 4 Install,0,7.7,RAW,RL,DCR,8/21,1,X,X,X,X,X,4/10,4/10,O,,
+410,189,Lennar - Columnbine Square,Elevator Misc Metal Bld 2,11.1,11.8,Red Oxide Primed,RL,DEP,12/10,1,X,X,X,X,X,1/16,1/16,O,,Need to hold 1/16 deleivery to site. Material here
+410,108,Lennar - Columnbine Square,Bld 1 Stair 3,36.3,34.9,Red Oxide Primed,RL,CBA,11/10,1,X,X,X,X,X,12/5,12/9,90%,90%,All but WHR
+410,131,Lennar - Columnbine Square,Bld 5 Stair 1,36.3,34.9,Red Oxide Primed,RL,CBA,11/18,2,X,X,X,X,ST,4/10,4/14,,,
+410,133,Lennar - Columnbine Square,Bld 5 Stair 3,36.3,34.9,Red Oxide Primed,RL,CBA,11/18,2,X,X,X,X,ST,4/10,4/14,,,
+410,132,Lennar - Columnbine Square,Bld 5 Stair 2,36.3,34.9,Red Oxide Primed,RL,CBA,11/18,2,X,X,X,X,ST,4/10,4/14,,,
+410,136,Lennar - Columnbine Square,Bld 7 Stair 1,36.3,34.9,Red Oxide Primed,RL,CBA,11/14,2,X,X,X,X,O,4/10,4/14,,,QC Done
+410,137,Lennar - Columnbine Square,Bld 7 Stair 2,36.3,34.9,Red Oxide Primed,RL,CBA,11/14,2,X,X,X,X,O,4/10,4/14,,,QC Done
+410,138,Lennar - Columnbine Square,Bld 7 Stair 3,36.3,34.9,Red Oxide Primed,RL,CBA,11/14,2,X,X,X,X,O,4/10,4/14,,,QC Done still need sway bars 8 total
+410,406,Lennar - Columnbine Square,Bld 4 Wings,0,0,Red Oxide Primed,RL,CBA,2/26,2,X,X,X,X,RS,3/27,3/27,,,
+410,467,Lennar - Columnbine Square,Bld 2 Stair Core Ledger Angle,6,24,Red Oxide Primed,RL,DCR,3/20,20,X,X,X,O,,4/1,4/2,,,HOT
+410,491,Lennar - Columnbine Square,Bld 1 Landing Extention Rails,1.6,1,Red Oxide primed,RL,CBA,3/30,80.555,-,,,,,4/10,4/10,,,
+410,256,Lennar - Columnbine Square,Bld 2 Embed Fix,70.5,141,Raw Finish,RL,RJA,1/19,,X,X,X,X,X,4/10,4/22,X,O,QC Done
+410,825,Lennar - Columnbine Square,Bld 6 Retail Area Columns & Beams,20.1,25.1,1HR Intumescent Paint,RL,RJA,11/21,,X,X,X,X,X,2/5,2/6,X,X,Painted Waiting On Inspection 2/11
+410,823,Lennar - Columnbine Square,Bld 4 Retail Area Columns & Beams,20.1,25.1,Intumescent,RL,RJA,12/9,,X,X,X,X,X,2/5,2/6,X,X,Painted Waiting On Inspection 2/11
+410,V862,Lennar - Columnbine Square,Missing SC4.2 Column,1.5,0,1 HR Intumescent,RL,RL,3/18,,X,X,X,X,X,3/18,3/18,X,O,
+410,V296,Lennar - Columnbine Square,#4 Rebar,1,0,RAW,RL,RL,12/1,,X,X,X,X,X,4/10,4/10,X,O,
+410,685,Lennar - Columnbine Square,HD Embeds Bld 7 Install,0,7,RAW,RL,DCR,8/21,,X,X,X,X,X,4/10,4/10,X,O,
+410,447,Lennar - Columnbine Square,HD Embeds Bld 7 Missing,5,0,RAW,RL,DCR,3/10,,X,X,X,X,X,4/10,4/10,X,O,
+410,455,Lennar - Columnbine Square,Bld 2 Hold Down All Thread,5,0,RAW,RL,DCR,3/16,,X,X,X,X,X,3/16,3/16,X,O,allthread ordered 3/17
+410,V427,Lennar - Columnbine Square,Building 1 column extensions,1,1.5,RAW,RL,RL,11/18,,X,X,X,X,X,11/18,11/18,X,O,
+410,V983,Lennar - Columnbine Square,Hold Down Embed Rework/ Rebar add,2.5,0,RAW,RL,RL,12/15,,X,X,X,X,X,12/22,12/22,X,O,
+420,195,Thompson Thrift - The Stacks at Wheat Ridge,Building 2 Amenity Deck Screen Wall,3,4,Primed Finish,DR,RJA,12/16,1,X,X,X,X,X,4/10,4/10,O,MFP,QC Done
+420,424,Thompson Thrift - The Stacks at Wheat Ridge,Bld 1 Stair 2,60.7,57.7,Red Oxide Primed,DR,CBA,3/13,1,X,X,X,X,X,4/10,4/15,O,,Qc done
+420,500,Thompson Thrift - The Stacks at Wheat Ridge,Clubhouse Bracket,0.3,1,RAW,DR,DCR,4/2,3,-,,,,,4/10,4/10,,,
+420,466,Thompson Thrift - The Stacks at Wheat Ridge,Bld 2 Stairs 1&2,121.5,115,Red Oxide Primed,DR,CBA,3/23,37,X,O,,,,4/13,4/22,,,
+420,V922,Thompson Thrift - The Stacks at Wheat Ridge,Additional Saddles per GC direction,1,1,Red OX,DR,DR,1/6,,X,X,X,X,X,1/6,1/6,X,O,NEED CO
+420,423,Thompson Thrift - The Stacks at Wheat Ridge,Bld 1 Stair 1,60.7,57.7,Red Oxide Primed,DR,CBA,3/9,,X,X,X,X,X,4/13,4/16,X,M,
+440,214,Evergreen - Outlook Green Valley Ranch,Bld 16 Ultralox Post install,6.7,3.5,Factory Black,RL,CBA,12/16,1,X,X,X,X,X,2/27,2/27,O,,
+440,311,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 15,1.8,3.6,N/A,RL,DCR,2/23,1,X,X,X,X,X,4/13,4/13,O,,
+440,758,Evergreen - Outlook Green Valley Ranch,Planter Trellis,24,16,Railing Black,RL,DCR,9/12,1,X,X,X,X,X,4/13,4/14,50%,MFP,2 more behind bld 5
+440,310,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 12,0.9,1.8,N/A,RL,DCR,2/23,1,X,X,X,X,X,4/13,4/13,O,,
+440,690,Evergreen - Outlook Green Valley Ranch,Bld 15 Stair Core 1 Type B2,27.9,28.8,Railing Black,RL,DCR,8/6,1,X,X,X,X,X,4/13,4/14,90%,M,All but WHR
+440,691,Evergreen - Outlook Green Valley Ranch,Bld 15 Stair Core 2 Type B2,22.1,23,Railing Black,RL,DCR,8/6,1,X,X,X,X,X,4/13,4/14,90%,M,All but WHR
+440,213,Evergreen - Outlook Green Valley Ranch,Bld 15 Ultralox Post install,6.7,5,Factory Black,RL,CBA,12/16,1,X,X,X,X,X,2/27,2/27,O,,
+440,312,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 16,0.9,1.8,N/A,RL,DCR,2/23,1,X,X,X,X,X,4/13,4/13,O,,
+440,409,Evergreen - Outlook Green Valley Ranch,Trash Enclosure A,6,12,Railing Black,RL,DEP,3/3,1,X,X,X,X,X,3/30,3/30,O,,
+440,671,Evergreen - Outlook Green Valley Ranch,Bld 12 Stair Core 1 Type A1,27.9,28.8,Railing Black,RL,DCR,8/5,1,X,X,X,X,X,4/13,4/14,90%,90%,Ready to ship
+440,686,Evergreen - Outlook Green Valley Ranch,Bld 9 Stair Core 1 Type B2,27.9,28.8,Railing Black,RL,DCR,8/5,1,X,X,X,X,X,12/10,12/11,90%,90%,All but WHR
+440,687,Evergreen - Outlook Green Valley Ranch,Bld 9 Stair Core 2 Type B2,28.3,29.3,Railing Black,RL,DCR,8/5,1,X,X,X,X,X,12/10,12/11,90%,90%,All but WHR
+440,688,Evergreen - Outlook Green Valley Ranch,Bld 11 Stair Core 1 Type B1,28.3,29.3,Railing Black,RL,DCR,8/6,1,X,X,X,X,X,4/13,4/14,90%,90%,All But WHR
+440,689,Evergreen - Outlook Green Valley Ranch,Bld 11 Stair Core 2 Type B1,27.9,28.8,Railing Black,RL,DCR,8/6,1,X,X,X,X,X,4/13,4/14,90%,90%,All But WHR
+440,670,Evergreen - Outlook Green Valley Ranch,Bld 10 Stair Core 1 Type A2,27.9,28.8,Railing Black,RL,DCR,8/5,1,X,X,X,X,X,4/13,4/14,90%,90%,QC Done
+440,623,Evergreen - Outlook Green Valley Ranch,Bld 2 Stair Core 1 Type B1,28.3,29.3,Railing Black,RL,DCR,7/24,1,X,X,X,X,X,8/12,8/13,90%,90%,1st/ This date can't push out/ elevation confirmed onsite
+440,624,Evergreen - Outlook Green Valley Ranch,Bld 2 Stair Core 2 Type B1 (reliance treads),27.9,28.8,Railing Black,RL,DCR,7/24,1,X,X,X,X,X,8/12,8/13,90%,90%,1st/ This date can't push out/ elevation confirmed onsite
+440,625,Evergreen - Outlook Green Valley Ranch,Bld 5 Stair Core 1 Type B2,27.9,28.8,Railing Black,RL,DCR,7/24,1,X,X,X,X,X,4/13,4/14,90%,90%,QC Done
+440,626,Evergreen - Outlook Green Valley Ranch,Bld 5 Stair Core 2 Type B2,28.3,29.3,Railing Black,RL,DCR,7/24,1,X,X,X,X,X,4/13,4/14,90%,90%,All but WHR
+440,655,Evergreen - Outlook Green Valley Ranch,Bld 6 Stair Core 1 Type B1,28.3,29.3,Railing Black,RL,DCR,7/31,1,X,X,X,X,X,4/13,4/14,90%,90%,All but WHR
+440,656,Evergreen - Outlook Green Valley Ranch,Bld 6 Stair Core 2 Type B1,27.9,28.8,Railing Black,RL,DCR,7/31,1,X,X,X,X,X,4/13,4/14,90%,90%,All but WHR
+440,657,Evergreen - Outlook Green Valley Ranch,Bld 7 Stair Core 1 Type B1,28.3,29.3,Railing Black,RL,DCR,7/31,1,X,X,X,X,X,4/13,4/14,90%,90%,QC Done
+440,658,Evergreen - Outlook Green Valley Ranch,Bld 7 Stair Core 2 Type B1,27.9,28.8,Railing Black,RL,DCR,7/31,1,X,X,X,X,X,4/13,4/14,90%,90%,All but WHR
+440,659,Evergreen - Outlook Green Valley Ranch,Bld 8 Stair Core 1 Type B2,27.9,28.8,Railing Black,RL,DCR,8/5,1,X,X,X,X,X,11/27,11/28,90%,90%,All but WHR
+440,660,Evergreen - Outlook Green Valley Ranch,Bld 8 Stair Core 2 Type B2,28.3,29.3,Railing Black,RL,DCR,8/5,1,X,X,X,X,X,11/27,11/28,90%,90%,All but WHR
+440,421,Evergreen - Outlook Green Valley Ranch,Bld 6 Stair Rail,5.5,7.6,Railing Black,RL,DCR,3/5,1,X,X,X,X,X,4/13,4/13,O,,Qc done
+440,672,Evergreen - Outlook Green Valley Ranch,Bld 16 Stair Core 1 Type A1,27.9,28.8,Railing Black,RL,DCR,8/5,2,X,X,X,X,RS,4/13,4/14,,M,QC Done
+440,334,Evergreen - Outlook Green Valley Ranch,Bld 10 Ultralox Remaing Install,3.6,41.4,Factory Black,RL,CBA,1/29,3,-,,,,,4/14,4/16,,,
+440,270,Evergreen - Outlook Green Valley Ranch,Bld 7 Ultralox Remaing Install P1 of 2,6.7,72.7,Factory Black,RL,CBA,1/8,3,X,O,,,,3/30,4/3,,,
+440,271,Evergreen - Outlook Green Valley Ranch,Bld 8 Ultralox Remaing Install P1 of 2,6.7,72.7,Factory Black,RL,CBA,1/8,3,-,,,,,4/14,4/20,,,
+440,444,Evergreen - Outlook Green Valley Ranch,Bld 13 Steel Divider & Ultralox Balcony Rail,1.3,17.8,Ultralox Black,RL,CBA,3/11,22,X,X,X,O,,4/14,4/15,,,dividers are Finished / Ultralox cut
+440,445,Evergreen - Outlook Green Valley Ranch,Bld 14 Steel Divider & Ultralox Balcony Rail,1.3,17.8,Ultralox Black,RL,CBA,3/11,23,X,X,X,O,,4/14,4/15,,,dividers are Finished / Ultralox cut
+440,476,Evergreen - Outlook Green Valley Ranch,Clubhouse Site Rails,8,8,Railing Black,RL,DCR,3/25,25,X,X,O,,,4/8,4/8,,,HOT
+440,440,Evergreen - Outlook Green Valley Ranch,Bld 6 Utility Room Gates,6,6,Railing Black,RL,DCR,3/11,26,X,X,O,,,4/14,4/14,,,
+440,441,Evergreen - Outlook Green Valley Ranch,Bld 7 Utility Room Gates,6,6,Railing Black,RL,DCR,3/11,28,X,O,,,,4/14,4/14,,,
+440,439,Evergreen - Outlook Green Valley Ranch,Bld 5 Utility Room Gates,6,6,Railing Black,RL,DCR,3/18,36,X,O,,,,4/14,4/14,,,
+440,451,Evergreen - Outlook Green Valley Ranch,Bld 2 retaining wall Ultralox Rail,3.6,53.4,Factory Black,RL,CBA,3/17,40,-,,,,,3/31,4/3,,,
+440,450,Evergreen - Outlook Green Valley Ranch,Bld 3 Site Ramp Rail,6,8.3,Railing Black,RL,DCR,3/17,44,X,O,,,,4/14,4/14,,,
+440,452,Evergreen - Outlook Green Valley Ranch,Bld 2 Site Ramp Rail,16.3,22.3,Railing Black,RL,DCR,3/18,45,X,O,,,,4/14,4/15,,,
+440,482,Evergreen - Outlook Green Valley Ranch,Bld 2&5 Stair Wings Extensions,4,4,Railing Black,RL,DCR,3/25,45.1,X,X,O,,,4/10,4/10,,,
+440,483,Evergreen - Outlook Green Valley Ranch,Pool Deck Escutcheon Plates,4,4,Railing Black,RL,DCR,3/25,52,X,O,,,,4/8,4/8,,,HOT
+440,486,Evergreen - Outlook Green Valley Ranch,Trash Enclosure B,6,12,Railing Black,RL,DEP,3/27,59,-,,,,,4/14,4/14,,,Decking is here
+440,489,Evergreen - Outlook Green Valley Ranch,Trash Enclosure C,6,12,Railing Black,RL,DEP,3/27,60,-,,,,,4/14,4/14,,,Decking is here
+440,277,Evergreen - Outlook Green Valley Ranch,Bld 9 Ultralox Remaing Install P1 of 2,6.7,72.7,Factory Black,RL,CBA,2/27,80.555,-,,,,,4/14,4/20,,,
+440,278,Evergreen - Outlook Green Valley Ranch,Bld 11 Ultralox Remaing Install P1 of 2,6.7,72.7,Factory Black,RL,CBA,2/27,80.555,-,,,,,4/14,4/20,,,
+440,279,Evergreen - Outlook Green Valley Ranch,Bld 15 Ultralox Remaing Install P1 of 2,6.7,72.7,Factory Black,RL,CBA,2/27,80.555,-,,,,,4/14,4/20,,,
+440,490,Evergreen - Outlook Green Valley Ranch,Trash Enclosure D,6,12,Railing Black,RL,DEP,3/30,80.555,-,,,,,4/14,4/14,,,Decking is here
+440,492,Evergreen - Outlook Green Valley Ranch,Trash Enclosure E,6,12,Railing Black,RL,DEP,3/30,80.555,-,,,,,4/15,4/15,,,Decking is here
+440,V936,Evergreen - Outlook Green Valley Ranch,Building 15 Missing Riser Pans,1,1,Railing Black,RL,RL,4/1,80.555,-,,,,,4/15,4/15,,,
+440,269,Evergreen - Outlook Green Valley Ranch,Bld 6 Ultralox Remaing Install P1 of 2,6.7,72.7,Factory Black,RL,CBA,1/8,,X,X,X,X,X,3/23,3/27,X,O,Need 12 Lower Saddles
+440,416,Evergreen - Outlook Green Valley Ranch,Landing Pour Stop Angle Remaining,6,12,Red Oxide Primed,RL,DCR,3/4,,X,X,X,X,X,4/15,4/15,X,O,material ordered 3/16
+440,443,Evergreen - Outlook Green Valley Ranch,Bld 4 Steel Divider & Ultralox Balcony Rail,1.3,17.8,Ultralox Black,RL,CBA,3/11,,X,X,X,X,X,3/20,3/23,X,O,HOT dividers are finished
+440,219,Evergreen - Outlook Green Valley Ranch,Bld 7&8 retaining wall Ultralox Rail,14.3,213.8,Factory Black,RL,CBA,12/24,,X,X,X,X,X,1/30,2/18,X,X,
+440,347,Evergreen - Outlook Green Valley Ranch,Bld 3 Steel Divider & Ultralox Balcony Rail,1.3,17.8,Ultralox Black,RL,CBA,2/5,,X,X,X,X,X,3/11,3/12,X,MFP,Hold 3/11 delivery date.mesh delivered
+440,387,Evergreen - Outlook Green valley Ranch,Carraige House 3 Site Rail,10,13.8,Railing Black,RL,DCR,2/24,,X,X,X,X,X,3/4,3/4,X,O,QC Done
+440,V766,Evergreen - Outlook Green Valley Ranch,Electrical Cover Plates,1.5,1.5,Railing Black,RL,RL,1/19,,X,X,X,X,X,4/15,4/15,X,O,No Charge or CO?
+440,320,Evergreen - Outlook Green Valley Ranch,Fire Pit Footrest,1.6,1.3,Railing Black,RL,DCR,1/22,,X,X,X,X,X,1/30,1/30,X,O,NEED CO
+440,321,Evergreen - Outlook Green Valley Ranch,Fire Pit Top Support,4.5,9,Red Oxide Primed,RL,DCR,1/22,,X,X,X,X,X,1/30,1/30,X,O,NEED CO
+440,237,Evergreen - Outlook Green Valley Ranch,Breeze Way Gate,15.4,15.4,Railing Black,RL,DCR,12/23,,X,X,X,X,X,1/14,1/14,X,O,QC Done
+440,V471,Evergreen - Outlook Green Valley Ranch,Amenity Steel Splices,0.5,0,RAW,RL,RL,11/3,,X,X,X,X,X,4/15,4/15,X,O,No Charge or CO?
+440,V734,Evergreen - Outlook Green Valley Ranch,R4 Panel,1.5,0,Railing Black,RL,RL,1/13,,X,X,X,X,X,1/13,1/13,X,O,No Charge or CO?
+450,344,Marrow - Sandstone Ranch,Bld A Balconyrails,71.3,106.9,Red Oxide Primed,DR,CBA,2/25,1,X,X,X,X,X,4/15,4/23,50%,,
+450,442,Marrow - Sandstone Ranch,Roof Access Ladder And Safety Gate,3,3,Railing Black,DR,DEP,3/13,1,X,X,X,X,X,4/15,4/15,O,,Building A only
+450,193,Marrow - Sandstone Ranch,Fitness Stair,32.8,30.2,Railing Black,DR,CBA,12/12,2,X,X,X,X,ST,4/15,4/16,,M,
+450,300,Marrow - Sandstone Ranch,Upper Canopies Bld A,45,90,Charcol Grey,DR,DCR,1/22,5,X,X,X,O,,4/15,4/22,,MFP,QC Done still missing clevis assembly
+450,301,Marrow - Sandstone Ranch,Lower Canopies Bld A,16,32,Charcol Grey,DR,DCR,2/4,6,X,X,X,O,,4/15,4/17,,MF,"Knife plates,Stand offs are done HOLD per Danny Req"
+450,314,Marrow - Sandstone Ranch,Upper Canopies Bld B,26,52,Charcol Grey,DR,DCR,1/22,8,X,X,X,O,,4/15,4/20,,MFP,QC Done
+450,316,Marrow - Sandstone Ranch,Lower Canopies Bld B,39.6,89.6,Charcol Grey,DR,DCR,1/22,9,X,X,X,O,,4/15,4/22,,M,"Knife plates,Stand offs are done"
+450,313,Marrow - Sandstone Ranch,Upper Canopies Bld C,18,36,Charcol Grey,DR,DCR,1/22,39,X,O,,,,4/15,4/17,,M,"Knife plates,Stand offs are done"
+450,317,Marrow - Sandstone Ranch,Lower Canopies Bld C,12,24,Charcol Grey,DR,DCR,1/22,80.555,-,,,,,4/15,4/16,,M,"Knife plates,Stand offs are done"
+450,318,Marrow - Sandstone Ranch,Lower Canopies Bld D,9,18,Charcol Grey,DR,DCR,1/22,80.555,-,,,,,4/15,4/16,,M,"Knife plates,Stand offs are done"
+450,315,Marrow - Sandstone Ranch,Upper Canopies Bld D,22,44,Charcol Grey,DR,DCR,1/22,80.555,O,,,,,4/15,4/17,,M,"Knife plates,Stand offs are done"
+450,169,Marrow - Sandstone Ranch,Custom Sadle Plates CO#5,18,0,Red Oxide Primed,DR,DCR,12/16,,X,X,X,X,X,4/15,4/15,X,O,NEED CO
+450,900,Marrow - Sandstone Ranch,Additional Buckets CO #3,3,4.5,Red Oxide Primed,DR,DCR,11/3,,X,X,X,X,X,4/15,4/15,X,O,NEED CO
+480,294,Wood Partners - Alta Flatirons,Area 6 Structural Steel,35.7,52.2,Intumescent,GA,DEP,2/17,1,X,X,X,X,X,3/12,3/17,25%,MFP,
+480,299,Wood Partners - Alta Flatirons,Pre-cast Stair Core 2,47.4,6.8,Red Oxide Primed,GA,CBA,1/28,1,X,X,X,X,X,4/15,4/15,O,MFP,QC Done
+480,V547,Wood Partners - Alta Flatirons,EP1 Embeds,5,0,RAW,GA,GA,3/31,1,X,X,X,X,X,4/10,4/10,O,,Please Use 12X12
+480,431,Wood Partners - Alta Flatirons,Hold Down Embed Install Area 2,0,18.6,RAW,GA,DCR,3/9,2,X,X,X,X,O,4/15,4/16,,,
+480,432,Wood Partners - Alta Flatirons,Hold Down Embed Install Area 3,0,23.5,RAW,GA,DCR,3/9,2,X,X,X,X,O,4/15,4/16,,,
+480,433,Wood Partners - Alta Flatirons,Hold Down Embed Install Area 4,0,20,RAW,GA,DCR,3/9,2,X,X,X,X,O,4/15,4/16,,,
+480,495,Wood Partners - Alta Flatirons,Area 6 Extended Clips,0,0,0,GA,DEP,4/1,3,-,,,,,4/15,4/15,,,
+480,389,Wood Partners - Alta Flatirons,Area 2 Structural Steel.389 S1,377.6,473.4,2 HR Intumescent,GA,DEP,3/5,35,X,O,,,,4/2,5/13,,M,
+480,430,Wood Partners - Alta Flatirons,Area 4 Structural Steel,99.2,145.3,2HR Intumescent,GA,DEP,3/11,50.5,O,,,,,4/23,5/6,,,Need to order material
+480,493,Wood Partners - Alta Flatirons,CO#07 Additional HD Embeds 2,25,35,RAW,GA,DCR,3/30,57.5,-,,,,,4/10,4/14,,,
+480,434,Wood Partners - Alta Flatirons,Hold Down Embed Install Area 5,0,17.5,RAW,GA,DCR,3/9,,X,X,X,X,X,4/22,4/23,X,O,
+480,437,Wood Partners - Alta Flatirons,CO#04 Additional HD Embeds,25,35,RAW,GA,DCR,3/10,,X,X,X,X,X,4/22,4/24,X,O,
+480,435,Wood Partners - Alta Flatirons,Hold Down Embed Install Area 6,0,17.9,RAW,GA,DCR,3/9,,X,X,X,X,X,4/22,4/23,X,O,
+480,668,Wood Partners - Alta Flatirons,Curb Protection,6,0,Red Oxide Primed,GA,DTS,8/7,,X,X,X,X,X,4/22,4/22,X,O,3 of 6 complete and delivered
+500,186,Brinkman - Novel Flatiron,Hold Down Embed Install,0,87.5,RAW,GA,DCR,12/9,1,X,X,X,X,X,4/22,4/29,O,,
+500,154,Brinkman - Novel Flatiron,Elevator Sump Cover,6,6,Galvanized Steel,GA,RJA,1/22,2,X,X,X,X,O,4/22,4/22,,,
+500,338,Brinkman - Novel Flatiron,Stair Core 1 Part 1,38.8,60.4,Red Oxide Primed,GA,DCR,2/9,7,X,X,X,O,,4/22,4/27,,,QC Done
+500,339,Brinkman - Novel Flatiron,Stair Core 2 Part 1,41.7,62.8,Red Oxide Primed,GA,DCR,2/17,12,X,X,X,O,,4/22,4/27,,,QC done
+500,449,Brinkman - Novel Flatiron,Amenity Steel,64.5,101.3,1HR Intumescent,GA,DEP,3/24,47,X,O,,,,4/10,4/20,,,
+500,422,Brinkman - Novel Flatiron,Hold Down Embeds Remaining,47.5,0,RAW,GA,DCR,3/6,,X,X,X,X,X,3/20,3/20,X,O,
+500,438,Brinkman - Novel Flatiron,CO#08 Hanger Embeds,31.5,0,Raw,GA,CBA,3/11,,X,X,X,X,X,3/20,3/20,X,O,
+500,457,Brinkman - Novel Flatiron,Amenity Steel Embeds,3,0,Raw,GA,DEP,3/17,,X,X,X,X,X,3/20,3/20,X,O,
+500,324,Brinkman - Novel Flatiron,Hanging Table Embed,1,0,RAW,GA,DCR,1/23,,X,X,X,X,X,4/22,4/22,X,O,
+510,151,W.E. O'Neill - Idaho Springs Police Dept.,Pipe Bollards,5.5,0,Safety Yellow,RL,DCR,11/19,78,HOLD,,,,,4/22,4/22,,,HOLD/ Possibly switching to top mount
+510,V906,W.E. O'Neill - Idaho Springs Police Dept.,3/4 Anchor Rods (Drop Ship Only),1.5,0,Raw,RL,RL,12/9,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+510,V913,W.E. O'Neill - Idaho Springs Police Dept.,"3/4"" Anchor Rods (24)",1,0,Spray Galv,RL,RL,12/10,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+530,403,Shaw - East Oak Townhomes,2 to 3 Stair Stringers,39,156,Red Oxide Primed,DR,CBA,3/4,1,X,X,X,X,X,3/23,4/3,50%,,Start 3/26
+530,468,Shaw - East Oak Townhomes,Mock up Kneewall & Parapet Rails,1.9,1.8,Red Oxide Primed,DR,CBA,3/25,48,X,O,,,,4/7,4/7,,,Material is here
+550,469,New Generation Construction - 4th St. North,Bld A Underside PT Slab Connection To Basement Wall Embeds And Angles,26.7,30.8,RAW,DR,DCR,3/20,1,X,X,X,X,X,4/22,4/23,O,,Angles still at shop
+550,480,New Generation Construction - 4th St. North,Bld A Storefront Supports To Embeds & Channel,5,15,RAW,DR,DCR,3/30,55,O,,,,,4/22,4/22,,,
+550,472,New Generation Construction - 4th St. North,CO#03 Elevator Flat Bars,5,0,Raw,DR,CBA,3/30,80.555,-,,,,,4/22,4/22,,,Two of 40 shipped to site
+550,464,New Generation Construction - 4th St. North,Building A Structural Steel Columns & Beams Embed,3.8,0,Raw,DR,DEP,3/17,,X,X,X,X,X,4/22,4/22,X,O,
+560,459,Wood Partners - Alta Metro Center,Bld A Structural Embeds,5.3,0,Raw,GA,CBA,3/17,43,HOT,,,,,4/7,4/7,,,Embeds already on-site for A. Will be used on a different bldg
+575,402,Brinkmann - Falcon Commerce,Drop Ship Steel Material,25,1.5,Red Oxide Primed,GA,DTS,2/26,,X,X,X,X,X,4/22,4/22,X,O,Last pc of material to land 3/12. Then will be compleat
+900,349,Arlington - Velo Interlocken,Bld 6 Rail Extensions,3.3,3.3,Red Oxide Primed,RL,DCR,2/5,2,X,X,X,X,O,2/19,2/19,X,O,
+900,485,Arlington - Velo Interlocken,Bld 5 Westside Site Rail,1.3,1,Railing Black,RL,DCR,3/26,2,X,X,X,X,RS,4/3,4/3,,,HOT
+900,487,Arlington - Velo Interlocken,Bld 4 Eastside Site Rail,2.5,2,Railing Black,RL,DCR,3/26,2,X,X,X,X,RS,4/3,4/3,,,HOT
+900,889,Arlington - Velo Interlocken,Bld 3 Westside Stair Rail,9.5,8.9,Red Oxide Primed,RL,DCR,11/5,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,V811,Arlington - Velo Interlocken,"Replacement Panel at 42""",1.5,0.5,Red Oxide Prime,RL,RL,12/16,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,V916,Arlington - Velo Interlocken,Diamond Plates 4' X 8' Sheets,1,0,RAW,RL,RL,12/10,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,413,Arlington - Velo Interlocken,Bld 6 4th Floor Corner Balconies,13.4,6.5,Railing Black,RL,DCR,3/4,,X,X,X,X,X,3/16,3/16,X,O,HOT
+900,414,Arlington - Velo Interlocken,Unit 4205 Balcony Rail,2.9,2.5,Railing Black,RL,DCR,3/4,,X,X,X,X,X,3/16,3/16,X,O,HOT
+900,171,Arlington - Velo Interlocken,Bld 1 Interior Step Rail,2.5,2,Red Oxide Primed,RL,DCR,12/3,,X,X,X,X,X,12/10,12/10,X,O,NEED CO
+900,172,Arlington - Velo Interlocken,Bld 2 Interior Step Rail,2.5,2,Red Oxide Primed,RL,DCR,12/3,,X,X,X,X,X,12/17,12/17,X,O,NEED CO
+900,179,Arlington - Velo Interlocken,Bld 3 Interior Step Rail,2.5,2,Red Oxide Primed,RL,DCR,12/4,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,180,Arlington - Velo Interlocken,Bld 4 Interior Step Rail,2.5,2,Red Oxide Primed,RL,DCR,12/4,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,182,Arlington - Velo Interlocken,Bld 5 Interior Step Rail,2.5,2,Red Oxide Primed,RL,DCR,12/4,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,183,Arlington - Velo Interlocken,Bld 6 Interior Step Rail,2.5,2,Red Oxide Primed,RL,DCR,12/4,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,517,Arlington - Velo Interlocken,Maintenance Shed Rail,2.5,1,Railing Black,RL,DCR,6/12,,X,X,X,X,X,4/22,4/22,X,O,NEED CO
+900,884,Arlington - Velo Interlocken,Bld 3 Eastside Stair Rail,19.7,18.9,Red Oxide Primed,RL,DCR,11/5,,X,X,X,X,X,4/22,4/23,X,O,NEED CO
+999,999,MHMW Office,Office Desk,8,0,Railing Black,WO,DTS,12/9,80.555,-,,,,,4/22,4/22,,,
+999,152,Saddleback Simulator Rail,Saddleback Simulator Rail.pd,11.3,11.3,Railing Black,RL,DEP,12/2,,X,X,X,X,X,4/22,4/22,X,O,
+999,293,Saddleback Bag Drop,Saddleback Bag Drop,12,0.2,Railing Black,WO,RJA,1/20,,X,X,X,X,X,4/22,4/22,X,O,

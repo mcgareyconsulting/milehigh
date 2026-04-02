@@ -23,7 +23,7 @@ from app.models import Releases, db
 from app.api.helpers import get_stage_group_from_stage
 
 
-CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "live_jobs.csv")
+CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "final-boss.csv")
 
 
 def _parse_float(val):
@@ -169,7 +169,7 @@ def sync(dry_run=False):
         for job, rel in sorted(to_create):
             info = csv_records[(job, rel)]
             prefix = "[DRY RUN] " if dry_run else ""
-            print(f"    {prefix}{job}-{rel:<8} {info['name'][:30]:<32} {info['description'][:25]}")
+            print(f"    {prefix}{job}-{rel:<8} {info['job_name'][:30]:<32} {info['description'][:25]}")
 
     if to_archive:
         print(f"\n  Archiving {len(to_archive)} releases not in CSV:")

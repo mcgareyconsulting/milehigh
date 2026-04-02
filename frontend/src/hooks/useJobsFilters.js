@@ -169,6 +169,64 @@ export function useJobsFilters(jobs = []) {
     }, [filterByStageGroups]);
 
     /**
+     * Start Install Order subset: group by project (Job # ascending),
+     * active releases (with fab_order) first sorted by start_install date,
+     * completed releases (no fab_order) at bottom of each group.
+     */
+    const getStartInstallOrderSubset = useCallback((jobsToFilter) => {
+        // Group by Job #
+        const groups = new Map();
+        for (const job of jobsToFilter) {
+            const jobNum = job['Job #'] ?? 0;
+            if (!groups.has(jobNum)) groups.set(jobNum, []);
+            groups.get(jobNum).push(job);
+        }
+
+        // Sort project groups by Job # ascending
+        const sortedKeys = [...groups.keys()].sort((a, b) => (a || 0) - (b || 0));
+
+        const parseDate = (val) => {
+            if (!val) return null;
+            const d = new Date(val);
+            return isNaN(d.getTime()) ? null : d;
+        };
+
+        const compareDates = (a, b) => {
+            const da = parseDate(a['Start install']);
+            const db = parseDate(b['Start install']);
+            if (da == null && db == null) return 0;
+            if (da == null) return 1;
+            if (db == null) return -1;
+            return da - db;
+        };
+
+        const result = [];
+        for (const key of sortedKeys) {
+            const releases = groups.get(key);
+            const active = releases.filter(j => j['Fab Order'] != null);
+            const completed = releases.filter(j => j['Fab Order'] == null);
+
+            // Active: sort by start_install date, fab_order tiebreaker, stage priority
+            active.sort((a, b) => {
+                const dateCmp = compareDates(a, b);
+                if (dateCmp !== 0) return dateCmp;
+                const fabA = Number(a['Fab Order']);
+                const fabB = Number(b['Fab Order']);
+                if (!isNaN(fabA) && !isNaN(fabB) && fabA !== fabB) return fabA - fabB;
+                const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
+                const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
+                return prioA - prioB;
+            });
+
+            // Completed: sort by start_install date
+            completed.sort(compareDates);
+
+            result.push(...active, ...completed);
+        }
+        return result;
+    }, [STAGE_SORT_PRIORITY]);
+
+    /**
      * Filtered and sorted jobs for display based on selected subset
      */
     const displayJobs = useMemo(() => {
@@ -183,7 +241,10 @@ export function useJobsFilters(jobs = []) {
         // Apply subset-specific filtering
         let result = [];
 
-        if (selectedSubset === 'job_order') {
+        if (selectedSubset === 'start_install_order') {
+            // Start Install Order: grouped by project, sorted by start install date
+            result = getStartInstallOrderSubset(baseFiltered);
+        } else if (selectedSubset === 'job_order') {
             // Job Order: all releases sorted by unified fab_order
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'complete') {
@@ -210,7 +271,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getStartInstallOrderSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder]);
 
     /**
      * Extract unique project name (Job) options from jobs
