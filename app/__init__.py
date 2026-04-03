@@ -28,9 +28,7 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 
 def init_scheduler(app):
-    """Initialize the background scheduler. OneDrive poll only runs in production."""
-    from app.onedrive.utils import run_onedrive_poll
-    from app.sync_lock import sync_lock_manager
+    """Initialize the background scheduler for Trello queue draining and heartbeat."""
     from app.trello import drain_trello_queue
 
     # --- Prevent scheduler duplication in multi-worker environments ---
@@ -41,10 +39,6 @@ def init_scheduler(app):
         logger.info("Skipping scheduler startup on this worker")
         return None
 
-    # --- Check environment ---
-    env = (os.environ.get("FLASK_ENV") or os.environ.get("ENVIRONMENT", "local")).lower()
-    is_production = env in ("production", "prod")
-
     # --- Configure scheduler ---
     executors = {
         "default": {
@@ -54,90 +48,8 @@ def init_scheduler(app):
     }
     scheduler = BackgroundScheduler(executors=executors)
 
-    # --- Simple retry wrapper for transient errors ---
-    def retry_with_backoff(func, retries=3, base_delay=5):
-        for i in range(retries):
-            try:
-                return func()
-            except Exception as e:
-                if i == retries - 1:
-                    raise
-                delay = base_delay * (2**i)
-                logger.warning(
-                    "Retrying OneDrive poll after failure",
-                    attempt=i + 1,
-                    delay=delay,
-                    error=str(e),
-                )
-                time.sleep(delay)
-
-    # --- The actual scheduled task ---
-    def scheduled_run():
-        with app.app_context():
-            if sync_lock_manager.is_locked():
-                current_op = sync_lock_manager.get_current_operation()
-                logger.info(
-                    "Skipping scheduled OneDrive poll - sync locked",
-                    current_operation=current_op,
-                )
-
-                try:
-                    drained = drain_trello_queue(max_items=3)
-                    if drained:
-                        logger.info(
-                            "Drained Trello queue while OneDrive locked",
-                            drained=drained,
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "Trello queue drain failed during skip", error=str(e)
-                    )
-                return
-
-            try:
-                logger.info("Starting scheduled OneDrive poll")
-
-                # Pre-drain Trello queue
-                try:
-                    drained_pre = drain_trello_queue(max_items=2)
-                    if drained_pre:
-                        logger.info("Pre-drain Trello queue", drained=drained_pre)
-                except Exception:
-                    pass
-
-                # Run OneDrive poll with retry logic
-                retry_with_backoff(run_onedrive_poll)
-
-                # Post-drain Trello queue
-                try:
-                    drained_post = drain_trello_queue(max_items=5)
-                    if drained_post:
-                        logger.info("Post-drain Trello queue", drained=drained_post)
-                except Exception:
-                    pass
-
-                logger.info("Scheduled OneDrive poll completed successfully")
-
-            except RuntimeError as e:
-                logger.info(
-                    "Scheduled OneDrive poll skipped due to runtime lock", error=str(e)
-                )
-            except Exception as e:
-                logger.error("Scheduled OneDrive poll failed", error=str(e))
-
-    # --- Add the main job (runs hourly at :00) if in production ---
-    if is_production:
-        scheduler.add_job(
-            func=scheduled_run,
-            trigger="cron",
-            minute="0",
-            hour="*",
-            id="onedrive_poll",
-            name="OneDrive Polling Job",
-            replace_existing=True,
-        )
-    else:
-        logger.info("OneDrive poll disabled — not production environment", environment=env)
+    # OneDrive poll disabled — Brain job log is now the source of truth
+    logger.info("OneDrive poll disabled — migrated to Brain job log as source of truth")
 
     # --- Queue drainer job (runs every 5 minutes) ---
     def queue_drainer():
@@ -170,16 +82,7 @@ def init_scheduler(app):
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
-    # Build jobs list with conditional OneDrive poll
-    jobs_list = []
-    if is_production:
-        jobs_list.append({
-            "id": "onedrive_poll",
-            "name": "OneDrive Polling Job",
-            "schedule": "Every hour at minute :00",
-            "description": "Sync OneDrive Excel to Trello, with Trello queue draining",
-        })
-    jobs_list += [
+    jobs_list = [
         {
             "id": "trello_queue_drainer",
             "name": "Trello Queue Drainer",

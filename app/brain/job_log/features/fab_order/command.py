@@ -97,8 +97,16 @@ class UpdateFabOrderCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 
-        # 5️⃣ Trello fab_order sync disabled during testing — close event without queueing outbox
-        JobEventService.close(event.id)
+        # 5️⃣ Queue outbox item for Trello fab_order sync (event closed by OutboxService on success)
+        if job_record.trello_card_id:
+            OutboxService.add(
+                destination='trello',
+                action='update_fab_order',
+                event_id=event.id
+            )
+        else:
+            # No Trello card — close event immediately
+            JobEventService.close(event.id)
         
         # 7️⃣ Commit all DB changes first (this is the critical operation)
         db.session.commit()
