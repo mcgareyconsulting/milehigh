@@ -128,6 +128,33 @@ export function useJobsFilters(jobs = []) {
     }, []);
 
     /**
+     * Sort jobs by fab order, then start install date as tiebreaker (for Paint+Fab view)
+     */
+    const sortByFabOrderThenStartInstall = useCallback((jobs) => {
+        return [...jobs].sort((a, b) => {
+            const fabOrderA = a['Fab Order'];
+            const fabOrderB = b['Fab Order'];
+            if (fabOrderA == null && fabOrderB == null) return 0;
+            if (fabOrderA == null) return 1;
+            if (fabOrderB == null) return -1;
+            const numA = Number(fabOrderA);
+            const numB = Number(fabOrderB);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                if (numA !== numB) return numA - numB;
+                const dateA = a['Start install'] ? new Date(a['Start install']) : null;
+                const dateB = b['Start install'] ? new Date(b['Start install']) : null;
+                if (dateA && dateB && dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+                if (dateA && !dateB) return -1;
+                if (!dateA && dateB) return 1;
+                const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
+                const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
+                return prioA - prioB;
+            }
+            return String(fabOrderA).localeCompare(String(fabOrderB));
+        });
+    }, []);
+
+    /**
      * Default sort: Job # ascending, then Release # ascending
      */
     const sortJobs = useCallback((filteredJobs) => {
@@ -169,62 +196,13 @@ export function useJobsFilters(jobs = []) {
     }, [filterByStageGroups]);
 
     /**
-     * Start Install Order subset: group by project (Job # ascending),
-     * active releases (with fab_order) first sorted by start_install date,
-     * completed releases (no fab_order) at bottom of each group.
+     * Start Install Order subset: sorted by fab_order ascending.
+     * Fab order drives the start_install date cascade, so sorting by
+     * fab_order naturally produces cascading start install projections.
      */
     const getStartInstallOrderSubset = useCallback((jobsToFilter) => {
-        // Group by Job #
-        const groups = new Map();
-        for (const job of jobsToFilter) {
-            const jobNum = job['Job #'] ?? 0;
-            if (!groups.has(jobNum)) groups.set(jobNum, []);
-            groups.get(jobNum).push(job);
-        }
-
-        // Sort project groups by Job # ascending
-        const sortedKeys = [...groups.keys()].sort((a, b) => (a || 0) - (b || 0));
-
-        const parseDate = (val) => {
-            if (!val) return null;
-            const d = new Date(val);
-            return isNaN(d.getTime()) ? null : d;
-        };
-
-        const compareDates = (a, b) => {
-            const da = parseDate(a['Start install']);
-            const db = parseDate(b['Start install']);
-            if (da == null && db == null) return 0;
-            if (da == null) return 1;
-            if (db == null) return -1;
-            return da - db;
-        };
-
-        const result = [];
-        for (const key of sortedKeys) {
-            const releases = groups.get(key);
-            const active = releases.filter(j => j['Fab Order'] != null);
-            const completed = releases.filter(j => j['Fab Order'] == null);
-
-            // Active: sort by start_install date, fab_order tiebreaker, stage priority
-            active.sort((a, b) => {
-                const dateCmp = compareDates(a, b);
-                if (dateCmp !== 0) return dateCmp;
-                const fabA = Number(a['Fab Order']);
-                const fabB = Number(b['Fab Order']);
-                if (!isNaN(fabA) && !isNaN(fabB) && fabA !== fabB) return fabA - fabB;
-                const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
-                const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
-                return prioA - prioB;
-            });
-
-            // Completed: sort by start_install date
-            completed.sort(compareDates);
-
-            result.push(...active, ...completed);
-        }
-        return result;
-    }, [STAGE_SORT_PRIORITY]);
+        return sortByFabOrder([...jobsToFilter]);
+    }, [sortByFabOrder]);
 
     /**
      * Filtered and sorted jobs for display based on selected subset
@@ -259,19 +237,21 @@ export function useJobsFilters(jobs = []) {
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
-            // Paint+Fab: Paint complete + Welded QC (asc fab), then FABRICATION group (asc fab)
+            // Paint+Fab: Paint complete + Welded QC, then FABRICATION group
+            // Sorted by fab_order with start_install date as tiebreaker within same fab_order
             const paintStages = ['Paint complete', 'Welded QC'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            const paintSorted = sortByFabOrder(paintOnly);
-            const fabOnly = getFabSubset(baseFiltered);
-            result = [...paintSorted, ...fabOnly];
+            const paintSorted = sortByFabOrderThenStartInstall(paintOnly);
+            const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
+            const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
+            result = [...paintSorted, ...fabSorted];
         } else if (selectedSubset === 'fab') {
             // Fab: Only FABRICATION stage_group
             result = getFabSubset(baseFiltered);
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getStartInstallOrderSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getStartInstallOrderSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder, sortByFabOrderThenStartInstall]);
 
     /**
      * Extract unique project name (Job) options from jobs

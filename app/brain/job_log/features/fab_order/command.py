@@ -58,7 +58,7 @@ class UpdateFabOrderCommand:
             old_fab_order = None
 
         # 1b. Fixed-tier guard: stages with auto-assigned fab_order
-        from app.api.helpers import get_fixed_tier, get_fab_order_bounds, clamp_fab_order
+        from app.api.helpers import get_fixed_tier
         tier = get_fixed_tier(job_record.stage)
         if tier is not None:
             self.fab_order = tier
@@ -67,12 +67,9 @@ class UpdateFabOrderCommand:
                 f"(stage={job_record.stage}), overriding fab_order to {tier}"
             )
         elif self.fab_order is not None:
-            lower_bound, upper_bound = get_fab_order_bounds(
-                job_record.stage, self.job_id, self.release
-            )
-            self.fab_order = clamp_fab_order(
-                self.fab_order, lower_bound, upper_bound, strict_upper=False
-            )
+            # Manual ordering: no stage bounds, just enforce dynamic minimum
+            if self.fab_order < 3:
+                self.fab_order = 3
 
         # 2️⃣ Create event for the current job (handles deduplication, logging internally)
         # Ensure payload values are valid (not NaN) - convert to None if needed
@@ -105,7 +102,14 @@ class UpdateFabOrderCommand:
         
         # 7️⃣ Commit all DB changes first (this is the critical operation)
         db.session.commit()
-        
+
+        # 7b. Recalculate scheduling for fab stage (fab_order affects hours_in_front → start_install)
+        try:
+            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+        except Exception as e:
+            logger.error(f"Scheduling recalculation failed after fab_order update: {e}", exc_info=True)
+
         logger.info(f"update_fab_order completed successfully", extra={
             'job': self.job_id,
             'release': self.release,

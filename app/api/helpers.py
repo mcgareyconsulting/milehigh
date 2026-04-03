@@ -185,7 +185,14 @@ def clamp_fab_order(value, lower, upper, strict_upper=False):
 
     strict_upper=True: clamp when value >= upper (stage change path, no collision detection)
     strict_upper=False: clamp only when value > upper (command path, collision handles ties)
+
+    When bounds are inverted (lower >= upper), stage fab_order ranges overlap and
+    clamping would collapse any value to 3. Skip bounds clamping in that case.
     """
+    # If bounds are inverted, stages overlap — skip lower/upper clamping entirely
+    if lower is not None and upper is not None and lower >= upper:
+        lower = None
+        upper = None
     if lower is not None and value <= lower:
         value = lower + 1
     if upper is not None:

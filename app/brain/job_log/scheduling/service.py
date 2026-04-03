@@ -5,11 +5,21 @@ This service calculates and updates start_install and comp_eta fields in the dat
 based on the scheduling logic.
 """
 
+import math
 from datetime import date, datetime
 from typing import List, Optional
 from app.models import Releases, db
 from app.brain.job_log.scheduling.calculator import calculate_all_job_scheduling
 from app.logging_config import get_logger
+
+
+def _safe_float(val):
+    """Convert NaN floats to None to prevent downstream int() conversion errors."""
+    if val is None:
+        return None
+    if isinstance(val, float) and math.isnan(val):
+        return None
+    return val
 
 logger = get_logger(__name__)
 
@@ -53,18 +63,20 @@ def update_job_scheduling_fields(
     all_jobs_dicts = []
     for j in all_jobs:
         all_jobs_dicts.append({
-            'fab_hrs': j.fab_hrs,
-            'install_hrs': j.install_hrs,
-            'fab_order': j.fab_order,
+            'fab_hrs': _safe_float(j.fab_hrs),
+            'install_hrs': _safe_float(j.install_hrs),
+            'fab_order': _safe_float(j.fab_order),
             'stage': j.stage if j.stage else 'Released',
+            'is_hard_date': j.start_install_formulaTF is False,
         })
-    
+
     # Convert current job to dict
     job_dict = {
-        'fab_hrs': job.fab_hrs,
-        'install_hrs': job.install_hrs,
-        'fab_order': job.fab_order,
+        'fab_hrs': _safe_float(job.fab_hrs),
+        'install_hrs': _safe_float(job.install_hrs),
+        'fab_order': _safe_float(job.fab_order),
         'stage': job.stage if job.stage else 'Released',
+        'is_hard_date': job.start_install_formulaTF is False,
     }
     
     # Calculate scheduling fields
@@ -100,31 +112,36 @@ def update_job_scheduling_fields(
 
 def recalculate_all_jobs_scheduling(
     reference_date: Optional[date] = None,
-    batch_size: int = 100
+    batch_size: int = 100,
+    stage_group: Optional[str] = None
 ) -> dict:
     """
-    Recalculate and update scheduling fields for all jobs in the database.
-    
+    Recalculate and update scheduling fields for jobs in the database.
+
     This function:
-    1. Fetches all jobs from the database
-    2. Calculates scheduling fields for all jobs
+    1. Fetches jobs from the database (optionally filtered by stage_group)
+    2. Calculates scheduling fields for those jobs
     3. Updates start_install and comp_eta fields
     4. Commits changes in batches
-    
+
     Args:
         reference_date: Reference date for calculations (defaults to today)
         batch_size: Number of jobs to commit in each batch (default: 100)
-        
+        stage_group: If set, only recalculate jobs in this stage group (e.g. 'FABRICATION')
+
     Returns:
         dict: Summary of updates with counts and any errors
     """
     if reference_date is None:
         reference_date = date.today()
-    
-    logger.info(f"Starting scheduling recalculation for all jobs (reference_date={reference_date})")
-    
-    # Fetch all jobs
-    all_jobs = Releases.query.all()
+
+    logger.info(f"Starting scheduling recalculation (stage_group={stage_group}, reference_date={reference_date})")
+
+    # Fetch jobs (filtered by stage_group if specified)
+    query = Releases.query
+    if stage_group:
+        query = query.filter(Releases.stage_group == stage_group)
+    all_jobs = query.all()
     total_jobs = len(all_jobs)
     
     if total_jobs == 0:
@@ -141,10 +158,11 @@ def recalculate_all_jobs_scheduling(
     jobs_dicts = []
     for job in all_jobs:
         jobs_dicts.append({
-            'fab_hrs': job.fab_hrs,
-            'install_hrs': job.install_hrs,
-            'fab_order': job.fab_order,
+            'fab_hrs': _safe_float(job.fab_hrs),
+            'install_hrs': _safe_float(job.install_hrs),
+            'fab_order': _safe_float(job.fab_order),
             'stage': job.stage if job.stage else 'Released',
+            'is_hard_date': job.start_install_formulaTF is False,
         })
     
     # Calculate scheduling for all jobs

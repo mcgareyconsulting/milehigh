@@ -276,8 +276,8 @@ def test_bounds_self_excluded(app):
 # Integration: UpdateFabOrderCommand
 # ---------------------------------------------------------------------------
 
-def test_fab_order_manual_edit_clamped_to_stage_bounds(app):
-    """Manual edit is clamped to stage upper bound to prevent bleed."""
+def test_fab_order_manual_edit_no_stage_bounds(app):
+    """Manual edit is not clamped to stage bounds — fully manual ordering."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
         make_release(2, "A", "Welded", "FABRICATION", 10)
@@ -289,12 +289,12 @@ def test_fab_order_manual_edit_clamped_to_stage_bounds(app):
             result = cmd.execute()
 
         db.session.refresh(wqc)
-        # Welded QC (pos 0) upper_bound = min of Welded (10), so 25 clamped to 9
-        assert wqc.fab_order == 9
+        # No bounds clamping — value is accepted as-is
+        assert wqc.fab_order == 25
 
 
-def test_fab_order_manual_edit_clamped_to_lower_bound(app):
-    """Released cannot be set below earlier stages' max fab_order."""
+def test_fab_order_manual_edit_accepts_any_value_above_3(app):
+    """Manual edit accepts any value >= 3 regardless of other stages."""
     with app.app_context():
         make_release(1, "A", "Cut start", "FABRICATION", 20)
         released = make_release(2, "A", "Released", "FABRICATION", 30)
@@ -306,8 +306,8 @@ def test_fab_order_manual_edit_clamped_to_lower_bound(app):
             result = cmd.execute()
 
         db.session.refresh(released)
-        # Released (pos 5) lower_bound = max of Cut start (20), so 3 clamped to 21
-        assert released.fab_order == 21
+        # No bounds clamping — value is accepted (>= 3 minimum)
+        assert released.fab_order == 3
 
 
 def test_fab_order_min_is_3(app):
@@ -788,8 +788,8 @@ def test_endpoint_fab_order_zero_clamped_to_3(client, app):
         assert job.fab_order >= 3
 
 
-def test_endpoint_fab_order_very_large_clamped(client, app):
-    """Very large fab_order is clamped to stage upper bound to prevent bleed."""
+def test_endpoint_fab_order_very_large_accepted(client, app):
+    """Very large fab_order is accepted — no stage bounds clamping."""
     with app.app_context():
         make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
         make_release(2, "A", "Welded", "FABRICATION", 10)
@@ -805,8 +805,8 @@ def test_endpoint_fab_order_very_large_clamped(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        # Welded QC (pos 0) upper_bound = min of Welded (10), so 999999 clamped to 9
-        assert job.fab_order == 9
+        # No bounds clamping — value is accepted as-is
+        assert job.fab_order == 999999
 
 
 # ---------------------------------------------------------------------------
@@ -1270,15 +1270,14 @@ def test_no_cascade_same_value_noop(app):
 # Stage bleed prevention tests
 # ---------------------------------------------------------------------------
 
-def test_stage_change_no_bleed_into_next_stage(client, app):
-    """Moving to a stage uses fractional midpoint when there's a healthy gap above max_in_stage."""
+def test_stage_change_appends_after_max(client, app):
+    """Moving to a stage places at max_in_stage + 1 regardless of other stages."""
     with app.app_context():
         # Welded (pos 1) has releases at 8, 9, 10
         make_release(2, "A", "Welded", "FABRICATION", 8)
         make_release(3, "A", "Welded", "FABRICATION", 9)
         make_release(4, "A", "Welded", "FABRICATION", 10)
-        # Fit Up Complete (pos 2) starts at 11 — contiguous, upper_bound = 11 = max_in_stage + 1
-        # upper_bound (11) > max_in_stage (10) so midpoint kicks in
+        # Fit Up Complete (pos 2) starts at 11 — no longer causes midpoint squeezing
         make_release(5, "A", "Fit Up Complete.", "FABRICATION", 11)
         # Release to be moved
         make_release(1, "A", "Released", "FABRICATION", 30)
@@ -1295,8 +1294,8 @@ def test_stage_change_no_bleed_into_next_stage(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        # max_in_stage (Welded) = 10, upper_bound = 11 > 10 so midpoint = (10 + 11) / 2 = 10.5
-        assert job.fab_order == 10.5
+        # max_in_stage (Welded) = 10, so new fab_order = 11
+        assert job.fab_order == 11
 
 
 def test_stage_change_legacy_bleed_appends_normally(client, app):

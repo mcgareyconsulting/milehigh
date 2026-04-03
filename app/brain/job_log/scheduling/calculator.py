@@ -62,19 +62,21 @@ def calculate_hours_in_front(
     if job_fab_order is None:
         # Jobs without fab_order are considered at the end of the queue
         # They have all other jobs in front of them
+        # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity
         return sum(
             job.get('remaining_fab_hours', 0.0)
             for job in all_jobs
-            if job.get('fab_order') is not None
+            if job.get('fab_order') is not None and not job.get('is_hard_date')
         )
-    
+
     # Sum remaining hours for jobs with lower (earlier) fab_order
+    # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity
     hours_in_front = 0.0
     for job in all_jobs:
         other_fab_order = job.get('fab_order')
-        if other_fab_order is not None and other_fab_order < job_fab_order:
+        if other_fab_order is not None and other_fab_order < job_fab_order and not job.get('is_hard_date'):
             hours_in_front += job.get('remaining_fab_hours', 0.0)
-    
+
     return hours_in_front
 
 

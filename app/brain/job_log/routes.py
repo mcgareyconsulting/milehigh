@@ -414,6 +414,14 @@ def get_jobs():
                     'Stage': j.stage if j.stage else 'Released',
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
+            # Override displayed Start install with calculated value for jobs still
+            # in FABRICATION that don't have a hard (red) date. Once a release
+            # leaves fabrication, its start_install freezes at the DB-stored value.
+            for job in job_list:
+                if (job.get('Banana Color') != 'red'
+                        and job.get('install_start_date')
+                        and job.get('Stage Group') == 'FABRICATION'):
+                    job['Start install'] = job['install_start_date']
         except Exception as scheduling_error:
             logger.warning(
                 f"Error calculating scheduling fields: {scheduling_error}",
@@ -665,6 +673,14 @@ def get_all_jobs():
                     'Stage': j.stage if j.stage else 'Released',
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
+            # Override displayed Start install with calculated value for jobs still
+            # in FABRICATION that don't have a hard (red) date. Once a release
+            # leaves fabrication, its start_install freezes at the DB-stored value.
+            for job in job_list:
+                if (job.get('Banana Color') != 'red'
+                        and job.get('install_start_date')
+                        and job.get('Stage Group') == 'FABRICATION'):
+                    job['Start install'] = job['install_start_date']
         except Exception as scheduling_error:
             logger.warning(
                 f"Error calculating scheduling fields: {scheduling_error}",
@@ -870,7 +886,7 @@ def update_stage(job, release):
             return jsonify({'error': 'Event already exists'}), 400
         
         # Capture old stage_group before updating (needed for logging)
-        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, _normalize_stage, _get_all_variants_for_stages, get_fab_order_bounds, DYNAMIC_STAGE_ORDER
+        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, _normalize_stage, _get_all_variants_for_stages
         old_stage_group = job_record.stage_group
         new_stage_group = get_stage_group_from_stage(stage)
 
@@ -893,7 +909,7 @@ def update_stage(job, release):
                 f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
             )
         elif stage not in ('Hold', None):
-            # Dynamic stage: append to end of that stage's block, respecting bounds
+            # Dynamic stage: append to end of that stage's fab_order list
             normalized = _normalize_stage(stage)
             if normalized is not None:
                 from sqlalchemy import func, or_
@@ -905,27 +921,7 @@ def update_stage(job, release):
                     or_(Releases.job != job, Releases.release != release)
                 ).scalar()
 
-                # Get bounds to prevent stage bleed
-                lower_bound, upper_bound = get_fab_order_bounds(stage, job, release)
-
-                if max_in_stage is not None:
-                    candidate = max_in_stage + 1
-                else:
-                    # Stage is empty — place after earlier stages
-                    candidate = (lower_bound + 1) if lower_bound is not None else 3
-
-                # Only clamp when upper_bound is above max_in_stage (healthy gap).
-                # If upper_bound <= max_in_stage, legacy bleed already exists —
-                # appending at max_in_stage + 1 is the safest placement.
-                healthy_gap = max_in_stage is None or (upper_bound is not None and upper_bound > max_in_stage)
-                if upper_bound is not None and candidate >= upper_bound and healthy_gap:
-                    if max_in_stage is not None:
-                        # Squeeze between max_in_stage and upper_bound
-                        candidate = (max_in_stage + upper_bound) / 2.0
-                    else:
-                        # Empty stage but upper_bound is tight
-                        effective_lower = lower_bound if lower_bound is not None else 2
-                        candidate = (effective_lower + upper_bound) / 2.0
+                candidate = (max_in_stage + 1) if max_in_stage is not None else 3
 
                 # Floor: dynamic fab_order must be >= 3
                 if candidate < 3:
@@ -1041,10 +1037,10 @@ def update_stage(job, release):
         # Commit all DB changes first (this is the critical operation)
         db.session.commit()
 
-        # Trigger start install cascade — stage change affects all formula-driven dates
+        # Trigger start install cascade — stage change affects fab stage formula-driven dates
         try:
             from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling()
+            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
         except Exception as cascade_err:
             logger.error(
                 f"Scheduling cascade failed after stage change for {job}-{release}: {cascade_err}",
@@ -1208,8 +1204,9 @@ def update_fab_order(job, release):
         # Allow None/null to clear the value
         if fab_order is not None:
             try:
-                # Convert to float
                 fab_order = float(fab_order)
+                if math.isnan(fab_order):
+                    fab_order = None  # Treat NaN as clearing the value
             except (ValueError, TypeError):
                 return jsonify({'error': 'fab_order must be a number'}), 400
 
