@@ -526,6 +526,12 @@ function JobLog() {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
+            table-layout: fixed;
+        }
+        .hard-date {
+            background-color: #EF4444;
+            color: white;
+            font-weight: bold;
         }
         th {
             background-color: #e0e0e0;
@@ -541,6 +547,9 @@ function JobLog() {
             padding: 4px;
             text-align: center;
             font-size: 9px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            word-wrap: break-word;
         }
         tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -564,10 +573,19 @@ function JobLog() {
             const pmJobs = jobsByPM[pm];
             const isLastPM = pmIndex === pmArray.length - 1;
 
+            // Build colgroup with normalized widths for uniform columns across pages
+            const defaultWeight = 5;
+            const totalWeight = columnHeaders.reduce((sum, col) => sum + (COLUMN_WIDTH_PERCENT[col] ?? defaultWeight), 0);
+            const colgroup = '<colgroup>' + columnHeaders.map(col => {
+                const pct = ((COLUMN_WIDTH_PERCENT[col] ?? defaultWeight) / totalWeight * 100).toFixed(2);
+                return `<col style="width:${pct}%">`;
+            }).join('') + '</colgroup>';
+
             printHTML += `
     <div class="pm-group"${isLastPM ? '' : ' style="page-break-after: always;"'}>
         <div class="pm-header">PM: ${pm}</div>
         <table>
+            ${colgroup}
             <thead>
                 <tr>
                     ${columnHeaders.map(col => {
@@ -632,7 +650,10 @@ function JobLog() {
 
                     // Escape HTML
                     const displayValue = String(value || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    printHTML += `<td>${displayValue}</td>`;
+
+                    // Apply red styling for hard dates on Start install
+                    const isHardDate = column === 'Start install' && job['start_install_formulaTF'] === false && job['Start install'];
+                    printHTML += `<td${isHardDate ? ' class="hard-date"' : ''}>${displayValue}</td>`;
                 });
                 printHTML += '</tr>';
             });
