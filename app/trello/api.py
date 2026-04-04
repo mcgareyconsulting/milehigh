@@ -1033,7 +1033,7 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
         }
 
 
-def add_comment_to_trello_card(card_id, comment_text, operation_id=None):
+def add_comment_to_trello_card(card_id, comment_text, operation_id=None, sender_initials=None):
     """
     Adds a timestamped comment to a Trello card.
 
@@ -1041,6 +1041,7 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None):
         card_id: Trello card ID
         comment_text: Comment text to add
         operation_id: Optional operation ID for logging
+        sender_initials: Optional initials of the sender (e.g. 'DM')
 
     Returns:
         True if successful, False otherwise
@@ -1049,9 +1050,10 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None):
         print(f"[TRELLO API] Skipping empty comment for card {card_id}")
         return True
 
-    # Format comment with timestamp
+    # Format comment with timestamp and sender initials
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    formatted_comment = f"[{timestamp}] {comment_text.strip()}"
+    sender_tag = f" ({sender_initials})" if sender_initials else ""
+    formatted_comment = f"[{timestamp}]{sender_tag} {comment_text.strip()}"
 
     url = f"https://api.trello.com/1/cards/{card_id}/actions/comments"
     params = {

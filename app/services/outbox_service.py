@@ -278,12 +278,20 @@ class OutboxService:
                     logger.info(f"Outbox {outbox_item.id} completed (notes empty, skipping Trello)")
                     return True
                 
+                # Derive sender initials from the event's user
+                sender_initials = 'UNK'
+                if event.internal_user_id:
+                    from app.models import User
+                    user = User.query.get(event.internal_user_id)
+                    if user and user.first_name and user.last_name:
+                        sender_initials = (user.first_name[0] + user.last_name[0]).upper()
+
                 # Execute the Trello API call
                 try:
                     from app.trello.api import add_comment_to_trello_card
-                    
+
                     # Add comment to Trello card
-                    success = add_comment_to_trello_card(card_id, str(notes))
+                    success = add_comment_to_trello_card(card_id, str(notes), sender_initials=sender_initials)
                     
                     if success:
                         # Success! Mark outbox item as completed
