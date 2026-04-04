@@ -37,7 +37,11 @@ class SchedulingConfig:
         'WeldingQC': 0.1,
         'Welded QC': 0.1,
         'Welding QC': 0.1,
+        'Welded': 0.1,
         
+        # Hold - 0% (paused, not consuming fab capacity)
+        'Hold': 0.0,
+
         # Paint Complete - 0% (handles variations)
         'Paint Complete': 0.0,
         'Paint complete': 0.0,
@@ -60,7 +64,7 @@ class SchedulingConfig:
     }
     
     # Fabrication capacity (fixed daily capacity)
-    FAB_HOURS_PER_DAY: float = 8.0  # Adjust if Excel uses different value
+    FAB_HOURS_PER_DAY: float = 104.0  # 13 fabricators × 8 hrs/day
     
     # Installation capacity (fixed daily capacity)
     INSTALL_HOURS_PER_DAY: float = 16.0

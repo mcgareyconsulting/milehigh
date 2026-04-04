@@ -348,6 +348,7 @@ def add_scheduling_fields_to_jobs(
             'install_hrs': job.get('Install HRS') or job.get('install_hrs'),
             'fab_order': job.get('Fab Order') or job.get('fab_order'),
             'stage': job.get('Stage') or job.get('stage'),
+            'is_hard_date': job.get('is_hard_date'),
         }
         queue_job_dicts.append(job_dict)
     
@@ -383,6 +384,7 @@ def add_scheduling_fields_to_jobs(
                 'install_hrs': job.get('Install HRS') or job.get('install_hrs'),
                 'fab_order': job.get('Fab Order') or job.get('fab_order'),
                 'stage': job.get('Stage') or job.get('stage'),
+                'is_hard_date': job.get('is_hard_date'),
             }
             from app.brain.job_log.scheduling import calculate_scheduling_fields
             scheduling = calculate_scheduling_fields(job_dict, queue_job_dicts, reference_date)

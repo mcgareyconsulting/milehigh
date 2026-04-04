@@ -412,6 +412,7 @@ def get_jobs():
                     'Install HRS': serialize_value(j.install_hrs),
                     'Fab Order': serialize_value(j.fab_order),
                     'Stage': j.stage if j.stage else 'Released',
+                    'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
             # Override displayed Start install with calculated value for jobs still
@@ -671,6 +672,7 @@ def get_all_jobs():
                     'Install HRS': serialize_value(j.install_hrs),
                     'Fab Order': serialize_value(j.fab_order),
                     'Stage': j.stage if j.stage else 'Released',
+                    'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
             # Override displayed Start install with calculated value for jobs still
@@ -1689,13 +1691,20 @@ def update_start_install(job, release):
         
         # Commit all DB changes
         db.session.commit()
-        
+
+        # Recalculate all fab jobs so the queue adjusts for the new hard date
+        try:
+            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+        except Exception as cascade_error:
+            logger.error(f"Scheduling cascade failed after hard-date update: {cascade_error}", exc_info=True)
+
         logger.info(f"update_start_install completed successfully", extra={
             'job': job,
             'release': release,
             'event_id': event.id
         })
-        
+
         return jsonify({
             'status': 'success',
             'event_id': event.id
