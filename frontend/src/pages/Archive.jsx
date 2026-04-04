@@ -298,7 +298,7 @@ function Archive() {
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
-                                                    const displayHeader = column === 'Release #' ? 'rel. #' : column;
+                                                    const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
                                                     const colWidthPct = columnWidthPercents[column];
                                                     return (
                                                         <th

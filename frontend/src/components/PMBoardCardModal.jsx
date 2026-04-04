@@ -17,7 +17,7 @@ const RELEASE_FIELDS = [
     { key: 'Paint color', label: 'Paint color' },
     { key: 'Start install', label: 'Start install', format: 'date' },
     { key: 'Comp. ETA', label: 'Comp. ETA', format: 'date' },
-    { key: 'Job Comp', label: 'Job Comp' },
+    { key: 'Job Comp', label: 'Install Prog' },
     { key: 'Invoiced', label: 'Invoiced' },
     { key: 'Urgency', label: 'Urgency' },
     { key: 'Notes', label: 'Notes' },

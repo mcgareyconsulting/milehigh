@@ -975,7 +975,7 @@ function JobLog() {
                                                     {columnHeaders.map((column) => {
                                                         const isReleaseNumber = column === 'Release #';
                                                         // Display "rel. #" for Release # column header
-                                                        const displayHeader = column === 'Release #' ? 'rel. #' : column;
+                                                        const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
                                                         const colWidthPct = columnWidthPercents[column];
                                                         return (
                                                             <th
