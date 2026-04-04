@@ -94,6 +94,65 @@ class TestRedDateProtection:
         assert releases[0].start_install is not None
 
 
+class TestHoldReleaseCascade:
+    """Hold releases should receive full hours and cascade normally."""
+
+    def test_hold_gets_full_remaining_hours(self):
+        """A Hold release should retain 100% of its fab hours."""
+        remaining = calculate_remaining_fab_hours(80.0, 'Hold')
+        assert remaining == pytest.approx(80.0)
+
+    def test_hold_release_gets_calculated_dates(self):
+        """A Hold release should get start_install and comp_eta, not None."""
+        jobs = [
+            {'fab_hrs': 80.0, 'install_hrs': 40.0, 'stage': 'Released', 'fab_order': 1},
+            {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Hold', 'fab_order': 2},
+        ]
+        results = calculate_all_job_scheduling(jobs, reference_date=date(2026, 4, 1))
+
+        # Hold release should have calculated dates, not None
+        assert results[1]['install_start_date'] is not None
+        assert results[1]['install_complete_date'] is not None
+
+    def test_hold_hours_included_in_cascade(self):
+        """Releases after a Hold release should include its full hours in hours_in_front."""
+        jobs = [
+            {'fab_hrs': 80.0, 'install_hrs': 40.0, 'stage': 'Released', 'fab_order': 1},
+            {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Hold', 'fab_order': 2},
+            {'fab_hrs': 40.0, 'install_hrs': 20.0, 'stage': 'Cut Start', 'fab_order': 3},
+        ]
+        results = calculate_all_job_scheduling(jobs, reference_date=date(2026, 4, 1))
+
+        # Third release should have Released (80) + Hold (60) hours in front
+        assert results[2]['hours_in_front'] == pytest.approx(80.0 + 60.0)
+
+    @patch('app.brain.job_log.scheduling.service.Releases')
+    @patch('app.brain.job_log.scheduling.service.db')
+    def test_hold_release_not_cleared_in_batch(self, mock_db, mock_releases):
+        """recalculate_all_jobs_scheduling should set dates on Hold releases, not clear them."""
+        from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+
+        rec = MagicMock()
+        rec.job = 100
+        rec.release = 'A'
+        rec.fab_hrs = 80.0
+        rec.install_hrs = 40.0
+        rec.stage = 'Hold'
+        rec.fab_order = 1.0
+        rec.start_install = None
+        rec.comp_eta = None
+        rec.start_install_formulaTF = True
+        rec.source_of_update = None
+        rec.last_updated_at = None
+
+        mock_releases.query.all.return_value = [rec]
+
+        recalculate_all_jobs_scheduling(reference_date=date(2026, 4, 1))
+
+        assert rec.start_install is not None
+        assert rec.comp_eta is not None
+
+
 class TestRedDateContributesToQueue:
     """Red-date releases must still contribute remaining fab hours to the queue."""
 

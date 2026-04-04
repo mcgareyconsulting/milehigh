@@ -1124,14 +1124,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
                             >
-                                <div className="flex items-center justify-center gap-1">
-                                    <span>{displayValue}</span>
-                                    {isFormulaDate && (
-                                        <span className="text-[8px] text-gray-500 dark:text-slate-400" title="Formula-driven date">
-                                            📐
-                                        </span>
-                                    )}
-                                </div>
+                                <span>{displayValue}</span>
                             </td>
                         );
                     }

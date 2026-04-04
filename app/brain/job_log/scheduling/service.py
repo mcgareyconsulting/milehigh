@@ -52,17 +52,6 @@ def update_job_scheduling_fields(
         logger.debug(f"Skipping scheduling update for hard-date job {job.job}-{job.release}")
         return job
 
-    # Hold releases — clear projected dates so stale values don't linger
-    if job.stage == 'Hold':
-        if job.start_install is not None or job.comp_eta is not None:
-            logger.info(f"Clearing scheduling dates for Hold job {job.job}-{job.release}")
-            job.start_install = None
-            job.comp_eta = None
-            job.last_updated_at = datetime.utcnow()
-            if commit:
-                db.session.commit()
-        return job
-
     if reference_date is None:
         reference_date = date.today()
 
@@ -187,16 +176,6 @@ def recalculate_all_jobs_scheduling(
         try:
             # Skip hard-date releases — their dates are user-set and must not be overwritten
             if job.start_install_formulaTF is False:
-                continue
-
-            # Hold releases — clear projected dates so stale values don't linger
-            if job.stage == 'Hold':
-                if job.start_install is not None or job.comp_eta is not None:
-                    logger.info(f"Clearing scheduling dates for Hold job {job.job}-{job.release}")
-                    job.start_install = None
-                    job.comp_eta = None
-                    job.last_updated_at = datetime.utcnow()
-                    updated_count += 1
                 continue
 
             old_start_install = job.start_install

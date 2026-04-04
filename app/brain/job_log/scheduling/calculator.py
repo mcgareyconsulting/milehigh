@@ -174,8 +174,11 @@ def calculate_install_complete_date(
     if install_start_date is None:
         return None
     
-    if install_hours is None or install_hours <= 0:
+    if install_hours is None or install_hours < 0:
         return None
+
+    if install_hours == 0:
+        return install_start_date
     
     # Convert install hours to days (round up)
     install_capacity = SchedulingConfig.INSTALL_HOURS_PER_DAY

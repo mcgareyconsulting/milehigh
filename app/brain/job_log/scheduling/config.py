@@ -39,8 +39,8 @@ class SchedulingConfig:
         'Welding QC': 0.1,
         'Welded': 0.1,
         
-        # Hold - 0% (paused, not consuming fab capacity)
-        'Hold': 0.0,
+        # Hold - 100% (full hours, cascades off previous release)
+        'Hold': 1.0,
 
         # Paint Complete - 0% (handles variations)
         'Paint Complete': 0.0,
