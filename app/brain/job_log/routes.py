@@ -1612,8 +1612,61 @@ def update_start_install(job, release):
     try:
         start_install_str = request.json.get('start_install')
         is_hard_date = request.json.get('is_hard_date', True)  # Default to True for backward compatibility
+        clear_hard_date = request.json.get('clear_hard_date', False)
         start_install_date = None
-        
+
+        # Handle clearing a hard date (revert to formula-driven)
+        if clear_hard_date:
+            job_record = Releases.query.filter_by(job=job, release=release).first()
+            if not job_record:
+                return jsonify({'error': 'Job not found'}), 404
+
+            old_start_install = job_record.start_install
+
+            event = JobEventService.create(
+                job=job,
+                release=release,
+                action='clear_hard_date',
+                source='Brain',
+                payload={
+                    'from': old_start_install.isoformat() if old_start_install else None,
+                    'to': None,
+                    'cleared_hard_date': True
+                }
+            )
+
+            if event is None:
+                return jsonify({'error': 'Event already exists'}), 400
+
+            job_record.start_install_formulaTF = True
+            job_record.start_install_formula = None
+            job_record.banana_color = None
+            job_record.last_updated_at = datetime.utcnow()
+            job_record.source_of_update = 'Brain'
+
+            # Clear Trello card due date
+            if job_record.trello_card_id:
+                try:
+                    update_trello_card(
+                        card_id=job_record.trello_card_id,
+                        new_due_date=None,
+                        clear_due_date=True
+                    )
+                except Exception as trello_error:
+                    logger.error(f"Failed to clear Trello due date for job {job}-{release}: {trello_error}", exc_info=True)
+
+            db.session.commit()
+
+            # Recalculate so the formula date gets set
+            try:
+                from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+                recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+            except Exception as cascade_error:
+                logger.error(f"Scheduling cascade failed after clear hard date: {cascade_error}", exc_info=True)
+
+            logger.info(f"Cleared hard date for job {job}-{release}", extra={'event_id': event.id})
+            return jsonify({'status': 'success', 'event_id': event.id}), 200
+
         # Parse date string if provided
         if start_install_str and start_install_str.strip():
             try:

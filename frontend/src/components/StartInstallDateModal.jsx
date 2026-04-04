@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, jobNumber, releaseNumber, startInstallFormulaTF }) {
+export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, onClearHardDate, jobNumber, releaseNumber, startInstallFormulaTF }) {
     const [dateInput, setDateInput] = useState('');
     const [isHardDate, setIsHardDate] = useState(false);
     const [error, setError] = useState('');
@@ -203,24 +203,36 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, jo
                         </p>
                     </div>
 
-                    <div className="flex justify-end gap-3">
-                        <button
-                            onClick={handleCancel}
-                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                isHardDate
-                                    ? 'bg-accent-500 text-white hover:bg-accent-600'
-                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            }`}
-                            disabled={!isHardDate}
-                        >
-                            {isHardDate ? 'Save Hard Date' : 'Save (Hard Date Required)'}
-                        </button>
+                    <div className="flex justify-between gap-3">
+                        <div>
+                            {startInstallFormulaTF === false && currentDate && onClearHardDate && (
+                                <button
+                                    onClick={onClearHardDate}
+                                    className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg font-medium hover:bg-red-200 transition-all"
+                                >
+                                    Clear Hard Date
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={handleCancel}
+                                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                                    isHardDate
+                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
+                                disabled={!isHardDate}
+                            >
+                                {isHardDate ? 'Save Hard Date' : 'Save (Hard Date Required)'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

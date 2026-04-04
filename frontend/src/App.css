@@ -15,6 +15,22 @@
   animation: fadeIn 0.3s ease-out;
 }
 
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.animate-fade-out {
+  animation: fadeOut 0.5s ease-in 1.5s forwards;
+}
+
 .no-spin::-webkit-outer-spin-button,
 .no-spin::-webkit-inner-spin-button {
   -webkit-appearance: none;

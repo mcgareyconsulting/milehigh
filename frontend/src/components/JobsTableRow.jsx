@@ -5,7 +5,7 @@ import { JobDetailsModal } from './JobDetailsModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [showActionMenu, setShowActionMenu] = useState(false);
@@ -382,6 +382,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             }
         }
         setUpdatingStage(true);
+        if (onCascadeRecalculating) onCascadeRecalculating(true);
 
         try {
             const jobNumber = row['Job #'];
@@ -409,6 +410,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             alert(`Failed to update stage: ${error.message}`);
         } finally {
             setUpdatingStage(false);
+            if (onCascadeRecalculating) onCascadeRecalculating(false);
         }
     };
 
@@ -450,6 +452,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         // Optimistic update
         setLocalFabOrder(parsedValue);
         setUpdatingFabOrder(true);
+        if (onCascadeRecalculating) onCascadeRecalculating(true);
 
         try {
             const jobNumber = row['Job #'];
@@ -473,6 +476,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             alert(`Failed to update fab order: ${error.message}`);
         } finally {
             setUpdatingFabOrder(false);
+            if (onCascadeRecalculating) onCascadeRecalculating(false);
         }
     };
 
@@ -578,6 +582,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             setLocalBananaColor('red');
         }
         setUpdatingStartInstall(true);
+        if (onCascadeRecalculating) onCascadeRecalculating(true);
 
         try {
             const jobNumber = row['Job #'];
@@ -604,6 +609,39 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             alert(`Failed to update start install: ${error.message}`);
         } finally {
             setUpdatingStartInstall(false);
+            if (onCascadeRecalculating) onCascadeRecalculating(false);
+        }
+    };
+
+    // Handle clearing a hard date (revert to formula-driven)
+    const handleClearHardDate = async () => {
+        const oldValue = localStartInstall;
+        const oldBananaColor = localBananaColor;
+
+        // Optimistic update
+        setLocalStartInstall(null);
+        setLocalBananaColor(null);
+        setIsStartInstallModalOpen(false);
+        if (onCascadeRecalculating) onCascadeRecalculating(true);
+
+        try {
+            const jobNumber = row['Job #'];
+            const releaseNumber = row['Release #'];
+
+            console.log(`[START_INSTALL] Clearing hard date for job ${jobNumber}-${releaseNumber}`);
+            await jobsApi.clearStartInstallHardDate(jobNumber, releaseNumber);
+            console.log(`[START_INSTALL] Successfully cleared hard date for job ${jobNumber}-${releaseNumber}`);
+
+            if (onUpdate) {
+                onUpdate();
+            }
+        } catch (error) {
+            console.error(`[START_INSTALL] Failed to clear hard date for job ${row['Job #']}-${row['Release #']}:`, error);
+            setLocalStartInstall(oldValue);
+            setLocalBananaColor(oldBananaColor);
+            alert(`Failed to clear hard date: ${error.message}`);
+        } finally {
+            if (onCascadeRecalculating) onCascadeRecalculating(false);
         }
     };
 
@@ -1250,6 +1288,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 onClose={() => setIsStartInstallModalOpen(false)}
                 currentDate={localStartInstall}
                 onSave={handleStartInstallSave}
+                onClearHardDate={handleClearHardDate}
                 jobNumber={row['Job #']}
                 releaseNumber={row['Release #']}
                 startInstallFormulaTF={row['start_install_formulaTF']}

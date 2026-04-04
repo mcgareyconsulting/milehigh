@@ -142,7 +142,7 @@ class JobsApi {
         try {
             const response = await axios.patch(
                 `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
-                { 
+                {
                     start_install: startInstall,
                     is_hard_date: isHardDate
                 }
@@ -150,6 +150,18 @@ class JobsApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to update start install');
+        }
+    }
+
+    async clearStartInstallHardDate(job, release) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
+                { clear_hard_date: true }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to clear hard date');
         }
     }
 
