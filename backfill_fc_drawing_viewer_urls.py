@@ -24,6 +24,7 @@ from app.procore.procore import (
     get_access_token,
     _request_json,
     _normalize_title,
+    _identifier_matches,
     get_final_pdf_viewers,
 )
 
@@ -52,7 +53,7 @@ def submittals_for_release(all_submittals, job, release):
     identifier = f"{job}-{release}".strip().lower()
     return [
         s for s in all_submittals
-        if identifier in _normalize_title(s.get("title", ""))
+        if _identifier_matches(identifier, _normalize_title(s.get("title", "")))
         and s.get("type", {}).get("name") == "For Construction"
     ]
 
@@ -162,9 +163,118 @@ def run_backfill(dry_run=False, filter_job=None, commit_every=50, delay=0.25):
         print(f"  No project: {len(no_project)}")
 
 
+def run_compare(filter_job=None, delay=0.25):
+    """Compare old (substring) vs new (word-boundary) matching for all active releases."""
+    app = create_app()
+    with app.app_context():
+        # ── 1. Load records ────────────────────────────────────────────────────
+        query = db.session.query(Releases).filter(Releases.is_archived == False)
+        if filter_job is not None:
+            query = query.filter(Releases.job == filter_job)
+        records = query.all()
+        print(f"Comparing match logic for {len(records)} non-archived release(s).\n")
+        if not records:
+            return
+
+        # ── 2. Fetch company + all projects ────────────────────────────────────
+        print("Fetching Procore company ID…")
+        company_id_url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.0/companies"
+        companies = _request_json(company_id_url, headers={"Authorization": f"Bearer {get_access_token()}"}) or []
+        if not companies:
+            print("ERROR: No Procore companies returned. Aborting.")
+            return
+        company_id = companies[0]["id"]
+
+        print("Fetching all Procore projects…")
+        project_map = fetch_all_projects(company_id)
+        print(f"  {len(project_map)} projects loaded.\n")
+
+        # ── 3. Group records by project_id ─────────────────────────────────────
+        groups = defaultdict(list)
+        no_project = []
+        for record in records:
+            pid = project_map.get(str(record.job))
+            if pid:
+                groups[pid].append(record)
+            else:
+                no_project.append(record)
+
+        stats = {"both": [], "old_only": [], "new_only": [], "neither": []}
+
+        # ── 4. Compare matching per project ────────────────────────────────────
+        for project_id, proj_records in groups.items():
+            all_submittals = fetch_all_submittals(project_id)
+            fc_submittals = [
+                s for s in all_submittals
+                if (s.get("type") or {}).get("name") == "For Construction"
+            ]
+            print(f"Project {project_id} — {len(proj_records)} release(s), {len(fc_submittals)} FC submittal(s)")
+            if delay:
+                time.sleep(delay)
+
+            for record in proj_records:
+                identifier = f"{record.job}-{record.release}".strip().lower()
+                label = f"{record.job}-{record.release}"
+
+                old_matches = [
+                    s for s in fc_submittals
+                    if identifier in _normalize_title(s.get("title", ""))
+                ]
+                new_matches = [
+                    s for s in fc_submittals
+                    if _identifier_matches(identifier, _normalize_title(s.get("title", "")))
+                ]
+
+                has_old = len(old_matches) > 0
+                has_new = len(new_matches) > 0
+
+                if has_old and has_new:
+                    stats["both"].append(label)
+                elif has_old and not has_new:
+                    stats["old_only"].append((label, [s.get("title") for s in old_matches]))
+                elif not has_old and has_new:
+                    stats["new_only"].append((label, [s.get("title") for s in new_matches]))
+                else:
+                    stats["neither"].append(label)
+
+        # ── 5. Print summary ──────────────────────────────────────────────────
+        print(f"\n{'=' * 60}")
+        print(f"  MATCH COMPARISON RESULTS")
+        print(f"{'=' * 60}")
+        print(f"  Matched by both (no change):  {len(stats['both'])}")
+        print(f"  Old only (false positives):   {len(stats['old_only'])}")
+        print(f"  New only (newly found):       {len(stats['new_only'])}")
+        print(f"  Neither (no submittal):       {len(stats['neither'])}")
+        print(f"  No Procore project:           {len(no_project)}")
+
+        if stats["old_only"]:
+            print(f"\n  --- False Positives (old matched, new rejected) ---")
+            for label, titles in stats["old_only"]:
+                for t in titles:
+                    print(f"    {label}  ←  \"{t}\"")
+
+        if stats["new_only"]:
+            print(f"\n  --- Newly Matched (new found, old missed) ---")
+            for label, titles in stats["new_only"]:
+                for t in titles:
+                    print(f"    {label}  ←  \"{t}\"")
+
+        if stats["neither"]:
+            print(f"\n  --- No FC Submittal Match (neither old nor new) ---")
+            for label in stats["neither"]:
+                print(f"    {label}")
+
+        if no_project:
+            print(f"\n  --- No Procore Project ---")
+            for r in no_project:
+                print(f"    {r.job}-{r.release}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Backfill FC Drawing viewer_url for existing Releases.")
     parser.add_argument("--dry-run", action="store_true", help="Fetch URLs but do not write to the database.")
+    parser.add_argument("--compare", action="store_true",
+                        help="Compare old (substring) vs new (boundary) matching without writing anything.")
     parser.add_argument("--job", type=int, default=None, help="Only process releases for this job number.")
     parser.add_argument("--commit-every", type=int, default=50, metavar="N",
                         help="Commit to DB every N successful updates (default: 50).")
@@ -172,9 +282,12 @@ if __name__ == "__main__":
                         help="Seconds to sleep between Procore API calls (default: 0.25).")
     args = parser.parse_args()
 
-    run_backfill(
-        dry_run=args.dry_run,
-        filter_job=args.job,
-        commit_every=args.commit_every,
-        delay=args.delay,
-    )
+    if args.compare:
+        run_compare(filter_job=args.job, delay=args.delay)
+    else:
+        run_backfill(
+            dry_run=args.dry_run,
+            filter_job=args.job,
+            commit_every=args.commit_every,
+            delay=args.delay,
+        )
