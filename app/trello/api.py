@@ -4,6 +4,7 @@ import os
 from app.config import Config as cfg
 from app.trello.utils import mountain_due_datetime, mountain_start_datetime
 from app.models import Releases, db
+from app.api.helpers import DEFAULT_FAB_ORDER
 from flask import current_app
 from datetime import datetime
 import pandas as pd
@@ -376,7 +377,9 @@ def create_job_record_from_excel_data(excel_data):
             pm=safe_string(excel_data.get("PM"), 16),
             by=safe_string(excel_data.get("BY"), 16),
             released=to_date(excel_data.get("Released")),
-            fab_order=safe_float(excel_data.get("Fab Order")),
+            fab_order=safe_float(excel_data.get("Fab Order")) or DEFAULT_FAB_ORDER,
+            stage='Released',
+            stage_group='FABRICATION',
             cut_start=safe_string(excel_data.get("Cut start"), 8),
             fitup_comp=safe_string(excel_data.get("Fitup comp"), 8),
             welded=safe_string(excel_data.get("Welded"), 8),

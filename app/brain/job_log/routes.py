@@ -11,6 +11,7 @@ from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
+from app.api.helpers import DEFAULT_FAB_ORDER
 from datetime import datetime
 import json
 import hashlib
@@ -1924,7 +1925,9 @@ def release_job_data():
                     pm=safe_string(row_values['pm'], 16),
                     by=safe_string(row_values['by'], 16),
                     released=to_date(row_values['released']),
-                    fab_order=safe_float(row_values['fab_order']),
+                    fab_order=safe_float(row_values['fab_order']) or DEFAULT_FAB_ORDER,
+                    stage='Released',
+                    stage_group='FABRICATION',
                     last_updated_at=datetime.utcnow(),
                     source_of_update='Brain'
                 )

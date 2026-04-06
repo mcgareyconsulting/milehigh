@@ -20,7 +20,7 @@ from datetime import datetime
 
 from app import create_app
 from app.models import Releases, db
-from app.api.helpers import get_stage_group_from_stage
+from app.api.helpers import get_stage_group_from_stage, DEFAULT_FAB_ORDER
 
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "final-boss.csv")
@@ -97,7 +97,7 @@ def _read_csv():
                 "pm": row.get("PM", "").strip() or None,
                 "by": row.get("BY", "").strip() or None,
                 "released": _parse_date(row.get("Released", "")),
-                "fab_order": _parse_float(row.get("Fab Order", "")),
+                "fab_order": _parse_float(row.get("Fab Order", "")) or DEFAULT_FAB_ORDER,
                 "stage": stage,
                 "stage_group": get_stage_group_from_stage(stage),
                 "start_install": _parse_date(row.get("Start Install", "")),

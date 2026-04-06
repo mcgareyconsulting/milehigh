@@ -35,6 +35,9 @@ STAGE_TO_GROUP = {
     "Complete": "COMPLETE",
 }
 
+# Default fab_order for newly created releases when no value is provided
+DEFAULT_FAB_ORDER = 80.555
+
 # Fixed tiers: stages auto-assigned to a shared fab_order value (not user-orderable)
 FIXED_TIER_STAGES = {
     1: ["Shipping completed", "Shipping Complete", "Complete"],
