@@ -60,6 +60,16 @@ def _normalize_title(value):
     return normalized
 
 
+def _identifier_matches(normalized_identifier, normalized_title):
+    """Check if identifier appears in title with word boundaries (tight match).
+
+    Uses lookaround assertions so that '123-456' does not falsely match
+    inside '1123-4567'.  Supports both xxx-yyy and xxx-Vyyy patterns.
+    """
+    pattern = r'(?<![a-z0-9])' + re.escape(normalized_identifier) + r'(?![a-z0-9])'
+    return bool(re.search(pattern, normalized_title))
+
+
 # Get Companies List
 def get_companies_list():
     url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.0/companies"
@@ -202,7 +212,7 @@ def get_submittals_by_project_id(project_id, identifier):
     normalized_identifier = (identifier or "").strip().lower()
     return [
         s for s in submittals
-        if normalized_identifier in _normalize_title(s.get("title", ""))
+        if _identifier_matches(normalized_identifier, _normalize_title(s.get("title", "")))
         and s.get("type", {}).get("name") == "For Construction"
     ]
 
