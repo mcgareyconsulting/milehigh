@@ -21,6 +21,7 @@ STAGE_TO_GROUP = {
     
     # READY_TO_SHIP group
     "Welded QC": "READY_TO_SHIP",
+    "Paint Start": "READY_TO_SHIP",
     "Paint Complete": "READY_TO_SHIP",
     "Paint complete": "READY_TO_SHIP",  # Actual name used in codebase
     "Store at Shop": "READY_TO_SHIP",
@@ -48,6 +49,7 @@ FIXED_TIER_STAGES = {
 # fab_order 3+ is assigned sequentially within each stage block
 DYNAMIC_STAGE_ORDER = [
     "Welded QC",
+    "Paint Start",
     "Welded",
     "Fit Up Complete.",
     "Material Ordered",

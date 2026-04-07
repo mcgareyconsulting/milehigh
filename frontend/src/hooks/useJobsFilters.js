@@ -196,15 +196,6 @@ export function useJobsFilters(jobs = []) {
     }, [filterByStageGroups]);
 
     /**
-     * Start Install Order subset: sorted by fab_order ascending.
-     * Fab order drives the start_install date cascade, so sorting by
-     * fab_order naturally produces cascading start install projections.
-     */
-    const getStartInstallOrderSubset = useCallback((jobsToFilter) => {
-        return sortByFabOrder([...jobsToFilter]);
-    }, [sortByFabOrder]);
-
-    /**
      * Filtered and sorted jobs for display based on selected subset
      */
     const displayJobs = useMemo(() => {
@@ -219,21 +210,20 @@ export function useJobsFilters(jobs = []) {
         // Apply subset-specific filtering
         let result = [];
 
-        if (selectedSubset === 'start_install_order') {
-            // Start Install Order: grouped by project, sorted by start install date
-            result = getStartInstallOrderSubset(baseFiltered);
-        } else if (selectedSubset === 'job_order') {
+        if (selectedSubset === 'job_order') {
             // Job Order: all releases sorted by unified fab_order
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'complete') {
             // Complete: COMPLETE stage_group only, ascending fab order
             result = filterByStageGroups(baseFiltered, ['COMPLETE']);
         } else if (selectedSubset === 'ready_to_ship') {
-            // Ready to Ship: READY_TO_SHIP + FABRICATION stage_groups, unified fab_order
-            result = filterByStageGroups(baseFiltered, ['READY_TO_SHIP', 'FABRICATION']);
+            // Ready to Ship: Shipping planning, Store at MHMW for shipping, Paint complete
+            const readyToShipStages = ['Shipping planning', 'Store at MHMW for shipping', 'Paint complete'];
+            const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
+            result = sortByFabOrder(rtsOnly);
         } else if (selectedSubset === 'paint') {
-            // Paint: only stages "Paint complete" and "Welded QC", ascending fab order
-            const paintStages = ['Paint complete', 'Welded QC'];
+            // Paint: only Welded QC jobs, ascending fab order
+            const paintStages = ['Welded QC'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
@@ -251,7 +241,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getStartInstallOrderSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder, sortByFabOrderThenStartInstall]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder, sortByFabOrderThenStartInstall]);
 
     /**
      * Extract unique project name (Job) options from jobs
@@ -279,6 +269,7 @@ export function useJobsFilters(jobs = []) {
         'Material Ordered': 'FABRICATION',
         'Welded': 'FABRICATION',
         'Welded QC': 'READY_TO_SHIP',
+        'Paint Start': 'READY_TO_SHIP',
         'Paint complete': 'READY_TO_SHIP',
         'Store at MHMW for shipping': 'READY_TO_SHIP',
         'Shipping planning': 'READY_TO_SHIP',
@@ -305,6 +296,7 @@ export function useJobsFilters(jobs = []) {
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
         { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
+        { value: 'Paint Start', label: 'Paint Start' },
         { value: 'Paint complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
