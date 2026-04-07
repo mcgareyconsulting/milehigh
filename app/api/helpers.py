@@ -68,6 +68,7 @@ STAGE_ORDER = {
     ],
     "READY_TO_SHIP": [
         "Welded QC",
+        "Paint Start",
         "Paint complete",
         "Store at MHMW for shipping",
         "Shipping planning",

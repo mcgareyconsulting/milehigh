@@ -5,6 +5,7 @@ const _FAB_MODIFIER = {
     'Cut Start': 0.9, 'Cut start': 0.9,
     'Fit up Comp': 0.5, 'Fit Up Complete': 0.5, 'Fit Up Complete.': 0.5, 'Fitup comp': 0.5,
     'WeldingQC': 0.0, 'Welded QC': 0.0, 'Welding QC': 0.0, 'Welded': 0.0,
+    'Paint Start': 0.0,
     'Paint Complete': 0.0, 'Paint complete': 0.0, 'Paint comp': 0.0,
     'Store': 0.0, 'Store at MHMW for shipping': 0.0,
     'Ship Planning': 0.0, 'Shipping planning': 0.0,
@@ -99,6 +100,7 @@ export function useJobsFilters(jobs = []) {
         'Store at Shop': 2,
         'Paint complete': 3,
         'Paint Complete': 3,
+        'Paint Start': 3.5,
         'Welded QC': 4,
     };
 
@@ -223,13 +225,13 @@ export function useJobsFilters(jobs = []) {
             result = sortByFabOrder(rtsOnly);
         } else if (selectedSubset === 'paint') {
             // Paint: only Welded QC jobs, ascending fab order
-            const paintStages = ['Welded QC'];
+            const paintStages = ['Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
             // Paint+Fab: Paint complete + Welded QC, then FABRICATION group
             // Sorted by fab_order with start_install date as tiebreaker within same fab_order
-            const paintStages = ['Paint complete', 'Welded QC'];
+            const paintStages = ['Paint complete', 'Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByFabOrderThenStartInstall(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
@@ -325,6 +327,10 @@ export function useJobsFilters(jobs = []) {
         'Welded QC': {
             unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
             selected: 'bg-yellow-600 text-white border-yellow-700'
+        },
+        'Paint Start': {
+            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            selected: 'bg-emerald-600 text-white border-emerald-700'
         },
         'Paint complete': {
             unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
