@@ -329,8 +329,8 @@ export function useJobsFilters(jobs = []) {
             selected: 'bg-yellow-600 text-white border-yellow-700'
         },
         'Paint Start': {
-            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-            selected: 'bg-emerald-600 text-white border-emerald-700'
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
         },
         'Paint complete': {
             unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
