@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { logout } from '../utils/auth';
+import { logout, checkAuth } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
@@ -9,6 +10,13 @@ function AppShellInner({ isAuthenticated }) {
   const location = useLocation();
   const { isDark, toggleTheme } = useTheme();
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      checkAuth().then(user => setIsAdmin(user?.is_admin || false));
+    }
+  }, [isAuthenticated]);
 
   const handleLogout = async () => {
     await logout();
@@ -102,6 +110,20 @@ function AppShellInner({ isAuthenticated }) {
           >
             Events
           </button>
+
+          {/* Board (admin only) */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate('/board')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/board')
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+                }`}
+            >
+              Bug Tracker
+            </button>
+          )}
 
           {/* Theme toggle */}
           <button

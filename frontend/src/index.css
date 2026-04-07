@@ -98,6 +98,15 @@ body>#root>div>div {
   display: none; /* Chrome, Safari, Edge */
 }
 
+/* Board slide-over animation */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.2s ease-out;
+}
+
 /* Drop indicator pulse animation */
 @keyframes dropIndicatorPulse {
 
