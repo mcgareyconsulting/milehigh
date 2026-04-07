@@ -580,6 +580,70 @@ class WebhookReceipt(db.Model):
     received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
+class BoardItem(db.Model):
+    """Feature requests, bugs, and tasks tracked on The Board."""
+    __tablename__ = "board_items"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(300), nullable=False)
+    body = db.Column(db.Text, nullable=True)
+    category = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='open')
+    priority = db.Column(db.String(20), nullable=False, default='normal')
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    author_name = db.Column(db.String(160), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    activity = db.relationship('BoardActivity', backref='item', lazy='dynamic',
+                               cascade='all, delete-orphan')
+
+    def to_dict(self, include_activity=False, activity_count=None):
+        d = {
+            'id': self.id,
+            'title': self.title,
+            'body': self.body,
+            'category': self.category,
+            'status': self.status,
+            'priority': self.priority,
+            'author_id': self.author_id,
+            'author_name': self.author_name,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'activity_count': activity_count if activity_count is not None else self.activity.filter_by(type='comment').count(),
+        }
+        if include_activity:
+            d['activity'] = [a.to_dict() for a in
+                             self.activity.order_by(BoardActivity.created_at.asc()).all()]
+        return d
+
+
+class BoardActivity(db.Model):
+    """Activity stream for board items — comments and status changes."""
+    __tablename__ = "board_activity"
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'), nullable=False)
+    type = db.Column(db.String(30), nullable=False)  # 'comment' or 'status_change'
+    body = db.Column(db.Text, nullable=True)
+    old_value = db.Column(db.String(100), nullable=True)
+    new_value = db.Column(db.String(100), nullable=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    author_name = db.Column(db.String(160), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'item_id': self.item_id,
+            'type': self.type,
+            'body': self.body,
+            'old_value': self.old_value,
+            'new_value': self.new_value,
+            'author_id': self.author_id,
+            'author_name': self.author_name,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class ProjectManager(db.Model):
     """Project managers assigned to jobsites."""
     __tablename__ = 'project_managers'
