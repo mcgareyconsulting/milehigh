@@ -818,18 +818,6 @@ function JobLog() {
                                         <button
                                             onClick={() => {
                                                 setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'start_install_order' ? null : 'start_install_order');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'start_install_order'
-                                                ? 'bg-amber-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Start Install
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
                                                 setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
                                             }}
                                             className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
@@ -897,7 +885,7 @@ function JobLog() {
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
                                         >
-                                            Ctrl Q
+                                            Fab
                                         </button>
                                         <button
                                             onClick={() => {
