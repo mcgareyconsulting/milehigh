@@ -38,7 +38,7 @@ def get_list_id_by_stage(stage):
         Returns None for stages that Trello doesn't track ('Complete', 'Cut start', 'Hold', 'Welded', 'Material Ordered')
     """
     # Stages that Trello does not track - return None to prevent outbox creation
-    stages_not_tracked_by_trello = ['Complete', 'Cut start', 'Hold', 'Welded', 'Material Ordered']
+    stages_not_tracked_by_trello = ['Complete', 'Cut start', 'Cut Complete', 'Fitup Start', 'Weld Start', 'Weld Complete', 'Hold', 'Welded', 'Material Ordered']
     if stage in stages_not_tracked_by_trello:
         logger.info(f"Stage '{stage}' is not tracked by Trello, skipping outbox creation")
         return None

@@ -266,7 +266,11 @@ export function useJobsFilters(jobs = []) {
     const stageToGroup = {
         'Released': 'FABRICATION',
         'Cut start': 'FABRICATION',
+        'Cut Complete': 'FABRICATION',
+        'Fitup Start': 'FABRICATION',
         'Fit Up Complete.': 'FABRICATION',
+        'Weld Start': 'FABRICATION',
+        'Weld Complete': 'FABRICATION',
         'Hold': 'FABRICATION',
         'Material Ordered': 'FABRICATION',
         'Welded': 'FABRICATION',
@@ -294,8 +298,12 @@ export function useJobsFilters(jobs = []) {
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Cut start', label: 'Cut start' },
+        { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Material Ordered', label: 'Material Ordered' },
+        { value: 'Fitup Start', label: 'Fitup start' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Weld Start', label: 'Weld start' },
+        { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
@@ -317,6 +325,14 @@ export function useJobsFilters(jobs = []) {
             selected: 'bg-blue-600 text-white border-blue-700'
         },
         'Cut start': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
+        },
+        'Cut Complete': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
+        },
+        'Fitup Start': {
             unselected: 'bg-blue-100 text-blue-800 border-blue-300',
             selected: 'bg-blue-600 text-white border-blue-700'
         },
@@ -353,6 +369,14 @@ export function useJobsFilters(jobs = []) {
             selected: 'bg-violet-600 text-white border-violet-700'
         },
         'Hold': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
+        },
+        'Weld Start': {
+            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+            selected: 'bg-blue-600 text-white border-blue-700'
+        },
+        'Weld Complete': {
             unselected: 'bg-blue-100 text-blue-800 border-blue-300',
             selected: 'bg-blue-600 text-white border-blue-700'
         },

@@ -24,10 +24,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Cut start', label: 'Cut start' },
+        { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Material Ordered', label: 'Material Ordered' },
+        { value: 'Fitup Start', label: 'Fitup start' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Weld Start', label: 'Weld start' },
+        { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
+        { value: 'Paint Start', label: 'Paint Start' },
         { value: 'Paint complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
         { value: 'Store at MHMW for shipping', label: 'Store' },
@@ -47,6 +52,22 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
         'Cut start': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
+        },
+        'Cut Complete': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
+        },
+        'Fitup Start': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600
@@ -111,6 +132,22 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             className: 'bg-violet-100 text-violet-800 border-violet-300'
         },
         'Hold': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
+        },
+        'Weld Start': {
+            light: 'rgb(219 234 254)', // blue-100
+            base: 'rgb(59 130 246)', // blue-500
+            dark: 'rgb(37 99 235)', // blue-600
+            text: 'rgb(30 64 175)', // blue-800
+            border: 'rgb(147 197 253)', // blue-300
+            className: 'bg-blue-100 text-blue-800 border-blue-300'
+        },
+        'Weld Complete': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600

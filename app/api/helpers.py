@@ -12,8 +12,12 @@ STAGE_TO_GROUP = {
     "Released": "FABRICATION",
     "Cut Start": "FABRICATION",
     "Cut start": "FABRICATION",  # Actual name used in codebase
+    "Cut Complete": "FABRICATION",
+    "Fitup Start": "FABRICATION",
     "Fitup Complete": "FABRICATION",
     "Fit Up Complete.": "FABRICATION",  # Actual name used in codebase
+    "Weld Start": "FABRICATION",
+    "Weld Complete": "FABRICATION",
     "Hold": "FABRICATION",  # Job log only stage
     "Material Ordered": "FABRICATION",  # Job log only stage
     "Welded": "FABRICATION",  # Job log only stage
@@ -50,9 +54,13 @@ FIXED_TIER_STAGES = {
 DYNAMIC_STAGE_ORDER = [
     "Welded QC",
     "Paint Start",
+    "Weld Complete",
+    "Weld Start",
     "Welded",
     "Fit Up Complete.",
+    "Fitup Start",
     "Material Ordered",
+    "Cut Complete",
     "Cut start",
     "Released",
 ]
@@ -62,8 +70,12 @@ STAGE_ORDER = {
     "FABRICATION": [
         "Released",
         "Cut start",
+        "Cut Complete",
         "Material Ordered",
+        "Fitup Start",
         "Fit Up Complete.",
+        "Weld Start",
+        "Weld Complete",
         "Welded",
     ],
     "READY_TO_SHIP": [

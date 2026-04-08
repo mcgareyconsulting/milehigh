@@ -6,10 +6,26 @@ from flask import request, jsonify
 from sqlalchemy import func
 from app.brain import brain_bp
 from app.auth.utils import admin_required, get_current_user
-from app.models import db, BoardItem, BoardActivity
+import re
+from app.models import db, BoardItem, BoardActivity, User, Notification
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+@brain_bp.route('/board/mentionable-users', methods=['GET'])
+@admin_required
+def list_mentionable_users():
+    """List active users for @mention autocomplete."""
+    users = User.query.filter_by(is_active=True).order_by(User.first_name).all()
+    return jsonify({'users': [
+        {
+            'id': u.id,
+            'first_name': u.first_name or u.username,
+            'last_name': u.last_name or '',
+        }
+        for u in users
+    ]})
 
 
 @brain_bp.route('/board/items', methods=['GET'])
@@ -147,7 +163,7 @@ def delete_board_item(item_id):
 @admin_required
 def add_board_activity(item_id):
     """Add a comment to a board item."""
-    BoardItem.query.get_or_404(item_id)
+    item = BoardItem.query.get_or_404(item_id)
     data = request.get_json()
     user = get_current_user()
 
@@ -164,5 +180,26 @@ def add_board_activity(item_id):
     )
     db.session.add(activity)
     db.session.commit()
+
+    # Parse @FirstName mentions and create notifications
+    mentions = re.findall(r'@(\w+)', body)
+    if mentions:
+        mentioned_users = User.query.filter(
+            db.func.lower(User.first_name).in_([m.lower() for m in mentions]),
+            User.is_active.is_(True),
+            User.id != user.id,
+        ).all()
+        author_name = user.first_name or user.username
+        for mu in mentioned_users:
+            notif = Notification(
+                user_id=mu.id,
+                type='mention',
+                message=f'{author_name} mentioned you',
+                board_item_id=item.id,
+                board_activity_id=activity.id,
+            )
+            db.session.add(notif)
+        if mentioned_users:
+            db.session.commit()
 
     return jsonify(activity.to_dict()), 201

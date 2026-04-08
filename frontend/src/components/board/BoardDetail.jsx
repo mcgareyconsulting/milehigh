@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { updateBoardItem, addComment, deleteBoardItem, fetchBoardItem } from '../../services/boardApi';
+import { useState, useEffect } from 'react';
+import { updateBoardItem, addComment, deleteBoardItem, fetchBoardItem, fetchMentionableUsers } from '../../services/boardApi';
+import MentionInput from './MentionInput';
 
 const STATUS_OPTIONS = ['open', 'in_progress', 'deployed', 'closed'];
 const PRIORITY_OPTIONS = ['low', 'normal', 'high', 'urgent'];
@@ -32,10 +33,24 @@ function formatDate(isoString) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function renderCommentBody(body) {
+    const parts = body.split(/(@\w+)/g);
+    return parts.map((part, i) =>
+        part.startsWith('@')
+            ? <span key={i} className="font-semibold text-accent-500">{part}</span>
+            : part
+    );
+}
+
 export default function BoardDetail({ item, onUpdate, onClose }) {
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [mentionableUsers, setMentionableUsers] = useState([]);
+
+    useEffect(() => {
+        fetchMentionableUsers().then(setMentionableUsers).catch(() => {});
+    }, []);
 
     const handleStatusChange = async (newStatus) => {
         const updated = await updateBoardItem(item.id, { status: newStatus });
@@ -48,7 +63,7 @@ export default function BoardDetail({ item, onUpdate, onClose }) {
     };
 
     const handleComment = async (e) => {
-        e.preventDefault();
+        if (e?.preventDefault) e.preventDefault();
         if (!commentText.trim() || submitting) return;
         setSubmitting(true);
         try {
@@ -130,7 +145,7 @@ export default function BoardDetail({ item, onUpdate, onClose }) {
                                 )}
                             </div>
                             {a.type === 'comment' && (
-                                <p className="text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{a.body}</p>
+                                <p className="text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{renderCommentBody(a.body)}</p>
                             )}
                         </div>
                     ))}
@@ -139,9 +154,14 @@ export default function BoardDetail({ item, onUpdate, onClose }) {
 
             {/* Comment input — pinned to bottom */}
             <form onSubmit={handleComment} className="shrink-0 flex gap-2 pt-2 border-t border-gray-100 dark:border-slate-700">
-                <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Add a comment..."
-                    className="flex-1 px-2.5 py-1.5 text-xs border border-gray-300 dark:border-slate-500 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-transparent" />
+                <MentionInput
+                    value={commentText}
+                    onChange={setCommentText}
+                    onSubmit={handleComment}
+                    users={mentionableUsers}
+                    placeholder="Add a comment... (type @ to mention)"
+                    disabled={submitting}
+                />
                 <button type="submit" disabled={!commentText.trim() || submitting}
                     className="px-3 py-1.5 text-xs font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                     Reply

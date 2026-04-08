@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { checkAuth } from '../utils/auth';
 import { fetchBoardItems, fetchBoardItem, updateBoardItem } from '../services/boardApi';
 import BoardDetail from '../components/board/BoardDetail';
@@ -124,6 +125,7 @@ function KanbanColumn({ status, items, selectedId, onCardClick, onDragStart, onD
 }
 
 export default function Board() {
+    const location = useLocation();
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState([]);
@@ -236,6 +238,14 @@ export default function Board() {
         }, ...prev]);
     };
 
+    // Open specific item from notification navigation
+    useEffect(() => {
+        const openItemId = location.state?.openItemId;
+        if (openItemId && isAdmin) {
+            fetchBoardItem(openItemId).then(setSelectedItem).catch(() => {});
+        }
+    }, [location.state, isAdmin]);
+
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') setSelectedItem(null); };
         window.addEventListener('keydown', onKey);
@@ -256,15 +266,15 @@ export default function Board() {
         <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
             {/* Header bar */}
             <div className="shrink-0 px-5 py-2.5 flex items-center gap-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 tracking-tight">Bug Tracker</h1>
+                <h1 className="text-lg font-bold text-accent-600 dark:text-accent-300 tracking-tight">Bug Tracker</h1>
 
                 <div className="flex items-center gap-1 ml-3">
                     {CATEGORY_FILTERS.map(c => (
                         <button key={c} onClick={() => setCategoryFilter(c)}
                             className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                                 categoryFilter === c
-                                    ? 'bg-gray-900 dark:bg-slate-100 text-white dark:text-slate-900'
-                                    : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'
+                                    ? 'bg-accent-500 text-white dark:bg-accent-400 dark:text-slate-900'
+                                    : 'text-gray-500 dark:text-slate-400 hover:bg-accent-50 dark:hover:bg-slate-700'
                             }`}>{c}</button>
                     ))}
                 </div>
