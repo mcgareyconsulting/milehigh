@@ -185,9 +185,18 @@ function JobLog() {
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
 
+    // Stage completeness order (index 0 = least complete, higher = more complete)
+    const STAGE_COMPLETENESS = {
+        'Released': 0, 'Cut start': 1, 'Cut Complete': 2, 'Material Ordered': 3,
+        'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
+        'Welded': 8, 'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
+        'Store at MHMW for shipping': 12, 'Shipping planning': 13,
+        'Shipping completed': 14, 'Complete': 15,
+    };
+
     // When Review mode is enabled, sort independently of other sort behavior:
     // 1) group by PM (no intermixing of PMs),
-    // 2) within each PM, sort by ascending Job #,
+    // 2) within each PM, sort by stage completeness (most complete first),
     // 3) PM groups ordered alphabetically by PM name.
     const reviewDisplayJobs = useMemo(() => {
         if (!reviewMode) return displayJobs;
@@ -196,16 +205,19 @@ function JobLog() {
         sorted.sort((a, b) => {
             const pmKeyA = (a['PM'] || 'No PM').toString();
             const pmKeyB = (b['PM'] || 'No PM').toString();
-            const jobA = a['Job #'] || 0;
-            const jobB = b['Job #'] || 0;
-
-            // Same PM: sort by job number within the block
-            if (pmKeyA === pmKeyB) {
-                return jobA - jobB;
-            }
 
             // Different PMs: alphabetical by PM name (case-insensitive)
-            return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
+            if (pmKeyA !== pmKeyB) {
+                return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
+            }
+
+            // Same PM: sort by stage completeness (most complete first)
+            const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
+            const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
+            if (stageA !== stageB) return stageB - stageA;
+
+            // Tiebreaker: Job # ascending
+            return (a['Job #'] || 0) - (b['Job #'] || 0);
         });
 
         return sorted;
