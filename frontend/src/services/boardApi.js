@@ -35,6 +35,11 @@ export async function deleteBoardItem(id) {
     await axios.delete(`${BASE}/items/${id}`);
 }
 
+export async function fetchMentionableUsers() {
+    const { data } = await axios.get(`${BASE}/mentionable-users`);
+    return data.users;
+}
+
 export async function addComment(itemId, body) {
     const { data } = await axios.post(`${BASE}/items/${itemId}/activity`, { body });
     return data;

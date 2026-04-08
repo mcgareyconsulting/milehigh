@@ -4,6 +4,7 @@ import { logout, checkAuth } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
+import NotificationBell from './NotificationBell';
 
 function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
@@ -124,6 +125,9 @@ function AppShellInner({ isAuthenticated }) {
               Bug Tracker
             </button>
           )}
+
+          {/* Notification bell (authenticated users only) */}
+          {isAuthenticated && <NotificationBell />}
 
           {/* Theme toggle */}
           <button

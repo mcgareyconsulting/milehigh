@@ -644,6 +644,36 @@ class BoardActivity(db.Model):
         }
 
 
+class Notification(db.Model):
+    """In-app notifications for @mentions and other events."""
+    __tablename__ = "notifications"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    type = db.Column(db.String(50), nullable=False, default='mention')
+    message = db.Column(db.Text, nullable=False)
+    board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'), nullable=True)
+    board_activity_id = db.Column(db.Integer, db.ForeignKey('board_activity.id', ondelete='CASCADE'), nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='notifications', lazy='select')
+    board_item = db.relationship('BoardItem', lazy='select')
+    board_activity = db.relationship('BoardActivity', lazy='select')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'type': self.type,
+            'message': self.message,
+            'board_item_id': self.board_item_id,
+            'board_activity_id': self.board_activity_id,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'board_item_title': self.board_item.title if self.board_item else None,
+        }
+
+
 class ProjectManager(db.Model):
     """Project managers assigned to jobsites."""
     __tablename__ = 'project_managers'
