@@ -317,7 +317,7 @@ export default function Board() {
                 {/* Right detail panel */}
                 {selectedItem && (
                     <div className="w-[40%] border-l border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 overflow-hidden">
-                        <BoardDetail item={selectedItem} onUpdate={handleItemUpdate} onClose={() => setSelectedItem(null)} />
+                        <BoardDetail key={selectedItem.id} item={selectedItem} onUpdate={handleItemUpdate} onClose={() => setSelectedItem(null)} />
                     </div>
                 )}
 
