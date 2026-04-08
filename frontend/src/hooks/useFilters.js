@@ -76,6 +76,9 @@ export function useFilters(rows = []) {
     const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
     const [selectedProcoreStatus, setSelectedProcoreStatus] = useState(ALL_OPTION_VALUE);
     
+    // Text search state
+    const [search, setSearch] = useState('');
+
     // General column sorting: { column: 'Project Name', direction: 'asc' | 'desc' | null }
     // For Project Name, we maintain backward compatibility with the existing 'normal' mode
     const [columnSort, setColumnSort] = useState({ column: null, direction: null });
@@ -118,8 +121,21 @@ export function useFilters(rows = []) {
             }
         }
 
+        // Text search across project name, title, and ball in court
+        if (search.trim() !== '') {
+            const keywords = search.trim().toLowerCase().split(/\s+/);
+            const haystack = [
+                String(row.project_name ?? row['NAME'] ?? ''),
+                String(row.title ?? row['TITLE'] ?? ''),
+                String(row.ball_in_court ?? row['BIC'] ?? ''),
+            ].join(' ').toLowerCase();
+            if (!keywords.every(kw => haystack.includes(kw))) {
+                return false;
+            }
+        }
+
         return true;
-    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName, selectedProcoreStatus]);
+    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName, selectedProcoreStatus, search]);
 
     /**
      * Sort rows based on columnSort state
@@ -326,6 +342,7 @@ export function useFilters(rows = []) {
         setSelectedSubmittalManager(ALL_OPTION_VALUE);
         setSelectedProjectName(ALL_OPTION_VALUE);
         setSelectedProcoreStatus(ALL_OPTION_VALUE);
+        setSearch('');
         setColumnSort({ column: null, direction: null });
     }, []);
 
@@ -365,6 +382,7 @@ export function useFilters(rows = []) {
 
     return {
         // Filter state
+        search,
         selectedBallInCourt,
         selectedSubmittalManager,
         selectedProjectName,
@@ -373,6 +391,7 @@ export function useFilters(rows = []) {
         projectNameSortMode, // Backward compatibility
 
         // Filter setters
+        setSearch,
         setSelectedBallInCourt,
         setSelectedSubmittalManager,
         setSelectedProjectName,

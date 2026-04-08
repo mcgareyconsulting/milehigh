@@ -106,11 +106,15 @@ def test_get_stage_position_dynamic_stages():
     """Dynamic stages return their position in DYNAMIC_STAGE_ORDER."""
     assert get_stage_position("Welded QC") == 0
     assert get_stage_position("Paint Start") == 1
-    assert get_stage_position("Welded") == 2
-    assert get_stage_position("Fit Up Complete.") == 3
-    assert get_stage_position("Material Ordered") == 4
-    assert get_stage_position("Cut start") == 5
-    assert get_stage_position("Released") == 6
+    assert get_stage_position("Weld Complete") == 2
+    assert get_stage_position("Weld Start") == 3
+    assert get_stage_position("Welded") == 4
+    assert get_stage_position("Fit Up Complete.") == 5
+    assert get_stage_position("Fitup Start") == 6
+    assert get_stage_position("Material Ordered") == 7
+    assert get_stage_position("Cut Complete") == 8
+    assert get_stage_position("Cut start") == 9
+    assert get_stage_position("Released") == 10
 
 
 def test_get_stage_position_fixed_tiers_return_none():
