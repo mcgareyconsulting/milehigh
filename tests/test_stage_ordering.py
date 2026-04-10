@@ -111,9 +111,9 @@ def test_get_stage_position_dynamic_stages():
     assert get_stage_position("Welded") == 4
     assert get_stage_position("Fit Up Complete.") == 5
     assert get_stage_position("Fitup Start") == 6
-    assert get_stage_position("Material Ordered") == 7
-    assert get_stage_position("Cut Complete") == 8
-    assert get_stage_position("Cut start") == 9
+    assert get_stage_position("Cut Complete") == 7
+    assert get_stage_position("Cut start") == 8
+    assert get_stage_position("Material Ordered") == 9
     assert get_stage_position("Released") == 10
 
 

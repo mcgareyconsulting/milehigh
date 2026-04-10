@@ -187,7 +187,7 @@ function JobLog() {
 
     // Stage completeness order (index 0 = least complete, higher = more complete)
     const STAGE_COMPLETENESS = {
-        'Released': 0, 'Cut start': 1, 'Cut Complete': 2, 'Material Ordered': 3,
+        'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
         'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
         'Welded': 8, 'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
         'Store at MHMW for shipping': 12, 'Shipping planning': 13,
