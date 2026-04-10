@@ -59,9 +59,9 @@ DYNAMIC_STAGE_ORDER = [
     "Welded",
     "Fit Up Complete.",
     "Fitup Start",
-    "Material Ordered",
     "Cut Complete",
     "Cut start",
+    "Material Ordered",
     "Released",
 ]
 
@@ -69,9 +69,9 @@ DYNAMIC_STAGE_ORDER = [
 STAGE_ORDER = {
     "FABRICATION": [
         "Released",
+        "Material Ordered",
         "Cut start",
         "Cut Complete",
-        "Material Ordered",
         "Fitup Start",
         "Fit Up Complete.",
         "Weld Start",

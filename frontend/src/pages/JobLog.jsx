@@ -187,7 +187,7 @@ function JobLog() {
 
     // Stage completeness order (index 0 = least complete, higher = more complete)
     const STAGE_COMPLETENESS = {
-        'Released': 0, 'Cut start': 1, 'Cut Complete': 2, 'Material Ordered': 3,
+        'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
         'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
         'Welded': 8, 'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
         'Store at MHMW for shipping': 12, 'Shipping planning': 13,
@@ -195,9 +195,9 @@ function JobLog() {
     };
 
     // When Review mode is enabled, sort independently of other sort behavior:
-    // 1) group by PM (no intermixing of PMs),
-    // 2) within each PM, sort by stage completeness (most complete first),
-    // 3) PM groups ordered alphabetically by PM name.
+    // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
+    // 2) within each PM, sort by Project # ascending,
+    // 3) within each Project #, sort by stage completeness (most complete first).
     const reviewDisplayJobs = useMemo(() => {
         if (!reviewMode) return displayJobs;
 
@@ -211,13 +211,15 @@ function JobLog() {
                 return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
             }
 
-            // Same PM: sort by stage completeness (most complete first)
+            // Same PM: sort by Project # (Job #) ascending
+            const jobA = a['Job #'] || 0;
+            const jobB = b['Job #'] || 0;
+            if (jobA !== jobB) return jobA - jobB;
+
+            // Same Project #: sort by stage completeness (most complete first)
             const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
             const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-            if (stageA !== stageB) return stageB - stageA;
-
-            // Tiebreaker: Job # ascending
-            return (a['Job #'] || 0) - (b['Job #'] || 0);
+            return stageB - stageA;
         });
 
         return sorted;
@@ -838,18 +840,6 @@ function JobLog() {
                                                 }`}
                                         >
                                             Job Order
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'complete' ? null : 'complete');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'complete'
-                                                ? 'bg-violet-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Complete
                                         </button>
                                         <button
                                             onClick={() => {

@@ -23,9 +23,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Stage options with simplified names for display (in progression order)
     const stageOptions = [
         { value: 'Released', label: 'Released' },
+        { value: 'Material Ordered', label: 'Material Ordered' },
         { value: 'Cut start', label: 'Cut start' },
         { value: 'Cut Complete', label: 'Cut comp' },
-        { value: 'Material Ordered', label: 'Material Ordered' },
         { value: 'Fitup Start', label: 'Fitup start' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },

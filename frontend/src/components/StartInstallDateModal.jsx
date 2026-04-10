@@ -8,33 +8,20 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
     // Initialize form when modal opens or currentDate changes
     useEffect(() => {
         if (isOpen) {
-            // Format current date for display (MM/DD/YYYY)
             if (currentDate) {
                 try {
-                    // Handle ISO date strings (YYYY-MM-DD) - parse directly to avoid timezone issues
-                    if (typeof currentDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(currentDate)) {
-                        // Extract date parts directly from ISO string to avoid timezone conversion
-                        const parts = currentDate.split('T')[0].split('-');
-                        if (parts.length === 3) {
-                            const year = parts[0];
-                            const month = parts[1];
-                            const day = parts[2];
-                            setDateInput(`${month}/${day}/${year}`);
-                        } else {
-                            setDateInput('');
-                        }
-                    } else {
-                        // Fallback to Date object parsing for other formats
-                        const date = new Date(currentDate);
-                        if (!isNaN(date.getTime())) {
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const day = String(date.getDate()).padStart(2, '0');
-                            const year = date.getFullYear();
-                            setDateInput(`${month}/${day}/${year}`);
-                        } else {
-                            setDateInput('');
-                        }
-                    }
+                    // Native date input requires YYYY-MM-DD
+                    const isoDate = typeof currentDate === 'string'
+                        ? currentDate.split('T')[0]
+                        : (() => {
+                            const d = new Date(currentDate);
+                            if (isNaN(d.getTime())) return '';
+                            const y = d.getFullYear();
+                            const m = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            return `${y}-${m}-${day}`;
+                        })();
+                    setDateInput(isoDate || '');
                 } catch (e) {
                     setDateInput('');
                 }
@@ -50,82 +37,21 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
         }
     }, [isOpen, currentDate, startInstallFormulaTF]);
 
-    const parseDateInput = (input) => {
-        // Try to parse MM/DD/YYYY format
-        const trimmed = input.trim();
-        if (!trimmed) return null;
-
-        // Try MM/DD/YYYY format
-        const mmddyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (mmddyyyy) {
-            const month = parseInt(mmddyyyy[1], 10);
-            const day = parseInt(mmddyyyy[2], 10);
-            const year = parseInt(mmddyyyy[3], 10);
-            
-            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-                const date = new Date(year, month - 1, day);
-                // Check if date is valid (handles invalid dates like Feb 30)
-                if (date.getFullYear() === year && 
-                    date.getMonth() === month - 1 && 
-                    date.getDate() === day) {
-                    return date;
-                }
-            }
-        }
-
-        // Try YYYY-MM-DD format (for date picker)
-        const yyyymmdd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (yyyymmdd) {
-            const year = parseInt(yyyymmdd[1], 10);
-            const month = parseInt(yyyymmdd[2], 10);
-            const day = parseInt(yyyymmdd[3], 10);
-            
-            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-                const date = new Date(year, month - 1, day);
-                if (date.getFullYear() === year && 
-                    date.getMonth() === month - 1 && 
-                    date.getDate() === day) {
-                    return date;
-                }
-            }
-        }
-
-        return null;
-    };
-
     const handleDateInputChange = (e) => {
-        const value = e.target.value;
-        setDateInput(value);
+        setDateInput(e.target.value);
         setError('');
     };
 
     const handleSave = () => {
-        if (!dateInput.trim() && isHardDate) {
-            setError('Please enter a date or uncheck "Hard Date"');
+        if (!dateInput && isHardDate) {
+            setError('Please select a date or uncheck "Hard Date"');
             return;
-        }
-
-        const parsedDate = parseDateInput(dateInput);
-        
-        if (dateInput.trim() && !parsedDate) {
-            setError('Invalid date format. Please use MM/DD/YYYY (e.g., 04/07/2026)');
-            return;
-        }
-
-        // Format date as YYYY-MM-DD for API
-        let dateValue = null;
-        if (parsedDate) {
-            const year = parsedDate.getFullYear();
-            const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
-            const day = String(parsedDate.getDate()).padStart(2, '0');
-            dateValue = `${year}-${month}-${day}`;
         }
 
         // Only save if it's a hard date, otherwise just close
         if (isHardDate) {
-            onSave(dateValue, true);
+            onSave(dateInput || null, true);
         } else {
-            // Not a hard date, just close without saving
             onClose();
         }
     };
@@ -164,24 +90,19 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                 <div className="p-6">
                     <div className="mb-4">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Date (MM/DD/YYYY)
+                            Date
                         </label>
                         <input
-                            type="text"
+                            type="date"
                             value={dateInput}
                             onChange={handleDateInputChange}
-                            placeholder="04/07/2026"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 ${
                                 error ? 'border-red-500' : 'border-gray-300'
                             }`}
-                            maxLength={10}
                         />
                         {error && (
                             <p className="text-red-600 text-sm mt-1">{error}</p>
                         )}
-                        <p className="text-gray-500 text-xs mt-1">
-                            Enter date in MM/DD/YYYY format (e.g., 04/07/2026)
-                        </p>
                     </div>
 
                     <div className="mb-6">
@@ -197,7 +118,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                             </span>
                         </label>
                         <p className="text-gray-500 text-xs mt-1 ml-8">
-                            {isHardDate 
+                            {isHardDate
                                 ? 'This date will be saved and synced to Trello. Formula calculations will not override it.'
                                 : 'Leave unchecked to keep formula-driven dates. Changes will not be saved.'}
                         </p>
@@ -239,4 +160,3 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
         </div>
     );
 }
-
