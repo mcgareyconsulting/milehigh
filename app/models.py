@@ -593,6 +593,7 @@ class BoardItem(db.Model):
     author_name = db.Column(db.String(160), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    position = db.Column(db.Integer, nullable=True)
 
     activity = db.relationship('BoardActivity', backref='item', lazy='dynamic',
                                cascade='all, delete-orphan')
@@ -609,6 +610,7 @@ class BoardItem(db.Model):
             'author_name': self.author_name,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'position': self.position,
             'activity_count': activity_count if activity_count is not None else self.activity.filter_by(type='comment').count(),
         }
         if include_activity:

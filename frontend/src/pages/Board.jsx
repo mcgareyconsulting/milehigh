@@ -1,15 +1,31 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { checkAuth } from '../utils/auth';
-import { fetchBoardItems, fetchBoardItem, updateBoardItem } from '../services/boardApi';
+import { fetchBoardItems, fetchBoardItem, updateBoardItem, reorderBoardItems } from '../services/boardApi';
 import BoardDetail from '../components/board/BoardDetail';
 import NewItemModal from '../components/board/NewItemModal';
+import {
+    DndContext,
+    DragOverlay,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    closestCenter,
+    useDroppable,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const STATUSES = [
-    { value: 'open', label: 'Open', dot: 'bg-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/30', border: 'border-blue-200 dark:border-blue-800/40' },
-    { value: 'in_progress', label: 'In Progress', dot: 'bg-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-950/30', border: 'border-yellow-200 dark:border-yellow-800/40' },
-    { value: 'deployed', label: 'Deployed', dot: 'bg-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/40' },
-    { value: 'closed', label: 'Closed', dot: 'bg-gray-400', bg: 'bg-gray-50 dark:bg-gray-800/30', border: 'border-gray-200 dark:border-gray-700' },
+    { value: 'open',        label: 'Open',        dot: 'bg-blue-400',    bg: 'bg-blue-50 dark:bg-blue-950/30',      border: 'border-blue-200 dark:border-blue-800/40',    gradientTop: 'rgba(254, 240, 138, 0.18)' },
+    { value: 'in_progress', label: 'In Progress',  dot: 'bg-yellow-400',  bg: 'bg-yellow-50 dark:bg-yellow-950/30',  border: 'border-yellow-200 dark:border-yellow-800/40', gradientTop: 'rgba(254, 215, 170, 0.20)' },
+    { value: 'deployed',    label: 'Deployed',     dot: 'bg-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/40', gradientTop: 'rgba(187, 247, 208, 0.20)' },
+    { value: 'closed',      label: 'Closed',       dot: 'bg-gray-400',    bg: 'bg-gray-50 dark:bg-gray-800/30',      border: 'border-gray-200 dark:border-gray-700',        gradientTop: 'rgba(203, 213, 225, 0.15)' },
 ];
 
 const CATEGORY_COLORS = {
@@ -40,21 +56,24 @@ function timeAgo(isoString) {
     return `${Math.floor(hrs / 24)}d`;
 }
 
-function KanbanCard({ item, isSelected, onClick, onDragStart }) {
+function isNew(isoString) {
+    if (!isoString) return false;
+    const ts = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+    return (Date.now() - new Date(ts).getTime()) < 48 * 60 * 60 * 1000;
+}
+
+function KanbanCard({ item, isSelected, onClick }) {
     const hasPriorityDot = item.priority === 'urgent' || item.priority === 'high';
+    const cardNew = !isSelected && isNew(item.created_at);
     return (
         <div
-            draggable
-            onDragStart={(e) => {
-                e.dataTransfer.setData('text/plain', String(item.id));
-                e.dataTransfer.effectAllowed = 'move';
-                onDragStart(item.id);
-            }}
             onClick={onClick}
             className={`w-full text-left rounded-lg border p-2.5 transition-all cursor-grab active:cursor-grabbing
                 ${isSelected
                     ? 'bg-accent-50 dark:bg-accent-900/20 border-accent-300 dark:border-accent-600 ring-1 ring-accent-400/50 shadow-md'
-                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-sm'
+                    : cardNew
+                        ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:shadow-sm'
+                        : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-sm'
                 }`}
         >
             <div className="flex items-start gap-1.5">
@@ -85,8 +104,23 @@ function KanbanCard({ item, isSelected, onClick, onDragStart }) {
     );
 }
 
-function KanbanColumn({ status, items, selectedId, onCardClick, onDragStart, onDrop, dragOverStatus }) {
-    const isOver = dragOverStatus === status.value;
+function SortableKanbanCard({ item, isSelected, onClick }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+    return (
+        <div
+            ref={setNodeRef}
+            style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+            {...attributes}
+            {...listeners}
+        >
+            <KanbanCard item={item} isSelected={isSelected} onClick={onClick} />
+        </div>
+    );
+}
+
+function KanbanColumn({ status, items, selectedId, onCardClick, isOver }) {
+    const { setNodeRef } = useDroppable({ id: status.value });
+    const itemIds = items.map(i => i.id);
     return (
         <div className="flex flex-col min-w-0 flex-1">
             <div className={`flex items-center gap-2 px-2.5 py-2 rounded-t-lg border ${status.border} ${status.bg}`}>
@@ -95,16 +129,8 @@ function KanbanColumn({ status, items, selectedId, onCardClick, onDragStart, onD
                 <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">{items.length}</span>
             </div>
             <div
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                onDragEnter={(e) => { e.preventDefault(); onDrop('hover', status.value); }}
-                onDragLeave={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget)) onDrop('leave', status.value);
-                }}
-                onDrop={(e) => {
-                    e.preventDefault();
-                    const itemId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                    if (itemId) onDrop('drop', status.value, itemId);
-                }}
+                ref={setNodeRef}
+                style={{ background: `linear-gradient(to bottom, ${status.gradientTop} 0%, transparent 40%)` }}
                 className={`flex-1 overflow-y-auto p-1.5 space-y-1.5 border-x border-b rounded-b-lg transition-colors ${status.border}
                     ${isOver
                         ? 'bg-accent-50/50 dark:bg-accent-900/10 ring-2 ring-inset ring-accent-300 dark:ring-accent-600'
@@ -116,9 +142,16 @@ function KanbanColumn({ status, items, selectedId, onCardClick, onDragStart, onD
                         {isOver ? 'Drop here' : 'No items'}
                     </div>
                 )}
-                {items.map(item => (
-                    <KanbanCard key={item.id} item={item} isSelected={selectedId === item.id} onClick={() => onCardClick(item)} onDragStart={onDragStart} />
-                ))}
+                <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+                    {items.map(item => (
+                        <SortableKanbanCard
+                            key={item.id}
+                            item={item}
+                            isSelected={selectedId === item.id}
+                            onClick={() => onCardClick(item)}
+                        />
+                    ))}
+                </SortableContext>
             </div>
         </div>
     );
@@ -132,12 +165,14 @@ export default function Board() {
     const [selectedItem, setSelectedItem] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [showNewModal, setShowNewModal] = useState(false);
-    const [draggingId, setDraggingId] = useState(null);
-    const [dragOverStatus, setDragOverStatus] = useState(null);
+    const [activeItem, setActiveItem] = useState(null);
+    const [overColumnId, setOverColumnId] = useState(null);
 
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [searchText, setSearchText] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
     const debounceRef = useRef(null);
     useEffect(() => {
@@ -164,55 +199,6 @@ export default function Board() {
         finally { setDetailLoading(false); }
     };
 
-    const handleDragStart = (itemId) => {
-        setDraggingId(itemId);
-    };
-
-    const handleColumnDrop = async (action, statusValue, itemId) => {
-        if (action === 'hover') {
-            setDragOverStatus(statusValue);
-            return;
-        }
-        if (action === 'leave') {
-            setDragOverStatus(null);
-            return;
-        }
-        // action === 'drop'
-        setDragOverStatus(null);
-        setDraggingId(null);
-
-        const draggedItem = items.find(i => i.id === itemId);
-        if (!draggedItem || draggedItem.status === statusValue) return;
-
-        // Optimistic update
-        setItems(prev => prev.map(i => i.id === itemId ? { ...i, status: statusValue } : i));
-        if (selectedItem?.id === itemId) {
-            setSelectedItem(prev => prev ? { ...prev, status: statusValue } : prev);
-        }
-
-        // Persist to backend
-        try {
-            const updated = await updateBoardItem(itemId, { status: statusValue });
-            // Sync with server response
-            setItems(prev => prev.map(i => i.id === itemId ? {
-                ...i, status: updated.status, updated_at: updated.updated_at,
-            } : i));
-            if (selectedItem?.id === itemId) {
-                setSelectedItem(updated);
-            }
-        } catch {
-            // Revert on failure
-            setItems(prev => prev.map(i => i.id === itemId ? { ...i, status: draggedItem.status } : i));
-        }
-    };
-
-    // Clear drag state when drag ends anywhere
-    useEffect(() => {
-        const onDragEnd = () => { setDraggingId(null); setDragOverStatus(null); };
-        window.addEventListener('dragend', onDragEnd);
-        return () => window.removeEventListener('dragend', onDragEnd);
-    }, []);
-
     const handleItemUpdate = (updated) => {
         if (updated === null) {
             setItems(prev => prev.filter(i => i.id !== selectedItem?.id));
@@ -235,6 +221,7 @@ export default function Board() {
             status: item.status, priority: item.priority, author_id: item.author_id,
             author_name: item.author_name, created_at: item.created_at,
             updated_at: item.updated_at, activity_count: 0,
+            position: null,
         }, ...prev]);
     };
 
@@ -261,6 +248,70 @@ export default function Board() {
         if (columns[item.status]) columns[item.status].push(item);
         else columns.open.push(item);
     }
+    for (const s of STATUSES) {
+        columns[s.value].sort((a, b) => {
+            const pa = a.position ?? Number.MAX_SAFE_INTEGER;
+            const pb = b.position ?? Number.MAX_SAFE_INTEGER;
+            if (pa !== pb) return pa - pb;
+            return new Date(b.updated_at) - new Date(a.updated_at);
+        });
+    }
+
+    const handleDragEnd = async ({ active, over }) => {
+        setActiveItem(null);
+        setOverColumnId(null);
+        if (!over || active.id === over.id) return;
+
+        const activeStatus = items.find(i => i.id === active.id)?.status;
+        const overIsColumn = typeof over.id === 'string';
+        const overStatus = overIsColumn ? over.id : items.find(i => i.id === over.id)?.status;
+        if (!activeStatus || !overStatus) return;
+
+        if (activeStatus === overStatus) {
+            // Within-column reorder
+            const col = columns[activeStatus];
+            const oldIndex = col.findIndex(i => i.id === active.id);
+            const newIndex = col.findIndex(i => i.id === over.id);
+            if (oldIndex === newIndex || newIndex === -1) return;
+
+            const reordered = arrayMove(col, oldIndex, newIndex);
+            const orderedIds = reordered.map(i => i.id);
+            const posMap = Object.fromEntries(orderedIds.map((id, idx) => [id, idx]));
+
+            // Optimistic update
+            setItems(prev => prev.map(i => posMap[i.id] !== undefined ? { ...i, position: posMap[i.id] } : i));
+
+            try {
+                await reorderBoardItems(activeStatus, orderedIds);
+            } catch {
+                // Revert to original positions
+                setItems(prev => prev.map(i => {
+                    const orig = col.find(c => c.id === i.id);
+                    return orig ? { ...i, position: orig.position } : i;
+                }));
+            }
+        } else {
+            // Between-column status change
+            const draggedItem = items.find(i => i.id === active.id);
+            if (!draggedItem) return;
+
+            setItems(prev => prev.map(i => i.id === active.id ? { ...i, status: overStatus } : i));
+            if (selectedItem?.id === active.id) {
+                setSelectedItem(prev => prev ? { ...prev, status: overStatus } : prev);
+            }
+
+            try {
+                const updated = await updateBoardItem(active.id, { status: overStatus });
+                setItems(prev => prev.map(i => i.id === active.id
+                    ? { ...i, status: updated.status, updated_at: updated.updated_at }
+                    : i
+                ));
+                if (selectedItem?.id === active.id) setSelectedItem(updated);
+            } catch {
+                setItems(prev => prev.map(i => i.id === active.id ? { ...i, status: draggedItem.status } : i));
+            }
+        }
+    };
 
     return (
         <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -298,21 +349,35 @@ export default function Board() {
 
             {/* Main: kanban + detail side by side */}
             <div className="flex-1 flex min-h-0 overflow-hidden">
-                {/* Kanban columns */}
-                <div className={`flex gap-2.5 p-3 min-h-0 overflow-x-auto transition-all ${selectedItem ? 'w-[60%]' : 'w-full'}`}>
-                    {STATUSES.map(status => (
-                        <KanbanColumn
-                            key={status.value}
-                            status={status}
-                            items={columns[status.value]}
-                            selectedId={selectedItem?.id}
-                            onCardClick={handleCardClick}
-                            onDragStart={handleDragStart}
-                            onDrop={handleColumnDrop}
-                            dragOverStatus={dragOverStatus}
-                        />
-                    ))}
-                </div>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={({ active }) => setActiveItem(items.find(i => i.id === active.id) ?? null)}
+                    onDragOver={({ over }) => setOverColumnId(typeof over?.id === 'string' ? over.id : null)}
+                    onDragEnd={handleDragEnd}
+                >
+                    {/* Kanban columns */}
+                    <div className={`flex gap-2.5 p-3 min-h-0 overflow-x-auto transition-all ${selectedItem ? 'w-[60%]' : 'w-full'}`}>
+                        {STATUSES.map(status => (
+                            <KanbanColumn
+                                key={status.value}
+                                status={status}
+                                items={columns[status.value]}
+                                selectedId={selectedItem?.id}
+                                onCardClick={handleCardClick}
+                                isOver={overColumnId === status.value}
+                            />
+                        ))}
+                    </div>
+
+                    <DragOverlay>
+                        {activeItem && (
+                            <div className="rotate-1 shadow-xl opacity-95 w-52">
+                                <KanbanCard item={activeItem} isSelected={false} onClick={() => {}} />
+                            </div>
+                        )}
+                    </DragOverlay>
+                </DndContext>
 
                 {/* Right detail panel */}
                 {selectedItem && (
