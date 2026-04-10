@@ -195,9 +195,9 @@ function JobLog() {
     };
 
     // When Review mode is enabled, sort independently of other sort behavior:
-    // 1) group by PM (no intermixing of PMs),
-    // 2) within each PM, sort by stage completeness (most complete first),
-    // 3) PM groups ordered alphabetically by PM name.
+    // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
+    // 2) within each PM, sort by Project # ascending,
+    // 3) within each Project #, sort by stage completeness (most complete first).
     const reviewDisplayJobs = useMemo(() => {
         if (!reviewMode) return displayJobs;
 
@@ -211,13 +211,15 @@ function JobLog() {
                 return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
             }
 
-            // Same PM: sort by stage completeness (most complete first)
+            // Same PM: sort by Project # (Job #) ascending
+            const jobA = a['Job #'] || 0;
+            const jobB = b['Job #'] || 0;
+            if (jobA !== jobB) return jobA - jobB;
+
+            // Same Project #: sort by stage completeness (most complete first)
             const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
             const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-            if (stageA !== stageB) return stageB - stageA;
-
-            // Tiebreaker: Job # ascending
-            return (a['Job #'] || 0) - (b['Job #'] || 0);
+            return stageB - stageA;
         });
 
         return sorted;
