@@ -423,8 +423,11 @@ def is_formula_cell(row):
 
 
 def sync_from_onedrive(data):
-    """Sync data from OneDrive to Trello based on polling payload."""
-    
+    """DEPRECATED: OneDrive/Excel sync is no longer active. Brain UI is the sole
+    source of stage updates. This function and _update_trello_card_from_excel
+    remain for reference but should not be called."""
+    raise RuntimeError("sync_from_onedrive is deprecated — OneDrive polling has been removed")
+
     # Use context manager - handles all operation tracking
     with sync_operation_context("onedrive_poll", "onedrive", None) as sync_op:
         if sync_op is None:
@@ -651,7 +654,8 @@ def sync_from_onedrive(data):
 
 
 def _update_trello_card_from_excel(rec, is_formula, sync_op, old_values=None):
-    """Update Trello card from Excel changes."""
+    """DEPRECATED: See sync_from_onedrive docstring. Direct Trello API calls
+    with no outbox/retry — this was a known reliability gap."""
     operation_id = sync_op.operation_id if sync_op else None
     from app.config import Config as cfg
     
