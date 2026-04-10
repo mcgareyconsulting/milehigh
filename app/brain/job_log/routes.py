@@ -29,29 +29,48 @@ logger = get_logger(__name__)
 def get_list_id_by_stage(stage):
     """
     Get Trello list ID by stage name.
-    
+
+    Trello tracks a small subset of stages. All FABRICATION stages except
+    'Released' map to the 'Fit Up Complete.' Trello list. 'Hold', 'Welded QC',
+    and 'Complete' are ignored. All other stages fall back to exact name match.
+
     Args:
-        stage: Stage name (e.g., 'Released', 'Cut start', 'Fit Up Complete.', etc.)
-    
+        stage: Stage name (e.g., 'Released', 'Weld Start', 'Fit Up Complete.', etc.)
+
     Returns:
-        str: Trello list ID, or None if not found or on error
-        Returns None for stages that Trello doesn't track ('Complete', 'Cut start', 'Hold', 'Welded', 'Material Ordered')
+        str: Trello list ID, or None if stage is ignored or list not found
     """
-    # Stages that Trello does not track - return None to prevent outbox creation
-    stages_not_tracked_by_trello = ['Complete', 'Cut start', 'Cut Complete', 'Fitup Start', 'Weld Start', 'Weld Complete', 'Hold', 'Welded', 'Material Ordered']
-    if stage in stages_not_tracked_by_trello:
-        logger.info(f"Stage '{stage}' is not tracked by Trello, skipping outbox creation")
+    # Stages Trello ignores entirely — no card move
+    TRELLO_IGNORED = {'Hold', 'Welded QC', 'Complete'}
+    if stage in TRELLO_IGNORED:
+        logger.info(f"Stage '{stage}' is ignored by Trello, skipping outbox creation")
         return None
-    
+
+    # Explicit stage → Trello list name mapping.
+    # All non-Released FABRICATION stages funnel to 'Fit Up Complete.'
+    STAGE_TO_TRELLO_LIST = {
+        'Released':         'Released',
+        'Material Ordered': 'Fit Up Complete.',
+        'Cut start':        'Fit Up Complete.',
+        'Cut Complete':     'Fit Up Complete.',
+        'Fitup Start':      'Fit Up Complete.',
+        'Fit Up Complete.': 'Fit Up Complete.',
+        'Weld Start':       'Fit Up Complete.',
+        'Weld Complete':    'Fit Up Complete.',
+        'Welded':           'Fit Up Complete.',
+    }
+
+    trello_list_name = STAGE_TO_TRELLO_LIST.get(stage, stage)  # fallback: exact name
+
     try:
-        list_info = get_list_by_name(stage)
+        list_info = get_list_by_name(trello_list_name)
         if list_info and 'id' in list_info:
             return list_info['id']
         else:
-            logger.warning(f"Could not get list ID for stage: {stage} (list_info: {list_info})")
+            logger.warning(f"Could not get list ID for stage '{stage}' → list '{trello_list_name}' (list_info: {list_info})")
             return None
     except Exception as e:
-        logger.error(f"Error getting list ID for stage {stage}: {e}", exc_info=True)
+        logger.error(f"Error getting list ID for stage '{stage}': {e}", exc_info=True)
         return None
 
 def update_job_stage_fields(job_record, stage):
