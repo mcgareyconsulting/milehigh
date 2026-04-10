@@ -38,7 +38,7 @@ export function useJobsFilters(jobs = []) {
     const [search, setSearch] = useState('');
     const [selectedSubset, setSelectedSubset] = useState(
         () => localStorage.getItem('jl_subset') || null
-    ); // 'job_order', 'complete', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
+    ); // 'job_order', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
 
     // Sync filter state to localStorage
     useEffect(() => { localStorage.setItem('jl_projects', JSON.stringify(selectedProjectNames)); }, [selectedProjectNames]);
@@ -215,9 +215,6 @@ export function useJobsFilters(jobs = []) {
         if (selectedSubset === 'job_order') {
             // Job Order: all releases sorted by unified fab_order
             result = getJobOrderSubset(baseFiltered);
-        } else if (selectedSubset === 'complete') {
-            // Complete: COMPLETE stage_group only, ascending fab order
-            result = filterByStageGroups(baseFiltered, ['COMPLETE']);
         } else if (selectedSubset === 'ready_to_ship') {
             // Ready to Ship: Shipping planning, Store at MHMW for shipping, Paint complete
             const readyToShipStages = ['Shipping planning', 'Store at MHMW for shipping', 'Paint complete'];

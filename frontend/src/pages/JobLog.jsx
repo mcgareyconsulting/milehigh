@@ -844,18 +844,6 @@ function JobLog() {
                                         <button
                                             onClick={() => {
                                                 setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'complete' ? null : 'complete');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'complete'
-                                                ? 'bg-violet-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Complete
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
                                                 setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
                                             }}
                                             className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
