@@ -1,0 +1,332 @@
+Job,Release,Identifier,Job Name,Description,DB Stage,DB Stage Group,DB Job Comp,DB Invoiced,CSV Job Comp,CSV Invoiced,Stage OK,Job Comp OK,Invoiced OK
+160,872,160-872,Brinkmann - Wind Crest RB3.5,Site Rail Extensions CO #7,Shipping completed,COMPLETE,,,X,X,Y,N,N
+160,V603,160-V603,Brinkmann - Wind Crest RB3.5,Additional post for Carlo ,Shipping completed,COMPLETE,X,,X,X,Y,Y,N
+170,103,170-103,Garrett -Banyan High Point,Bld 5 Balcony Rails,Store at MHMW for shipping,READY_TO_SHIP,,,X,X,N,N,N
+170,128,170-128,Garrett -Banyan High Point,Bld 1 Stair A,Shipping completed,COMPLETE,90,0.9,X,X,Y,N,N
+170,129,170-129,Garrett -Banyan High Point,Bld 1 Stair B,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,130,170-130,Garrett -Banyan High Point,Bld 2 Stair A,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,131,170-131,Garrett -Banyan High Point,Bld 2 Stair B,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,132,170-132,Garrett -Banyan High Point,Bld 3 Stair A,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,141,170-141,Garrett -Banyan High Point,Bld 3 Stair B,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,142,170-142,Garrett -Banyan High Point,Bld 4 Stair A,Shipping completed,COMPLETE,0.9,X,X,X,Y,N,Y
+170,143,170-143,Garrett -Banyan High Point,Bld 4 Stair B,Shipping completed,COMPLETE,0.9,X,X,X,Y,N,Y
+170,144,170-144,Garrett -Banyan High Point,Bld 5 Stair A,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,145,170-145,Garrett -Banyan High Point,Bld 5 Stair B,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,146,170-146,Garrett -Banyan High Point,Bld 6 Stair A,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,147,170-147,Garrett -Banyan High Point,Bld 6 Stair B,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+170,167,170-167,Garrett -Banyan High Point,Bld 4 Exterior North Stair,Shipping completed,COMPLETE,,,X,X,Y,N,N
+170,168,170-168,Garrett -Banyan High Point,Replacement Canopy Decking,Shipping completed,COMPLETE,,,X,X,Y,N,N
+170,208,170-208,Garrett -Banyan High Point,Bld 4 West Ext Stair,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+170,280,170-280,Garrett -Banyan High Point,Bld 4 Southeast Corner Stair Rails,Cut start,FABRICATION,,,X,X,N,N,N
+170,283,170-283,Garrett -Banyan High Point,Bld 4 North Ramp Rail,Shipping planning,READY_TO_SHIP,,,X,X,N,N,N
+170,284,170-284,Garrett -Banyan High Point,Building 1 Canopy Plates,Shipping completed,COMPLETE,O,X,X,X,Y,N,Y
+170,285,170-285,Garrett -Banyan High Point,Building 1 Canopy,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+170,286,170-286,Garrett -Banyan High Point,Building 2 Canopy Plates,Shipping completed,COMPLETE,O,X,X,X,Y,N,Y
+170,287,170-287,Garrett -Banyan High Point,Building 2 Canopy,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+170,288,170-288,Garrett -Banyan High Point,Building 3 Canopy Plates,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+170,289,170-289,Garrett -Banyan High Point,Building 3 Canopy,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+170,292,170-292,Garrett -Banyan High Point,Building 5 Canopy Plates,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+170,293,170-293,Garrett -Banyan High Point,Building 5 Canopy,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+170,294,170-294,Garrett -Banyan High Point,Building 6 Canopy Plates,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+170,520,170-520,Garrett -Banyan High Point,Bld 4 Balcony Rails,Shipping completed,COMPLETE,0.99,0.9,X,X,Y,N,N
+170,641,170-641,Garrett -Banyan High Point,Trash Pipe Bollards,Shipping completed,COMPLETE,O,X,X,X,Y,N,Y
+170,839,170-839,Garrett -Banyan High Point,Amenity Spiral Remaining Rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+170,842,170-842,Garrett -Banyan High Point,Bld 1 Balcony Rail,Shipping completed,COMPLETE,O,MFP,X,X,Y,N,N
+170,865,170-865,Garrett -Banyan High Point,Amenity Spiral Cane Rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+170,866,170-866,Garrett -Banyan High Point,Bld 2 Balcony Rail,Shipping completed,COMPLETE,,,X,X,Y,N,N
+170,905,170-905,Garrett -Banyan High Point,Bld 4 Exterior Stair Rail,Shipping completed,COMPLETE,,,X,X,Y,N,N
+190,122,190-122,Hinton - Metro Center,Bld 2 Interior Ramp Rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+190,167,190-167,Hinton - Metro Center,Stair Core 4B,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+190,168,190-168,Hinton - Metro Center,Bld 4 Ramp Rail,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+190,170,190-170,Hinton - Metro Center,Pool Fence pt2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+190,201,190-201,Hinton - Metro Center,Bld 2 Stoop Stringers,Welded,FABRICATION,,,X,X,N,N,N
+190,223,190-223,Hinton - Metro Center,Bld 5 Balcony Rails,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+190,236,190-236,Hinton - Metro Center,Bld 5 Roof Access Ladder,Store at MHMW for shipping,READY_TO_SHIP,,,X,X,N,N,N
+190,239,190-239,Hinton - Metro Center,Bld 2 Level 1 Balcony,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+190,278,190-278,Hinton - Metro Center,Stair Core 4A,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+190,341,190-341,Hinton - Metro Center,Bld 2 Stoop SE Corner,Shipping completed,COMPLETE,,,X,X,Y,N,N
+190,390,190-390,Hinton - Metro Center,Bld 3 Balcony Guardrail,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+190,396,190-396,Hinton - Metro Center,Pool Site Rail,Shipping planning,READY_TO_SHIP,,,X,X,N,N,N
+190,404,190-404,Hinton - Metro Center,Pool Fence pt3,Shipping completed,COMPLETE,,,X,X,Y,N,N
+190,461,190-461,Hinton - Metro Center,Bld 4 Roof Access Ladder,Shipping completed,COMPLETE,O,X,X,X,Y,N,Y
+190,587,190-587,Hinton - Metro Center,Bld 4 Balcony Rails,Shipping completed,COMPLETE,0.7,MFP,X,X,Y,N,N
+190,596,190-596,Hinton - Metro Center,Bld 4 Stoop Landing Guardrails,Shipping completed,COMPLETE,O,MFP,X,X,Y,N,N
+190,714,190-714,Hinton - Metro Center,Trash Enclosures,Shipping completed,COMPLETE,0.9,,X,X,Y,N,N
+190,725,190-725,Hinton - Metro Center,Shade Structure A,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+190,790,190-790,Hinton - Metro Center,"Bld 2 Unit 2217, 2227 Rail",Shipping completed,COMPLETE,O,,X,X,Y,N,N
+190,800,190-800,Hinton - Metro Center,Lower Clevis KP,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+190,801,190-801,Hinton - Metro Center,Shade Structure B,Shipping completed,COMPLETE,,,X,X,Y,N,N
+190,854,190-854,Hinton - Metro Center,Bld 1 Standpipe Protection,Released,FABRICATION,X,X,X,X,N,Y,Y
+190,856,190-856,Hinton - Metro Center,Bld 3 Standpipe Protection,Released,FABRICATION,X,X,X,X,N,Y,Y
+190,876,190-876,Hinton - Metro Center,CO#23 Sidewalk Chase Covers,Welded,FABRICATION,,,X,X,N,N,N
+190,880,190-880,Hinton - Metro Center,Dog Park Fence,Shipping completed,COMPLETE,,,X,X,Y,N,N
+190,883,190-883,Hinton - Metro Center,Stair Core 2A Pt1,Shipping completed,COMPLETE,0.9,X,X,X,Y,N,Y
+190,903,190-903,Hinton - Metro Center,Bld 3 Stoop Stringers,Shipping completed,COMPLETE,,,X,X,Y,N,N
+200,340,200-340,TCR - Alexan Diagonal ,Alexan Diagonal Plaza Additional Rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+200,583,200-583,TCR - Alexan Diagonal ,Tree Grate Frame,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+200,730,200-730,TCR - Alexan Diagonal ,Elevator Lobby Rail,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+200,743,200-743,TCR - Alexan Diagonal ,Bld 1 Parking Garage Stair Rails,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+200,806,200-806,TCR - Alexan Diagonal ,Pool Deck Site Rails,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+200,820,200-820,TCR - Alexan Diagonal ,Bld 1 Parking Garage Ramp Rail,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+260,386,260-386,Hinton - Kairoi (Tripoint),Dog Park Kickplate,Shipping completed,COMPLETE,,,X,X,Y,N,N
+290,726,290-726,Martin Residence,Front Trellis Base Plate Template,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+300,272,300-272,PCL - 16th Street Mall,Damaged Planter Railing Replacement,Released,FABRICATION,,,X,X,N,N,N
+320,115,320-115,Thompson Thrift - Landing at Lemay,Building 16 North Stair,Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,116,320-116,Thompson Thrift - Landing at Lemay,Building 16 South Stair,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+320,118,320-118,Thompson Thrift - Landing at Lemay,Building 16 Patio & Balcony Ultralox Rails,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+320,226,320-226,Thompson Thrift - Landing at Lemay,Building 17 East Stair,Cut start,FABRICATION,,,X,X,N,N,N
+320,227,320-227,Thompson Thrift - Landing at Lemay,Building 17 Middle Stair,Cut start,FABRICATION,,,X,X,N,N,N
+320,228,320-228,Thompson Thrift - Landing at Lemay,Building 17 West Stair,Cut start,FABRICATION,,,X,X,N,N,N
+320,245,320-245,Thompson Thrift - Landing at Lemay,Building 17 Patio & Balcony Ultralox Rails Sheet 1 of 2,Released,FABRICATION,,,X,X,N,N,N
+320,281,320-281,Thompson Thrift - Landing at Lemay,Building 18 Middle Stair,Released,FABRICATION,,,X,X,N,N,N
+320,282,320-282,Thompson Thrift - Landing at Lemay,Building 18 West Stair,Released,FABRICATION,,,X,X,N,N,N
+320,288,320-288,Thompson Thrift - Landing at Lemay,Building 18 East Stair,Released,FABRICATION,,,X,X,N,N,N
+320,482,320-482,Thompson Thrift - Landing at Lemay,Trash Enclosure,Shipping completed,COMPLETE,0.9,,X,X,Y,N,N
+320,779,320-779,Thompson Thrift - Landing at Lemay,Building 13 East Stair,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+320,780,320-780,Thompson Thrift - Landing at Lemay,Building 13 Middle Stair,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+320,781,320-781,Thompson Thrift - Landing at Lemay,Building 13 West Stair,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+320,784,320-784,Thompson Thrift - Landing at Lemay,Building 13 Patio & Balcony Ultralox Rails P1 of 2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,828,320-828,Thompson Thrift - Landing at Lemay,Building 15 Patio & Balcony Ultralox Rails P1 of 2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,834,320-834,Thompson Thrift - Landing at Lemay,Building 15 North Stair,Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,836,320-836,Thompson Thrift - Landing at Lemay,Building 15 South Stair,Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,871,320-871,Thompson Thrift - Landing at Lemay,"Site Rail Between Bld 2&3, 4&5",Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,888,320-888,Thompson Thrift - Landing at Lemay,Building 14 Patio & Balcony Ultralox Rails P1 of 2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,897,320-897,Thompson Thrift - Landing at Lemay,Building 14 West Stair,Shipping completed,COMPLETE,,,X,X,Y,N,N
+320,898,320-898,Thompson Thrift - Landing at Lemay,Building 14 East Stair,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,110,330-110,Brinkmann - Aspendale Littleton Senior,Balcony Top Saddles,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,120,330-120,Brinkmann - Aspendale Littleton Senior,Covered Walkway Steel,Fit Up Complete.,FABRICATION,,,X,X,N,N,N
+330,145,330-145,Brinkmann - Aspendale Littleton Senior,Wood Ultralox Balcony West Extra,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+330,297,330-297,Brinkmann - Aspendale Littleton Senior,Balcony Divider Screen PT1,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,342,330-342,Brinkmann - Aspendale Littleton Senior,Exterior Deck Stair Rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,343,330-343,Brinkmann - Aspendale Littleton Senior,Balcony Divider Screen PT2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,447,330-447,Brinkmann - Aspendale Littleton Senior,Roof Access Ladder,Shipping completed,COMPLETE,X,MFP,X,X,Y,Y,N
+330,603,330-603,Brinkmann - Aspendale Littleton Senior,Stair Core 3,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+330,615,330-615,Brinkmann - Aspendale Littleton Senior,Stair Core 2,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+330,628,330-628,Brinkmann - Aspendale Littleton Senior,Stair Core 1,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+330,653,330-653,Brinkmann - Aspendale Littleton Senior,Stair Core 4,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+330,749,330-749,Brinkmann - Aspendale Littleton Senior,Stair Core 1 Replacement,Shipping completed,COMPLETE,X,0.9,X,X,Y,Y,N
+330,858,330-858,Brinkmann - Aspendale Littleton Senior,Wood Ultralox Balcony Rails P1 of 10,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,874,330-874,Brinkmann - Aspendale Littleton Senior,Ultralox Balcony North&West P1 of 4,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,879,330-879,Brinkmann - Aspendale Littleton Senior,Concrete Ultralox Balcony Rails P1 of 3,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,899,330-899,Brinkmann - Aspendale Littleton Senior,Embeds for Coverd Walkway,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,V295,330-V295,Brinkmann - Aspendale Littleton Senior,Balcony Ultralox Saddles ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,V467,330-V467,Brinkmann - Aspendale Littleton Senior,Missing Ultralox Panels ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+330,V497,330-V497,Brinkmann - Aspendale Littleton Senior,Covered Walk Way Flat Bar ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,117,340-117,AMLI - Littleton Village II,Commercial Awnings,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,225,340-225,AMLI - Littleton Village II,Roof Amenity Trellis,Released,FABRICATION,,,X,X,N,N,N
+340,241,340-241,AMLI - Littleton Village II,CO#16 Upsized flitch beam,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+340,265,340-265,AMLI - Littleton Village II,CO#17 Upsized flitch beam,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+340,411,340-411,AMLI - Littleton Village II,Awning Embeds,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+340,421,340-421,AMLI - Littleton Village II,Structural Steel,Shipping completed,COMPLETE,0.9,M,X,X,Y,N,N
+340,423,340-423,AMLI - Littleton Village II,Stair Core A Guard Rails,Paint complete,READY_TO_SHIP,,M,X,X,N,N,N
+340,584,340-584,AMLI - Littleton Village II,CMU Wall Atachment,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+340,613,340-613,AMLI - Littleton Village II,Balcony embeds at 3rd floor podium,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+340,647,340-647,AMLI - Littleton Village II,Awning Clevis Embeds,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+340,711,340-711,AMLI - Littleton Village II,Flitch beams Contract - Drop Shipped,Shipping completed,COMPLETE,,X,X,X,Y,N,Y
+340,722,340-722,AMLI - Littleton Village II,CO#7 Amenity Level 2 Steel Beam Change,Shipping completed,COMPLETE,O,,X,X,Y,N,N
+340,729,340-729,AMLI - Littleton Village II,Leasing Center Awnigns,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,830,340-830,AMLI - Littleton Village II,Flitch beam Replacement,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,849,340-849,AMLI - Littleton Village II,Loose Lintels,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,855,340-855,AMLI - Littleton Village II,Stand offs for Wood Frame Balconies,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,887,340-887,AMLI - Littleton Village II,CMU Wall Atachment Angles,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,894,340-894,AMLI - Littleton Village II,Hanging Brick Relief At Storefront,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V163,340-V163,AMLI - Littleton Village II,Missed Saddles in Leasing Center,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V261,340-V261,AMLI - Littleton Village II,Missing Flitch Beam Plates,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V439,340-V439,AMLI - Littleton Village II,Leasing Fireplace Steel Missing Embed Fix,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V441,340-V441,AMLI - Littleton Village II,4th Floor Missed Flitch Beams,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V516,340-V516,AMLI - Littleton Village II,Steel hung Balcony Template,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V553,340-V553,AMLI - Littleton Village II,Column Embed plate Fixes - RFI 134,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V761,340-V761,AMLI - Littleton Village II,Missing Clevis Rods,Shipping completed,COMPLETE,,,X,X,Y,N,N
+340,V922,340-V922,AMLI - Littleton Village II,Column Angle Iron Fixes,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+340,V992,340-V992,AMLI - Littleton Village II,Missing flitch Beams @ stair D,Shipping completed,COMPLETE,,,X,X,Y,N,N
+370,504,370-504,Fairfield - Vista Highlands,Roof Access Ladder Type B Bld 2,Welded,FABRICATION,,MFP,X,X,N,N,N
+370,510,370-510,Fairfield - Vista Highlands,Roof Access Ladder Type C Bld 15,Shipping completed,COMPLETE,O,MFP,X,X,Y,N,N
+370,528,370-528,Fairfield - Vista Highlands,Bld 3 Ultralox Remainder Balcony Rails,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+370,529,370-529,Fairfield - Vista Highlands,Bld 4 Ultralox Remainder Balcony Rails,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+370,558,370-558,Fairfield - Vista Highlands,Bld 5 Ultralox Remainder Balcony Rails,Shipping completed,COMPLETE,O,M,X,X,Y,N,N
+370,560,370-560,Fairfield - Vista Highlands,Bld 6 Ultralox Remainder Balcony Rails,Shipping completed,COMPLETE,O,M,X,X,Y,N,N
+370,562,370-562,Fairfield - Vista Highlands,Bld 7 Ultralox Remainder Balcony Rails,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+370,564,370-564,Fairfield - Vista Highlands,Bld 8 Ultralox Remainder Balcony Rails,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+370,734,370-734,Fairfield - Vista Highlands,Bld 14 & 15 Replacement WG,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+370,833,370-833,Fairfield - Vista Highlands,Bld 3 Stair 1 Rails,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+370,837,370-837,Fairfield - Vista Highlands,Bld 3 Stair 2 Rails,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+370,846,370-846,Fairfield - Vista Highlands,Bld 4 Stair 1 Rails,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+370,847,370-847,Fairfield - Vista Highlands,Bld 4 Stair 2 Rails,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+370,V982,370-V982,Fairfield Development - Vista Highlands,Bld 8 Ultralox 2.0 ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+380,112,380-112,Brinkman - Marshall Pointe,Garage Pipe Protection,Shipping completed,COMPLETE,,,X,X,Y,N,N
+380,233,380-233,Brinkman - Marshall Pointe,Roof Canopy End Channels,Cut start,FABRICATION,,,X,X,N,N,N
+380,266,380-266,Brinkman - Marshall Pointe,CMU Embed at Garage Roof Canopy  Replacements,Released,FABRICATION,,,X,X,N,N,N
+380,268,380-268,Brinkman - Marshall Pointe,Shade Sail Posts,Welded,FABRICATION,,,X,X,N,N,N
+380,592,380-592,Brinkman - Marshall Pointe,Garage Screens,Paint complete,READY_TO_SHIP,,MF,X,X,N,N,N
+380,715,380-715,Brinkman - Marshall Pointe,Hammock Posts,Shipping completed,COMPLETE,,,X,X,Y,N,N
+380,735,380-735,Brinkman - Marshall Pointe,Garage Stair Core 2 Cane Rail,Shipping completed,COMPLETE,X,MFP,X,X,Y,Y,N
+380,844,380-844,Brinkman - Marshall Pointe,Elevator Sump Pit Cover,Welded,FABRICATION,,,X,X,N,N,N
+380,V176,380-V176,Brinkman - Marshall Pointe,North CY Ultralox,Shipping completed,COMPLETE,,,X,X,Y,N,N
+380,V510,380-V510,Brinkman - Marshall Pointe,WHG extension,Shipping completed,COMPLETE,O,,X,X,Y,N,N
+385,184,385-184,Brinkmann - Gallary @ Fort Collins,Barrier Gate,Shipping completed,COMPLETE,,,X,X,Y,N,N
+385,883,385-883,Brinkmann - Gallary @ Fort Collins,Memory Garden Handgrabs,Shipping completed,COMPLETE,,,X,X,Y,N,N
+385,895,385-895,Brinkmann - Gallary @ Fort Collins,Roof Top Grating Stair,Shipping completed,COMPLETE,,,X,X,Y,N,N
+390,215,390-215,Thompson Thrift - Heritage on Hover,Bld A West Stair Core,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+390,231,390-231,Thompson Thrift - Heritage on Hover,Bld A East Stair Core,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+390,328,390-328,Thompson Thrift - Heritage on Hover,Bld B East Stair Core,Shipping completed,COMPLETE,,,X,X,Y,N,N
+390,329,390-329,Thompson Thrift - Heritage on Hover,Bld B West Stair Core,Shipping completed,COMPLETE,,,X,X,Y,N,N
+390,330,390-330,Thompson Thrift - Heritage on Hover,Bld C East Stair Core,Shipping completed,COMPLETE,,,X,X,Y,N,N
+390,331,390-331,Thompson Thrift - Heritage on Hover,Bld C West Stair Core,Shipping completed,COMPLETE,,,X,X,Y,N,N
+390,751,390-751,Thompson Thrift - Heritage on Hover,Interior Window Frame,Shipping completed,COMPLETE,O,,X,X,Y,N,N
+390,V186,390-V186,Thompson Thrift - Heritage on Hover,Missing Wing ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+400,155,400-155,Mountain West Contractors - Fieldhouse (Idaho Springs),Extra Trash Enclosure Panels,Shipping completed,COMPLETE,,,X,X,Y,N,N
+400,336,400-336,Mountain West Contractors - Fieldhouse (Idaho Springs),Building 3 Stair Core 5,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+400,340,400-340,Mountain West Contractors - Fieldhouse (Idaho Springs),Building 3 Stair Core 6,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+400,746,400-746,Mountain West Contractors - Fieldhouse (Idaho Springs),Top Riser Plate,Shipping completed,COMPLETE,,,X,X,Y,N,N
+400,754,400-754,Mountain West Contractors - Fieldhouse (Idaho Springs),Trash Enclosure Embeds,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+400,792,400-792,Mountain West Contractors - Fieldhouse (Idaho Springs),Carports,Shipping completed,COMPLETE,,,X,X,Y,N,N
+400,794,400-794,Mountain West Contractors - Fieldhouse (Idaho Springs),Trash Enclosure,Shipping completed,COMPLETE,,,X,X,Y,N,N
+400,V268,400-V268,Mountain West Contractors - Fieldhouse (Idaho Springs),Bearing Angle ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+400,V347,400-V347,Mountain West Contractors - Fieldhouse (Idaho Springs),Mockup Riser ,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+400,V421,400-V421,Mountain West Contractors - Fieldhouse (Idaho Springs),Carport plates ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+400,V651,400-V651,Mountain West Contractors - Fieldhouse (Idaho Springs),Angles  ,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,102,410-102,Lennar - Columnbine Square,Trash Bollard/ Contract ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,235,410-235,Lennar - Columnbine Square,Bld 5 Structural Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,673,410-673,Lennar - Columnbine Square,HD Embeds Bld 1 Install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,674,410-674,Lennar - Columnbine Square,HD Embeds Bld 1,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,675,410-675,Lennar - Columnbine Square,HD Embeds Bld 2,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,677,410-677,Lennar - Columnbine Square,HD Embeds Bld 3 Install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,678,410-678,Lennar - Columnbine Square,HD Embeds Bld 4,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,680,410-680,Lennar - Columnbine Square,HD Embeds Bld 5,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,682,410-682,Lennar - Columnbine Square,HD Embeds Bld 6,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,684,410-684,Lennar - Columnbine Square,HD Embeds Bld 7,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,765,410-765,Lennar - Columnbine Square,Bldg 1 Retail Area Embeds,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,768,410-768,Lennar - Columnbine Square,Bldg 1 Retail Area Columns and Beams,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,788,410-788,Lennar - Columnbine Square,Bldg 2 Structural Embeds Drop Ship,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+410,793,410-793,Lennar - Columnbine Square,Mockup Balcony and juliet,Shipping completed,COMPLETE,O,,X,X,Y,N,N
+410,822,410-822,Lennar - Columnbine Square,Bld 4 Retail Area Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,824,410-824,Lennar - Columnbine Square,Bld 6 Retail Area Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,878,410-878,Lennar - Columnbine Square,Bldg 2 Structural Steel Columns and Beams pt1,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,890,410-890,Lennar - Columnbine Square,Trash Bollard Add,Shipping completed,COMPLETE,,,X,X,Y,N,N
+410,V181,410-V181,Lennar - Columnbine Square,EP4 Embed ,Shipping completed,COMPLETE,X,,X,X,Y,Y,N
+410,V845,410-V845,Lennar - Columnbine Square,EP1 Embeds ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+420,142,420-142,Thompson Thrift - The Stacks at Wheat Ridge,Elevator Hoist Beams,Shipping completed,COMPLETE,,,X,X,Y,N,N
+420,194,420-194,Thompson Thrift - The Stacks at Wheat Ridge,Elevator Sump Pit Metals Fab,Released,FABRICATION,,,X,X,N,N,N
+420,220,420-220,Thompson Thrift - The Stacks at Wheat Ridge,Elevator Sump Pit Metals Building 1 Install,Released,FABRICATION,,,X,X,N,N,N
+420,221,420-221,Thompson Thrift - The Stacks at Wheat Ridge,Elevator Sump Pit Metals Building 2 Install,Released,FABRICATION,,,X,X,N,N,N
+420,222,420-222,Thompson Thrift - The Stacks at Wheat Ridge,Elevator Sump Pit Metals Building 3 Install,Released,FABRICATION,,,X,X,N,N,N
+420,326,420-326,Thompson Thrift - The Stacks at Wheat Ridge,Trash Enclosure Gates,Shipping completed,COMPLETE,,,X,X,Y,N,N
+420,491,420-491,Thompson Thrift - The Stacks at Wheat Ridge,Structural Steel,Shipping completed,COMPLETE,,M,X,X,Y,N,N
+440,105,440-105,Evergreen - Outlook Green Valley Ranch,Bld 2 Ultralox Remaing Install P1 of 2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,114,440-114,Evergreen - Outlook Green Valley Ranch,Bld 6 Ultralox Post install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,158,440-158,Evergreen - Outlook Green Valley Ranch,Bld 7 Ultralox Post install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,159,440-159,Evergreen - Outlook Green Valley Ranch,Bld 8 Ultralox Post install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,160,440-160,Evergreen - Outlook Green Valley Ranch,Pool Fence,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,162,440-162,Evergreen - Outlook Green Valley Ranch,East Trash Enclosure - Buildings 2 & 5,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,174,440-174,Evergreen - Outlook Green Valley Ranch,Landing Pour Stop Angle,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+440,176,440-176,Evergreen - Outlook Green Valley Ranch,Bld 2&5 Stair Wings,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,177,440-177,Evergreen - Outlook Green Valley Ranch,West Trash Enclosure - Buildings 2 & 5.xls,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,197,440-197,Evergreen - Outlook Green Valley Ranch,Bld 2 Utility Room Gates,Released,FABRICATION,,,X,X,N,N,N
+440,209,440-209,Evergreen - Outlook Green Valley Ranch,Bld 9 Ultralox Post install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,210,440-210,Evergreen - Outlook Green Valley Ranch,Bld 10 Ultralox Post install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,211,440-211,Evergreen - Outlook Green Valley Ranch,Bld 11 Ultralox Post install,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,251,440-251,Evergreen - Outlook Green Valley Ranch,Pool Fence R3,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,284,440-284,Evergreen - Outlook Green Valley Ranch,Pool Fence Angle Fix,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,302,440-302,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,303,440-303,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 5,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,304,440-304,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 6,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,305,440-305,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 7,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,306,440-306,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 8,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,307,440-307,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 9,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,308,440-308,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 10,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,309,440-309,Evergreen - Outlook Green Valley Ranch,Pour Stop Angle Install Bld 11,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,322,440-322,Evergreen - Outlook Green Valley Ranch,Game Bar Top Plates,Released,FABRICATION,,,X,X,N,N,N
+440,385,440-385,Evergreen - Outlook Green Valley Ranch,Pool Area Ramp Rail,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,401,440-401,Evergreen - Outlook Green Valley Ranch,Pool Area Site Rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,407,440-407,Evergreen - Outlook Green Valley Ranch,Bld 2 Knee Wall Replacement Pannels,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,744,440-744,Evergreen - Outlook Green Valley Ranch,Cabanas,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+440,745,440-745,Evergreen - Outlook Green Valley Ranch,Festoon Light Poles,Paint complete,READY_TO_SHIP,,MFP,X,X,N,N,N
+440,755,440-755,Evergreen - Outlook Green Valley Ranch,TV Wall Trellis,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+440,756,440-756,Evergreen - Outlook Green Valley Ranch,Shade Structure B,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+440,757,440-757,Evergreen - Outlook Green Valley Ranch,Game Bar Frame,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+440,761,440-761,Evergreen - Outlook Green Valley Ranch,Shade Structure A,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+440,763,440-763,Evergreen - Outlook Green Valley Ranch,Shade Structure C,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+440,766,440-766,Evergreen - Outlook Green Valley Ranch,Trellis At Clubhouse,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+440,907,440-907,Evergreen - Outlook Green Valley Ranch,Bld 5 Ultralox Remaing Install P1 of 2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,V548,440-V548,Evergreen - Outlook Green Valley Ranch,Game Bar Base Plates ,Shipping completed,COMPLETE,,,X,X,Y,N,N
+440,V707,440-V707,Evergreen - Outlook Green Valley Ranch,Game Bar Escutcheon Plates ,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+450,111,450-111,Marrow - Sandstone Ranch,Missing Amenity Saddle,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,113,450-113,Marrow - Sandstone Ranch,Retaining Wall West,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,148,450-148,Marrow - Sandstone Ranch,Retaining Wall South,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,700,450-700,Marrow - Sandstone Ranch,Structural Steel,Shipping completed,COMPLETE,X,0.8,X,X,Y,Y,N
+450,747,450-747,Marrow - Sandstone Ranch,Bld A Stair #3,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+450,752,450-752,Marrow - Sandstone Ranch,Elevator Misc. Metal,Shipping completed,COMPLETE,O,M,X,X,Y,N,N
+450,759,450-759,Marrow - Sandstone Ranch,Bld A Stair #2,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+450,760,450-760,Marrow - Sandstone Ranch,Bld A Stair #1,Shipping completed,COMPLETE,X,M,X,X,Y,Y,N
+450,810,450-810,Marrow - Sandstone Ranch,Bld B Stair #1,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,811,450-811,Marrow - Sandstone Ranch,Bld B Stair #2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,812,450-812,Marrow - Sandstone Ranch,Bld B Stair #3,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,813,450-813,Marrow - Sandstone Ranch,Bld C Stair #1,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,814,450-814,Marrow - Sandstone Ranch,Bld C Stair #2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,815,450-815,Marrow - Sandstone Ranch,Bld C Stair #3,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,816,450-816,Marrow - Sandstone Ranch,Bld D Stair #1,Shipping completed,COMPLETE,,,X,X,Y,N,N
+450,817,450-817,Marrow - Sandstone Ranch,Bld D Stair #2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+460,191,460-191,Mountain West Contractors - Dublin Springs,Balcony Bottom Saddles Stack 24.xls,Shipping completed,COMPLETE,,,X,X,Y,N,N
+460,264,460-264,Mountain West Contractors - Dublin Springs,Balcony Saddles Remaining,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+460,862,460-862,Mountain West Contractors - Dublin Springs,Standpipe & Cane Detection,Shipping completed,COMPLETE,,,X,X,Y,N,N
+460,902,460-902,Mountain West Contractors - Dublin Springs,Interior Handgrabs,Shipping completed,COMPLETE,,,X,X,Y,N,N
+470,150,470-150,Bryan Construction - Olde Course Maintenance,Stair To Mezzanine,Shipping completed,COMPLETE,,,X,X,Y,N,N
+470,323,470-323,Bryan Construction - Olde Course Maintenance,Mezzanine Sleeve,Released,FABRICATION,,,X,X,N,N,N
+470,346,470-346,Bryan Construction - Olde Course Maintenance,Freestanding Handrail At Concrete Stairs,Shipping completed,COMPLETE,,,X,X,Y,N,N
+470,705,470-705,Bryan Construction - Olde Course Maintenance,Bollards,Shipping completed,COMPLETE,,MFP,X,X,Y,N,N
+470,786,470-786,Bryan Construction - Olde Course Maintenance,Parking Structure Template,Shipping completed,COMPLETE,,,X,X,Y,N,N
+480,253,480-253,Wood Partners - Alta Flatirons,Elevator 2 Metals,Welded,FABRICATION,,,X,X,N,N,N
+480,273,480-273,Wood Partners - Alta Flatirons,Area 2 Structural Steel Embeds,Released,FABRICATION,,,X,X,N,N,N
+480,274,480-274,Wood Partners - Alta Flatirons,Area 3 Structural Steel Embed,Released,FABRICATION,,,X,X,N,N,N
+480,275,480-275,Wood Partners - Alta Flatirons,Area 4 Structural Steel Embeds,Released,FABRICATION,,,X,X,N,N,N
+480,276,480-276,Wood Partners - Alta Flatirons,Area 6 Structural Steel Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+480,753,480-753,Wood Partners - Alta Flatirons,Hold Down Embeds - Droped Shipped,Shipping completed,COMPLETE,,,X,X,Y,N,N
+480,840,480-840,Wood Partners - Alta Flatirons,Embed EP-6,Shipping completed,COMPLETE,O,,X,X,Y,N,N
+480,857,480-857,Wood Partners - Alta Flatirons,Hold Down Embed Extra,Shipping completed,COMPLETE,,,X,X,Y,N,N
+480,V902,480-V902,Wood Partners - Alta Flatirons,Elevator Hoist Beams,Shipping completed,COMPLETE,,,X,X,Y,N,N
+500,149,500-149,Brinkman - Novel Flatiron,"PT,CMU,Hanger Embeds",Complete,COMPLETE,,,X,X,Y,N,N
+500,156,500-156,Brinkman - Novel Flatiron,Canopy Embeds,Complete,COMPLETE,,,X,X,Y,N,N
+500,166,500-166,Brinkman - Novel Flatiron,Mockup Lintels,Complete,COMPLETE,,,X,X,Y,N,N
+500,175,500-175,Brinkman - Novel Flatiron,Ultralox Mockup,Shipping completed,COMPLETE,,,X,X,Y,N,N
+500,199,500-199,Brinkman - Novel Flatiron,Garage Entry Steel Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+500,285,500-285,Brinkman - Novel Flatiron,Ultralox Glass Mockup,Released,FABRICATION,,,X,X,N,N,N
+500,877,500-877,Brinkman - Novel Flatiron,Mockup Canopy,Shipping completed,COMPLETE,,,X,X,Y,N,N
+500,892,500-892,Brinkman - Novel Flatiron,Hold Down Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+510,818,510-818,W.E. O'Neill - Idaho Springs Police Dept.,Structural Steel Columns & Beams,Shipping completed,COMPLETE,,,X,X,Y,N,N
+510,819,510-819,W.E. O'Neill - Idaho Springs Police Dept.,Structural Steel Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+510,863,510-863,W.E. O'Neill - Idaho Springs Police Dept.,Structural Steel Columns & Beams East,Shipping completed,COMPLETE,,,X,X,Y,N,N
+510,V934,510-V934,W.E. O'Neill - Idaho Springs Police Dept.,Stiffners/ Plates,Shipping completed,COMPLETE,,,X,X,Y,N,N
+530,121,530-121,Shaw - East Oak Townhomes,East Moment Frames,Shipping completed,COMPLETE,,,X,X,Y,N,N
+530,287,530-287,Shaw - East Oak Townhomes,Bay Window Steel Framing,Cut start,FABRICATION,,,X,X,N,N,N
+530,896,530-896,Shaw - East Oak Townhomes,Structural Steel Embeds,Shipping completed,COMPLETE,,,X,X,Y,N,N
+530,901,530-901,Shaw - East Oak Townhomes,Structural Steel Columns and Beams,Shipping completed,COMPLETE,,,X,X,Y,N,N
+530,S,530-S,Shaw - East Oak Townhomes,Stair example,Released,FABRICATION,,,X,X,N,N,N
+537,904,537-904,Loecker - Decks,Balcony Rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+538,891,538-891,Brinkmann - Stevenson Toyota,Diamond plate wall cover,Shipping completed,COMPLETE,,,X,X,Y,N,N
+539,882,539-882,1430 Blake Street,Side walk chase plates,Shipping completed,COMPLETE,,,X,X,Y,N,N
+540,124,540-124,TTRES - The Quarry,Compactor Shading,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+545,240,545-240,RMS - Cabinet & Oil Containment,Cabinet Enclosure,Released,FABRICATION,,,X,X,N,N,N
+900,119,900-119,Arlington - Velo Interlocken,12in Return Loops Bld 2,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,165,900-165,Arlington - Velo Interlocken,12in Return Loops Bld 3-6,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,178,900-178,Arlington - Velo Interlocken,Pool Opposite side rails,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,185,900-185,Arlington - Velo Interlocken,Bld 5 Exterior Stair Rail,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,187,900-187,Arlington - Velo Interlocken,Clubhouse Exterior Stairs,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,192,900-192,Arlington - Velo Interlocken,Bld 6 Exterior Stair Rail,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+900,198,900-198,Arlington - Velo Interlocken,Juliet Top Extension,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,258,900-258,Arlington - Velo Interlocken,Elevator Platform Angles,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+900,262,900-262,Arlington - Velo Interlocken,Elevator Platform Angles Additional,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+900,408,900-408,Arlington - Velo Interlocken,Standpipe Protection,Shipping completed,COMPLETE,0.9,MFP,X,X,Y,N,N
+900,694,900-694,Arlington - Velo Interlocken,Trash Compactor Gates,Shipping completed,COMPLETE,O,,X,X,Y,N,N
+900,702,900-702,Arlington - Velo Interlocken,Building 1- 4 Grating and Angles,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+900,716,900-716,Arlington - Velo Interlocken,Clubhouse Exterior Ramp & Stair,Shipping completed,COMPLETE,X,O,X,X,Y,Y,N
+900,801,900-801,Arlington - Velo Interlocken,Bld 6 Stair Core 1,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+900,802,900-802,Arlington - Velo Interlocken,Bld 6 Stair Core 2,Shipping completed,COMPLETE,0.9,0.9,X,X,Y,N,N
+900,831,900-831,Arlington - Velo Interlocken,Bld 4 Missing Balcony,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,838,900-838,Arlington - Velo Interlocken,CO#10 Pool Rail,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,873,900-873,Arlington - Velo Interlocken,12in Return Loops,Shipping completed,COMPLETE,,,X,X,Y,N,N
+900,V983,900-V983,Arlington - Velo Interlocken,Clubhouse Cane Angle ,Paint complete,READY_TO_SHIP,,,X,X,N,N,N
+999,206,999-206,MHMW - Misc Projects ,Aunt Ds Stair Rails,Welded,FABRICATION,,,X,X,N,N,N
+999,691,999-691,Capital Railing,Capital Railing PO 691 Juilet brackets,Shipping completed,COMPLETE,,,X,X,Y,N,N
+999,861,999-861,Capital Railing,Julet brackets 16T083158.375.pd,Shipping completed,COMPLETE,,,X,X,Y,N,N
+999,863,999-863,Capital Railing ,Capital Railing,Shipping completed,COMPLETE,,,X,X,Y,N,N
+999,864,999-864,Capital Railing ,Capital Railing,Shipping completed,COMPLETE,,,X,X,Y,N,N
