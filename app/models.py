@@ -6,6 +6,11 @@ from sqlalchemy import cast, Integer, String
 
 db = SQLAlchemy()
 
+
+def _dt(value):
+    """Serialize a datetime/date to ISO format string, or None."""
+    return value.isoformat() if value else None
+
 class SyncStatus(Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -157,12 +162,12 @@ class Submittals(db.Model):
             "order_number": self.order_number,
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
-            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "due_date": _dt(self.due_date),
             "lifespan": lifespan,
             "was_multiple_assignees": self.was_multiple_assignees,
-            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_ball_in_court_update": last_ball_update.isoformat() if last_ball_update else None,
+            "last_updated": _dt(self.last_updated),
+            "created_at": _dt(self.created_at),
+            "last_ball_in_court_update": _dt(last_ball_update),
             "time_since_ball_in_court_update_seconds": time_since_update.total_seconds() if time_since_update else None,
             "days_since_ball_in_court_update": days_since_ball_update,
         }
@@ -608,8 +613,8 @@ class BoardItem(db.Model):
             'priority': self.priority,
             'author_id': self.author_id,
             'author_name': self.author_name,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': _dt(self.created_at),
+            'updated_at': _dt(self.updated_at),
             'position': self.position,
             'activity_count': activity_count if activity_count is not None else self.activity.filter_by(type='comment').count(),
         }
@@ -642,7 +647,7 @@ class BoardActivity(db.Model):
             'new_value': self.new_value,
             'author_id': self.author_id,
             'author_name': self.author_name,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': _dt(self.created_at),
         }
 
 
@@ -671,7 +676,7 @@ class Notification(db.Model):
             'board_item_id': self.board_item_id,
             'board_activity_id': self.board_activity_id,
             'is_read': self.is_read,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
         }
 
