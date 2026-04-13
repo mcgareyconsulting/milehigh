@@ -4,13 +4,14 @@ Job Log route handlers for the brain Blueprint.
 Provides API endpoints for job data queries and CSV release data handling.
 """
 from app.brain import brain_bp
-from flask import jsonify, request
+from flask import jsonify, request, g
 from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
+from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
 from datetime import datetime
 import json
@@ -1097,83 +1098,51 @@ def update_stage(job, release):
 
 @brain_bp.route("/update-banana-color/<int:job>/<release>", methods=["PATCH"])
 @login_required
+@handle_errors("update_banana_color", raw_error=True)
 def update_banana_color(job, release):
     """
     Update the banana_color (urgency indicator) for a specific job-release combination.
-    
+
     Parameters:
         job: int
         release: str
-    
+
     Request Body:
         {
             "banana_color": "red" | "yellow" | "green" | null
         }
-    
+
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Releases, db
-    
-    logger.info(f"update_banana_color called", extra={
-        'job': job,
-        'release': release,
-        'banana_color': request.json.get('banana_color')
-    })
-    
-    try:
-        banana_color = request.json.get('banana_color')
-        # Validate banana_color value
-        if banana_color is not None and banana_color not in ['red', 'yellow', 'green']:
-            return jsonify({'error': 'banana_color must be "red", "yellow", "green", or null'}), 400
-        
-        # Fetch job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            logger.warning(f"Job not found: {job}-{release}")
-            return jsonify({'error': 'Job not found'}), 404
-        
-        old_banana_color = job_record.banana_color
+    banana_color = request.json.get('banana_color')
+    if banana_color is not None and banana_color not in ['red', 'yellow', 'green']:
+        return jsonify({'error': 'banana_color must be "red", "yellow", "green", or null'}), 400
 
-        # Update banana_color
-        job_record.banana_color = banana_color if banana_color else None
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
+    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    if err:
+        return err
 
-        from app.services.job_event_service import JobEventService
-        JobEventService.create_and_close(
-            job=job,
-            release=release,
-            action='updated',
-            source='Brain',
-            payload={'field': 'banana_color', 'old_value': old_banana_color, 'new_value': banana_color},
-        )
+    old_banana_color = job_record.banana_color
+    job_record.banana_color = banana_color if banana_color else None
+    job_record.last_updated_at = datetime.utcnow()
+    job_record.source_of_update = 'Brain'
 
-        # Commit changes
-        db.session.commit()
-        
-        logger.info(f"update_banana_color completed successfully", extra={
-            'job': job,
-            'release': release,
-            'banana_color': banana_color
-        })
-        
-        return jsonify({
-            'status': 'success',
-            'banana_color': banana_color
-        }), 200
-    except Exception as e:
-        logger.error(f"update_banana_color failed", exc_info=True, extra={
-            'job': job,
-            'release': release,
-            'error': str(e),
-            'error_type': type(e).__name__
-        })
-        db.session.rollback()
-        return jsonify({
-            'error': str(e),
-            'error_type': type(e).__name__
-        }), 500
+    from app.services.job_event_service import JobEventService
+    JobEventService.create_and_close(
+        job=job,
+        release=release,
+        action='updated',
+        source='Brain',
+        payload={'field': 'banana_color', 'old_value': old_banana_color, 'new_value': banana_color},
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'banana_color': banana_color
+    }), 200
 
 @brain_bp.route("/update-fab-order/<int:job>/<release>", methods=["PATCH"])
 @login_required
@@ -1426,6 +1395,7 @@ def _normalize_short_field(value, max_len=8):
 
 @brain_bp.route("/update-job-comp/<int:job>/<release>", methods=["PATCH"])
 @login_required
+@handle_errors("update_job_comp", raw_error=True)
 def update_job_comp(job, release):
     """
     Update the job_comp field for a specific job-release.
@@ -1434,105 +1404,94 @@ def update_job_comp(job, release):
     Request Body: { "job_comp": str (optional, empty to clear) }
     Returns: JSON with status or error.
     """
-    from app.models import Releases, db
+    raw = request.json.get("job_comp")
+    job_comp_str = _normalize_short_field(raw)
+    if job_comp_str and job_comp_str.upper() != 'X':
+        try:
+            num = float(job_comp_str.rstrip('%'))
+            job_comp_str = f"{num:g}%"
+        except ValueError:
+            pass
 
-    logger.info("update_job_comp called", extra={"job": job, "release": release, "job_comp": request.json.get("job_comp")})
+    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    if err:
+        return err
 
-    try:
-        raw = request.json.get("job_comp")
-        job_comp_str = _normalize_short_field(raw)
-        # Normalize numeric values to percentage display (e.g. "90" → "90%")
-        if job_comp_str and job_comp_str.upper() != 'X':
-            try:
-                num = float(job_comp_str.rstrip('%'))
-                job_comp_str = f"{num:g}%"
-            except ValueError:
-                pass
+    old_job_comp = job_record.job_comp
+    job_record.job_comp = job_comp_str
+    job_record.last_updated_at = datetime.utcnow()
+    job_record.source_of_update = "Brain"
 
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            return jsonify({"error": "Job not found"}), 404
+    from app.services.job_event_service import JobEventService
+    JobEventService.create_and_close(
+        job=job,
+        release=release,
+        action='updated',
+        source='Brain',
+        payload={'field': 'job_comp', 'old_value': old_job_comp, 'new_value': job_comp_str},
+    )
 
-        old_job_comp = job_record.job_comp
-        job_record.job_comp = job_comp_str
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = "Brain"
+    # If job_comp cleared from 'X', revert stage to what it was before Complete
+    response_extras = {}
+    old_was_x = old_job_comp and old_job_comp.strip().upper() == 'X'
+    new_is_x = job_comp_str and job_comp_str.upper() == 'X'
+    if old_was_x and not new_is_x:
+        current_stage = job_record.stage or 'Released'
+        if current_stage == 'Complete':
+            from app.models import ReleaseEvents
+            recent_stage_events = ReleaseEvents.query.filter_by(
+                job=job, release=release, action='update_stage'
+            ).order_by(ReleaseEvents.created_at.desc()).limit(20).all()
 
-        from app.services.job_event_service import JobEventService
-        JobEventService.create_and_close(
-            job=job,
-            release=release,
-            action='updated',
-            source='Brain',
-            payload={'field': 'job_comp', 'old_value': old_job_comp, 'new_value': job_comp_str},
-        )
+            revert_stage = 'Released'
+            for evt in recent_stage_events:
+                if evt.payload.get('to') == 'Complete' and evt.payload.get('from'):
+                    revert_stage = evt.payload['from']
+                    break
 
-        # If job_comp cleared from 'X', revert stage to what it was before Complete
-        response_extras = {}
-        old_was_x = old_job_comp and old_job_comp.strip().upper() == 'X'
-        new_is_x = job_comp_str and job_comp_str.upper() == 'X'
-        if old_was_x and not new_is_x:
-            current_stage = job_record.stage or 'Released'
-            if current_stage == 'Complete':
-                # Look up the stage before Complete from release_events
-                from app.models import ReleaseEvents
-                recent_stage_events = ReleaseEvents.query.filter_by(
-                    job=job, release=release, action='update_stage'
-                ).order_by(ReleaseEvents.created_at.desc()).limit(20).all()
+            update_job_stage_fields(job_record, revert_stage)
+            JobEventService.create_and_close(
+                job=job, release=release,
+                action='update_stage', source='Brain',
+                payload={'from': 'Complete', 'to': revert_stage, 'reason': 'job_comp_cleared'},
+            )
+            response_extras['stage'] = revert_stage
+            from app.api.helpers import get_stage_group_from_stage
+            response_extras['stage_group'] = get_stage_group_from_stage(revert_stage)
 
-                revert_stage = 'Released'
-                for evt in recent_stage_events:
-                    if evt.payload.get('to') == 'Complete' and evt.payload.get('from'):
-                        revert_stage = evt.payload['from']
-                        break
+    if new_is_x:
+        current_stage = job_record.stage or 'Released'
+        if current_stage != 'Complete':
+            update_job_stage_fields(job_record, 'Complete')
+            JobEventService.create_and_close(
+                job=job, release=release,
+                action='update_stage', source='Brain',
+                payload={'from': current_stage, 'to': 'Complete', 'reason': 'job_comp_set_to_x'},
+            )
+            response_extras['stage'] = 'Complete'
+            from app.api.helpers import get_stage_group_from_stage
+            response_extras['stage_group'] = get_stage_group_from_stage('Complete')
 
-                update_job_stage_fields(job_record, revert_stage)
-                JobEventService.create_and_close(
-                    job=job, release=release,
-                    action='update_stage', source='Brain',
-                    payload={'from': 'Complete', 'to': revert_stage, 'reason': 'job_comp_cleared'},
-                )
-                response_extras['stage'] = revert_stage
-                from app.api.helpers import get_stage_group_from_stage
-                response_extras['stage_group'] = get_stage_group_from_stage(revert_stage)
+        if job_record.fab_order is not None:
+            old_fab = job_record.fab_order
+            job_record.fab_order = None
+            fab_event = JobEventService.create(
+                job=job, release=release,
+                action='update_fab_order', source='Brain',
+                payload={'from': old_fab, 'to': None, 'reason': 'job_comp_complete'},
+            )
+            if fab_event:
+                JobEventService.close(fab_event.id)
+            response_extras['fab_order'] = None
 
-        # If job_comp set to 'X', auto-set stage to Complete and clear fab_order
-        if new_is_x:
-            current_stage = job_record.stage or 'Released'
-            if current_stage != 'Complete':
-                update_job_stage_fields(job_record, 'Complete')
-                JobEventService.create_and_close(
-                    job=job, release=release,
-                    action='update_stage', source='Brain',
-                    payload={'from': current_stage, 'to': 'Complete', 'reason': 'job_comp_set_to_x'},
-                )
-                response_extras['stage'] = 'Complete'
-                from app.api.helpers import get_stage_group_from_stage
-                response_extras['stage_group'] = get_stage_group_from_stage('Complete')
+    db.session.commit()
 
-            if job_record.fab_order is not None:
-                old_fab = job_record.fab_order
-                job_record.fab_order = None
-                fab_event = JobEventService.create(
-                    job=job, release=release,
-                    action='update_fab_order', source='Brain',
-                    payload={'from': old_fab, 'to': None, 'reason': 'job_comp_complete'},
-                )
-                if fab_event:
-                    JobEventService.close(fab_event.id)
-                response_extras['fab_order'] = None
-
-        db.session.commit()
-
-        return jsonify({"status": "success", **response_extras}), 200
-    except Exception as e:
-        logger.error("update_job_comp failed", exc_info=True, extra={"job": job, "release": release, "error": str(e)})
-        db.session.rollback()
-        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
+    return jsonify({"status": "success", **response_extras}), 200
 
 
 @brain_bp.route("/update-invoiced/<int:job>/<release>", methods=["PATCH"])
 @login_required
+@handle_errors("update_invoiced", raw_error=True)
 def update_invoiced(job, release):
     """
     Update the invoiced field for a specific job-release.
@@ -1541,46 +1500,36 @@ def update_invoiced(job, release):
     Request Body: { "invoiced": str (optional, empty to clear) }
     Returns: JSON with status or error.
     """
-    from app.models import Releases, db
+    raw = request.json.get("invoiced")
+    invoiced_str = _normalize_short_field(raw)
+    if invoiced_str and invoiced_str.upper() != 'X':
+        try:
+            num = float(invoiced_str.rstrip('%'))
+            invoiced_str = f"{num:g}%"
+        except ValueError:
+            pass
 
-    logger.info("update_invoiced called", extra={"job": job, "release": release, "invoiced": request.json.get("invoiced")})
+    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    if err:
+        return err
 
-    try:
-        raw = request.json.get("invoiced")
-        invoiced_str = _normalize_short_field(raw)
-        # Normalize numeric values to percentage display (e.g. "90" → "90%")
-        if invoiced_str and invoiced_str.upper() != 'X':
-            try:
-                num = float(invoiced_str.rstrip('%'))
-                invoiced_str = f"{num:g}%"
-            except ValueError:
-                pass
+    old_invoiced = job_record.invoiced
+    job_record.invoiced = invoiced_str
+    job_record.last_updated_at = datetime.utcnow()
+    job_record.source_of_update = "Brain"
 
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            return jsonify({"error": "Job not found"}), 404
+    from app.services.job_event_service import JobEventService
+    JobEventService.create_and_close(
+        job=job,
+        release=release,
+        action='updated',
+        source='Brain',
+        payload={'field': 'invoiced', 'old_value': old_invoiced, 'new_value': invoiced_str},
+    )
 
-        old_invoiced = job_record.invoiced
-        job_record.invoiced = invoiced_str
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = "Brain"
+    db.session.commit()
 
-        from app.services.job_event_service import JobEventService
-        JobEventService.create_and_close(
-            job=job,
-            release=release,
-            action='updated',
-            source='Brain',
-            payload={'field': 'invoiced', 'old_value': old_invoiced, 'new_value': invoiced_str},
-        )
-
-        db.session.commit()
-
-        return jsonify({"status": "success"}), 200
-    except Exception as e:
-        logger.error("update_invoiced failed", exc_info=True, extra={"job": job, "release": release, "error": str(e)})
-        db.session.rollback()
-        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
+    return jsonify({"status": "success"}), 200
 
 
 @brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
@@ -2624,6 +2573,7 @@ EDITABLE_FIELDS = {
 @brain_bp.route("/jobs/<int:job>/<release>", methods=["DELETE"])
 @login_required
 @admin_required
+@handle_errors("delete job", raw_error=True)
 def delete_job(job, release):
     """
     Delete a job record by job number and release.
@@ -2635,41 +2585,34 @@ def delete_job(job, release):
     Returns:
         JSON object with success status (200) or error (404)
     """
-    from app.models import Releases
-    from datetime import datetime
+    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    if err:
+        return err
 
-    try:
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            logger.warning(f"Delete failed: Job not found: {job}-{release}")
-            return jsonify({"error": "Job not found"}), 404
+    logger.info(f"Soft-deleting job {job}-{release}")
+    job_record.is_active = False
+    job_record.last_updated_at = datetime.utcnow()
+    job_record.source_of_update = 'Admin'
 
-        logger.info(f"Soft-deleting job {job}-{release}")
-        job_record.is_active = False
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Admin'
+    from app.services.job_event_service import JobEventService
+    JobEventService.create_and_close(
+        job=job,
+        release=release,
+        action='deleted',
+        source='Brain',
+        payload={'job': job, 'release': release},
+    )
 
-        from app.services.job_event_service import JobEventService
-        JobEventService.create_and_close(
-            job=job,
-            release=release,
-            action='deleted',
-            source='Brain',
-            payload={'job': job, 'release': release},
-        )
+    db.session.commit()
 
-        db.session.commit()
-
-        return jsonify({"message": "deleted"}), 200
-    except Exception as e:
-        logger.error(f"Error deleting job {job}-{release}: {e}", exc_info=True)
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"message": "deleted"}), 200
 
 
 @brain_bp.route("/jobs/<int:job>/<release>", methods=["PATCH"])
 @login_required
 @admin_required
+@handle_errors("update job column", raw_error=True)
+@require_json("field")
 def update_job_column(job, release):
     """
     Update a specific column for a job record.
@@ -2687,88 +2630,67 @@ def update_job_column(job, release):
     Returns:
         JSON object with updated job data (200) or error (400, 404, 500)
     """
-    from app.models import Releases
-    from datetime import datetime
+    field = g.json_data['field']
+    value = g.json_data.get("value")
 
+    if field not in EDITABLE_FIELDS:
+        return jsonify({"error": f"field '{field}' is not editable"}), 400
+
+    db_field, type_converter = EDITABLE_FIELDS[field]
+
+    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
+    if err:
+        return err
+
+    # Coerce value to proper type
     try:
-        data = request.json or {}
-        field = data.get("field")
-        value = data.get("value")
-
-        if not field:
-            return jsonify({"error": "field is required"}), 400
-
-        # Validate field is editable
-        if field not in EDITABLE_FIELDS:
-            return jsonify({"error": f"field '{field}' is not editable"}), 400
-
-        # Get database field name and type converter
-        db_field, type_converter = EDITABLE_FIELDS[field]
-
-        # Find job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            logger.warning(f"Update failed: Job not found: {job}-{release}")
-            return jsonify({"error": "Job not found"}), 404
-
-        # Coerce value to proper type
-        try:
-            if type_converter == "date":
-                # Parse YYYY-MM-DD format
-                if value:
-                    converted_value = datetime.strptime(value, "%Y-%m-%d").date()
-                else:
-                    converted_value = None
-            elif type_converter == int:
-                converted_value = int(value) if value is not None else None
-            elif type_converter == float:
-                converted_value = float(value) if value is not None else None
+        if type_converter == "date":
+            if value:
+                converted_value = datetime.strptime(value, "%Y-%m-%d").date()
             else:
-                converted_value = str(value) if value is not None else None
-        except (ValueError, TypeError) as e:
-            return jsonify({"error": f"Invalid value for field '{field}': {str(e)}"}), 400
+                converted_value = None
+        elif type_converter == int:
+            converted_value = int(value) if value is not None else None
+        elif type_converter == float:
+            converted_value = float(value) if value is not None else None
+        else:
+            converted_value = str(value) if value is not None else None
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": f"Invalid value for field '{field}': {str(e)}"}), 400
 
-        # Capture old value before overwriting
-        old_value = serialize_value(getattr(job_record, db_field, None))
+    old_value = serialize_value(getattr(job_record, db_field, None))
+    setattr(job_record, db_field, converted_value)
+    job_record.last_updated_at = datetime.utcnow()
+    job_record.source_of_update = 'Admin'
 
-        # Update the field
-        setattr(job_record, db_field, converted_value)
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Admin'
+    from app.services.job_event_service import JobEventService
+    JobEventService.create_and_close(
+        job=job,
+        release=release,
+        action='updated',
+        source='Brain',
+        payload={'field': field, 'old_value': old_value, 'new_value': serialize_value(converted_value)},
+    )
 
-        from app.services.job_event_service import JobEventService
-        JobEventService.create_and_close(
-            job=job,
-            release=release,
-            action='updated',
-            source='Brain',
-            payload={'field': field, 'old_value': old_value, 'new_value': serialize_value(converted_value)},
-        )
+    db.session.commit()
 
-        db.session.commit()
+    logger.info(f"Updated job {job}-{release} field {field} to {converted_value}")
 
-        logger.info(f"Updated job {job}-{release} field {field} to {converted_value}")
+    job_data = {
+        'id': serialize_value(job_record.id),
+        'Job #': serialize_value(job_record.job),
+        'Release #': serialize_value(job_record.release),
+        'Job': serialize_value(job_record.job_name),
+        'Description': serialize_value(job_record.description),
+        'Fab Hrs': serialize_value(job_record.fab_hrs),
+        'Install HRS': serialize_value(job_record.install_hrs),
+        'Paint color': serialize_value(job_record.paint_color),
+        'PM': serialize_value(job_record.pm),
+        'BY': serialize_value(job_record.by),
+        'Released': serialize_value(job_record.released),
+    }
 
-        # Return updated job record
-        job_data = {
-            'id': serialize_value(job_record.id),
-            'Job #': serialize_value(job_record.job),
-            'Release #': serialize_value(job_record.release),
-            'Job': serialize_value(job_record.job_name),
-            'Description': serialize_value(job_record.description),
-            'Fab Hrs': serialize_value(job_record.fab_hrs),
-            'Install HRS': serialize_value(job_record.install_hrs),
-            'Paint color': serialize_value(job_record.paint_color),
-            'PM': serialize_value(job_record.pm),
-            'BY': serialize_value(job_record.by),
-            'Released': serialize_value(job_record.released),
-        }
-
-        return jsonify(job_data), 200
-    except Exception as e:
-        logger.error(f"Error updating job {job}-{release}: {e}", exc_info=True)
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    return jsonify(job_data), 200
 
 
 # ==============================================================================
@@ -2808,66 +2730,58 @@ def archive_preview():
 
 @brain_bp.route("/unarchive/<int:job>/<release>", methods=["POST"])
 @admin_required
+@handle_errors("unarchive release", raw_error=True)
 def unarchive_release(job, release):
     """Unarchive a single release (set is_archived=False)."""
     from app.services.job_event_service import JobEventService
 
-    try:
-        r = Releases.query.filter_by(job=job, release=str(release)).first()
-        if not r:
-            return jsonify({'error': f'Release {job}-{release} not found'}), 404
-        if not r.is_archived:
-            return jsonify({'error': f'Release {job}-{release} is not archived'}), 400
+    r, err = get_or_404(Releases, f'Release {job}-{release} not found', job=job, release=str(release))
+    if err:
+        return err
+    if not r.is_archived:
+        return jsonify({'error': f'Release {job}-{release} is not archived'}), 400
 
-        r.is_archived = False
-        r.last_updated_at = datetime.utcnow()
-        r.source_of_update = 'Brain'
-        JobEventService.create_and_close(
-            job=r.job,
-            release=r.release,
-            action='unarchived',
-            source='Brain',
-            payload={'reason': 'admin_unarchive'},
-        )
-        db.session.commit()
-        logger.info(f"Unarchived release {job}-{release} via admin action")
-        return jsonify({'status': 'success'}), 200
-    except Exception as e:
-        logger.error(f"unarchive_release failed for {job}-{release}", exc_info=True)
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+    r.is_archived = False
+    r.last_updated_at = datetime.utcnow()
+    r.source_of_update = 'Brain'
+    JobEventService.create_and_close(
+        job=r.job,
+        release=r.release,
+        action='unarchived',
+        source='Brain',
+        payload={'reason': 'admin_unarchive'},
+    )
+    db.session.commit()
+    logger.info(f"Unarchived release {job}-{release} via admin action")
+    return jsonify({'status': 'success'}), 200
 
 
 @brain_bp.route("/archive-confirm", methods=["POST"])
 @admin_required
+@handle_errors("archive releases", raw_error=True)
 def archive_confirm():
     """Archive all eligible releases (both job_comp and invoiced = 'X', not yet archived)."""
     from app.services.job_event_service import JobEventService
 
-    try:
-        releases = _archivable_query().all()
-        count = 0
-        now = datetime.utcnow()
-        for r in releases:
-            r.is_archived = True
-            r.fab_order = None
-            r.last_updated_at = now
-            r.source_of_update = 'Brain'
-            JobEventService.create_and_close(
-                job=r.job,
-                release=r.release,
-                action='archived',
-                source='Brain',
-                payload={'reason': 'admin_send_to_archive'},
-            )
-            count += 1
-        db.session.commit()
-        logger.info(f"Archived {count} releases via admin action")
-        return jsonify({'status': 'success', 'count': count}), 200
-    except Exception as e:
-        logger.error("archive_confirm failed", exc_info=True)
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+    releases = _archivable_query().all()
+    count = 0
+    now = datetime.utcnow()
+    for r in releases:
+        r.is_archived = True
+        r.fab_order = None
+        r.last_updated_at = now
+        r.source_of_update = 'Brain'
+        JobEventService.create_and_close(
+            job=r.job,
+            release=r.release,
+            action='archived',
+            source='Brain',
+            payload={'reason': 'admin_send_to_archive'},
+        )
+        count += 1
+    db.session.commit()
+    logger.info(f"Archived {count} releases via admin action")
+    return jsonify({'status': 'success', 'count': count}), 200
 
 
 # ==============================================================================
