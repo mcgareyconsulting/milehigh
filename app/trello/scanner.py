@@ -16,42 +16,21 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Stages that don't have dedicated Trello lists but are mapped during sync
-# Cut start → Released, Welded QC → Fit Up Complete., Complete → Shipping completed
-STAGES_NOT_TRACKED = []  # Empty - all stages map to lists for sync purposes
-
-
 def get_expected_trello_list_from_stage(stage: Optional[str]) -> Optional[str]:
     """
     Map a database stage to the expected Trello list name.
-    
-    For sync purposes, untracked stages (Cut start, Welded QC, Complete) 
-    are mapped to existing lists:
-    - Cut start → Released (first stage)
-    - Welded QC → Fit Up Complete. (previous tracked stage)
-    - Complete → Shipping completed (final stage)
-    
+
+    Delegates to TrelloListMapper.get_trello_list_for_stage() which holds
+    the authoritative many-to-one mapping for all DB stages.
+
     Args:
         stage: Database stage value
-        
+
     Returns:
-        Expected Trello list name, or None if stage is invalid
+        Expected Trello list name, or None if stage is invalid/unmapped
     """
-    if not stage:
-        return None
-    
-    # Special mappings for untracked stages (no dedicated Trello list)
-    if stage == 'Cut start':
-        return 'Released'  # Map to first tracked list
-    if stage in ('Welded', 'Welded QC'):
-        return 'Fit Up Complete.'  # Map to previous tracked stage
-    if stage == 'Complete':
-        return 'Shipping completed'  # Map to final tracked list
-    
-    # Direct mapping: stage name = Trello list name
-    # Valid Trello lists: Released, Fit Up Complete., Paint complete, 
-    # Store at MHMW for shipping, Shipping planning, Shipping completed
-    return stage
+    from app.trello.list_mapper import TrelloListMapper
+    return TrelloListMapper.get_trello_list_for_stage(stage)
 
 
 def parse_identifier(identifier: str) -> Optional[Tuple[int, str]]:

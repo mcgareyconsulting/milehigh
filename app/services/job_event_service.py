@@ -96,3 +96,19 @@ class JobEventService:
             logger.debug(f"Event {event_id} marked as applied")
         else:
             logger.warning(f"Attempted to close non-existent event {event_id}")
+
+    @staticmethod
+    def create_and_close(job, release, action, source, payload, external_user_id=None):
+        """Create a job event and immediately mark it as applied.
+
+        Use this for DB-only changes that have no async outbox step.
+        Returns the event if created, None if deduplicated.
+        """
+        event = JobEventService.create(
+            job=job, release=release, action=action,
+            source=source, payload=payload,
+            external_user_id=external_user_id,
+        )
+        if event:
+            JobEventService.close(event.id)
+        return event

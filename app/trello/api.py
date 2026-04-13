@@ -1,6 +1,8 @@
 import requests
 import re
 import os
+import time as _time
+import threading
 from app.config import Config as cfg
 from app.trello.utils import mountain_due_datetime, mountain_start_datetime
 from app.models import Releases, db
@@ -73,17 +75,84 @@ def update_trello_card(
         raise
 
 
+## ---------------------------------------------------------------------------
+## Board list cache — lists are near-static board config; caching avoids
+## repeated API calls during batch outbox processing and stage changes.
+## ---------------------------------------------------------------------------
+
+_board_lists_lock = threading.Lock()
+_board_lists_by_name = {}   # {list_name: {"name": ..., "id": ...}}
+_board_lists_by_id = {}     # {list_id: {"name": ..., "id": ...}}
+_board_lists_expires_at = 0
+_BOARD_LISTS_TTL = 300      # 5 minutes
+
+
+def _refresh_board_lists_cache():
+    """Fetch all board lists from Trello and populate both lookup dicts.
+
+    Must be called while holding _board_lists_lock.
+    """
+    global _board_lists_by_name, _board_lists_by_id, _board_lists_expires_at
+
+    board_id = cfg.TRELLO_BOARD_ID
+    if not board_id:
+        return
+
+    url = f"https://api.trello.com/1/boards/{board_id}/lists"
+    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        lists = response.json()
+    except Exception as e:
+        print(f"[TRELLO API] Error refreshing board lists cache: {e}")
+        return
+
+    by_name = {}
+    by_id = {}
+    for lst in lists:
+        entry = {"name": lst["name"], "id": lst["id"]}
+        by_name[lst["name"]] = entry
+        by_id[lst["id"]] = entry
+
+    _board_lists_by_name = by_name
+    _board_lists_by_id = by_id
+    _board_lists_expires_at = _time.monotonic() + _BOARD_LISTS_TTL
+
+
+def _ensure_board_lists_cache():
+    """Refresh the cache if it has expired or is empty."""
+    if _time.monotonic() < _board_lists_expires_at and _board_lists_by_name:
+        return  # cache is fresh
+    with _board_lists_lock:
+        # Double-check after acquiring the lock (another thread may have refreshed)
+        if _time.monotonic() < _board_lists_expires_at and _board_lists_by_name:
+            return
+        _refresh_board_lists_cache()
+
+
 ## Helper functions for combining Trello and Excel data
 def get_list_name_by_id(list_id):
     """
-    Fetches the list name from Trello API by list ID.
+    Return the list name for a Trello list ID (cached).
     """
+    _ensure_board_lists_cache()
+    entry = _board_lists_by_id.get(list_id)
+    if entry:
+        return entry["name"]
+
+    # Cache miss for this ID — fall back to single-list fetch and update cache
     url = f"https://api.trello.com/1/lists/{list_id}"
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
     response = requests.get(url, params=params)
     if response.status_code == 200:
         data = response.json()
-        return data.get("name")
+        name = data.get("name")
+        if name:
+            new_entry = {"name": name, "id": list_id}
+            _board_lists_by_id[list_id] = new_entry
+            _board_lists_by_name[name] = new_entry
+        return name
     else:
         print(f"Trello API error: {response.status_code} {response.text}")
         return None
@@ -120,19 +189,10 @@ def get_board_info(board_id=None):
 
 def get_list_by_name(list_name):
     """
-    Fetches the list details from Trello API by list name.
+    Return list details {"name": ..., "id": ...} for a Trello list name (cached).
     """
-    url = f"https://api.trello.com/1/boards/{cfg.TRELLO_BOARD_ID}/lists"
-    params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN}
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        lists = response.json()
-        for lst in lists:
-            if lst["name"] == list_name:
-                return {"name": lst["name"], "id": lst["id"]}
-    else:
-        print(f"Trello API error: {response.status_code} {response.text}")
-        return None
+    _ensure_board_lists_cache()
+    return _board_lists_by_name.get(list_name)
 
 
 def get_trello_card_by_id(card_id):

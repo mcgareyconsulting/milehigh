@@ -28,39 +28,23 @@ logger = get_logger(__name__)
 
 def get_list_id_by_stage(stage):
     """
-    Get Trello list ID by stage name.
+    Get Trello list ID for a database stage.
 
-    Trello tracks a small subset of stages. All FABRICATION stages except
-    'Released' map to the 'Fit Up Complete.' Trello list. 'Hold', 'Welded QC',
-    and 'Complete' are ignored. All other stages fall back to exact name match.
+    Uses TrelloListMapper.DB_STAGE_TO_TRELLO_LIST to resolve many-to-one
+    mappings (e.g. 'Welded QC' → 'Fit Up Complete.' list).
 
     Args:
-        stage: Stage name (e.g., 'Released', 'Weld Start', 'Fit Up Complete.', etc.)
+        stage: Database stage name
 
     Returns:
-        str: Trello list ID, or None if stage is ignored or list not found
+        str: Trello list ID, or None if the stage has no mapping or the API call fails
     """
-    # Stages Trello ignores entirely — no card move
-    TRELLO_IGNORED = {'Hold', 'Welded QC', 'Complete'}
-    if stage in TRELLO_IGNORED:
-        logger.info(f"Stage '{stage}' is ignored by Trello, skipping outbox creation")
+    from app.trello.list_mapper import TrelloListMapper
+
+    trello_list_name = TrelloListMapper.get_trello_list_for_stage(stage)
+    if trello_list_name is None:
+        logger.info(f"Stage '{stage}' has no Trello list mapping, skipping outbox creation")
         return None
-
-    # Explicit stage → Trello list name mapping.
-    # All non-Released FABRICATION stages funnel to 'Fit Up Complete.'
-    STAGE_TO_TRELLO_LIST = {
-        'Released':         'Released',
-        'Material Ordered': 'Fit Up Complete.',
-        'Cut start':        'Fit Up Complete.',
-        'Cut Complete':     'Fit Up Complete.',
-        'Fitup Start':      'Fit Up Complete.',
-        'Fit Up Complete.': 'Fit Up Complete.',
-        'Weld Start':       'Fit Up Complete.',
-        'Weld Complete':    'Fit Up Complete.',
-        'Welded':           'Fit Up Complete.',
-    }
-
-    trello_list_name = STAGE_TO_TRELLO_LIST.get(stage, stage)  # fallback: exact name
 
     try:
         list_info = get_list_by_name(trello_list_name)
@@ -972,7 +956,7 @@ def update_stage(job, release):
             if current_job_comp != 'X':
                 old_jc = job_record.job_comp
                 job_record.job_comp = 'X'
-                JobEventService.create(
+                JobEventService.create_and_close(
                     job=job, release=release,
                     action='updated', source='Brain',
                     payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': 'X', 'reason': 'stage_set_to_complete'},
@@ -983,7 +967,7 @@ def update_stage(job, release):
             if current_job_comp == 'X':
                 old_jc = job_record.job_comp
                 job_record.job_comp = None
-                JobEventService.create(
+                JobEventService.create_and_close(
                     job=job, release=release,
                     action='updated', source='Brain',
                     payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': None, 'reason': 'stage_changed_from_complete'},
@@ -1157,7 +1141,7 @@ def update_banana_color(job, release):
         job_record.source_of_update = 'Brain'
 
         from app.services.job_event_service import JobEventService
-        JobEventService.create(
+        JobEventService.create_and_close(
             job=job,
             release=release,
             action='updated',
@@ -1475,7 +1459,7 @@ def update_job_comp(job, release):
         job_record.source_of_update = "Brain"
 
         from app.services.job_event_service import JobEventService
-        JobEventService.create(
+        JobEventService.create_and_close(
             job=job,
             release=release,
             action='updated',
@@ -1503,7 +1487,7 @@ def update_job_comp(job, release):
                         break
 
                 update_job_stage_fields(job_record, revert_stage)
-                JobEventService.create(
+                JobEventService.create_and_close(
                     job=job, release=release,
                     action='update_stage', source='Brain',
                     payload={'from': 'Complete', 'to': revert_stage, 'reason': 'job_comp_cleared'},
@@ -1517,7 +1501,7 @@ def update_job_comp(job, release):
             current_stage = job_record.stage or 'Released'
             if current_stage != 'Complete':
                 update_job_stage_fields(job_record, 'Complete')
-                JobEventService.create(
+                JobEventService.create_and_close(
                     job=job, release=release,
                     action='update_stage', source='Brain',
                     payload={'from': current_stage, 'to': 'Complete', 'reason': 'job_comp_set_to_x'},
@@ -1582,7 +1566,7 @@ def update_invoiced(job, release):
         job_record.source_of_update = "Brain"
 
         from app.services.job_event_service import JobEventService
-        JobEventService.create(
+        JobEventService.create_and_close(
             job=job,
             release=release,
             action='updated',
@@ -1675,6 +1659,7 @@ def update_start_install(job, release):
                 except Exception as trello_error:
                     logger.error(f"Failed to clear Trello due date for job {job}-{release}: {trello_error}", exc_info=True)
 
+            JobEventService.close(event.id)
             db.session.commit()
 
             # Recalculate so the formula date gets set
@@ -1761,7 +1746,10 @@ def update_start_install(job, release):
                 f"Job {job}-{release} has no trello_card_id, skipping Trello update",
                 extra={'job': job, 'release': release}
             )
-        
+
+        # Close event — no outbox needed (Trello update is synchronous above)
+        JobEventService.close(event.id)
+
         # Commit all DB changes
         db.session.commit()
 
@@ -2662,7 +2650,7 @@ def delete_job(job, release):
         job_record.source_of_update = 'Admin'
 
         from app.services.job_event_service import JobEventService
-        JobEventService.create(
+        JobEventService.create_and_close(
             job=job,
             release=release,
             action='deleted',
@@ -2749,7 +2737,7 @@ def update_job_column(job, release):
         job_record.source_of_update = 'Admin'
 
         from app.services.job_event_service import JobEventService
-        JobEventService.create(
+        JobEventService.create_and_close(
             job=job,
             release=release,
             action='updated',
@@ -2834,7 +2822,7 @@ def unarchive_release(job, release):
         r.is_archived = False
         r.last_updated_at = datetime.utcnow()
         r.source_of_update = 'Brain'
-        JobEventService.create(
+        JobEventService.create_and_close(
             job=r.job,
             release=r.release,
             action='unarchived',
@@ -2865,7 +2853,7 @@ def archive_confirm():
             r.fab_order = None
             r.last_updated_at = now
             r.source_of_update = 'Brain'
-            JobEventService.create(
+            JobEventService.create_and_close(
                 job=r.job,
                 release=r.release,
                 action='archived',
@@ -2879,4 +2867,89 @@ def archive_confirm():
     except Exception as e:
         logger.error("archive_confirm failed", exc_info=True)
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+# ==============================================================================
+# Sync Health
+# ==============================================================================
+
+@brain_bp.route("/sync-health", methods=["GET"])
+@login_required
+@admin_required
+def sync_health():
+    """
+    Report the health of the Job Log ↔ Trello sync.
+
+    Returns JSON with:
+      - mismatches: active records where the expected Trello list
+        (derived from DB stage) differs from the stored trello_list_name
+      - unclosed_events: events with applied_at IS NULL older than 1 hour
+      - outbox: counts of failed / pending / stuck-processing outbox items
+    """
+    from app.trello.list_mapper import TrelloListMapper
+    from app.models import Releases, ReleaseEvents, TrelloOutbox
+    from sqlalchemy import func
+    from datetime import timedelta
+
+    try:
+        now = datetime.utcnow()
+
+        # --- Mismatches ---------------------------------------------------
+        active_with_trello = Releases.query.filter(
+            Releases.trello_card_id.isnot(None),
+            Releases.is_archived != True,  # noqa: E712
+            Releases.is_active == True,    # noqa: E712
+        ).all()
+
+        mismatch_details = []
+        pattern_counts = {}
+        for r in active_with_trello:
+            expected = TrelloListMapper.get_trello_list_for_stage(r.stage)
+            actual = r.trello_list_name
+            if expected and actual and expected != actual:
+                pattern = f"{actual} (trello) != {r.stage} (db)"
+                pattern_counts[pattern] = pattern_counts.get(pattern, 0) + 1
+                if len(mismatch_details) < 50:
+                    mismatch_details.append({
+                        'job': r.job,
+                        'release': r.release,
+                        'db_stage': r.stage,
+                        'trello_list': actual,
+                        'expected_list': expected,
+                    })
+
+        # --- Unclosed events ----------------------------------------------
+        stale_cutoff = now - timedelta(hours=1)
+        unclosed_total = ReleaseEvents.query.filter(
+            ReleaseEvents.applied_at == None  # noqa: E711
+        ).count()
+        unclosed_stale = ReleaseEvents.query.filter(
+            ReleaseEvents.applied_at == None,  # noqa: E711
+            ReleaseEvents.created_at < stale_cutoff,
+        ).count()
+
+        # --- Outbox -------------------------------------------------------
+        outbox_failed = TrelloOutbox.query.filter_by(status='failed').count()
+        outbox_pending = TrelloOutbox.query.filter_by(status='pending').count()
+        outbox_processing = TrelloOutbox.query.filter_by(status='processing').count()
+
+        return jsonify({
+            'mismatches': {
+                'total': sum(pattern_counts.values()),
+                'by_pattern': dict(sorted(pattern_counts.items(), key=lambda x: -x[1])),
+                'sample': mismatch_details,
+            },
+            'unclosed_events': {
+                'total': unclosed_total,
+                'older_than_1h': unclosed_stale,
+            },
+            'outbox': {
+                'failed': outbox_failed,
+                'pending': outbox_pending,
+                'processing': outbox_processing,
+            },
+        }), 200
+    except Exception as e:
+        logger.error("sync_health failed", exc_info=True)
         return jsonify({'error': str(e)}), 500

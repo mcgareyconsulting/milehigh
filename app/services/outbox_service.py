@@ -78,7 +78,10 @@ class OutboxService:
                 outbox_item.error_message = f"Job {event.job}-{event.release} not found"
                 db.session.commit()
                 return False
-            
+
+            # Stash list_id for batch sort in process_pending_items (not persisted)
+            outbox_item._trello_list_id = job_record.trello_list_id
+
             # Process based on destination and action
             if outbox_item.destination == 'trello' and outbox_item.action == 'move_card':
                 # Derive stage from event payload
@@ -169,7 +172,6 @@ class OutboxService:
                 try:
                     from app.trello.api import update_card_custom_field_number
                     from app.config import Config as cfg
-                    from app.trello.utils import sort_list_if_needed
                     import math
                     
                     if cfg.FAB_ORDER_FIELD_ID:
@@ -188,17 +190,9 @@ class OutboxService:
                             )
                             
                             if success:
-                                # Get list_id from job record to check if sorting is needed
-                                list_id = job_record.trello_list_id
-                                if list_id:
-                                    # Sort the list if it's one of the target lists
-                                    sort_list_if_needed(
-                                        list_id,
-                                        cfg.FAB_ORDER_FIELD_ID,
-                                        None,  # No operation_id for outbox processing
-                                        "list"
-                                    )
-                                
+                                # NOTE: List sorting is deferred to process_pending_items()
+                                # to avoid redundant sorts when processing batches.
+
                                 # Success! Mark outbox item as completed
                                 outbox_item.status = 'completed'
                                 outbox_item.completed_at = datetime.utcnow()
@@ -380,13 +374,32 @@ class OutboxService:
             return 0
         
         processed_count = 0
+        # Track lists that need sorting after fab_order batch updates
+        lists_to_sort = set()
+
         for item in pending_items:
             try:
                 if OutboxService.process_item(item):
                     processed_count += 1
+                    # Collect list_id for deferred sort after fab_order updates
+                    if item.action == 'update_fab_order' and item.status == 'completed':
+                        list_id = getattr(item, '_trello_list_id', None)
+                        if list_id:
+                            lists_to_sort.add(list_id)
             except Exception as e:
                 logger.error(f"Error processing outbox {item.id}: {e}", exc_info=True)
-        
+
+        # Batch sort: sort each affected list once after all fab_order updates
+        if lists_to_sort:
+            from app.trello.utils import sort_list_if_needed
+            from app.config import Config as cfg
+            if cfg.FAB_ORDER_FIELD_ID:
+                for list_id in lists_to_sort:
+                    try:
+                        sort_list_if_needed(list_id, cfg.FAB_ORDER_FIELD_ID, None, "batch")
+                    except Exception as e:
+                        logger.error(f"Batch sort failed for list {list_id}: {e}", exc_info=True)
+
         if processed_count > 0:
             logger.debug(f"Processed {processed_count}/{len(pending_items)} outbox items")
         return processed_count
