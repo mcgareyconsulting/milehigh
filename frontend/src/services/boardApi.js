@@ -31,6 +31,14 @@ export async function updateBoardItem(id, updates) {
     return data;
 }
 
+export async function reorderBoardItems(status, orderedIds) {
+    const { data } = await axios.patch(`${BASE}/items/reorder`, {
+        status,
+        ordered_ids: orderedIds,
+    });
+    return data;
+}
+
 export async function deleteBoardItem(id) {
     await axios.delete(`${BASE}/items/${id}`);
 }

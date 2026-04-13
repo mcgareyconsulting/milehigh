@@ -51,10 +51,10 @@ def get_list_id_by_stage(stage):
         if list_info and 'id' in list_info:
             return list_info['id']
         else:
-            logger.warning(f"Could not get list ID for Trello list: {trello_list_name} (mapped from stage '{stage}')")
+            logger.warning(f"Could not get list ID for stage '{stage}' → list '{trello_list_name}' (list_info: {list_info})")
             return None
     except Exception as e:
-        logger.error(f"Error getting list ID for stage {stage}: {e}", exc_info=True)
+        logger.error(f"Error getting list ID for stage '{stage}': {e}", exc_info=True)
         return None
 
 def update_job_stage_fields(job_record, stage):

@@ -6,9 +6,9 @@ function PMBoardList({ jobs, onUpdate }) {
     // Stage options matching JobsTableRow
     const stageOptions = [
         { value: 'Released', label: 'Released' },
+        { value: 'Material Ordered', label: 'Material Ordered' },
         { value: 'Cut start', label: 'Cut start' },
         { value: 'Cut Complete', label: 'Cut comp' },
-        { value: 'Material Ordered', label: 'Material Ordered' },
         { value: 'Fitup Start', label: 'Fitup start' },
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },

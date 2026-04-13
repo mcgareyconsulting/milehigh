@@ -53,7 +53,7 @@ class OutboxService:
         """
         from app.models import Releases, db
         from app.services.job_event_service import JobEventService
-        from app.trello.api import update_trello_card, get_list_by_name
+        from app.trello.api import update_trello_card
         from app.config import Config as cfg
 
         # Mark as processing to prevent concurrent processing
@@ -102,16 +102,15 @@ class OutboxService:
                     db.session.commit()
                     return False
                 
-                # Get list_id from stage name
-                list_info = get_list_by_name(stage)
-                if not list_info or 'id' not in list_info:
+                # Get list_id from stage name using the shared mapping
+                from app.brain.job_log.routes import get_list_id_by_stage
+                list_id = get_list_id_by_stage(stage)
+                if not list_id:
                     logger.error(f"Outbox {outbox_item.id}: Could not get list ID for stage '{stage}'")
                     outbox_item.status = 'failed'
                     outbox_item.error_message = f"Could not get list ID for stage: {stage}"
                     db.session.commit()
                     return False
-                
-                list_id = list_info['id']
                 
                 # Execute the Trello API call
                 try:

@@ -68,8 +68,44 @@ def list_board_items():
             )
         )
 
-    rows = query.order_by(BoardItem.updated_at.desc()).all()
+    rows = query.order_by(
+        BoardItem.position.asc().nullslast(),
+        BoardItem.updated_at.desc()
+    ).all()
     return jsonify({'items': [item.to_dict(activity_count=count or 0) for item, count in rows]})
+
+
+@brain_bp.route('/board/items/reorder', methods=['PATCH'])
+@admin_required
+def reorder_board_items():
+    """Bulk-update card positions within a single status column."""
+    data = request.get_json()
+    status_value = data.get('status')
+    ordered_ids = data.get('ordered_ids', [])
+
+    valid_statuses = {'open', 'in_progress', 'deployed', 'closed'}
+    if status_value not in valid_statuses:
+        return jsonify({'error': 'Invalid status'}), 400
+    if not isinstance(ordered_ids, list) or not ordered_ids:
+        return jsonify({'error': 'ordered_ids must be a non-empty list'}), 400
+
+    # Verify all IDs belong to this column (prevents cross-column injection)
+    existing_ids = {
+        row.id for row in
+        db.session.query(BoardItem.id)
+        .filter(BoardItem.status == status_value, BoardItem.id.in_(ordered_ids))
+        .all()
+    }
+    if len(existing_ids) != len(ordered_ids):
+        return jsonify({'error': 'One or more IDs not found in this column'}), 400
+
+    id_to_pos = {item_id: idx for idx, item_id in enumerate(ordered_ids)}
+    for item in db.session.query(BoardItem).filter(BoardItem.id.in_(ordered_ids)).all():
+        item.position = id_to_pos[item.id]
+
+    db.session.commit()
+    logger.info(f"Reordered {len(ordered_ids)} items in column '{status_value}'")
+    return jsonify({'ok': True, 'updated': len(ordered_ids)})
 
 
 @brain_bp.route('/board/items', methods=['POST'])
