@@ -81,6 +81,7 @@ class Config:
 
     # Dev webhook — fires board events to an external server (e.g. Railway)
     DEV_WEBHOOK_URL = os.environ.get("DEV_WEBHOOK_URL")
+    DEV_WEBHOOK_SECRET = os.environ.get("DEV_WEBHOOK_SECRET")
 
 
 class LocalConfig(Config):

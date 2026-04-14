@@ -22,9 +22,14 @@ class DevWebhookService:
             'timestamp': datetime.now(timezone.utc).isoformat(),
         }
 
+        headers = {}
+        secret = current_app.config.get('DEV_WEBHOOK_SECRET')
+        if secret:
+            headers['X-Webhook-Secret'] = secret
+
         def _post():
             try:
-                requests.post(url, json=data, timeout=5)
+                requests.post(url, json=data, headers=headers, timeout=5)
             except Exception as e:
                 logger.warning("dev_webhook_failed", event=event_type, error=str(e))
 
