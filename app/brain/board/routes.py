@@ -26,6 +26,7 @@ from app.auth.utils import admin_required, get_current_user
 import re
 from app.models import db, BoardItem, BoardActivity, User, Notification
 from app.logging_config import get_logger
+from app.services.dev_webhook_service import DevWebhookService
 
 logger = get_logger(__name__)
 
@@ -153,7 +154,9 @@ def create_board_item():
     db.session.commit()
 
     logger.info(f"Board item #{item.id} created by {user.username}: {title}")
-    return jsonify(item.to_dict(include_activity=True)), 201
+    item_dict = item.to_dict(include_activity=True)
+    DevWebhookService.send('board_item.created', item_dict)
+    return jsonify(item_dict), 201
 
 
 @brain_bp.route('/board/items/<int:item_id>', methods=['GET'])
@@ -184,8 +187,10 @@ def update_board_item(item_id):
         item.category = data['category'].strip()
     if 'priority' in data:
         item.priority = data['priority']
+    status_changed = False
     if new_status and new_status != old_status:
         item.status = new_status
+        status_changed = True
         activity = BoardActivity(
             item_id=item.id,
             type='status_change',
@@ -198,7 +203,13 @@ def update_board_item(item_id):
         db.session.add(activity)
 
     db.session.commit()
-    return jsonify(item.to_dict(include_activity=True))
+    item_dict = item.to_dict(include_activity=True)
+    DevWebhookService.send('board_item.updated', item_dict)
+    if status_changed:
+        DevWebhookService.send('board_item.status_changed', {
+            'id': item.id, 'from': old_status, 'to': new_status,
+        })
+    return jsonify(item_dict)
 
 
 @brain_bp.route('/board/items/<int:item_id>', methods=['DELETE'])
@@ -206,9 +217,13 @@ def update_board_item(item_id):
 def delete_board_item(item_id):
     """Delete a board item and all its activity."""
     item = BoardItem.query.get_or_404(item_id)
+    user = get_current_user()
     db.session.delete(item)
     db.session.commit()
-    logger.info(f"Board item #{item_id} deleted by {get_current_user().username}")
+    logger.info(f"Board item #{item_id} deleted by {user.username}")
+    DevWebhookService.send('board_item.deleted', {
+        'id': item_id, 'deleted_by': user.first_name or user.username,
+    })
     return jsonify({'ok': True})
 
 
@@ -255,4 +270,8 @@ def add_board_activity(item_id):
         if mentioned_users:
             db.session.commit()
 
-    return jsonify(activity.to_dict()), 201
+    activity_dict = activity.to_dict()
+    DevWebhookService.send('board_activity.created', {
+        **activity_dict, 'item_id': item.id, 'item_title': item.title,
+    })
+    return jsonify(activity_dict), 201

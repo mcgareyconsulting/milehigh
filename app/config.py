@@ -79,6 +79,9 @@ class Config:
     # Admin PIN for health scan admin page
     ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
 
+    # Dev webhook — fires board events to an external server (e.g. Railway)
+    DEV_WEBHOOK_URL = os.environ.get("DEV_WEBHOOK_URL")
+
 
 class LocalConfig(Config):
     """Configuration for local development."""
