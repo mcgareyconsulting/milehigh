@@ -1,3 +1,18 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Encapsulate the full fab_order update workflow (DB write, event creation, outbox queuing, scheduling recalc) as a single command object.
+exports:
+  UpdateFabOrderCommand: Dataclass command that executes a fab_order update with all side effects
+imports_from: [app.models, app.brain.job_log.features.fab_order.results, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service]
+imported_by: [app/brain/job_log/routes.py]
+invariants:
+  - Fixed-tier stages always override the requested fab_order with their tier value
+  - Dynamic fab_order values are floored at 3
+  - Deduplicated events raise ValueError, not silently succeed
+  - Scheduling recalculation failure is logged but does not roll back the update
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 # app/brain/job_log/features/fab_order/command.py
 
 from dataclasses import dataclass

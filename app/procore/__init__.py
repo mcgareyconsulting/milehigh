@@ -1,3 +1,17 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Register the Procore blueprint and expose the webhook endpoint that receives submittal create/update events from Procore.
+exports:
+  procore_bp: Flask blueprint handling Procore webhook ingestion, health scans, and admin PIN verification.
+imports_from: [flask, app.models, app.procore.procore, app.procore.helpers, app.procore.client, app.logging_config, app.config, app.trello.context, app.trello.logging]
+imported_by: [app/__init__.py]
+invariants:
+  - Burst dedup via is_duplicate_webhook() rejects repeated Procore deliveries within a 15-second window.
+  - Connector-originated webhooks (PROCORE_CONNECTOR_USER_ID) are still processed to catch Procore side-effect diffs.
+  - Update events for missing submittals fall back to create_submittal_from_webhook to handle race conditions.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 # Package
 import os
 import json

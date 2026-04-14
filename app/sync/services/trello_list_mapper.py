@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provide the single authoritative bidirectional mapping between database milestone fields (fitup_comp, welded, paint_comp, ship) and the 6 Trello lists, so stage logic lives in one place.
+exports:
+  TrelloListMapper: Class with classmethods for DB-to-Trello list resolution, Trello-list-to-DB field application, and shipping-state validation.
+imports_from: [app.logging_config]
+imported_by: [app/sync/sync.py, app/trello/scripts/trello_cleanup.py]
+invariants:
+  - Many DB field combinations map to the same Trello list (many-to-one); the reverse mapping is deterministic (one list sets exact field values).
+  - VALID_SHIPPING_STATES must stay in sync with the list names checked in determine_trello_list_from_db.
+  - apply_trello_list_to_db modifies the job record in place but does NOT commit — the caller owns the transaction.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Trello list mapping logic for syncing between database and Trello lists.
 
 This module provides a mapper class that handles bidirectional mapping between

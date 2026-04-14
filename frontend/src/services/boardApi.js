@@ -1,3 +1,23 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Centralizes all HTTP calls to the Brain Board (bug/feature tracker) so UI components stay transport-agnostic.
+ * exports:
+ *   fetchBoardItems: Retrieve board items with optional status/category/priority/search filters.
+ *   fetchBoardItem: Retrieve a single board item by ID.
+ *   createBoardItem: Create a new board item.
+ *   updateBoardItem: Patch an existing board item.
+ *   reorderBoardItems: Persist drag-drop column ordering.
+ *   deleteBoardItem: Delete a board item by ID.
+ *   fetchMentionableUsers: List users available for @mention in comments.
+ *   addComment: Post a comment on a board item.
+ * imports_from: [axios, ../utils/api]
+ * imported_by: [components/board/NewItemModal.jsx, components/board/BoardDetail.jsx, pages/Board.jsx]
+ * invariants:
+ *   - axios.defaults.withCredentials is set globally so session cookies are sent on every request.
+ *   - All endpoints are prefixed with /brain/board.
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 

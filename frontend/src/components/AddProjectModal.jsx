@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Lets users add a Procore project to the drafting work load via a multi-step preview/confirm flow.
+ * exports:
+ *   AddProjectModal: Multi-step modal for previewing and confirming project additions
+ * imports_from: [react, ../services/draftingWorkLoadApi]
+ * imported_by: [frontend/src/pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - Modal resets all state on close to avoid stale data on reopen
+ *   - Project ID must be a valid integer before preview is allowed
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 

@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Primary submittal tracking page that lets drafters and admins view, filter, reorder, and update Procore submittals across Open and Draft tabs.
+ * exports:
+ *   DraftingWorkLoad: Page component with tabbed submittal table, drag-and-drop ordering, inline editing, and PDF export
+ * imports_from: [react, react-router-dom, ../hooks/useDataFetching, ../hooks/useFilters, ../hooks/useDWLDragAndDrop, ../components/TableRow, ../services/draftingWorkLoadApi, ../context/LocationContext]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - Admin-only actions: reorder, resort, add project, bump, step order, change Procore status
+ *   - Drafter-or-admin actions: update status, update due date
+ *   - When a highlight query param is present, all tabs are fetched so the target row can be found
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';

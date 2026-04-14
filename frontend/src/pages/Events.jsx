@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Displays a filterable audit trail of job and submittal events so admins can investigate what changed and when.
+ * exports:
+ *   Events: Page component rendering event table with date, source, user, and identifier filters
+ * imports_from: [react, react-router-dom, axios, ../utils/api]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - URL search params (submittal_id, job, release) pre-populate filters on mount and sync bidirectionally
+ *   - Payload expansion is tracked per-event using a composite key of type + id
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';

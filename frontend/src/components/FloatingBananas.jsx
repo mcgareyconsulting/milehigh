@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Adds a playful bouncing-banana animation overlay to the login page background.
+ * exports:
+ *   FloatingBananas: Canvas-based bouncing banana animation with DVD-logo collision physics
+ * imports_from: [react]
+ * imported_by: [frontend/src/pages/Login.jsx]
+ * invariants:
+ *   - Animation uses requestAnimationFrame and cleans up on unmount
+ *   - Burst mode temporarily multiplies speed for 2 seconds on click
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useEffect, useRef, useState } from 'react';
 
 const BANANA_SIZE = 40;

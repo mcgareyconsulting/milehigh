@@ -1,3 +1,23 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Pure-logic utilities (webhook parsing, date math, identifier extraction, Fab-Order sorting) shared across the Trello package with no DB writes.
+exports:
+  parse_webhook_data: Parse raw Trello webhook JSON into a normalised event dict.
+  parse_trello_datetime: Convert Trello ISO-8601 strings to naive Python datetimes.
+  extract_identifier: Pull the "NNN-NNN" job-release prefix from a card name.
+  mountain_due_datetime: Convert a local date to 6 pm Mountain ISO string for Trello due dates.
+  calculate_business_days_before: Count backward N business days from a date.
+  should_sort_list_by_fab_order: Decide whether a list needs Fab-Order re-sorting.
+  sort_list_if_needed: Sort a list by Fab Order if it is a target list, with logging.
+imports_from: [app.config, app.trello.api, app.trello.logging, zoneinfo, re]
+imported_by: [app/trello/sync.py, app/trello/scanner.py, app/trello/card_creation.py, app/trello/api.py, app/brain/job_log/routes.py, app/services/outbox_service.py]
+invariants:
+  - parse_webhook_data never raises; errors return {"event": "error", "handled": False}.
+  - All Mountain-time conversions are DST-aware via ZoneInfo.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
+
 import re
 from datetime import datetime, date, timezone, time, timedelta
 from zoneinfo import ZoneInfo

@@ -1,14 +1,31 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Idempotently converge every tracked project to the desired webhook+trigger state, adding only what is missing.
+exports:
+  get_database_info: Returns a sanitized DB connection string for debug output.
+  ensure_project_webhooks: Converges one project's webhooks/triggers to the required state; supports dry-run.
+  ensure_single_webhook: Convenience wrapper that bootstraps app context for a single project.
+  main: CLI entry point with single-project, batch, and dry-run modes.
+imports_from: [app, app.procore.client, app.procore.webhook_utils]
+imported_by: []
+invariants:
+  - Requires Flask app context (creates its own via create_app).
+  - Invoked directly as `python -m app.procore.scripts.ensure_webhooks`.
+  - Idempotent: safe to run repeatedly; only creates missing webhooks/triggers.
+  - Dry-run mode reports planned changes without mutating Procore state.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to ensure all projects in procore_submittals have webhooks with both
 'update' and 'create' triggers for Submittals.
 
 Usage:
     # Ensure webhooks for all projects in database
     python -m app.procore.scripts.ensure_webhooks
-    
+
     # Ensure webhook for a single project
     python -m app.procore.scripts.ensure_webhooks --project-id <project_id>
-    
+
     # Dry-run mode (report only, no changes)
     python -m app.procore.scripts.ensure_webhooks --dry-run
 

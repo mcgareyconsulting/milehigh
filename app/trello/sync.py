@@ -1,3 +1,18 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Processes inbound Trello webhooks by reconciling card changes (moves, edits, due-date updates) with the DB and creating JobEvents for the audit trail.
+exports:
+  sync_from_trello: Main webhook handler that fetches card data, updates the Job record, and emits JobEvents.
+imports_from: [app.trello.api, app.trello.utils, app.trello.operations, app.trello.context, app.trello.logging, app.trello.list_mapper, app.models, app.services.job_event_service, app.config]
+imported_by: [app/trello/__init__.py]
+invariants:
+  - Echo webhooks from Brain's own outbox calls are detected and skipped (90-second window, content-matched).
+  - All DB changes are committed only after JobEvents are created; on failure the context manager rolls back everything.
+  - Duplicate events (same or older timestamp) are silently dropped.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
+
 from numpy import safe_eval
 import openpyxl
 import pandas as pd

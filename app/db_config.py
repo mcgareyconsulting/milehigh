@@ -1,4 +1,20 @@
-"""Database configuration and setup for different environments."""
+"""
+@milehigh-header
+schema_version: 1
+purpose: Selects the correct database URI and connection-pool settings per environment so local dev uses SQLite and deployed environments use PostgreSQL with SSL.
+exports:
+  configure_database: Sets SQLALCHEMY_DATABASE_URI and engine options on the Flask app
+  get_database_config: Returns (uri, engine_options) for a given environment name
+  get_database_engine_options: PostgreSQL QueuePool settings (pool_size=5, max_overflow=10, 30s statement timeout)
+imports_from: [sqlalchemy.pool]
+imported_by: [app/__init__.py]
+invariants:
+  - When TESTING=1 is set, database is forced to in-memory SQLite regardless of environment — prevents tests from touching real databases.
+  - pool_recycle=280 is tuned slightly below Render's ~5 min idle timeout to avoid stale connections.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
+Database configuration and setup for different environments.
+"""
 import os
 
 

@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders a portal-based modal form for creating new board items with title, body, category, and priority fields.
+ * exports:
+ *   NewItemModal: Modal dialog that collects board item details and calls createBoardItem on submit
+ * imports_from: [react, react-dom, ../../services/boardApi]
+ * imported_by: [pages/Board.jsx]
+ * invariants:
+ *   - Renders via createPortal to document.body so it overlays all other content
+ *   - Category options are hardcoded to match backend-accepted values
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createBoardItem } from '../../services/boardApi';

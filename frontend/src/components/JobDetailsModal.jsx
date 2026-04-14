@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Displays a full read-only detail view of a job release in a portal modal with links to events and Procore.
+ * exports:
+ *   JobDetailsModal: Portal modal showing all fields of a single job/release record
+ * imports_from: [react, react-dom, react-router-dom]
+ * imported_by: [frontend/src/components/JobsTableRow.jsx]
+ * invariants:
+ *   - Renders via createPortal to document.body to escape table overflow clipping
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';

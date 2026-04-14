@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders a single job-log table row with inline stage editing, urgency indicators, action menus, and detail/date modals.
+ * exports:
+ *   JobsTableRow: Feature-rich table row for the Job Log with inline editing and admin actions
+ * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./BananaIcon]
+ * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
+ * invariants:
+ *   - Stage dropdown options must stay in sync with PMBoardList stage definitions
+ *   - Admin-only actions (delete, unarchive, field edit) are gated on the isAdmin prop
+ *   - Duplicate fab order detection relies on the duplicateFabOrders set passed from parent
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';

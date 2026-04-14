@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Wraps all job log CRUD, stage/field updates, Gantt data, and archive operations so page components remain free of HTTP logic.
+ * exports:
+ *   jobsApi: Singleton with methods for fetching, updating, releasing, deleting, archiving, and scheduling jobs.
+ * imports_from: [axios, ../utils/api]
+ * imported_by: [components/PMBoardList.jsx, components/JobsTableRow.jsx, components/GanttChart.jsx, pages/PMBoard.jsx, pages/JobLog.jsx, pages/Archive.jsx, hooks/useJobsDataFetching.js, hooks/useArchiveDataFetching.js]
+ * invariants:
+ *   - Exported as a singleton; all callers share the same instance.
+ *   - fetchAllJobs paginates internally and returns the full accumulated array.
+ *   - _handleError enriches axios errors with statusCode and originalError before re-throwing.
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 

@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Encapsulates all drag-and-drop reordering logic for the DWL table so the page component stays declarative.
+ * exports:
+ *   useDWLDragAndDrop: Hook returning drag state and event handlers for DWL submittal row reordering
+ * imports_from: [react, ../services/draftingWorkLoadApi]
+ * imported_by: [../pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - Cross-BIC drops and multi-assignee rows are rejected (drag prevented)
+ *   - Urgent-zone reorders call dragReorder with insertBefore flag; ordered-zone uses target_order
+ *   - No-op detection prevents unnecessary API calls when row position would not change
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useCallback } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 

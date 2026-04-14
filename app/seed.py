@@ -1,3 +1,16 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Seeds the Releases table from combined Trello/Excel data, mapping raw card fields to ORM columns with date parsing and duplicate detection.
+exports:
+  (script functions — seed_from_combined_data and helpers; typically called from app factory or standalone)
+imports_from: [app/models, app/combine, app/trello/operations, app/trello/logging, pandas, sqlalchemy]
+imported_by: []
+invariants:
+  - Seeding is disabled in the current app factory (commented out); this file is kept for manual re-seed scenarios.
+  - Date parsing handles M/D (no year) format — months 4-12 map to 2025, months 1-3 map to 2026.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import pandas as pd
 from app.models import db, Releases, SyncOperation, SyncStatus
 from app.combine import combine_trello_excel_data

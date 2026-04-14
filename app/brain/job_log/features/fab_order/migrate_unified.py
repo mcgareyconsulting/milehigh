@@ -1,9 +1,22 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: One-time migration that renumbers all fab_orders to the unified three-tier ordering scheme (fixed tiers 1-2, dynamic 3+).
+exports:
+  renumber_fab_orders: Reassign fab_order values for all active releases based on stage tier rules
+imports_from: [app.models, app.api.helpers, app.logging_config]
+imported_by: [app/brain/job_log/routes.py, run_renumber.py]
+invariants:
+  - Tier 1 (Complete stages) always gets fab_order=1, Tier 2 (Paint/Store/Ship Planning) always gets fab_order=2
+  - Dynamic stages start at fab_order=3 and preserve relative ordering within each stage
+  - dry_run=True rolls back all changes
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 One-time migration to renumber fab_orders for the unified ordering scheme.
 
 Usage:
-    python -c "from app import create_app; app = create_app(); \
-    from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders; \
+    python -c "from app import create_app; app = create_app(); \\
+    from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders; \\
     with app.app_context(): renumber_fab_orders()"
 
 Or call renumber_fab_orders() from a Flask shell.

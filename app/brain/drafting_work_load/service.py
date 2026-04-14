@@ -1,4 +1,20 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Bridge between DWL routes and the pure-logic engine, converting ORM objects to plain dicts and back for all ordering, urgency, and location operations.
+exports:
+  DraftingWorkLoadService: CRUD helpers for notes, drafting status, due date, and filtered submittal queries.
+  SubmittalOrderingService: Delegates ordering math to engine and maps results back to ORM objects.
+  UrgencyService: Executes bump workflows (ordered-to-urgent and unordered-to-ordered) against the database.
+  LocationService: Resolves lat/lng to job numbers via PostGIS or Python fallback.
+  SubmittalOrderUpdate: Re-exported from engine for backward compatibility.
+imports_from: [datetime, typing, logging, sqlalchemy, app.models, app.brain.drafting_work_load.engine]
+imported_by: [app/brain/drafting_work_load/routes.py, app/procore/procore.py]
+invariants:
+  - Service methods never commit the session — callers are responsible for db.session.commit().
+  - All engine calls receive plain dicts; results are mapped back to ORM objects before returning.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Service layer for Drafting Work Load operations.
 Handles database operations and coordinates with engine for business logic.
 """

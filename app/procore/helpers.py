@@ -1,3 +1,23 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Shared helper functions for Procore webhook processing including ball-in-court parsing, user resolution, burst dedup, and submittal event creation.
+exports:
+  clean_value: Converts pandas NaT/NaN to None for safe DB storage.
+  is_email: Check if a string looks like an email address.
+  parse_ball_in_court_from_submittal: Extract ball-in-court user names from submittal webhook data.
+  extract_procore_user_id_from_webhook: Pull the actor's Procore user ID from a webhook payload.
+  resolve_webhook_user_ids: Map a webhook payload to (external_user_id, internal_user_id).
+  is_duplicate_webhook: Burst-dedup check using time-bucketed SHA-256 receipt hashes.
+  create_submittal_event: Create a SubmittalEvents audit record with user attribution.
+imports_from: [hashlib, json, sqlalchemy, app.models, app.config]
+imported_by: [app/procore/__init__.py, app/procore/procore.py, app/brain/drafting_work_load/routes.py, app/procore/scripts/sync_submittals.py]
+invariants:
+  - is_duplicate_webhook uses a 15-second time bucket; the first delivery inserts a WebhookReceipt row, duplicates hit the unique constraint.
+  - create_submittal_event is placed here (not in procore.py) to avoid circular imports between procore and brain.
+  - Ball-in-court parsing prefers user name over login and skips email-only identifiers.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import hashlib
 import json
 import logging

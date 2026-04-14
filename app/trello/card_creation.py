@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Centralises card-creation logic so every code path (Excel sync, scanner, manual) builds titles, descriptions, and post-creation features identically.
+exports:
+  build_card_title: Assemble a standardised "job-release name description" card title.
+  build_card_description: Assemble a Markdown card description with install hours, paint, team, etc.
+  create_trello_card_core: POST a new card to a Trello list (shared low-level call).
+  apply_card_post_creation_features: Set Fab Order, FC Drawing link, notes comment, and mirror card after creation.
+imports_from: [app.trello.api, app.trello.utils, app.logging_config, app.config, app.models, requests]
+imported_by: [app/brain/job_log/routes.py, app/trello/scanner.py]
+invariants:
+  - create_trello_card_core always returns a dict with a 'success' boolean key.
+  - apply_card_post_creation_features uses deferred imports to avoid circular deps with api.py.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Shared Trello card creation functionality.
 
 This module provides a unified interface for creating Trello cards from various sources,

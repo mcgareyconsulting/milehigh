@@ -1,3 +1,27 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Provides all outbound Trello REST API calls (CRUD on cards, lists, custom fields, attachments) and Excel-to-Trello record translation helpers.
+exports:
+  update_trello_card: Move card between lists and/or set due dates in a single PUT.
+  get_list_name_by_id: Resolve a Trello list ID to its human-readable name (cached).
+  get_list_by_name: Look up a Trello list ID by name.
+  get_trello_card_by_id: Fetch full card JSON from the Trello API.
+  get_all_trello_cards: Retrieve every card on the configured board.
+  create_trello_card_from_excel_data: Build and POST a new card from an Excel/DB row.
+  sort_list_by_fab_order: Reorder cards in a list by their Fab Order custom field.
+  add_comment_to_trello_card: POST a comment to a card.
+  update_card_custom_field_number: Set a numeric custom field value on a card.
+  calculate_installation_duration: Derive install-day count from hours and crew size.
+imports_from: [app.config, app.trello.utils, app.models, app.api.helpers, requests, pandas]
+imported_by: [app/trello/sync.py, app/trello/card_creation.py, app/trello/scanner.py, app/trello/utils.py, app/services/outbox_service.py, app/brain/job_log/routes.py, app/procore/procore.py, app/onedrive/api.py]
+invariants:
+  - Board-list cache (_BOARD_LISTS_CACHE) auto-refreshes; callers should not bypass it.
+  - All date params sent to Trello are converted to 6 pm Mountain via mountain_due_datetime.
+  - Card creation always returns a dict with 'success' key.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
+
 import requests
 import re
 import os

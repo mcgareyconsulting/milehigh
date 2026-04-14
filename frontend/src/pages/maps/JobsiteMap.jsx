@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders an interactive map of job-site locations using MapLibre GL so users can visually locate active projects.
+ * exports:
+ *   JobsiteMap: Page component rendering a MapLibre GL map with GeoJSON job-site markers
+ * imports_from: [react, maplibre-gl, ../../hooks/useJobsiteMap]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - Map instance is destroyed and recreated on React StrictMode double-invoke to prevent duplicate canvases
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';

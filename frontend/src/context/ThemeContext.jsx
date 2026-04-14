@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Manages dark/light theme state, persists preference to localStorage, and toggles the 'dark' class on the document root.
+ * exports:
+ *   ThemeProvider: Context provider that syncs theme to DOM and localStorage
+ *   useTheme: Hook returning { isDark, toggleTheme }
+ * imports_from: [react]
+ * imported_by: [main.jsx, components/AppShell.jsx]
+ * invariants:
+ *   - Falls back to OS prefers-color-scheme when no localStorage value exists
+ *   - useTheme throws if called outside ThemeProvider
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { createContext, useContext, useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'mhmw-theme';

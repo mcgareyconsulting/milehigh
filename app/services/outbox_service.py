@@ -1,3 +1,18 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Reliable outbound delivery queue — retries failed Trello API calls with exponential backoff so webhook processing can stay async.
+exports:
+  OutboxService: Static methods add(), process_item(), process_pending_items() for outbox lifecycle
+imports_from: [app/models, app/services/job_event_service, app/trello/api, app/trello/utils, app/brain/job_log/routes, app/config, app/logging_config]
+imported_by: [app/__init__.py, app/brain/job_log/routes.py, app/brain/job_log/features/fab_order/command.py]
+invariants:
+  - Outbox writes must go through OutboxService.add(), not direct DB inserts, so retry semantics are preserved.
+  - Exponential backoff is 2^retry_count seconds (2, 4, 8, 16, 32); max 5 retries per item.
+  - process_pending_items batches list sorts after fab_order updates to avoid redundant Trello API calls.
+  - Uses lazy imports inside methods to avoid circular import chains with models and services.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from datetime import datetime, timedelta
 from app.logging_config import get_logger
 logger = get_logger(__name__)

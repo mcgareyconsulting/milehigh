@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Thin CRUD layer for SyncOperation rows so callers never write raw SQLAlchemy for operation lifecycle tracking.
+exports:
+  create_sync_operation: Insert a new PENDING SyncOperation and return it.
+  update_sync_operation: Patch any SyncOperation fields by operation_id with silent rollback on failure.
+imports_from: [app.models, app.logging_config, sqlalchemy]
+imported_by: [app/trello/sync.py, app/trello/context.py, app/seed.py]
+invariants:
+  - create_sync_operation commits immediately; caller must handle commit failures.
+  - update_sync_operation silently rolls back and returns None on error to avoid breaking the parent sync flow.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Database operations for SyncOperation records.
 
 This module handles all CRUD operations for SyncOperation records,

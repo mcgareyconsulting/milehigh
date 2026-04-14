@@ -1,4 +1,20 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Interactively create Trello cards for releases that have no card anywhere on the board.
+exports:
+  run: Find truly missing releases and interactively create cards with CSV report.
+  _find_truly_missing: Return Releases rows with no Trello card anywhere on the board.
+  _create_card_for_release: Create a Trello card for a Release and update the DB row.
+imports_from: [app, app.models, app.trello.api, app.trello.card_creation, app.trello.scanner, dotenv, argparse, csv]
+imported_by: []
+invariants:
+  - Interactive script; prompts user for y/n/q per card unless --dry-run.
+  - Writes both to Trello (card creation) and the local DB (release update).
+  - Requires Flask app context (created via create_app at __main__).
+  - Invoked directly: python -m app.trello.scripts.create_missing_cards [--dry-run]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Interactively create Trello cards for releases missing from the board.
 
 Scans active Releases against all Trello cards to find "truly missing"

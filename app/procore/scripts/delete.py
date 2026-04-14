@@ -1,10 +1,25 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Tear down all Procore webhooks for tracked projects so the environment can be reprovisioned cleanly.
+exports:
+  delete_all_webhooks_for_project: Deletes every webhook for a given project/namespace and returns a summary dict.
+  get_project_number: Looks up a project number from the submittals table by project ID.
+  main: CLI entry point with interactive confirmation and single/batch modes.
+imports_from: [app, app.models, app.procore.client, app.procore.webhook_utils]
+imported_by: []
+invariants:
+  - Requires Flask app context (creates its own via create_app).
+  - Invoked directly as `python -m app.procore.scripts.delete`.
+  - Prompts for interactive confirmation before deleting; not safe for non-interactive use.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to delete all Procore webhooks for projects in procore_submittals.
 
 Usage:
     # Delete webhooks for all projects in database
     python -m app.procore.scripts.delete
-    
+
     # Delete webhooks for a single project
     python -m app.procore.scripts.delete --project-id <project_id>
 

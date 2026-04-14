@@ -1,4 +1,16 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Legacy hyphen-path copy of job_log/utils.py -- provides stage resolution and value serialization helpers for the brain module.
+exports:
+  determine_stage_from_db_fields: Return the stage name from a Job record, defaulting to 'Released'
+  serialize_value: Convert Python values (dates, NaN, bytes) to JSON-safe types
+imports_from: [datetime, math]
+imported_by: []
+invariants:
+  - This file duplicates app/brain/job_log/utils.py; the underscore-path version is canonical
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Utility functions for the Brain
 
 Contains helper functions for processing and transforming Job log data.

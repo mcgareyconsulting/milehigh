@@ -1,4 +1,19 @@
 /**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Centralizes date and cell-value formatting so all tables and PDF exports render data consistently.
+ * exports:
+ *   formatDate: Formats a date value as MM/DD/YYYY
+ *   formatDateShort: Formats a date value as MM/DD/YY without timezone conversion
+ *   formatCellValue: Coalesces null/undefined/empty to an em-dash, joins arrays
+ * imports_from: []
+ * imported_by: [pages/DraftingWorkLoad.jsx, pages/JobSearch/JobSearchTable.jsx, pages/JobSearch/constants.js, components/TableRow.jsx, components/QuickSearch.jsx, utils/pdfUtils.js]
+ * invariants:
+ *   - parseDateOnly is intentionally not exported; it avoids timezone shifts by string-splitting before Date parsing
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
+
+/**
  * Shared formatting utilities for displaying data
  */
 

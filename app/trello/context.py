@@ -1,4 +1,16 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Wraps every Trello/Procore sync action in a context manager that auto-tracks status (PENDING->IN_PROGRESS->COMPLETED/FAILED), duration, and DB rollback on error.
+exports:
+  sync_operation_context: Context manager yielding a SyncOperation; handles status transitions and rollback.
+imports_from: [app.models, app.logging_config, app.trello.operations, app.trello.logging]
+imported_by: [app/trello/sync.py, app/procore/__init__.py]
+invariants:
+  - On exception the DB session is rolled back before re-raising.
+  - If require_db=False and DB is unavailable, yields None and continues without tracking.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Context manager for sync operations.
 
 This module provides a context manager that handles the lifecycle of sync operations:

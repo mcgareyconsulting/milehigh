@@ -1,4 +1,15 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Maps a Trello member ID to the internal User record so webhook events can be attributed to the right person.
+exports:
+  resolve_internal_user_id_from_trello: Look up users.id from a Trello member ID string.
+imports_from: [app.models]
+imported_by: [app/services/job_event_service.py]
+invariants:
+  - Returns None (never raises) when the Trello ID is unknown or blank.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Trello helpers for user resolution and event attribution.
 """
 

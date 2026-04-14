@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Enables quick lookup of releases and submittals by job number prefix so users can find data across both systems in one call.
+ * exports:
+ *   searchByJob: Search releases and submittals by 1-3 digit job number prefix.
+ * imports_from: [axios, ../utils/api]
+ * imported_by: [components/QuickSearch.jsx, pages/JobSearch/index.jsx]
+ * invariants:
+ *   - Input is trimmed before sending; the API expects 1-3 digit strings.
+ *   - Returns empty arrays (not undefined) for releases/submittals via nullish coalescing.
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 

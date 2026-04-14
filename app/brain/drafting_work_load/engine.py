@@ -1,4 +1,21 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Encapsulate pure business logic for DWL ordering, urgency ladder, and location checks without any database dependencies.
+exports:
+  SubmittalOrderUpdate: Dataclass representing a submittal order update request.
+  DraftingWorkLoadEngine: Validation logic for notes, drafting status, and due dates.
+  SubmittalOrderingEngine: Ordering math — cascading updates, step/swap, drag-drop, and resort.
+  UrgencyEngine: Urgency ladder bump calculations (0.1-0.9 slots with overflow to regular).
+  LocationEngine: Point-in-polygon and buffer constants for geofence matching.
+imports_from: [typing, dataclasses, logging]
+imported_by: [app/brain/drafting_work_load/service.py, app/procore/procore.py]
+invariants:
+  - No database or ORM imports — operates only on plain dicts and dataclasses.
+  - Urgency slots are 0.1 through 0.9; 0.1 is most urgent, 0.9 is least urgent.
+  - Order numbers >= 1 are regular positions; None means unordered.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Pure business logic engine for Drafting Work Load operations.
 Contains no database dependencies - works with plain data structures.
 """

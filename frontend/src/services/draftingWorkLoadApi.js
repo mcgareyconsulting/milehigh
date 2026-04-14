@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides the frontend API client for the Drafting Work Load view, encapsulating ordering, status, and Procore project management calls.
+ * exports:
+ *   draftingWorkLoadApi: Singleton instance with methods for fetching, reordering, bumping, and updating DWL submittals.
+ * imports_from: [axios, ../utils/api]
+ * imported_by: [components/AddProjectModal.jsx, hooks/useDataFetching.js, pages/DraftingWorkLoad.jsx, hooks/useMutations.js, hooks/useDWLDragAndDrop.js]
+ * invariants:
+ *   - Exported as a singleton; all callers share the same instance.
+ *   - _handleError enriches axios errors with statusCode and originalError before re-throwing.
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 

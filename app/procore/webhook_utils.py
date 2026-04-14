@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Shared utilities for Procore webhook management scripts (project listing, delivery inspection, operation logging).
+exports:
+  get_unique_projects: Query distinct project IDs and numbers from the submittals table.
+  log_operation: Append a JSON-lines log entry for a webhook management action.
+  get_webhook_triggers: Fetch all triggers for a specific webhook via the Procore client.
+  get_recent_deliveries: Retrieve webhook deliveries within a rolling N-day window.
+imports_from: [json, os, datetime, app.models, app.procore.client, app.config]
+imported_by: [app/procore/scripts/check.py, app/procore/scripts/create.py, app/procore/scripts/delete.py, app/procore/scripts/ensure_webhooks.py, app/procore/scripts/view_deliveries.py]
+invariants:
+  - get_unique_projects skips rows with non-integer project IDs rather than raising.
+  - log_operation creates the logs/ directory if it does not exist.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Shared utilities for Procore webhook management scripts.
 """
 

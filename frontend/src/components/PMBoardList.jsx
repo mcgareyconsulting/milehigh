@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders the PM Kanban board as stage-grouped columns of release cards with inline stage editing and search filtering.
+ * exports:
+ *   PMBoardList: Kanban-style list view grouping releases by fabrication stage
+ * imports_from: [react, ../services/jobsApi, ./PMBoardCardModal]
+ * imported_by: [frontend/src/pages/PMBoard.jsx]
+ * invariants:
+ *   - Stage options and color mapping must stay in sync with JobsTableRow definitions
+ *   - Cards are grouped by current stage; moving a card updates the backend and triggers onUpdate
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useMemo, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { PMBoardCardModal } from './PMBoardCardModal';

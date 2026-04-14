@@ -1,4 +1,18 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Generate a read-only diff of current vs. computed scheduling dates so admins can review before applying recalculation.
+exports:
+  preview_scheduling_changes: Compare DB dates against computed values, return structured diff
+  print_preview: Pretty-print the diff to stdout
+  run_preview_script: CLI entry point for running the preview
+imports_from: [app.models, app.brain.job_log.scheduling.calculator, app.logging_config]
+imported_by: [app/brain/job_log/routes.py]
+invariants:
+  - Never writes to the database
+  - show_all=False filters to only jobs with date changes
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Preview script to show differences between current and computed scheduling dates.
 
 This script calculates what the new start_install and comp_eta values would be

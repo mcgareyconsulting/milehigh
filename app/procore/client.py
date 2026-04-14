@@ -1,3 +1,16 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Provide a singleton ProcoreAPI instance configured for the current environment (production, sandbox, or local).
+exports:
+  get_procore_client: Returns the singleton ProcoreAPI instance, creating it on first call.
+imports_from: [os, app.procore.api, app.logging_config, app.config]
+imported_by: [app/procore/__init__.py, app/procore/procore.py, app/procore/webhook_utils.py, app/admin/__init__.py, app/brain/drafting_work_load/routes.py, app/procore/scripts/check.py, app/procore/scripts/create.py, app/procore/scripts/delete.py]
+invariants:
+  - The client is a module-level singleton; once created it is reused for the process lifetime.
+  - Webhook URL is chosen based on FLASK_ENV / ENVIRONMENT env var (production, sandbox, or dev fallback).
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import os
 from app.procore.api import ProcoreAPI
 from app.logging_config import get_logger

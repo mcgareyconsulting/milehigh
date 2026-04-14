@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Link local User records to their Trello identities by matching names against board membership.
+exports:
+  build_member_lookup: Return dict keyed by normalized fullName to full Trello member object.
+  main: CLI entry point with --dry-run and --force flags.
+imports_from: [app, app.models, app.trello.api, dotenv, argparse]
+imported_by: []
+invariants:
+  - Matches by case-insensitive full name, falls back to first name only.
+  - Supports --dry-run and --force to control write behavior.
+  - Requires Flask app context (created via create_app inside main).
+  - Invoked directly: python -m app.trello.scripts.sync_member_ids [--dry-run] [--force]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to sync Trello board member IDs into the local users table.
 
 Fetches all board members from Trello, matches them against local User records

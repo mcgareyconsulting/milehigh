@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides a global job-number search box in the top bar that shows releases and submittals in a dropdown.
+ * exports:
+ *   QuickSearch: Debounced search input with dropdown results for releases and submittals
+ * imports_from: [react, ../services/jobSearchApi, ../pages/JobSearch/JobSearchTable, ../utils/formatters]
+ * imported_by: [frontend/src/components/AppShell.jsx]
+ * invariants:
+ *   - Only triggers search for 1-3 digit numeric input to avoid API noise
+ *   - Dropdown closes on outside click via document-level mousedown listener
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { searchByJob } from '../services/jobSearchApi';
 import { JobSearchTable } from '../pages/JobSearch/JobSearchTable';

@@ -1,3 +1,20 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Manage Procore OAuth client-credentials tokens with automatic refresh and persistent DB storage.
+exports:
+  get_access_token: Return a valid access token, refreshing transparently if expired.
+  get_access_token_force_refresh: Force-fetch a new token (used after 401 responses).
+  initialize_tokens: Utility to manually bootstrap token storage from a script.
+  TOKEN_REFRESH_BUFFER_SECONDS: How many seconds before expiry to proactively refresh.
+imports_from: [requests, datetime, app.config, app.models]
+imported_by: [app/procore/api.py, app/procore/procore.py]
+invariants:
+  - Only one ProcoreToken row exists; _persist_token upserts rather than inserting duplicates.
+  - Client-credentials flow does not produce refresh tokens; a fresh token is requested each time.
+  - Token is refreshed proactively when within TOKEN_REFRESH_BUFFER_SECONDS of expiry.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import requests
 from datetime import datetime, timedelta
 from app.config import Config as cfg

@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Encapsulates drag-and-drop reordering for the Job Log table so fab_order updates are handled in one place.
+ * exports:
+ *   useJobsDragAndDrop: Hook returning drag state and handlers for job-log row reordering by fab_order
+ * imports_from: [react]
+ * imported_by: [../pages/JobLog.jsx]
+ * invariants:
+ *   - Fixed-tier stages (Shipping Complete, Paint Complete, Store, etc.) cannot be dragged or dropped onto
+ *   - Dynamic fab_order range starts at 3; positions 1-2 are reserved for fixed tiers
+ *   - Backend handles collision cascade when a new fab_order conflicts with existing values
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useCallback } from 'react';
 
 /**

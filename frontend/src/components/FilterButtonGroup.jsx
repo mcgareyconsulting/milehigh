@@ -1,8 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders a labeled row of toggle buttons so users can filter table data by a single discrete value.
+ * exports:
+ *   FilterButtonGroup: Reusable toggle-button group with "All" option and minimized mode
+ * imports_from: [react]
+ * imported_by: [frontend/src/pages/DraftingWorkLoad.jsx]
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React from 'react';
 
-/**
- * Reusable component for filter button groups
- */
 export function FilterButtonGroup({ label, options, selectedValue, onSelect, allOptionValue, minimized = false }) {
     return (
         <div>

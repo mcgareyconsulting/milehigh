@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Diagnose webhook health by inspecting triggers and delivery status for every tracked Procore project.
+exports:
+  check_project_webhooks: Checks webhook status (triggers, deliveries) for one project and returns a result dict.
+  format_webhook_summary: Renders a list of check results into a human-readable status report.
+  main: CLI entry point that checks all projects and saves JSON output.
+imports_from: [app, app.procore.client, app.procore.webhook_utils, app.config]
+imported_by: []
+invariants:
+  - Requires Flask app context (creates its own via create_app).
+  - Invoked directly as `python -m app.procore.scripts.check`.
+  - Read-only against Procore API; never mutates webhooks.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to check Procore webhook status for all projects in procore_submittals.
 
 Usage:

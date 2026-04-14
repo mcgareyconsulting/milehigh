@@ -1,4 +1,20 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Serve all job-log API endpoints (CRUD, stage updates, fab ordering, scheduling, CSV import) under the brain blueprint.
+exports:
+  get_list_id_by_stage: Resolve a DB stage to a Trello list ID via TrelloListMapper
+  update_job_stage_fields: Apply stage and stage_group to a job record
+  create_trello_card_for_job: Create a Trello card for a job from Excel data
+imports_from: [app.brain, app.models, app.trello.api, app.services.outbox_service, app.auth.utils, app.api.helpers, app.brain.job_log.utils, app.brain.job_log.scheduling]
+imported_by: [app/brain/__init__.py, app/services/outbox_service.py]
+invariants:
+  - All mutating routes require @login_required; admin routes require @admin_required
+  - get_list_id_by_stage returns None (not an error) for unmapped stages
+  - CSV import validates expected columns before processing rows
+  - fab_order updates trigger scheduling recalculation for FABRICATION stage group
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Job Log route handlers for the brain Blueprint.
 
 Provides API endpoints for job data queries and CSV release data handling.

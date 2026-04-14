@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Centralizes all DWL filter, search, and column-sort logic so DraftingWorkLoad only handles rendering.
+ * exports:
+ *   useFilters: Hook returning filter state, dropdown options, displayRows, and sort/reset handlers for DWL
+ * imports_from: [react]
+ * imported_by: [../pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - Rows with type 'For Construction' are always excluded before any user filter is applied
+ *   - Default sort groups by BIC then order_number; column sort overrides but preserves multi-assignee-last rule for NAME
+ *   - Ball-in-court filter splits comma-separated values so individual names are matchable
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useMemo, useCallback } from 'react';
 
 const ALL_OPTION_VALUE = '__ALL__';

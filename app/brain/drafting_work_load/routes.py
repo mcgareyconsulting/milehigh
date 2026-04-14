@@ -1,3 +1,24 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Define Flask routes for all Drafting Work Load CRUD operations (ordering, notes, status, drag-drop, bump, resort).
+exports:
+  drafting_work_load: GET endpoint returning DWL submittals filtered by tab and optional location.
+  update_submittal_order: PUT endpoint for setting a submittal's order number.
+  update_submittal_notes: PUT endpoint for updating submittal notes.
+  update_submittal_drafting_status: PUT endpoint for changing drafting status (STARTED, NEED VIF, HOLD).
+  step_submittal_order: POST endpoint for swapping adjacent submittals.
+  bump_submittal: POST endpoint for bumping submittals between urgency and ordered zones.
+  drag_submittal_order: PUT endpoint for drag-and-drop reordering.
+  update_submittal_procore_status: PUT endpoint for changing Procore status via API.
+imports_from: [flask, app.brain, app.brain.drafting_work_load.service, app.models, app.auth.utils, app.route_utils, app.procore.api, app.procore.client]
+imported_by: [app/brain/__init__.py]
+invariants:
+  - All routes are registered on brain_bp under the /drafting-work-load prefix.
+  - Every mutating endpoint creates a SubmittalEvent for the audit trail.
+  - Order and bump endpoints require admin; notes and due-date require login; drafting status requires drafter or admin.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from app.brain import brain_bp
 from flask import jsonify, request, g
 from app.brain.drafting_work_load.service import (

@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Displays archived job releases in a filterable, read-only table so users can review completed work and optionally un-archive entries.
+ * exports:
+ *   Archive: Page component rendering the archived-jobs table with project filters and search
+ * imports_from: [react, react-router-dom, ../hooks/useArchiveDataFetching, ../hooks/useJobsFilters, ../components/JobsTableRow, ../services/jobsApi, ../utils/auth]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - Un-archive action is only available to admin users
+ *   - Filter minimized state persists in localStorage under key 'ar_minimized'
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';

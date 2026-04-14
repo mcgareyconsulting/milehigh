@@ -1,4 +1,18 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Detect releases missing from Trello or with stage/list mismatches so operators can fix data drift.
+exports:
+  audit: Compare active Releases against Trello primary lists and print discrepancies.
+  _parse_job_release: Extract (job_int, release_str) tuple from a Trello card name.
+imports_from: [app, app.models, app.trello.api, dotenv]
+imported_by: []
+invariants:
+  - Read-only script; never writes to the DB or Trello.
+  - Requires Flask app context (created via create_app at __main__).
+  - Invoked directly: python -m app.trello.scripts.audit_releases
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Audit active Releases against the Trello board.
 
 Read-only — reports which active Releases are missing cards in the

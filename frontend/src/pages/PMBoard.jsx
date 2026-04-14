@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Project-manager board offering list and Gantt-timeline views of active jobs for high-level scheduling oversight.
+ * exports:
+ *   PMBoard: Page component toggling between PMBoardList and GanttChart views of job data
+ * imports_from: [react, react-router-dom, ../hooks/useJobsDataFetching, ../services/jobsApi, ../components/PMBoardList, ../components/GanttChart]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - View mode toggles between 'list' and 'timeline' without re-fetching data
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';

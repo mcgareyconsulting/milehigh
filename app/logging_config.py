@@ -1,3 +1,19 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Configures structlog with JSON rendering and provides get_logger() and SyncContext so every module logs with correlation IDs and consistent format.
+exports:
+  configure_logging: Sets up structlog processors, console + rotating file handlers
+  get_logger: Returns a structlog.BoundLogger for a given module name
+  SyncContext: Context manager that wraps sync operations with correlation ID, timing, and success/error logging
+  log_sync_operation: One-shot structured log for sync events
+imports_from: [structlog, logging]
+imported_by: [app/__init__.py, app/services/outbox_service.py, app/services/job_event_service.py, app/brain/board/routes.py, app/trello/sync.py, app/procore/__init__.py, app/brain/job_log/routes.py, app/auth/utils.py, app/sync/context.py, app/admin/__init__.py, ...and 28 more]
+invariants:
+  - Rotating file handler writes to logs/app.log (10 MB max, 5 backups); ensure the logs/ directory exists.
+  - configure_logging() must be called once at app startup (in app/__init__.py) before any get_logger() calls.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import logging
 import logging.config
 import structlog

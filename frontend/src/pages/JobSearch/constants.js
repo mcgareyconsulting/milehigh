@@ -1,3 +1,19 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Shared column definitions, validation helpers, and URL builders for the JobSearch feature so table config stays DRY.
+ * exports:
+ *   RELEASES_COLS: Column config array for the releases results table
+ *   SUBMITTALS_COLS: Column config array for the submittals results table
+ *   isValidJobInput: Validates that input is exactly 3 digits
+ *   getReleaseJumpUrl: Builds a /job-log deep-link for a release row
+ *   getSubmittalJumpUrl: Builds a /drafting-work-load deep-link for a submittal row
+ * imports_from: [../../utils/formatters]
+ * imported_by: [pages/JobSearch/index.jsx]
+ * invariants:
+ *   - Job input must be exactly 3 digits (e.g. 001, 400)
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { formatDateShort, formatCellValue } from '../../utils/formatters';
 
 export const RELEASES_COLS = [

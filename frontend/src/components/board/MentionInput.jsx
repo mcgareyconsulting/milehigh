@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides a text input with @mention autocomplete dropdown so users can tag teammates in board comments.
+ * exports:
+ *   MentionInput: Controlled input that detects @-triggers, shows a filtered user dropdown, and inserts mention tokens
+ * imports_from: [react]
+ * imported_by: [components/board/BoardDetail.jsx]
+ * invariants:
+ *   - Enter submits the form when the dropdown is closed; when open it selects the highlighted user
+ *   - Dropdown renders above the input (bottom-full) to avoid clipping in pinned-bottom comment areas
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useRef, useEffect } from 'react';
 
 export default function MentionInput({ value, onChange, onSubmit, users, placeholder, disabled }) {

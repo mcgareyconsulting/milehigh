@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Validate that CSV-derived stages agree with Trello list assignments in the DB to catch sync drift.
+exports:
+  audit: Compare CSV-derived expected Trello list vs actual trello_list_name in DB.
+  _determine_stage: Derive stage from CSV progress columns using rightmost-X logic.
+  _read_csv: Read live_jobs.csv and return dict keyed by (job_int, release_str).
+imports_from: [app, app.models, app.trello.scanner, csv, dotenv]
+imported_by: []
+invariants:
+  - Read-only script; never writes to the DB or Trello.
+  - Requires Flask app context (created via create_app at __main__).
+  - Invoked directly: python -m app.trello.scripts.audit_stage_vs_list
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Compare CSV-derived stages against Trello list assignments in the Releases table.
 
 Reads live_jobs.csv progress columns (Cut start, Fitup comp, Welded, Paint Comp,

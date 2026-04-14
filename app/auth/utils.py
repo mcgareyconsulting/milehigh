@@ -1,4 +1,21 @@
-"""Authentication utilities for password hashing and user management."""
+"""
+@milehigh-header
+schema_version: 1
+purpose: Provide auth decorators and helpers so routes can enforce role-based access without duplicating session logic.
+exports:
+  login_required: Decorator returning 401 if no authenticated session
+  admin_required: Decorator returning 403 if user is not admin
+  drafter_or_admin_required: Decorator returning 403 if user lacks drafter or admin role
+  get_current_user: Resolve session user_id to a User object (None outside request context)
+  format_source_with_user: Append current username to audit source strings
+imports_from: [functools, werkzeug.security, flask, app.models, app.logging_config]
+imported_by: [app/auth/routes.py, app/admin/__init__.py, app/brain/job_log/routes.py, app/brain/drafting_work_load/routes.py, app/brain/map/routes.py, app/brain/board/routes.py, app/brain/notification_routes.py, app/services/job_event_service.py]
+invariants:
+  - get_current_user returns None outside request context (background threads); callers must handle None
+  - hash_password uses pbkdf2:sha256 for Python 3.9 compat; do not switch to scrypt without checking runtime version
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
+Authentication utilities for password hashing and user management."""
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import session, jsonify

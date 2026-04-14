@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Define frozen scheduling constants (capacity, buffer, stage percentages) that must match the legacy Excel workbook exactly.
+exports:
+  SchedulingConfig: Class with FAB_HOURS_PER_DAY, INSTALL_HOURS_PER_DAY, INSTALL_BUFFER_DAYS, stage-remaining map, and lookup method
+imports_from: [typing]
+imported_by: [app/brain/job_log/scheduling/__init__.py, app/brain/job_log/scheduling/calculator.py]
+invariants:
+  - DO NOT change numeric values without explicit approval -- they mirror the Excel workbook
+  - get_stage_remaining_percentage returns 1.0 (100%) for unknown stages
+  - Stage lookup is case-insensitive as a fallback
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Scheduling configuration module.
 
 This module defines all scheduling parameters that must match Excel behavior.

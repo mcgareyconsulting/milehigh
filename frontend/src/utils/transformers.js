@@ -1,4 +1,18 @@
 /**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Maps snake_case backend submittal fields to uppercase display-name keys expected by the DWL table and PDF export.
+ * exports:
+ *   transformSubmittals: Transforms an array of raw API submittals to frontend format
+ *   getMostRecentUpdate: Finds the latest last_updated timestamp across all submittals
+ * imports_from: []
+ * imported_by: [hooks/useDataFetching.js]
+ * invariants:
+ *   - The original snake_case fields are preserved via spread so both naming conventions coexist on each row
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
+
+/**
  * Transform raw API submittal data to frontend format
  */
 function transformSubmittal(submittal, index) {

@@ -1,4 +1,21 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Centralize stage-mapping constants and job-display transforms so every consumer shares one source of truth.
+exports:
+  STAGE_TO_GROUP: Dict mapping every stage variant to its group (FABRICATION, READY_TO_SHIP, COMPLETE)
+  transform_job_for_display: Convert a raw job dict into the frontend display format
+  get_stage_group_from_stage: Resolve a stage name to its group with case-insensitive fallback
+  add_scheduling_fields_to_jobs: Enrich job dicts with projected dates and queue metrics
+  get_fab_order_bounds: Return (lower, upper) fab_order constraints for a stage
+imports_from: [typing, datetime, app.models]
+imported_by: [app/api/routes.py, app/seed.py, app/trello/api.py, app/trello/list_mapper.py, app/trello/scripts/sync_releases.py, app/trello/scripts/find_missing_cards.py, app/brain/job_log/routes.py, app/brain/job_log/features/fab_order/command.py, app/brain/job_log/features/fab_order/migrate_unified.py, app/brain/job_log/features/fab_order/fix_null_fab_orders.py]
+invariants:
+  - STAGE_TO_GROUP must contain both canonical and variant spellings; missing variants cause silent None returns
+  - FIXED_TIER_STAGES (tiers 1-2) are reserved; dynamic fab_order must be >= 3
+  - clamp_fab_order skips bounds when lower >= upper (inverted ranges from overlapping stages)
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Helper functions for transforming job data for API responses.
 """
 from typing import Dict, Any, Union, List, Optional

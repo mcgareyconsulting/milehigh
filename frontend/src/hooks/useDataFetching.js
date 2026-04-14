@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Fetches, transforms, and polls DWL (Drafting Work Load) submittal data so the DraftingWorkLoad page stays current without manual refresh.
+ * exports:
+ *   useDataFetching: Named export — hook returning { submittals, columns, loading, error, lastUpdated, refetch }
+ * imports_from: [react, ../services/draftingWorkLoadApi, ../utils/transformers, ../utils/sorting, ../utils/columns]
+ * imported_by: [frontend/src/pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - Polls every 30 seconds; pauses when document is hidden and fetches immediately on visibility restore.
+ *   - locationFilter and tab are tracked via refs so the poller always uses current values without restarting the interval.
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { transformSubmittals, getMostRecentUpdate } from '../utils/transformers';

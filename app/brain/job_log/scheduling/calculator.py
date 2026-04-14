@@ -1,4 +1,24 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Implement the core scheduling pipeline (remaining hours, queue position, projected dates) matching legacy Excel formulas exactly.
+exports:
+  calculate_remaining_fab_hours: Remaining fab hours = total * stage percentage
+  calculate_hours_in_front: Sum of remaining hours for all jobs ahead in queue
+  calculate_days_in_front: Convert hours-in-front to working days (ROUNDUP)
+  calculate_projected_fab_complete_date: Today + days_in_front business days
+  calculate_install_start_date: Fab complete + buffer business days
+  calculate_install_complete_date: Install start + ceil(install_hrs / capacity) business days
+  calculate_scheduling_fields: Compute all scheduling fields for one job
+  calculate_all_job_scheduling: Two-pass batch calculation for all jobs
+imports_from: [app.brain.job_log.scheduling.config, app.trello.utils]
+imported_by: [app/brain/job_log/scheduling/__init__.py, app/brain/job_log/scheduling/service.py, app/brain/job_log/scheduling/preview.py]
+invariants:
+  - Hard-date jobs (is_hard_date=True) are excluded from hours_in_front sums
+  - All date arithmetic uses business days only (Monday-Friday)
+  - Unknown stages default to 100% remaining (conservative)
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Scheduling calculation module.
 
 This module implements the core scheduling logic exactly as specified,

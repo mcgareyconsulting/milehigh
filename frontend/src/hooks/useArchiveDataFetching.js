@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Fetches and caches archived job data so the Archive page can render without re-fetching on every mount.
+ * exports:
+ *   useArchiveDataFetching: Hook returning archived jobs, columns, loading/error state, and a refetch handle
+ * imports_from: [react, ../services/jobsApi]
+ * imported_by: [../pages/Archive.jsx]
+ * invariants:
+ *   - Only fetches once per mount via hasFetchedRef guard (React Strict Mode safe)
+ *   - Always passes true to jobsApi.fetchAllJobs to request archived jobs only
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 

@@ -1,3 +1,19 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Module-level reentrant lock that prevents Trello webhook processing and OneDrive polling from running concurrently.
+exports:
+  sync_lock_manager: Global SyncLockManager singleton used by Trello and OneDrive blueprints
+  SyncLockManager: Reentrant lock with context-manager API, deadlock detection, and status introspection
+  synchronized_sync: Decorator that acquires the sync lock for any function
+imports_from: [threading]
+imported_by: [app/trello/__init__.py, app/sync/sync.py, app/onedrive/utils.py]
+invariants:
+  - Uses threading.RLock so the same thread can re-enter (e.g., Trello webhook triggers a nested sync).
+  - Default lock timeout is 60 seconds; callers can override via timeout_seconds parameter.
+  - sync_lock_manager is a module-level singleton — do not instantiate a second SyncLockManager.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import threading
 import logging
 from contextlib import contextmanager

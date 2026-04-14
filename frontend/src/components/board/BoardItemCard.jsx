@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders a compact card preview for a board item in the Kanban list, with priority-colored left border and status badge.
+ * exports:
+ *   BoardItemCard: Clickable card component showing title, status, category, author, and activity count
+ * imports_from: []
+ * imported_by: []
+ * invariants:
+ *   - Priority border color falls back to "normal" if the priority key is unrecognized
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 const PRIORITY_BORDER = {
     urgent: 'border-l-red-500',
     high: 'border-l-orange-500',

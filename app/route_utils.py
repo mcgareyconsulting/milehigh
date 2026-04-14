@@ -1,4 +1,18 @@
-"""Route handler utilities to reduce boilerplate across Flask endpoints."""
+"""
+@milehigh-header
+schema_version: 1
+purpose: Decorators and helpers that reduce boilerplate in Flask route handlers (error wrapping, JSON validation, 404 lookups).
+exports:
+  handle_errors: Decorator — wraps a route in try/except with db.session.rollback and structured error response
+  require_json: Decorator — validates JSON body and required fields, stores parsed data on flask.g.json_data
+  get_or_404: Looks up a record or returns a (None, (response, 404)) tuple for early return
+imports_from: [flask, app/logging_config, app/models]
+imported_by: [app/brain/job_log/routes.py, app/brain/drafting_work_load/routes.py, app/admin/__init__.py]
+invariants: []
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
+Route handler utilities to reduce boilerplate across Flask endpoints.
+"""
 from functools import wraps
 from flask import request, jsonify, g
 from app.logging_config import get_logger

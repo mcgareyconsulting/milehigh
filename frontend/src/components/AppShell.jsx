@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Wraps all authenticated pages with the top navigation bar, theme toggle, location controls, and notification bell.
+ * exports:
+ *   AppShell: Layout shell with nav chrome, renders child routes via Outlet
+ * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch, ./NotificationBell]
+ * imported_by: [frontend/src/App.jsx]
+ * invariants:
+ *   - Admin-only nav items are gated on checkAuth result
+ *   - LocationProvider wraps the inner shell so all children can access geolocation context
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { logout, checkAuth } from '../utils/auth';

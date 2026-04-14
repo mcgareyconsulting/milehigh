@@ -1,4 +1,20 @@
 /**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides sort comparators for DWL submittals so the table can be ordered by priority number, project name, or ball-in-court grouping.
+ * exports:
+ *   sortByOrderNumber: Sorts ordered items first by number, then unordered by staleness
+ *   sortByProjectName: Alphabetical sort by project name with direction toggle
+ *   sortByBallInCourt: Groups by assignee then sorts within group by order/staleness
+ * imports_from: []
+ * imported_by: [hooks/useDataFetching.js]
+ * invariants:
+ *   - Multi-assignee (comma-separated BIC) rows always sort to the bottom in sortByBallInCourt
+ *   - Unordered items sort oldest-first so the most stale appear at the top
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
+
+/**
  * Sort submittals by order number, then by last_updated for unordered items
  * Ordered items (with order_number) come first, sorted by order number
  * Unordered items (NULL order_number) come after, sorted by last_updated (oldest first = most stale at top)

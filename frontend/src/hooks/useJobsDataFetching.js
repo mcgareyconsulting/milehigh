@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Manages cursor-based incremental job fetching and 30-second polling so the Job Log stays live without full reloads.
+ * exports:
+ *   useJobsDataFetching: Hook returning jobs, columns, loading/error state, refetch, and fetchAll handles
+ * imports_from: [react, ../services/jobsApi]
+ * imported_by: [../pages/JobLog.jsx, ../pages/PMBoard.jsx]
+ * invariants:
+ *   - Cursor timestamp is persisted in localStorage; initial mount always fetches all pages then sets cursor
+ *   - Polling pauses when the browser tab is hidden and resumes with an immediate fetch on visibility
+ *   - Soft-deleted or archived jobs (is_active=false / is_archived=true) are removed from the in-memory array on merge
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 

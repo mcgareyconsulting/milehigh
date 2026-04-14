@@ -1,3 +1,19 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Expose admin-only endpoints for geofence regeneration and Procore project onboarding.
+exports:
+  admin_bp: Flask blueprint registered at /admin with admin-only routes
+  regenerate_geofences: POST endpoint to rebuild all jobsite geofence polygons
+  add_project_preview: POST endpoint to preview Procore project submittals before import
+  add_project_confirm: POST endpoint to create webhook and sync submittals for a Procore project
+imports_from: [flask, app.models, app.auth.utils, app.brain.map.utils.geofence, app.logging_config, app.route_utils, app.procore.client, app.procore.procore]
+imported_by: [app/__init__.py]
+invariants:
+  - All routes require @admin_required; removing it exposes destructive operations to non-admins
+  - add_project_confirm uses lazy imports for create_webhook_and_trigger and sync_submittals_for_project to avoid circular imports
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from flask import Blueprint, jsonify, request, g
 from app.models import Projects, db
 from app.auth.utils import admin_required

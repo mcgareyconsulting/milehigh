@@ -1,4 +1,18 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Display all registered Trello webhooks so operators can verify webhook configuration.
+exports:
+  list_webhooks: List all webhooks for the current Trello token.
+  main: CLI entry point.
+imports_from: [requests, dotenv]
+imported_by: []
+invariants:
+  - Read-only; never modifies webhooks.
+  - Does NOT require Flask app context; reads credentials from env vars directly.
+  - Invoked directly: python -m app.trello.scripts.list_webhooks
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to list all Trello webhooks for the current token.
 
 Usage:

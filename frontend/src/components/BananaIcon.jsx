@@ -1,11 +1,18 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders an inline banana SVG whose fill color encodes release urgency levels.
+ * exports:
+ *   BananaIcon: Color-coded banana SVG for urgency indicators (red/yellow/green/gray/outline)
+ * imports_from: [react]
+ * imported_by: [frontend/src/components/JobsTableRow.jsx]
+ * invariants:
+ *   - Null or unknown color falls back to yellow
+ *   - Stroke width scales inversely with icon size for small-size legibility
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React from 'react';
 
-/**
- * Banana icon component for urgency indicators
- * Uses the banana SVG from the web app header
- * @param {string|null} color - 'red', 'yellow', 'green', 'gray', or 'outline' (ghost/none)
- * @param {number} size - Size in pixels (default: 16)
- */
 export function BananaIcon({ color = 'yellow', size = 16 }) {
     const labelMap = {
         red: 'Red',

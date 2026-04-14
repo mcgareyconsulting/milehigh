@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Displays detailed log entries for a specific sync operation, enabling debugging of individual webhook or sync events.
+ * exports:
+ *   Logs: Page component showing timestamped, level-colored log entries with expandable JSON data for a given operation ID
+ * imports_from: [react, react-router-dom, axios, ../utils/api]
+ * imported_by: []
+ * invariants:
+ *   - Operation ID comes from the URL param; page fetches logs on mount and when the param changes
+ *   - Currently not routed in App.jsx; may be accessed via direct URL or slated for re-integration
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';

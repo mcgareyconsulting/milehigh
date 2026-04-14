@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Lists sync operations with date, type, and source-ID filters so admins can monitor webhook processing health and drill into individual operation logs.
+ * exports:
+ *   Operations: Page component rendering a filterable operations table with navigation to per-operation log detail
+ * imports_from: [react, react-router-dom, axios, ../utils/api]
+ * imported_by: []
+ * invariants:
+ *   - source_id filter syncs bidirectionally with URL search params
+ *   - Currently not routed in App.jsx; may be accessed via direct URL or slated for re-integration
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
