@@ -1,9 +1,24 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Surface recent webhook delivery history so operators can verify payloads are reaching the server.
+exports:
+  format_delivery: Formats a single delivery record into a human-readable multi-line string.
+  view_webhook_deliveries: Fetches and displays deliveries for all projects, grouped by project.
+  main: CLI entry point accepting optional days_back and limit_per_hook positional args.
+imports_from: [app, app.procore.client, app.procore.webhook_utils, app.config]
+imported_by: []
+invariants:
+  - Requires Flask app context (creates its own via create_app).
+  - Invoked directly as `python -m app.procore.scripts.view_deliveries`.
+  - Read-only against Procore API; never mutates webhooks.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to view recent Procore webhook deliveries/payloads.
 
 Usage:
     python -m app.procore.scripts.view_deliveries [days_back] [limit_per_hook]
-    
+
 Examples:
     python -m app.procore.scripts.view_deliveries           # Last 7 days, 20 per hook
     python -m app.procore.scripts.view_deliveries 14        # Last 14 days

@@ -1,4 +1,21 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Remove Trello webhooks by ID or all-at-once to clean up stale or duplicate registrations.
+exports:
+  delete_webhook: Delete a specific webhook by ID via the Trello API.
+  delete_single_webhook: Delete one webhook with interactive confirmation.
+  delete_all_webhooks: Delete all webhooks for the token with interactive confirmation.
+  get_all_webhooks: Fetch all webhooks for the current token.
+  main: CLI entry point with --webhook-id or --all args.
+imports_from: [requests, dotenv, argparse]
+imported_by: []
+invariants:
+  - Interactive script; requires user confirmation before deletion.
+  - Does NOT require Flask app context; reads credentials from env vars directly.
+  - Invoked directly: python -m app.trello.scripts.delete_webhook --webhook-id <id> | --all
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to delete Trello webhooks.
 
 Usage:

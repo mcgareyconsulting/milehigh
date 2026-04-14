@@ -1,3 +1,27 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Read and write the Excel job log via Microsoft Graph API and manage daily snapshots for diff detection.
+exports:
+  get_access_token: Obtain an OAuth2 client-credentials token for Graph API.
+  get_excel_dataframe: Download and parse the Excel job log into a DataFrame.
+  get_excel_data_with_timestamp: Fetch Excel data plus last-modified metadata.
+  update_excel_cell: Write a value to a specific cell in the remote workbook.
+  capture_excel_snapshot: Save a daily DataFrame snapshot for row-diff checking.
+  capture_excel_snapshot_with_data: Save a snapshot from already-downloaded data.
+  load_snapshot: Load a previously saved snapshot by date.
+  get_latest_snapshot: Retrieve the most recent snapshot on disk.
+  find_new_rows_in_excel: Diff current vs previous DataFrame to find new rows.
+  run_excel_snapshot_digest: End-to-end capture, diff, and snapshot pipeline.
+imports_from: [requests, pandas, openpyxl, app.config, app.trello.api]
+imported_by: [app/onedrive/utils.py, app/sync/sync.py]
+invariants:
+  - Rows with non-integer Job # values are filtered out during parsing.
+  - Snapshot filenames include timestamps to allow multiple snapshots per day.
+  - New-row detection triggers Trello card creation via create_trello_card_from_excel_data.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
+
 import requests
 import pandas as pd
 from io import BytesIO

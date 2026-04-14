@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Push stage and fab_order values from the live_jobs_more.csv spreadsheet into the Releases table.
+exports:
+  sync_from_csv: Compare live_jobs_more.csv against active Releases and update stage + fab_order.
+  _determine_stage: Derive stage from CSV progress columns using rightmost-X logic.
+  _read_csv: Read live_jobs_more.csv and return dict keyed by (job_int, release_str).
+imports_from: [app, app.models, app.api.helpers, csv, dotenv, argparse]
+imported_by: []
+invariants:
+  - Supports --dry-run to preview without committing.
+  - Requires Flask app context (created via create_app at __main__).
+  - Invoked directly: python -m app.trello.scripts.sync_from_csv [--dry-run]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Sync Release stages and fab_order from live_jobs_more.csv.
 
 Reads the CSV's progress columns (Cut start, Fitup comp, Welded, Paint Comp,

@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Multi-step login page handling email lookup, first-time password setup, and credential-based sign-in.
+ * exports:
+ *   Login: Page component with email -> set-password / login flow and auto-redirect for authenticated users
+ * imports_from: [react, react-router-dom, ../utils/api, ../components/FloatingBananas]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - Three-step flow: email check, optional password setup (first login), then password login
+ *   - Already-authenticated users are immediately redirected to /dashboard on mount
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../utils/api';

@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Shows a color-coded detail modal for a single release card on the PM Kanban board with links to events.
+ * exports:
+ *   PMBoardCardModal: Portal modal displaying release fields styled by stage color
+ * imports_from: [react, react-dom, react-router-dom]
+ * imported_by: [frontend/src/components/PMBoardList.jsx]
+ * invariants:
+ *   - Falls back to a default blue stage color when stageColor prop is not provided
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';

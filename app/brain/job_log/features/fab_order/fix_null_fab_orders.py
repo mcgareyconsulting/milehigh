@@ -1,4 +1,16 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: One-time data repair script that assigns DEFAULT_FAB_ORDER to Released releases missing a fab_order value.
+exports:
+  fix_null_fab_orders: Finds and patches NULL/zero fab_order records, with dry-run support
+imports_from: [app, app.models, app.api.helpers]
+imported_by: []
+invariants:
+  - Defaults to dry-run; --commit flag required to write
+  - Only touches active (non-archived) releases in Released-equivalent stages
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 One-time script to set fab_order=80.555 for Released releases with NULL fab_order.
 
 Usage:

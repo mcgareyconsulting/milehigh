@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Scans and reconciles the Trello board against the DB so admins can find missing cards, orphan cards, and stage/list mismatches in one report.
+exports:
+  scan_trello_db_comparison: Full diff between DB jobs and Trello cards.
+  create_trello_card_for_db_job: Create a card for a DB job that is missing from Trello.
+  sync_trello_with_db: Batch-create missing cards and optionally fix mismatches (dry-run supported).
+  sync_releases_to_trello: Push a filtered set of releases to Trello with card creation and post-creation features.
+imports_from: [app.models, app.trello.api, app.trello.utils, app.trello.list_mapper, app.trello.card_creation, app.logging_config]
+imported_by: [app/brain/job_log/routes.py]
+invariants:
+  - All mutating functions accept a dry_run flag; when True no Trello API calls are made.
+  - Card identifier parsing expects "NNN-NNN" or "NNN-VNNN" at the start of the card name.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Trello-DB Scanner: Compare database jobs with Trello cards.
 
 This module provides scanning functionality to identify:

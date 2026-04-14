@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders a single submittal table row on the Drafting Work Load page with inline editing for order, notes, status, and due date.
+ * exports:
+ *   TableRow: Submittal table row with drag-drop reordering and role-gated inline editing
+ * imports_from: [react, ../utils/formatters, ../constants/jumpToHighlight]
+ * imported_by: [frontend/src/pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - Drafter and admin roles both unlock inline editing via canEditDrafterFields
+ *   - Order number editing is admin-only and restricted to single-assignee rows
+ *   - Bump/step-order actions reorder relative to allRows for correct position calculation
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';

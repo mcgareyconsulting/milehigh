@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Compute aggregate KPI totals (remaining fab hours and remaining install hours) used by dashboard summaries and scheduling.
+exports:
+  get_fab_modifier: Return the remaining-work multiplier (0.0-1.0) for a fabrication stage
+  calculate_total_fab_hrs: Sum remaining fab hours across all jobs using stage modifiers
+  calculate_total_install_hrs: Sum remaining install hours for post-fabrication jobs only
+imports_from: []
+imported_by: [app/brain/job_log/scheduling/__init__.py]
+invariants:
+  - Only jobs with get_fab_modifier==0.0 are included in install hour totals
+  - Job Comp values are capped at 1.0 to prevent negative remaining hours
+  - Unknown stages default to modifier 1.0 (conservative)
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Aggregate KPI helpers: total remaining fab hours and total remaining install hours.
 """
 

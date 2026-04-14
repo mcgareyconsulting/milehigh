@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Isolate all SyncOperation CRUD so the rest of the sync module never touches the ORM directly for operation records.
+exports:
+  create_sync_operation: Creates a new SyncOperation row with a random 8-char ID and PENDING status.
+  update_sync_operation: Patches arbitrary fields on a SyncOperation by operation_id, swallowing errors to avoid breaking callers.
+imports_from: [app.models, app.logging_config, sqlalchemy]
+imported_by: [app/sync/sync.py, app/sync/context.py]
+invariants:
+  - create_sync_operation commits immediately in its own transaction.
+  - update_sync_operation never raises; failures are logged and the session is rolled back.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Database operations for SyncOperation records.
 
 This module handles all CRUD operations for SyncOperation records,

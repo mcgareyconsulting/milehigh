@@ -1,4 +1,21 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Make the Releases table exactly mirror the CSV by creating, un-archiving, and archiving rows as needed.
+exports:
+  sync: Ensure exactly the CSV's records are active in the Releases table.
+  _read_csv: Read the CSV and return dict keyed by (job_int, release_str) with all fields.
+  _determine_stage: Derive stage from CSV progress columns using rightmost-X logic.
+  _apply_csv_fields: Update a Releases row with all fields from the CSV record.
+imports_from: [app, app.models, app.api.helpers, csv, dotenv, argparse]
+imported_by: []
+invariants:
+  - Supports --dry-run to preview without committing.
+  - CSV_PATH points to final-boss.csv (not live_jobs.csv despite docstring).
+  - Requires Flask app context (created via create_app at __main__).
+  - Invoked directly: python -m app.trello.scripts.sync_releases [--dry-run]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Sync the Releases table to match live_jobs.csv exactly.
 
 Ensures all 300 CSV records are active in the DB. Creates missing rows,

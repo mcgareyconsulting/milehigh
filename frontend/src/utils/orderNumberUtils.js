@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Calculates "urgency slot" order numbers (0.1-0.9) when a DWL row is bumped to the top of its ball-in-court group.
+ * exports:
+ *   calculateTopOrderNumber: Finds the highest available urgency slot for a drag-to-top operation
+ *   parseOrderNumberWithUrgent: Parses order_number supporting decimal urgency values
+ * imports_from: [./rowDataAccessors]
+ * imported_by: []
+ * invariants:
+ *   - Urgency slots are 0.1 through 0.9; returns 1.0 when all 9 slots are occupied
+ *   - Slot selection starts from 0.9 (least urgent) and works down
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { getBallInCourt, parseOrderNumber } from './rowDataAccessors';
 
 /**

@@ -1,8 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides a consistent styled alert banner for success and error feedback across pages.
+ * exports:
+ *   AlertMessage: Themed alert component with icon, title, and optional message
+ * imports_from: [react]
+ * imported_by: [frontend/src/pages/DraftingWorkLoad.jsx, frontend/src/pages/DraftingWorkLoadAdmin.jsx]
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React from 'react';
 
-/**
- * Reusable alert message component
- */
 export function AlertMessage({ type, title, message, icon }) {
     const styles = {
         success: {

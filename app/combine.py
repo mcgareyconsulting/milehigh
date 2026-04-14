@@ -1,3 +1,18 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Fetches Trello cards and builds identifier-keyed maps for seeding and duplicate detection (Excel integration removed).
+exports:
+  list_duplicate_trello_identifiers: Returns identifiers that appear on more than one Trello card
+  get_identifier_to_trello_card_map_and_list: Returns a dict and ordered list of identifier -> card
+  combine_trello_excel_data: Combines Trello data by identifier (Excel portion now returns None)
+  get_excel_data_by_identifier: Filters a DataFrame to given identifiers (legacy)
+imports_from: [app/trello/api, app/trello/utils]
+imported_by: [app/seed.py]
+invariants:
+  - Excel functionality has been removed; combine_trello_excel_data returns None for the excel field.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from app.trello.api import get_trello_cards_from_subset
 from app.trello.utils import extract_identifier
 

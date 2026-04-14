@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Register a new Trello webhook so the app receives board-change events at a callback URL.
+exports:
+  create_webhook: Create a webhook for a Trello board via the Trello API.
+  main: CLI entry point with --callback-url, --board-id, --description args.
+imports_from: [requests, dotenv, argparse]
+imported_by: []
+invariants:
+  - Does NOT require Flask app context; reads credentials from env vars directly.
+  - Invoked directly: python -m app.trello.scripts.create_webhook --description <desc>
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to create a Trello webhook.
 
 Usage:

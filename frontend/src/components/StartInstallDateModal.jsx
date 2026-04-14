@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Lets users set or clear the Start Install date on a release, choosing between a hard date and a formula-driven date.
+ * exports:
+ *   StartInstallDateModal: Date-picker modal with hard-date vs formula toggle and clear action
+ * imports_from: [react]
+ * imported_by: [frontend/src/components/JobsTableRow.jsx]
+ * invariants:
+ *   - Hard-date checkbox is initialized from startInstallFormulaTF prop to reflect current backend state
+ *   - Clearing a hard date requires a separate onClearHardDate callback distinct from onSave
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useEffect } from 'react';
 
 export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, onClearHardDate, jobNumber, releaseNumber, startInstallFormulaTF }) {

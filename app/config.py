@@ -1,3 +1,20 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Loads .env and exposes environment-specific config classes so the app factory can switch between local/sandbox/production credentials.
+exports:
+  Config: Base config class with all env vars (Trello, Procore, Azure, CORS, etc.)
+  LocalConfig: Debug-enabled local development config
+  SandboxConfig: Staging environment config
+  ProductionConfig: Production environment config
+  get_config: Returns the appropriate config class based on FLASK_ENV / ENVIRONMENT
+imports_from: [dotenv]
+imported_by: [app/__init__.py, app/services/outbox_service.py, app/trello/api.py, app/trello/utils.py, app/procore/client.py, app/procore/api.py, app/procore/__init__.py, app/onedrive/api.py, app/brain/job_log/routes.py, app/procore/procore_auth.py, ...and 13 more]
+invariants:
+  - .env path is hardcoded to the repo owner's local path; infer required vars from this file when setting up a new environment.
+  - PROCORE_CONNECTOR_USER_ID identifies the service account; webhooks from this user are Brain-originated echoes and must be ignored.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import os
 from dotenv import load_dotenv
 from pathlib import Path

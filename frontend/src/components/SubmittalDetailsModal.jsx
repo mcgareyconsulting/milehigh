@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Displays a read-only detail modal for a Procore submittal with links to events history and the Procore web UI.
+ * exports:
+ *   SubmittalDetailsModal: Detail modal for a single submittal record
+ * imports_from: [react, react-router-dom]
+ * imported_by: []
+ * invariants:
+ *   - Procore URL is only rendered when both projectId and submittalId are present
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 

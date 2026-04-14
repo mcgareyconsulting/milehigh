@@ -1,4 +1,18 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provide audit trail endpoints for job and submittal change history.
+exports:
+  history_bp: Blueprint registering history query routes.
+  _extract_new_value_from_payload: Human-readable summary for ReleaseEvents payloads.
+  _extract_submittal_new_value_from_payload: Human-readable summary for SubmittalEvents payloads.
+imports_from: [flask, app.datetime_utils, app.logging_config, app.models]
+imported_by: [app/__init__.py]
+invariants:
+  - Filters out system echo events (is_system_echo == False) from all queries.
+  - Models are imported inside functions to avoid circular imports.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 History blueprint — job and submittal change audit trail routes.
 
 Routes:

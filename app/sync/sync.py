@@ -1,3 +1,18 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Orchestrate bidirectional sync between Trello webhooks, the jobs database, and Excel so that card moves/edits flow through to all three systems.
+exports:
+  sync_from_trello: Processes a Trello webhook event — updates DB, applies list-to-stage mapping, updates Excel, and tracks state changes.
+  sync_from_onedrive: DEPRECATED — was the Excel-to-Trello sync entry point; now raises RuntimeError.
+imports_from: [app.trello.utils, app.trello.api, app.onedrive.utils, app.onedrive.api, app.models, app.sync.context, app.sync.logging, app.sync.services.trello_list_mapper]
+imported_by: [app/onedrive/utils.py]
+invariants:
+  - Duplicate Trello events are suppressed by comparing event_time against rec.last_updated_at.
+  - Excel updates for cards created from Excel sync are skipped within 5 minutes to prevent echo loops.
+  - sync_from_onedrive is deprecated and will raise RuntimeError if called.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from numpy import safe_eval
 import openpyxl
 import pandas as pd

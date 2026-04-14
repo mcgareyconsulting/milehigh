@@ -1,3 +1,20 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Provide a typed HTTP client for the Procore REST API with retry logic, token refresh, and pagination.
+exports:
+  ProcoreAPI: Session-based Procore API client with methods for users, projects, submittals, and webhooks.
+  SUBMITTAL_STATUSES: Coded mapping of company submittal status IDs to names.
+  VALID_SUBMITTAL_STATUS_IDS: Set of allowed submittal status IDs for validation.
+  SUBMITTAL_STATUS_ID_TO_NAME: Dict mapping status ID to human-readable name.
+imports_from: [requests, app.config, app.procore.procore_auth, app.logging_config]
+imported_by: [app/procore/client.py, app/brain/drafting_work_load/routes.py]
+invariants:
+  - Connection errors retry up to 3 times with exponential backoff; HTTP 4xx/5xx errors do not retry.
+  - A 401 response triggers a single forced token refresh before re-attempting the request.
+  - update_submittal_status validates status_id against VALID_SUBMITTAL_STATUS_IDS before calling the API.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import time
 import requests
 from typing import Optional, Dict, List

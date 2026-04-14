@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Visualizes project release timelines as a horizontal Gantt chart so PMs can see schedule overlaps at a glance.
+ * exports:
+ *   GanttChart: Interactive Gantt chart with hover tooltips and optional Complete-stage filtering
+ * imports_from: [react, ../services/jobsApi]
+ * imported_by: [frontend/src/pages/PMBoard.jsx]
+ * invariants:
+ *   - When filterComplete is true, Complete-stage releases are excluded using the full jobs list
+ *   - Projects with zero visible releases after filtering are omitted entirely
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 

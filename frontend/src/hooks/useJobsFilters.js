@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Centralizes all Job Log filter, subset, and sort logic so JobLog.jsx only handles rendering.
+ * exports:
+ *   useJobsFilters: Hook returning filter state, stage options/colors, displayJobs, KPI totals, and reset/toggle handlers
+ * imports_from: [react]
+ * imported_by: [../pages/JobLog.jsx, ../pages/Archive.jsx]
+ * invariants:
+ *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
+ *   - Subset views (job_order, ready_to_ship, paint, paint_fab, fab) apply stage-group filters then sort by fab_order
+ *   - totalFabHrs and totalInstallHrs are computed over ALL jobs, not the filtered displayJobs
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 
 const _FAB_MODIFIER = {

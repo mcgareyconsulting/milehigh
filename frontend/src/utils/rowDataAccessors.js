@@ -1,4 +1,20 @@
 /**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides safe accessors for submittal row fields that may appear under different key names (snake_case vs display-name).
+ * exports:
+ *   getBallInCourt: Returns ball_in_court from a row with fallback keys
+ *   getRowId: Returns the submittal ID from a row
+ *   getOrderNumber: Returns raw order number from a row
+ *   parseOrderNumber: Parses order number as a float with a fallback default
+ * imports_from: []
+ * imported_by: [utils/orderNumberUtils.js]
+ * invariants:
+ *   - All accessors use nullish coalescing; callers should not assume a non-null return
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
+
+/**
  * Utility functions for accessing row data with fallback field names
  */
 

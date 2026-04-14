@@ -1,10 +1,25 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provision Procore webhooks and Submittals triggers for projects, used both as a CLI tool and imported by admin routes.
+exports:
+  create_webhook_and_trigger: Creates or augments a webhook with update/create triggers for one project.
+  create_single_webhook: Convenience wrapper that bootstraps app context and creates a webhook for one project.
+  main: CLI entry point supporting single-project and batch modes.
+imports_from: [app, app.procore.client, app.procore.webhook_utils]
+imported_by: [app/admin/__init__.py]
+invariants:
+  - Requires Flask app context (creates its own via create_app when run as CLI).
+  - Invoked directly as `python -m app.procore.scripts.create` or imported by admin blueprint.
+  - Logs all API responses to procore_webhook_responses.log for post-mortem debugging.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to create Procore webhooks for Submittals updates and creates.
 
 Usage:
     # Create webhooks for all projects in database
     python -m app.procore.scripts.create
-    
+
     # Create webhook for a single project
     python -m app.procore.scripts.create --project-id <project_id> [--namespace <namespace>]
 

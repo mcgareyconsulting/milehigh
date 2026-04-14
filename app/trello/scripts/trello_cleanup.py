@@ -1,4 +1,22 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: End-to-end repair of Trello board state by creating missing cards, syncing Releases, and archiving completed rows.
+exports:
+  find_missing_cards: Find Job records missing Trello cards or with deleted cards.
+  create_card_for_job: Create a Trello card for a Job record and update the DB.
+  sync_releases_for_job: Ensure a Releases record exists and mirrors the Job record.
+  archive_completed_releases: Archive Releases rows where job_comp='X' AND invoiced='X'.
+  main: CLI entry point with --dry-run and --verbose flags.
+imports_from: [app, app.models, app.config, app.trello.api, app.trello.utils, app.sync.services.trello_list_mapper, app.api.helpers, requests, argparse]
+imported_by: []
+invariants:
+  - Writes both to Trello (card creation) and the local DB.
+  - Supports --dry-run to preview without side effects.
+  - Requires Flask app context (created via create_app inside main).
+  - Invoked directly: python -m app.trello.scripts.trello_cleanup [--dry-run] [--verbose]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Trello cleanup script: finds Job records missing Trello cards, creates them
 in the correct list, syncs the Releases shadow table, and archives completed rows.
 

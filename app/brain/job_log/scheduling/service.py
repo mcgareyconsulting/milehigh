@@ -1,4 +1,18 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Persist computed scheduling dates (start_install, comp_eta) back to Job records, with single-job and batch-recalculation modes.
+exports:
+  update_job_scheduling_fields: Calculate and save scheduling dates for one job
+  recalculate_all_jobs_scheduling: Batch recalculate and commit scheduling for all (or filtered) jobs
+imports_from: [app.models, app.brain.job_log.scheduling.calculator, app.logging_config]
+imported_by: [app/brain/job_log/routes.py, app/brain/job_log/features/fab_order/command.py]
+invariants:
+  - Hard-date jobs (start_install_formulaTF=False) are never overwritten
+  - Batch commits every batch_size records to limit transaction size
+  - NaN floats are converted to None before calculation to prevent int() errors
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Scheduling service for updating Job model records with calculated scheduling fields.
 
 This service calculates and updates start_install and comp_eta fields in the database

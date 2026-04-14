@@ -1,3 +1,13 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Shows a centered login call-to-action for unauthenticated visitors on the landing page.
+ * exports:
+ *   LoginPrompt: Simple CTA component that navigates to the login page
+ * imports_from: [react-router-dom]
+ * imported_by: [frontend/src/App.jsx]
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useNavigate } from 'react-router-dom';
 
 function LoginPrompt() {

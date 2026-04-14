@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provide shared helper functions for safely serializing job-log data and resolving stage names from DB fields.
+exports:
+  determine_stage_from_db_fields: Return the stage name from a Job record, defaulting to 'Released'
+  serialize_value: Convert Python values (dates, NaN, bytes) to JSON-safe types
+imports_from: [datetime, math]
+imported_by: [app/brain/job_log/routes.py]
+invariants:
+  - serialize_value must never raise on any input type
+  - determine_stage_from_db_fields always returns a non-None string
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Utility functions for the Brain
 
 Contains helper functions for processing and transforming Job log data.

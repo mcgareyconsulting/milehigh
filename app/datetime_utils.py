@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Converts datetimes to Mountain Time or UTC for user-facing display across the API and model serialization.
+exports:
+  format_datetime_mountain: Formats a datetime to "Month DD, YYYY HH:MM:SS AM/PM" in America/Denver
+  format_datetime_utc: Formats a datetime to the same pattern with " UTC" suffix
+  get_mountain_timezone: Returns ZoneInfo("America/Denver")
+imports_from: [datetime, zoneinfo]
+imported_by: [app/models.py, app/history/__init__.py, app/brain/job_log/routes.py]
+invariants:
+  - Naive datetimes are assumed UTC; callers storing Mountain Time must attach tzinfo before passing.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 DateTime utility functions for the application.
 """
 from datetime import datetime, timezone

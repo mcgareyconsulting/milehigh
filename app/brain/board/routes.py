@@ -1,4 +1,21 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: CRUD routes for the admin Kanban bug/feature tracker, including drag-drop reordering and @mention notifications.
+exports:
+  list_board_items: GET /board/items with filtering and comment counts (avoids N+1)
+  create_board_item: POST /board/items
+  add_board_activity: POST /board/items/<id>/activity — parses @mentions, creates Notification records
+  reorder_board_items: PATCH /board/items/reorder — bulk position update for drag-drop
+  ...and 4 more
+imports_from: [app/brain, app/auth/utils, app/models, app/logging_config, flask, sqlalchemy]
+imported_by: [app/brain/__init__.py]
+invariants:
+  - All routes require @admin_required; do not add public routes to this blueprint.
+  - Routes are registered on brain_bp (imported from app/brain), not a local blueprint.
+  - Comment @mention parsing uses re.findall(r'@(\w+)') and matches against User.first_name — must stay in sync with frontend MentionInput.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Board routes — CRUD for feature/bug tracking items and their activity threads.
 All routes are admin-only.
 """

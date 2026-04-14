@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Admin-only Kanban board for tracking bugs, features, and tasks with drag-and-drop reordering and cross-column status changes.
+ * exports:
+ *   Board: Page component rendering four-column Kanban (Open, In Progress, Deployed, Closed) with detail panel
+ * imports_from: [react, react-router-dom, ../utils/auth, ../services/boardApi, ../components/board/BoardDetail, ../components/board/NewItemModal, @dnd-kit/core, @dnd-kit/sortable]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - Requires admin role; non-admins see an access-denied message
+ *   - Drag between columns triggers a status update API call; within-column drag triggers a reorder API call
+ *   - Optimistic UI updates revert on API failure
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { checkAuth } from '../utils/auth';

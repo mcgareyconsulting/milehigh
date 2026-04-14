@@ -1,3 +1,18 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Track job milestone state transitions (Created -> Fitup Complete -> Paint Complete -> Shipped) so every stage change is auditable in JobChangeLog.
+exports:
+  JobStateConfig: Defines milestone fields, their display names, and the progression order; derives current state from a job record.
+  track_job_state_change: Compares previous vs current state and writes a JobChangeLog entry if they differ.
+  detect_and_track_state_changes: Given old field values and the updated record, derives both states and delegates to track_job_state_change.
+imports_from: [app.models, app.logging_config]
+imported_by: [app/sync/sync.py]
+invariants:
+  - Only the value "X" (not any truthy value) counts as a completed milestone.
+  - State is determined by checking ship, paint_comp, fitup_comp in reverse order — highest completed milestone wins.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from app.models import db, Job, JobChangeLog
 from datetime import datetime, timezone
 from app.logging_config import get_logger

@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Wraps all DWL field-update API calls with unified loading/error/success state so each mutation is a one-liner in the page.
+ * exports:
+ *   useMutations: Hook returning mutation functions (updateOrderNumber, updateNotes, updateStatus, etc.) with shared updating/error/success state
+ * imports_from: [react, ../services/draftingWorkLoadApi]
+ * imported_by: [../pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - Order number 0 is rejected; values between 0-1 must be exact tenths (0.1-0.9)
+ *   - Every mutation triggers refetch(true) on both success and failure to keep UI in sync
+ *   - Dash, blank, empty string, null, and undefined all clear the order number to NULL
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useCallback } from 'react';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 

@@ -1,3 +1,17 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Serve jobsite geofence polygons as GeoJSON for the map view.
+exports:
+  jobsites_map: GET endpoint returning a GeoJSON FeatureCollection of all jobsites with geofences.
+imports_from: [app.brain, flask, app.models, app.auth.utils, app.logging_config]
+imported_by: [app/brain/__init__.py]
+invariants:
+  - Only returns projects where geofence_geojson is not None.
+  - Route is registered on brain_bp, not its own blueprint.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
+
 from app.brain import brain_bp
 from flask import jsonify
 from app.models import Projects, ProjectManager, db

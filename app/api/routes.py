@@ -1,4 +1,15 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Define REST endpoints for querying the job log database (currently disabled pending completion).
+exports:
+  (no active exports): All route handlers are commented out
+imports_from: [flask, app.api, app.models, app.api.helpers, app.logging_config]
+imported_by: [app/api/__init__.py]
+invariants:
+  - Routes are registered on api_bp imported from app.api, not a local blueprint
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 API routes for internal database queries.
 """
 from flask import jsonify, request

@@ -1,3 +1,19 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Flask app factory — registers all blueprints, starts APScheduler (queue drainer + heartbeat), and spawns the daemon outbox-retry thread.
+exports:
+  create_app: Factory that builds and returns the configured Flask application
+  init_scheduler: Starts APScheduler with queue-drainer (5 min) and heartbeat (30 min) jobs
+imports_from: [app/trello, app/procore, app/brain, app/auth/routes, app/history, app/admin, app/onedrive, app/models, app/config, app/db_config, app/logging_config, app/services/outbox_service, app/trello/api, apscheduler]
+imported_by: [run.py]
+invariants:
+  - Scheduler only starts on one process: checks WERKZEUG_RUN_MAIN or IS_RENDER_SCHEDULER to avoid duplication in multi-worker deploys.
+  - APScheduler uses a 3-worker thread pool; outbox retry runs on a separate daemon thread (2s idle / 0.5s active / 5s error sleep).
+  - Blueprint registration order matters: API blueprints must register before the React catch-all route.
+  - Application entry point via run.py or wsgi.py — not imported by other app modules.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import os
 import atexit
 import time

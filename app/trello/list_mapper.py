@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Authoritative many-to-one mapping between ~20 DB stages and the 6 physical Trello lists, used for both inbound (webhook->DB) and outbound (DB->Trello) stage resolution.
+exports:
+  TrelloListMapper: Class with DB_STAGE_TO_TRELLO_LIST dict and helpers for bidirectional stage/list translation.
+imports_from: [app.logging_config, app.api.helpers]
+imported_by: [app/trello/sync.py, app/trello/scanner.py, app/brain/job_log/routes.py]
+invariants:
+  - DB_STAGE_TO_TRELLO_LIST is the single source of truth for stage-to-list mapping.
+  - VALID_TRELLO_LISTS must exactly match the 6 physical board lists; apply_trello_list_to_db rejects unknown names.
+  - Case-insensitive fallback exists but exact match is preferred.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Trello list mapping logic for syncing between database and Trello lists.
 
 This module provides a mapper class that handles bidirectional mapping between

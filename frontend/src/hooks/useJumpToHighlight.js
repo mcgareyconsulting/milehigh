@@ -1,3 +1,18 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Scrolls to and temporarily highlights a table row when the user arrives via a "Jump To" link from Job Search.
+ * exports:
+ *   useJumpToHighlight: Hook that reads URL params, scrolls to the matching row, and applies a timed CSS highlight
+ *   JUMP_TO_HIGHLIGHT_MS: Default highlight duration constant (3500ms)
+ * imports_from: [react]
+ * imported_by: [../pages/JobLog.jsx, ../pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - Scrolls only the table container (not the page) so the sticky header and nav remain visible
+ *   - Supports two modes: 'job-release' (Job Log) and 'submittal' (DWL), selected by the caller
+ *   - Highlight auto-removes after durationMs to avoid stale visual state
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect } from 'react';
 
 /** Highlight duration in ms when navigating from Job Search Jump To */

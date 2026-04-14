@@ -1,3 +1,13 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Renders the top-level navigation bar with route links and logout for the pre-AppShell layout (currently unused but retained).
+ * exports:
+ *   Navbar: Standalone navigation bar with Operations, History, and logout buttons
+ * imports_from: [react-router-dom, ../utils/auth]
+ * imported_by: []
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useNavigate, useLocation } from 'react-router-dom';
 import { logout } from '../utils/auth';
 

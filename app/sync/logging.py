@@ -1,4 +1,18 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provide safe, retry-capable logging to the SyncLog table so sync events are persisted even when payloads contain non-JSON-serializable types (numpy, pandas, Decimal, etc.).
+exports:
+  make_json_safe: Recursively converts numpy/pandas/datetime/Decimal values to JSON-safe Python primitives.
+  safe_log_sync_event: Writes a SyncLog row with up to 3 retries and exponential backoff; never raises.
+  safe_sync_op_call: Wrapper that auto-injects operation_id and swallows errors when sync_op is None.
+imports_from: [numpy, pandas, app.models, app.logging_config]
+imported_by: [app/sync/sync.py]
+invariants:
+  - safe_log_sync_event never raises — all failures are logged to structlog and the function returns False.
+  - Retries use 0.1s * 2^attempt backoff (max 3 attempts).
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Logging utilities for sync operations.
 
 This module provides safe logging that handles JSON serialization issues

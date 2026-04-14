@@ -1,3 +1,15 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: One-shot script to seed the Projects table from a JSON fixture (docs/jobsites.json), skipping existing job numbers.
+exports:
+  (script — no importable exports)
+imports_from: [app, app/models]
+imported_by: []
+invariants:
+  - Standalone script; invoked directly, not imported. Requires an app context (creates one via create_app).
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 ## To run this script
 # curl -X POST http://mile-high-metal-works-trello-onedrive.onrender.com/admin/jobsites/regenerate-geofences \
 #   -H "Cookie: session=eyJfcGVybWFuZW50Ijp0cnVlLCJ1c2VyX2lkIjoyNSwidXNlcm5hbWUiOiJtY2dhcmV5Y29uc3VsdGluZ0BnbWFpbC5jb20ifQ.abRdRg.8fCLedpy8OpuHV49_0yfYYSXO3g" \

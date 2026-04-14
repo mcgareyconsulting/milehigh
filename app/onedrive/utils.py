@@ -1,3 +1,20 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Orchestrate OneDrive Excel polling, row-level lookup, and snapshot diffing under the sync lock.
+exports:
+  run_onedrive_poll: Poll OneDrive, sync data, diff for new rows, and save a snapshot.
+  get_excel_row_and_index_by_identifiers: Look up a single Excel row by Job # and Release #.
+  parse_excel_datetime: Convert OneDrive lastModifiedDateTime to naive UTC.
+  parse_polling_data: Download and package Excel data for the sync pipeline.
+imports_from: [pandas, app.onedrive.api, app.config, app.sync_lock, app.sync.sync]
+imported_by: [app/onedrive/__init__.py, app/sync/sync.py]
+invariants:
+  - run_onedrive_poll is protected by @synchronized_sync to prevent concurrent Trello/OneDrive processing.
+  - Excel index adjustment uses cfg.EXCEL_INDEX_ADJ to map DataFrame rows back to Excel row numbers.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
+
 import pandas as pd
 from app.onedrive.api import get_excel_dataframe, get_excel_data_with_timestamp
 from app.config import Config as cfg

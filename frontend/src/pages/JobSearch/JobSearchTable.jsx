@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Reusable data table for JobSearch results that optionally renders a jump-to action column linking rows to their detail pages.
+ * exports:
+ *   JobSearchTable: Table component accepting column definitions, row data, and an optional jumpTo URL builder
+ * imports_from: [react, react-router-dom, ../../utils/formatters]
+ * imported_by: [pages/JobSearch/index.jsx, components/QuickSearch.jsx]
+ * invariants:
+ *   - When jumpTo prop is provided, an extra action column is appended with navigation buttons
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCellValue } from '../../utils/formatters';

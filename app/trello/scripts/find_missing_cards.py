@@ -1,4 +1,21 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Sync Release stages from Trello and archive releases not present in live_jobs.csv.
+exports:
+  diff_stage_vs_trello: Compare Releases.stage against Trello card lists and update mismatches.
+  archive_inactive_releases: Archive Releases rows whose (job, release) is NOT in live_jobs.csv.
+  _read_csv: Read live_jobs.csv and return dict keyed by (job_int, release_str).
+  _parse_job_release: Extract (job_int, release_str) tuple from a Trello card name.
+imports_from: [app, app.models, app.trello.api, app.api.helpers, csv, dotenv, argparse]
+imported_by: []
+invariants:
+  - diff_stage_vs_trello treats Trello as source of truth for stage values.
+  - Contains large blocks of commented-out code from earlier iterations.
+  - Requires Flask app context (created via create_app at __main__).
+  - Invoked directly: python -m app.trello.scripts.find_missing_cards [--dry-run]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Archive inactive releases: sets is_archived=True on Releases rows
 whose (job, release) is NOT in live_jobs.csv.
 

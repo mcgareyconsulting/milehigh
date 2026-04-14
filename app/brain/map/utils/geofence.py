@@ -1,3 +1,17 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Generate circular geofence polygons from lat/lon coordinates for jobsite boundaries.
+exports:
+  generate_geofence_polygon: Build a GeoJSON polygon approximating a circle around a point.
+imports_from: [math, shapely.geometry]
+imported_by: [app/admin/__init__.py]
+invariants:
+  - Uses degree-based approximation accurate at jobsite scale (tens to hundreds of meters).
+  - Returns a closed GeoJSON Polygon ring (first and last coordinate are identical).
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
+
 import math
 from shapely.geometry import Polygon, mapping
 

@@ -1,4 +1,19 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provide REST endpoints for the in-app @mention notification system used by the board feature.
+exports:
+  list_notifications: GET /notifications — returns recent notifications with unread count.
+  unread_notification_count: GET /notifications/unread-count — lightweight polling endpoint for the notification bell.
+  mark_notification_read: PATCH /notifications/<id>/read — marks a single notification as read.
+  mark_all_notifications_read: POST /notifications/read-all — marks all unread notifications as read.
+imports_from: [flask, app.brain, app.auth.utils, sqlalchemy.orm, app.models, app.logging_config]
+imported_by: [app/brain/__init__.py]
+invariants:
+  - All routes require @login_required; users can only access their own notifications.
+  - Notification records are created by board comment logic (app/brain/board/routes.py), not here.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Notification routes — in-app notifications for @mentions.
 """
 from flask import request, jsonify

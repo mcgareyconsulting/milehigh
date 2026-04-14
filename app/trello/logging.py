@@ -1,4 +1,18 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provides retry-safe, JSON-clean SyncLog persistence so sync operations can log structured data without risking serialisation errors or swallowed exceptions.
+exports:
+  make_json_safe: Recursively coerce pandas/numpy/datetime values into JSON-serialisable Python types.
+  safe_log_sync_event: Write a SyncLog row with automatic retry and rollback on failure.
+  safe_sync_op_call: Null-safe wrapper that calls a function only when sync_op is present.
+imports_from: [app.models, app.logging_config, numpy, pandas]
+imported_by: [app/trello/sync.py, app/trello/context.py, app/trello/utils.py, app/procore/__init__.py, app/seed.py]
+invariants:
+  - safe_log_sync_event never raises; failures degrade to structlog warnings.
+  - Retries use exponential back-off (0.1s base, 3 attempts).
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Logging utilities for sync operations.
 
 This module provides safe logging that handles JSON serialization issues

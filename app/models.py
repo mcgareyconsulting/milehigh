@@ -1,3 +1,22 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Central ORM module — defines every SQLAlchemy model and the shared db instance used across the application.
+exports:
+  db: The shared SQLAlchemy instance (initialized in app factory via db.init_app)
+  Releases: Job log entries (alias: Job as Releases in integration code)
+  Submittals: Procore submittals (table renamed from procore_submittals in M2)
+  ReleaseEvents: Audit event stream for job releases with payload-hash dedup
+  User: Authentication model with role flags (is_admin, is_drafter, is_active)
+  ...and 16 more
+imports_from: [flask_sqlalchemy, sqlalchemy, pandas, datetime]
+imported_by: [app/__init__.py, app/seed.py, app/services/outbox_service.py, app/brain/job_log/routes.py, app/trello/sync.py, app/procore/__init__.py, app/auth/utils.py, app/brain/drafting_work_load/service.py, app/sync/db_operations.py, app/api/helpers.py, ...and 80 more]
+invariants:
+  - Job (table 'jobs') is the legacy job log; Releases (table 'releases') is the current model. Integration code aliases: from app.models import Job as Releases.
+  - Submittals was renamed from ProcoreSubmittal; old scripts alias it: from app.models import Submittals as ProcoreSubmittal.
+  - Job vs Jobs naming collision: Job = job log entries (table 'jobs'); Projects (formerly Jobs) = geofence/job site records (table 'projects').
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 from datetime import datetime, date

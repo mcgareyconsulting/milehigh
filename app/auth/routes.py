@@ -1,4 +1,21 @@
-"""Authentication routes for login, logout, and user management."""
+"""
+@milehigh-header
+schema_version: 1
+purpose: Handle the full session-auth lifecycle so users can log in, set initial passwords, and check auth state.
+exports:
+  auth_bp: Flask blueprint registered at /api/auth with login, logout, me, check-user, set-password routes
+  login: POST endpoint that verifies credentials and creates a Flask session
+  logout: POST endpoint that clears the session
+  get_current_user_info: GET endpoint returning the authenticated user's profile
+  set_password: POST endpoint for first-login password setup flow
+imports_from: [flask, app.models, app.auth.utils, app.logging_config, datetime]
+imported_by: [app/__init__.py]
+invariants:
+  - set_password only works when user.password_set is False; once True the endpoint rejects further changes
+  - session['user_id'] is the single source of auth state; clearing it logs the user out
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
+Authentication routes for login, logout, and user management."""
 from flask import Blueprint, request, jsonify, session
 from app.models import User, db
 from app.auth.utils import verify_password, get_current_user, hash_password

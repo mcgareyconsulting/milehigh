@@ -1,3 +1,15 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Frozen snapshot of legacy model definitions before the Submittals rename and schema migrations — kept for reference, not imported at runtime.
+exports:
+  (no runtime exports — reference only)
+imports_from: [flask_sqlalchemy, pandas, datetime]
+imported_by: []
+invariants:
+  - This file is not imported by any application code; it exists as a historical reference. Do not add imports to it.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 from datetime import datetime

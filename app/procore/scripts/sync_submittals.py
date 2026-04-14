@@ -1,4 +1,20 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Backfill the local submittals table from the Procore API so the DB matches the source of truth.
+exports:
+  extract_field_value: Safely extracts a value from submittal data that may be a dict or string.
+  create_submittal_from_api_data: Creates a single Submittals record from raw API data with dedup/race protection.
+  sync_submittals_for_project: Orchestrates a full sync for one project (fetch, filter, upsert).
+  main: CLI entry point requiring --project-id.
+imports_from: [app, app.models, app.procore.client, app.procore.procore, app.procore.helpers, app.logging_config]
+imported_by: [app/admin/__init__.py]
+invariants:
+  - Requires Flask app context (creates its own via create_app when run as CLI).
+  - Invoked directly as `python -m app.procore.scripts.sync_submittals` or imported by admin blueprint.
+  - Uses double-check-then-commit pattern to guard against race conditions on submittal_id uniqueness.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Script to sync submittals from Procore API to the database.
 
 Usage:

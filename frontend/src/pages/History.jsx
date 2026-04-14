@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Lets users search for a job or submittal and review its full change history in a detail + timeline layout.
+ * exports:
+ *   History: Page component with job/submittal search form, job-release selector, and change-history table
+ * imports_from: [react, axios, ../utils/api]
+ * imported_by: []
+ * invariants:
+ *   - Job search and submittal search are mutually exclusive; entering one clears the other
+ *   - When multiple job-release combos exist for a job number, the user can toggle between them
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState } from 'react';
 import axios from 'axios';
 

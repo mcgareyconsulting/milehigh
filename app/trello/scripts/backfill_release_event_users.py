@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Link Trello-sourced ReleaseEvents to local users by resolving external_user_id to internal_user_id.
+exports:
+  main: CLI entry point that backfills internal_user_id on Trello ReleaseEvents.
+imports_from: [app, app.models, dotenv, argparse]
+imported_by: []
+invariants:
+  - Supports --dry-run to preview without committing.
+  - Requires Flask app context (created via create_app inside main).
+  - Invoked directly: python -m app.trello.scripts.backfill_release_event_users [--dry-run]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Backfill internal_user_id on ReleaseEvents sourced from Trello.
 
 Finds all ReleaseEvents where source="Trello" and internal_user_id is NULL,

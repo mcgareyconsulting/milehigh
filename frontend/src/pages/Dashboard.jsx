@@ -1,3 +1,15 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Landing page that provides card-based navigation to Operations and History views.
+ * exports:
+ *   Dashboard: Page component with navigation cards linking to /operations and /history
+ * imports_from: [react-router-dom]
+ * imported_by: []
+ * invariants:
+ *   - Currently not routed in App.jsx; may be unused or slated for future re-integration
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useNavigate } from 'react-router-dom';
 
 function Dashboard() {

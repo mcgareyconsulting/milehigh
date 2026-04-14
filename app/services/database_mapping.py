@@ -1,4 +1,20 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Enable cross-database job synchronization so field values (e.g. fab_order) can be propagated between production and sandbox by (job, release) key.
+exports:
+  DatabaseMappingService: Stateless service with static methods for fetching, matching, and updating jobs across database engines.
+  FieldMapping: Dataclass defining how a single source field maps to a target field with optional transform.
+  JobMappingResult: Dataclass capturing the match result and field diffs for one job.
+  MappingStatistics: Dataclass aggregating counts and per-field update tallies for a mapping run.
+  map_production_fab_order_to_sandbox: Convenience function that maps fab_order from production to sandbox in one call.
+imports_from: [sqlalchemy, pandas]
+imported_by: []
+invariants:
+  - Jobs are matched by (job, release) composite key — duplicates in the lookup silently overwrite earlier rows.
+  - apply_field_updates runs all row UPDATEs in a single transaction; partial failure still commits earlier rows.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Database mapping service for cross-database job synchronization.
 
 This module provides functions to map and synchronize job data between

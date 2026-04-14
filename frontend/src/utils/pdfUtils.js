@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Generates a formatted 11x17 landscape PDF of the Drafting Work Load table with DRR-row highlighting.
+ * exports:
+ *   generateDraftingWorkLoadPDF: Builds and downloads a PDF from filtered/sorted DWL rows and columns
+ * imports_from: [jspdf, jspdf-autotable, ./formatters]
+ * imported_by: [pages/DraftingWorkLoad.jsx]
+ * invariants:
+ *   - DRR highlight (green) is applied only to the TYPE column cell, not the entire row
+ *   - Column widths array must stay in sync with DESIRED_COLUMN_ORDER from columns.js
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatDate, formatCellValue } from './formatters';

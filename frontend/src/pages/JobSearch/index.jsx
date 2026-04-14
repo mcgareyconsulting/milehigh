@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Job search page that fetches releases and submittals for a given 3-digit job number and displays them in side-by-side tables with jump-to links.
+ * exports:
+ *   JobSearch: Page component with job-number input, search action, and dual results tables
+ * imports_from: [react, ./JobSearchTable, ../../services/jobSearchApi, ./constants]
+ * imported_by: []
+ * invariants:
+ *   - Input is validated to exactly 3 digits before the API call fires
+ *   - Currently not routed in App.jsx; accessed via QuickSearch or direct navigation
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useCallback } from 'react';
 import { JobSearchTable } from './JobSearchTable';
 import { searchByJob } from '../../services/jobSearchApi';

@@ -1,3 +1,17 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides a React context for browser geolocation state so the DWL and map pages can filter by user proximity.
+ * exports:
+ *   LocationProvider: Context provider managing geolocation toggle, requesting, and coords
+ *   useLocationContext: Hook to consume the location context
+ * imports_from: [react]
+ * imported_by: [pages/DraftingWorkLoad.jsx, components/AppShell.jsx]
+ * invariants:
+ *   - locationFilter is null when disabled; consumers must null-check before using coords
+ *   - Uses high-accuracy geolocation with a 10-second timeout
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { createContext, useCallback, useContext, useState } from 'react';
 
 const LocationContext = createContext(null);

@@ -1,3 +1,15 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Persist system-level errors to the SystemLogs table so they survive beyond log rotation and are queryable from the admin UI.
+exports:
+  SystemLogService: Static service with log_error() that writes structured error records including stack traces.
+imports_from: [app.logging_config, app.models]
+imported_by: [app/brain/job_log/routes.py]
+invariants:
+  - Each log_error call commits in its own transaction to avoid being rolled back with the caller's failed work.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from datetime import datetime
 from app.logging_config import get_logger
 logger = get_logger(__name__)

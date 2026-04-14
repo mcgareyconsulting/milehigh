@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: PIN-protected admin page for running Procore health scans to detect sync mismatches between the local DB and the Procore API.
+ * exports:
+ *   DraftingWorkLoadAdmin: Page component with PIN auth gate, health-scan results, and bulk DB-update action
+ * imports_from: [react, ../components/AlertMessage, ../utils/api]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - PIN verification happens client-side via /procore/admin/verify-pin before scan is accessible
+ *   - Bulk update overwrites local DB values with Procore API values for all detected sync issues
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useState, useEffect } from 'react';
 import { AlertMessage } from '../components/AlertMessage';
 

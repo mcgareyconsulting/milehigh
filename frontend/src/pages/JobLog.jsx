@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Main job log page where users view, filter, reorder, and edit active job releases synced from Trello and Excel.
+ * exports:
+ *   JobLog: Page component with filterable job table, drag-and-drop row reordering, CSV release import, and jump-to-highlight support
+ * imports_from: [react, react-router-dom, ../hooks/useJumpToHighlight, ../hooks/useJobsDataFetching, ../hooks/useJobsFilters, ../hooks/useJobsDragAndDrop, ../components/JobsTableRow, ../services/jobsApi]
+ * imported_by: [App.jsx]
+ * invariants:
+ *   - Admin-only actions: drag reorder, CSV release import, archive, cascade recalc
+ *   - Jump-to highlight param triggers fetchAll to load every row regardless of filter
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';

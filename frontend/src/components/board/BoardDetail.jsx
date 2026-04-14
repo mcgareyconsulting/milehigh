@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Provides the detail/edit panel for a single board item, including status/priority controls, activity thread, commenting with @mentions, and deletion.
+ * exports:
+ *   BoardDetail: Board item detail view with inline status changes, comment thread, and delete confirmation
+ * imports_from: [react, ../../services/boardApi, ./MentionInput]
+ * imported_by: [pages/Board.jsx]
+ * invariants:
+ *   - onUpdate(null) signals the item was deleted; parent must handle removal
+ *   - After posting a comment, the full item is re-fetched to get server-rendered activity
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { useState, useEffect } from 'react';
 import { updateBoardItem, addComment, deleteBoardItem, fetchBoardItem, fetchMentionableUsers } from '../../services/boardApi';
 import MentionInput from './MentionInput';

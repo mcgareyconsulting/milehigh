@@ -1,3 +1,16 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Top-level route configuration that gates all pages behind session authentication and redirects unauthenticated users to a login prompt.
+ * exports:
+ *   App: Root component wrapping BrowserRouter, auth check, and all page routes
+ * imports_from: [react-router-dom, react, ./components/AppShell, ./components/LoginPrompt, ./pages/DraftingWorkLoad, ./pages/DraftingWorkLoadAdmin, ./pages/Events, ./pages/JobLog]
+ * imported_by: [main.jsx]
+ * invariants:
+ *   - Authenticated users default-redirect to /job-log; unauthenticated users see LoginPrompt on any route
+ *   - Auth state is checked once on mount via checkAuth; child pages may re-check independently
+ * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ */
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import AppShell from './components/AppShell';

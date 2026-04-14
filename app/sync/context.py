@@ -1,4 +1,17 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Provide a context manager that wraps any sync operation with automatic lifecycle tracking (create, in-progress, completed/failed) so callers never forget to update status or roll back.
+exports:
+  sync_operation_context: Context manager yielding a SyncOperation; auto-transitions status, calculates duration, rolls back on error.
+imports_from: [app.models, app.logging_config, app.sync.db_operations, app.sync.logging]
+imported_by: [app/sync/sync.py]
+invariants:
+  - If require_db is False and the DB is unavailable, yields None and returns without raising.
+  - On exception the DB session is rolled back and the exception is always re-raised.
+  - Status transitions follow PENDING -> IN_PROGRESS -> COMPLETED|FAILED; no other paths exist.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Context manager for sync operations.
 
 This module provides a context manager that handles the lifecycle of sync operations:

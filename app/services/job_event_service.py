@@ -1,3 +1,18 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Creates deduplicated job events using time-bucketed payload hashing so concurrent webhook deliveries don't produce duplicate records.
+exports:
+  JobEventService: Static methods create(), close(), create_and_close() for the event lifecycle
+  DEDUP_WINDOW_SECONDS: Dedup bucket width (30s) — events with identical payload hash within this window are dropped
+imports_from: [app/models, app/auth/utils, app/trello/helpers, app/logging_config]
+imported_by: [app/trello/sync.py, app/services/outbox_service.py, app/brain/job_log/routes.py, app/brain/job_log/features/fab_order/command.py]
+invariants:
+  - Dedup window is 30 seconds (DEDUP_WINDOW_SECONDS); events with the same payload hash within that window are dropped via DB unique constraint.
+  - create() uses a SAVEPOINT (begin_nested) so IntegrityError on duplicate does not roll back the caller's transaction.
+  - Brain source resolves internal_user_id via get_current_user(); Trello source resolves via trello_id lookup — other sources get None.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 from datetime import datetime
 from app.logging_config import get_logger
 from app.auth.utils import get_current_user

@@ -1,4 +1,20 @@
 """
+@milehigh-header
+schema_version: 1
+purpose: Populate missing Trello metadata on Releases rows by matching cards from the board to DB records.
+exports:
+  backfill: Match active releases to Trello cards and backfill 7 Trello columns.
+  _apply_trello_fields: Set Trello columns on a release from a card dict, returning changes.
+  _parse_job_release: Extract (job_int, release_str) tuple from a Trello card name.
+imports_from: [app, app.models, app.trello.api, app.trello.utils, dotenv, argparse]
+imported_by: []
+invariants:
+  - Read-only on Trello; only writes to the local DB.
+  - Supports --dry-run to preview without committing.
+  - Requires Flask app context (created via create_app at __main__).
+  - Invoked directly: python -m app.trello.scripts.backfill_trello_data [--dry-run]
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+
 Backfill Trello card data onto the Releases table.
 
 Fetches all cards from primary Trello lists, matches them to active

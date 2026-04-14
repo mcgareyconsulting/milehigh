@@ -1,3 +1,23 @@
+"""
+@milehigh-header
+schema_version: 1
+purpose: Core Procore business logic for creating, updating, and health-checking submittals against the Procore API.
+exports:
+  get_project_id_by_project_name: Resolve a project name to its Procore project ID.
+  create_submittal_from_webhook: Create a new Submittals DB record from a Procore webhook payload.
+  check_and_update_submittal: Diff a webhook payload against the DB record and apply changes.
+  comprehensive_health_scan: Full audit comparing DB submittals against Procore API state.
+  get_viewer_url_for_job: Look up the FC Drawing Viewer URL for a given job/release number.
+  add_procore_link_to_trello_card: Attach the Procore viewer link to the corresponding Trello card.
+  get_drafting_workload: Aggregate drafting-relevant submittals across all projects.
+imports_from: [requests, sqlalchemy, app.config, app.models, app.procore.procore_auth, app.procore.client, app.procore.helpers, app.brain.drafting_work_load.service]
+imported_by: [app/procore/__init__.py, app/sync/sync.py, app/trello/card_creation.py, app/trello/sync.py, app/admin/__init__.py, app/__init__.py, app/procore/scripts/sync_submittals.py]
+invariants:
+  - check_and_update_submittal uses a row-level lock (with_for_update) to prevent concurrent webhook races.
+  - Submittal events are recorded via helpers.create_submittal_event to maintain the audit trail.
+  - Connector-originated updates are tagged with is_system_echo=True in submittal events.
+updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+"""
 import logging
 import re
 import json
