@@ -86,8 +86,8 @@ def list_board_items():
         )
 
     rows = query.order_by(
-        BoardItem.position.asc().nullslast(),
-        BoardItem.updated_at.desc()
+        BoardItem.position.asc().nullsfirst(),
+        BoardItem.created_at.desc()
     ).all()
     return jsonify({'items': [item.to_dict(activity_count=count or 0) for item, count in rows]})
 
