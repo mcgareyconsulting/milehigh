@@ -339,6 +339,53 @@ class OutboxService:
                     
                     db.session.commit()
                     return False
+            elif outbox_item.destination == 'trello' and outbox_item.action == 'create_card':
+                # Create a Trello card for a newly released job
+                from app.brain.job_log.routes import create_trello_card_for_job
+
+                # Rebuild excel_data_dict from the event payload
+                excel_data_dict = event.payload or {}
+
+                try:
+                    trello_result = create_trello_card_for_job(job_record, excel_data_dict)
+
+                    if trello_result and trello_result.get('success'):
+                        outbox_item.status = 'completed'
+                        outbox_item.completed_at = datetime.utcnow()
+                        outbox_item.error_message = None
+                        db.session.commit()
+
+                        JobEventService.close(event.id)
+                        db.session.commit()
+
+                        logger.info(f"Outbox {outbox_item.id} completed successfully (create_card for {event.job}-{event.release})")
+                        return True
+                    else:
+                        error_msg = trello_result.get('error', 'Unknown error') if trello_result else 'Trello card creation returned None'
+                        raise Exception(error_msg)
+
+                except Exception as api_error:
+                    outbox_item.retry_count += 1
+                    outbox_item.error_message = str(api_error)
+
+                    if outbox_item.retry_count < outbox_item.max_retries:
+                        delay_seconds = 2 ** outbox_item.retry_count
+                        outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+                        outbox_item.status = 'pending'
+
+                        logger.warning(
+                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        )
+                    else:
+                        outbox_item.status = 'failed'
+                        logger.error(
+                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
+                            exc_info=True
+                        )
+
+                    db.session.commit()
+                    return False
+
             else:
                 # Unsupported destination/action combination
                 logger.error(f"Outbox {outbox_item.id}: Unsupported {outbox_item.destination}/{outbox_item.action}")

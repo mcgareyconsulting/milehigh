@@ -1830,8 +1830,9 @@ def release_job_data():
         
         processed = []
         errors = []
+        collisions = []
         created_count = 0
-        trello_cards_created = 0
+
         
         for row_idx, row in enumerate(rows[start_idx:], start=start_idx + 1):
             try:
@@ -1850,9 +1851,33 @@ def release_job_data():
                 job_number = int(row_values['job'])
                 release_number = str(row_values['release']).strip()
                 
-                # Check if job already exists
+                # Check if job-release already exists
                 existing_job = Releases.query.filter_by(job=job_number, release=release_number).first()
                 if existing_job:
+                    # Find max release scoped to this job + job_name
+                    job_name_value = str(row_values['job_name']).strip()
+                    sibling_releases = Releases.query.filter_by(
+                        job=job_number, job_name=job_name_value
+                    ).all()
+
+                    # Suggest max+1 from numeric releases in this scope
+                    suggested = None
+                    numeric_releases = []
+                    for r in sibling_releases:
+                        try:
+                            numeric_releases.append(int(r.release))
+                        except (ValueError, TypeError):
+                            pass
+                    if numeric_releases:
+                        suggested = str(max(numeric_releases) + 1)
+
+                    collisions.append({
+                        'row': row_idx,
+                        'job': job_number,
+                        'release': release_number,
+                        'job_name': job_name_value,
+                        'suggested_next': suggested
+                    })
                     continue
                 
                 # Prepare Excel format dictionary for Trello card creation
@@ -1906,33 +1931,20 @@ def release_job_data():
                 )
                 db.session.add(new_job)
                 db.session.commit()
-                
-                # Create Trello card for new job
-                trello_result = create_trello_card_for_job(new_job, excel_data_dict)
+
+                # Queue Trello card creation via outbox for async processing
+                OutboxService.add(
+                    destination='trello',
+                    action='create_card',
+                    event_id=event.id
+                )
+                db.session.commit()
+
                 processed_record = {
                     'job': job_number,
                     'release': release_number,
                     'action': 'created'
                 }
-                
-                if trello_result and trello_result.get('success'):
-                    trello_cards_created += 1
-                    processed_record['trello_card_created'] = True
-                    processed_record['trello_card_id'] = trello_result.get('card_id')
-                    db.session.commit()
-                else:
-                    error_msg = trello_result.get('error', 'Unknown error') if trello_result else 'Trello card creation failed'
-                    errors.append({
-                        'row': row_idx,
-                        'error': error_msg,
-                        'data': row
-                    })
-                
-                # Update event applied_at time
-                event = ReleaseEvents.query.filter_by(payload_hash=payload_hash).first()
-                if event:
-                    event.applied_at = datetime.utcnow()
-                    db.session.commit()
                 
                 created_count += 1
                 processed.append(processed_record)
@@ -1950,10 +1962,11 @@ def release_job_data():
             'success': True,
             'processed_count': len(processed),
             'created_count': created_count,
-            'trello_cards_created': trello_cards_created,
             'error_count': len(errors),
+            'collision_count': len(collisions),
             'processed': processed,
-            'errors': errors if errors else None
+            'errors': errors if errors else None,
+            'collisions': collisions if collisions else None
         }), 200
         
     except Exception as e:
