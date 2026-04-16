@@ -430,10 +430,15 @@ function JobLog() {
                 collision_count: result.collision_count || 0
             });
 
-            // Refresh the job data
-            await fetchAll();
+            // Unlock the modal immediately so user can cancel/edit/retry
+            setReleasing(false);
 
-            // Only auto-close if no collisions to review
+            // Refresh in the background only if something was actually created
+            if (result.created_count > 0) {
+                fetchAll();
+            }
+
+            // Only auto-close if everything succeeded with no collisions
             if (!result.collisions || result.collisions.length === 0) {
                 setTimeout(() => {
                     handleCloseModal();
@@ -441,7 +446,6 @@ function JobLog() {
             }
         } catch (error) {
             setReleaseError(error.message || 'Failed to release job data');
-        } finally {
             setReleasing(false);
         }
     };
@@ -1270,7 +1274,6 @@ function JobLog() {
                                 <button
                                     onClick={handleCloseModal}
                                     className="px-4 py-2 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
-                                    disabled={releasing}
                                 >
                                     Cancel
                                 </button>

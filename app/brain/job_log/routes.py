@@ -1854,22 +1854,27 @@ def release_job_data():
                 # Check if job-release already exists
                 existing_job = Releases.query.filter_by(job=job_number, release=release_number).first()
                 if existing_job:
-                    # Find max release scoped to this job + job_name
                     job_name_value = str(row_values['job_name']).strip()
-                    sibling_releases = Releases.query.filter_by(
-                        job=job_number, job_name=job_name_value
-                    ).all()
 
-                    # Suggest max+1 from numeric releases in this scope
+                    # Suggest the next free release for this job, starting from
+                    # the colliding number + 1 (matches client's "rolling release" workflow).
                     suggested = None
-                    numeric_releases = []
-                    for r in sibling_releases:
-                        try:
-                            numeric_releases.append(int(r.release))
-                        except (ValueError, TypeError):
-                            pass
-                    if numeric_releases:
-                        suggested = str(max(numeric_releases) + 1)
+                    try:
+                        attempted_int = int(release_number)
+                        # Get all numeric releases for this job to check availability
+                        taken = set()
+                        for r in Releases.query.filter_by(job=job_number).all():
+                            try:
+                                taken.add(int(r.release))
+                            except (ValueError, TypeError):
+                                pass
+                        candidate = attempted_int + 1
+                        while candidate in taken:
+                            candidate += 1
+                        suggested = str(candidate)
+                    except (ValueError, TypeError):
+                        # Non-numeric release identifier; can't auto-increment
+                        pass
 
                     collisions.append({
                         'row': row_idx,
