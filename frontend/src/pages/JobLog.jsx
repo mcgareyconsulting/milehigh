@@ -425,19 +425,27 @@ function JobLog() {
                 processed: result.processed_count || 0,
                 created: result.created_count || 0,
                 updated: result.updated_count || 0,
-                errors: result.error_count || 0
+                errors: result.error_count || 0,
+                collisions: result.collisions || [],
+                collision_count: result.collision_count || 0
             });
 
-            // Refresh the job data
-            await fetchAll();
+            // Unlock the modal immediately so user can cancel/edit/retry
+            setReleasing(false);
 
-            // Auto-close modal after 3 seconds
-            setTimeout(() => {
-                handleCloseModal();
-            }, 3000);
+            // Refresh in the background only if something was actually created
+            if (result.created_count > 0) {
+                fetchAll();
+            }
+
+            // Only auto-close if everything succeeded with no collisions
+            if (!result.collisions || result.collisions.length === 0) {
+                setTimeout(() => {
+                    handleCloseModal();
+                }, 3000);
+            }
         } catch (error) {
             setReleaseError(error.message || 'Failed to release job data');
-        } finally {
             setReleasing(false);
         }
     };
@@ -1235,28 +1243,29 @@ function JobLog() {
                                     </div>
                                 )}
 
-                                {releaseSuccess && (
+                                {releaseSuccess && releaseSuccess.created > 0 && (
                                     <div className="mb-4 bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500 text-green-700 dark:text-green-200 px-4 py-3 rounded">
                                         <p className="font-semibold">Success!</p>
                                         <p className="text-sm">
-                                            Processed: {releaseSuccess.processed} |
-                                            Created: {releaseSuccess.created} |
-                                            Updated: {releaseSuccess.updated}
-                                            {releaseSuccess.trello_cards_created > 0 && ` | Trello Cards Created: ${releaseSuccess.trello_cards_created}`}
+                                            Created: {releaseSuccess.created}
                                             {releaseSuccess.errors > 0 && ` | Errors: ${releaseSuccess.errors}`}
                                         </p>
-                                        {releaseSuccess.trello_errors && releaseSuccess.trello_errors.length > 0 && (
-                                            <div className="mt-2 text-xs">
-                                                <p className="font-semibold">Trello Errors:</p>
-                                                <ul className="list-disc list-inside">
-                                                    {releaseSuccess.trello_errors.map((err, idx) => (
-                                                        <li key={idx}>
-                                                            Job {err.job}-{err.release}: {err.error}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
+                                    </div>
+                                )}
+
+                                {releaseSuccess && releaseSuccess.collisions && releaseSuccess.collisions.length > 0 && (
+                                    <div className="mb-4 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-200 px-4 py-3 rounded">
+                                        <p className="font-semibold">Duplicate Releases</p>
+                                        <ul className="text-sm mt-2 space-y-1">
+                                            {releaseSuccess.collisions.map((col, idx) => (
+                                                <li key={idx}>
+                                                    <span className="font-medium">{col.job}-{col.release}</span> ({col.job_name}) already exists.
+                                                    {col.suggested_next && (
+                                                        <span> Try <span className="font-semibold">{col.job}-{col.suggested_next}</span></span>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
                                 )}
                             </div>
@@ -1265,7 +1274,6 @@ function JobLog() {
                                 <button
                                     onClick={handleCloseModal}
                                     className="px-4 py-2 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
-                                    disabled={releasing}
                                 >
                                     Cancel
                                 </button>
