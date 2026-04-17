@@ -315,8 +315,8 @@ def test_fab_order_manual_edit_accepts_any_value_above_3(app):
         assert released.fab_order == 3
 
 
-def test_fab_order_min_is_3(app):
-    """Dynamic fab_order is always at least 3 (1 and 2 are reserved)."""
+def test_fab_order_accepts_low_values_on_non_tier_stage(app):
+    """Non-fixed-tier stages accept any user-provided fab_order — no floor."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
         db.session.commit()
@@ -327,7 +327,7 @@ def test_fab_order_min_is_3(app):
             result = cmd.execute()
 
         db.session.refresh(wqc)
-        assert wqc.fab_order >= 3
+        assert wqc.fab_order == 1
 
 
 def test_fixed_tier_overrides_input(app):
@@ -489,8 +489,8 @@ def test_stage_change_to_paint_complete_sets_tier_2(client, app):
         assert job.fab_order == 2
 
 
-def test_stage_change_to_dynamic_appends(client, app):
-    """Moving to a dynamic stage appends at end of that stage's block."""
+def test_stage_change_to_dynamic_preserves_fab_order(client, app):
+    """Moving between Fabrication-group stages leaves fab_order untouched."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 20)
         make_release(2, "A", "Welded", "FABRICATION", 5)
@@ -508,12 +508,11 @@ def test_stage_change_to_dynamic_appends(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        # max in Welded = 6, so new fab_order = 7
-        assert job.fab_order == 7
+        assert job.fab_order == 20
 
 
-def test_stage_change_to_empty_dynamic_stage(client, app):
-    """Moving to an empty dynamic stage gets lower_bound + 1 or 3."""
+def test_stage_change_to_empty_dynamic_stage_preserves_fab_order(client, app):
+    """Moving to an empty Fabrication stage leaves fab_order untouched."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 10)
         db.session.commit()
@@ -529,12 +528,11 @@ def test_stage_change_to_empty_dynamic_stage(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        # Welded QC is pos 0, no earlier stages → lower_bound = None → fab_order = 3
-        assert job.fab_order == 3
+        assert job.fab_order == 10
 
 
-def test_stage_change_to_welded_qc_with_earlier_empty(client, app):
-    """Welded QC with no earlier stages starts at 3."""
+def test_stage_change_to_welded_qc_preserves_fab_order(client, app):
+    """Moving to Welded QC (dynamic) leaves fab_order untouched."""
     with app.app_context():
         make_release(1, "A", "Welded", "FABRICATION", 5)
         db.session.commit()
@@ -550,7 +548,7 @@ def test_stage_change_to_welded_qc_with_earlier_empty(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == 3
+        assert job.fab_order == 5
 
 
 def test_stage_change_to_shipping_planning_sets_tier_2(client, app):
@@ -755,8 +753,8 @@ def test_endpoint_fab_order_empty_json_clears(client, app):
         assert job.fab_order is None
 
 
-def test_endpoint_fab_order_negative_clamped_to_3(client, app):
-    """Negative fab_order is clamped to 3 for dynamic stages."""
+def test_endpoint_fab_order_negative_accepted(client, app):
+    """Negative fab_order is accepted as-is for non-fixed-tier stages."""
     with app.app_context():
         make_release(1, "A", "Welded", "FABRICATION", 10)
         db.session.commit()
@@ -771,11 +769,11 @@ def test_endpoint_fab_order_negative_clamped_to_3(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order >= 3
+        assert job.fab_order == -5
 
 
-def test_endpoint_fab_order_zero_clamped_to_3(client, app):
-    """Zero fab_order is clamped to 3 for dynamic stages."""
+def test_endpoint_fab_order_zero_accepted(client, app):
+    """Zero fab_order is accepted as-is for non-fixed-tier stages."""
     with app.app_context():
         make_release(1, "A", "Welded", "FABRICATION", 10)
         db.session.commit()
@@ -790,7 +788,7 @@ def test_endpoint_fab_order_zero_clamped_to_3(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order >= 3
+        assert job.fab_order == 0
 
 
 def test_endpoint_fab_order_very_large_accepted(client, app):
@@ -1275,16 +1273,13 @@ def test_no_cascade_same_value_noop(app):
 # Stage bleed prevention tests
 # ---------------------------------------------------------------------------
 
-def test_stage_change_appends_after_max(client, app):
-    """Moving to a stage places at max_in_stage + 1 regardless of other stages."""
+def test_stage_change_between_fabrication_stages_preserves_fab_order(client, app):
+    """Stage change across Fabrication-group stages never modifies fab_order."""
     with app.app_context():
-        # Welded (pos 1) has releases at 8, 9, 10
         make_release(2, "A", "Welded", "FABRICATION", 8)
         make_release(3, "A", "Welded", "FABRICATION", 9)
         make_release(4, "A", "Welded", "FABRICATION", 10)
-        # Fit Up Complete (pos 2) starts at 11 — no longer causes midpoint squeezing
         make_release(5, "A", "Fit Up Complete.", "FABRICATION", 11)
-        # Release to be moved
         make_release(1, "A", "Released", "FABRICATION", 30)
         db.session.commit()
 
@@ -1299,88 +1294,7 @@ def test_stage_change_appends_after_max(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        # max_in_stage (Welded) = 10, so new fab_order = 11
-        assert job.fab_order == 11
-
-
-def test_stage_change_legacy_bleed_appends_normally(client, app):
-    """When later stages already have lower fab_orders (legacy bleed), just append at max + 1."""
-    with app.app_context():
-        # Welded (pos 1) has releases at 10, 15
-        make_release(2, "A", "Welded", "FABRICATION", 10)
-        make_release(3, "A", "Welded", "FABRICATION", 15)
-        # Fit Up Complete (pos 2) has a release at 7 — legacy bleed (lower than Welded)
-        make_release(5, "A", "Fit Up Complete.", "FABRICATION", 7)
-        # Release to be moved
-        make_release(1, "A", "Released", "FABRICATION", 30)
-        db.session.commit()
-
-    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
-        resp = client.patch(
-            '/brain/update-stage/1/A',
-            json={'stage': 'Welded'},
-            content_type='application/json'
-        )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        # upper_bound = 7, max_in_stage = 15 → upper_bound <= max_in_stage (legacy bleed)
-        # so we just append: max_in_stage + 1 = 16
-        assert job.fab_order == 16
-
-
-def test_stage_change_empty_stage_tight_upper_bound(client, app):
-    """Moving to empty stage with tight upper bound uses fractional midpoint."""
-    with app.app_context():
-        # Welded QC (pos 0) is empty
-        # Welded (pos 1) starts at 4
-        make_release(2, "A", "Welded", "FABRICATION", 4)
-        # Release to be moved
-        make_release(1, "A", "Released", "FABRICATION", 20)
-        db.session.commit()
-
-    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
-        resp = client.patch(
-            '/brain/update-stage/1/A',
-            json={'stage': 'Welded QC'},
-            content_type='application/json'
-        )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        # Welded QC (pos 0) is empty, lower_bound = None, upper_bound = 4
-        # candidate = 3 (default), candidate < upper_bound 4, so 3 is fine
-        assert job.fab_order == 3
-
-
-def test_stage_change_empty_stage_very_tight_upper(client, app):
-    """Empty stage where candidate 3 >= upper_bound uses fractional midpoint."""
-    with app.app_context():
-        # Welded QC (pos 0) is empty, Welded (pos 1) at fab_order 3
-        make_release(2, "A", "Welded", "FABRICATION", 3)
-        make_release(1, "A", "Released", "FABRICATION", 20)
-        db.session.commit()
-
-    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
-        resp = client.patch(
-            '/brain/update-stage/1/A',
-            json={'stage': 'Welded QC'},
-            content_type='application/json'
-        )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        # candidate = 3, upper_bound = 3, candidate >= upper_bound
-        # empty stage: effective_lower = 2, midpoint = (2 + 3) / 2 = 2.5
-        # 2.5 < 3 → floor to 3... hmm. Actually min_dynamic floor applies.
-        # But 3 >= upper_bound so it's a tie — duplicates are acceptable
-        assert job.fab_order == 3
+        assert job.fab_order == 30
 
 
 # ---------------------------------------------------------------------------
