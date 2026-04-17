@@ -765,6 +765,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Clear the project filter and show releases from every project."
                                         >
                                             All
                                         </button>
@@ -782,7 +783,7 @@ function JobLog() {
                                                     ? 'bg-blue-700 text-white'
                                                     : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
                                                     }`}
-                                                title={option}
+                                                title={`Toggle "${option}" — when selected, only releases from this project are shown. Select multiple to combine projects.`}
                                             >
                                                 {option.length > 20 ? option.slice(0, 20) + '…' : option}
                                             </button>
@@ -859,6 +860,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show all active releases sorted by the unified Fab Order sequence. Useful for seeing the full production queue in order."
                                         >
                                             Job Order
                                         </button>
@@ -871,6 +873,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show only releases in Shipping planning, Store at MHMW for shipping, or Paint complete — i.e., work that's finished production and ready to leave."
                                         >
                                             Ready to Ship
                                         </button>
@@ -883,6 +886,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show only releases in Welded QC or Paint Start stages, sorted by Fab Order. Use to focus on jobs currently in paint."
                                         >
                                             Paint
                                         </button>
@@ -895,6 +899,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
                                         >
                                             Paint+Fab
                                         </button>
@@ -907,6 +912,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show only releases in the Fabrication stage group, sorted by Fab Order. Use to focus on shop floor work."
                                         >
                                             Fab
                                         </button>
@@ -920,6 +926,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Group releases by PM (alphabetical), then by Project # ascending, with the most-complete stage first within each project. Intended for PM review meetings."
                                         >
                                             Review
                                         </button>
@@ -941,6 +948,7 @@ function JobLog() {
                                         <button
                                             onClick={() => { resetFilters(); setReviewMode(false); }}
                                             className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                            title="Clear project selections, stage subset, Review mode, and the search box to return to the default view."
                                         >
                                             Reset Filters
                                         </button>
@@ -953,6 +961,7 @@ function JobLog() {
                                                 value={search}
                                                 onChange={(e) => setSearch(e.target.value)}
                                                 placeholder="Job #, release, name, description..."
+                                                title="Live-filter the visible rows by Job #, Release #, project name, or description. Case-insensitive substring match."
                                                 className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
                                         </div>
