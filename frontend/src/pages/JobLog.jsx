@@ -484,6 +484,59 @@ function JobLog() {
         }
     };
 
+    const handleExportCSV = () => {
+        const exportColumns = columnHeaders.filter(col => col !== 'Urgency');
+        const dateColumns = new Set(['Released', 'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced']);
+
+        const toIsoDate = (value) => {
+            if (!value) return '';
+            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+                return value.split('T')[0];
+            }
+            const d = new Date(value);
+            if (isNaN(d.getTime())) return '';
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+
+        const escapeCSV = (value) => {
+            if (value === null || value === undefined) return '';
+            const str = Array.isArray(value) ? value.join('; ') : String(value);
+            if (/[",\r\n]/.test(str)) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+
+        const headerRow = exportColumns.map(escapeCSV).join(',');
+        const dataRows = reviewDisplayJobs.map(row =>
+            exportColumns.map(col => {
+                let value = row[col];
+                if (dateColumns.has(col)) value = toIsoDate(value);
+                else if ((col === 'Fab Hrs' || col === 'Install HRS') && value != null && value !== '') {
+                    const n = parseFloat(value);
+                    if (!isNaN(n)) value = n.toFixed(2);
+                }
+                return escapeCSV(value);
+            }).join(',')
+        );
+
+        const csv = [headerRow, ...dataRows].join('\r\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `job-log-${stamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     const handlePrint = () => {
         // First, sort all jobs by Job # first, then PM
         const sortedJobs = [...jobs].sort((a, b) => {
@@ -821,6 +874,16 @@ function JobLog() {
                                         >
                                             🗄️ Archive
                                         </button>
+                                        {isAdmin && (
+                                            <button
+                                                onClick={handleExportCSV}
+                                                disabled={!hasData || loading}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                title="Admin only — download the currently filtered job log rows as a CSV file. Respects the active project, stage subset, search, and Review-mode filters/sort."
+                                            >
+                                                ⬇️ Export CSV
+                                            </button>
+                                        )}
                                         {isAdmin && (
                                             <button
                                                 onClick={async () => {
