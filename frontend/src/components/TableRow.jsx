@@ -16,12 +16,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
+import MentionInput from './shared/MentionInput';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
     const [notesValue, setNotesValue] = useState('');
+    const [pendingNotes, setPendingNotes] = useState(null);
     const [editingDueDate, setEditingDueDate] = useState(false);
     const [dueDateValue, setDueDateValue] = useState('');
     const inputRef = useRef(null);
@@ -91,21 +93,19 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
     const handleNotesBlur = () => {
         setEditingNotes(false);
+        setPendingNotes(notesValue);
         if (submittalId && onNotesChange) {
             onNotesChange(submittalId, notesValue);
         }
     };
 
-    const handleNotesKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            e.target.blur();
-        } else if (e.key === 'Escape') {
-            const currentValue = row['NOTES'] ?? row.notes ?? '';
-            setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
-            setEditingNotes(false);
+    const rowNotes = row['NOTES'] ?? row.notes ?? '';
+    useEffect(() => {
+        if (pendingNotes === null) return;
+        if (String(rowNotes) === String(pendingNotes)) {
+            setPendingNotes(null);
         }
-    };
+    }, [rowNotes, pendingNotes]);
 
     useEffect(() => {
         if (editingOrderNumber && inputRef.current) {
@@ -436,6 +436,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     }
 
                     if (isNotes && editingNotes) {
+                        const handleCancelNotes = () => {
+                            const currentValue = row['NOTES'] ?? row.notes ?? '';
+                            setNotesValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
+                            setEditingNotes(false);
+                        };
                         return (
                             <td
                                 key={`${row.id}-${column}`}
@@ -444,22 +449,26 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <textarea
+                                <MentionInput
                                     ref={notesInputRef}
                                     value={notesValue}
-                                    onChange={(e) => setNotesValue(e.target.value)}
+                                    onChange={setNotesValue}
                                     onBlur={handleNotesBlur}
-                                    onKeyDown={handleNotesKeyDown}
-                                    className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none shadow-sm transition-all text-center"
+                                    onCancel={handleCancelNotes}
+                                    users={mentionableUsers}
+                                    multiline
                                     rows={1}
-                                    placeholder="Add notes..."
-                                    style={{ lineHeight: '1.5' }}
+                                    placeholder="Add notes... (type @ to mention)"
+                                    className="w-full px-1 py-0.5 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none shadow-sm transition-all text-center"
                                 />
                             </td>
                         );
                     }
 
                     if (isNotes) {
+                        if (pendingNotes !== null) {
+                            cellValue = pendingNotes === '' ? '—' : pendingNotes;
+                        }
                         const hasNotes = cellValue && cellValue !== '—';
                         return (
                             <td

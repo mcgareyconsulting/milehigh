@@ -4,7 +4,7 @@
  * purpose: Provides the detail/edit panel for a single board item, including status/priority controls, activity thread, commenting with @mentions, and deletion.
  * exports:
  *   BoardDetail: Board item detail view with inline status changes, comment thread, and delete confirmation
- * imports_from: [react, ../../services/boardApi, ./MentionInput]
+ * imports_from: [react, ../../services/boardApi, ../shared/MentionInput]
  * imported_by: [pages/Board.jsx]
  * invariants:
  *   - onUpdate(null) signals the item was deleted; parent must handle removal
@@ -13,7 +13,7 @@
  */
 import { useState, useEffect } from 'react';
 import { updateBoardItem, addComment, deleteBoardItem, fetchBoardItem, fetchMentionableUsers } from '../../services/boardApi';
-import MentionInput from './MentionInput';
+import MentionInput from '../shared/MentionInput';
 
 const STATUS_OPTIONS = ['open', 'in_progress', 'deployed', 'closed'];
 const PRIORITY_OPTIONS = ['low', 'normal', 'high', 'urgent'];

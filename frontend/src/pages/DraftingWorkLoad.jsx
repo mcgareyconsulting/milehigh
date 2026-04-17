@@ -27,6 +27,7 @@ import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
 import { checkAuth } from '../utils/auth';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
+import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
@@ -82,6 +83,14 @@ function DraftingWorkLoad() {
         draftingWorkLoadApi.fetchSubmittalStatuses()
             .then(setSubmittalStatuses)
             .catch((err) => console.error('Failed to fetch submittal statuses:', err));
+    }, []);
+
+    // Mentionable users for @mention autocomplete in the notes field
+    const [mentionableUsers, setMentionableUsers] = useState([]);
+    useEffect(() => {
+        fetchMentionableUsers()
+            .then(setMentionableUsers)
+            .catch(() => {});
     }, []);
 
     // User role status
@@ -635,6 +644,7 @@ function DraftingWorkLoad() {
                                                             onDrop={isAdmin ? handleDrop : undefined}
                                                             isDragOver={isDragOver}
                                                             dragOverHalf={dragOverHalf}
+                                                            mentionableUsers={mentionableUsers}
                                                         />
                                                     );
                                                 })

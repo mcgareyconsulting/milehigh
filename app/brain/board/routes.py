@@ -23,7 +23,7 @@ from flask import request, jsonify
 from sqlalchemy import func
 from app.brain import brain_bp
 from app.auth.utils import admin_required, get_current_user
-import re
+from app.brain.mentions import parse_mentions, resolve_mentioned_users
 from app.models import db, BoardItem, BoardActivity, User, Notification
 from app.logging_config import get_logger
 
@@ -235,13 +235,8 @@ def add_board_activity(item_id):
     db.session.commit()
 
     # Parse @FirstName mentions and create notifications
-    mentions = re.findall(r'@(\w+)', body)
-    if mentions:
-        mentioned_users = User.query.filter(
-            db.func.lower(User.first_name).in_([m.lower() for m in mentions]),
-            User.is_active.is_(True),
-            User.id != user.id,
-        ).all()
+    mentioned_users = resolve_mentioned_users(parse_mentions(body))
+    if mentioned_users:
         author_name = user.first_name or user.username
         for mu in mentioned_users:
             notif = Notification(
@@ -252,7 +247,6 @@ def add_board_activity(item_id):
                 board_activity_id=activity.id,
             )
             db.session.add(notif)
-        if mentioned_users:
-            db.session.commit()
+        db.session.commit()
 
     return jsonify(activity.to_dict()), 201
