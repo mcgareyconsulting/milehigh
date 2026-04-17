@@ -16,7 +16,7 @@ imported_by: [app/brain/__init__.py]
 invariants:
   - All routes are registered on brain_bp under the /drafting-work-load prefix.
   - Every mutating endpoint creates a SubmittalEvent for the audit trail.
-  - Order and bump endpoints require admin; notes and due-date require login; drafting status requires drafter or admin.
+  - Order and bump endpoints require admin; notes and drafting-status require login; due-date requires drafter or admin.
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 from app.brain import brain_bp
@@ -184,7 +184,7 @@ def update_submittal_notes():
     }), 200
 
 @brain_bp.route("/drafting-work-load/submittal-drafting-status", methods=["PUT"])
-@drafter_or_admin_required
+@login_required
 @handle_errors("update submittal_drafting_status")
 @require_json("submittal_id")
 def update_submittal_drafting_status():

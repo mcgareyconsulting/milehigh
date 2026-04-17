@@ -7,7 +7,8 @@
  * imports_from: [react, ../utils/formatters, ../constants/jumpToHighlight]
  * imported_by: [frontend/src/pages/DraftingWorkLoad.jsx]
  * invariants:
- *   - Drafter and admin roles both unlock inline editing via canEditDrafterFields
+ *   - Notes and drafting status are editable by any authenticated user
+ *   - Due date editing is gated by canEditDrafterFields (admin or drafter)
  *   - Order number editing is admin-only and restricted to single-assignee rows
  *   - Bump/step-order actions reorder relative to allRows for correct position calculation
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
@@ -466,18 +467,14 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-notes`}
                                 style={{ maxWidth: '350px' }}
                                 draggable={false}
-                                onClick={canEditDrafterFields ? handleNotesFocus : undefined}
+                                onClick={handleNotesFocus}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title={canEditDrafterFields ? "Click to edit notes" : "Read-only"}
+                                title="Click to edit notes"
                             >
                                 <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
-                                    canEditDrafterFields
-                                        ? hasNotes
-                                            ? 'border-gray-200 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 hover:bg-white dark:hover:bg-slate-500 hover:border-accent-300 text-gray-800 dark:text-slate-200 cursor-text'
-                                            : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
-                                        : hasNotes
-                                            ? 'border-gray-200 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 cursor-default'
-                                            : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default'
+                                    hasNotes
+                                        ? 'border-gray-200 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 hover:bg-white dark:hover:bg-slate-500 hover:border-accent-300 text-gray-800 dark:text-slate-200 cursor-text'
+                                        : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
                                     }`}>
                                     {hasNotes ? (
                                         <div className="whitespace-normal break-words leading-tight">
@@ -547,17 +544,12 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 <select
                                     value={currentStatus || ''}
                                     onChange={(e) => {
-                                        if (canEditDrafterFields && submittalId && onStatusChange) {
+                                        if (submittalId && onStatusChange) {
                                             onStatusChange(submittalId, e.target.value);
                                         }
                                     }}
-                                    disabled={!canEditDrafterFields}
-                                    className={`w-full px-0.5 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded text-center ${
-                                        canEditDrafterFields
-                                            ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer'
-                                            : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 cursor-not-allowed opacity-75'
-                                    }`}
-                                    title={canEditDrafterFields ? "Select drafting status (HOLD / NEED VIF / STARTED)" : "Read-only"}
+                                    className="w-full px-0.5 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded text-center bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 cursor-pointer"
+                                    title="Select drafting status (HOLD / NEED VIF / STARTED)"
                                 >
                                     <option value="">—</option>
                                     {statusOptions.map((option) => (
