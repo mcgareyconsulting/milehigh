@@ -486,7 +486,7 @@ function JobLog() {
 
     const handlePrint = () => {
         // First, sort all jobs by Job # first, then PM
-        const sortedJobs = [...displayJobs].sort((a, b) => {
+        const sortedJobs = [...jobs].sort((a, b) => {
             // First sort by Job #
             const jobA = a['Job #'] || 0;
             const jobB = b['Job #'] || 0;
@@ -509,12 +509,15 @@ function JobLog() {
             jobsByPM[pm].push(job);
         });
 
-        // Sort each PM group by Job # to ensure proper ordering
+        // Sort each PM group by Job # ascending, then stage completeness descending (Review order)
         Object.keys(jobsByPM).forEach(pm => {
             jobsByPM[pm].sort((a, b) => {
                 const jobA = a['Job #'] || 0;
                 const jobB = b['Job #'] || 0;
-                return jobA - jobB;
+                if (jobA !== jobB) return jobA - jobB;
+                const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
+                const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
+                return stageB - stageA;
             });
         });
 
@@ -589,6 +592,9 @@ function JobLog() {
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+        tr.grayed-row, tr.grayed-row:nth-child(even) {
+            background-color: #d1d5db;
+        }
         .no-data {
             text-align: center;
             padding: 20px;
@@ -624,7 +630,7 @@ function JobLog() {
             <thead>
                 <tr>
                     ${columnHeaders.map(col => {
-                const displayHeader = col === 'Release #' ? 'rel. #' : col;
+                const displayHeader = col === 'Release #' ? 'rel. #' : col === 'Job Comp' ? 'Install Prog' : col;
                 return `<th>${displayHeader}</th>`;
             }).join('')}
                 </tr>
@@ -633,7 +639,8 @@ function JobLog() {
 `;
 
             pmJobs.forEach(job => {
-                printHTML += '<tr>';
+                const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
+                printHTML += `<tr${isInstallComplete ? ' class="grayed-row"' : ''}>`;
                 columnHeaders.forEach(column => {
                     // Render Urgency column as colored banana SVGs
                     if (column === 'Urgency') {
