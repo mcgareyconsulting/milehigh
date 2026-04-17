@@ -910,7 +910,7 @@ def update_stage(job, release):
             return jsonify({'error': 'Event already exists'}), 400
         
         # Capture old stage_group before updating (needed for logging)
-        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, _normalize_stage, _get_all_variants_for_stages
+        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier
         old_stage_group = job_record.stage_group
         new_stage_group = get_stage_group_from_stage(stage)
 
@@ -926,37 +926,14 @@ def update_stage(job, release):
 
         tier = get_fixed_tier(stage)
         if tier is not None:
-            # Fixed-tier stage: auto-assign the tier value
+            # Fixed-tier stage (Ready-to-Ship / Complete groups): auto-assign the tier value
             fab_order_to_set = tier
             logger.info(
                 f"Job {job}-{release} moving to fixed tier {tier} stage '{stage}'. "
                 f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
             )
-        elif stage not in ('Hold', None):
-            # Dynamic stage: append to end of that stage's fab_order list
-            normalized = _normalize_stage(stage)
-            if normalized is not None:
-                from sqlalchemy import func, or_
-                stage_variants = _get_all_variants_for_stages([normalized])
-                max_in_stage = db.session.query(func.max(Releases.fab_order)).filter(
-                    Releases.stage.in_(stage_variants),
-                    Releases.fab_order.isnot(None),
-                    Releases.is_archived != True,  # noqa: E712
-                    or_(Releases.job != job, Releases.release != release)
-                ).scalar()
-
-                candidate = (max_in_stage + 1) if max_in_stage is not None else 3
-
-                # Floor: dynamic fab_order must be >= 3
-                if candidate < 3:
-                    candidate = 3
-
-                fab_order_to_set = candidate
-
-                logger.info(
-                    f"Job {job}-{release} moving to dynamic stage '{stage}'. "
-                    f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
-                )
+        # Fabrication-group (dynamic) stages and Hold: leave fab_order untouched so the
+        # user's manual ordering is preserved across stage changes.
 
         # Update job fields (this will update stage_group)
         update_job_stage_fields(job_record, stage)
