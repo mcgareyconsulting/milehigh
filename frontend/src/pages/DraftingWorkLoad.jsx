@@ -617,7 +617,7 @@ function DraftingWorkLoad() {
                                                             formatDate={formatDate}
                                                             onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
                                                             onNotesChange={updateNotes}
-                                                            onStatusChange={canEditDrafterFields ? updateStatus : undefined}
+                                                            onStatusChange={updateStatus}
                                                             onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
                                                             procoreStatusOptions={submittalStatuses}
                                                             selectedTab={selectedTab}
