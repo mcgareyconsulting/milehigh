@@ -938,11 +938,6 @@ def update_stage(job, release):
         # Update job fields (this will update stage_group)
         update_job_stage_fields(job_record, stage)
 
-        # Auto-flag Hold as urgent (red banana)
-        # Do NOT clear banana_color when leaving Hold (manual control can override later)
-        if stage == 'Hold':
-            job_record.banana_color = 'red'
-
         # If stage set to Complete, auto-set job_comp to 'X'
         # If stage changed away from Complete, clear job_comp 'X'
         comp_extras = {}
@@ -1089,54 +1084,6 @@ def update_stage(job, release):
             'error': str(e),
             'error_type': type(e).__name__
         }), 500
-
-@brain_bp.route("/update-banana-color/<int:job>/<release>", methods=["PATCH"])
-@login_required
-@handle_errors("update_banana_color", raw_error=True)
-def update_banana_color(job, release):
-    """
-    Update the banana_color (urgency indicator) for a specific job-release combination.
-
-    Parameters:
-        job: int
-        release: str
-
-    Request Body:
-        {
-            "banana_color": "red" | "yellow" | "green" | null
-        }
-
-    Returns:
-        JSON object with 'status': 'success' or 'error'
-    """
-    banana_color = request.json.get('banana_color')
-    if banana_color is not None and banana_color not in ['red', 'yellow', 'green']:
-        return jsonify({'error': 'banana_color must be "red", "yellow", "green", or null'}), 400
-
-    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
-    if err:
-        return err
-
-    old_banana_color = job_record.banana_color
-    job_record.banana_color = banana_color if banana_color else None
-    job_record.last_updated_at = datetime.utcnow()
-    job_record.source_of_update = 'Brain'
-
-    from app.services.job_event_service import JobEventService
-    JobEventService.create_and_close(
-        job=job,
-        release=release,
-        action='updated',
-        source='Brain',
-        payload={'field': 'banana_color', 'old_value': old_banana_color, 'new_value': banana_color},
-    )
-
-    db.session.commit()
-
-    return jsonify({
-        'status': 'success',
-        'banana_color': banana_color
-    }), 200
 
 @brain_bp.route("/update-fab-order/<int:job>/<release>", methods=["PATCH"])
 @login_required
@@ -1587,7 +1534,6 @@ def update_start_install(job, release):
 
             job_record.start_install_formulaTF = True
             job_record.start_install_formula = None
-            job_record.banana_color = None
             job_record.last_updated_at = datetime.utcnow()
             job_record.source_of_update = 'Brain'
 
@@ -1663,10 +1609,6 @@ def update_start_install(job, release):
         # Clear formula fields when setting a hard date
         job_record.start_install_formula = None
         job_record.start_install_formulaTF = False
-        
-        # Auto-flag hard Start install dates as urgent (red banana) when a date is set
-        if start_install_date is not None:
-            job_record.banana_color = 'red'
 
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
