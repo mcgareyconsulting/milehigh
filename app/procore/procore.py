@@ -744,9 +744,12 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
             )
             record.status = status
             status_updated = True
-            if status == 'Closed' and record.order_number is not None:
+            if status != 'Open' and record.order_number is not None:
                 record.order_number = None
-                logger.info("Cleared order_number for closed submittal %s", submittal_id)
+                logger.info(
+                    "Cleared order_number for submittal %s (status=%s, not Open)",
+                    submittal_id, status,
+                )
         
         # Check and update title
         db_title_value = record.title if record.title is not None else ""
