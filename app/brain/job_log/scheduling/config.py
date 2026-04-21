@@ -56,12 +56,11 @@ class SchedulingConfig:
         # Weld Start - 50%
         'Weld Start': 0.5,
 
-        # Weld Complete / Welded / Welded QC - 10% (handles variations)
+        # Weld Complete / Welded QC - 10% (handles variations)
         'Weld Complete': 0.1,
         'WeldingQC': 0.1,
         'Welded QC': 0.1,
         'Welding QC': 0.1,
-        'Welded': 0.1,
 
         # Paint Start - 10%
         'Paint Start': 0.1,

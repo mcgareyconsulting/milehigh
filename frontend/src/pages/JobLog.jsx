@@ -203,7 +203,7 @@ function JobLog() {
     const STAGE_COMPLETENESS = {
         'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
         'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
-        'Welded': 8, 'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
+        'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
         'Store at MHMW for shipping': 12, 'Shipping planning': 13,
         'Shipping completed': 14, 'Complete': 15,
     };
@@ -704,7 +704,7 @@ function JobLog() {
 
                         let count = 1, defaultColor = 'gray';
                         if (group === 'FABRICATION') {
-                            const colorMap = { 'Cut start': 'green', 'Material Ordered': 'green', 'Fit Up Complete.': 'yellow', 'Welded': 'yellow', 'Released': 'gray', 'Hold': 'red' };
+                            const colorMap = { 'Cut start': 'green', 'Material Ordered': 'green', 'Fit Up Complete.': 'yellow', 'Released': 'gray', 'Hold': 'red' };
                             defaultColor = colorMap[stage] || 'gray';
                             count = 1;
                         } else if (group === 'READY_TO_SHIP') {

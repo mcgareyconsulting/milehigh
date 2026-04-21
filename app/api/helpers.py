@@ -37,9 +37,7 @@ STAGE_TO_GROUP = {
     "Weld Complete": "FABRICATION",
     "Hold": "FABRICATION",  # Job log only stage
     "Material Ordered": "FABRICATION",  # Job log only stage
-    "Welded": "FABRICATION",  # Job log only stage
 
-    
     # READY_TO_SHIP group
     "Welded QC": "READY_TO_SHIP",
     "Paint Start": "READY_TO_SHIP",
@@ -73,7 +71,6 @@ DYNAMIC_STAGE_ORDER = [
     "Paint Start",
     "Weld Complete",
     "Weld Start",
-    "Welded",
     "Fit Up Complete.",
     "Fitup Start",
     "Cut Complete",
@@ -93,7 +90,6 @@ STAGE_ORDER = {
         "Fit Up Complete.",
         "Weld Start",
         "Weld Complete",
-        "Welded",
     ],
     "READY_TO_SHIP": [
         "Welded QC",

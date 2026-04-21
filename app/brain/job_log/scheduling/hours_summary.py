@@ -21,7 +21,7 @@ _FAB_MODIFIER_TABLE = {
     'Released': 1.0,
     'Cut Start': 0.9, 'Cut start': 0.9,
     'Fit up Comp': 0.5, 'Fit Up Complete': 0.5, 'Fit Up Complete.': 0.5, 'Fitup comp': 0.5,
-    'WeldingQC': 0.0, 'Welded QC': 0.0, 'Welding QC': 0.0, 'Welded': 0.0,
+    'WeldingQC': 0.0, 'Welded QC': 0.0, 'Welding QC': 0.0,
     'Paint Complete': 0.0, 'Paint complete': 0.0, 'Paint comp': 0.0,
     'Store': 0.0, 'Store at MHMW for shipping': 0.0,
     'Ship Planning': 0.0, 'Shipping planning': 0.0,
@@ -69,7 +69,7 @@ def calculate_total_fab_hrs(jobs: list[dict]) -> float:
 
 
 def calculate_total_install_hrs(jobs: list[dict]) -> float:
-    """Sum remaining installation hours across Welded-or-later jobs only.
+    """Sum remaining installation hours across Welded QC-or-later jobs only.
 
     Only jobs where fabrication is complete (get_fab_modifier == 0.0) are included.
     remaining = Install HRS * (1 - job_comp_fraction)

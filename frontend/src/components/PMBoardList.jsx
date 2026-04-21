@@ -26,7 +26,6 @@ function PMBoardList({ jobs, onUpdate }) {
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
-        { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
         { value: 'Paint complete', label: 'Paint comp' },
@@ -118,12 +117,6 @@ function PMBoardList({ jobs, onUpdate }) {
             border: 'rgb(196 181 253)',
         },
         'Hold': {
-            light: 'rgb(219 234 254)',
-            base: 'rgb(59 130 246)',
-            text: 'rgb(30 64 175)',
-            border: 'rgb(147 197 253)',
-        },
-        'Welded': {
             light: 'rgb(219 234 254)',
             base: 'rgb(59 130 246)',
             text: 'rgb(30 64 175)',
