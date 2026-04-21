@@ -44,7 +44,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         { value: 'Fit Up Complete.', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
-        { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
         { value: 'Paint complete', label: 'Paint comp' },
@@ -169,14 +168,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Welded': {
-            light: 'rgb(219 234 254)', // blue-100
-            base: 'rgb(59 130 246)', // blue-500
-            dark: 'rgb(37 99 235)', // blue-600
-            text: 'rgb(30 64 175)', // blue-800
-            border: 'rgb(147 197 253)', // blue-300
-            className: 'bg-blue-100 text-blue-800 border-blue-300'
-        },
         'Material Ordered': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
@@ -198,7 +189,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         'Fit Up Complete.': 1,
         'Weld Start': 2,
         'Weld Complete': 2,
-        'Welded': 3,
         'Welded QC': 3,
         'Paint Start': 4,
         'Paint complete': 4,

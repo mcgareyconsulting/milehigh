@@ -68,7 +68,6 @@ class TrelloListMapper:
         "Fit Up Complete.":             "Fit Up Complete.",
         "Weld Start":                   "Fit Up Complete.",
         "Weld Complete":                "Fit Up Complete.",
-        "Welded":                       "Fit Up Complete.",
         "Welded QC":                    "Fit Up Complete.",
         "Hold":                         "Fit Up Complete.",
         "Paint Start":                  "Fit Up Complete.",

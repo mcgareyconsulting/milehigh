@@ -108,13 +108,12 @@ def test_get_stage_position_dynamic_stages():
     assert get_stage_position("Paint Start") == 1
     assert get_stage_position("Weld Complete") == 2
     assert get_stage_position("Weld Start") == 3
-    assert get_stage_position("Welded") == 4
-    assert get_stage_position("Fit Up Complete.") == 5
-    assert get_stage_position("Fitup Start") == 6
-    assert get_stage_position("Cut Complete") == 7
-    assert get_stage_position("Cut start") == 8
-    assert get_stage_position("Material Ordered") == 9
-    assert get_stage_position("Released") == 10
+    assert get_stage_position("Fit Up Complete.") == 4
+    assert get_stage_position("Fitup Start") == 5
+    assert get_stage_position("Cut Complete") == 6
+    assert get_stage_position("Cut start") == 7
+    assert get_stage_position("Material Ordered") == 8
+    assert get_stage_position("Released") == 9
 
 
 def test_get_stage_position_fixed_tiers_return_none():
@@ -150,7 +149,6 @@ def test_get_fixed_tier_dynamic_stages_return_none():
     """Dynamic stages are not fixed tiers."""
     assert get_fixed_tier("Released") is None
     assert get_fixed_tier("Cut start") is None
-    assert get_fixed_tier("Welded") is None
     assert get_fixed_tier("Welded QC") is None
     assert get_fixed_tier("Hold") is None
 
@@ -194,8 +192,8 @@ def test_clamp_above_upper_strict():
 def test_bounds_welded_qc_no_earlier_stages(app):
     """Welded QC (pos=0): no earlier dynamic stages; upper=min of Welded jobs."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
-        make_release(2, "A", "Welded", "FABRICATION", 15)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 15)
         db.session.commit()
 
         lower, upper = get_fab_order_bounds("Welded QC", 99, "Z")
@@ -223,7 +221,7 @@ def test_bounds_welded_between_stages(app):
         make_release(3, "A", "Released", "FABRICATION", 30)
         db.session.commit()
 
-        lower, upper = get_fab_order_bounds("Welded", 99, "Z")
+        lower, upper = get_fab_order_bounds("Weld Complete", 99, "Z")
         assert lower == 5   # max of Welded QC
         assert upper == 20  # min of Fit Up Complete
 
@@ -235,7 +233,7 @@ def test_bounds_cross_group_unified(app):
         make_release(2, "A", "Fit Up Complete.", "FABRICATION", 15)
         db.session.commit()
 
-        lower, upper = get_fab_order_bounds("Welded", 99, "Z")
+        lower, upper = get_fab_order_bounds("Weld Complete", 99, "Z")
         assert lower == 5
         assert upper == 15
 
@@ -272,7 +270,7 @@ def test_bounds_self_excluded(app):
         make_release(10, "A", "Welded QC", "READY_TO_SHIP", 5)
         db.session.commit()
 
-        lower, upper = get_fab_order_bounds("Welded", 10, "A")
+        lower, upper = get_fab_order_bounds("Weld Complete", 10, "A")
         assert lower is None
         assert upper is None
 
@@ -285,7 +283,7 @@ def test_fab_order_manual_edit_no_stage_bounds(app):
     """Manual edit is not clamped to stage bounds — fully manual ordering."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
-        make_release(2, "A", "Welded", "FABRICATION", 10)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -377,7 +375,7 @@ def test_no_cascade_allows_duplicates(app):
     """Setting fab_order to a value already used by another release does not shift others."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
-        welded = make_release(2, "A", "Welded", "FABRICATION", 5)
+        welded = make_release(2, "A", "Weld Complete", "FABRICATION", 5)
         fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 7)
         db.session.commit()
 
@@ -401,7 +399,7 @@ def test_fixed_tiers_unchanged_on_manual_edit(app):
         complete = make_release(1, "A", "Complete", "COMPLETE", 1)
         paint = make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
         wqc = make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
-        welded = make_release(4, "A", "Welded", "FABRICATION", 5)
+        welded = make_release(4, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -423,7 +421,7 @@ def test_duplicate_fab_order_no_cascade(app):
     """Multiple releases can share the same fab_order without any shifting."""
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
-        welded = make_release(2, "A", "Welded", "FABRICATION", 5)
+        welded = make_release(2, "A", "Weld Complete", "FABRICATION", 5)
         fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 8)
         released = make_release(4, "A", "Released", "FABRICATION", 12)
         db.session.commit()
@@ -451,7 +449,7 @@ def test_duplicate_fab_order_no_cascade(app):
 def test_stage_change_to_complete_sets_tier_1(client, app):
     """Moving to Complete auto-sets fab_order=1 and job_comp='X'."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
@@ -493,14 +491,14 @@ def test_stage_change_to_dynamic_preserves_fab_order(client, app):
     """Moving between Fabrication-group stages leaves fab_order untouched."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 20)
-        make_release(2, "A", "Welded", "FABRICATION", 5)
-        make_release(3, "A", "Welded", "FABRICATION", 6)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 5)
+        make_release(3, "A", "Weld Complete", "FABRICATION", 6)
         db.session.commit()
 
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
         resp = client.patch(
             '/brain/update-stage/1/A',
-            json={'stage': 'Welded'},
+            json={'stage': 'Weld Complete'},
             content_type='application/json'
         )
 
@@ -534,7 +532,7 @@ def test_stage_change_to_empty_dynamic_stage_preserves_fab_order(client, app):
 def test_stage_change_to_welded_qc_preserves_fab_order(client, app):
     """Moving to Welded QC (dynamic) leaves fab_order untouched."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
@@ -554,7 +552,7 @@ def test_stage_change_to_welded_qc_preserves_fab_order(client, app):
 def test_stage_change_to_shipping_planning_sets_tier_2(client, app):
     """Shipping planning is a fixed tier 2 stage."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
@@ -578,7 +576,7 @@ def test_stage_change_to_shipping_planning_sets_tier_2(client, app):
 def test_endpoint_fab_order_update_success(client, app):
     """Basic PATCH returns 200 with status and event_id, DB updated."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     resp = client.patch(
@@ -600,7 +598,7 @@ def test_endpoint_fab_order_update_success(client, app):
 def test_endpoint_fab_order_null_clears(client, app):
     """Sending null clears fab_order to None."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     resp = client.patch(
@@ -619,7 +617,7 @@ def test_endpoint_fab_order_null_clears(client, app):
 def test_endpoint_fab_order_integer_value(client, app):
     """Integer input accepted and stored."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
@@ -638,7 +636,7 @@ def test_endpoint_fab_order_integer_value(client, app):
 def test_endpoint_fab_order_float_value(client, app):
     """Float input accepted."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
@@ -661,7 +659,7 @@ def test_endpoint_fab_order_float_value(client, app):
 def test_endpoint_fab_order_string_returns_400(client, app):
     """String fab_order returns 400."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
@@ -677,7 +675,7 @@ def test_endpoint_fab_order_string_returns_400(client, app):
 def test_endpoint_fab_order_empty_string_returns_400(client, app):
     """Empty string fab_order returns 400."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
@@ -692,7 +690,7 @@ def test_endpoint_fab_order_empty_string_returns_400(client, app):
 def test_endpoint_fab_order_list_returns_400(client, app):
     """List fab_order returns 400."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
@@ -707,7 +705,7 @@ def test_endpoint_fab_order_list_returns_400(client, app):
 def test_endpoint_fab_order_dict_returns_400(client, app):
     """Dict fab_order returns 400."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
@@ -737,7 +735,7 @@ def test_endpoint_fab_order_nonexistent_job_returns_404(client, app):
 def test_endpoint_fab_order_empty_json_clears(client, app):
     """Empty JSON body (no fab_order key) clears fab_order to None."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     resp = client.patch(
@@ -756,7 +754,7 @@ def test_endpoint_fab_order_empty_json_clears(client, app):
 def test_endpoint_fab_order_negative_accepted(client, app):
     """Negative fab_order is accepted as-is for non-fixed-tier stages."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     resp = client.patch(
@@ -775,7 +773,7 @@ def test_endpoint_fab_order_negative_accepted(client, app):
 def test_endpoint_fab_order_zero_accepted(client, app):
     """Zero fab_order is accepted as-is for non-fixed-tier stages."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 10)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     resp = client.patch(
@@ -795,7 +793,7 @@ def test_endpoint_fab_order_very_large_accepted(client, app):
     """Very large fab_order is accepted — no stage bounds clamping."""
     with app.app_context():
         make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
-        make_release(2, "A", "Welded", "FABRICATION", 10)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     resp = client.patch(
@@ -819,8 +817,8 @@ def test_endpoint_fab_order_very_large_accepted(client, app):
 def test_endpoint_no_cascade_duplicate_allowed(client, app):
     """Setting fab_order to an occupied value does not bump other jobs — duplicates allowed."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
-        make_release(2, "A", "Welded", "FABRICATION", 6)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 6)
         db.session.commit()
 
     resp = client.patch(
@@ -841,10 +839,10 @@ def test_endpoint_no_cascade_duplicate_allowed(client, app):
 def test_endpoint_no_cascade_multiple_jobs(client, app):
     """Setting fab_order leaves all other jobs unchanged."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 3)
-        make_release(2, "A", "Welded", "FABRICATION", 5)
-        make_release(3, "A", "Welded", "FABRICATION", 6)
-        make_release(4, "A", "Welded", "FABRICATION", 7)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 3)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 5)
+        make_release(3, "A", "Weld Complete", "FABRICATION", 6)
+        make_release(4, "A", "Weld Complete", "FABRICATION", 7)
         db.session.commit()
 
     resp = client.patch(
@@ -869,10 +867,10 @@ def test_endpoint_no_cascade_multiple_jobs(client, app):
 def test_endpoint_no_cascade_with_gaps(client, app):
     """Setting fab_order with gaps leaves all other jobs unchanged."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 3)
-        make_release(2, "A", "Welded", "FABRICATION", 5)
-        make_release(3, "A", "Welded", "FABRICATION", 8)
-        make_release(4, "A", "Welded", "FABRICATION", 12)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 3)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 5)
+        make_release(3, "A", "Weld Complete", "FABRICATION", 8)
+        make_release(4, "A", "Weld Complete", "FABRICATION", 12)
         db.session.commit()
 
     resp = client.patch(
@@ -897,8 +895,8 @@ def test_endpoint_no_cascade_with_gaps(client, app):
 def test_endpoint_duplicate_within_stage(client, app):
     """Two same-stage jobs can share the same fab_order."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
-        make_release(2, "A", "Welded", "FABRICATION", 6)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 6)
         db.session.commit()
 
     resp = client.patch(
@@ -922,7 +920,7 @@ def test_endpoint_fixed_tiers_unchanged(client, app):
         make_release(1, "A", "Complete", "COMPLETE", 1)
         make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
         make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
-        make_release(4, "A", "Welded", "FABRICATION", 5)
+        make_release(4, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
@@ -948,8 +946,8 @@ def test_endpoint_no_cascade_many_jobs(client, app):
     """Setting fab_order to a value shared by many jobs does not shift any of them."""
     with app.app_context():
         for i in range(10):
-            make_release(i + 2, "A", "Welded", "FABRICATION", 3 + i)
-        make_release(100, "A", "Welded", "FABRICATION", 50)
+            make_release(i + 2, "A", "Weld Complete", "FABRICATION", 3 + i)
+        make_release(100, "A", "Weld Complete", "FABRICATION", 50)
         db.session.commit()
 
     resp = client.patch(
@@ -1014,9 +1012,9 @@ def test_renumber_dynamic_sequential(app):
 def test_renumber_preserves_relative_order(app):
     """Within a stage, relative order by original fab_order is preserved."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 20)
-        make_release(2, "A", "Welded", "FABRICATION", 10)
-        make_release(3, "A", "Welded", "FABRICATION", 15)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 20)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 10)
+        make_release(3, "A", "Weld Complete", "FABRICATION", 15)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
@@ -1050,7 +1048,7 @@ def test_renumber_returns_stats(app):
     with app.app_context():
         make_release(1, "A", "Complete", "COMPLETE", 50)
         make_release(2, "A", "Paint complete", "READY_TO_SHIP", 99)
-        make_release(3, "A", "Welded", "FABRICATION", 75)
+        make_release(3, "A", "Weld Complete", "FABRICATION", 75)
         make_release(4, "A", "Released", "FABRICATION", 80)
         db.session.commit()
 
@@ -1126,7 +1124,7 @@ def test_endpoint_none_stage_no_clamping(client, app):
 def test_endpoint_reorder_same_job_twice(client, app):
     """Sequential updates to the same job both succeed."""
     with app.app_context():
-        make_release(1, "A", "Welded", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp1 = client.patch(
@@ -1157,7 +1155,7 @@ def test_no_cascade_move_earlier(app):
     with app.app_context():
         jobs = []
         for i, pos in enumerate([25, 26, 27, 28, 29, 30, 40, 41, 42]):
-            jobs.append(make_release(i + 1, "A", "Welded", "FABRICATION", pos))
+            jobs.append(make_release(i + 1, "A", "Weld Complete", "FABRICATION", pos))
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -1184,7 +1182,7 @@ def test_no_cascade_move_later(app):
     with app.app_context():
         jobs = []
         for i, pos in enumerate([8, 9, 10, 11, 12, 13, 14, 15, 16]):
-            jobs.append(make_release(i + 1, "A", "Welded", "FABRICATION", pos))
+            jobs.append(make_release(i + 1, "A", "Weld Complete", "FABRICATION", pos))
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -1209,9 +1207,9 @@ def test_no_cascade_move_later(app):
 def test_no_cascade_move_by_one(app):
     """Moving by one position does not bump adjacent job."""
     with app.app_context():
-        job_a = make_release(1, "A", "Welded", "FABRICATION", 40)
-        job_b = make_release(2, "A", "Welded", "FABRICATION", 41)
-        job_c = make_release(3, "A", "Welded", "FABRICATION", 42)
+        job_a = make_release(1, "A", "Weld Complete", "FABRICATION", 40)
+        job_b = make_release(2, "A", "Weld Complete", "FABRICATION", 41)
+        job_c = make_release(3, "A", "Weld Complete", "FABRICATION", 42)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -1230,10 +1228,10 @@ def test_no_cascade_move_by_one(app):
 def test_no_cascade_first_assignment(app):
     """First-time assignment (None → value) does not bump other jobs."""
     with app.app_context():
-        target = make_release(1, "A", "Welded", "FABRICATION", None)
-        job_at_10 = make_release(2, "A", "Welded", "FABRICATION", 10)
-        job_at_11 = make_release(3, "A", "Welded", "FABRICATION", 11)
-        job_at_9 = make_release(4, "A", "Welded", "FABRICATION", 9)
+        target = make_release(1, "A", "Weld Complete", "FABRICATION", None)
+        job_at_10 = make_release(2, "A", "Weld Complete", "FABRICATION", 10)
+        job_at_11 = make_release(3, "A", "Weld Complete", "FABRICATION", 11)
+        job_at_9 = make_release(4, "A", "Weld Complete", "FABRICATION", 9)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -1254,8 +1252,8 @@ def test_no_cascade_first_assignment(app):
 def test_no_cascade_same_value_noop(app):
     """Setting fab_order to same value is a no-op."""
     with app.app_context():
-        job_a = make_release(1, "A", "Welded", "FABRICATION", 10)
-        job_b = make_release(2, "A", "Welded", "FABRICATION", 11)
+        job_a = make_release(1, "A", "Weld Complete", "FABRICATION", 10)
+        job_b = make_release(2, "A", "Weld Complete", "FABRICATION", 11)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -1276,9 +1274,9 @@ def test_no_cascade_same_value_noop(app):
 def test_stage_change_between_fabrication_stages_preserves_fab_order(client, app):
     """Stage change across Fabrication-group stages never modifies fab_order."""
     with app.app_context():
-        make_release(2, "A", "Welded", "FABRICATION", 8)
-        make_release(3, "A", "Welded", "FABRICATION", 9)
-        make_release(4, "A", "Welded", "FABRICATION", 10)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 8)
+        make_release(3, "A", "Weld Complete", "FABRICATION", 9)
+        make_release(4, "A", "Weld Complete", "FABRICATION", 10)
         make_release(5, "A", "Fit Up Complete.", "FABRICATION", 11)
         make_release(1, "A", "Released", "FABRICATION", 30)
         db.session.commit()
@@ -1286,7 +1284,7 @@ def test_stage_change_between_fabrication_stages_preserves_fab_order(client, app
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
         resp = client.patch(
             '/brain/update-stage/1/A',
-            json={'stage': 'Welded'},
+            json={'stage': 'Weld Complete'},
             content_type='application/json'
         )
 
@@ -1330,10 +1328,10 @@ def test_clamp_fab_order_strict_upper():
 def test_no_cascade_archived_unaffected(app):
     """Setting fab_order does not affect any other jobs, including archived ones."""
     with app.app_context():
-        target = make_release(1, "A", "Welded", "FABRICATION", 15)
-        active_job = make_release(2, "A", "Welded", "FABRICATION", 10)
+        target = make_release(1, "A", "Weld Complete", "FABRICATION", 15)
+        active_job = make_release(2, "A", "Weld Complete", "FABRICATION", 10)
         archived_job = Releases(
-            job=3, release="A", job_name="Archived", stage="Welded",
+            job=3, release="A", job_name="Archived", stage="Weld Complete",
             stage_group="FABRICATION", fab_order=10, is_archived=True,
         )
         db.session.add(archived_job)
