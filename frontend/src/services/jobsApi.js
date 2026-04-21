@@ -190,25 +190,6 @@ class JobsApi {
         }
     }
 
-    async recalculateScheduling(referenceDate = null, batchSize = 100) {
-        try {
-            const params = {};
-            if (referenceDate) {
-                params.reference_date = referenceDate;
-            }
-            params.batch_size = batchSize;
-
-            const response = await axios.post(
-                `${API_BASE_URL}/brain/recalculate-scheduling`,
-                null,
-                { params }
-            );
-            return response.data;
-        } catch (error) {
-            throw this._handleError(error, 'Failed to recalculate scheduling');
-        }
-    }
-
     async deleteJob(job, release) {
         try {
             const response = await axios.delete(
