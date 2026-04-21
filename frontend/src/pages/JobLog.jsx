@@ -1016,13 +1016,6 @@ function JobLog() {
                                 {/* Row 3: Search + stats — always visible */}
                                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        <button
-                                            onClick={() => { resetFilters(); setReviewMode(false); }}
-                                            className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
-                                            title="Clear project selections, stage subset, Review mode, and the search box to return to the default view."
-                                        >
-                                            Reset Filters
-                                        </button>
                                         <div className="flex items-center gap-1.5">
                                             <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
                                                 Search:
@@ -1036,6 +1029,13 @@ function JobLog() {
                                                 className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
                                         </div>
+                                        <button
+                                            onClick={() => { resetFilters(); setReviewMode(false); }}
+                                            className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                            title="Clear project selections, stage subset, Review mode, and the search box to return to the default view."
+                                        >
+                                            Reset Filters
+                                        </button>
                                     </div>
                                     <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
                                         <span>
