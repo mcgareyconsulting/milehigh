@@ -1,8 +1,2 @@
-# Move Reset Filter Button
-On the job log, the reset filter button is currently displayed to hte left of the search bar, we want it to move to the right side
-
-# Location
-- right side of search bar
-- in minimized and normal fitler header view
-
-# confirm location on drafting work load search as well
+# Procore Status Blocking Submittal Order Number
+When a submittal has procore status other than 'Open' we want to completely drop the order number. This will prevent a hidden order number or hidden gap if a status changes and is not shown on the order tab. The only submittals that should get order numbers are 'Open' status
