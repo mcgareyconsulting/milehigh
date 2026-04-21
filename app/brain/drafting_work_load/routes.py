@@ -528,7 +528,7 @@ def update_submittal_procore_status():
         )
 
     submittal.status = new_status
-    if new_status == 'Closed':
+    if new_status != 'Open':
         submittal.order_number = None
     db.session.commit()
 
