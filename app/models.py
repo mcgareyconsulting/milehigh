@@ -679,12 +679,14 @@ class Notification(db.Model):
     message = db.Column(db.Text, nullable=False)
     board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'), nullable=True)
     board_activity_id = db.Column(db.Integer, db.ForeignKey('board_activity.id', ondelete='CASCADE'), nullable=True)
+    submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id', ondelete='CASCADE'), nullable=True, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     user = db.relationship('User', backref='notifications', lazy='select')
     board_item = db.relationship('BoardItem', lazy='select')
     board_activity = db.relationship('BoardActivity', lazy='select')
+    submittal = db.relationship('Submittals', lazy='select')
 
     def to_dict(self):
         return {
@@ -694,9 +696,13 @@ class Notification(db.Model):
             'message': self.message,
             'board_item_id': self.board_item_id,
             'board_activity_id': self.board_activity_id,
+            'submittal_id': self.submittal_id,
             'is_read': self.is_read,
             'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
+            'submittal_title': self.submittal.title if self.submittal else None,
+            'submittal_project_name': self.submittal.project_name if self.submittal else None,
+            'submittal_project_number': self.submittal.project_number if self.submittal else None,
         }
 
 

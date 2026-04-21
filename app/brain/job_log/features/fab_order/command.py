@@ -8,7 +8,6 @@ imports_from: [app.models, app.brain.job_log.features.fab_order.results, app.ser
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Fixed-tier stages always override the requested fab_order with their tier value
-  - Dynamic fab_order values are floored at 3
   - Deduplicated events raise ValueError, not silently succeed
   - Scheduling recalculation failure is logged but does not roll back the update
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
@@ -81,10 +80,6 @@ class UpdateFabOrderCommand:
                 f"Job {self.job_id}-{self.release} is fixed tier {tier} "
                 f"(stage={job_record.stage}), overriding fab_order to {tier}"
             )
-        elif self.fab_order is not None:
-            # Manual ordering: no stage bounds, just enforce dynamic minimum
-            if self.fab_order < 3:
-                self.fab_order = 3
 
         # 2️⃣ Create event for the current job (handles deduplication, logging internally)
         # Ensure payload values are valid (not NaN) - convert to None if needed

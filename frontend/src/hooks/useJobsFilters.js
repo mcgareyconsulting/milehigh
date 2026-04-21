@@ -65,10 +65,29 @@ export function useJobsFilters(jobs = []) {
     }, [selectedSubset]);
 
     /**
-     * Check if a job matches all selected filters
+     * Check if a job matches the search string. Search is a loose substring match
+     * across Job #, Release #, project name, description, and the dashed
+     * Job#-Release# form so users can type '350-567' and still match.
      */
-    const matchesSelectedFilter = useCallback((job) => {
-        // Filter by project name (multi-select). If none selected, show all.
+    const matchesSearch = useCallback((job, searchStr) => {
+        if (!searchStr || searchStr.trim() === '') return true;
+        const keywords = searchStr.trim().toLowerCase().split(/\s+/);
+        const jobNum = String(job['Job #'] ?? '');
+        const releaseNum = String(job['Release #'] ?? '');
+        const haystack = [
+            jobNum,
+            releaseNum,
+            `${jobNum}-${releaseNum}`,
+            (job['Job'] || ''),
+            (job['Description'] || ''),
+        ].join(' ').toLowerCase();
+        return keywords.every(kw => haystack.includes(kw));
+    }, []);
+
+    /**
+     * Check if a job matches the project + stage filters (excluding search).
+     */
+    const matchesFilters = useCallback((job) => {
         if (selectedProjectNames.length > 0) {
             const jobName = job['Job'] ?? '';
             const normalized = String(jobName).trim();
@@ -77,22 +96,6 @@ export function useJobsFilters(jobs = []) {
             }
         }
 
-        // Unified search: loose keyword match across Job #, Release #, name, description
-        if (search.trim() !== '') {
-            const keywords = search.trim().toLowerCase().split(/\s+/);
-            const haystack = [
-                String(job['Job #'] ?? ''),
-                String(job['Release #'] ?? ''),
-                (job['Job'] || ''),
-                (job['Description'] || ''),
-            ].join(' ').toLowerCase();
-            if (!keywords.every(kw => haystack.includes(kw))) {
-                return false;
-            }
-        }
-
-        // Filter by Stage (multiselect - must match any selected stage)
-        // If empty array, show all stages
         if (selectedStages.length > 0) {
             const jobStage = job['Stage'] ?? '';
             if (!selectedStages.includes(String(jobStage).trim())) {
@@ -101,7 +104,12 @@ export function useJobsFilters(jobs = []) {
         }
 
         return true;
-    }, [selectedProjectNames, search, selectedStages]);
+    }, [selectedProjectNames, selectedStages]);
+
+    const matchesSelectedFilter = useCallback(
+        (job) => matchesFilters(job) && matchesSearch(job, search),
+        [matchesFilters, matchesSearch, search]
+    );
 
     /**
      * Stage priority for tiebreaking when fab_order values are equal
@@ -255,6 +263,17 @@ export function useJobsFilters(jobs = []) {
 
         return result;
     }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder, sortByFabOrderThenStartInstall]);
+
+    /**
+     * Secondary search: jobs matching the search with all project/stage/subset
+     * filters bypassed. Empty unless the primary displayJobs is empty and the
+     * user has entered a search term — surfaces matches hidden by active filters.
+     */
+    const secondarySearchResults = useMemo(() => {
+        if (search.trim() === '' || displayJobs.length > 0) return [];
+        const matched = jobs.filter(job => matchesSearch(job, search));
+        return sortJobs([...matched]);
+    }, [jobs, search, displayJobs, matchesSearch, sortJobs]);
 
     /**
      * Extract unique project name (Job) options from jobs
@@ -459,6 +478,7 @@ export function useJobsFilters(jobs = []) {
 
         // Filtered and sorted jobs
         displayJobs,
+        secondarySearchResults,
 
         // Aggregate KPIs (all jobs, not filtered)
         totalFabHrs,

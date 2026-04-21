@@ -78,6 +78,7 @@ function JobLog() {
         stageToGroup,
         stageGroupColors,
         displayJobs,
+        secondarySearchResults,
         totalFabHrs,
         totalInstallHrs,
         resetFilters,
@@ -425,19 +426,27 @@ function JobLog() {
                 processed: result.processed_count || 0,
                 created: result.created_count || 0,
                 updated: result.updated_count || 0,
-                errors: result.error_count || 0
+                errors: result.error_count || 0,
+                collisions: result.collisions || [],
+                collision_count: result.collision_count || 0
             });
 
-            // Refresh the job data
-            await fetchAll();
+            // Unlock the modal immediately so user can cancel/edit/retry
+            setReleasing(false);
 
-            // Auto-close modal after 3 seconds
-            setTimeout(() => {
-                handleCloseModal();
-            }, 3000);
+            // Refresh in the background only if something was actually created
+            if (result.created_count > 0) {
+                fetchAll();
+            }
+
+            // Only auto-close if everything succeeded with no collisions
+            if (!result.collisions || result.collisions.length === 0) {
+                setTimeout(() => {
+                    handleCloseModal();
+                }, 3000);
+            }
         } catch (error) {
             setReleaseError(error.message || 'Failed to release job data');
-        } finally {
             setReleasing(false);
         }
     };
@@ -476,9 +485,62 @@ function JobLog() {
         }
     };
 
+    const handleExportCSV = () => {
+        const exportColumns = columnHeaders.filter(col => col !== 'Urgency');
+        const dateColumns = new Set(['Released', 'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced']);
+
+        const toIsoDate = (value) => {
+            if (!value) return '';
+            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+                return value.split('T')[0];
+            }
+            const d = new Date(value);
+            if (isNaN(d.getTime())) return '';
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+
+        const escapeCSV = (value) => {
+            if (value === null || value === undefined) return '';
+            const str = Array.isArray(value) ? value.join('; ') : String(value);
+            if (/[",\r\n]/.test(str)) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+
+        const headerRow = exportColumns.map(escapeCSV).join(',');
+        const dataRows = reviewDisplayJobs.map(row =>
+            exportColumns.map(col => {
+                let value = row[col];
+                if (dateColumns.has(col)) value = toIsoDate(value);
+                else if ((col === 'Fab Hrs' || col === 'Install HRS') && value != null && value !== '') {
+                    const n = parseFloat(value);
+                    if (!isNaN(n)) value = n.toFixed(2);
+                }
+                return escapeCSV(value);
+            }).join(',')
+        );
+
+        const csv = [headerRow, ...dataRows].join('\r\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `job-log-${stamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     const handlePrint = () => {
         // First, sort all jobs by Job # first, then PM
-        const sortedJobs = [...displayJobs].sort((a, b) => {
+        const sortedJobs = [...jobs].sort((a, b) => {
             // First sort by Job #
             const jobA = a['Job #'] || 0;
             const jobB = b['Job #'] || 0;
@@ -501,12 +563,15 @@ function JobLog() {
             jobsByPM[pm].push(job);
         });
 
-        // Sort each PM group by Job # to ensure proper ordering
+        // Sort each PM group by Job # ascending, then stage completeness descending (Review order)
         Object.keys(jobsByPM).forEach(pm => {
             jobsByPM[pm].sort((a, b) => {
                 const jobA = a['Job #'] || 0;
                 const jobB = b['Job #'] || 0;
-                return jobA - jobB;
+                if (jobA !== jobB) return jobA - jobB;
+                const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
+                const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
+                return stageB - stageA;
             });
         });
 
@@ -581,6 +646,9 @@ function JobLog() {
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+        tr.grayed-row, tr.grayed-row:nth-child(even) {
+            background-color: #d1d5db;
+        }
         .no-data {
             text-align: center;
             padding: 20px;
@@ -616,7 +684,7 @@ function JobLog() {
             <thead>
                 <tr>
                     ${columnHeaders.map(col => {
-                const displayHeader = col === 'Release #' ? 'rel. #' : col;
+                const displayHeader = col === 'Release #' ? 'rel. #' : col === 'Job Comp' ? 'Install Prog' : col;
                 return `<th>${displayHeader}</th>`;
             }).join('')}
                 </tr>
@@ -625,7 +693,8 @@ function JobLog() {
 `;
 
             pmJobs.forEach(job => {
-                printHTML += '<tr>';
+                const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
+                printHTML += `<tr${isInstallComplete ? ' class="grayed-row"' : ''}>`;
                 columnHeaders.forEach(column => {
                     // Render Urgency column as colored banana SVGs
                     if (column === 'Urgency') {
@@ -757,6 +826,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Clear the project filter and show releases from every project."
                                         >
                                             All
                                         </button>
@@ -774,7 +844,7 @@ function JobLog() {
                                                     ? 'bg-blue-700 text-white'
                                                     : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'
                                                     }`}
-                                                title={option}
+                                                title={`Toggle "${option}" — when selected, only releases from this project are shown. Select multiple to combine projects.`}
                                             >
                                                 {option.length > 20 ? option.slice(0, 20) + '…' : option}
                                             </button>
@@ -805,6 +875,16 @@ function JobLog() {
                                         >
                                             🗄️ Archive
                                         </button>
+                                        {isAdmin && (
+                                            <button
+                                                onClick={handleExportCSV}
+                                                disabled={!hasData || loading}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                title="Admin only — download the currently filtered job log rows as a CSV file. Respects the active project, stage subset, search, and Review-mode filters/sort."
+                                            >
+                                                ⬇️ Export CSV
+                                            </button>
+                                        )}
                                         {isAdmin && (
                                             <button
                                                 onClick={async () => {
@@ -851,6 +931,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show all active releases sorted by the unified Fab Order sequence. Useful for seeing the full production queue in order."
                                         >
                                             Job Order
                                         </button>
@@ -863,6 +944,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show only releases in Shipping planning, Store at MHMW for shipping, or Paint complete — i.e., work that's finished production and ready to leave."
                                         >
                                             Ready to Ship
                                         </button>
@@ -875,6 +957,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show only releases in Welded QC or Paint Start stages, sorted by Fab Order. Use to focus on jobs currently in paint."
                                         >
                                             Paint
                                         </button>
@@ -887,6 +970,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
                                         >
                                             Paint+Fab
                                         </button>
@@ -899,6 +983,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Show only releases in the Fabrication stage group, sorted by Fab Order. Use to focus on shop floor work."
                                         >
                                             Fab
                                         </button>
@@ -912,6 +997,7 @@ function JobLog() {
                                                 ? 'bg-blue-700 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
+                                            title="Group releases by PM (alphabetical), then by Project # ascending, with the most-complete stage first within each project. Intended for PM review meetings."
                                         >
                                             Review
                                         </button>
@@ -930,12 +1016,6 @@ function JobLog() {
                                 {/* Row 3: Search + stats — always visible */}
                                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        <button
-                                            onClick={() => { resetFilters(); setReviewMode(false); }}
-                                            className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
-                                        >
-                                            Reset Filters
-                                        </button>
                                         <div className="flex items-center gap-1.5">
                                             <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
                                                 Search:
@@ -945,9 +1025,17 @@ function JobLog() {
                                                 value={search}
                                                 onChange={(e) => setSearch(e.target.value)}
                                                 placeholder="Job #, release, name, description..."
+                                                title="Live-filter the visible rows by Job #, Release #, project name, or description. Case-insensitive substring match."
                                                 className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
                                         </div>
+                                        <button
+                                            onClick={() => { resetFilters(); setReviewMode(false); }}
+                                            className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                            title="Clear project selections, stage subset, Review mode, and the search box to return to the default view."
+                                        >
+                                            Reset Filters
+                                        </button>
                                     </div>
                                     <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
                                         <span>
@@ -1020,17 +1108,56 @@ function JobLog() {
                                             </thead>
                                             <tbody>
                                                 {!hasData ? (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
-                                                            className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
-                                                        >
-                                                            {hasJobsData
-                                                                ? 'No records match the selected filters.'
-                                                                : 'No records found.'
-                                                            }
-                                                        </td>
-                                                    </tr>
+                                                    hasJobsData && search.trim() !== '' && secondarySearchResults.length > 0 ? (
+                                                        <>
+                                                            <tr>
+                                                                <td
+                                                                    colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                                    className="px-6 py-6 text-center text-amber-800 dark:text-amber-200 font-medium bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800"
+                                                                >
+                                                                    <span className="mr-2">⚠️</span>
+                                                                    {`'${search.trim()}' not found under current filters. Showing results from unfiltered search:`}
+                                                                </td>
+                                                            </tr>
+                                                            {secondarySearchResults.map((row, index) => (
+                                                                <JobsTableRow
+                                                                    key={row.id}
+                                                                    row={row}
+                                                                    columns={columnHeaders}
+                                                                    isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
+                                                                    formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
+                                                                    formatDate={formatDate}
+                                                                    rowIndex={index}
+                                                                    onDragStart={handleDragStart}
+                                                                    onDragOver={handleDragOver}
+                                                                    onDragLeave={handleDragLeave}
+                                                                    onDrop={handleDrop}
+                                                                    isDragging={draggedIndex}
+                                                                    dragOverIndex={dragOverIndex}
+                                                                    onUpdate={() => refetch(true)}
+                                                                    onCascadeRecalculating={handleCascadeRecalculating}
+                                                                    stageToGroup={stageToGroup}
+                                                                    stageGroupColors={stageGroupColors}
+                                                                    isAdmin={isAdmin}
+                                                                    onDelete={handleDeleteJob}
+                                                                    tableScrollRef={tableScrollRef}
+                                                                    duplicateFabOrders={duplicateFabOrders}
+                                                                />
+                                                            ))}
+                                                        </>
+                                                    ) : (
+                                                        <tr>
+                                                            <td
+                                                                colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                                className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
+                                                            >
+                                                                {hasJobsData
+                                                                    ? 'No records match the selected filters.'
+                                                                    : 'No records found.'
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    )
                                                 ) : (
                                                     reviewDisplayJobs.map((row, index) => (
                                                         <JobsTableRow
@@ -1235,28 +1362,29 @@ function JobLog() {
                                     </div>
                                 )}
 
-                                {releaseSuccess && (
+                                {releaseSuccess && releaseSuccess.created > 0 && (
                                     <div className="mb-4 bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500 text-green-700 dark:text-green-200 px-4 py-3 rounded">
                                         <p className="font-semibold">Success!</p>
                                         <p className="text-sm">
-                                            Processed: {releaseSuccess.processed} |
-                                            Created: {releaseSuccess.created} |
-                                            Updated: {releaseSuccess.updated}
-                                            {releaseSuccess.trello_cards_created > 0 && ` | Trello Cards Created: ${releaseSuccess.trello_cards_created}`}
+                                            Created: {releaseSuccess.created}
                                             {releaseSuccess.errors > 0 && ` | Errors: ${releaseSuccess.errors}`}
                                         </p>
-                                        {releaseSuccess.trello_errors && releaseSuccess.trello_errors.length > 0 && (
-                                            <div className="mt-2 text-xs">
-                                                <p className="font-semibold">Trello Errors:</p>
-                                                <ul className="list-disc list-inside">
-                                                    {releaseSuccess.trello_errors.map((err, idx) => (
-                                                        <li key={idx}>
-                                                            Job {err.job}-{err.release}: {err.error}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
+                                    </div>
+                                )}
+
+                                {releaseSuccess && releaseSuccess.collisions && releaseSuccess.collisions.length > 0 && (
+                                    <div className="mb-4 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-200 px-4 py-3 rounded">
+                                        <p className="font-semibold">Duplicate Releases</p>
+                                        <ul className="text-sm mt-2 space-y-1">
+                                            {releaseSuccess.collisions.map((col, idx) => (
+                                                <li key={idx}>
+                                                    <span className="font-medium">{col.job}-{col.release}</span> ({col.job_name}) already exists.
+                                                    {col.suggested_next && (
+                                                        <span> Try <span className="font-semibold">{col.job}-{col.suggested_next}</span></span>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
                                 )}
                             </div>
@@ -1265,7 +1393,6 @@ function JobLog() {
                                 <button
                                     onClick={handleCloseModal}
                                     className="px-4 py-2 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
-                                    disabled={releasing}
                                 >
                                     Cancel
                                 </button>

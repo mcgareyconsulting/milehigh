@@ -16,7 +16,7 @@ imported_by: [app/brain/__init__.py]
 invariants:
   - All routes are registered on brain_bp under the /drafting-work-load prefix.
   - Every mutating endpoint creates a SubmittalEvent for the audit trail.
-  - Order and bump endpoints require admin; notes and due-date require login; drafting status requires drafter or admin.
+  - Order and bump endpoints require admin; notes and drafting-status require login; due-date requires drafter or admin.
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 from app.brain import brain_bp
@@ -29,8 +29,9 @@ from app.brain.drafting_work_load.service import (
     LocationService,
 )
 from app.logging_config import get_logger
-from app.models import Submittals, ProcoreOutbox, db
+from app.models import Submittals, ProcoreOutbox, Notification, db
 from app.auth.utils import login_required, admin_required, drafter_or_admin_required, get_current_user
+from app.brain.mentions import parse_mentions, resolve_mentioned_users
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.procore.api import SUBMITTAL_STATUSES, VALID_SUBMITTAL_STATUS_IDS, SUBMITTAL_STATUS_ID_TO_NAME
 from app.procore.client import get_procore_client
@@ -177,6 +178,41 @@ def update_submittal_notes():
     except Exception as event_err:
         logger.warning("Failed to create SubmittalEvent for notes update: %s", event_err)
 
+    # @mention notifications: diff old vs new to notify on newly-added names
+    # and delete unread notifications for names that were removed.
+    try:
+        old_names = parse_mentions(old_notes or "")
+        new_names = parse_mentions(notes or "")
+        added = new_names - old_names
+        removed = old_names - new_names
+
+        if added:
+            added_users = resolve_mentioned_users(added)
+            author_name = (user.first_name if user else None) or (user.username if user else 'Someone')
+            for mu in added_users:
+                db.session.add(Notification(
+                    user_id=mu.id,
+                    type='dwl_mention',
+                    message=f'{author_name} mentioned you in a DWL note',
+                    submittal_id=submittal.submittal_id,
+                ))
+
+        if removed:
+            removed_users = resolve_mentioned_users(removed)
+            if removed_users:
+                Notification.query.filter(
+                    Notification.submittal_id == submittal.submittal_id,
+                    Notification.type == 'dwl_mention',
+                    Notification.is_read.is_(False),
+                    Notification.user_id.in_([u.id for u in removed_users]),
+                ).delete(synchronize_session=False)
+
+        if added or removed:
+            db.session.commit()
+    except Exception as notif_err:
+        logger.warning("Failed to process @mentions on DWL note update: %s", notif_err)
+        db.session.rollback()
+
     return jsonify({
         "success": True,
         "submittal_id": submittal_id,
@@ -184,7 +220,7 @@ def update_submittal_notes():
     }), 200
 
 @brain_bp.route("/drafting-work-load/submittal-drafting-status", methods=["PUT"])
-@drafter_or_admin_required
+@login_required
 @handle_errors("update submittal_drafting_status")
 @require_json("submittal_id")
 def update_submittal_drafting_status():
@@ -492,7 +528,7 @@ def update_submittal_procore_status():
         )
 
     submittal.status = new_status
-    if new_status == 'Closed':
+    if new_status != 'Open':
         submittal.order_number = None
     db.session.commit()
 

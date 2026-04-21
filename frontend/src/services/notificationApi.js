@@ -39,3 +39,8 @@ export async function markAllRead() {
     const { data } = await axios.post(`${BASE}/read-all`);
     return data;
 }
+
+export async function fetchMentionableUsers() {
+    const { data } = await axios.get(`${API_BASE_URL}/brain/mentionable-users`);
+    return data.users;
+}

@@ -264,10 +264,10 @@ export default function Board() {
     }
     for (const s of STATUSES) {
         columns[s.value].sort((a, b) => {
-            const pa = a.position ?? Number.MAX_SAFE_INTEGER;
-            const pb = b.position ?? Number.MAX_SAFE_INTEGER;
+            const pa = a.position ?? Number.NEGATIVE_INFINITY;
+            const pb = b.position ?? Number.NEGATIVE_INFINITY;
             if (pa !== pb) return pa - pb;
-            return new Date(b.updated_at) - new Date(a.updated_at);
+            return new Date(b.created_at) - new Date(a.created_at);
         });
     }
 

@@ -34,6 +34,7 @@ import json
 import hashlib
 import csv
 import io
+import string
 import pandas as pd
 import math
 
@@ -909,7 +910,7 @@ def update_stage(job, release):
             return jsonify({'error': 'Event already exists'}), 400
         
         # Capture old stage_group before updating (needed for logging)
-        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, _normalize_stage, _get_all_variants_for_stages
+        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier
         old_stage_group = job_record.stage_group
         new_stage_group = get_stage_group_from_stage(stage)
 
@@ -925,45 +926,17 @@ def update_stage(job, release):
 
         tier = get_fixed_tier(stage)
         if tier is not None:
-            # Fixed-tier stage: auto-assign the tier value
+            # Fixed-tier stage (Ready-to-Ship / Complete groups): auto-assign the tier value
             fab_order_to_set = tier
             logger.info(
                 f"Job {job}-{release} moving to fixed tier {tier} stage '{stage}'. "
                 f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
             )
-        elif stage not in ('Hold', None):
-            # Dynamic stage: append to end of that stage's fab_order list
-            normalized = _normalize_stage(stage)
-            if normalized is not None:
-                from sqlalchemy import func, or_
-                stage_variants = _get_all_variants_for_stages([normalized])
-                max_in_stage = db.session.query(func.max(Releases.fab_order)).filter(
-                    Releases.stage.in_(stage_variants),
-                    Releases.fab_order.isnot(None),
-                    Releases.is_archived != True,  # noqa: E712
-                    or_(Releases.job != job, Releases.release != release)
-                ).scalar()
-
-                candidate = (max_in_stage + 1) if max_in_stage is not None else 3
-
-                # Floor: dynamic fab_order must be >= 3
-                if candidate < 3:
-                    candidate = 3
-
-                fab_order_to_set = candidate
-
-                logger.info(
-                    f"Job {job}-{release} moving to dynamic stage '{stage}'. "
-                    f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
-                )
+        # Fabrication-group (dynamic) stages and Hold: leave fab_order untouched so the
+        # user's manual ordering is preserved across stage changes.
 
         # Update job fields (this will update stage_group)
         update_job_stage_fields(job_record, stage)
-
-        # Auto-flag Hold as urgent (red banana)
-        # Do NOT clear banana_color when leaving Hold (manual control can override later)
-        if stage == 'Hold':
-            job_record.banana_color = 'red'
 
         # If stage set to Complete, auto-set job_comp to 'X'
         # If stage changed away from Complete, clear job_comp 'X'
@@ -1111,54 +1084,6 @@ def update_stage(job, release):
             'error': str(e),
             'error_type': type(e).__name__
         }), 500
-
-@brain_bp.route("/update-banana-color/<int:job>/<release>", methods=["PATCH"])
-@login_required
-@handle_errors("update_banana_color", raw_error=True)
-def update_banana_color(job, release):
-    """
-    Update the banana_color (urgency indicator) for a specific job-release combination.
-
-    Parameters:
-        job: int
-        release: str
-
-    Request Body:
-        {
-            "banana_color": "red" | "yellow" | "green" | null
-        }
-
-    Returns:
-        JSON object with 'status': 'success' or 'error'
-    """
-    banana_color = request.json.get('banana_color')
-    if banana_color is not None and banana_color not in ['red', 'yellow', 'green']:
-        return jsonify({'error': 'banana_color must be "red", "yellow", "green", or null'}), 400
-
-    job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
-    if err:
-        return err
-
-    old_banana_color = job_record.banana_color
-    job_record.banana_color = banana_color if banana_color else None
-    job_record.last_updated_at = datetime.utcnow()
-    job_record.source_of_update = 'Brain'
-
-    from app.services.job_event_service import JobEventService
-    JobEventService.create_and_close(
-        job=job,
-        release=release,
-        action='updated',
-        source='Brain',
-        payload={'field': 'banana_color', 'old_value': old_banana_color, 'new_value': banana_color},
-    )
-
-    db.session.commit()
-
-    return jsonify({
-        'status': 'success',
-        'banana_color': banana_color
-    }), 200
 
 @brain_bp.route("/update-fab-order/<int:job>/<release>", methods=["PATCH"])
 @login_required
@@ -1609,7 +1534,6 @@ def update_start_install(job, release):
 
             job_record.start_install_formulaTF = True
             job_record.start_install_formula = None
-            job_record.banana_color = None
             job_record.last_updated_at = datetime.utcnow()
             job_record.source_of_update = 'Brain'
 
@@ -1685,10 +1609,6 @@ def update_start_install(job, release):
         # Clear formula fields when setting a hard date
         job_record.start_install_formula = None
         job_record.start_install_formulaTF = False
-        
-        # Auto-flag hard Start install dates as urgent (red banana) when a date is set
-        if start_install_date is not None:
-            job_record.banana_color = 'red'
 
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = 'Brain'
@@ -1829,8 +1749,9 @@ def release_job_data():
         
         processed = []
         errors = []
+        collisions = []
         created_count = 0
-        trello_cards_created = 0
+
         
         for row_idx, row in enumerate(rows[start_idx:], start=start_idx + 1):
             try:
@@ -1849,9 +1770,38 @@ def release_job_data():
                 job_number = int(row_values['job'])
                 release_number = str(row_values['release']).strip()
                 
-                # Check if job already exists
+                # Check if job-release already exists
                 existing_job = Releases.query.filter_by(job=job_number, release=release_number).first()
                 if existing_job:
+                    job_name_value = str(row_values['job_name']).strip()
+
+                    # Suggest the next free release for this job, starting from
+                    # the colliding number + 1 (matches client's "rolling release" workflow).
+                    suggested = None
+                    try:
+                        attempted_int = int(release_number)
+                        # Get all numeric releases for this job to check availability
+                        taken = set()
+                        for r in Releases.query.filter_by(job=job_number).all():
+                            try:
+                                taken.add(int(r.release))
+                            except (ValueError, TypeError):
+                                pass
+                        candidate = attempted_int + 1
+                        while candidate in taken:
+                            candidate += 1
+                        suggested = str(candidate)
+                    except (ValueError, TypeError):
+                        # Non-numeric release identifier; can't auto-increment
+                        pass
+
+                    collisions.append({
+                        'row': row_idx,
+                        'job': job_number,
+                        'release': release_number,
+                        'job_name': job_name_value,
+                        'suggested_next': suggested
+                    })
                     continue
                 
                 # Prepare Excel format dictionary for Trello card creation
@@ -1905,33 +1855,20 @@ def release_job_data():
                 )
                 db.session.add(new_job)
                 db.session.commit()
-                
-                # Create Trello card for new job
-                trello_result = create_trello_card_for_job(new_job, excel_data_dict)
+
+                # Queue Trello card creation via outbox for async processing
+                OutboxService.add(
+                    destination='trello',
+                    action='create_card',
+                    event_id=event.id
+                )
+                db.session.commit()
+
                 processed_record = {
                     'job': job_number,
                     'release': release_number,
                     'action': 'created'
                 }
-                
-                if trello_result and trello_result.get('success'):
-                    trello_cards_created += 1
-                    processed_record['trello_card_created'] = True
-                    processed_record['trello_card_id'] = trello_result.get('card_id')
-                    db.session.commit()
-                else:
-                    error_msg = trello_result.get('error', 'Unknown error') if trello_result else 'Trello card creation failed'
-                    errors.append({
-                        'row': row_idx,
-                        'error': error_msg,
-                        'data': row
-                    })
-                
-                # Update event applied_at time
-                event = ReleaseEvents.query.filter_by(payload_hash=payload_hash).first()
-                if event:
-                    event.applied_at = datetime.utcnow()
-                    db.session.commit()
                 
                 created_count += 1
                 processed.append(processed_record)
@@ -1949,10 +1886,11 @@ def release_job_data():
             'success': True,
             'processed_count': len(processed),
             'created_count': created_count,
-            'trello_cards_created': trello_cards_created,
             'error_count': len(errors),
+            'collision_count': len(collisions),
             'processed': processed,
-            'errors': errors if errors else None
+            'errors': errors if errors else None,
+            'collisions': collisions if collisions else None
         }), 200
         
     except Exception as e:

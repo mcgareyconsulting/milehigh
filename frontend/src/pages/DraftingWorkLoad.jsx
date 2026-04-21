@@ -27,6 +27,7 @@ import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
 import { checkAuth } from '../utils/auth';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
+import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
@@ -82,6 +83,14 @@ function DraftingWorkLoad() {
         draftingWorkLoadApi.fetchSubmittalStatuses()
             .then(setSubmittalStatuses)
             .catch((err) => console.error('Failed to fetch submittal statuses:', err));
+    }, []);
+
+    // Mentionable users for @mention autocomplete in the notes field
+    const [mentionableUsers, setMentionableUsers] = useState([]);
+    useEffect(() => {
+        fetchMentionableUsers()
+            .then(setMentionableUsers)
+            .catch(() => {});
     }, []);
 
     // User role status
@@ -382,6 +391,12 @@ function DraftingWorkLoad() {
                                                     className="w-48 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                                 />
                                             </div>
+                                            <button
+                                                onClick={resetFilters}
+                                                className="px-2 py-1 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded text-xs font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all"
+                                            >
+                                                Reset Filters
+                                            </button>
                                             {/* Last updated - right-aligned */}
                                             <span className="ml-auto text-gray-500 dark:text-slate-400">
                                                 Last updated: <span className="font-medium text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
@@ -392,12 +407,6 @@ function DraftingWorkLoad() {
                                     {/* Bottom bar (Reset, Total count) - shown when expanded */}
                                     {!isFilterMinimized && (
                                         <div className="flex items-center gap-2 pt-2">
-                                            <button
-                                                onClick={resetFilters}
-                                                className="px-2 py-1 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded text-xs font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all"
-                                            >
-                                                Reset Filters
-                                            </button>
                                             <div className="flex items-center gap-1.5">
                                                 <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
                                                     Search:
@@ -410,6 +419,12 @@ function DraftingWorkLoad() {
                                                     className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                                 />
                                             </div>
+                                            <button
+                                                onClick={resetFilters}
+                                                className="px-2 py-1 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded text-xs font-medium shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all"
+                                            >
+                                                Reset Filters
+                                            </button>
                                             <div className="px-2 py-1 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 text-gray-600 dark:text-slate-300 rounded text-xs font-medium shadow-sm">
                                                 Total: <span className="text-gray-900 dark:text-slate-100">{displayRows.length}</span> records
                                             </div>
@@ -617,7 +632,7 @@ function DraftingWorkLoad() {
                                                             formatDate={formatDate}
                                                             onOrderNumberChange={isAdmin ? updateOrderNumber : undefined}
                                                             onNotesChange={updateNotes}
-                                                            onStatusChange={canEditDrafterFields ? updateStatus : undefined}
+                                                            onStatusChange={updateStatus}
                                                             onProcoreStatusChange={isAdmin ? updateProcoreStatus : undefined}
                                                             procoreStatusOptions={submittalStatuses}
                                                             selectedTab={selectedTab}
@@ -635,6 +650,7 @@ function DraftingWorkLoad() {
                                                             onDrop={isAdmin ? handleDrop : undefined}
                                                             isDragOver={isDragOver}
                                                             dragOverHalf={dragOverHalf}
+                                                            mentionableUsers={mentionableUsers}
                                                         />
                                                     );
                                                 })

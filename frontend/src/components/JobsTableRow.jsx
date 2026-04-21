@@ -187,42 +187,31 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
-    /**
-     * Urgency banana count and default color by stage / stage group.
-     * FAB: 1 banana (Cut/Material Ordered=green, Fitup/Welded=yellow, Released=gray, Hold=red).
-     * Ready to Ship: 2 bananas (Welded QC=green, rest=yellow).
-     * Complete: 3 bananas (Complete=gray, Ship comp=green).
-     */
-    const getBananaCountAndDefault = (stage, stageToGroupMap) => {
-        const group = stageToGroupMap && stageToGroupMap[stage] ? stageToGroupMap[stage] : 'FABRICATION';
-        if (group === 'FABRICATION') {
-            const colorMap = {
-                'Cut start': 'green',
-                'Material Ordered': 'green',
-                'Fit Up Complete.': 'yellow',
-                'Welded': 'yellow',
-                'Released': 'gray',
-                'Hold': 'red',
-            };
-            return { count: 1, defaultColor: colorMap[stage] || 'gray' };
-        }
-        if (group === 'READY_TO_SHIP') {
-            const colorMap = {
-                'Welded QC': 'green',
-                'Paint complete': 'yellow',
-                'Store at MHMW for shipping': 'yellow',
-                'Shipping planning': 'yellow',
-            };
-            return { count: 2, defaultColor: colorMap[stage] || 'yellow' };
-        }
-        if (group === 'COMPLETE') {
-            const colorMap = {
-                'Complete': 'gray',
-                'Shipping completed': 'green',
-            };
-            return { count: 3, defaultColor: colorMap[stage] || 'gray' };
-        }
-        return { count: 1, defaultColor: 'gray' };
+    // 5-step urgency banana fill (XXXOO-style). Each stage maps to one of five levels
+    // so the column reads at a glance. Hold is a pause: 0% fill.
+    const STAGE_TO_BANANA_STEP = {
+        'Released': 0,
+        'Material Ordered': 1,
+        'Cut start': 1,
+        'Cut Complete': 1,
+        'Fitup Start': 1,
+        'Fit Up Complete.': 1,
+        'Weld Start': 2,
+        'Weld Complete': 2,
+        'Welded': 3,
+        'Welded QC': 3,
+        'Paint Start': 4,
+        'Paint complete': 4,
+        'Store at MHMW for shipping': 4,
+        'Shipping planning': 4,
+        'Shipping completed': 5,
+        'Complete': 5,
+    };
+    const getBananaProgress = (stage) => {
+        if (stage === 'Hold') return 0;
+        const step = STAGE_TO_BANANA_STEP[stage];
+        if (step == null) return 0;
+        return step / 5;
     };
 
     // Local state for stage
@@ -243,9 +232,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [localStartInstall, setLocalStartInstall] = useState(row['Start install'] ?? null);
     const [updatingStartInstall, setUpdatingStartInstall] = useState(false);
 
-    // Local state for banana color
-    const [localBananaColor, setLocalBananaColor] = useState(row['Banana Color'] || null);
-    const [updatingBananaColor, setUpdatingBananaColor] = useState(false);
     const [showStageDropdown, setShowStageDropdown] = useState(false);
     const [dropdownDirection, setDropdownDirection] = useState('down');
     const stageListRef = useRef(null);       // ref on the scrollable container div
@@ -345,12 +331,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setLocalNotes(row['Notes'] ?? '');
         setNotesInputValue(row['Notes'] ?? '');
         setLocalStartInstall(row['Start install'] ?? null);
-        setLocalBananaColor(row['Banana Color'] || null);
         setLocalJobComp(row['Job Comp'] ?? '');
         setLocalInvoiced(row['Invoiced'] ?? '');
         setJobCompInputValue(row['Job Comp'] ?? '');
         setInvoicedInputValue(row['Invoiced'] ?? '');
-    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Banana Color'], row['Job Comp'], row['Invoiced']]);
+    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Job Comp'], row['Invoiced']]);
 
     // Rotate stage options so current stage is at top (wheel behavior)
     const rotatedStageOptions = useMemo(() => {
@@ -410,14 +395,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Handle stage change
     const handleStageChange = async (newStage) => {
         const oldStage = localStage;
-        const oldBananaColor = localBananaColor;
         const oldJobComp = localJobComp;
         const oldFabOrder = localFabOrder;
         setLocalStage(newStage); // Optimistic update
-        // Auto-flag Hold as urgent (red banana)
-        if (newStage === 'Hold') {
-            setLocalBananaColor('red');
-        }
         // If setting to Complete, optimistically update job_comp and fab_order
         if (newStage === 'Complete') {
             setLocalJobComp('X');
@@ -453,7 +433,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             console.error(`[STAGE] Failed to update stage for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
             setLocalStage(oldStage);
-            setLocalBananaColor(oldBananaColor);
             setLocalJobComp(oldJobComp);
             setJobCompInputValue(oldJobComp ?? '');
             setLocalFabOrder(oldFabOrder);
@@ -462,36 +441,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         } finally {
             setUpdatingStage(false);
             if (onCascadeRecalculating) onCascadeRecalculating(false);
-        }
-    };
-
-    // Handle banana color change
-    const handleBananaColorChange = async (newColor) => {
-        const oldColor = localBananaColor;
-        setLocalBananaColor(newColor); // Optimistic update
-        setUpdatingBananaColor(true);
-
-        try {
-            const jobNumber = row['Job #'];
-            const releaseNumber = row['Release #'];
-
-            console.log(`[BANANA] Updating job ${jobNumber}-${releaseNumber} banana color from ${oldColor} to ${newColor}`);
-
-            await jobsApi.updateBananaColor(jobNumber, releaseNumber, newColor);
-
-            console.log(`[BANANA] Successfully updated job ${jobNumber}-${releaseNumber} banana color to ${newColor}`);
-
-            // Trigger refetch to show latest state
-            if (onUpdate) {
-                onUpdate();
-            }
-        } catch (error) {
-            console.error(`[BANANA] Failed to update banana color for job ${row['Job #']}-${row['Release #']}:`, error);
-            // Revert on error
-            setLocalBananaColor(oldColor);
-            alert(`Failed to update banana color: ${error.message}`);
-        } finally {
-            setUpdatingBananaColor(false);
         }
     };
 
@@ -624,14 +573,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
 
         const oldValue = localStartInstall;
-        const oldBananaColor = localBananaColor;
 
         // Optimistic update
         setLocalStartInstall(dateValue);
-        // Auto-flag hard dates as urgent (red banana) when a date is set
-        if (dateValue) {
-            setLocalBananaColor('red');
-        }
         setUpdatingStartInstall(true);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
@@ -656,7 +600,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             console.error(`[START_INSTALL] Failed to update start install for job ${row['Job #']}-${row['Release #']}:`, error);
             // Revert on error
             setLocalStartInstall(oldValue);
-            setLocalBananaColor(oldBananaColor);
             alert(`Failed to update start install: ${error.message}`);
         } finally {
             setUpdatingStartInstall(false);
@@ -667,11 +610,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Handle clearing a hard date (revert to formula-driven)
     const handleClearHardDate = async () => {
         const oldValue = localStartInstall;
-        const oldBananaColor = localBananaColor;
 
         // Optimistic update
         setLocalStartInstall(null);
-        setLocalBananaColor(null);
         setIsStartInstallModalOpen(false);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
@@ -689,7 +630,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         } catch (error) {
             console.error(`[START_INSTALL] Failed to clear hard date for job ${row['Job #']}-${row['Release #']}:`, error);
             setLocalStartInstall(oldValue);
-            setLocalBananaColor(oldBananaColor);
             alert(`Failed to clear hard date: ${error.message}`);
         } finally {
             if (onCascadeRecalculating) onCascadeRecalculating(false);
@@ -851,33 +791,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
 
 
-                    // Urgency column: stage-based banana count + color; toggleable to red (except Hold)
+                    // Urgency column: banana-boy progress fill; not interactive (red date handles urgency).
                     if (column === 'Urgency') {
-                        const { count: bananaCount, defaultColor: stageDefaultColor } = getBananaCountAndDefault(localStage, stageToGroup);
-                        const isHold = localStage === 'Hold';
-                        const effectiveColor = isHold ? 'red' : (localBananaColor === 'red' ? 'red' : stageDefaultColor);
-                        const isUrgencyToggleable = !isHold && !updatingBananaColor;
-
-                        const bananaChipClass = effectiveColor === 'red'
-                            ? 'bg-red-100 dark:bg-red-900/50 border-red-300 dark:border-red-700 ring-2 ring-red-300 dark:ring-red-700'
-                            : effectiveColor === 'yellow'
-                                ? 'bg-yellow-100 dark:bg-yellow-900/40 border-yellow-300 dark:border-yellow-700 ring-1 ring-yellow-200 dark:ring-yellow-700'
-                                : effectiveColor === 'green'
-                                    ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-200 dark:ring-emerald-700'
-                                    : effectiveColor === 'gray'
-                                        ? 'bg-gray-100 dark:bg-slate-600 border-gray-300 dark:border-slate-500 ring-1 ring-gray-200 dark:ring-slate-500'
-                                        : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-500';
-                        const bananaHoverClass = isUrgencyToggleable ? 'hover:brightness-[0.98]' : '';
-
-                        const handleUrgencyClick = () => {
-                            if (!isUrgencyToggleable) return;
-                            if (effectiveColor === 'red') {
-                                handleBananaColorChange(null);
-                            } else {
-                                handleBananaColorChange('red');
-                            }
-                        };
-
+                        const progress = getBananaProgress(localStage);
                         return (
                             <td
                                 key={`${row.id}-${column}`}
@@ -886,22 +802,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <div className="flex items-center justify-center">
-                                    <div className="relative flex items-center justify-center gap-0.5">
-                                        <button
-                                            type="button"
-                                            onClick={handleUrgencyClick}
-                                            disabled={!isUrgencyToggleable}
-                                            className={`p-1.5 rounded-md border transition-all ${bananaChipClass} ${bananaHoverClass} ${!isUrgencyToggleable ? 'opacity-90 cursor-default' : 'cursor-pointer'}`}
-                                            title={isHold ? 'Hold – always urgent (red)' : (effectiveColor === 'red' ? 'Marked urgent – click for normal' : 'Click to mark urgent (red)')}
-                                        >
-                                            <span className="inline-flex items-center gap-0.5">
-                                                {Array.from({ length: bananaCount }, (_, i) => (
-                                                    <BananaIcon key={i} color={effectiveColor} size={bananaCount === 1 ? 22 : 18} />
-                                                ))}
-                                            </span>
-                                        </button>
-                                    </div>
+                                <div
+                                    className="w-full flex items-center justify-center p-1 rounded-md border bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700 ring-1 ring-yellow-100 dark:ring-yellow-800"
+                                    title={`Release progress: ${Math.round(progress * 100)}%`}
+                                >
+                                    <BananaIcon progress={progress} width={140} height={36} />
                                 </div>
                             </td>
                         );

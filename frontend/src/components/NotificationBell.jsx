@@ -109,6 +109,8 @@ export default function NotificationBell() {
         setOpen(false);
         if (notif.board_item_id) {
             navigate('/board', { state: { openItemId: notif.board_item_id } });
+        } else if (notif.submittal_id) {
+            navigate(`/drafting-work-load?highlight=${encodeURIComponent(notif.submittal_id)}`);
         }
     };
 
@@ -186,6 +188,11 @@ export default function NotificationBell() {
                                         {n.board_item_title && (
                                             <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
                                                 {n.board_item_title}
+                                            </p>
+                                        )}
+                                        {n.submittal_id && (
+                                            <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+                                                {[n.submittal_project_number, n.submittal_project_name, n.submittal_title].filter(Boolean).join(' · ') || `Submittal #${n.submittal_id}`}
                                             </p>
                                         )}
                                         <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{timeAgo(n.created_at)}</p>
