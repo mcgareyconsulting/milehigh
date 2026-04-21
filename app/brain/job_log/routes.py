@@ -2352,60 +2352,6 @@ def preview_scheduling():
         logger.error(f"Error in preview scheduling: {e}", exc_info=True)
         return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
 
-@brain_bp.route("/recalculate-scheduling", methods=["POST"])
-@login_required
-def recalculate_scheduling():
-    """
-    Recalculate and update scheduling fields (start_install, comp_eta) for all jobs.
-    
-    This endpoint:
-    - Fetches all jobs from the database
-    - Calculates scheduling fields based on fab_order, stage, fab_hrs, install_hrs
-    - Updates start_install and comp_eta fields in the database
-    - Commits changes in batches
-    
-    Query Parameters:
-        reference_date (string, optional): ISO date string for reference date (defaults to today)
-        batch_size (int, optional): Number of jobs to commit per batch (default: 100)
-    
-    Returns:
-        JSON object with:
-        - total_jobs: Total number of jobs processed
-        - updated: Number of jobs that had changes
-        - errors: List of any errors encountered
-        
-    Status Codes:
-        - 200: Success
-        - 500: Server error
-    """
-    from datetime import datetime
-    from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-    
-    try:
-        # Get optional parameters
-        reference_date_str = request.args.get('reference_date')
-        batch_size = request.args.get('batch_size', 100, type=int)
-        
-        reference_date = None
-        if reference_date_str:
-            try:
-                reference_date = datetime.fromisoformat(reference_date_str.replace('Z', '+00:00')).date()
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid reference_date parameter: {reference_date_str}, using today")
-        
-        logger.info(f"Recalculate scheduling endpoint called (reference_date={reference_date}, batch_size={batch_size})")
-        
-        result = recalculate_all_jobs_scheduling(
-            reference_date=reference_date,
-            batch_size=batch_size
-        )
-        
-        return jsonify(result), 200
-        
-    except Exception as e:
-        logger.error(f"Error in recalculate scheduling: {e}", exc_info=True)
-        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
-
 @brain_bp.route("/trello-sync", methods=["POST"])
 @login_required
 def trello_sync():
