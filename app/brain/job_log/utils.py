@@ -52,7 +52,10 @@ def serialize_value(value):
     """
     if value is None:
         return None
-    elif isinstance(value, (date, datetime)):
+    elif isinstance(value, datetime):
+        iso = value.isoformat()
+        return iso + 'Z' if value.tzinfo is None else iso
+    elif isinstance(value, date):
         return value.isoformat()
     elif isinstance(value, float):
         # Check for NaN and infinity values which aren't valid JSON
