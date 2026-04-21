@@ -2675,6 +2675,8 @@ def archive_preview():
                 'job_name': r.job_name,
                 'description': r.description,
                 'stage': r.stage or 'Released',
+                'job_comp': r.job_comp,
+                'invoiced': r.invoiced,
             })
         return jsonify({'count': len(items), 'releases': items}), 200
     except Exception as e:

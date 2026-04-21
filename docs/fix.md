@@ -1,2 +1,7 @@
-# Procore Status Blocking Submittal Order Number
-When a submittal has procore status other than 'Open' we want to completely drop the order number. This will prevent a hidden order number or hidden gap if a status changes and is not shown on the order tab. The only submittals that should get order numbers are 'Open' status
+# Archive Modal Additional Columns
+To allow the user better confirmation when pushing bulk archives on the job Log, we want to add two more columns to the archive modal
+
+# Column Additions
+Job Comp (Install Prog)
+Invoiced
+- when we archive, both of these columns must contain 'X', we want the to be archvied modal to show these column values for user clarity

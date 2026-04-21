@@ -1227,6 +1227,8 @@ function JobLog() {
                                                         <th className="px-2 py-1 text-left">Name</th>
                                                         <th className="px-2 py-1 text-left">Description</th>
                                                         <th className="px-2 py-1 text-left">Stage</th>
+                                                        <th className="px-2 py-1 text-left">Job Comp (Install Prog)</th>
+                                                        <th className="px-2 py-1 text-left">Invoiced</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1237,6 +1239,8 @@ function JobLog() {
                                                             <td className="px-2 py-1">{r.job_name}</td>
                                                             <td className="px-2 py-1">{r.description}</td>
                                                             <td className="px-2 py-1">{r.stage}</td>
+                                                            <td className="px-2 py-1">{r.job_comp}</td>
+                                                            <td className="px-2 py-1">{r.invoiced}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
