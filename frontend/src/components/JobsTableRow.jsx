@@ -187,31 +187,31 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
-    // Per-stage urgency banana fill. Progress = index / (length - 1) so each stage
-    // nudges the collage a measurable amount. Hold is a pause: 0% fill + red override.
-    const STAGE_PROGRESSION = [
-        'Released',
-        'Material Ordered',
-        'Cut start',
-        'Cut Complete',
-        'Fitup Start',
-        'Fit Up Complete.',
-        'Weld Start',
-        'Weld Complete',
-        'Welded',
-        'Welded QC',
-        'Paint Start',
-        'Paint complete',
-        'Store at MHMW for shipping',
-        'Shipping planning',
-        'Shipping completed',
-        'Complete',
-    ];
+    // 5-step urgency banana fill (XXXOO-style). Each stage maps to one of five levels
+    // so the column reads at a glance. Hold is a pause: 0% fill.
+    const STAGE_TO_BANANA_STEP = {
+        'Released': 0,
+        'Material Ordered': 1,
+        'Cut start': 1,
+        'Cut Complete': 1,
+        'Fitup Start': 1,
+        'Fit Up Complete.': 1,
+        'Weld Start': 2,
+        'Weld Complete': 2,
+        'Welded': 3,
+        'Welded QC': 3,
+        'Paint Start': 4,
+        'Paint complete': 4,
+        'Store at MHMW for shipping': 4,
+        'Shipping planning': 4,
+        'Shipping completed': 5,
+        'Complete': 5,
+    };
     const getBananaProgress = (stage) => {
         if (stage === 'Hold') return 0;
-        const idx = STAGE_PROGRESSION.indexOf(stage);
-        if (idx < 0) return 0;
-        return idx / (STAGE_PROGRESSION.length - 1);
+        const step = STAGE_TO_BANANA_STEP[stage];
+        if (step == null) return 0;
+        return step / 5;
     };
 
     // Local state for stage
