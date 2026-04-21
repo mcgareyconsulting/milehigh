@@ -565,13 +565,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     };
 
     // Handle start install change from modal
-    const handleStartInstallSave = async (dateValue, isHardDate) => {
-        if (!isHardDate) {
-            // Not a hard date, just close modal
-            setIsStartInstallModalOpen(false);
-            return;
-        }
-
+    const handleStartInstallSave = async (dateValue) => {
         const oldValue = localStartInstall;
 
         // Optimistic update
@@ -583,9 +577,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             const jobNumber = row['Job #'];
             const releaseNumber = row['Release #'];
 
-            console.log(`[START_INSTALL] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${dateValue} (hard date: ${isHardDate})`);
+            console.log(`[START_INSTALL] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${dateValue}`);
 
-            await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue, isHardDate);
+            await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue);
 
             console.log(`[START_INSTALL] Successfully updated job ${jobNumber}-${releaseNumber} to ${dateValue}`);
 

@@ -1,7 +1,10 @@
-# Archive Modal Additional Columns
-To allow the user better confirmation when pushing bulk archives on the job Log, we want to add two more columns to the archive modal
+# Clearing Hard Date on Job Log
+Clearing a hard date has a bug. when the hard date checkbox is checked and we push clear hard date, we get an 'event already exists' or some such message. When the checkbox is not clicked and we clear a hard date, we have no issue.
 
-# Column Additions
-Job Comp (Install Prog)
-Invoiced
-- when we archive, both of these columns must contain 'X', we want the to be archvied modal to show these column values for user clarity
+# Remove checkbox
+- Start Install Dates cascade automatically
+- Any date entry would be a hard date, so no need for the checkbox
+
+# Clearing date
+- When clearing date, we want to claer that dang date, so no event bug warning
+- Start install cascades normally after clearing, we want that funciontality to continue
