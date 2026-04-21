@@ -7,7 +7,7 @@
  * imports_from: [react, react-router-dom, ../hooks/useJumpToHighlight, ../hooks/useJobsDataFetching, ../hooks/useJobsFilters, ../hooks/useJobsDragAndDrop, ../components/JobsTableRow, ../services/jobsApi]
  * imported_by: [App.jsx]
  * invariants:
- *   - Admin-only actions: drag reorder, CSV release import, archive, cascade recalc
+ *   - Admin-only actions: drag reorder, CSV release import, archive
  *   - Jump-to highlight param triggers fetchAll to load every row regardless of filter
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
@@ -31,7 +31,6 @@ function JobLog() {
     const [releasing, setReleasing] = useState(false);
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
-    const [recalculating, setRecalculating] = useState(false);
     const [cascadeStatus, setCascadeStatus] = useState(null); // null | 'recalculating' | 'done'
     const cascadeTimeoutRef = useRef(null);
 
@@ -50,8 +49,6 @@ function JobLog() {
             }, 2000);
         }
     }, []);
-    const [recalculateError, setRecalculateError] = useState(null);
-    const [recalculateSuccess, setRecalculateSuccess] = useState(null);
     const [reviewMode, setReviewMode] = useState(
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
@@ -451,40 +448,6 @@ function JobLog() {
         }
     };
 
-    const handleRecalculateScheduling = async () => {
-        if (!window.confirm('Recalculate scheduling for all jobs? This will update start_install and comp_eta fields.')) {
-            return;
-        }
-
-        setRecalculating(true);
-        setRecalculateError(null);
-        setRecalculateSuccess(null);
-
-        try {
-            const result = await jobsApi.recalculateScheduling();
-            setRecalculateSuccess({
-                total_jobs: result.total_jobs || 0,
-                updated: result.updated || 0,
-                errors: result.errors || []
-            });
-
-            // Refresh the job data
-            await fetchAll();
-
-            // Clear success message after 5 seconds
-            setTimeout(() => {
-                setRecalculateSuccess(null);
-            }, 5000);
-        } catch (error) {
-            setRecalculateError(error.message || 'Failed to recalculate scheduling');
-            setTimeout(() => {
-                setRecalculateError(null);
-            }, 5000);
-        } finally {
-            setRecalculating(false);
-        }
-    };
-
     const handleExportCSV = () => {
         const exportColumns = columnHeaders.filter(col => col !== 'Urgency');
         const dateColumns = new Set(['Released', 'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced']);
@@ -785,23 +748,6 @@ function JobLog() {
                 <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
 
-                        {/* Success/Error Messages */}
-                        {recalculateSuccess && (
-                            <div className="mx-2 mb-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
-                                <p className="text-green-800 dark:text-green-200 text-sm">
-                                    ✓ Scheduling updated: {recalculateSuccess.updated} of {recalculateSuccess.total_jobs} jobs updated
-                                    {recalculateSuccess.errors && recalculateSuccess.errors.length > 0 && (
-                                        <span className="text-orange-600"> ({recalculateSuccess.errors.length} errors)</span>
-                                    )}
-                                </p>
-                            </div>
-                        )}
-                        {recalculateError && (
-                            <div className="mx-2 mb-2 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-                                <p className="text-red-800 dark:text-red-200 text-sm">✗ {recalculateError}</p>
-                            </div>
-                        )}
-
                         <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
                             <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
 
@@ -906,17 +852,6 @@ function JobLog() {
                                             className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
                                         >
                                             📋 Release
-                                        </button>
-                                        <button
-                                            onClick={handleRecalculateScheduling}
-                                            disabled={recalculating}
-                                            className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                                        >
-                                            {recalculating ? (
-                                                <><span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></span> Calculating...</>
-                                            ) : (
-                                                '⏱️ Refresh Schedule'
-                                            )}
                                         </button>
                                     </div>
 
