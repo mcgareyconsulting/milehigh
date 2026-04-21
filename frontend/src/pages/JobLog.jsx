@@ -78,6 +78,7 @@ function JobLog() {
         stageToGroup,
         stageGroupColors,
         displayJobs,
+        secondarySearchResults,
         totalFabHrs,
         totalInstallHrs,
         resetFilters,
@@ -1107,17 +1108,56 @@ function JobLog() {
                                             </thead>
                                             <tbody>
                                                 {!hasData ? (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
-                                                            className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
-                                                        >
-                                                            {hasJobsData
-                                                                ? 'No records match the selected filters.'
-                                                                : 'No records found.'
-                                                            }
-                                                        </td>
-                                                    </tr>
+                                                    hasJobsData && search.trim() !== '' && secondarySearchResults.length > 0 ? (
+                                                        <>
+                                                            <tr>
+                                                                <td
+                                                                    colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                                    className="px-6 py-6 text-center text-amber-800 dark:text-amber-200 font-medium bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800"
+                                                                >
+                                                                    <span className="mr-2">⚠️</span>
+                                                                    {`'${search.trim()}' not found under current filters. Showing results from unfiltered search:`}
+                                                                </td>
+                                                            </tr>
+                                                            {secondarySearchResults.map((row, index) => (
+                                                                <JobsTableRow
+                                                                    key={row.id}
+                                                                    row={row}
+                                                                    columns={columnHeaders}
+                                                                    isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
+                                                                    formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
+                                                                    formatDate={formatDate}
+                                                                    rowIndex={index}
+                                                                    onDragStart={handleDragStart}
+                                                                    onDragOver={handleDragOver}
+                                                                    onDragLeave={handleDragLeave}
+                                                                    onDrop={handleDrop}
+                                                                    isDragging={draggedIndex}
+                                                                    dragOverIndex={dragOverIndex}
+                                                                    onUpdate={() => refetch(true)}
+                                                                    onCascadeRecalculating={handleCascadeRecalculating}
+                                                                    stageToGroup={stageToGroup}
+                                                                    stageGroupColors={stageGroupColors}
+                                                                    isAdmin={isAdmin}
+                                                                    onDelete={handleDeleteJob}
+                                                                    tableScrollRef={tableScrollRef}
+                                                                    duplicateFabOrders={duplicateFabOrders}
+                                                                />
+                                                            ))}
+                                                        </>
+                                                    ) : (
+                                                        <tr>
+                                                            <td
+                                                                colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                                className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
+                                                            >
+                                                                {hasJobsData
+                                                                    ? 'No records match the selected filters.'
+                                                                    : 'No records found.'
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    )
                                                 ) : (
                                                     reviewDisplayJobs.map((row, index) => (
                                                         <JobsTableRow
