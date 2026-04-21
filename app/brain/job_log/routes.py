@@ -1530,7 +1530,10 @@ def update_start_install(job, release):
             )
 
             if event is None:
-                return jsonify({'error': 'Event already exists'}), 400
+                # Clearing is idempotent — a duplicate within the 30s dedup window means
+                # a prior clear already applied the state change, so report success.
+                logger.info(f"Duplicate clear_hard_date for job {job}-{release}; returning success")
+                return jsonify({'status': 'success', 'deduplicated': True}), 200
 
             job_record.start_install_formulaTF = True
             job_record.start_install_formula = None
