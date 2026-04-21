@@ -1,20 +1,21 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Progress indicator showing banana-boy.jpg filling in left-to-right as a release advances.
+ * purpose: Urgency progress bar showing a row of tiled banana-boy pixel-art characters that fill in left-to-right as a release advances.
  * exports:
- *   BananaIcon: Progress-fill banana-boy image. Props: progress (0-1), width, height.
+ *   BananaIcon: Progress indicator. Props: progress (0-1), width, height.
  * imports_from: [react]
  * imported_by: [frontend/src/components/JobsTableRow.jsx]
  * invariants:
- *   - progress is clamped to [0, 1]
- *   - Shared background-image — browser caches the file once; every row is just 2 plain divs
- *   - Unfilled portion is shown at low opacity; filled portion is full opacity, revealed left-to-right
+ *   - progress clamped to [0, 1]
+ *   - Single shared PNG tiled via backgroundRepeat — browser fetches and decodes once per page
+ *   - Pixel-art rendering uses image-rendering: pixelated so the tiny character stays crisp
+ *   - Unfilled tiles shown at low opacity; filled portion revealed via clip-path from the right
  * updated_by_agent: 2026-04-20T00:00:00Z
  */
 import React from 'react';
 
-const IMG_SRC = '/banana-boy.jpg';
+const IMG_SRC = '/banana-boy.png';
 const UNFILLED_OPACITY = 0.22;
 
 export function BananaIcon({ progress = 0, width = 140, height = 36 }) {
@@ -22,14 +23,17 @@ export function BananaIcon({ progress = 0, width = 140, height = 36 }) {
     const percent = Math.round(clamped * 100);
     const ariaLabel = `Release progress: ${percent}%`;
 
-    // Reveal from the right inward to show progress building left-to-right.
+    // Reveal from the right inward — the filled portion grows left-to-right.
     const revealClip = `inset(0 ${(1 - clamped) * 100}% 0 0)`;
 
+    // Tile the pixel-art banana vertically-fit, repeating horizontally so the
+    // whole column fills with a line of banana-boys.
     const bgStyle = {
         backgroundImage: `url(${IMG_SRC})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
+        backgroundSize: 'auto 100%',
+        backgroundRepeat: 'repeat-x',
+        backgroundPosition: 'left center',
+        imageRendering: 'pixelated',
     };
 
     return (
