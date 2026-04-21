@@ -1,29 +1,26 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Lets users set or clear the Start Install date on a release, choosing between a hard date and a formula-driven date.
+ * purpose: Lets users set or clear the Start Install date on a release. Any date entered is treated as a hard date; a separate Clear button reverts to formula-driven scheduling.
  * exports:
- *   StartInstallDateModal: Date-picker modal with hard-date vs formula toggle and clear action
+ *   StartInstallDateModal: Date-picker modal with Save and Clear actions
  * imports_from: [react]
  * imported_by: [frontend/src/components/JobsTableRow.jsx]
  * invariants:
- *   - Hard-date checkbox is initialized from startInstallFormulaTF prop to reflect current backend state
- *   - Clearing a hard date requires a separate onClearHardDate callback distinct from onSave
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Any non-empty date submitted via Save is persisted as a hard date (is_hard_date=true).
+ *   - Clear button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate).
+ * updated_by_agent: 2026-04-21T00:00:00Z
  */
 import React, { useState, useEffect } from 'react';
 
 export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, onClearHardDate, jobNumber, releaseNumber, startInstallFormulaTF }) {
     const [dateInput, setDateInput] = useState('');
-    const [isHardDate, setIsHardDate] = useState(false);
     const [error, setError] = useState('');
 
-    // Initialize form when modal opens or currentDate changes
     useEffect(() => {
         if (isOpen) {
             if (currentDate) {
                 try {
-                    // Native date input requires YYYY-MM-DD
                     const isoDate = typeof currentDate === 'string'
                         ? currentDate.split('T')[0]
                         : (() => {
@@ -41,14 +38,9 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
             } else {
                 setDateInput('');
             }
-            // Initialize hard date checkbox based on start_install_formulaTF field
-            // If start_install_formulaTF is explicitly false and there's a date, it's a hard date
-            // Otherwise, default to false (formula-driven or no date)
-            const isCurrentlyHardDate = startInstallFormulaTF === false && currentDate;
-            setIsHardDate(isCurrentlyHardDate);
             setError('');
         }
-    }, [isOpen, currentDate, startInstallFormulaTF]);
+    }, [isOpen, currentDate]);
 
     const handleDateInputChange = (e) => {
         setDateInput(e.target.value);
@@ -56,22 +48,15 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
     };
 
     const handleSave = () => {
-        if (!dateInput && isHardDate) {
-            setError('Please select a date or uncheck "Hard Date"');
+        if (!dateInput) {
+            setError('Please select a date');
             return;
         }
-
-        // Only save if it's a hard date, otherwise just close
-        if (isHardDate) {
-            onSave(dateInput || null, true);
-        } else {
-            onClose();
-        }
+        onSave(dateInput);
     };
 
     const handleCancel = () => {
         setDateInput('');
-        setIsHardDate(false);
         setError('');
         onClose();
     };
@@ -101,7 +86,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                 </div>
 
                 <div className="p-6">
-                    <div className="mb-4">
+                    <div className="mb-6">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                             Date
                         </label>
@@ -116,24 +101,8 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                         {error && (
                             <p className="text-red-600 text-sm mt-1">{error}</p>
                         )}
-                    </div>
-
-                    <div className="mb-6">
-                        <label className="flex items-center cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={isHardDate}
-                                onChange={(e) => setIsHardDate(e.target.checked)}
-                                className="w-5 h-5 text-accent-600 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
-                            />
-                            <span className="ml-3 text-sm font-medium text-gray-700">
-                                Hard Date
-                            </span>
-                        </label>
-                        <p className="text-gray-500 text-xs mt-1 ml-8">
-                            {isHardDate
-                                ? 'This date will be saved and synced to Trello. Formula calculations will not override it.'
-                                : 'Leave unchecked to keep formula-driven dates. Changes will not be saved.'}
+                        <p className="text-gray-500 text-xs mt-2">
+                            Saving a date sets it as a hard date. Start Install dates cascade automatically.
                         </p>
                     </div>
 
@@ -157,14 +126,14 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                             </button>
                             <button
                                 onClick={handleSave}
+                                disabled={!dateInput}
                                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                    isHardDate
+                                    dateInput
                                         ? 'bg-accent-500 text-white hover:bg-accent-600'
                                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
-                                disabled={!isHardDate}
                             >
-                                {isHardDate ? 'Save Hard Date' : 'Save (Hard Date Required)'}
+                                Save
                             </button>
                         </div>
                     </div>
