@@ -18,6 +18,7 @@ import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
+import { useTheme } from '../context/ThemeContext';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, stashSession = null }) {
     // Stash session helpers — when an active session exists, mutating handlers
@@ -387,10 +388,13 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         return () => scrollContainer.removeEventListener('scroll', handleScroll);
     }, [showStageDropdown]);
 
+    const { isOldMan } = useTheme();
     const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
     const invoicedIsX = (localInvoiced || '').toString().trim().toUpperCase() === 'X';
     const isGrayed = isComplete || jobCompIsX;
     const rowBgClass = isGrayed ? 'bg-gray-300 dark:bg-slate-600' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-100 dark:bg-slate-700/80');
+    const cellPy = isOldMan ? 'py-2' : 'py-0.5';
+    const cellText = isOldMan ? 'text-xs' : 'text-[10px]';
 
     // Handle stage change
     const handleStageChange = async (newStage) => {
@@ -889,7 +893,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b-2 border-gray-500 dark:border-slate-800 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b-2 border-white dark:border-slate-600 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -942,7 +946,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center relative`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
                                 style={{ minWidth: '160px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -980,7 +984,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center relative ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative ${pendingHighlight}`}
                                 style={{ minWidth: '160px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -1048,7 +1052,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center ${pendingHighlight}`}
                                 style={isDuplicateFabOrder ? { backgroundColor: '#f97316' } : undefined}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -1105,7 +1109,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center whitespace-normal ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center whitespace-normal ${pendingHighlight}`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -1141,7 +1145,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center ${pendingHighlight}`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1179,7 +1183,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center ${pendingHighlight}`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1226,7 +1230,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 whitespace-nowrap text-[10px] align-middle font-medium ${startInstallBgClass} border-r border-gray-500 dark:border-slate-800 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''} ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''} ${pendingHighlight}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
                             >
@@ -1244,7 +1248,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
                                 title={`${tooltipValue} - Click to view details`}
                                 onClick={() => setIsModalOpen(true)}
                                 style={{
@@ -1279,7 +1283,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             return (
                                 <td
                                     key={`${row.id}-${column}`}
-                                    className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-center`}
+                                    className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
                                     title={`${rawValue} - Click to open Procore viewer`}
                                 >
                                     <a
@@ -1300,7 +1304,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`${paddingClass} py-0.5 text-[10px] align-middle font-medium ${rowBgClass} border-r border-gray-500 dark:border-slate-800 text-gray-900 dark:text-slate-100 text-center ${shouldWrapAndTruncate
+                            className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 text-center ${shouldWrapAndTruncate
                                 ? ''
                                 : whitespaceClass
                                 }`}
@@ -1332,7 +1336,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 })}
                 {isAdmin && (
                     <td
-                        className="px-2 py-0.5 text-center align-middle border-r border-gray-500 dark:border-slate-800 bg-white dark:bg-slate-800 w-12 relative"
+                        className={`px-2 ${cellPy} text-center align-middle border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 w-12 relative`}
                         style={{ width: '48px' }}
                     >
                         <button

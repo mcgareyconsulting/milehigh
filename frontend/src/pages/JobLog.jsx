@@ -12,6 +12,7 @@
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
 import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
@@ -51,6 +52,7 @@ function JobLog() {
             }, 2000);
         }
     }, []);
+    const { isOldMan } = useTheme();
     const [reviewMode, setReviewMode] = useState(
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
@@ -231,7 +233,10 @@ function JobLog() {
             const jobB = b['Job #'] || 0;
             if (jobA !== jobB) return jobA - jobB;
 
-            // Same Project #: sort by stage completeness (most complete first)
+            // Same Project #: "Complete" pinned to bottom, everything else descending by completeness
+            const isCompleteA = a['Stage'] === 'Complete';
+            const isCompleteB = b['Stage'] === 'Complete';
+            if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
             const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
             const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
             return stageB - stageA;
@@ -530,12 +535,15 @@ function JobLog() {
             jobsByPM[pm].push(job);
         });
 
-        // Sort each PM group by Job # ascending, then stage completeness descending (Review order)
+        // Sort each PM group by Job # ascending, then "Complete" pinned last, everything else descending
         Object.keys(jobsByPM).forEach(pm => {
             jobsByPM[pm].sort((a, b) => {
                 const jobA = a['Job #'] || 0;
                 const jobB = b['Job #'] || 0;
                 if (jobA !== jobB) return jobA - jobB;
+                const isCompleteA = a['Stage'] === 'Complete';
+                const isCompleteB = b['Stage'] === 'Complete';
+                if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
                 const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
                 const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
                 return stageB - stageA;
@@ -940,7 +948,6 @@ function JobLog() {
                                         >
                                             Review
                                         </button>
-
                                         {/* Stash session controls — admin + review filter only */}
                                         {reviewMode && isAdmin && !stashSession.activeSession && (
                                             <button
@@ -1081,7 +1088,7 @@ function JobLog() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-400 dark:border-slate-700 shadow-sm`}
+                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-xs' : 'py-0.5 text-[10px]'} text-center font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
                                                                 {displayHeader}
@@ -1089,7 +1096,7 @@ function JobLog() {
                                                         );
                                                     })}
                                                     {isAdmin && (
-                                                        <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-400 dark:border-slate-700 shadow-sm w-12">
+                                                        <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600 w-12">
                                                             ⚙
                                                         </th>
                                                     )}

@@ -22,7 +22,8 @@ import NotificationBell from './NotificationBell';
 function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, isOldMan, toggleDark, toggleOldMan } = useTheme();
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -31,6 +32,15 @@ function AppShellInner({ isAuthenticated }) {
       checkAuth().then(user => setIsAdmin(user?.is_admin || false));
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!showThemeMenu) return;
+    const handler = (e) => {
+      if (!e.target.closest('[data-theme-menu]')) setShowThemeMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showThemeMenu]);
 
   const handleLogout = async () => {
     await logout();
@@ -142,19 +152,51 @@ function AppShellInner({ isAuthenticated }) {
           {/* Notification bell (authenticated users only) */}
           {isAuthenticated && <NotificationBell />}
 
-          {/* Theme toggle */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
-            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {isDark ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+          {/* Theme picker */}
+          <div className="relative" data-theme-menu>
+            <button
+              type="button"
+              onClick={() => setShowThemeMenu(prev => !prev)}
+              className="p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
+              aria-label="Change theme"
+            >
+              {isOldMan ? (
+                <span className="w-5 h-5 flex items-center justify-center text-sm font-bold leading-none">Aa</span>
+              ) : isDark ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+              )}
+            </button>
+            {showThemeMenu && (
+              <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg z-50 p-3 space-y-3">
+                {/* Dark mode toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Dark Mode</span>
+                  <button
+                    type="button"
+                    onClick={toggleDark}
+                    className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-accent-500 ${isDark ? 'bg-accent-500' : 'bg-gray-200 dark:bg-slate-600'}`}
+                    aria-pressed={isDark}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isDark ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {/* Old Man Mode toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Old Man Mode</span>
+                  <button
+                    type="button"
+                    onClick={toggleOldMan}
+                    className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-amber-500 ${isOldMan ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-600'}`}
+                    aria-pressed={isOldMan}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isOldMan ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
             )}
-          </button>
+          </div>
 
           {/* Login / Logout */}
           {isAuthenticated ? (
