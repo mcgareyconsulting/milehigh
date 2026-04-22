@@ -835,6 +835,34 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const isDragOver = dragOverIndex === rowIndex;
     const isBeingDragged = isDragging === rowIndex;
 
+    const formatPendingValue = (field, change) => {
+        const v = change.new_value;
+        if (v === null || v === undefined) return '—';
+        if (field === 'stage') {
+            const opt = stageOptions.find(o => o.value === v);
+            return opt ? opt.label : v;
+        }
+        if (field === 'start_install') {
+            if (typeof v === 'object') {
+                if (v.action === 'clear') return 'clear date';
+                if (v.date) return v.date;
+                return '—';
+            }
+            return String(v);
+        }
+        if (field === 'notes' && String(v).length > 28) return String(v).slice(0, 25) + '…';
+        return String(v) || '—';
+    };
+
+    const PendingHint = ({ field, change }) => {
+        if (!stashPendingView || !change) return null;
+        return (
+            <div className="text-[9px] font-semibold text-amber-700 dark:text-amber-400 mt-0.5 leading-tight">
+                → {formatPendingValue(field, change)}
+            </div>
+        );
+    };
+
     return (
         <>
             {/* Drop indicator line - appears above the row when dragging over */}
@@ -893,7 +921,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     })[column];
                     const _stashChangeForCell = _stashFieldForColumn ? _stashChange(_stashFieldForColumn) : null;
                     const pendingHighlight = stashPendingView && _stashChangeForCell
-                        ? 'ring-2 ring-amber-400 ring-inset'
+                        ? 'ring-4 ring-amber-500 ring-inset'
                         : '';
 
                     // Job and Description: wrap to 2 lines then truncate with ellipsis
@@ -969,6 +997,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         >
                                             {currentLabel}
                                         </button>
+                                        <PendingHint field="stage" change={_stashChangeForCell} />
                                         {showStageDropdown && (
                                             <>
                                                 <div
@@ -1066,6 +1095,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     placeholder="—"
                                     style={{ minWidth: '60px' }}
                                 />
+                                <PendingHint field="fab_order" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1100,6 +1130,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     rows={2}
                                     style={{ minWidth: '120px' }}
                                 />
+                                <PendingHint field="notes" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1137,6 +1168,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     placeholder="—"
                                     style={{ minWidth: '48px' }}
                                 />
+                                <PendingHint field="job_comp" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1174,6 +1206,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     placeholder="—"
                                     style={{ minWidth: '48px' }}
                                 />
+                                <PendingHint field="invoiced" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1198,6 +1231,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
                             >
                                 <span>{displayValue}</span>
+                                <PendingHint field="start_install" change={_stashChangeForCell} />
                             </td>
                         );
                     }

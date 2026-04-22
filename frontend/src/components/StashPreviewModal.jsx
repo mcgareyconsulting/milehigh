@@ -42,6 +42,7 @@ export default function StashPreviewModal({ sessionId, onClose, onApply, onDisca
     const [data, setData] = useState(null);
     const [inFlight, setInFlight] = useState(false);
     const [applySummary, setApplySummary] = useState(null);
+    const [confirmPending, setConfirmPending] = useState(null); // 'apply' | 'discard' | null
 
     const refresh = useCallback(async () => {
         setLoading(true);
@@ -70,7 +71,6 @@ export default function StashPreviewModal({ sessionId, onClose, onApply, onDisca
     };
 
     const handleApply = async () => {
-        if (!window.confirm('Apply all queued changes? This cannot be undone.')) return;
         setInFlight(true);
         try {
             const result = await onApply();
@@ -83,7 +83,6 @@ export default function StashPreviewModal({ sessionId, onClose, onApply, onDisca
     };
 
     const handleDiscard = async () => {
-        if (!window.confirm('Discard the session? All queued edits will be dropped.')) return;
         setInFlight(true);
         try {
             await onDiscard();
@@ -211,31 +210,59 @@ export default function StashPreviewModal({ sessionId, onClose, onApply, onDisca
                 </div>
 
                 <div className="px-5 py-3 border-t border-gray-200 dark:border-slate-600 flex items-center justify-between">
-                    <button
-                        onClick={handleDiscard}
-                        disabled={inFlight || !!applySummary}
-                        className="px-3 py-1.5 text-sm font-semibold rounded bg-red-100 text-red-800 hover:bg-red-200 disabled:opacity-50"
-                    >
-                        Discard Session
-                    </button>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={onClose}
-                            disabled={inFlight}
-                            className="px-3 py-1.5 text-sm font-semibold rounded bg-gray-200 text-gray-800 hover:bg-gray-300 disabled:opacity-50"
-                        >
-                            {applySummary ? 'Close' : 'Back'}
-                        </button>
-                        {!applySummary && (
+                    {confirmPending ? (
+                        <div className="flex items-center gap-3 w-full">
+                            <span className="text-sm text-gray-700 dark:text-slate-300">
+                                {confirmPending === 'discard'
+                                    ? 'Discard all queued edits?'
+                                    : 'Apply all queued changes? This cannot be undone.'}
+                            </span>
                             <button
-                                onClick={handleApply}
-                                disabled={inFlight || changes.length === 0}
-                                className="px-3 py-1.5 text-sm font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                                onClick={() => {
+                                    setConfirmPending(null);
+                                    if (confirmPending === 'discard') handleDiscard();
+                                    else handleApply();
+                                }}
+                                className="px-3 py-1.5 text-sm font-semibold rounded bg-red-600 text-white hover:bg-red-700"
                             >
-                                {inFlight ? 'Applying…' : 'Apply All'}
+                                Yes
                             </button>
-                        )}
-                    </div>
+                            <button
+                                onClick={() => setConfirmPending(null)}
+                                className="px-3 py-1.5 text-sm font-semibold rounded bg-gray-200 text-gray-800 hover:bg-gray-300"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <button
+                                onClick={() => setConfirmPending('discard')}
+                                disabled={inFlight || !!applySummary}
+                                className="px-3 py-1.5 text-sm font-semibold rounded bg-red-100 text-red-800 hover:bg-red-200 disabled:opacity-50"
+                            >
+                                Discard Session
+                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={onClose}
+                                    disabled={inFlight}
+                                    className="px-3 py-1.5 text-sm font-semibold rounded bg-gray-200 text-gray-800 hover:bg-gray-300 disabled:opacity-50"
+                                >
+                                    {applySummary ? 'Close' : 'Back'}
+                                </button>
+                                {!applySummary && (
+                                    <button
+                                        onClick={() => setConfirmPending('apply')}
+                                        disabled={inFlight || changes.length === 0}
+                                        className="px-3 py-1.5 text-sm font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                                    >
+                                        {inFlight ? 'Applying…' : 'Apply All'}
+                                    </button>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
