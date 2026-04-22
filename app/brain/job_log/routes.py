@@ -996,10 +996,18 @@ def update_stage(job, release):
         # Add Trello update to outbox (async - will be processed by outbox service)
         # DB changes are committed first, then outbox handles Trello updates asynchronously
         # This ensures DB changes are never lost due to Trello API failures
+        #
+        # Only push when the target stage is itself a Trello milestone list. Sub-stages
+        # (e.g. "Paint Start", "Welded QC", "Fitup Start") collapse onto the same Trello
+        # list as their neighbors, so pushing them produces a redundant API call and a
+        # bounce-back webhook that overwrites the user's fine-grained stage.
+        from app.trello.list_mapper import TrelloListMapper
+
         outbox_item_created = False
-        new_list_id = get_list_id_by_stage(stage)
-        
-        if new_list_id and job_record.trello_card_id:
+        is_milestone_stage = stage in TrelloListMapper.VALID_TRELLO_LISTS
+        new_list_id = get_list_id_by_stage(stage) if is_milestone_stage else None
+
+        if is_milestone_stage and new_list_id and job_record.trello_card_id:
             try:
                 # Create outbox item - will be processed asynchronously by outbox service
                 OutboxService.add(
@@ -1008,18 +1016,22 @@ def update_stage(job, release):
                     event_id=event.id
                 )
                 outbox_item_created = True
-                logger.info(f"Outbox item created for Trello stage update (job {job}-{release})")
+                logger.info(f"Outbox item created for Trello milestone update (job {job}-{release}, stage={stage})")
             except Exception as outbox_error:
                 # Log error but don't fail the operation - DB update is more important
                 logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
         else:
-            # Log why outbox item wasn't created
-            if not new_list_id:
-                logger.warning(
-                    f"Could not get list ID for stage '{stage}', skipping Trello update",
+            if not is_milestone_stage:
+                logger.info(
+                    f"Skipping Trello push for sub-stage change",
                     extra={'job': job, 'release': release, 'stage': stage}
                 )
-            if not job_record.trello_card_id:
+            elif not new_list_id:
+                logger.warning(
+                    f"Could not get list ID for milestone stage '{stage}', skipping Trello update",
+                    extra={'job': job, 'release': release, 'stage': stage}
+                )
+            elif not job_record.trello_card_id:
                 logger.warning(
                     f"Job {job}-{release} has no trello_card_id, skipping Trello update",
                     extra={'job': job, 'release': release}
