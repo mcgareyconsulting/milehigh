@@ -852,29 +852,16 @@ def get_gantt_data():
 def update_stage(job, release):
     """
     Update the stage for a specific job-release combination.
-    Updates the stage field directly in the database.
-
-    Parameters:
-        job: int
-        release: str
+    Thin wrapper over UpdateStageCommand — see
+    app/brain/job_log/features/stage/command.py for the full workflow.
 
     Request Body:
-        {
-            "stage": "Released" | "Cut start" | "Fit Up Complete." | "Paint complete" | etc.
-        }
-
-    Returns:
-        JSON object with 'status': 'success' or 'error'
+        {"stage": "Released" | "Cut start" | "Fit Up Complete." | ...}
     """
-    from app.models import Releases, db, ReleaseEvents
-    from app.services.job_event_service import JobEventService
-    from datetime import datetime
-    
-    # Log operation entry
-    logger.info(f"update_stage called", extra={
-        'job': job,
-        'release': release,
-        'stage': request.json.get('stage')
+    from app.brain.job_log.features.stage.command import UpdateStageCommand
+
+    logger.info("update_stage called", extra={
+        'job': job, 'release': release, 'stage': request.json.get('stage'),
     })
 
     try:
@@ -882,220 +869,39 @@ def update_stage(job, release):
         if not stage:
             return jsonify({'error': 'Stage is required'}), 400
 
-        # Fetch job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            logger.warning(f"Job not found: {job}-{release}")
-            return jsonify({'error': 'Job not found'}), 404
-
-        # Capture old state for payload
-        # Use stage field directly from database (default to 'Released' if None)
-        old_stage = job_record.stage if job_record.stage else 'Released'
-
-        # Create event (handles deduplication, logging internally)
-        event = JobEventService.create(
-            job=job,
-            release=release,
-            action='update_stage',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
-            payload={
-                'from': old_stage,
-                'to': stage
-            }
-        )
-
-        # Check if event was deduplicated
-        if event is None:
-            logger.info(f"Event already exists for job {job}-{release} to stage {stage}")
-            return jsonify({'error': 'Event already exists'}), 400
-        
-        # Capture old stage_group before updating (needed for logging)
-        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier
-        old_stage_group = job_record.stage_group
-        new_stage_group = get_stage_group_from_stage(stage)
-
-        logger.info(
-            f"Stage change for job {job}-{release}: "
-            f"old_stage_group={old_stage_group}, new_stage_group={new_stage_group}, "
-            f"old_stage={old_stage}, new_stage={stage}"
-        )
-
-        # --- Unified fab_order assignment on stage change ---
-        fab_order_to_set = None
-        old_fab_order_for_update = job_record.fab_order
-
-        tier = get_fixed_tier(stage)
-        if tier is not None:
-            # Fixed-tier stage (Ready-to-Ship / Complete groups): auto-assign the tier value
-            fab_order_to_set = tier
-            logger.info(
-                f"Job {job}-{release} moving to fixed tier {tier} stage '{stage}'. "
-                f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
-            )
-        # Fabrication-group (dynamic) stages and Hold: leave fab_order untouched so the
-        # user's manual ordering is preserved across stage changes.
-
-        # Update job fields (this will update stage_group)
-        update_job_stage_fields(job_record, stage)
-
-        # If stage set to Complete, auto-set job_comp to 'X'
-        # If stage changed away from Complete, clear job_comp 'X'
-        comp_extras = {}
-        if stage == 'Complete':
-            current_job_comp = (job_record.job_comp or '').strip().upper()
-            if current_job_comp != 'X':
-                old_jc = job_record.job_comp
-                job_record.job_comp = 'X'
-                JobEventService.create_and_close(
-                    job=job, release=release,
-                    action='updated', source='Brain',
-                    payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': 'X', 'reason': 'stage_set_to_complete'},
-                )
-                comp_extras['job_comp'] = 'X'
-        elif old_stage == 'Complete' and stage != 'Complete':
-            current_job_comp = (job_record.job_comp or '').strip().upper()
-            if current_job_comp == 'X':
-                old_jc = job_record.job_comp
-                job_record.job_comp = None
-                JobEventService.create_and_close(
-                    job=job, release=release,
-                    action='updated', source='Brain',
-                    payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': None, 'reason': 'stage_changed_from_complete'},
-                )
-                comp_extras['job_comp'] = None
-
-        # Update job metadata
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
-
-        # Apply the calculated fab_order
-        if fab_order_to_set is not None and fab_order_to_set != old_fab_order_for_update:
-            # Ensure payload values are valid (not NaN) - convert to None if needed
-            payload_from = None if (isinstance(old_fab_order_for_update, float) and math.isnan(old_fab_order_for_update)) else old_fab_order_for_update
-            payload_to = None if (isinstance(fab_order_to_set, float) and math.isnan(fab_order_to_set)) else fab_order_to_set
-
-            fab_order_event = JobEventService.create(
-                job=job,
-                release=release,
-                action='update_fab_order',
-                source='Brain',
-                payload={
-                    'from': payload_from,
-                    'to': payload_to,
-                    'reason': 'stage_change_unified'
-                }
-            )
-
-            if fab_order_event is None:
-                logger.warning(f"Event already exists for fab_order update on job {job}-{release}")
-            else:
-                job_record.fab_order = fab_order_to_set
-                JobEventService.close(fab_order_event.id)
-                comp_extras['fab_order'] = fab_order_to_set
-
-        # Add Trello update to outbox (async - will be processed by outbox service)
-        # DB changes are committed first, then outbox handles Trello updates asynchronously
-        # This ensures DB changes are never lost due to Trello API failures
-        #
-        # Only push when the target stage is itself a Trello milestone list. Sub-stages
-        # (e.g. "Paint Start", "Welded QC", "Fitup Start") collapse onto the same Trello
-        # list as their neighbors, so pushing them produces a redundant API call and a
-        # bounce-back webhook that overwrites the user's fine-grained stage.
-        from app.trello.list_mapper import TrelloListMapper
-
-        outbox_item_created = False
-        is_milestone_stage = stage in TrelloListMapper.VALID_TRELLO_LISTS
-        new_list_id = get_list_id_by_stage(stage) if is_milestone_stage else None
-
-        if is_milestone_stage and new_list_id and job_record.trello_card_id:
-            try:
-                # Create outbox item - will be processed asynchronously by outbox service
-                OutboxService.add(
-                    destination='trello',
-                    action='move_card',
-                    event_id=event.id
-                )
-                outbox_item_created = True
-                logger.info(f"Outbox item created for Trello milestone update (job {job}-{release}, stage={stage})")
-            except Exception as outbox_error:
-                # Log error but don't fail the operation - DB update is more important
-                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
-        else:
-            if not is_milestone_stage:
-                logger.info(
-                    f"Skipping Trello push for sub-stage change",
-                    extra={'job': job, 'release': release, 'stage': stage}
-                )
-            elif not new_list_id:
-                logger.warning(
-                    f"Could not get list ID for milestone stage '{stage}', skipping Trello update",
-                    extra={'job': job, 'release': release, 'stage': stage}
-                )
-            elif not job_record.trello_card_id:
-                logger.warning(
-                    f"Job {job}-{release} has no trello_card_id, skipping Trello update",
-                    extra={'job': job, 'release': release}
-                )
-        
-        # Close event only if no outbox item was created (no external API call needed)
-        # If an outbox item exists, it will be closed when processing succeeds
-        if not outbox_item_created:
-            JobEventService.close(event.id)
-        
-        # Commit all DB changes first (this is the critical operation)
-        db.session.commit()
-
-        # Trigger start install cascade — stage change affects fab stage formula-driven dates
-        try:
-            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-        except Exception as cascade_err:
-            logger.error(
-                f"Scheduling cascade failed after stage change for {job}-{release}: {cascade_err}",
-                exc_info=True
-            )
-
-        logger.info(f"update_stage completed successfully", extra={
-            'job': job,
-            'release': release,
-            'event_id': event.id
-        })
+        result = UpdateStageCommand(job_id=job, release=release, stage=stage).execute()
 
         return jsonify({
             'status': 'success',
-            'event_id': event.id,
-            **comp_extras
+            'event_id': result.event_id,
+            **result.extras,
         }), 200
+
+    except ValueError as e:
+        msg = str(e)
+        if 'not found' in msg.lower():
+            return jsonify({'error': msg}), 404
+        if 'already exists' in msg.lower():
+            return jsonify({'error': 'Event already exists'}), 400
+        return jsonify({'error': msg}), 400
+
     except Exception as e:
-        # Log critical failure
-        logger.error(f"update_stage failed catastrophically", exc_info=True, extra={
-            'job': job,
-            'release': release,
-            'error': str(e),
-            'error_type': type(e).__name__
+        logger.error("update_stage failed catastrophically", exc_info=True, extra={
+            'job': job, 'release': release,
+            'error': str(e), 'error_type': type(e).__name__,
         })
-        
-        # Try to log to system_logs
         try:
             from app.services.system_log_service import SystemLogService
             SystemLogService.log_error(
                 category='operation_failure',
                 operation='update_stage',
                 error=e,
-                context={
-                    'job': job,
-                    'release': release,
-                    'stage': request.json.get('stage')
-                }
+                context={'job': job, 'release': release, 'stage': request.json.get('stage')},
             )
-        except:
-            pass  # DB might be down, console logs are our fallback
-        
+        except Exception:
+            pass
         db.session.rollback()
-        return jsonify({
-            'error': str(e),
-            'error_type': type(e).__name__
-        }), 500
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/update-fab-order/<int:job>/<release>", methods=["PATCH"])
 @login_required
@@ -2784,3 +2590,169 @@ def sync_health():
     except Exception as e:
         logger.error("sync_health failed", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+# ==============================================================================
+# Stash Sessions — Thursday review-meeting "stash" flow
+# ==============================================================================
+
+_STASH_ALLOWED_FIELDS = {
+    'stage', 'fab_order', 'notes', 'job_comp', 'invoiced', 'start_install',
+}
+
+
+def _format_source(user):
+    """Return 'Brain:username' for attribution, falling back to 'Brain'."""
+    if user and getattr(user, 'username', None):
+        return f"Brain:{user.username}"
+    return "Brain"
+
+
+@brain_bp.route("/stash-sessions/active", methods=["GET"])
+@admin_required
+def stash_session_active():
+    """Return the currently active StashSession (+ its changes) or null."""
+    from app.brain.job_log.features.stash.service import StashSessionService
+
+    session = StashSessionService.get_active()
+    if session is None:
+        return jsonify({'session': None}), 200
+
+    return jsonify({
+        'session': session.to_dict(include_changes=True),
+    }), 200
+
+
+@brain_bp.route("/stash-sessions", methods=["POST"])
+@admin_required
+def stash_session_start():
+    """Start a new StashSession. 409 if one is already active."""
+    from app.brain.job_log.features.stash.service import (
+        StashSessionService, SessionAlreadyActiveError,
+    )
+
+    user = get_current_user()
+    try:
+        session = StashSessionService.start(user)
+    except SessionAlreadyActiveError as e:
+        return jsonify({'error': str(e)}), 409
+    return jsonify({'session': session.to_dict()}), 201
+
+
+@brain_bp.route("/stash-sessions/<int:session_id>/changes", methods=["POST"])
+@admin_required
+def stash_session_upsert_change(session_id):
+    """Upsert a queued change. Body: {job, release, field, new_value}."""
+    from app.brain.job_log.features.stash.service import (
+        StashSessionService, SessionNotActiveError, SessionNotFoundError,
+    )
+
+    body = request.json or {}
+    job = body.get('job')
+    release = body.get('release')
+    field = body.get('field')
+    new_value = body.get('new_value')
+
+    if job is None or release is None or not field:
+        return jsonify({'error': 'job, release, and field are required'}), 400
+    if field not in _STASH_ALLOWED_FIELDS:
+        return jsonify({'error': f'Unsupported field: {field}'}), 400
+    try:
+        job = int(job)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'job must be an integer'}), 400
+
+    try:
+        change = StashSessionService.stash_change(
+            session_id=session_id,
+            job=job,
+            release=str(release),
+            field=field,
+            new_value=new_value,
+        )
+    except SessionNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except SessionNotActiveError as e:
+        return jsonify({'error': str(e)}), 409
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    return jsonify({'change': change.to_dict()}), 200
+
+
+@brain_bp.route(
+    "/stash-sessions/<int:session_id>/changes/<int:change_id>",
+    methods=["DELETE"],
+)
+@admin_required
+def stash_session_remove_change(session_id, change_id):
+    """Remove a single queued change from a session."""
+    from app.brain.job_log.features.stash.service import (
+        StashSessionService, SessionNotActiveError, SessionNotFoundError,
+    )
+
+    try:
+        StashSessionService.remove_change(session_id=session_id, change_id=change_id)
+    except SessionNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except SessionNotActiveError as e:
+        return jsonify({'error': str(e)}), 409
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+
+    return jsonify({'status': 'success'}), 200
+
+
+@brain_bp.route("/stash-sessions/<int:session_id>/preview", methods=["GET"])
+@admin_required
+def stash_session_preview(session_id):
+    """Preview the session — each change with baseline, current, new, and conflict flag."""
+    from app.brain.job_log.features.stash.service import (
+        StashSessionService, SessionNotFoundError,
+    )
+
+    try:
+        data = StashSessionService.preview(session_id)
+    except SessionNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+
+    return jsonify(data), 200
+
+
+@brain_bp.route("/stash-sessions/<int:session_id>/apply", methods=["POST"])
+@admin_required
+def stash_session_apply(session_id):
+    """Apply all queued changes; runs scheduling cascade once at the end."""
+    from app.brain.job_log.features.stash.service import (
+        StashSessionService, SessionNotActiveError, SessionNotFoundError,
+    )
+
+    user = get_current_user()
+    source = _format_source(user)
+
+    try:
+        data = StashSessionService.apply(session_id, source=source)
+    except SessionNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except SessionNotActiveError as e:
+        return jsonify({'error': str(e)}), 409
+
+    return jsonify(data), 200
+
+
+@brain_bp.route("/stash-sessions/<int:session_id>/discard", methods=["POST"])
+@admin_required
+def stash_session_discard(session_id):
+    """Discard the session — no DB mutations replayed; session marked 'discarded'."""
+    from app.brain.job_log.features.stash.service import (
+        StashSessionService, SessionNotActiveError, SessionNotFoundError,
+    )
+
+    try:
+        session = StashSessionService.discard(session_id)
+    except SessionNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except SessionNotActiveError as e:
+        return jsonify({'error': str(e)}), 409
+
+    return jsonify({'session': session.to_dict()}), 200

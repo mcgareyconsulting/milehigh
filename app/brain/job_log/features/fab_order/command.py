@@ -45,6 +45,9 @@ class UpdateFabOrderCommand:
     fab_order: Optional[float]
     source: str = "Brain"  # Will be formatted as 'Brain:username' automatically
     source_of_update: str = "Brain"  # Matches route's hardcoded value
+    # When True, skip the final recalculate_all_jobs_scheduling call — useful when
+    # the caller is batching multiple updates and will run the cascade once at the end.
+    defer_cascade: bool = False
 
     def execute(self) -> FabOrderUpdateResult:
         """
@@ -122,11 +125,12 @@ class UpdateFabOrderCommand:
         db.session.commit()
 
         # 7b. Recalculate scheduling for fab stage (fab_order affects hours_in_front → start_install)
-        try:
-            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-        except Exception as e:
-            logger.error(f"Scheduling recalculation failed after fab_order update: {e}", exc_info=True)
+        if not self.defer_cascade:
+            try:
+                from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+                recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+            except Exception as e:
+                logger.error(f"Scheduling recalculation failed after fab_order update: {e}", exc_info=True)
 
         logger.info(f"update_fab_order completed successfully", extra={
             'job': self.job_id,

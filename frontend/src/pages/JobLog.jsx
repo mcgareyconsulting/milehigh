@@ -20,6 +20,8 @@ import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth } from '../utils/auth';
+import { useStashSession } from '../hooks/useStashSession';
+import StashPreviewModal from '../components/StashPreviewModal';
 
 function JobLog() {
     const navigate = useNavigate();
@@ -53,6 +55,8 @@ function JobLog() {
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
     const [isAdmin, setIsAdmin] = useState(false);
+    const [showStashPreview, setShowStashPreview] = useState(false);
+    const stashSession = useStashSession({ enabled: isAdmin });
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('jl_minimized') === 'true'
     );
@@ -936,6 +940,56 @@ function JobLog() {
                                         >
                                             Review
                                         </button>
+
+                                        {/* Stash session controls — admin + review filter only */}
+                                        {reviewMode && isAdmin && !stashSession.activeSession && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        await stashSession.start();
+                                                    } catch (err) {
+                                                        alert(err.message || 'Failed to start session');
+                                                    }
+                                                }}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-amber-500 text-white hover:bg-amber-600"
+                                                title="Start a Review stash session. Subsequent edits will be queued server-side and applied as a batch when you press Stop & Preview."
+                                            >
+                                                Start Review Session
+                                            </button>
+                                        )}
+                                        {reviewMode && isAdmin && stashSession.activeSession && (
+                                            <>
+                                                <button
+                                                    onClick={() => setShowStashPreview(true)}
+                                                    className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-emerald-600 text-white hover:bg-emerald-700"
+                                                    title="Stop the review session and preview all queued changes before applying."
+                                                >
+                                                    Stop & Preview ({stashSession.changeCount})
+                                                </button>
+                                                <div className="inline-flex rounded border border-gray-400 dark:border-slate-500 overflow-hidden">
+                                                    <button
+                                                        onClick={() => stashSession.setViewMode('print')}
+                                                        className={`px-2 py-1 text-xs font-semibold ${stashSession.viewMode === 'print'
+                                                            ? 'bg-slate-700 text-white'
+                                                            : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200'
+                                                            }`}
+                                                        title="Show baseline values — matches the printed Job Log."
+                                                    >
+                                                        Print
+                                                    </button>
+                                                    <button
+                                                        onClick={() => stashSession.setViewMode('pending')}
+                                                        className={`px-2 py-1 text-xs font-semibold ${stashSession.viewMode === 'pending'
+                                                            ? 'bg-amber-500 text-white'
+                                                            : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200'
+                                                            }`}
+                                                        title="Show queued new values with pending highlight."
+                                                    >
+                                                        Pending
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
 
                                     {/* Chevron toggle button */}
@@ -1077,6 +1131,7 @@ function JobLog() {
                                                                     onDelete={handleDeleteJob}
                                                                     tableScrollRef={tableScrollRef}
                                                                     duplicateFabOrders={duplicateFabOrders}
+                                                                    stashSession={stashSession}
                                                                 />
                                                             ))}
                                                         </>
@@ -1117,6 +1172,7 @@ function JobLog() {
                                                             onDelete={handleDeleteJob}
                                                             tableScrollRef={tableScrollRef}
                                                             duplicateFabOrders={duplicateFabOrders}
+                                                            stashSession={stashSession}
                                                         />
                                                     ))
                                                 )}
@@ -1380,6 +1436,24 @@ function JobLog() {
                 )}
 
             </div>
+            {showStashPreview && stashSession.activeSession && (
+                <StashPreviewModal
+                    sessionId={stashSession.activeSession.id}
+                    onClose={() => setShowStashPreview(false)}
+                    onApply={async () => {
+                        const result = await stashSession.apply();
+                        setShowStashPreview(false);
+                        await refetch(true);
+                        return result;
+                    }}
+                    onDiscard={async () => {
+                        await stashSession.discard();
+                        setShowStashPreview(false);
+                        await refetch(true);
+                    }}
+                    onRemove={stashSession.remove}
+                />
+            )}
         </>
     );
 }
