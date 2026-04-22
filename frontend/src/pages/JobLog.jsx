@@ -1081,7 +1081,7 @@ function JobLog() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-400 dark:border-slate-700 shadow-sm`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
                                                                 {displayHeader}
@@ -1089,7 +1089,7 @@ function JobLog() {
                                                         );
                                                     })}
                                                     {isAdmin && (
-                                                        <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                        <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-400 dark:border-slate-700 shadow-sm w-12">
                                                             ⚙
                                                         </th>
                                                     )}
@@ -1315,7 +1315,7 @@ function JobLog() {
                                         <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
                                             Preview ({parsedPreview.length} row{parsedPreview.length !== 1 ? 's' : ''})
                                         </h3>
-                                        <div className="border border-gray-300 dark:border-slate-600 rounded-lg overflow-hidden">
+                                        <div className="border border-gray-400 dark:border-slate-700 rounded-lg overflow-hidden">
                                             <div className="overflow-x-auto max-h-96">
                                                 <table className="w-full text-xs border-collapse">
                                                     <thead className="bg-gray-100 dark:bg-slate-700 sticky top-0">
@@ -1323,7 +1323,7 @@ function JobLog() {
                                                             {['Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'].map((col) => (
                                                                 <th
                                                                     key={col}
-                                                                    className="px-2 py-1.5 text-left font-semibold text-gray-700 dark:text-slate-200 border-b border-gray-300 dark:border-slate-600 whitespace-nowrap"
+                                                                    className="px-2 py-1.5 text-left font-semibold text-gray-700 dark:text-slate-200 border-b border-gray-400 dark:border-slate-700 whitespace-nowrap"
                                                                 >
                                                                     {col}
                                                                 </th>
