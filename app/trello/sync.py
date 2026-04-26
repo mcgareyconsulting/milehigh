@@ -385,60 +385,83 @@ def sync_from_trello(event_info):
             
             # Capture old stage value before applying list mapping
             old_stage_before_list_move = rec.stage
-            
-            # Apply list mapping to database
-            TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
-            
-            # Always create JobEvent for list moves - the webhook confirms the move happened
-            # Use to_list_name as the stage name to match frontend format
-            stage = to_list_name
-            # Use from_list_name from webhook for "from" value (more reliable than DB stage)
-            # Fall back to old_stage_before_list_move if from_list_name is not available
-            from_stage = from_list_name if from_list_name else (old_stage_before_list_move if old_stage_before_list_move else None)
-            
-            safe_log_sync_event(
-                sync_op.operation_id,
-                "INFO",
-                "Creating stage update event for list move",
-                job=rec.job,
-                release=rec.release,
-                from_list=from_list_name,
-                to_list=to_list_name,
-                old_stage=old_stage_before_list_move,
-                new_stage=stage
+
+            # Apply list mapping to database. Returns True only if the rank gate
+            # actually advanced rec.stage; False means the inbound was skipped
+            # (echo of our own push, backward Trello drag, or DB already at/ahead
+            # of the inbound list zone).
+            applied = TrelloListMapper.apply_trello_list_to_db(
+                rec, rec.trello_list_name, sync_op.operation_id
             )
-            
-            event = JobEventService.create(
-                job=rec.job,
-                release=rec.release,
-                action="update_stage",
-                source=trello_source,
-                payload={"from": from_stage, "to": stage},
-                external_user_id=trello_user_id,
-            )
-            if event:
-                created_events.append(event)
+
+            if applied:
+                # Use to_list_name as the stage name to match frontend format
+                stage = to_list_name
+                # Use from_list_name from webhook for "from" value (more reliable
+                # than DB stage); fall back to old DB stage if unavailable.
+                from_stage = (
+                    from_list_name
+                    if from_list_name
+                    else (old_stage_before_list_move if old_stage_before_list_move else None)
+                )
+
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "INFO",
-                    "JobEvent created for stage update",
-                    job=rec.job,
-                    release=rec.release,
-                    from_list=from_list_name,
-                    to_stage=stage,
-                    event_id=event.id
-                )
-            else:
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "WARNING",
-                    "Duplicate stage update event detected, skipping",
+                    "Creating stage update event for list move",
                     job=rec.job,
                     release=rec.release,
                     from_list=from_list_name,
                     to_list=to_list_name,
-                    payload_from=from_stage,
-                    payload_to=stage
+                    old_stage=old_stage_before_list_move,
+                    new_stage=stage,
+                )
+
+                event = JobEventService.create(
+                    job=rec.job,
+                    release=rec.release,
+                    action="update_stage",
+                    source=trello_source,
+                    payload={"from": from_stage, "to": stage},
+                    external_user_id=trello_user_id,
+                )
+                if event:
+                    created_events.append(event)
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "JobEvent created for stage update",
+                        job=rec.job,
+                        release=rec.release,
+                        from_list=from_list_name,
+                        to_stage=stage,
+                        event_id=event.id,
+                    )
+                else:
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "WARNING",
+                        "Duplicate stage update event detected, skipping",
+                        job=rec.job,
+                        release=rec.release,
+                        from_list=from_list_name,
+                        to_list=to_list_name,
+                        payload_from=from_stage,
+                        payload_to=stage,
+                    )
+            else:
+                # Rank gate skipped the apply — DB stage was not advanced. No
+                # phantom update_stage event is recorded; the audit trail stays
+                # honest. The skip itself is logged inside apply_trello_list_to_db.
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "INFO",
+                    "Skipping JobEvent — inbound Trello list move did not advance DB stage",
+                    job=rec.job,
+                    release=rec.release,
+                    from_list=from_list_name,
+                    to_list=to_list_name,
+                    db_stage=old_stage_before_list_move,
                 )
             
             destination_name = event_info.get("to")
