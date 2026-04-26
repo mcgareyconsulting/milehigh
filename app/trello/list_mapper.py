@@ -20,8 +20,26 @@ Excel/database status fields and Trello list names.
 
 from typing import Optional
 from app.logging_config import get_logger
+from app.api.helpers import STAGE_PROGRESSION_RANK
 
 logger = get_logger(__name__)
+
+
+def _compute_trello_list_rank(stage_to_list, valid_lists, rank_map):
+    """Compute each Trello list's progression rank as the floor of its zone.
+
+    Floor = lowest progression rank among the DB stages that forward-map to this
+    list, excluding Hold (Hold's sentinel rank would otherwise raise the floor of
+    "Fit Up Complete." since Hold maps there).
+    """
+    return {
+        list_name: min(
+            rank_map[s]
+            for s, target in stage_to_list.items()
+            if target == list_name and s in rank_map and s != "Hold"
+        )
+        for list_name in valid_lists
+    }
 
 
 class TrelloListMapper:
@@ -82,7 +100,14 @@ class TrelloListMapper:
         "Shipping Complete":            "Shipping completed",
         "Complete":                     "Shipping completed",
     }
-    
+
+    # Derived: each Trello list's progression rank = floor of its zone (lowest DB
+    # stage rank whose forward-map is that list, excluding Hold). Used by the
+    # inbound rank gate in apply_trello_list_to_db.
+    TRELLO_LIST_RANK = _compute_trello_list_rank(
+        DB_STAGE_TO_TRELLO_LIST, VALID_TRELLO_LISTS, STAGE_PROGRESSION_RANK,
+    )
+
     @classmethod
     def determine_trello_list_from_db(cls, rec) -> Optional[str]:
         """
@@ -186,20 +211,27 @@ class TrelloListMapper:
         return None
 
     @classmethod
-    def apply_trello_list_to_db(cls, job, trello_list_name: str, operation_id: str) -> None:
+    def apply_trello_list_to_db(cls, job, trello_list_name: str, operation_id: str) -> bool:
         """
-        Update database record stage based on Trello list movement.
-        
-        This is used when syncing from Trello to database to update
-        the stage field based on which list the card was moved to.
-        
+        Update database record stage based on Trello list movement, gated by progression rank.
+
+        The rank gate skips the apply when DB stage is at or ahead of the inbound
+        Trello list's zone — this collapses three otherwise-tricky cases into one
+        check:
+          - echoes of our own outbound pushes (same forward-map → equal or lower
+            inbound rank than DB),
+          - backward Trello drags (intentionally blocked; rollbacks happen in Brain),
+          - same-zone moves where DB has finer-grained state than the Trello list.
+
         Args:
             job: Database record (Job model instance) to update
             trello_list_name: Name of the Trello list the card was moved to
             operation_id: Sync operation ID for logging
-            
+
         Returns:
-            None (modifies job in place)
+            True if job.stage was updated, False if the inbound was skipped
+            (unknown list name, or DB rank ≥ inbound list rank). Callers use
+            this to decide whether to record a stage-change audit event.
         """
         # Validate that the Trello list name is one we recognise
         if trello_list_name not in cls.VALID_TRELLO_LISTS:
@@ -210,32 +242,48 @@ class TrelloListMapper:
                 trello_list=trello_list_name,
                 current_stage=job.stage,
             )
-            return
+            return False
 
-        # Log the current state before applying changes
+        db_rank = STAGE_PROGRESSION_RANK.get(job.stage, -1)
+        trello_rank = cls.TRELLO_LIST_RANK[trello_list_name]
+
+        if db_rank >= trello_rank:
+            logger.info(
+                "Inbound Trello list skipped — DB progression at or ahead of Trello zone",
+                operation_id=operation_id,
+                job_id=job.id,
+                db_stage=job.stage,
+                db_rank=db_rank,
+                trello_list=trello_list_name,
+                trello_rank=trello_rank,
+            )
+            return False
+
+        # DB is behind — Trello has advanced; catch up.
         old_stage = job.stage
         logger.info(
             "Applying Trello list to database record",
             operation_id=operation_id,
             job_id=job.id,
             trello_list=trello_list_name,
-            current_stage=old_stage
+            current_stage=old_stage,
+            db_rank=db_rank,
+            trello_rank=trello_rank,
         )
 
-        # Set the stage directly from the Trello list name
         job.stage = trello_list_name
-        
+
         # Update stage_group based on stage
         from app.api.helpers import get_stage_group_from_stage
         job.stage_group = get_stage_group_from_stage(trello_list_name)
-        
-        # Log the new state after applying changes
+
         logger.info(
             "Applied Trello list to database record",
             operation_id=operation_id,
             job_id=job.id,
-            new_stage=job.stage
+            new_stage=job.stage,
         )
+        return True
     
     @classmethod
     def is_valid_shipping_state(cls, list_name: str) -> bool:
@@ -249,4 +297,20 @@ class TrelloListMapper:
             True if the list is a valid shipping state
         """
         return list_name in cls.VALID_SHIPPING_STATES
+
+
+# Fail fast at import time if the rank table doesn't cover every key in the
+# forward map. Hold is excluded from the requirement because its sentinel rank
+# (99) is intentionally filtered out of TRELLO_LIST_RANK above. This catches
+# silent drift the moment it lands rather than at first webhook.
+_missing_rank_keys = (
+    set(TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.keys())
+    - {"Hold"}
+    - set(STAGE_PROGRESSION_RANK.keys())
+)
+assert not _missing_rank_keys, (
+    f"STAGE_PROGRESSION_RANK is missing keys present in DB_STAGE_TO_TRELLO_LIST: "
+    f"{_missing_rank_keys}"
+)
+del _missing_rank_keys
 

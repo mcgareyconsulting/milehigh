@@ -102,6 +102,37 @@ STAGE_ORDER = {
 
 STAGE_ORDER_EXEMPT = {"Hold"}
 
+# Single source of truth for "how far along is this stage on the release lifecycle."
+# Used by the inbound Trello rank gate in TrelloListMapper: when an inbound webhook
+# arrives, we compare rank(db.stage) against rank(target_trello_list); if DB is at
+# or ahead of the inbound list, we skip the apply (echoes, backward Trello drags,
+# and same-zone moves all collapse to this single check).
+#
+# Variants (e.g. "Cut start" + "Cut Start") share a rank — they are the same
+# conceptual stage. Hold is a sentinel above every real rank so a release on Hold
+# is never advanced or rolled back by Trello drags; only Brain transitions out.
+#
+# This dict is DB stage names only. The 6 actual Trello lists live in
+# TrelloListMapper.VALID_TRELLO_LISTS — the rank derivation is in list_mapper.py.
+STAGE_PROGRESSION_RANK = {
+    "Released":                       0,
+    "Material Ordered":               1,
+    "Cut start":                      2, "Cut Start":           2,
+    "Cut Complete":                   3,
+    "Fitup Start":                    4,
+    "Fitup Complete":                 5, "Fit Up Complete.":    5,
+    "Weld Start":                     6,
+    "Weld Complete":                  7,
+    "Welded QC":                      9,
+    "Paint Start":                   10,
+    "Paint complete":                11, "Paint Complete":     11,
+    "Store at MHMW for shipping":    12, "Store at Shop":      12,
+    "Shipping planning":             13, "Shipping Planning":  13,
+    "Shipping completed":            14, "Shipping Complete":  14,
+    "Complete":                      15,
+    "Hold":                          99,
+}
+
 
 def _normalize_stage(stage: Optional[str]) -> Optional[str]:
     """Resolve a stage name (including variants) to the canonical key in STAGE_TO_GROUP."""
