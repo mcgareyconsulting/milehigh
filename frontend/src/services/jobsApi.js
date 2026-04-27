@@ -116,6 +116,18 @@ class JobsApi {
         }
     }
 
+    async getNotesHistory(job, release, limit = 200) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/events`,
+                { params: { job, release, limit } }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch notes history');
+        }
+    }
+
     async updateJobComp(job, release, jobComp) {
         try {
             const response = await axios.patch(
