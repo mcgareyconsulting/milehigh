@@ -54,6 +54,29 @@ export function useJobsFilters(jobs = []) {
         () => localStorage.getItem('jl_subset') || null
     ); // 'job_order', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
 
+    // Per-column dropdown filters: { [columnName]: string[] of allowed values; '(Blanks)' represents null/empty }
+    const [columnFilters, setColumnFiltersState] = useState(() => {
+        try {
+            const raw = localStorage.getItem('jl_column_filters');
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    });
+    // Per-column sort override: { column: string|null, direction: 'asc'|'desc'|null }
+    const [columnSort, setColumnSortState] = useState(() => {
+        try {
+            const raw = localStorage.getItem('jl_column_sort');
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (parsed && parsed.column && (parsed.direction === 'asc' || parsed.direction === 'desc')) {
+                return parsed;
+            }
+        } catch {
+            /* ignore */
+        }
+        return { column: null, direction: null };
+    });
+
     // Sync filter state to localStorage
     useEffect(() => { localStorage.setItem('jl_projects', JSON.stringify(selectedProjectNames)); }, [selectedProjectNames]);
     useEffect(() => {
@@ -63,6 +86,40 @@ export function useJobsFilters(jobs = []) {
             localStorage.setItem('jl_subset', selectedSubset);
         }
     }, [selectedSubset]);
+    useEffect(() => {
+        if (Object.keys(columnFilters).length === 0) {
+            localStorage.removeItem('jl_column_filters');
+        } else {
+            localStorage.setItem('jl_column_filters', JSON.stringify(columnFilters));
+        }
+    }, [columnFilters]);
+    useEffect(() => {
+        if (!columnSort.column || !columnSort.direction) {
+            localStorage.removeItem('jl_column_sort');
+        } else {
+            localStorage.setItem('jl_column_sort', JSON.stringify(columnSort));
+        }
+    }, [columnSort]);
+
+    const setColumnFilter = useCallback((column, values) => {
+        setColumnFiltersState(prev => {
+            const next = { ...prev };
+            if (!values || values.length === 0) {
+                delete next[column];
+            } else {
+                next[column] = [...values];
+            }
+            return next;
+        });
+    }, []);
+
+    const setColumnSort = useCallback((column, direction) => {
+        if (!direction) {
+            setColumnSortState({ column: null, direction: null });
+        } else {
+            setColumnSortState({ column, direction });
+        }
+    }, []);
 
     /**
      * Check if a job matches the search string. Search is a loose substring match
@@ -106,9 +163,28 @@ export function useJobsFilters(jobs = []) {
         return true;
     }, [selectedProjectNames, selectedStages]);
 
+    /**
+     * Check if a job matches all active per-column dropdown filters.
+     * The literal '(Blanks)' in an allowed list matches null/undefined/empty values.
+     */
+    const matchesColumnFilters = useCallback((job) => {
+        for (const col in columnFilters) {
+            const allowed = columnFilters[col];
+            if (!allowed || allowed.length === 0) continue;
+            const v = job[col];
+            const isBlank = (v === null || v === undefined || String(v).trim() === '');
+            if (isBlank) {
+                if (!allowed.includes('(Blanks)')) return false;
+            } else {
+                if (!allowed.includes(String(v).trim())) return false;
+            }
+        }
+        return true;
+    }, [columnFilters]);
+
     const matchesSelectedFilter = useCallback(
-        (job) => matchesFilters(job) && matchesSearch(job, search),
-        [matchesFilters, matchesSearch, search]
+        (job) => matchesFilters(job) && matchesSearch(job, search) && matchesColumnFilters(job),
+        [matchesFilters, matchesSearch, search, matchesColumnFilters]
     );
 
     /**
@@ -220,36 +296,56 @@ export function useJobsFilters(jobs = []) {
     }, [filterByStageGroups]);
 
     /**
+     * Numeric columns get numeric comparison (with nulls always sorted to the end).
+     * All other columns compare via locale-aware string compare with numeric collation.
+     */
+    const NUMERIC_COLUMNS = useMemo(() => new Set(['Job #', 'Fab Order', 'Fab Hrs', 'Install HRS']), []);
+
+    const compareByColumn = useCallback((a, b, column, direction) => {
+        const va = a?.[column];
+        const vb = b?.[column];
+        const aBlank = (va === null || va === undefined || String(va).trim() === '');
+        const bBlank = (vb === null || vb === undefined || String(vb).trim() === '');
+        // Blanks always sort to the end, regardless of direction
+        if (aBlank && bBlank) return 0;
+        if (aBlank) return 1;
+        if (bBlank) return -1;
+        let cmp;
+        if (NUMERIC_COLUMNS.has(column)) {
+            const na = Number(va);
+            const nb = Number(vb);
+            if (!isNaN(na) && !isNaN(nb)) {
+                cmp = na - nb;
+            } else {
+                cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
+            }
+        } else {
+            cmp = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+        }
+        return direction === 'desc' ? -cmp : cmp;
+    }, [NUMERIC_COLUMNS]);
+
+    /**
      * Filtered and sorted jobs for display based on selected subset
      */
     const displayJobs = useMemo(() => {
         // First apply base filters (project name, job #, release #, etc.)
         const baseFiltered = jobs.filter(matchesSelectedFilter);
 
-        // If no subset is selected, use default behavior
+        let result;
         if (!selectedSubset) {
-            return sortJobs([...baseFiltered]);
-        }
-
-        // Apply subset-specific filtering
-        let result = [];
-
-        if (selectedSubset === 'job_order') {
-            // Job Order: all releases sorted by unified fab_order
+            result = sortJobs([...baseFiltered]);
+        } else if (selectedSubset === 'job_order') {
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'ready_to_ship') {
-            // Ready to Ship: Shipping planning, Store at MHMW for shipping, Paint complete
             const readyToShipStages = ['Shipping planning', 'Store at MHMW for shipping', 'Paint complete'];
             const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByFabOrder(rtsOnly);
         } else if (selectedSubset === 'paint') {
-            // Paint: only Welded QC jobs, ascending fab order
             const paintStages = ['Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
-            // Paint+Fab: Paint complete + Welded QC, then FABRICATION group
-            // Sorted by fab_order with start_install date as tiebreaker within same fab_order
             const paintStages = ['Paint complete', 'Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByFabOrderThenStartInstall(paintOnly);
@@ -257,12 +353,18 @@ export function useJobsFilters(jobs = []) {
             const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
             result = [...paintSorted, ...fabSorted];
         } else if (selectedSubset === 'fab') {
-            // Fab: Only FABRICATION stage_group
             result = getFabSubset(baseFiltered);
+        } else {
+            result = [...baseFiltered];
+        }
+
+        // Column sort overrides default/subset ordering when active
+        if (columnSort.column && columnSort.direction) {
+            result = [...result].sort((a, b) => compareByColumn(a, b, columnSort.column, columnSort.direction));
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder, sortByFabOrderThenStartInstall]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByFabOrderThenStartInstall, columnSort, compareByColumn]);
 
     /**
      * Secondary search: jobs matching the search with all project/stage/subset
@@ -446,8 +548,12 @@ export function useJobsFilters(jobs = []) {
         setSelectedStages([]);
         setSearch('');
         setSelectedSubset(null);
+        setColumnFiltersState({});
+        setColumnSortState({ column: null, direction: null });
         localStorage.removeItem('jl_projects');
         localStorage.removeItem('jl_subset');
+        localStorage.removeItem('jl_column_filters');
+        localStorage.removeItem('jl_column_sort');
     }, []);
 
     return {
@@ -456,12 +562,16 @@ export function useJobsFilters(jobs = []) {
         selectedStages,
         search,
         selectedSubset,
+        columnFilters,
+        columnSort,
 
         // Filter setters
         setSelectedProjectNames,
         setSelectedStages,
         setSearch,
         setSelectedSubset,
+        setColumnFilter,
+        setColumnSort,
 
         // Filter options
         projectNameOptions,
@@ -469,6 +579,10 @@ export function useJobsFilters(jobs = []) {
         stageColors,
         stageToGroup,
         stageGroupColors,
+
+        // Filter predicates (exposed so callers can compute reachable values)
+        matchesFilters,
+        matchesSearch,
 
         // Filtered and sorted jobs
         displayJobs,

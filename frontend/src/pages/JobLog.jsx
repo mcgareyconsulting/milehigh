@@ -17,6 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
+import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
@@ -88,6 +89,12 @@ function JobLog() {
         toggleStage,
         selectedSubset,
         setSelectedSubset,
+        columnFilters,
+        columnSort,
+        setColumnFilter,
+        setColumnSort,
+        matchesFilters,
+        matchesSearch,
     } = useJobsFilters(jobs);
 
     // Fetch user auth info to check admin status
@@ -323,6 +330,50 @@ function JobLog() {
         // Only include columns that exist in the data and are in our defined order
         return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
     }, [columns]);
+
+    // Phase 1 columns that get an Excel-style header dropdown filter.
+    const FILTERABLE_COLUMNS = useMemo(() => new Set([
+        'Job #', 'Release #', 'Job', 'Stage', 'Fab Order',
+        'Paint color', 'Job Comp', 'Invoiced', 'PM', 'BY',
+    ]), []);
+
+    /**
+     * Per-column reachable values: for each filterable column C, the set of unique
+     * non-blank values present in jobs that pass every active filter except C's own
+     * column filter (Excel-style narrowing). Also tracks whether blanks are reachable.
+     */
+    const uniqueValuesByColumn = useMemo(() => {
+        const out = {};
+        FILTERABLE_COLUMNS.forEach((col) => {
+            const set = new Set();
+            let hasBlanks = false;
+            for (const job of jobs) {
+                if (!matchesFilters(job)) continue;
+                if (!matchesSearch(job, search)) continue;
+                let ok = true;
+                for (const k in columnFilters) {
+                    if (k === col) continue;
+                    const allowed = columnFilters[k];
+                    if (!allowed || allowed.length === 0) continue;
+                    const v = job[k];
+                    const blank = (v === null || v === undefined || String(v).trim() === '');
+                    if (blank ? !allowed.includes('(Blanks)') : !allowed.includes(String(v).trim())) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (!ok) continue;
+                const v = job[col];
+                if (v === null || v === undefined || String(v).trim() === '') hasBlanks = true;
+                else set.add(String(v).trim());
+            }
+            out[col] = {
+                values: [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
+                hasBlanks,
+            };
+        });
+        return out;
+    }, [jobs, columnFilters, matchesFilters, matchesSearch, search, FILTERABLE_COLUMNS]);
 
     const tableColumnCount = columnHeaders.length;
 
@@ -1098,13 +1149,30 @@ function JobLog() {
                                                         // Display "rel. #" for Release # column header
                                                         const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
                                                         const colWidthPct = columnWidthPercents[column];
+                                                        const isFilterable = FILTERABLE_COLUMNS.has(column);
+                                                        const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
+                                                        const colSelected = columnFilters[column] ?? [];
                                                         return (
                                                             <th
                                                                 key={column}
                                                                 className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-xs' : 'py-0.5 text-[10px]'} text-center font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
-                                                                {displayHeader}
+                                                                <div className="flex items-center justify-center">
+                                                                    <span>{displayHeader}</span>
+                                                                    {isFilterable && (
+                                                                        <ColumnHeaderFilter
+                                                                            column={column}
+                                                                            values={colInfo?.values ?? []}
+                                                                            hasBlanks={colInfo?.hasBlanks ?? false}
+                                                                            selected={new Set(colSelected)}
+                                                                            onChange={(next) => setColumnFilter(column, [...next])}
+                                                                            sort={columnSort}
+                                                                            onSort={(dir) => setColumnSort(column, dir)}
+                                                                            isActive={colSelected.length > 0}
+                                                                        />
+                                                                    )}
+                                                                </div>
                                                             </th>
                                                         );
                                                     })}
