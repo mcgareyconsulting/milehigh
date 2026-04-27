@@ -1129,6 +1129,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         if (e.key === 'Escape') {
                                             setNotesInputValue(localNotes ?? '');
                                             e.target.blur();
+                                        } else if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            e.target.blur();
                                         }
                                     }}
                                     disabled={updatingNotes}
