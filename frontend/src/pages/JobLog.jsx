@@ -245,12 +245,14 @@ function JobLog() {
         return sorted;
     }, [displayJobs, reviewMode]);
 
-    // Compute set of fab_order values >= 4 that appear on more than one release
+    // Compute set of fab_order values >= 4 that appear on more than one release.
+    // 80.555 is the DEFAULT_FAB_ORDER sentinel (newly created releases) — collisions
+    // there are expected, not real ordering conflicts, so don't flag them.
     const duplicateFabOrders = useMemo(() => {
         const counts = {};
         for (const row of reviewDisplayJobs) {
             const fo = row['Fab Order'];
-            if (fo != null && fo >= 4) {
+            if (fo != null && fo >= 4 && fo !== 80.555) {
                 counts[fo] = (counts[fo] || 0) + 1;
             }
         }
@@ -563,11 +565,15 @@ function JobLog() {
                 size: 11in 17in landscape;
                 margin: 0.5in;
             }
+            /* Force each PM to start on a fresh front (right-hand) sheet so duplex
+               printing never lands the next PM on the back of the previous one. */
             .pm-group {
-                page-break-after: always;
+                break-before: right;
+                page-break-before: right;
             }
-            .pm-group:last-child {
-                page-break-after: auto;
+            .pm-group:first-child {
+                break-before: auto;
+                page-break-before: auto;
             }
         }
         body {
@@ -619,7 +625,7 @@ function JobLog() {
             word-wrap: break-word;
         }
         tr:nth-child(even) {
-            background-color: #f9f9f9;
+            background-color: #dbeafe;
         }
         tr.grayed-row, tr.grayed-row:nth-child(even) {
             background-color: #d1d5db;
@@ -639,9 +645,8 @@ function JobLog() {
         // PM blocks are ordered alphabetically by PM, with each block internally sorted by Job #.
         Object.keys(jobsByPM).sort((pmA, pmB) => {
             return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
-        }).forEach((pm, pmIndex, pmArray) => {
+        }).forEach((pm) => {
             const pmJobs = jobsByPM[pm];
-            const isLastPM = pmIndex === pmArray.length - 1;
 
             // Build colgroup with normalized widths for uniform columns across pages
             const defaultWeight = 5;
@@ -652,7 +657,7 @@ function JobLog() {
             }).join('') + '</colgroup>';
 
             printHTML += `
-    <div class="pm-group"${isLastPM ? '' : ' style="page-break-after: always;"'}>
+    <div class="pm-group">
         <div class="pm-header">PM: ${pm}</div>
         <table>
             ${colgroup}
@@ -669,7 +674,9 @@ function JobLog() {
 
             pmJobs.forEach(job => {
                 const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
-                printHTML += `<tr${isInstallComplete ? ' class="grayed-row"' : ''}>`;
+                const isComplete = job['Stage'] === 'Complete';
+                const isGrayed = isInstallComplete || isComplete;
+                printHTML += `<tr${isGrayed ? ' class="grayed-row"' : ''}>`;
                 columnHeaders.forEach(column => {
                     // Render Urgency column as colored banana SVGs
                     if (column === 'Urgency') {

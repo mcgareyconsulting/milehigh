@@ -157,6 +157,33 @@ class UpdateStageCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 
+        # Complete is terminal — fab_order is always NULL.
+        if self.stage == 'Complete' and old_fab_order_for_update is not None:
+            payload_from = (
+                None if (isinstance(old_fab_order_for_update, float) and math.isnan(old_fab_order_for_update))
+                else old_fab_order_for_update
+            )
+            fab_order_event = JobEventService.create(
+                job=self.job_id,
+                release=self.release,
+                action='update_fab_order',
+                source=self.source,
+                payload={
+                    'from': payload_from,
+                    'to': None,
+                    'reason': 'stage_change_complete_clears_fab_order',
+                },
+            )
+            if fab_order_event is None:
+                logger.warning(
+                    f"Event already exists for fab_order clear on job "
+                    f"{self.job_id}-{self.release}"
+                )
+            else:
+                job_record.fab_order = None
+                JobEventService.close(fab_order_event.id)
+                extras['fab_order'] = None
+
         # fab_order auto-assign for fixed-tier stages
         if fab_order_to_set is not None and fab_order_to_set != old_fab_order_for_update:
             payload_from = (
