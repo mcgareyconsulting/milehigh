@@ -189,50 +189,60 @@ class TestRedDateContributesToQueue:
 
 class TestDefaultFabOrderSentinel:
     """Releases with the DEFAULT_FAB_ORDER sentinel (80.555) — meaning no explicit fab_order
-    has been assigned — should still cascade, but should not affect other releases' queue math."""
+    has been assigned — must still fully participate in queue calculations so the projected
+    run-out reflects their hours, and they must cascade through each other in some stable
+    order rather than collapsing onto a single date."""
 
-    def test_sentinel_release_still_gets_cascaded_date(self):
+    def test_sentinel_release_contributes_to_later_releases(self):
         from app.api.helpers import DEFAULT_FAB_ORDER
 
-        jobs = [
-            {'fab_hrs': 80.0, 'install_hrs': 40.0, 'stage': 'Released', 'fab_order': 5},
-            {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Released', 'fab_order': DEFAULT_FAB_ORDER},
-        ]
-        results = calculate_all_job_scheduling(jobs, reference_date=date(2026, 4, 1))
-
-        # Sentinel release still gets a calculated install date (cascade does not stall)
-        assert results[1]['install_start_date'] is not None
-        assert results[1]['install_complete_date'] is not None
-        # And it sees the explicit-order release as in front of it
-        assert results[1]['hours_in_front'] == pytest.approx(80.0)
-
-    def test_sentinel_release_does_not_inflate_others(self):
-        from app.api.helpers import DEFAULT_FAB_ORDER
-
-        # An explicit fab_order release greater than the sentinel value (80.555) should NOT
-        # see the sentinel-order release as in front of it.
+        # A release with a higher explicit fab_order should still see the sentinel release
+        # as in front of it — its remaining hours count toward the run-out.
         jobs = [
             {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Released', 'fab_order': DEFAULT_FAB_ORDER},
             {'fab_hrs': 40.0, 'install_hrs': 20.0, 'stage': 'Released', 'fab_order': 100},
         ]
         results = calculate_all_job_scheduling(jobs, reference_date=date(2026, 4, 1))
 
-        # Release with fab_order=100 has nothing real in front of it
-        assert results[1]['hours_in_front'] == pytest.approx(0.0)
+        assert results[1]['hours_in_front'] == pytest.approx(60.0)
 
-    def test_multiple_sentinel_releases_all_cascade(self):
+    def test_multiple_sentinel_releases_cascade_through_each_other(self):
         from app.api.helpers import DEFAULT_FAB_ORDER
 
+        # Three sentinel releases must cascade in list order, each with strictly more
+        # hours-in-front than the previous, so the run-out reflects their cumulative time.
         jobs = [
             {'fab_hrs': 80.0, 'install_hrs': 40.0, 'stage': 'Released', 'fab_order': 5},
+            {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Released', 'fab_order': DEFAULT_FAB_ORDER},
+            {'fab_hrs': 40.0, 'install_hrs': 20.0, 'stage': 'Released', 'fab_order': DEFAULT_FAB_ORDER},
+            {'fab_hrs': 20.0, 'install_hrs': 10.0, 'stage': 'Released', 'fab_order': DEFAULT_FAB_ORDER},
+        ]
+        results = calculate_all_job_scheduling(jobs, reference_date=date(2026, 4, 1))
+
+        # First sentinel sees only the explicit-order release in front (80h).
+        assert results[1]['hours_in_front'] == pytest.approx(80.0)
+        # Second sentinel adds the first sentinel's 60h.
+        assert results[2]['hours_in_front'] == pytest.approx(80.0 + 60.0)
+        # Third sentinel adds the first and second sentinels' 60h + 40h.
+        assert results[3]['hours_in_front'] == pytest.approx(80.0 + 60.0 + 40.0)
+
+        # All three sentinel releases must produce valid install dates (cascade does not stall).
+        for idx in (1, 2, 3):
+            assert results[idx]['install_start_date'] is not None
+            assert results[idx]['install_complete_date'] is not None
+
+    def test_sentinel_release_run_out_includes_all_work(self):
+        from app.api.helpers import DEFAULT_FAB_ORDER
+
+        # The last release in the queue (a sentinel) should reflect the cumulative
+        # remaining hours of every other non-hard-date release in the queue.
+        jobs = [
+            {'fab_hrs': 80.0, 'install_hrs': 40.0, 'stage': 'Released', 'fab_order': 5},
+            {'fab_hrs': 100.0, 'install_hrs': 50.0, 'stage': 'Released', 'fab_order': 10},
             {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Released', 'fab_order': DEFAULT_FAB_ORDER},
             {'fab_hrs': 40.0, 'install_hrs': 20.0, 'stage': 'Released', 'fab_order': DEFAULT_FAB_ORDER},
         ]
         results = calculate_all_job_scheduling(jobs, reference_date=date(2026, 4, 1))
 
-        # Both sentinel releases get cascaded dates
-        assert results[1]['install_start_date'] is not None
-        assert results[2]['install_start_date'] is not None
-        # Both see only the explicit-order release in front (each other is ambiguous, not counted)
-        assert results[1]['hours_in_front'] == pytest.approx(80.0)
-        assert results[2]['hours_in_front'] == pytest.approx(80.0)
+        # The final sentinel sees: both explicit-order releases + the first sentinel.
+        assert results[3]['hours_in_front'] == pytest.approx(80.0 + 100.0 + 60.0)
