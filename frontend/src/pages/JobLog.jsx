@@ -1158,21 +1158,22 @@ function JobLog() {
                                                                 className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-xs' : 'py-0.5 text-[10px]'} text-center font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
-                                                                <div className="flex items-center justify-center">
-                                                                    <span>{displayHeader}</span>
-                                                                    {isFilterable && (
-                                                                        <ColumnHeaderFilter
-                                                                            column={column}
-                                                                            values={colInfo?.values ?? []}
-                                                                            hasBlanks={colInfo?.hasBlanks ?? false}
-                                                                            selected={new Set(colSelected)}
-                                                                            onChange={(next) => setColumnFilter(column, [...next])}
-                                                                            sort={columnSort}
-                                                                            onSort={(dir) => setColumnSort(column, dir)}
-                                                                            isActive={colSelected.length > 0}
-                                                                        />
-                                                                    )}
-                                                                </div>
+                                                                {isFilterable ? (
+                                                                    <ColumnHeaderFilter
+                                                                        column={column}
+                                                                        values={colInfo?.values ?? []}
+                                                                        hasBlanks={colInfo?.hasBlanks ?? false}
+                                                                        selected={new Set(colSelected)}
+                                                                        onChange={(next) => setColumnFilter(column, [...next])}
+                                                                        sort={columnSort}
+                                                                        onSort={(dir) => setColumnSort(column, dir)}
+                                                                        isActive={colSelected.length > 0}
+                                                                    >
+                                                                        {displayHeader}
+                                                                    </ColumnHeaderFilter>
+                                                                ) : (
+                                                                    displayHeader
+                                                                )}
                                                             </th>
                                                         );
                                                     })}

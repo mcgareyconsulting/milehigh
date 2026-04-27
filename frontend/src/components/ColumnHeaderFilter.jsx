@@ -3,17 +3,23 @@
  * schema_version: 1
  * purpose: Excel-style per-column header filter popover for the Job Log table.
  * exports:
- *   ColumnHeaderFilter: Trigger button + popover with search, sort, and value checklist.
- * imports_from: [react]
+ *   ColumnHeaderFilter: Wraps a header label as the trigger; opens a portaled popover with search, sort, and value checklist.
+ * imports_from: [react, react-dom]
  * imported_by: [../pages/JobLog.jsx]
  * invariants:
  *   - selected is treated as a Set; '(Blanks)' is the sentinel for null/empty values.
  *   - Empty selection means "no filter on this column".
  *   - Closes on outside click or Escape; commits via Apply, never on individual checkbox toggles.
+ *   - Popover is rendered via portal at document.body and positioned with fixed coords so it
+ *     escapes the table's overflow:auto clip and stays inside the viewport.
  */
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 const BLANKS = '(Blanks)';
+const POPOVER_WIDTH = 224;        // matches w-56
+const POPOVER_MAX_HEIGHT = 360;   // approximate; just used for vertical clamp
+const VIEWPORT_PAD = 8;
 
 export default function ColumnHeaderFilter({
     column,
@@ -24,24 +30,61 @@ export default function ColumnHeaderFilter({
     sort,
     onSort,
     isActive,
+    children,
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [draft, setDraft] = useState(selected);
-    const containerRef = useRef(null);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const triggerRef = useRef(null);
     const popoverRef = useRef(null);
 
-    // Sync draft from props when popover opens (so "Cancel by close" doesn't persist edits)
+    // Sync draft from props when popover opens (so closing without Apply discards edits)
     useEffect(() => {
         if (open) setDraft(new Set(selected));
     }, [open, selected]);
 
+    const updatePosition = useCallback(() => {
+        const el = triggerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        // Prefer right-aligning to the trigger so the dropdown opens "from" the header,
+        // but clamp to viewport on both sides.
+        let left = rect.right - POPOVER_WIDTH;
+        if (left < VIEWPORT_PAD) left = VIEWPORT_PAD;
+        if (left + POPOVER_WIDTH > vw - VIEWPORT_PAD) left = vw - VIEWPORT_PAD - POPOVER_WIDTH;
+        // Prefer below; flip above if it would overflow.
+        let top = rect.bottom + 4;
+        if (top + POPOVER_MAX_HEIGHT > vh - VIEWPORT_PAD) {
+            const above = rect.top - 4 - POPOVER_MAX_HEIGHT;
+            if (above >= VIEWPORT_PAD) top = rect.top - 4 - POPOVER_MAX_HEIGHT;
+            else top = Math.max(VIEWPORT_PAD, vh - VIEWPORT_PAD - POPOVER_MAX_HEIGHT);
+        }
+        setCoords({ top, left });
+    }, []);
+
+    // Position on open + keep in sync with scroll/resize while open
+    useLayoutEffect(() => {
+        if (!open) return undefined;
+        updatePosition();
+        const onScroll = () => updatePosition();
+        const onResize = () => updatePosition();
+        window.addEventListener('scroll', onScroll, true);
+        window.addEventListener('resize', onResize);
+        return () => {
+            window.removeEventListener('scroll', onScroll, true);
+            window.removeEventListener('resize', onResize);
+        };
+    }, [open, updatePosition]);
+
     // Outside click + Escape close
     useEffect(() => {
-        if (!open) return;
+        if (!open) return undefined;
         const onMouseDown = (e) => {
             if (popoverRef.current && popoverRef.current.contains(e.target)) return;
-            if (containerRef.current && containerRef.current.contains(e.target)) return;
+            if (triggerRef.current && triggerRef.current.contains(e.target)) return;
             setOpen(false);
             setSearch('');
         };
@@ -111,47 +154,46 @@ export default function ColumnHeaderFilter({
     const sortDir = sort?.column === column ? sort.direction : null;
 
     return (
-        <span ref={containerRef} className="relative inline-flex" onMouseDown={(e) => e.stopPropagation()}>
+        <>
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={(e) => {
                     e.stopPropagation();
                     setOpen((v) => !v);
                 }}
-                className={`ml-1 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-slate-400'}`}
-                aria-label={`Filter ${column}`}
+                className={`inline-flex items-center justify-center gap-1 cursor-pointer px-1 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-inherit'}`}
                 aria-haspopup="true"
                 aria-expanded={open}
             >
-                {isActive ? (
+                {children}
+                {isActive && (
                     <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true">
                         <path d="M1 2h14l-5.5 6.5V14L6.5 12V8.5L1 2z" />
-                    </svg>
-                ) : (
-                    <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                        <path d="M3 4l5 6 5-6H3z" strokeLinejoin="round" strokeLinecap="round" />
                     </svg>
                 )}
             </button>
 
-            {open && (
+            {open && createPortal(
                 <div
                     ref={popoverRef}
-                    className="absolute right-0 top-full mt-1 z-30 w-56 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-500 rounded-md shadow-lg text-left normal-case tracking-normal font-normal text-gray-800 dark:text-slate-100"
+                    style={{ position: 'fixed', top: coords.top, left: coords.left, width: POPOVER_WIDTH }}
+                    className="z-[1000] bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-500 rounded-md shadow-lg text-left normal-case tracking-normal font-normal text-gray-800 dark:text-slate-100"
                     onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
                 >
                     <div className="flex border-b border-gray-200 dark:border-slate-600">
                         <button
                             type="button"
                             onClick={() => onSort('asc')}
-                            className={`flex-1 px-2 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-slate-700 ${sortDir === 'asc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                            className={`flex-1 px-2 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tl-md ${sortDir === 'asc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                         >
                             Sort A→Z
                         </button>
                         <button
                             type="button"
                             onClick={() => onSort('desc')}
-                            className={`flex-1 px-2 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 ${sortDir === 'desc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                            className={`flex-1 px-2 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tr-md ${sortDir === 'desc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                         >
                             Sort Z→A
                         </button>
@@ -227,8 +269,9 @@ export default function ColumnHeaderFilter({
                             Apply
                         </button>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
-        </span>
+        </>
     );
 }
