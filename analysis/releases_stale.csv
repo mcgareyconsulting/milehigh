@@ -1,0 +1,93 @@
+job,release,stage,drafter,pm,job_name,days_stale,fab_hrs,fab_order
+440,279,Released,CBA,RL,Evergreen - Outlook Green Valley Ranch,42.57262597001157,6.7,80.555
+410,132,Store at MHMW for shipping,CBA,RL,Lennar - Columnbine Square,38.183698409189816,36.3,2.0
+450,193,Store at MHMW for shipping,CBA,DR,Marrow - Sandstone Ranch,29.177531026284722,32.8,2.0
+510,151,Hold,DCR,RL,W.E. O'Neill - Idaho Springs Police Dept.,21.944749283587964,5.5,80.555
+190,398,Store at MHMW for shipping,DCR,GA,Hinton - Metro Center,18.20056680511574,12.5,2.0
+170,463,Welded QC,DCR,RL,Garrett -Banyan High Point,18.020012424768517,7.9,24.0
+440,439,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,17.263365253425928,6.0,27.0
+170,457,Store at MHMW for shipping,FMW,RL,Garrett -Banyan High Point,17.119471572835646,67.5,2.0
+170,451,Store at MHMW for shipping,FMW,RL,Garrett -Banyan High Point,17.119366415208333,45.6,2.0
+550,480,Cut start,DCR,DR,New Generation Construction - 4th St. North,17.105401916458334,5.0,9.0
+170,461,Welded QC,DCR,RL,Garrett -Banyan High Point,16.939642638599537,7.5,20.0
+170,425,Welded QC,DCR,RL,Garrett -Banyan High Point,15.98003840670139,23.3,16.0
+170,448,Welded QC,DCR,RL,Garrett -Banyan High Point,15.97995971082176,7.8,13.0
+170,453,Welded QC,DCR,RL,Garrett -Banyan High Point,15.971699207002315,1.5,30.0
+450,314,Welded QC,DCR,DR,Marrow - Sandstone Ranch,15.967838089722223,26.0,7.0
+450,316,Welded QC,DCR,DR,Marrow - Sandstone Ranch,15.967751875046295,39.6,9.0
+450,301,Welded QC,DCR,DR,Marrow - Sandstone Ranch,15.967338460960649,16.0,4.0
+450,300,Welded QC,DCR,DR,Marrow - Sandstone Ranch,15.967251294386575,45.0,4.0
+370,244,Welded QC,DCR,GA,Fairfield Development - Vista Highlands,15.966823956782408,10.0,21.0
+500,338,Welded QC,DCR,GA,Brinkman - Novel Flatiron,15.96656351599537,38.8,17.0
+370,262,Welded QC,DCR,GA,Fairfield Development - Vista Highlands,15.966202504224537,5.0,10.0
+370,261,Welded QC,DCR,GA,Fairfield Development - Vista Highlands,15.966063529548611,5.0,11.0
+500,339,Welded QC,DCR,GA,Brinkman - Novel Flatiron,15.965775120624999,41.7,18.0
+170,412,Welded QC,DCR,RL,Garrett -Banyan High Point,15.965435031157408,151.4,12.0
+170,456,Welded QC,DCR,RL,Garrett -Banyan High Point,15.965313193344908,3.5,15.0
+370,509,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,15.92260112193287,0.0,2.0
+370,218,Shipping planning,RJA,GA,Fairfield Development - Vista Highlands,14.718400904166666,12.5,2.0
+450,313,Welded QC,DCR,DR,Marrow - Sandstone Ranch,14.262539633171295,18.0,38.0
+370,507,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,11.136334470324075,0.0,2.0
+370,501,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,11.136252789768518,0.0,2.0
+500,154,Store at MHMW for shipping,RJA,GA,Brinkman - Novel Flatiron,11.136196325254629,6.0,2.0
+380,514,Store at MHMW for shipping,RJA,GA,Brinkman - Marshall Pointe,11.136104012708333,2.0,2.0
+450,315,Welded QC,DCR,DR,Marrow - Sandstone Ranch,9.887071696539351,22.0,39.0
+370,497,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,8.130750175405092,0.0,2.0
+370,500,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,8.130711331168982,0.0,2.0
+370,502,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,8.13067128241898,0.0,2.0
+370,508,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,8.130648427210648,0.0,2.0
+370,534,Store at MHMW for shipping,RJA,GA,Fairfield Development - Vista Highlands,8.130612655868056,90.0,2.0
+370,243,Store at MHMW for shipping,DCR,GA,Fairfield Development - Vista Highlands,8.11314106480324,10.0,2.0
+480,511,Welded QC,DCR,GA,Wood Partners - Alta Flatirons,7.939820264108797,0.5,48.0
+170,513,Welded QC,DCR,RL,Garrett -Banyan High Point,7.879263075972222,109.71,49.0
+440,521,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,4.214372434641204,3.0,52.0
+440,518,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,4.213160683576389,6.0,58.0
+550,479,Welded QC,DCR,DR,New Generation Construction - 4th St. North,4.073845568564815,16.4,51.0
+290,153,Shipping planning,DCR,GA,Martin Residence,4.041227263761574,30.9,2.0
+370,247,Released,DCR,GA,Fairfield Development - Vista Highlands,4.0362140246875,10.0,80.555
+450,545,Cut start,CBA,DR,Marrow - Sandstone Ranch,4.005376269027778,91.44,18.0
+440,440,Store at MHMW for shipping,DCR,RL,Evergreen - Outlook Green Valley Ranch,3.1606253135532407,6.0,2.0
+440,441,Store at MHMW for shipping,DCR,RL,Evergreen - Outlook Green Valley Ranch,3.1369395479166666,6.0,2.0
+170,454,Welded QC,DCR,RL,Garrett -Banyan High Point,3.1356139633449076,152.5,50.0
+440,445,Paint complete,CBA,RL,Evergreen - Outlook Green Valley Ranch,3.1140493629745367,1.3,2.0
+440,519,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,2.9600076871412035,6.0,5.0
+440,522,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,2.9598941022222225,3.0,5.0
+440,523,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,2.9598078051273147,3.0,5.0
+190,502,Welded QC,DCR,GA,Hinton - Metro Center,2.9588053853935183,18.25,55.0
+560,524,Fitup Start,CBA,GA,Wood Partners - Alta Metro Center,2.879226190925926,137.5,16.0
+480,430,Paint Start,DEP,GA,Wood Partners - Alta Flatirons,2.242345507037037,99.2,3.0
+450,549,Welded QC,DR,DR,Marrow - Sandstone Ranch,2.1672693656944446,2.0,10.0
+500,515,Material Ordered,DCR,GA,Brinkman - Novel Flatiron,2.1232104510995367,37.5,4.0
+390,533,Welded QC,CBA,RL,Thompson Thrift - Heritage on Hover,2.086861428900463,13.75,5.0
+390,535,Welded QC,CBA,RL,Thompson Thrift - Heritage on Hover,2.0867799357175927,13.75,7.0
+440,334,Released,CBA,RL,Evergreen - Outlook Green Valley Ranch,2.0852085905902777,3.6,3.0
+390,534,Welded QC,CBA,RL,Thompson Thrift - Heritage on Hover,2.0849163797337966,13.75,8.0
+440,520,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,2.084835979375,6.0,6.0
+190,550,Fit Up Complete.,DCR,GA,Hinton - Metro Center,2.0005262389814815,10.0,15.0
+170,567,Cut start,DCR,RL,Garrett -Banyan High Point,1.9180332925925925,101.63,20.0
+560,526,Cut start,CBA,GA,Wood Partners - Alta Metro Center,1.9179440460532409,8.25,21.0
+615,551,Cut start,CBA,DR,Schuler Residence - Fencing,1.917784772685185,23.22,80.55
+420,498,Cut start,DEP,DR,Thompson Thrift - The Stacks at Wheat Ridge,1.9170161124884262,3.0,80.555
+440,508,Cut start,DCR,RL,Evergreen - Outlook Green Valley Ranch,1.9169513818287036,16.0,80.555
+170,568,Cut start,DCR,RL,Garrett -Banyan High Point,1.916562529537037,2.5,80.555
+380,525,Cut start,DCR,GA,Brinkman - Marshall Pointe,1.9164446262500001,14.13,80.555
+530,468,Shipping planning,CBA,DR,Shaw - East Oak Townhomes,1.1780753966319444,1.9,2.0
+170,516,Fitup Start,DCR,RL,Garrett -Banyan High Point,1.177005710925926,20.0,17.0
+170,504,Welded QC,DCR,RL,Garrett -Banyan High Point,1.174741654849537,1.5,14.0
+380,258,Store at MHMW for shipping,CBA,GA,Brinkman - Marshall Pointe,1.1675809854282408,12.1,2.0
+500,543,Fitup Start,DCR,GA,Brinkman - Novel Flatiron,1.1652576478819445,53.37,16.5
+440,486,Shipping planning,DEP,RL,Evergreen - Outlook Green Valley Ranch,1.145200219363426,6.0,2.0
+410,136,Shipping planning,CBA,RL,Lennar - Columnbine Square,1.1450351299074075,36.3,2.0
+410,137,Shipping planning,CBA,RL,Lennar - Columnbine Square,1.1446609182407408,36.3,2.0
+410,138,Shipping planning,CBA,RL,Lennar - Columnbine Square,1.1446046559837963,36.3,2.0
+190,484,Paint Start,DCR,GA,Hinton - Metro Center,1.1084742628472222,59.7,3.0
+440,492,Paint complete,DEP,RL,Evergreen - Outlook Green Valley Ranch,1.0980149548726852,6.0,2.0
+440,490,Paint complete,DEP,RL,Evergreen - Outlook Green Valley Ranch,1.0979537383217592,6.0,2.0
+500,548,Fit Up Complete.,DCR,GA,Brinkman - Novel Flatiron,1.0583734988194444,106.0,19.0
+596,411,Fitup Start,CBA,RL,Burback Residence,1.0518051696875,9.63,13.0
+480,433,Store at MHMW for shipping,DCR,GA,Wood Partners - Alta Flatirons,1.021063000474537,0.0,2.0
+170,460,Paint complete,DCR,RL,Garrett -Banyan High Point,1.013960385486111,5.0,2.0
+440,450,Paint complete,DCR,RL,Evergreen - Outlook Green Valley Ranch,1.0138735895949074,6.0,2.0
+170,446,Paint complete,DCR,RL,Garrett -Banyan High Point,1.013762668726852,3.5,2.0
+440,517,Welded QC,DCR,RL,Evergreen - Outlook Green Valley Ranch,0.8906138922222223,6.0,5.0
+450,531,Paint complete,DCR,DR,Marrow - Sandstone Ranch,0.8037665608217592,1.0,2.0

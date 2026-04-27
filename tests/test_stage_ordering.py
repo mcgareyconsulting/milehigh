@@ -138,7 +138,8 @@ def test_get_fixed_tier():
     """Fixed-tier stages return their tier value."""
     assert get_fixed_tier("Shipping completed") == 1
     assert get_fixed_tier("Shipping Complete") == 1
-    assert get_fixed_tier("Complete") == 1
+    # Complete is intentionally not in any tier — it holds fab_order=NULL.
+    assert get_fixed_tier("Complete") is None
     assert get_fixed_tier("Paint complete") == 2
     assert get_fixed_tier("Paint Complete") == 2
     assert get_fixed_tier("Store at MHMW for shipping") == 2
@@ -328,8 +329,8 @@ def test_fab_order_accepts_low_values_on_non_tier_stage(app):
         assert wqc.fab_order == 1
 
 
-def test_fixed_tier_overrides_input(app):
-    """Fixed-tier stage always gets the tier value regardless of input."""
+def test_complete_forces_null_fab_order(app):
+    """Stage='Complete' is terminal — fab_order is always forced to NULL."""
     with app.app_context():
         complete = make_release(1, "A", "Complete", "COMPLETE", None)
         db.session.commit()
@@ -339,7 +340,21 @@ def test_fixed_tier_overrides_input(app):
         result = cmd.execute()
 
         db.session.refresh(complete)
-        assert complete.fab_order == 1
+        assert complete.fab_order is None
+
+
+def test_shipping_completed_overrides_input(app):
+    """Shipping completed (tier 1) always gets fab_order=1 regardless of input."""
+    with app.app_context():
+        sc = make_release(1, "A", "Shipping completed", "COMPLETE", None)
+        db.session.commit()
+
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=99)
+        result = cmd.execute()
+
+        db.session.refresh(sc)
+        assert sc.fab_order == 1
 
 
 def test_fixed_tier_paint_complete(app):
@@ -446,8 +461,8 @@ def test_duplicate_fab_order_no_cascade(app):
 # Integration: stage change route
 # ---------------------------------------------------------------------------
 
-def test_stage_change_to_complete_sets_tier_1(client, app):
-    """Moving to Complete auto-sets fab_order=1 and job_comp='X'."""
+def test_stage_change_to_complete_clears_fab_order(client, app):
+    """Moving to Complete clears fab_order to NULL and cascades job_comp='X'."""
     with app.app_context():
         make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
@@ -463,7 +478,7 @@ def test_stage_change_to_complete_sets_tier_1(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == 1
+        assert job.fab_order is None
         assert job.job_comp == 'X'
 
 
@@ -973,10 +988,11 @@ def test_endpoint_no_cascade_many_jobs(client, app):
 # ---------------------------------------------------------------------------
 
 def test_renumber_sets_fixed_tiers(app):
-    """renumber_fab_orders sets Complete->1, Paint complete->2."""
+    """renumber_fab_orders clears Complete to NULL, Shipping completed->1, Paint complete->2."""
     with app.app_context():
         make_release(1, "A", "Complete", "COMPLETE", 50)
         make_release(2, "A", "Paint complete", "READY_TO_SHIP", 99)
+        make_release(3, "A", "Shipping completed", "COMPLETE", 88)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
@@ -984,8 +1000,10 @@ def test_renumber_sets_fixed_tiers(app):
 
         c = Releases.query.filter_by(job=1, release="A").first()
         p = Releases.query.filter_by(job=2, release="A").first()
-        assert c.fab_order == 1
+        s = Releases.query.filter_by(job=3, release="A").first()
+        assert c.fab_order is None
         assert p.fab_order == 2
+        assert s.fab_order == 1
 
 
 def test_renumber_dynamic_sequential(app):
@@ -1046,25 +1064,34 @@ def test_renumber_dry_run_no_commit(app):
 def test_renumber_returns_stats(app):
     """Stats dict has correct counts."""
     with app.app_context():
+        # Stage='Complete' starts with a stale fab_order=50; should be cleared to NULL.
         make_release(1, "A", "Complete", "COMPLETE", 50)
         make_release(2, "A", "Paint complete", "READY_TO_SHIP", 99)
         make_release(3, "A", "Weld Complete", "FABRICATION", 75)
         make_release(4, "A", "Released", "FABRICATION", 80)
+        # Add a Shipping completed so fixed_tier_1 has something to renumber.
+        make_release(5, "A", "Shipping completed", "COMPLETE", 88)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
         stats = renumber_fab_orders()
 
+        assert stats['complete_cleared'] == 1
         assert stats['fixed_tier_1'] == 1
         assert stats['fixed_tier_2'] == 1
         assert stats['dynamic'] == 2
-        assert stats['total'] == 4
+        assert stats['total'] == 5
+
+        # Verify Complete actually had its fab_order cleared.
+        c = Releases.query.filter_by(job=1, release="A").first()
+        assert c.fab_order is None
 
 
 def test_renumber_idempotent(app):
     """Already-correct data returns total=0."""
     with app.app_context():
-        make_release(1, "A", "Complete", "COMPLETE", 1)
+        # Stage='Complete' is correct only when fab_order is NULL.
+        make_release(1, "A", "Complete", "COMPLETE", None)
         make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
         make_release(3, "A", "Welded QC", "READY_TO_SHIP", 3)
         make_release(4, "A", "Released", "FABRICATION", 4)

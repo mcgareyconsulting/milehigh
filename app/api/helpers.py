@@ -58,9 +58,12 @@ STAGE_TO_GROUP = {
 # Default fab_order for newly created releases when no value is provided
 DEFAULT_FAB_ORDER = 80.555
 
-# Fixed tiers: stages auto-assigned to a shared fab_order value (not user-orderable)
+# Fixed tiers: stages auto-assigned to a shared fab_order value (not user-orderable).
+# Note: Stage='Complete' is intentionally NOT in any tier — Complete releases hold
+# fab_order=NULL (terminal stage; nothing to order). The fab_order migration
+# clears any stale value on Complete releases.
 FIXED_TIER_STAGES = {
-    1: ["Shipping completed", "Shipping Complete", "Complete"],
+    1: ["Shipping completed", "Shipping Complete"],
     2: ["Paint complete", "Paint Complete", "Store at MHMW for shipping", "Store at Shop", "Shipping planning", "Shipping Planning"],
 }
 

@@ -84,6 +84,15 @@ class UpdateFabOrderCommand:
                 f"(stage={job_record.stage}), overriding fab_order to {tier}"
             )
 
+        # 1c. Complete is terminal — no ordering. Always force fab_order to None.
+        if (job_record.stage or "").strip().lower() == "complete":
+            if self.fab_order is not None:
+                logger.info(
+                    f"Job {self.job_id}-{self.release} is Complete; "
+                    f"forcing fab_order to NULL (was {self.fab_order})"
+                )
+            self.fab_order = None
+
         # 2️⃣ Create event for the current job (handles deduplication, logging internally)
         # Ensure payload values are valid (not NaN) - convert to None if needed
         payload_from = None if (isinstance(old_fab_order, float) and math.isnan(old_fab_order)) else old_fab_order
