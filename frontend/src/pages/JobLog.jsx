@@ -211,6 +211,12 @@ function JobLog() {
         'Shipping completed': 14, 'Complete': 15,
     };
 
+    // Defensive Complete check — tolerates whitespace + case drift in the stage value.
+    // Otherwise STAGE_COMPLETENESS['Complete']=15 (highest) would push these rows to
+    // the top of the descending sort instead of the bottom.
+    const isCompleteStage = (stage) =>
+        (stage || '').toString().trim().toLowerCase() === 'complete';
+
     // When Review mode is enabled, sort independently of other sort behavior:
     // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
     // 2) within each PM, sort by Project # ascending,
@@ -234,8 +240,8 @@ function JobLog() {
             if (jobA !== jobB) return jobA - jobB;
 
             // Same Project #: "Complete" pinned to bottom, everything else descending by completeness
-            const isCompleteA = a['Stage'] === 'Complete';
-            const isCompleteB = b['Stage'] === 'Complete';
+            const isCompleteA = isCompleteStage(a['Stage']);
+            const isCompleteB = isCompleteStage(b['Stage']);
             if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
             const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
             const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
@@ -543,8 +549,8 @@ function JobLog() {
                 const jobA = a['Job #'] || 0;
                 const jobB = b['Job #'] || 0;
                 if (jobA !== jobB) return jobA - jobB;
-                const isCompleteA = a['Stage'] === 'Complete';
-                const isCompleteB = b['Stage'] === 'Complete';
+                const isCompleteA = isCompleteStage(a['Stage']);
+                const isCompleteB = isCompleteStage(b['Stage']);
                 if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
                 const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
                 const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
@@ -674,7 +680,7 @@ function JobLog() {
 
             pmJobs.forEach(job => {
                 const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
-                const isComplete = job['Stage'] === 'Complete';
+                const isComplete = isCompleteStage(job['Stage']);
                 const isGrayed = isInstallComplete || isComplete;
                 printHTML += `<tr${isGrayed ? ' class="grayed-row"' : ''}>`;
                 columnHeaders.forEach(column => {
