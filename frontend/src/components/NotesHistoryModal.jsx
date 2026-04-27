@@ -156,9 +156,6 @@ export function NotesHistoryModal({ isOpen, onClose, job, release, currentNotes 
                                         <p className="text-sm text-gray-900 dark:text-slate-100 whitespace-pre-wrap break-words">
                                             {renderValue(p.to)}
                                         </p>
-                                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 whitespace-pre-wrap break-words">
-                                            was: {renderValue(p.from)}
-                                        </p>
                                     </li>
                                 );
                             })}
