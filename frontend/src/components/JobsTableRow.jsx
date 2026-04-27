@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
+import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 import { useTheme } from '../context/ThemeContext';
@@ -32,6 +33,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         return stashSession?.changesByKey?.[key] || null;
     };
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [showActionMenu, setShowActionMenu] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -894,7 +896,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b-2 border-white dark:border-slate-600 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`group ${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b-2 border-white dark:border-slate-600 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -1110,7 +1112,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center whitespace-normal ${pendingHighlight}`}
+                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center whitespace-normal ${pendingHighlight}`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -1135,6 +1137,24 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     rows={2}
                                     style={{ minWidth: '120px' }}
                                 />
+                                <button
+                                    type="button"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsNotesHistoryOpen(true);
+                                    }}
+                                    className="absolute top-0.5 right-0.5 p-0.5 rounded text-gray-400 hover:text-accent-600 dark:text-slate-400 dark:hover:text-accent-400 hover:bg-white dark:hover:bg-slate-800 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                    title="View notes history"
+                                    aria-label="View notes history"
+                                    tabIndex={-1}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                                        <path d="M3 3v5h5" />
+                                        <path d="M12 7v5l3 2" />
+                                    </svg>
+                                </button>
                                 <PendingHint field="notes" change={_stashChangeForCell} />
                             </td>
                         );
@@ -1387,6 +1407,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 job={row}
+            />
+            <NotesHistoryModal
+                isOpen={isNotesHistoryOpen}
+                onClose={() => setIsNotesHistoryOpen(false)}
+                job={row['Job #']}
+                release={row['Release #']}
             />
             <StartInstallDateModal
                 isOpen={isStartInstallModalOpen}
