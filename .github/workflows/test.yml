@@ -5,7 +5,8 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  backend:
+    name: Backend (pytest + coverage)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,12 +15,23 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run tests
-        run: pytest --tb=short --junit-xml=test-results.xml
+      - name: Run tests with coverage
+        # --cov-fail-under is set just below current measured coverage so this
+        # acts as a regression gate, not a ratchet. Bump it explicitly when
+        # adding meaningful new coverage. See tests/README.md.
+        run: |
+          pytest \
+            --tb=short \
+            --junit-xml=test-results.xml \
+            --cov \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=30
 
       - name: Upload test results
         if: always()
@@ -27,3 +39,31 @@ jobs:
         with:
           name: test-results
           path: test-results.xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+
+  frontend:
+    name: Frontend (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm run test

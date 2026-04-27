@@ -1,7 +1,16 @@
 venv
+.venv
 .env
 instance/
 .vscode/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+test-results.xml
 
 # Log files
 logs/

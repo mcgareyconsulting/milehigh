@@ -14,42 +14,14 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from app import create_app
 from app.models import Releases, db
 from app.api.helpers import STAGE_PROGRESSION_RANK
 from app.trello.list_mapper import TrelloListMapper
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures (app, mock_admin_user are in tests/conftest.py)
 # ---------------------------------------------------------------------------
-
-@pytest.fixture
-def app():
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    app.config["SECRET_KEY"] = "test-secret-key"
-
-    uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
-    assert "sandbox" not in uri.lower() and "render.com" not in uri
-
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.session.remove()
-        db.drop_all()
-
-
-@pytest.fixture
-def mock_admin_user():
-    user = Mock()
-    user.id = 1
-    user.username = "test_admin"
-    user.is_admin = True
-    user.is_active = True
-    return user
-
 
 @pytest.fixture(autouse=True)
 def setup_auth(mock_admin_user):
