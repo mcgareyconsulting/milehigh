@@ -39,8 +39,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [editValue, setEditValue] = useState('');
     const [saving, setSaving] = useState(false);
 
-    // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X)
-    const isComplete = row['Stage'] === 'Complete';
+    // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X).
+    // Tolerates whitespace + case drift on the stage value.
+    const isComplete = (row['Stage'] || '').toString().trim().toLowerCase() === 'complete';
 
     // Row is draggable (disabled for now)
     const isDraggable = false;
