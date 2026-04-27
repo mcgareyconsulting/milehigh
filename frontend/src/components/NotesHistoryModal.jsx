@@ -15,7 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { jobsApi } from '../services/jobsApi';
 
-export function NotesHistoryModal({ isOpen, onClose, job, release }) {
+export function NotesHistoryModal({ isOpen, onClose, job, release, currentNotes }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -67,6 +67,17 @@ export function NotesHistoryModal({ isOpen, onClose, job, release }) {
         return val;
     };
 
+    // Anchor the list with the live cell value. If the most recent event already
+    // matches it, the events feed is in sync — no synthetic entry needed.
+    // Otherwise prepend a "Current" item so users always see today's note,
+    // including for releases whose history predates event tracking.
+    const normalizedCurrent = (currentNotes ?? '').toString();
+    const latestTo = (events[0]?.payload?.to ?? '').toString();
+    const showCurrentSynthetic = normalizedCurrent !== '' && normalizedCurrent !== latestTo;
+    const displayItems = showCurrentSynthetic
+        ? [{ id: 'current', synthetic: true, value: currentNotes }, ...events]
+        : events;
+
     const modalContent = (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity"
@@ -103,26 +114,43 @@ export function NotesHistoryModal({ isOpen, onClose, job, release }) {
                             {error}
                         </p>
                     )}
-                    {!loading && !error && events.length === 0 && (
+                    {!loading && !error && displayItems.length === 0 && (
                         <p className="text-sm text-gray-500 dark:text-slate-400 italic">
                             No prior notes for this release.
                         </p>
                     )}
-                    {!loading && !error && events.length > 0 && (
+                    {!loading && !error && displayItems.length > 0 && (
                         <ul className="space-y-4">
-                            {events.map((ev) => {
-                                const p = ev.payload || {};
+                            {displayItems.map((item) => {
+                                if (item.synthetic) {
+                                    return (
+                                        <li
+                                            key={item.id}
+                                            className="border-l-2 border-accent-500 pl-3"
+                                        >
+                                            <div className="flex flex-wrap items-baseline gap-x-2 mb-1">
+                                                <span className="text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                                    Current
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-gray-900 dark:text-slate-100 whitespace-pre-wrap break-words">
+                                                {renderValue(item.value)}
+                                            </p>
+                                        </li>
+                                    );
+                                }
+                                const p = item.payload || {};
                                 return (
                                     <li
-                                        key={ev.id}
+                                        key={item.id}
                                         className="border-l-2 border-accent-500 pl-3"
                                     >
                                         <div className="flex flex-wrap items-baseline gap-x-2 mb-1">
                                             <span className="text-xs font-semibold text-gray-700 dark:text-slate-200">
-                                                {ev.created_at}
+                                                {item.created_at}
                                             </span>
                                             <span className="text-xs text-gray-500 dark:text-slate-400">
-                                                {ev.source || '—'}
+                                                {item.source || '—'}
                                             </span>
                                         </div>
                                         <p className="text-sm text-gray-900 dark:text-slate-100 whitespace-pre-wrap break-words">
