@@ -31,16 +31,6 @@ class TestGetDraftingWorkLoad:
         mock_service.get_dwl_submittals.assert_called_once_with(None, tab='open')
 
     @patch('app.brain.drafting_work_load.routes.DraftingWorkLoadService')
-    def test_get_drafting_work_load_filters_by_status(self, mock_service, client):
-        """Test that only Open and Draft submittals are returned (via service)."""
-        mock_service.get_dwl_submittals.return_value = []
-
-        response = client.get('/brain/drafting-work-load')
-
-        assert response.status_code == 200
-        mock_service.get_dwl_submittals.assert_called_once_with(None, tab='open')
-
-    @patch('app.brain.drafting_work_load.routes.DraftingWorkLoadService')
     def test_get_drafting_work_load_error_handling(self, mock_service, client):
         """Test error handling when service raises."""
         mock_service.get_dwl_submittals.side_effect = Exception("Database error")

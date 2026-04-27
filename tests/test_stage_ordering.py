@@ -1,69 +1,37 @@
 """
-Tests for unified fab_order ordering.
+Tests for unified fab_order ordering — DB-level and route-level.
 
 Covers:
-- Pure utility functions (_normalize_stage, get_stage_position, clamp_fab_order, get_fixed_tier)
 - get_fab_order_bounds DB queries (unified across all dynamic stages)
-- Integration: UpdateFabOrderCommand clamping and collision cascade
-- Integration: stage change route — fixed tiers and dynamic assignment
+- Stage-change route fixed-tier and dynamic assignment
+- PATCH /brain/update-fab-order endpoint: happy path, validation, collision
+- renumber_fab_orders migration helper
+- Edge cases (HOLD, none stage, reorder)
+- Stage bleed prevention
+
+Pure-helper tests live in test_stage_helpers.py.
+UpdateFabOrderCommand integration tests live in test_fab_order_command.py.
 """
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-from app import create_app
 from app.models import Releases, db
 from app.api.helpers import (
-    _normalize_stage,
     _get_all_variants_for_stages,
-    get_stage_position,
     get_fab_order_bounds,
-    clamp_fab_order,
-    get_fixed_tier,
     DYNAMIC_STAGE_ORDER,
     FIXED_TIER_STAGES,
 )
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures (app, client, mock_admin_user are in tests/conftest.py)
 # ---------------------------------------------------------------------------
-
-@pytest.fixture
-def app():
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    app.config["SECRET_KEY"] = "test-secret-key"
-
-    uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
-    assert "sandbox" not in uri.lower() and "render.com" not in uri
-
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.session.remove()
-        db.drop_all()
-
-
-@pytest.fixture
-def mock_admin_user():
-    user = Mock()
-    user.id = 1
-    user.username = "test_admin"
-    user.is_admin = True
-    user.is_active = True
-    return user
-
 
 @pytest.fixture(autouse=True)
 def setup_auth(mock_admin_user):
     with patch('app.auth.utils.get_current_user', return_value=mock_admin_user):
         yield
-
-
-@pytest.fixture
-def client(app):
-    return app.test_client()
 
 
 def make_release(job, release, stage, stage_group, fab_order, job_name="Test"):
@@ -78,112 +46,6 @@ def make_release(job, release, stage, stage_group, fab_order, job_name="Test"):
     db.session.add(r)
     db.session.flush()
     return r
-
-
-# ---------------------------------------------------------------------------
-# Pure utility tests (no DB)
-# ---------------------------------------------------------------------------
-
-def test_normalize_stage_exact():
-    assert _normalize_stage("Cut start") == "Cut start"
-
-
-def test_normalize_stage_variant():
-    result = _normalize_stage("CUT START")
-    assert result is not None
-    assert result.lower() == "cut start"
-
-
-def test_normalize_stage_unknown():
-    assert _normalize_stage("Flying Saucer") is None
-
-
-def test_normalize_stage_none():
-    assert _normalize_stage(None) is None
-
-
-def test_get_stage_position_dynamic_stages():
-    """Dynamic stages return their position in DYNAMIC_STAGE_ORDER."""
-    assert get_stage_position("Welded QC") == 0
-    assert get_stage_position("Paint Start") == 1
-    assert get_stage_position("Weld Complete") == 2
-    assert get_stage_position("Weld Start") == 3
-    assert get_stage_position("Fit Up Complete.") == 4
-    assert get_stage_position("Fitup Start") == 5
-    assert get_stage_position("Cut Complete") == 6
-    assert get_stage_position("Cut start") == 7
-    assert get_stage_position("Material Ordered") == 8
-    assert get_stage_position("Released") == 9
-
-
-def test_get_stage_position_fixed_tiers_return_none():
-    """Fixed-tier stages are not in the dynamic order."""
-    assert get_stage_position("Shipping Complete") is None
-    assert get_stage_position("Shipping completed") is None
-    assert get_stage_position("Complete") is None
-    assert get_stage_position("Paint complete") is None
-    assert get_stage_position("Store at MHMW for shipping") is None
-    assert get_stage_position("Shipping planning") is None
-
-
-def test_get_stage_position_hold_exempt():
-    assert get_stage_position("Hold") is None
-
-
-def test_get_stage_position_none():
-    assert get_stage_position(None) is None
-
-
-def test_get_fixed_tier():
-    """Fixed-tier stages return their tier value."""
-    assert get_fixed_tier("Shipping completed") == 1
-    assert get_fixed_tier("Shipping Complete") == 1
-    # Complete is intentionally not in any tier — it holds fab_order=NULL.
-    assert get_fixed_tier("Complete") is None
-    assert get_fixed_tier("Paint complete") == 2
-    assert get_fixed_tier("Paint Complete") == 2
-    assert get_fixed_tier("Store at MHMW for shipping") == 2
-    assert get_fixed_tier("Shipping planning") == 2
-
-
-def test_get_fixed_tier_dynamic_stages_return_none():
-    """Dynamic stages are not fixed tiers."""
-    assert get_fixed_tier("Released") is None
-    assert get_fixed_tier("Cut start") is None
-    assert get_fixed_tier("Welded QC") is None
-    assert get_fixed_tier("Hold") is None
-
-
-def test_clamp_below_lower():
-    assert clamp_fab_order(5, lower=10, upper=None) == 11
-
-
-def test_clamp_above_upper():
-    assert clamp_fab_order(20, lower=None, upper=15) == 14
-
-
-def test_clamp_in_range():
-    assert clamp_fab_order(12, lower=10, upper=15) == 12
-
-
-def test_clamp_no_bounds():
-    assert clamp_fab_order(7, lower=None, upper=None) == 7
-
-
-def test_clamp_at_lower_boundary():
-    assert clamp_fab_order(10, lower=10, upper=None) == 11
-
-
-def test_clamp_at_upper_boundary():
-    assert clamp_fab_order(15, lower=None, upper=15) == 15
-
-
-def test_clamp_at_upper_boundary_strict():
-    assert clamp_fab_order(15, lower=None, upper=15, strict_upper=True) == 14
-
-
-def test_clamp_above_upper_strict():
-    assert clamp_fab_order(20, lower=None, upper=15, strict_upper=True) == 14
 
 
 # ---------------------------------------------------------------------------
@@ -274,187 +136,6 @@ def test_bounds_self_excluded(app):
         lower, upper = get_fab_order_bounds("Weld Complete", 10, "A")
         assert lower is None
         assert upper is None
-
-
-# ---------------------------------------------------------------------------
-# Integration: UpdateFabOrderCommand
-# ---------------------------------------------------------------------------
-
-def test_fab_order_manual_edit_no_stage_bounds(app):
-    """Manual edit is not clamped to stage bounds — fully manual ordering."""
-    with app.app_context():
-        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
-        make_release(2, "A", "Weld Complete", "FABRICATION", 10)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=25)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            result = cmd.execute()
-
-        db.session.refresh(wqc)
-        # No bounds clamping — value is accepted as-is
-        assert wqc.fab_order == 25
-
-
-def test_fab_order_manual_edit_accepts_any_value_above_3(app):
-    """Manual edit accepts any value >= 3 regardless of other stages."""
-    with app.app_context():
-        make_release(1, "A", "Cut start", "FABRICATION", 20)
-        released = make_release(2, "A", "Released", "FABRICATION", 30)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=3)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            result = cmd.execute()
-
-        db.session.refresh(released)
-        # No bounds clamping — value is accepted (>= 3 minimum)
-        assert released.fab_order == 3
-
-
-def test_fab_order_accepts_low_values_on_non_tier_stage(app):
-    """Non-fixed-tier stages accept any user-provided fab_order — no floor."""
-    with app.app_context():
-        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=1)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            result = cmd.execute()
-
-        db.session.refresh(wqc)
-        assert wqc.fab_order == 1
-
-
-def test_complete_forces_null_fab_order(app):
-    """Stage='Complete' is terminal — fab_order is always forced to NULL."""
-    with app.app_context():
-        complete = make_release(1, "A", "Complete", "COMPLETE", None)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=99)
-        result = cmd.execute()
-
-        db.session.refresh(complete)
-        assert complete.fab_order is None
-
-
-def test_shipping_completed_overrides_input(app):
-    """Shipping completed (tier 1) always gets fab_order=1 regardless of input."""
-    with app.app_context():
-        sc = make_release(1, "A", "Shipping completed", "COMPLETE", None)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=99)
-        result = cmd.execute()
-
-        db.session.refresh(sc)
-        assert sc.fab_order == 1
-
-
-def test_fixed_tier_paint_complete(app):
-    """Paint complete always gets fab_order=2."""
-    with app.app_context():
-        pc = make_release(1, "A", "Paint complete", "READY_TO_SHIP", None)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=50)
-        result = cmd.execute()
-
-        db.session.refresh(pc)
-        assert pc.fab_order == 2
-
-
-def test_hold_not_clamped(app):
-    """Hold job ignores bounds entirely."""
-    with app.app_context():
-        make_release(1, "A", "Released", "FABRICATION", 5)
-        hold_job = make_release(2, "A", "Hold", "FABRICATION", None)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=2, release="A", fab_order=3)
-        result = cmd.execute()
-
-        db.session.refresh(hold_job)
-        assert hold_job.fab_order == 3
-
-
-def test_no_cascade_allows_duplicates(app):
-    """Setting fab_order to a value already used by another release does not shift others."""
-    with app.app_context():
-        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
-        welded = make_release(2, "A", "Weld Complete", "FABRICATION", 5)
-        fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 7)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        # Set Welded QC from 3 to 5 — welded already at 5, should NOT be bumped
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(wqc)
-        db.session.refresh(welded)
-        db.session.refresh(fitup)
-        assert wqc.fab_order == 5
-        assert welded.fab_order == 5   # unchanged — duplicates allowed
-        assert fitup.fab_order == 7    # unchanged
-
-
-def test_fixed_tiers_unchanged_on_manual_edit(app):
-    """Fixed-tier releases keep their values when other releases are edited."""
-    with app.app_context():
-        complete = make_release(1, "A", "Complete", "COMPLETE", 1)
-        paint = make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
-        wqc = make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
-        welded = make_release(4, "A", "Weld Complete", "FABRICATION", 5)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=3, release="A", fab_order=3)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(complete)
-        db.session.refresh(paint)
-        db.session.refresh(wqc)
-        db.session.refresh(welded)
-        assert complete.fab_order == 1  # unchanged
-        assert paint.fab_order == 2     # unchanged
-        assert wqc.fab_order == 3
-        assert welded.fab_order == 5    # unchanged
-
-
-def test_duplicate_fab_order_no_cascade(app):
-    """Multiple releases can share the same fab_order without any shifting."""
-    with app.app_context():
-        wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
-        welded = make_release(2, "A", "Weld Complete", "FABRICATION", 5)
-        fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 8)
-        released = make_release(4, "A", "Released", "FABRICATION", 12)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        # Move WQC from 3 to 5 — welded already at 5, no cascade
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=5)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(wqc)
-        db.session.refresh(welded)
-        db.session.refresh(fitup)
-        db.session.refresh(released)
-        assert wqc.fab_order == 5
-        assert welded.fab_order == 5     # unchanged — duplicate allowed
-        assert fitup.fab_order == 8      # unchanged
-        assert released.fab_order == 12  # unchanged
 
 
 # ---------------------------------------------------------------------------
@@ -1174,127 +855,6 @@ def test_endpoint_reorder_same_job_twice(client, app):
 
 
 # ---------------------------------------------------------------------------
-# Bounded cascade tests
-# ---------------------------------------------------------------------------
-
-def test_no_cascade_move_earlier(app):
-    """Moving earlier does not bump any other jobs — duplicates allowed."""
-    with app.app_context():
-        jobs = []
-        for i, pos in enumerate([25, 26, 27, 28, 29, 30, 40, 41, 42]):
-            jobs.append(make_release(i + 1, "A", "Weld Complete", "FABRICATION", pos))
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=7, release="A", fab_order=27)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        for j in jobs:
-            db.session.refresh(j)
-
-        assert jobs[0].fab_order == 25   # unchanged
-        assert jobs[1].fab_order == 26   # unchanged
-        assert jobs[2].fab_order == 27   # unchanged — duplicate with target
-        assert jobs[3].fab_order == 28   # unchanged
-        assert jobs[4].fab_order == 29   # unchanged
-        assert jobs[5].fab_order == 30   # unchanged
-        assert jobs[6].fab_order == 27   # target job
-        assert jobs[7].fab_order == 41   # unchanged
-        assert jobs[8].fab_order == 42   # unchanged
-
-
-def test_no_cascade_move_later(app):
-    """Moving later does not bump any other jobs — duplicates allowed."""
-    with app.app_context():
-        jobs = []
-        for i, pos in enumerate([8, 9, 10, 11, 12, 13, 14, 15, 16]):
-            jobs.append(make_release(i + 1, "A", "Weld Complete", "FABRICATION", pos))
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=3, release="A", fab_order=15)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        for j in jobs:
-            db.session.refresh(j)
-
-        assert jobs[0].fab_order == 8    # unchanged
-        assert jobs[1].fab_order == 9    # unchanged
-        assert jobs[2].fab_order == 15   # target job
-        assert jobs[3].fab_order == 11   # unchanged
-        assert jobs[4].fab_order == 12   # unchanged
-        assert jobs[5].fab_order == 13   # unchanged
-        assert jobs[6].fab_order == 14   # unchanged
-        assert jobs[7].fab_order == 15   # unchanged — duplicate with target
-        assert jobs[8].fab_order == 16   # unchanged
-
-
-def test_no_cascade_move_by_one(app):
-    """Moving by one position does not bump adjacent job."""
-    with app.app_context():
-        job_a = make_release(1, "A", "Weld Complete", "FABRICATION", 40)
-        job_b = make_release(2, "A", "Weld Complete", "FABRICATION", 41)
-        job_c = make_release(3, "A", "Weld Complete", "FABRICATION", 42)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=41)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(job_a)
-        db.session.refresh(job_b)
-        db.session.refresh(job_c)
-        assert job_a.fab_order == 41
-        assert job_b.fab_order == 41   # unchanged — duplicate
-        assert job_c.fab_order == 42   # unchanged
-
-
-def test_no_cascade_first_assignment(app):
-    """First-time assignment (None → value) does not bump other jobs."""
-    with app.app_context():
-        target = make_release(1, "A", "Weld Complete", "FABRICATION", None)
-        job_at_10 = make_release(2, "A", "Weld Complete", "FABRICATION", 10)
-        job_at_11 = make_release(3, "A", "Weld Complete", "FABRICATION", 11)
-        job_at_9 = make_release(4, "A", "Weld Complete", "FABRICATION", 9)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(target)
-        db.session.refresh(job_at_10)
-        db.session.refresh(job_at_11)
-        db.session.refresh(job_at_9)
-        assert target.fab_order == 10
-        assert job_at_10.fab_order == 10  # unchanged — duplicate
-        assert job_at_11.fab_order == 11  # unchanged
-        assert job_at_9.fab_order == 9    # unchanged
-
-
-def test_no_cascade_same_value_noop(app):
-    """Setting fab_order to same value is a no-op."""
-    with app.app_context():
-        job_a = make_release(1, "A", "Weld Complete", "FABRICATION", 10)
-        job_b = make_release(2, "A", "Weld Complete", "FABRICATION", 11)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(job_a)
-        db.session.refresh(job_b)
-        assert job_a.fab_order == 10  # unchanged
-        assert job_b.fab_order == 11  # unchanged
-
-
-# ---------------------------------------------------------------------------
 # Stage bleed prevention tests
 # ---------------------------------------------------------------------------
 
@@ -1321,57 +881,3 @@ def test_stage_change_between_fabrication_stages_preserves_fab_order(client, app
         job = Releases.query.filter_by(job=1, release="A").first()
         assert job.fab_order == 30
 
-
-# ---------------------------------------------------------------------------
-# clamp_fab_order floor and regression tests
-# ---------------------------------------------------------------------------
-
-def test_clamp_fab_order_floor_prevents_zero():
-    """clamp_fab_order never returns below 3 for dynamic stages."""
-    assert clamp_fab_order(0, lower=None, upper=None) == 3
-    assert clamp_fab_order(-1, lower=None, upper=5) == 3
-    assert clamp_fab_order(2, lower=None, upper=None) == 3
-    assert clamp_fab_order(1, lower=0, upper=2) == 3
-
-
-def test_clamp_fab_order_with_tight_bounds():
-    """clamp_fab_order handles tight bounds correctly."""
-    # lower=5, upper=7, value=6 → stays at 6
-    assert clamp_fab_order(6, lower=5, upper=7) == 6
-    # lower=5, upper=6, value=5 → 5 <= 5 → lower + 1 = 6, but 6 > 6 is False → 6
-    assert clamp_fab_order(5, lower=5, upper=6) == 6
-    # value=10, upper=8 → 10 > 8 → upper - 1 = 7
-    assert clamp_fab_order(10, lower=5, upper=8) == 7
-
-
-def test_clamp_fab_order_strict_upper():
-    """strict_upper=True clamps at >= upper, not just > upper."""
-    # value=8, upper=8, strict → 8 >= 8 → upper - 1 = 7
-    assert clamp_fab_order(8, lower=5, upper=8, strict_upper=True) == 7
-    # value=8, upper=8, not strict → 8 > 8 is False → 8
-    assert clamp_fab_order(8, lower=5, upper=8, strict_upper=False) == 8
-
-
-def test_no_cascade_archived_unaffected(app):
-    """Setting fab_order does not affect any other jobs, including archived ones."""
-    with app.app_context():
-        target = make_release(1, "A", "Weld Complete", "FABRICATION", 15)
-        active_job = make_release(2, "A", "Weld Complete", "FABRICATION", 10)
-        archived_job = Releases(
-            job=3, release="A", job_name="Archived", stage="Weld Complete",
-            stage_group="FABRICATION", fab_order=10, is_archived=True,
-        )
-        db.session.add(archived_job)
-        db.session.commit()
-
-        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
-        cmd = UpdateFabOrderCommand(job_id=1, release="A", fab_order=10)
-        with patch('app.services.outbox_service.OutboxService.add'):
-            cmd.execute()
-
-        db.session.refresh(target)
-        db.session.refresh(active_job)
-        db.session.refresh(archived_job)
-        assert target.fab_order == 10
-        assert active_job.fab_order == 10   # unchanged — duplicate
-        assert archived_job.fab_order == 10  # unchanged

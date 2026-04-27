@@ -26,7 +26,9 @@ npm run lint     # ESLint
 Set `ENVIRONMENT` in `.env` to `local`, `sandbox`, or `production`. This controls which database and API credentials are used (`app/config.py`, `app/db_config.py`). No `.env.example` exists; infer required variables from `app/config.py`.
 
 ### Testing
-Tests use `TESTING=1` env var (set automatically in `tests/conftest.py`) to force in-memory SQLite, preventing any connection to real databases. Domain-specific test suites live in subdirectories (`tests/dwl/`, `tests/procore/`) with their own `conftest.py` fixtures.
+Tests use `TESTING=1` env var (set automatically in `tests/conftest.py`) to force in-memory SQLite, preventing any connection to real databases. Domain-specific test suites live in subdirectories (`tests/dwl/`, `tests/procore/`, `tests/brain/`) with their own `conftest.py` fixtures.
+
+Test layering: pure unit (no Flask/DB) → service (real logic, in-memory DB or mocked DB) → integration (HTTP via `test_client` + in-memory DB). External services (Procore, Trello, OneDrive) are always mocked; the DB is always real (in-memory). Shared fixtures (`app`, `client`, `mock_admin_user`, `mock_non_admin_user`) live in `tests/conftest.py`. See `tests/README.md` for the full strategy, coverage map, and known gaps.
 
 ## Architecture
 

@@ -14,31 +14,17 @@ from datetime import datetime, date
 
 import pytest
 
-from app import create_app
 from app.models import (
     Releases, User, StashSession, StashedJobChange, db,
 )
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Helpers
 # ---------------------------------------------------------------------------
-
-@pytest.fixture
-def app():
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    app.config["SECRET_KEY"] = "test-secret-key"
-
-    uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
-    assert "sandbox" not in uri.lower() and "render.com" not in uri
-
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.session.remove()
-        db.drop_all()
+# Shared fixtures (app, client, mock_admin_user, mock_non_admin_user) live in
+# tests/conftest.py. Auth-patching clients (admin_client, non_admin_client)
+# live in tests/brain/conftest.py.
 
 
 def _make_admin(username="admin_user"):
@@ -77,42 +63,6 @@ def make_release(job, release, stage="Weld Complete", stage_group="FABRICATION",
     db.session.add(r)
     db.session.flush()
     return r
-
-
-@pytest.fixture
-def mock_admin_user():
-    user = Mock()
-    user.id = 1
-    user.username = "admin_user"
-    user.is_admin = True
-    user.is_active = True
-    return user
-
-
-@pytest.fixture
-def mock_non_admin_user():
-    user = Mock()
-    user.id = 2
-    user.username = "normal_user"
-    user.is_admin = False
-    user.is_active = True
-    return user
-
-
-@pytest.fixture
-def admin_client(app, mock_admin_user):
-    """Test client authenticated as an admin. Patches get_current_user at both use sites."""
-    with patch('app.auth.utils.get_current_user', return_value=mock_admin_user), \
-         patch('app.brain.job_log.routes.get_current_user', return_value=mock_admin_user):
-        yield app.test_client()
-
-
-@pytest.fixture
-def non_admin_client(app, mock_non_admin_user):
-    """Test client authenticated as a non-admin — used to verify 403 gating."""
-    with patch('app.auth.utils.get_current_user', return_value=mock_non_admin_user), \
-         patch('app.brain.job_log.routes.get_current_user', return_value=mock_non_admin_user):
-        yield app.test_client()
 
 
 # ---------------------------------------------------------------------------

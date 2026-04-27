@@ -1,0 +1,22 @@
+[run]
+branch = False
+source = app
+omit =
+    app/trello/scripts/*
+    app/migrations/*
+    app/seed.py
+    app/setup.py
+    app/cli/*
+
+[report]
+exclude_also =
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    pragma: no cover
+show_missing = True
+skip_covered = False
+precision = 1
+
+[xml]
+output = coverage.xml
