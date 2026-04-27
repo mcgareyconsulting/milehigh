@@ -31,6 +31,15 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from app.brain.job_log.scheduling.config import SchedulingConfig
 from app.trello.utils import add_business_days
+from app.api.helpers import DEFAULT_FAB_ORDER
+
+
+def _has_real_fab_order(fab_order: Optional[float]) -> bool:
+    # DEFAULT_FAB_ORDER (80.555) is a sentinel for "no explicit fab_order assigned" — these
+    # releases must still cascade, but should not contribute to or consume queue position.
+    if fab_order is None:
+        return False
+    return fab_order != DEFAULT_FAB_ORDER
 
 
 def calculate_remaining_fab_hours(
@@ -79,22 +88,24 @@ def calculate_hours_in_front(
     Returns:
         float: Total hours in front (sum of remaining hours for jobs ahead in queue)
     """
-    if job_fab_order is None:
-        # Jobs without fab_order are considered at the end of the queue
-        # They have all other jobs in front of them
-        # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity
+    if not _has_real_fab_order(job_fab_order):
+        # Jobs without fab_order (or with the DEFAULT_FAB_ORDER sentinel) are considered at the
+        # end of the queue. They still get cascaded dates based on every real-fab_order release
+        # in front of them, but their order among themselves is left ambiguous.
+        # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity.
         return sum(
             job.get('remaining_fab_hours', 0.0)
             for job in all_jobs
-            if job.get('fab_order') is not None and not job.get('is_hard_date')
+            if _has_real_fab_order(job.get('fab_order')) and not job.get('is_hard_date')
         )
 
-    # Sum remaining hours for jobs with lower (earlier) fab_order
-    # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity
+    # Sum remaining hours for jobs with lower (earlier) fab_order.
+    # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity.
+    # Exclude sentinel-order jobs — they don't have a real queue position.
     hours_in_front = 0.0
     for job in all_jobs:
         other_fab_order = job.get('fab_order')
-        if other_fab_order is not None and other_fab_order < job_fab_order and not job.get('is_hard_date'):
+        if _has_real_fab_order(other_fab_order) and other_fab_order < job_fab_order and not job.get('is_hard_date'):
             hours_in_front += job.get('remaining_fab_hours', 0.0)
 
     return hours_in_front
