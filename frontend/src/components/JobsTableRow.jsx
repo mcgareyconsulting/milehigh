@@ -21,7 +21,7 @@ import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 import { useTheme } from '../context/ThemeContext';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, stashSession = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, stashSession = null }) {
     // Stash session helpers — when an active session exists, mutating handlers
     // queue to the server instead of applying directly. Pending view replaces
     // the displayed value with the queued new_value; Print view shows baseline.
@@ -1051,12 +1051,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // Handle Fab Order column with editable input
                     if (column === 'Fab Order') {
                         const displayValue = localFabOrder === null || localFabOrder === undefined ? '—' : formatCellValue(localFabOrder, column);
-                        const isDuplicateFabOrder = duplicateFabOrders && localFabOrder != null && localFabOrder >= 4 && duplicateFabOrders.has(localFabOrder);
+                        const fabOrderGroup = stageToGroup?.[localStage] || 'FABRICATION';
+                        const groupDupes = duplicateFabOrders?.get?.(fabOrderGroup);
+                        const isDuplicateFabOrder = !!groupDupes && localFabOrder != null && localFabOrder >= 4 && groupDupes.has(localFabOrder);
+                        const dupColor = isDuplicateFabOrder ? (stageGroupDupColors?.[fabOrderGroup] || '#f97316') : null;
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center ${pendingHighlight}`}
-                                style={isDuplicateFabOrder ? { backgroundColor: '#f97316' } : undefined}
+                                style={isDuplicateFabOrder ? { backgroundColor: dupColor } : undefined}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -1098,9 +1101,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingFabOrder || isGrayed}
-                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'bg-orange-400 text-white font-bold' : 'bg-white dark:bg-slate-700'} text-gray-900 dark:text-slate-100 text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'text-white font-bold' : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100'} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
-                                    style={{ minWidth: '60px' }}
+                                    style={isDuplicateFabOrder ? { minWidth: '60px', backgroundColor: dupColor } : { minWidth: '60px' }}
                                 />
                                 <PendingHint field="fab_order" change={_stashChangeForCell} />
                             </td>

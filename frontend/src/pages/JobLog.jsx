@@ -81,6 +81,7 @@ function JobLog() {
         stageColors,
         stageToGroup,
         stageGroupColors,
+        stageGroupDupColors,
         displayJobs,
         secondarySearchResults,
         totalFabHrs,
@@ -258,23 +259,35 @@ function JobLog() {
         return sorted;
     }, [displayJobs, reviewMode]);
 
-    // Compute set of fab_order values >= 4 that appear on more than one release.
-    // 80.555 is the DEFAULT_FAB_ORDER sentinel (newly created releases) — collisions
-    // there are expected, not real ordering conflicts, so don't flag them.
+    // Compute fab_order values that appear on more than one release *within the same
+    // stage group*. The client uses Welded QC (READY_TO_SHIP) for paint-sequence
+    // ordering, so its numbering naturally collides with FABRICATION numbering — those
+    // cross-group collisions are not real conflicts. 80.555 is the DEFAULT_FAB_ORDER
+    // sentinel and values < 4 are reserved tiers; both are excluded.
+    // Returns Map<groupKey, Set<number>> keyed by stage group.
     const duplicateFabOrders = useMemo(() => {
-        const counts = {};
+        const countsByGroup = new Map();
         for (const row of reviewDisplayJobs) {
             const fo = row['Fab Order'];
-            if (fo != null && fo >= 4 && fo !== 80.555) {
-                counts[fo] = (counts[fo] || 0) + 1;
+            if (fo == null || fo < 4 || fo === 80.555) continue;
+            const group = stageToGroup?.[row['Stage']] || 'FABRICATION';
+            let counts = countsByGroup.get(group);
+            if (!counts) {
+                counts = new Map();
+                countsByGroup.set(group, counts);
             }
+            counts.set(fo, (counts.get(fo) || 0) + 1);
         }
-        const dupes = new Set();
-        for (const [val, count] of Object.entries(counts)) {
-            if (count > 1) dupes.add(Number(val));
+        const dupesByGroup = new Map();
+        for (const [group, counts] of countsByGroup) {
+            const dupes = new Set();
+            for (const [val, count] of counts) {
+                if (count > 1) dupes.add(val);
+            }
+            if (dupes.size > 0) dupesByGroup.set(group, dupes);
         }
-        return dupes;
-    }, [reviewDisplayJobs]);
+        return dupesByGroup;
+    }, [reviewDisplayJobs, stageToGroup]);
 
     // Define column order explicitly
     const columnOrder = [
@@ -1216,6 +1229,7 @@ function JobLog() {
                                                                     onCascadeRecalculating={handleCascadeRecalculating}
                                                                     stageToGroup={stageToGroup}
                                                                     stageGroupColors={stageGroupColors}
+                                                                    stageGroupDupColors={stageGroupDupColors}
                                                                     isAdmin={isAdmin}
                                                                     onDelete={handleDeleteJob}
                                                                     tableScrollRef={tableScrollRef}
@@ -1257,6 +1271,7 @@ function JobLog() {
                                                             onCascadeRecalculating={handleCascadeRecalculating}
                                                             stageToGroup={stageToGroup}
                                                             stageGroupColors={stageGroupColors}
+                                                            stageGroupDupColors={stageGroupDupColors}
                                                             isAdmin={isAdmin}
                                                             onDelete={handleDeleteJob}
                                                             tableScrollRef={tableScrollRef}

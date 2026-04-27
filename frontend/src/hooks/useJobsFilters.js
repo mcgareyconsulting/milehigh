@@ -423,6 +423,15 @@ export function useJobsFilters(jobs = []) {
         COMPLETE: { light: 'rgb(237 233 254)', text: 'rgb(91 33 182)', border: 'rgb(196 181 253)' },
     };
 
+    // Background color applied to a Fab Order cell when its value duplicates another
+    // fab_order *within the same stage group*. Per-group so dups in fabrication and
+    // ready-to-ship are visually distinguishable.
+    const stageGroupDupColors = {
+        FABRICATION: '#f97316',
+        READY_TO_SHIP: '#2563eb',
+        COMPLETE: '#7c3aed',
+    };
+
     /**
      * Stage options for multiselect (using simplified labels)
      */
@@ -579,6 +588,7 @@ export function useJobsFilters(jobs = []) {
         stageColors,
         stageToGroup,
         stageGroupColors,
+        stageGroupDupColors,
 
         // Filter predicates (exposed so callers can compute reachable values)
         matchesFilters,
