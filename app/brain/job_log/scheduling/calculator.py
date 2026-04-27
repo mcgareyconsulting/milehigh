@@ -65,36 +65,49 @@ def calculate_remaining_fab_hours(
 
 def calculate_hours_in_front(
     job_fab_order: Optional[float],
-    all_jobs: List[Dict[str, Any]]
+    all_jobs: List[Dict[str, Any]],
+    job_index: Optional[int] = None
 ) -> float:
     """
     Calculate hours in front for a given job-release.
-    
-    Formula: sum of remaining_fab_hours for all job-releases with lower fab_order
-    
+
+    Formula: sum of remaining_fab_hours for all job-releases with lower fab_order.
+    When job_index is provided, equal-fab_order ties are broken by list position
+    (earlier-indexed jobs are considered in front). This is what lets many releases
+    sharing the DEFAULT_FAB_ORDER sentinel (80.555) cascade through each other rather
+    than all collapsing to the same projected date.
+
     Args:
         job_fab_order: Fab order number for this job-release
         all_jobs: List of all job dictionaries with 'fab_order' and calculated 'remaining_fab_hours'
-        
+        job_index: Optional position of this job within all_jobs, used as a tiebreaker
+                   when fab_orders are equal. Without it, ties contribute nothing.
+
     Returns:
         float: Total hours in front (sum of remaining hours for jobs ahead in queue)
     """
-    if job_fab_order is None:
-        # Jobs without fab_order are considered at the end of the queue
-        # They have all other jobs in front of them
-        # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity
-        return sum(
-            job.get('remaining_fab_hours', 0.0)
-            for job in all_jobs
-            if job.get('fab_order') is not None and not job.get('is_hard_date')
-        )
-
-    # Sum remaining hours for jobs with lower (earlier) fab_order
-    # Exclude hard-date jobs — they have fixed install dates and don't consume queue capacity
     hours_in_front = 0.0
-    for job in all_jobs:
+    for i, job in enumerate(all_jobs):
+        if job.get('is_hard_date'):
+            continue
+        if job_index is not None and i == job_index:
+            continue
         other_fab_order = job.get('fab_order')
-        if other_fab_order is not None and other_fab_order < job_fab_order and not job.get('is_hard_date'):
+
+        # None-fab_order jobs sit at the end of the queue
+        if other_fab_order is None:
+            if job_fab_order is None and job_index is not None and i < job_index:
+                hours_in_front += job.get('remaining_fab_hours', 0.0)
+            continue
+
+        # Job being calculated has no fab_order → all real-order jobs are in front
+        if job_fab_order is None:
+            hours_in_front += job.get('remaining_fab_hours', 0.0)
+            continue
+
+        if other_fab_order < job_fab_order:
+            hours_in_front += job.get('remaining_fab_hours', 0.0)
+        elif other_fab_order == job_fab_order and job_index is not None and i < job_index:
             hours_in_front += job.get('remaining_fab_hours', 0.0)
 
     return hours_in_front
@@ -214,7 +227,8 @@ def calculate_install_complete_date(
 def calculate_scheduling_fields(
     job: Dict[str, Any],
     all_jobs: List[Dict[str, Any]],
-    reference_date: Optional[date] = None
+    reference_date: Optional[date] = None,
+    job_index: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Calculate all scheduling fields for a single job-release.
@@ -260,7 +274,7 @@ def calculate_scheduling_fields(
         else:
             jobs_with_remaining.append(j)
     
-    hours_in_front = calculate_hours_in_front(fab_order, jobs_with_remaining)
+    hours_in_front = calculate_hours_in_front(fab_order, jobs_with_remaining, job_index)
     
     # Step 3: Calculate days in front
     days_in_front = calculate_days_in_front(hours_in_front)
@@ -323,18 +337,22 @@ def calculate_all_job_scheduling(
         })
     
     # Second pass: Calculate all scheduling fields for each job
-    # (hours_in_front requires all jobs to have remaining_fab_hours)
+    # (hours_in_front requires all jobs to have remaining_fab_hours).
+    # The list index is passed as a tiebreaker so equal-fab_order releases
+    # (in particular the many DEFAULT_FAB_ORDER 80.555 sentinels) cascade
+    # through each other in a stable order rather than collapsing onto one date.
     result = []
-    for job in jobs_with_remaining:
+    for i, job in enumerate(jobs_with_remaining):
         scheduling_fields = calculate_scheduling_fields(
             job,
             jobs_with_remaining,
-            reference_date
+            reference_date,
+            job_index=i
         )
         result.append({
             **job,
             **scheduling_fields
         })
-    
+
     return result
 
