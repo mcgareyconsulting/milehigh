@@ -113,6 +113,7 @@ body>#root>div>div {
 .job-log-table-scroll-hide-scrollbar {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE / Edge */
+  overflow-anchor: none; /* Don't auto-scroll to follow rows when sort order changes */
 }
 .job-log-table-scroll-hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Edge */
