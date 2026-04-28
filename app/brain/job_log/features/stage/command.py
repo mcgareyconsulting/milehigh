@@ -110,6 +110,28 @@ class UpdateStageCommand:
                 f"stage '{self.stage}'. Will set fab_order from "
                 f"{old_fab_order_for_update} to {fab_order_to_set}"
             )
+        elif self.stage == "Welded QC" and old_stage_group != "READY_TO_SHIP":
+            # Department handoff: Fab → Paint. Land at the back of the paint
+            # deck so the fresh arrival doesn't jump the line on existing
+            # Welded QC / Paint Start work. Tiers 1-2 are reserved, so floor
+            # the max at 2 — minimum result is 3.
+            from sqlalchemy import func, or_
+            current_max = db.session.query(func.max(Releases.fab_order)).filter(
+                Releases.stage.in_(["Welded QC", "Paint Start"]),
+                Releases.fab_order.isnot(None),
+                Releases.is_archived != True,  # noqa: E712
+                or_(
+                    Releases.job != self.job_id,
+                    Releases.release != self.release,
+                ),
+            ).scalar()
+            base = current_max if current_max is not None and current_max >= 2 else 2
+            fab_order_to_set = base + 1
+            logger.info(
+                f"Job {self.job_id}-{self.release} crossing Fab→R2S into Welded QC. "
+                f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set} "
+                f"(max(WQC+PaintStart)={current_max})"
+            )
 
         # Apply stage + stage_group
         job_record.stage = self.stage
