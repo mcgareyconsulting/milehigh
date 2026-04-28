@@ -629,6 +629,10 @@ function JobLog() {
 <head>
     <title>Job Log - Print</title>
     <style>
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
         @media print {
             @page {
                 /* 11x17 tabloid in landscape orientation */
