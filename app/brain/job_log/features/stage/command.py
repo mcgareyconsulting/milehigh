@@ -6,7 +6,7 @@ exports:
   UpdateStageCommand: Dataclass command that executes a stage update with all side effects
   StageUpdateResult: Dataclass result with event_id, job_comp/fab_order extras
 imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service]
-imported_by: [app/brain/job_log/routes.py, app/brain/job_log/features/stash/apply.py]
+imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Fixed-tier stages (Ready-to-Ship / Complete groups) auto-assign fab_order via get_fixed_tier
   - Setting stage='Complete' cascades job_comp='X'; leaving Complete clears job_comp='X'
@@ -66,9 +66,6 @@ class UpdateStageCommand:
     stage: str
     source: str = "Brain"
     source_of_update: str = "Brain"
-    # When True, skip the final recalculate_all_jobs_scheduling call — useful when
-    # the caller is batching multiple updates and will run the cascade once at the end.
-    defer_cascade: bool = False
 
     def execute(self) -> StageUpdateResult:
         from app.api.helpers import get_stage_group_from_stage, get_fixed_tier
@@ -299,16 +296,15 @@ class UpdateStageCommand:
 
         db.session.commit()
 
-        if not self.defer_cascade:
-            try:
-                from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-                recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-            except Exception as cascade_err:
-                logger.error(
-                    f"Scheduling cascade failed after stage change for "
-                    f"{self.job_id}-{self.release}: {cascade_err}",
-                    exc_info=True,
-                )
+        try:
+            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+        except Exception as cascade_err:
+            logger.error(
+                f"Scheduling cascade failed after stage change for "
+                f"{self.job_id}-{self.release}: {cascade_err}",
+                exc_info=True,
+            )
 
         logger.info(
             "update_stage completed successfully",
