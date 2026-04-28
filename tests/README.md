@@ -26,8 +26,8 @@ Tests fall into three layers. Pick the layer that matches the unit you're testin
 | Layer | Flask app? | DB? | Mocked? | Examples |
 |---|---|---|---|---|
 | **Pure unit** | no | no | nothing — pure functions | `test_dwl_engine.py`, `test_hours_summary.py`, `test_procore_auth.py` |
-| **Service** | sometimes | in-memory or mocked | external APIs only | `test_dwl_service.py`, `test_stash_session.py` (service half) |
-| **Integration** | yes (test_client) | in-memory | external APIs only | `test_dwl_routes.py`, `test_stash_session.py` (HTTP half), webhook handler tests |
+| **Service** | sometimes | in-memory or mocked | external APIs only | `test_dwl_service.py` |
+| **Integration** | yes (test_client) | in-memory | external APIs only | `test_dwl_routes.py`, webhook handler tests |
 
 **Rule:** prefer the lowest layer that exercises the behavior. A pure unit test for `_normalize_stage` is more valuable than an HTTP test that happens to call it.
 
@@ -68,7 +68,6 @@ When the patch sites for `get_current_user` differ across blueprints (e.g. `app.
 - **Procore helpers** — webhook helpers, token expiry, API client retries
 - **Hours summary KPIs** — pure functions
 - **Scheduling cascade** — red date protection, hold cascade
-- **Stash session** — service + HTTP layers, idempotency, conflict detection
 
 ### Known gaps (priority order)
 - **Auth routes** — login, logout, set-password, check-user (`tests/test_auth_routes.py`)

@@ -1,8 +1,10 @@
-# Stash Review Changes
-On thursday, my client runs a review meeting where they look at the print out version of hte Job Log and the Review filter in tandem. As they make changes to the review tab, there is a growing diff between the print out and the review tab. we want to stash those changes till the end of the meeting. Ideally, we would have a start/stop mechanic that would preview changes at the end of hte meeting and then run them as a batch one completed. 
+# Clearing Hard Date on Job Log
+Clearing a hard date has a bug. when the hard date checkbox is checked and we push clear hard date, we get an 'event already exists' or some such message. When the checkbox is not clicked and we clear a hard date, we have no issue.
 
-# When review filter is selected, a Start button appears, which is admin user only gated. 
-# Once started, all UI based changes are logged for processing but not shown on the frontend.
-# Once user pushes stop, all changes are made to system, there should be a good way of handling thsse bulk updates built.
+# Remove checkbox
+- Start Install Dates cascade automatically
+- Any date entry would be a hard date, so no need for the checkbox
 
-# Ask clarifiers
+# Clearing date
+- When clearing date, we want to claer that dang date, so no event bug warning
+- Start install cascades normally after clearing, we want that funciontality to continue
