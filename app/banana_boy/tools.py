@@ -10,15 +10,19 @@ user-supplied identifier — never let the LLM pretend to be a different user.
 import re
 from typing import Any
 
+from sqlalchemy.orm import joinedload
+
 from app.auth.google_tokens import GoogleAuthError
 from app.banana_boy.gmail_client import GmailScopeError, create_draft, send_draft
+from app.history import _extract_new_value_from_payload
 from app.logging_config import get_logger
-from app.models import Notification, Releases, db
+from app.models import Notification, ReleaseEvents, Releases, db
 
 logger = get_logger(__name__)
 
 TOOL_SEARCH_BY_ID = "search_jobs_by_identifier"
 TOOL_SEARCH_BY_NAME = "search_jobs_by_project_name"
+TOOL_RELEASE_HISTORY = "get_release_history"
 TOOL_CREATE_DRAFT = "create_email_draft"
 TOOL_SEND_DRAFT = "send_email_draft"
 TOOL_NOTIFICATIONS = "get_my_notifications"
@@ -67,6 +71,41 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": TOOL_RELEASE_HISTORY,
+        "description": (
+            "Fetch the full change history (audit trail) for a release. Use "
+            "this when the user asks 'what happened to', 'when did X change', "
+            "'who released it', 'show me the changelog', or after looking up "
+            "a release with search_jobs_by_identifier and the user wants more "
+            "than the current snapshot. Returns events newest-first. Filters "
+            "out system echoes by default."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {
+                    "type": "integer",
+                    "description": "Job number, e.g. 370.",
+                },
+                "release": {
+                    "type": "string",
+                    "description": "Release number, e.g. '406'.",
+                },
+                "max_events": {
+                    "type": "integer",
+                    "description": "Max events to return (default 50, hard cap 100).",
+                    "default": 50,
+                },
+                "include_system_echoes": {
+                    "type": "boolean",
+                    "description": "Include is_system_echo=True rows. Default false.",
+                    "default": False,
+                },
+            },
+            "required": ["job", "release"],
         },
     },
     {
@@ -244,6 +283,72 @@ def search_jobs_by_project_name(query: str, limit: int = 20) -> dict[str, Any]:
     }
 
 
+def get_release_history(job: int, release: str, max_events: int = 50,
+                        include_system_echoes: bool = False) -> dict[str, Any]:
+    """Audit trail for a single (job, release). Newest-first.
+
+    Reuses `_extract_new_value_from_payload` so the human-readable summary
+    matches the rest of the app. Joinedload on `User` keeps actor lookup O(1).
+    """
+    if job is None or release is None or str(release).strip() == "":
+        return {"error": "both job and release are required", "events": []}
+    try:
+        job_int = int(job)
+    except (TypeError, ValueError):
+        return {"error": f"invalid job number: {job!r}", "events": []}
+    release_str = str(release)
+    max_events = _clamp_limit(max_events, default=50, ceiling=100)
+
+    q = (
+        ReleaseEvents.query
+        .options(joinedload(ReleaseEvents.user))
+        .filter(ReleaseEvents.job == job_int,
+                ReleaseEvents.release == release_str)
+    )
+    if not include_system_echoes:
+        q = q.filter(ReleaseEvents.is_system_echo == False)  # noqa: E712
+
+    total = q.count()
+    rows = q.order_by(ReleaseEvents.created_at.desc()).limit(max_events).all()
+
+    events = []
+    for ev in rows:
+        actor_name = None
+        if ev.user is not None:
+            actor_name = ev.user.first_name or ev.user.username
+
+        payload = ev.payload or {}
+        from_value = payload.get("from") if isinstance(payload, dict) else None
+        to_value = payload.get("to") if isinstance(payload, dict) else None
+
+        events.append({
+            "id": ev.id,
+            "when": ev.created_at.isoformat() if ev.created_at else None,
+            "applied_at": ev.applied_at.isoformat() if ev.applied_at else None,
+            "action": ev.action,
+            "summary": _extract_new_value_from_payload(ev.action, payload),
+            "from": from_value,
+            "to": to_value,
+            "source": ev.source,
+            "actor_name": actor_name,
+            "actor_user_id": ev.internal_user_id,
+            "external_actor": ev.external_user_id,
+            "is_system_echo": ev.is_system_echo,
+            "payload": payload,
+        })
+
+    return {
+        "query": {
+            "job": job_int,
+            "release": release_str,
+            "include_system_echoes": include_system_echoes,
+        },
+        "total_event_count": total,
+        "returned_event_count": len(events),
+        "events": events,
+    }
+
+
 def get_my_notifications(context: dict, unread_only: bool = True, limit: int = 20) -> dict[str, Any]:
     user_id = context.get("user_id")
     if not user_id:
@@ -361,6 +466,7 @@ USER_SCOPED_TOOLS = {
 TOOL_EXECUTORS = {
     TOOL_SEARCH_BY_ID: search_jobs_by_identifier,
     TOOL_SEARCH_BY_NAME: search_jobs_by_project_name,
+    TOOL_RELEASE_HISTORY: get_release_history,
     TOOL_NOTIFICATIONS: get_my_notifications,
     TOOL_CREATE_DRAFT: create_email_draft_tool,
     TOOL_SEND_DRAFT: send_email_draft_tool,
