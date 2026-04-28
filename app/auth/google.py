@@ -9,7 +9,7 @@ Tokens never leave the server. The frontend sees only `gmail_linked` via /me.
 """
 import secrets
 from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import requests
 from authlib.integrations.requests_client import OAuth2Session
@@ -17,6 +17,7 @@ from flask import current_app, redirect, request, session
 from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
 
+from app.auth.google_tokens import post_token_request
 from app.auth.routes import auth_bp
 from app.auth.utils import get_current_user
 from app.logging_config import get_logger
@@ -25,7 +26,6 @@ from app.models import GoogleCredentials, db
 logger = get_logger(__name__)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 SESSION_KEY = "google_oauth"
 STATE_TTL_SECONDS = 600
 DEFAULT_NEXT = "/job-log"
@@ -97,21 +97,13 @@ def _build_authorization_url(nonce, login_hint=None):
 
 
 def _exchange_code_for_tokens(code):
-    client_id = current_app.config["GOOGLE_CLIENT_ID"]
-    client_secret = current_app.config["GOOGLE_CLIENT_SECRET"]
-    redirect_uri = current_app.config["GOOGLE_REDIRECT_URI"]
-
-    resp = requests.post(
-        GOOGLE_TOKEN_URL,
-        data={
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code",
-        },
-        timeout=10,
-    )
+    resp = post_token_request({
+        "code": code,
+        "client_id": current_app.config["GOOGLE_CLIENT_ID"],
+        "client_secret": current_app.config["GOOGLE_CLIENT_SECRET"],
+        "redirect_uri": current_app.config["GOOGLE_REDIRECT_URI"],
+        "grant_type": "authorization_code",
+    }, timeout=10)
     resp.raise_for_status()
     return resp.json()
 
@@ -132,32 +124,27 @@ def _scopes_include_gmail_readonly(scopes_str):
 def _upsert_credentials(user_id, token, idinfo):
     """Create or update the user's google_credentials row from the token + id_token claims."""
     expires_in = int(token.get("expires_in", 3600))
+    expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
     creds = GoogleCredentials.get_for_user(user_id)
-    if creds is None:
+    is_new = creds is None
+    if is_new:
         creds = GoogleCredentials(
             user_id=user_id,
             provider="google",
-            google_sub=idinfo["sub"],
             email=idinfo.get("email", ""),
-            email_verified=bool(idinfo.get("email_verified", True)),
-            access_token=token["access_token"],
-            refresh_token=token.get("refresh_token"),
-            token_expires_at=datetime.utcnow() + timedelta(seconds=expires_in),
-            scopes=token.get("scope", ""),
-            id_token=token.get("id_token"),
         )
         db.session.add(creds)
-    else:
-        creds.google_sub = idinfo["sub"]
-        creds.email = idinfo.get("email", creds.email)
-        creds.email_verified = bool(idinfo.get("email_verified", True))
-        creds.access_token = token["access_token"]
-        if token.get("refresh_token"):
-            creds.refresh_token = token["refresh_token"]
-        creds.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-        creds.scopes = token.get("scope", creds.scopes)
-        if token.get("id_token"):
-            creds.id_token = token["id_token"]
+
+    creds.google_sub = idinfo["sub"]
+    creds.email = idinfo.get("email", creds.email)
+    creds.email_verified = bool(idinfo.get("email_verified", True))
+    creds.access_token = token["access_token"]
+    creds.token_expires_at = expires_at
+    creds.scopes = token.get("scope", creds.scopes if not is_new else "")
+    if token.get("refresh_token"):
+        creds.refresh_token = token["refresh_token"]
+    if token.get("id_token"):
+        creds.id_token = token["id_token"]
     return creds
 
 
@@ -176,15 +163,14 @@ def initiate_google_oauth():
     nonce = secrets.token_urlsafe(32)
     expires_at = (datetime.utcnow() + timedelta(seconds=STATE_TTL_SECONDS)).isoformat()
     # Capture the frontend origin so the callback redirects back to the Vite
-    # dev server rather than Flask's own host. In production these are the
-    # same origin so this is a no-op.
-    origin_header = request.headers.get("Origin") or request.headers.get("Referer", "")
-    if origin_header.startswith(("http://", "https://")):
-        # Strip any path component from a Referer-style URL.
-        scheme_host = origin_header.split("/", 3)
-        origin_value = "/".join(scheme_host[:3]) if len(scheme_host) >= 3 else None
-    else:
-        origin_value = None
+    # dev server rather than Flask's own host (no-op in production).
+    raw_origin = request.headers.get("Origin") or request.headers.get("Referer", "")
+    parsed = urlsplit(raw_origin) if raw_origin else None
+    origin_value = (
+        f"{parsed.scheme}://{parsed.netloc}"
+        if parsed and parsed.scheme in ("http", "https") and parsed.netloc
+        else None
+    )
     session[SESSION_KEY] = {
         "nonce": nonce,
         "next": next_path,

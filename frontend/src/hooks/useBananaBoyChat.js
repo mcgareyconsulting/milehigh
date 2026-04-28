@@ -10,27 +10,23 @@ export function useBananaBoyChat(enabled) {
     const [loading, setLoading] = useState(false);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState(null);
-    const [hasFetched, setHasFetched] = useState(false);
 
     useEffect(() => {
-        if (!enabled || hasFetched) return;
+        if (!enabled) return undefined;
         let cancelled = false;
         setLoading(true);
         fetchMessages()
             .then((rows) => {
-                if (cancelled) return;
-                setMessages(rows);
-                setHasFetched(true);
+                if (!cancelled) setMessages(rows);
             })
             .catch((err) => {
-                if (cancelled) return;
-                setError(err.response?.data?.error || err.message);
+                if (!cancelled) setError(err.response?.data?.error || err.message);
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
             });
         return () => { cancelled = true; };
-    }, [enabled, hasFetched]);
+    }, [enabled]);
 
     const send = useCallback(async (text) => {
         const trimmed = text.trim();

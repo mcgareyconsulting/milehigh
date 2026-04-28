@@ -5,23 +5,20 @@ import { FRAMES, FRAME_SRC } from './frames';
 export default function BananaBoyAnimation({ enabled = true, className = '' }) {
     const { frame, sparks, glow } = useBananaBoyLoop(enabled);
     const sparksRef = useRef(null);
-    const lastSparkRef = useRef(0);
-    const rafRef = useRef(0);
-    const sparksOnRef = useRef(false);
 
     useEffect(() => {
-        sparksOnRef.current = sparks;
-    }, [sparks]);
-
-    useEffect(() => {
-        if (!enabled) return undefined;
+        if (!enabled || !sparks) return undefined;
         const sparksHost = sparksRef.current;
+        if (!sparksHost) return undefined;
+
+        let rafId = 0;
+        let lastSpark = 0;
+        const pendingTimeouts = new Set();
 
         const tick = (now) => {
-            rafRef.current = requestAnimationFrame(tick);
-            if (!sparksOnRef.current || !sparksHost) return;
-            if (now - lastSparkRef.current < 50) return;
-            lastSparkRef.current = now;
+            rafId = requestAnimationFrame(tick);
+            if (now - lastSpark < 50) return;
+            lastSpark = now;
 
             const count = 1 + Math.floor(Math.random() * 2);
             for (let k = 0; k < count; k++) {
@@ -39,15 +36,21 @@ export default function BananaBoyAnimation({ enabled = true, className = '' }) {
                 if (hue > 0.85) s.style.background = '#ffe28a';
                 else if (hue > 0.5) s.style.background = '#ffae3d';
                 sparksHost.appendChild(s);
-                window.setTimeout(() => s.remove(), 800);
+                const timeoutId = window.setTimeout(() => {
+                    pendingTimeouts.delete(timeoutId);
+                    s.remove();
+                }, 800);
+                pendingTimeouts.add(timeoutId);
             }
         };
-        rafRef.current = requestAnimationFrame(tick);
+        rafId = requestAnimationFrame(tick);
         return () => {
-            cancelAnimationFrame(rafRef.current);
-            if (sparksHost) sparksHost.innerHTML = '';
+            cancelAnimationFrame(rafId);
+            pendingTimeouts.forEach((id) => window.clearTimeout(id));
+            pendingTimeouts.clear();
+            sparksHost.innerHTML = '';
         };
-    }, [enabled]);
+    }, [enabled, sparks]);
 
     return (
         <div className={`relative ${className}`} aria-hidden="true">

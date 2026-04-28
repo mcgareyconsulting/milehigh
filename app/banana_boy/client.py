@@ -38,13 +38,22 @@ class BananaBoyAPIError(RuntimeError):
     """Raised when the upstream Anthropic call fails."""
 
 
-def _build_client():
+_CLIENT_KEY = "_banana_boy_anthropic_client"
+
+
+def _get_client():
     api_key = current_app.config.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise BananaBoyConfigError("ANTHROPIC_API_KEY is not configured")
 
-    import anthropic
-    return anthropic.Anthropic(api_key=api_key)
+    cache = current_app.extensions.setdefault(_CLIENT_KEY, {})
+    client = cache.get(api_key)
+    if client is None:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        cache.clear()
+        cache[api_key] = client
+    return client
 
 
 def _block_to_dict(block):
@@ -59,7 +68,6 @@ def _block_to_dict(block):
             "name": block.name,
             "input": block.input,
         }
-    # Fall through unchanged — let Anthropic SDK reject anything we don't know.
     return block
 
 
@@ -81,11 +89,7 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
     if extra_system_context:
         system_prompt = f"{SYSTEM_PROMPT}\n\n{extra_system_context}"
 
-    try:
-        client = _build_client()
-    except BananaBoyConfigError:
-        raise
-
+    client = _get_client()
     messages = list(history)
 
     for iteration in range(MAX_TOOL_ITERATIONS):
@@ -101,14 +105,12 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
             logger.error("Anthropic API call failed", error=str(exc), exc_info=True)
             raise BananaBoyAPIError(str(exc)) from exc
 
-        # If Claude is done, return the text.
         if response.stop_reason != "tool_use":
             text = _extract_text(response.content)
             if not text:
                 raise BananaBoyAPIError("empty response from Anthropic")
             return text
 
-        # Otherwise, run any tool_use blocks and feed results back.
         assistant_blocks = [_block_to_dict(b) for b in response.content]
         messages.append({"role": "assistant", "content": assistant_blocks})
 
@@ -130,7 +132,6 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
             })
 
         if not tool_results:
-            # tool_use stop_reason but no actual tool blocks — treat as terminal.
             text = _extract_text(response.content)
             if not text:
                 raise BananaBoyAPIError("empty response from Anthropic")

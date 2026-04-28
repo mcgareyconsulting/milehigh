@@ -7,11 +7,9 @@ handler injects into the system prompt. Auth failures are swallowed (logged,
 Write side: `create_draft` / `send_draft` create and send drafts. Sending
 only ever happens via send_draft — never directly from arbitrary input —
 so the LLM is forced to draft → confirm → send.
-
-TODO(post-demo): replace the N+1 (threads list + per-thread metadata get)
-with users.messages.list + batchGet for fewer round trips.
 """
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 
@@ -25,6 +23,7 @@ logger = get_logger(__name__)
 GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
 REQUEST_TIMEOUT = 5
 GMAIL_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose"
+THREAD_FETCH_CONCURRENCY = 5
 
 
 class GmailScopeError(RuntimeError):
@@ -86,13 +85,13 @@ def fetch_recent_threads(user_id, max_results=10):
         logger.warning("gmail_threads_list_failed", user_id=user_id, error=str(exc))
         return []
 
-    summaries = []
-    for thread in threads:
-        thread_id = thread.get("id")
-        if not thread_id:
-            continue
+    thread_ids = [t.get("id") for t in threads if t.get("id")]
+    if not thread_ids:
+        return []
+
+    def _fetch(thread_id):
         try:
-            t_resp = requests.get(
+            r = requests.get(
                 f"{GMAIL_API_BASE}/threads/{thread_id}",
                 params={
                     "format": "metadata",
@@ -101,16 +100,23 @@ def fetch_recent_threads(user_id, max_results=10):
                 headers=headers,
                 timeout=REQUEST_TIMEOUT,
             )
-            t_resp.raise_for_status()
-            t_data = t_resp.json()
+            r.raise_for_status()
+            return thread_id, r.json()
         except requests.RequestException as exc:
             logger.debug(
                 "gmail_thread_get_failed",
                 user_id=user_id, thread_id=thread_id, error=str(exc),
             )
-            continue
+            return thread_id, None
 
-        msgs = t_data.get("messages") or []
+    workers = min(THREAD_FETCH_CONCURRENCY, len(thread_ids))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # Preserve original order to keep the LLM's view stable.
+        results = list(pool.map(_fetch, thread_ids))
+
+    summaries = []
+    for _, t_data in results:
+        msgs = (t_data or {}).get("messages") or []
         if not msgs:
             continue
         first = msgs[0]
@@ -123,6 +129,31 @@ def fetch_recent_threads(user_id, max_results=10):
         })
 
     return summaries
+
+
+def _post_gmail(path, json_body, token, op_name, **log_fields):
+    """POST to Gmail and raise RuntimeError(<status>: <message>) on non-2xx."""
+    resp = requests.post(
+        f"{GMAIL_API_BASE}{path}",
+        json=json_body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+    if resp.status_code >= 400:
+        body_text = resp.text[:500]
+        logger.warning(
+            f"gmail_{op_name}_failed",
+            status=resp.status_code, body=body_text, **log_fields,
+        )
+        try:
+            msg = resp.json().get("error", {}).get("message") or body_text
+        except ValueError:
+            msg = body_text
+        raise RuntimeError(f"Gmail API {resp.status_code}: {msg}")
+    return resp.json()
 
 
 def _build_raw_message(to, subject, body, cc=None, bcc=None):
@@ -148,24 +179,13 @@ def create_draft(user_id, to, subject, body, cc=None, bcc=None):
     token = get_valid_access_token(user_id)
 
     raw = _build_raw_message(to, subject, body, cc=cc, bcc=bcc)
-    resp = requests.post(
-        f"{GMAIL_API_BASE}/drafts",
-        json={"message": {"raw": raw}},
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=REQUEST_TIMEOUT,
+    data = _post_gmail(
+        "/drafts", {"message": {"raw": raw}}, token, "draft_create",
+        user_id=user_id,
     )
-    if resp.status_code >= 400:
-        logger.warning(
-            "gmail_draft_create_failed",
-            user_id=user_id, status=resp.status_code, body=resp.text[:300],
-        )
-        resp.raise_for_status()
-
-    data = resp.json()
-    draft_id = data.get("id")
     msg = data.get("message") or {}
     return {
-        "draft_id": draft_id,
+        "draft_id": data.get("id"),
         "message_id": msg.get("id"),
         "thread_id": msg.get("threadId"),
         "to": to,
@@ -186,31 +206,10 @@ def send_draft(user_id, draft_id):
         raise ValueError("draft_id is required")
     token = get_valid_access_token(user_id)
 
-    resp = requests.post(
-        f"{GMAIL_API_BASE}/drafts/send",
-        json={"id": draft_id},
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        timeout=REQUEST_TIMEOUT,
+    data = _post_gmail(
+        "/drafts/send", {"id": draft_id}, token, "draft_send",
+        user_id=user_id, draft_id=draft_id,
     )
-    if resp.status_code >= 400:
-        body_text = resp.text[:500]
-        logger.warning(
-            "gmail_draft_send_failed",
-            user_id=user_id, draft_id=draft_id,
-            status=resp.status_code, body=body_text,
-        )
-        # Surface Google's error body so the chat tool can include it.
-        try:
-            err = resp.json().get("error", {})
-            msg = err.get("message") or body_text
-        except Exception:  # noqa: BLE001
-            msg = body_text
-        raise RuntimeError(f"Gmail API {resp.status_code}: {msg}")
-
-    data = resp.json()
     return {
         "sent": True,
         "message_id": data.get("id"),

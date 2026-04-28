@@ -10,12 +10,13 @@ from app.banana_boy.client import (
 )
 from app.banana_boy.gmail_client import fetch_recent_threads
 from app.logging_config import get_logger
-from app.models import ChatMessage, db
+from app.models import ChatMessage, ROLE_ASSISTANT, ROLE_USER, db
 
 logger = get_logger(__name__)
 
 MAX_MESSAGE_LENGTH = 8000
 GMAIL_CONTEXT_MAX_CHARS = 4000
+HISTORY_LIMIT = 30
 
 
 def _format_gmail_block(threads):
@@ -35,15 +36,22 @@ def _format_gmail_block(threads):
     return block
 
 
+def _recent_history(user_id, limit):
+    rows = (
+        ChatMessage.query.filter_by(user_id=user_id)
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.reverse()
+    return rows
+
+
 @banana_boy_bp.route("/messages", methods=["GET"])
 @login_required
 def list_messages():
     user = get_current_user()
-    rows = (
-        ChatMessage.query.filter_by(user_id=user.id)
-        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
-        .all()
-    )
+    rows = _recent_history(user.id, HISTORY_LIMIT)
     return jsonify({"messages": [m.to_dict() for m in rows]})
 
 
@@ -59,16 +67,13 @@ def chat():
     if len(message) > MAX_MESSAGE_LENGTH:
         return jsonify({"error": f"message exceeds {MAX_MESSAGE_LENGTH} characters"}), 400
 
-    user_turn = ChatMessage(user_id=user.id, role="user", content=message)
+    prior = _recent_history(user.id, HISTORY_LIMIT - 1)
+    user_turn = ChatMessage(user_id=user.id, role=ROLE_USER, content=message)
     db.session.add(user_turn)
     db.session.commit()
 
-    history = [
-        {"role": m.role, "content": m.content}
-        for m in ChatMessage.query.filter_by(user_id=user.id)
-        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
-        .all()
-    ]
+    history = [{"role": m.role, "content": m.content} for m in prior]
+    history.append({"role": ROLE_USER, "content": message})
 
     gmail_block = ""
     if user.gmail_credentials is not None:
@@ -91,7 +96,7 @@ def chat():
         logger.error("Banana Boy upstream failed", error=str(exc))
         return jsonify({"error": "assistant is unavailable"}), 502
 
-    assistant_turn = ChatMessage(user_id=user.id, role="assistant", content=reply_text)
+    assistant_turn = ChatMessage(user_id=user.id, role=ROLE_ASSISTANT, content=reply_text)
     db.session.add(assistant_turn)
     db.session.commit()
 

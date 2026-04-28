@@ -4,12 +4,8 @@ Each tool has:
   - a JSON-Schema definition exposed to Claude (`TOOL_DEFINITIONS`)
   - a Python executor mapped by name in `TOOL_EXECUTORS`
 
-Executors return JSON-serializable dicts. The chat client serializes them
-to strings before sending back as tool_result blocks.
-
-User-scoped tools (notifications, etc.) read `context["user_id"]` rather
-than trusting any user-supplied identifier — never let the LLM pretend to
-be a different user.
+User-scoped tools read `context["user_id"]` rather than trusting any
+user-supplied identifier — never let the LLM pretend to be a different user.
 """
 import re
 from typing import Any
@@ -17,16 +13,19 @@ from typing import Any
 from app.auth.google_tokens import GoogleAuthError
 from app.banana_boy.gmail_client import GmailScopeError, create_draft, send_draft
 from app.logging_config import get_logger
-from app.models import Notification, Releases
+from app.models import Notification, Releases, db
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Tool definitions exposed to Claude
+TOOL_SEARCH_BY_ID = "search_jobs_by_identifier"
+TOOL_SEARCH_BY_NAME = "search_jobs_by_project_name"
+TOOL_CREATE_DRAFT = "create_email_draft"
+TOOL_SEND_DRAFT = "send_email_draft"
+TOOL_NOTIFICATIONS = "get_my_notifications"
 
 TOOL_DEFINITIONS = [
     {
-        "name": "search_jobs_by_identifier",
+        "name": TOOL_SEARCH_BY_ID,
         "description": (
             "Look up a release by its 6-digit job/release identifier. "
             "Accepts forms like '410-271', '410 271', '410271', or just '410' "
@@ -48,7 +47,7 @@ TOOL_DEFINITIONS = [
         },
     },
     {
-        "name": "search_jobs_by_project_name",
+        "name": TOOL_SEARCH_BY_NAME,
         "description": (
             "Search releases by project name (job_name). Substring, "
             "case-insensitive. Use when the user mentions a project by name "
@@ -71,7 +70,7 @@ TOOL_DEFINITIONS = [
         },
     },
     {
-        "name": "create_email_draft",
+        "name": TOOL_CREATE_DRAFT,
         "description": (
             "Create a Gmail draft on the signed-in user's behalf. ALWAYS use "
             "this when the user asks to email someone — never claim to have "
@@ -93,7 +92,7 @@ TOOL_DEFINITIONS = [
         },
     },
     {
-        "name": "send_email_draft",
+        "name": TOOL_SEND_DRAFT,
         "description": (
             "Send a previously-created Gmail draft. Only call this AFTER the "
             "user has explicitly confirmed (e.g. 'yes send it', 'go ahead'). "
@@ -112,7 +111,7 @@ TOOL_DEFINITIONS = [
         },
     },
     {
-        "name": "get_my_notifications",
+        "name": TOOL_NOTIFICATIONS,
         "description": (
             "Fetch the current signed-in user's notifications. Use this when "
             "the user asks 'what's on my to-do', 'what do I have to do', "
@@ -138,10 +137,15 @@ TOOL_DEFINITIONS = [
     },
 ]
 
-# ---------------------------------------------------------------------------
-# Executors
-
 MAX_RESULTS = 25
+
+
+def _clamp_limit(value, default: int, ceiling: int = MAX_RESULTS) -> int:
+    try:
+        n = int(value) if value is not None else default
+    except (TypeError, ValueError):
+        n = default
+    return max(1, min(n, ceiling))
 
 
 def _release_to_compact(r: Releases) -> dict:
@@ -183,7 +187,6 @@ def _parse_identifier(identifier: str):
     if not s:
         return None, None
 
-    # Split on '-', ' ', or '/'
     parts = re.split(r"[\s\-/]+", s)
     if len(parts) >= 2 and parts[0].isdigit() and parts[1]:
         try:
@@ -191,10 +194,9 @@ def _parse_identifier(identifier: str):
         except ValueError:
             pass
 
-    # All-digit single token: 6+ digits → split job/release; ≤4 digits → job only
     if s.isdigit():
+        # 5+ digits: first 3 are job number, remainder is release.
         if len(s) >= 5:
-            # Heuristic: first 3 digits are the job number, remainder is release.
             return int(s[:3]), s[3:]
         return int(s), None
 
@@ -226,7 +228,7 @@ def search_jobs_by_identifier(identifier: str) -> dict[str, Any]:
 def search_jobs_by_project_name(query: str, limit: int = 20) -> dict[str, Any]:
     if not query or not query.strip():
         return {"error": "query is required", "results": []}
-    limit = max(1, min(int(limit or 20), MAX_RESULTS))
+    limit = _clamp_limit(limit, default=20)
     pattern = f"%{query.strip()}%"
     rows = (
         Releases.query
@@ -246,7 +248,7 @@ def get_my_notifications(context: dict, unread_only: bool = True, limit: int = 2
     user_id = context.get("user_id")
     if not user_id:
         return {"error": "no signed-in user", "results": []}
-    limit = max(1, min(int(limit or 20), 50))
+    limit = _clamp_limit(limit, default=20, ceiling=50)
 
     q = Notification.query.filter_by(user_id=user_id)
     if unread_only:
@@ -288,6 +290,19 @@ def get_my_notifications(context: dict, unread_only: bool = True, limit: int = 2
     }
 
 
+def _call_gmail(action: str, user_id, fn, *args, **kwargs):
+    """Run a Gmail-touching call, mapping known auth/scope errors to dicts."""
+    try:
+        return fn(*args, **kwargs)
+    except GmailScopeError as exc:
+        return {"error": str(exc), "needs_reconnect": True}
+    except GoogleAuthError as exc:
+        return {"error": f"gmail auth failed: {exc}", "needs_reconnect": True}
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"banana_boy_{action}_failed", user_id=user_id, error=str(exc))
+        return {"error": f"could not {action.replace('_', ' ')}: {exc}"}
+
+
 def create_email_draft_tool(context: dict, to: str, subject: str, body: str,
                             cc: str | None = None, bcc: str | None = None) -> dict[str, Any]:
     user_id = context.get("user_id")
@@ -295,16 +310,13 @@ def create_email_draft_tool(context: dict, to: str, subject: str, body: str,
         return {"error": "no signed-in user"}
     if not to or not to.strip():
         return {"error": "recipient (to) is required"}
-    try:
-        result = create_draft(user_id, to.strip(), subject or "", body or "",
-                              cc=cc, bcc=bcc)
-    except GmailScopeError as exc:
-        return {"error": str(exc), "needs_reconnect": True}
-    except GoogleAuthError as exc:
-        return {"error": f"gmail auth failed: {exc}", "needs_reconnect": True}
-    except Exception as exc:  # noqa: BLE001
-        logger.error("banana_boy_create_draft_failed", user_id=user_id, error=str(exc))
-        return {"error": f"could not create draft: {exc}"}
+
+    result = _call_gmail(
+        "create_draft", user_id, create_draft,
+        user_id, to.strip(), subject or "", body or "", cc=cc, bcc=bcc,
+    )
+    if "error" in result:
+        return result
 
     logger.info(
         "banana_boy_draft_created",
@@ -328,18 +340,10 @@ def send_email_draft_tool(context: dict, draft_id: str) -> dict[str, Any]:
         return {"error": "no signed-in user"}
     if not draft_id:
         return {"error": "draft_id is required"}
-    try:
-        result = send_draft(user_id, draft_id)
-    except GmailScopeError as exc:
-        return {"error": str(exc), "needs_reconnect": True}
-    except GoogleAuthError as exc:
-        return {"error": f"gmail auth failed: {exc}", "needs_reconnect": True}
-    except Exception as exc:  # noqa: BLE001
-        logger.error(
-            "banana_boy_send_draft_failed",
-            user_id=user_id, draft_id=draft_id, error=str(exc),
-        )
-        return {"error": f"could not send draft: {exc}"}
+
+    result = _call_gmail("send_draft", user_id, send_draft, user_id, draft_id)
+    if "error" in result:
+        return result
 
     logger.info(
         "banana_boy_draft_sent",
@@ -348,20 +352,18 @@ def send_email_draft_tool(context: dict, draft_id: str) -> dict[str, Any]:
     return result
 
 
-# Tools that need the current user are flagged here so execute_tool injects
-# `context` as the first argument. Keep this set small and explicit.
 USER_SCOPED_TOOLS = {
-    "get_my_notifications",
-    "create_email_draft",
-    "send_email_draft",
+    TOOL_NOTIFICATIONS,
+    TOOL_CREATE_DRAFT,
+    TOOL_SEND_DRAFT,
 }
 
 TOOL_EXECUTORS = {
-    "search_jobs_by_identifier": search_jobs_by_identifier,
-    "search_jobs_by_project_name": search_jobs_by_project_name,
-    "get_my_notifications": get_my_notifications,
-    "create_email_draft": create_email_draft_tool,
-    "send_email_draft": send_email_draft_tool,
+    TOOL_SEARCH_BY_ID: search_jobs_by_identifier,
+    TOOL_SEARCH_BY_NAME: search_jobs_by_project_name,
+    TOOL_NOTIFICATIONS: get_my_notifications,
+    TOOL_CREATE_DRAFT: create_email_draft_tool,
+    TOOL_SEND_DRAFT: send_email_draft_tool,
 }
 
 
@@ -382,4 +384,7 @@ def execute_tool(name: str, arguments: dict, context: dict | None = None) -> dic
         return {"error": f"bad arguments for {name}: {exc}"}
     except Exception as exc:  # noqa: BLE001
         logger.error("banana_boy_tool_failed", tool=name, error=str(exc))
+        # Tool DB queries can leave the session in an aborted state; reset so
+        # the next request doesn't inherit a poisoned transaction.
+        db.session.rollback()
         return {"error": f"tool {name} failed: {exc}"}

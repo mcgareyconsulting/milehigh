@@ -849,9 +849,20 @@ class Notification(db.Model):
         }
 
 
+ROLE_USER = "user"
+ROLE_ASSISTANT = "assistant"
+CHAT_ROLES = (ROLE_USER, ROLE_ASSISTANT)
+
+
 class ChatMessage(db.Model):
     """Banana Boy chat turns, per user, in chronological order."""
     __tablename__ = "chat_messages"
+    __table_args__ = (
+        db.CheckConstraint(
+            f"role IN ('{ROLE_USER}', '{ROLE_ASSISTANT}')",
+            name="ck_chat_messages_role",
+        ),
+    )
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'),
                         nullable=False, index=True)

@@ -15,6 +15,12 @@ from app.models import GoogleCredentials, db
 logger = get_logger(__name__)
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+TOKEN_REFRESH_BUFFER_SECONDS = 60
+
+
+def post_token_request(data: dict, timeout: int = 5):
+    """POST to Google's /token endpoint. Caller handles status / parsing."""
+    return requests.post(GOOGLE_TOKEN_URL, data=data, timeout=timeout)
 
 
 class GoogleAuthError(RuntimeError):
@@ -45,7 +51,7 @@ def get_valid_access_token(user_id: int) -> str:
     if creds is None:
         raise NoGoogleCredentialsError(f"user {user_id} has no Google credentials")
 
-    if not creds.is_expired(buffer_seconds=60):
+    if not creds.is_expired(buffer_seconds=TOKEN_REFRESH_BUFFER_SECONDS):
         return creds.access_token
 
     if not creds.refresh_token:
@@ -59,16 +65,12 @@ def get_valid_access_token(user_id: int) -> str:
         raise GoogleAuthError("GOOGLE_CLIENT_ID/SECRET not configured")
 
     try:
-        resp = requests.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": creds.refresh_token,
-                "client_id": client_id,
-                "client_secret": client_secret,
-            },
-            timeout=5,
-        )
+        resp = post_token_request({
+            "grant_type": "refresh_token",
+            "refresh_token": creds.refresh_token,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        })
     except requests.RequestException as exc:
         logger.error("google_token_refresh_network_error", user_id=user_id, error=str(exc))
         raise GoogleAuthError(f"network error refreshing token: {exc}") from exc
