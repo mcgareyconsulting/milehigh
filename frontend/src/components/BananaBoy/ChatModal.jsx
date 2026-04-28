@@ -6,14 +6,17 @@ import remarkGfm from 'remark-gfm';
 import { useBananaBoyChat } from '../../hooks/useBananaBoyChat';
 import BananaBoyAnimation from './BananaBoyAnimation';
 import { buildGoogleLinkUrl, messageForGoogleError } from '../../services/googleAuthApi';
+import { setBananaBoyPreferences } from '../../services/bananaBoyApi';
 
 export default function ChatModal({ user, onClose, onUserChange }) {
     const { messages, loading, sending, error, send, clear } = useBananaBoyChat(true);
     const [draft, setDraft] = useState('');
+    const [briefSaving, setBriefSaving] = useState(false);
     const listRef = useRef(null);
     const textareaRef = useRef(null);
     const location = useLocation();
     const gmailLinked = !!user?.gmail_linked;
+    const briefOn = !!user?.wants_daily_brief;
     const params = new URLSearchParams(location.search);
     const googleErrorCode = params.get('google_error');
     const googleErrorMsg = googleErrorCode ? messageForGoogleError(googleErrorCode) : null;
@@ -22,6 +25,19 @@ export default function ChatModal({ user, onClose, onUserChange }) {
     const handleConnectGmail = () => {
         const next = window.location.pathname + window.location.search;
         window.location.href = buildGoogleLinkUrl(next);
+    };
+
+    const handleToggleBrief = async () => {
+        if (briefSaving) return;
+        setBriefSaving(true);
+        try {
+            await setBananaBoyPreferences({ wants_daily_brief: !briefOn });
+            if (onUserChange) await onUserChange();
+        } catch (e) {
+            // Silent — toggle just won't flip if the API rejects.
+        } finally {
+            setBriefSaving(false);
+        }
     };
 
     useEffect(() => {
@@ -69,6 +85,23 @@ export default function ChatModal({ user, onClose, onUserChange }) {
                 <div className="absolute top-2 left-3 right-2 z-10 flex items-center justify-between text-sm">
                     <span className="font-semibold text-gray-900 dark:text-slate-100 drop-shadow-sm">Banana Boy</span>
                     <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleToggleBrief}
+                            disabled={briefSaving}
+                            title={
+                                briefOn
+                                    ? 'Daily 6:30am brief is on — click to turn off'
+                                    : 'Get a daily 6:30am brief in this chat'
+                            }
+                            className={
+                                briefOn
+                                    ? 'px-2 py-0.5 rounded bg-amber-100/90 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 hover:bg-amber-200/90 dark:hover:bg-amber-900/80 text-xs disabled:opacity-50'
+                                    : 'px-2 py-0.5 rounded bg-white/70 dark:bg-slate-800/70 text-gray-700 dark:text-slate-200 hover:text-gray-900 dark:hover:text-slate-100 text-xs disabled:opacity-50'
+                            }
+                        >
+                            {briefOn ? '☼ Daily brief' : 'Daily brief'}
+                        </button>
                         <button
                             type="button"
                             onClick={handleConnectGmail}

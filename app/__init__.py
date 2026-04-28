@@ -47,6 +47,9 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 def init_scheduler(app):
     """Initialize the background scheduler for Trello queue draining and heartbeat."""
+    from apscheduler.triggers.cron import CronTrigger
+
+    from app.banana_boy.daily_brief import send_daily_briefs
     from app.trello import drain_trello_queue
 
     # --- Prevent scheduler duplication in multi-worker environments ---
@@ -97,6 +100,15 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # --- Banana Boy daily brief (6:30 AM Mountain Time, opted-in users only) ---
+    scheduler.add_job(
+        func=lambda: send_daily_briefs(app),
+        trigger=CronTrigger(hour=6, minute=30, timezone="America/Denver"),
+        id="banana_boy_daily_brief",
+        name="Banana Boy Daily Brief",
+        replace_existing=True,
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -112,6 +124,12 @@ def init_scheduler(app):
             "name": "Scheduler Heartbeat",
             "schedule": "Every 30 minutes",
             "description": "Confirms scheduler is alive",
+        },
+        {
+            "id": "banana_boy_daily_brief",
+            "name": "Banana Boy Daily Brief",
+            "schedule": "Daily at 6:30 AM America/Denver",
+            "description": "Posts a morning summary to opted-in users' Banana Boy threads",
         },
     ]
 

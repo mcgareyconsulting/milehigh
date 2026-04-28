@@ -53,6 +53,7 @@ class User(db.Model):
     trello_id = db.Column(db.String(255), unique=True, nullable=True)
     email = db.Column(db.String(255), nullable=True, index=True)
     google_sub = db.Column(db.String(255), unique=True, nullable=True, index=True)
+    wants_daily_brief = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
 

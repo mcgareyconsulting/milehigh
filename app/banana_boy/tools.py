@@ -16,13 +16,14 @@ from app.auth.google_tokens import GoogleAuthError
 from app.banana_boy.gmail_client import GmailScopeError, create_draft, send_draft
 from app.history import _extract_new_value_from_payload
 from app.logging_config import get_logger
-from app.models import Notification, ReleaseEvents, Releases, db
+from app.models import Notification, ReleaseEvents, Releases, Submittals, db
 
 logger = get_logger(__name__)
 
 TOOL_SEARCH_BY_ID = "search_jobs_by_identifier"
 TOOL_SEARCH_BY_NAME = "search_jobs_by_project_name"
 TOOL_RELEASE_HISTORY = "get_release_history"
+TOOL_SEARCH_SUBMITTALS = "search_submittals"
 TOOL_CREATE_DRAFT = "create_email_draft"
 TOOL_SEND_DRAFT = "send_email_draft"
 TOOL_NOTIFICATIONS = "get_my_notifications"
@@ -106,6 +107,42 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["job", "release"],
+        },
+    },
+    {
+        "name": TOOL_SEARCH_SUBMITTALS,
+        "description": (
+            "Search Procore submittals. ONLY call when the user explicitly "
+            "mentions 'submittals' or asks about ball-in-court ownership "
+            "(e.g. 'what's on Daniel's plate'). Do NOT call for bare project "
+            "queries ('tell me about Lennar Columbine', 'project 350') or "
+            "for job-release identifiers ('440-271') — those are release-only. "
+            "If the user says 'pull submittals AND releases for 350', call "
+            "both this tool and search_jobs_by_identifier in the same turn. "
+            "Pass at least one filter."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_name": {
+                    "type": "string",
+                    "description": "Project name fragment (substring, case-insensitive). Example: 'Lennar Columbine'.",
+                },
+                "project_number": {
+                    "type": "string",
+                    "description": "Exact project number (string in DB). Use after release lookup gives you a job number.",
+                },
+                "ball_in_court": {
+                    "type": "string",
+                    "description": "Person currently owning the submittal. Substring match against the comma-separated assignee field. Example: 'Daniel'.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max rows (default 20, hard cap 50).",
+                    "default": 20,
+                },
+            },
+            "required": [],
         },
     },
     {
@@ -349,6 +386,64 @@ def get_release_history(job: int, release: str, max_events: int = 50,
     }
 
 
+def _submittal_to_compact(s: Submittals) -> dict:
+    return {
+        "submittal_id": s.submittal_id,
+        "title": s.title,
+        "status": s.status,
+        "type": s.type,
+        "ball_in_court": s.ball_in_court,
+        "submittal_manager": s.submittal_manager,
+        "order_number": s.order_number,
+        "drafting_status": s.submittal_drafting_status,
+        "due_date": s.due_date.isoformat() if s.due_date else None,
+        "project_number": s.project_number,
+        "project_name": s.project_name,
+        "last_updated": s.last_updated.isoformat() if s.last_updated else None,
+    }
+
+
+def search_submittals(project_name: str | None = None,
+                      project_number: str | None = None,
+                      ball_in_court: str | None = None,
+                      limit: int = 20) -> dict[str, Any]:
+    """Submittals search with optional filters. At least one required."""
+    if not (project_name or project_number or ball_in_court):
+        return {
+            "error": "at least one of project_name, project_number, or ball_in_court is required",
+            "results": [],
+        }
+    limit = _clamp_limit(limit, default=20, ceiling=50)
+
+    q = Submittals.query
+    if project_number:
+        q = q.filter(Submittals.project_number == str(project_number))
+    if project_name:
+        q = q.filter(Submittals.project_name.ilike(f"%{project_name.strip()}%"))
+    if ball_in_court:
+        # ball_in_court is a comma-separated multi-assignee string
+        # (see app/procore/helpers.py). Substring match handles partial names.
+        q = q.filter(Submittals.ball_in_court.ilike(f"%{ball_in_court.strip()}%"))
+
+    rows = (
+        q.order_by(Submittals.last_updated.desc().nullslast(),
+                   Submittals.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "query": {
+            "project_name": project_name,
+            "project_number": project_number,
+            "ball_in_court": ball_in_court,
+            "limit": limit,
+        },
+        "result_count": len(rows),
+        "results": [_submittal_to_compact(s) for s in rows],
+    }
+
+
 def get_my_notifications(context: dict, unread_only: bool = True, limit: int = 20) -> dict[str, Any]:
     user_id = context.get("user_id")
     if not user_id:
@@ -467,6 +562,7 @@ TOOL_EXECUTORS = {
     TOOL_SEARCH_BY_ID: search_jobs_by_identifier,
     TOOL_SEARCH_BY_NAME: search_jobs_by_project_name,
     TOOL_RELEASE_HISTORY: get_release_history,
+    TOOL_SEARCH_SUBMITTALS: search_submittals,
     TOOL_NOTIFICATIONS: get_my_notifications,
     TOOL_CREATE_DRAFT: create_email_draft_tool,
     TOOL_SEND_DRAFT: send_email_draft_tool,

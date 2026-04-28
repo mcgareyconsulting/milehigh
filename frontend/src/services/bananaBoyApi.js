@@ -18,3 +18,8 @@ export async function sendMessage(message) {
 export async function clearMessages() {
     await axios.delete(`${BASE}/messages`);
 }
+
+export async function setBananaBoyPreferences({ wants_daily_brief }) {
+    const { data } = await axios.put(`${BASE}/preferences`, { wants_daily_brief });
+    return data;
+}
