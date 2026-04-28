@@ -110,7 +110,9 @@ def get_current_user_info():
             'is_admin': user.is_admin,
             'is_drafter': user.is_drafter,
             'is_active': user.is_active,
-            'last_login': user.last_login.isoformat() if user.last_login else None
+            'last_login': user.last_login.isoformat() if user.last_login else None,
+            'gmail_linked': user.gmail_credentials is not None,
+            'gmail_email': user.gmail_credentials.email if user.gmail_credentials else None,
         }), 200
     except Exception as e:
         logger.error(f"Error getting current user info: {e}", exc_info=True)

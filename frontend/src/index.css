@@ -141,3 +141,56 @@ body>#root>div>div {
     transform: scaleY(0.8);
   }
 }
+
+/* Banana Boy animation — frame stack, sparks, weld glow */
+@keyframes bbBreathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-1px) scale(1.005); }
+}
+@keyframes bbSparkFly {
+  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translate(var(--bb-tx), var(--bb-ty)) scale(0.3); opacity: 0; }
+}
+@keyframes bbWeldFlicker {
+  0%   { opacity: 0.95; }
+  25%  { opacity: 0.35; }
+  50%  { opacity: 0.85; }
+  75%  { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+.bb-breathe {
+  animation: bbBreathe 3.2s ease-in-out infinite;
+}
+.bb-pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
+.bb-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  opacity: 0;
+  transition: opacity 60ms steps(1, end);
+}
+.bb-frame.bb-active { opacity: 1; }
+.bb-spark {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff5b8;
+  box-shadow: 0 0 6px 1px #e85a00, 0 0 10px 3px rgba(255, 122, 0, 0.55);
+  animation: bbSparkFly 0.7s ease-out forwards;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+.bb-glow {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 220, 130, 0.55), rgba(255, 140, 60, 0.18) 35%, transparent 65%);
+  filter: blur(4px);
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.bb-glow.bb-on { animation: bbWeldFlicker 0.18s steps(1, end) infinite; }

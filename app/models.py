@@ -19,7 +19,7 @@ updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from enum import Enum
 from sqlalchemy import cast, Integer, String
 
@@ -51,9 +51,11 @@ class User(db.Model):
     is_drafter = db.Column(db.Boolean, default=False, nullable=False)
     procore_id = db.Column(db.String(255), unique=True, nullable=True)
     trello_id = db.Column(db.String(255), unique=True, nullable=True)
+    email = db.Column(db.String(255), nullable=True, index=True)
+    google_sub = db.Column(db.String(255), unique=True, nullable=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
-    
+
     # Relationships
     job_events = db.relationship(
         'ReleaseEvents', backref='user', lazy='dynamic',
@@ -62,6 +64,10 @@ class User(db.Model):
     submittal_events = db.relationship(
         'SubmittalEvents', backref='user', lazy='dynamic',
         foreign_keys='SubmittalEvents.internal_user_id'
+    )
+    gmail_credentials = db.relationship(
+        'GoogleCredentials', backref='user', uselist=False,
+        cascade='all, delete-orphan'
     )
     
     def __repr__(self):
@@ -85,6 +91,59 @@ class ProcoreToken(db.Model):
     def get_current(cls):
         '''Get current Procore token'''
         return cls.query.order_by(cls.updated_at.desc()).first()
+
+
+class GoogleCredentials(db.Model):
+    """Per-user Google OAuth credentials (Gmail readonly + identity).
+
+    The `provider` column is forward-looking so a future Microsoft Graph
+    integration can share this table by adding rows with provider='microsoft'.
+    """
+    __tablename__ = "google_credentials"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'),
+        unique=True, nullable=False, index=True
+    )
+    provider = db.Column(db.String(32), nullable=False, default='google')
+    google_sub = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    email_verified = db.Column(db.Boolean, nullable=False, default=True)
+    # TODO(post-demo): encrypt access_token / refresh_token at rest (Fernet column).
+    access_token = db.Column(db.Text, nullable=False)
+    refresh_token = db.Column(db.Text, nullable=True)
+    token_expires_at = db.Column(db.DateTime, nullable=False)
+    scopes = db.Column(db.Text, nullable=False)
+    id_token = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False,
+        default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    last_refreshed_at = db.Column(db.DateTime, nullable=True)
+
+    @classmethod
+    def get_for_user(cls, user_id):
+        return cls.query.filter_by(user_id=user_id).first()
+
+    def is_expired(self, buffer_seconds: int = 60) -> bool:
+        return datetime.utcnow() >= self.token_expires_at - timedelta(seconds=buffer_seconds)
+
+    def update_from_token_response(self, token: dict) -> None:
+        """Apply a fresh /token response in place. Caller commits."""
+        if "access_token" in token:
+            self.access_token = token["access_token"]
+        if token.get("refresh_token"):
+            # Google may omit refresh_token on refresh; only overwrite when present.
+            self.refresh_token = token["refresh_token"]
+        expires_in = int(token.get("expires_in", 3600))
+        self.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        if token.get("scope"):
+            self.scopes = token["scope"]
+        if token.get("id_token"):
+            self.id_token = token["id_token"]
+        self.last_refreshed_at = datetime.utcnow()
+
 
 class Submittals(db.Model):
     __tablename__ = "submittals"
@@ -787,6 +846,27 @@ class Notification(db.Model):
             'submittal_title': self.submittal.title if self.submittal else None,
             'submittal_project_name': self.submittal.project_name if self.submittal else None,
             'submittal_project_number': self.submittal.project_number if self.submittal else None,
+        }
+
+
+class ChatMessage(db.Model):
+    """Banana Boy chat turns, per user, in chronological order."""
+    __tablename__ = "chat_messages"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    role = db.Column(db.String(16), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', lazy='select')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'role': self.role,
+            'content': self.content,
+            'created_at': _dt(self.created_at),
         }
 
 

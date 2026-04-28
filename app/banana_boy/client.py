@@ -1,0 +1,141 @@
+"""Anthropic Claude wrapper for Banana Boy with tool-use loop."""
+import json
+
+from flask import current_app
+
+from app.banana_boy.tools import TOOL_DEFINITIONS, execute_tool
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
+MAX_TOKENS = 1024
+MAX_TOOL_ITERATIONS = 5
+SYSTEM_PROMPT = (
+    "You are Banana Boy, a friendly personal assistant inside the MHMW operations app. "
+    "Be concise and direct. If you don't know something, say so. "
+    "When the user asks about a specific job, release, or project, call the "
+    "search tools rather than guessing. Identifiers look like '410-271' "
+    "(job-release) or just '410' (job). "
+    "When the user asks 'what's on my to-do', 'what do I have to do', or "
+    "anything about their notifications/mentions, call get_my_notifications. "
+    "EMAIL RULES: When the user asks you to send or write an email, ALWAYS "
+    "call create_email_draft first — never claim to have sent without a "
+    "draft. After drafting, summarize the draft (To, Subject, Body) and ask "
+    "the user to confirm. Only call send_email_draft AFTER an explicit, "
+    "unambiguous confirmation in the most recent user message (e.g. 'yes "
+    "send it', 'go ahead'). If the user's intent is unclear, ask. If a tool "
+    "result has needs_reconnect=true, tell the user to click 'Connect Gmail' "
+    "to grant draft/send permission."
+)
+
+
+class BananaBoyConfigError(RuntimeError):
+    """Raised when the Anthropic API key is missing."""
+
+
+class BananaBoyAPIError(RuntimeError):
+    """Raised when the upstream Anthropic call fails."""
+
+
+def _build_client():
+    api_key = current_app.config.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise BananaBoyConfigError("ANTHROPIC_API_KEY is not configured")
+
+    import anthropic
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def _block_to_dict(block):
+    """Convert an Anthropic content block (text/tool_use) to a plain dict."""
+    btype = getattr(block, "type", None)
+    if btype == "text":
+        return {"type": "text", "text": block.text}
+    if btype == "tool_use":
+        return {
+            "type": "tool_use",
+            "id": block.id,
+            "name": block.name,
+            "input": block.input,
+        }
+    # Fall through unchanged — let Anthropic SDK reject anything we don't know.
+    return block
+
+
+def _extract_text(content_blocks):
+    parts = [b.text for b in content_blocks if getattr(b, "type", None) == "text"]
+    return "".join(parts).strip()
+
+
+def generate_reply(history, extra_system_context: str = "", tool_context: dict | None = None):
+    """Run the chat turn, including any tool-use round trips.
+
+    `history` is a list of {role, content} the chat route built. `extra_system_context`
+    is appended to SYSTEM_PROMPT (used by the chat route for Gmail context).
+    `tool_context` carries per-request data tools may need (e.g. user_id).
+    Returns the final assistant text. Raises BananaBoyAPIError on upstream failure.
+    """
+    tool_context = tool_context or {}
+    system_prompt = SYSTEM_PROMPT
+    if extra_system_context:
+        system_prompt = f"{SYSTEM_PROMPT}\n\n{extra_system_context}"
+
+    try:
+        client = _build_client()
+    except BananaBoyConfigError:
+        raise
+
+    messages = list(history)
+
+    for iteration in range(MAX_TOOL_ITERATIONS):
+        try:
+            response = client.messages.create(
+                model=HAIKU_MODEL,
+                max_tokens=MAX_TOKENS,
+                system=system_prompt,
+                tools=TOOL_DEFINITIONS,
+                messages=messages,
+            )
+        except Exception as exc:
+            logger.error("Anthropic API call failed", error=str(exc), exc_info=True)
+            raise BananaBoyAPIError(str(exc)) from exc
+
+        # If Claude is done, return the text.
+        if response.stop_reason != "tool_use":
+            text = _extract_text(response.content)
+            if not text:
+                raise BananaBoyAPIError("empty response from Anthropic")
+            return text
+
+        # Otherwise, run any tool_use blocks and feed results back.
+        assistant_blocks = [_block_to_dict(b) for b in response.content]
+        messages.append({"role": "assistant", "content": assistant_blocks})
+
+        tool_results = []
+        for block in response.content:
+            if getattr(block, "type", None) != "tool_use":
+                continue
+            logger.info(
+                "banana_boy_tool_call",
+                iteration=iteration,
+                tool=block.name,
+                input=block.input,
+            )
+            result = execute_tool(block.name, block.input or {}, context=tool_context)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": json.dumps(result, default=str),
+            })
+
+        if not tool_results:
+            # tool_use stop_reason but no actual tool blocks — treat as terminal.
+            text = _extract_text(response.content)
+            if not text:
+                raise BananaBoyAPIError("empty response from Anthropic")
+            return text
+
+        messages.append({"role": "user", "content": tool_results})
+
+    raise BananaBoyAPIError("exceeded tool-use iteration limit")

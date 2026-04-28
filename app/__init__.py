@@ -28,9 +28,11 @@ from app.trello import trello_bp
 from app.procore import procore_bp
 from app.brain import brain_bp
 from app.auth.routes import auth_bp
+from app.auth import google as _google_oauth_routes  # noqa: F401  attaches /google/* to auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
 from app.onedrive import onedrive_bp
+from app.banana_boy import banana_boy_bp
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -427,6 +429,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(banana_boy_bp, url_prefix="/banana-boy")
 
     # Catch-all route for React Router (must be last, after all API routes)
     # This handles direct URL access to React routes like /history, /operations, etc.
