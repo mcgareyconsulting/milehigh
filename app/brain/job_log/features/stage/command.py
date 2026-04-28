@@ -66,6 +66,15 @@ class UpdateStageCommand:
     stage: str
     source: str = "Brain"
     source_of_update: str = "Brain"
+    # When True, skip the final recalculate_all_jobs_scheduling call — used by
+    # the /brain/events/<id>/undo bundling path so the cascade runs once after
+    # the parent + linked children all revert.
+    defer_cascade: bool = False
+    # When set, merged into the primary event payload as `undone_event_id`. Used by the
+    # /brain/events/<id>/undo endpoint to (a) link the undo event back to its source for
+    # audit trail rendering and (b) perturb the dedup hash so undo-the-undo within the
+    # 30s bucket doesn't collide with the original event.
+    undone_event_id: Optional[int] = None
 
     def execute(self) -> StageUpdateResult:
         from app.api.helpers import get_stage_group_from_stage, get_fixed_tier
@@ -79,12 +88,16 @@ class UpdateStageCommand:
 
         old_stage = job_record.stage if job_record.stage else 'Released'
 
+        event_payload = {'from': old_stage, 'to': self.stage}
+        if self.undone_event_id is not None:
+            event_payload['undone_event_id'] = self.undone_event_id
+
         event = JobEventService.create(
             job=self.job_id,
             release=self.release,
             action='update_stage',
             source=self.source,
-            payload={'from': old_stage, 'to': self.stage},
+            payload=event_payload,
         )
         if event is None:
             logger.info(
@@ -139,7 +152,8 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
-        # job_comp cascade
+        # job_comp cascade. Linked events get `parent_event_id` so the undo
+        # endpoint can find them and bundle their reverts with the parent's.
         if self.stage == 'Complete':
             current_job_comp = (job_record.job_comp or '').strip().upper()
             if current_job_comp != 'X':
@@ -153,6 +167,7 @@ class UpdateStageCommand:
                         'old_value': old_jc,
                         'new_value': 'X',
                         'reason': 'stage_set_to_complete',
+                        'parent_event_id': event.id,
                     },
                 )
                 extras['job_comp'] = 'X'
@@ -169,6 +184,7 @@ class UpdateStageCommand:
                         'old_value': old_jc,
                         'new_value': None,
                         'reason': 'stage_changed_from_complete',
+                        'parent_event_id': event.id,
                     },
                 )
                 extras['job_comp'] = None
@@ -191,6 +207,7 @@ class UpdateStageCommand:
                     'from': payload_from,
                     'to': None,
                     'reason': 'stage_change_complete_clears_fab_order',
+                    'parent_event_id': event.id,
                 },
             )
             if fab_order_event is None:
@@ -222,6 +239,7 @@ class UpdateStageCommand:
                     'from': payload_from,
                     'to': payload_to,
                     'reason': 'stage_change_unified',
+                    'parent_event_id': event.id,
                 },
             )
             if fab_order_event is None:
@@ -318,15 +336,16 @@ class UpdateStageCommand:
 
         db.session.commit()
 
-        try:
-            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-        except Exception as cascade_err:
-            logger.error(
-                f"Scheduling cascade failed after stage change for "
-                f"{self.job_id}-{self.release}: {cascade_err}",
-                exc_info=True,
-            )
+        if not self.defer_cascade:
+            try:
+                from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+                recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+            except Exception as cascade_err:
+                logger.error(
+                    f"Scheduling cascade failed after stage change for "
+                    f"{self.job_id}-{self.release}: {cascade_err}",
+                    exc_info=True,
+                )
 
         logger.info(
             "update_stage completed successfully",

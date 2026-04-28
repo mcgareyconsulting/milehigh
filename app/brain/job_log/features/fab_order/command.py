@@ -45,6 +45,14 @@ class UpdateFabOrderCommand:
     fab_order: Optional[float]
     source: str = "Brain"  # Will be formatted as 'Brain:username' automatically
     source_of_update: str = "Brain"  # Matches route's hardcoded value
+    # When True, skip the final recalculate_all_jobs_scheduling call — used by
+    # the /brain/events/<id>/undo bundling path so the cascade runs once after
+    # the parent + linked children all revert.
+    defer_cascade: bool = False
+    # When set, merged into the event payload as `undone_event_id`. Used by the
+    # /brain/events/<id>/undo endpoint to link the undo event to its source and
+    # perturb the dedup hash so undo-the-undo within 30s doesn't collide.
+    undone_event_id: Optional[int] = None
 
     def execute(self) -> FabOrderUpdateResult:
         """
@@ -95,15 +103,16 @@ class UpdateFabOrderCommand:
         payload_from = None if (isinstance(old_fab_order, float) and math.isnan(old_fab_order)) else old_fab_order
         payload_to = None if (self.fab_order is not None and isinstance(self.fab_order, float) and math.isnan(self.fab_order)) else self.fab_order
         
+        event_payload = {'from': payload_from, 'to': payload_to}
+        if self.undone_event_id is not None:
+            event_payload['undone_event_id'] = self.undone_event_id
+
         event = JobEventService.create(
             job=self.job_id,
             release=self.release,
             action='update_fab_order',
             source=self.source,
-            payload={
-                'from': payload_from,
-                'to': payload_to
-            }
+            payload=event_payload,
         )
 
         # Check if event was deduplicated
@@ -131,11 +140,12 @@ class UpdateFabOrderCommand:
         db.session.commit()
 
         # 7b. Recalculate scheduling for fab stage (fab_order affects hours_in_front → start_install)
-        try:
-            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-        except Exception as e:
-            logger.error(f"Scheduling recalculation failed after fab_order update: {e}", exc_info=True)
+        if not self.defer_cascade:
+            try:
+                from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+                recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+            except Exception as e:
+                logger.error(f"Scheduling recalculation failed after fab_order update: {e}", exc_info=True)
 
         logger.info(f"update_fab_order completed successfully", extra={
             'job': self.job_id,
