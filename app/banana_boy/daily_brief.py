@@ -15,17 +15,18 @@ import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import or_
-
-from app.banana_boy.client import HAIKU_MODEL, _get_client
-from app.banana_boy.tools import _release_to_compact, _submittal_to_compact
+from app.banana_boy.client import HAIKU_MODEL, get_client
+from app.banana_boy.tools import (
+    _release_to_compact,
+    _submittal_to_compact,
+    query_open_submittals,
+)
 from app.logging_config import get_logger
 from app.models import (
     ChatMessage,
     Notification,
     ROLE_ASSISTANT,
     Releases,
-    Submittals,
     User,
     db,
 )
@@ -49,22 +50,14 @@ def _today_in_mountain():
 
 
 def _my_open_submittals(user: User) -> list[dict]:
-    """Substring-match user's first/last name against the comma-separated
-    `ball_in_court` field. Mirrors the search_submittals tool convention."""
-    if not user.first_name and not user.last_name:
+    name_substrings = [s for s in (user.first_name, user.last_name) if s]
+    if not name_substrings:
         return []
-    name_filters = []
-    if user.first_name:
-        name_filters.append(Submittals.ball_in_court.ilike(f"%{user.first_name}%"))
-    if user.last_name:
-        name_filters.append(Submittals.ball_in_court.ilike(f"%{user.last_name}%"))
-
-    q = Submittals.query.filter(or_(*name_filters))
-    # Exclude obvious closed/completed submittals — status text varies, so
-    # we just filter the most common terminal label.
-    q = q.filter(or_(Submittals.status.is_(None),
-                     ~Submittals.status.ilike("%closed%")))
-    rows = q.order_by(Submittals.due_date.asc().nullslast()).limit(20).all()
+    rows = query_open_submittals(
+        ball_in_court_substrings=name_substrings,
+        exclude_closed=True,
+        limit=20,
+    )
     return [_submittal_to_compact(s) for s in rows]
 
 
@@ -112,8 +105,7 @@ def _has_any_signal(facts: dict) -> bool:
 
 
 def _format_brief(facts: dict) -> str:
-    """Single Haiku call: deterministic facts in, conversational brief out."""
-    client = _get_client()
+    client = get_client()
     response = client.messages.create(
         model=HAIKU_MODEL,
         max_tokens=BRIEF_MAX_TOKENS,

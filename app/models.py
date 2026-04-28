@@ -151,7 +151,7 @@ class Submittals(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     submittal_id = db.Column(db.String(255), unique=True, nullable=False)
     procore_project_id = db.Column(db.String(100))
-    project_number = db.Column(db.String(100))
+    project_number = db.Column(db.String(100), index=True)
     project_name = db.Column(db.String(255))
     title = db.Column(db.Text)
     status = db.Column(db.String(100))
@@ -163,7 +163,7 @@ class Submittals(db.Model):
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_bic_update = db.Column(db.DateTime, nullable=True)  # Cached timestamp of last ball-in-court update from Procore
 
@@ -571,7 +571,10 @@ def query_job_releases():
 class ReleaseEvents(db.Model):
     '''Table to track events for releases.'''
     __tablename__ = 'release_events'
-    __table_args__ = (db.UniqueConstraint('payload_hash', name='uq_release_events_payload_hash'),)
+    __table_args__ = (
+        db.UniqueConstraint('payload_hash', name='uq_release_events_payload_hash'),
+        db.Index('ix_release_events_job_release', 'job', 'release'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     job = db.Column(db.Integer, nullable=False)
     release = db.Column(db.String(50))

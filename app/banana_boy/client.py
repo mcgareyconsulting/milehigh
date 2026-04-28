@@ -17,34 +17,12 @@ SYSTEM_PROMPT = (
     "When the user asks about a specific job, release, or project, call the "
     "search tools rather than guessing. Identifiers look like '410-271' "
     "(job-release) or just '410' (job). "
-    "For change-history questions ('what happened to', 'when did stage change', "
-    "'who released it', 'show me the changelog'), call get_release_history "
-    "with job and release. When the user wants the full picture for a "
-    "release, call search_jobs_by_identifier AND get_release_history in the "
-    "same turn. "
-    "SUBMITTALS DISPATCH: search_submittals fires ONLY when the user "
-    "explicitly says 'submittals' or asks ball-in-court / ownership / "
-    "'on my plate' / 'in my court' / 'what should I work on' / 'to-do' "
-    "questions. Bare project or identifier queries are release-only. "
-    "Examples — "
-    "'Tell me about 440-271' → search_jobs_by_identifier only. "
-    "'Tell me about Lennar Columbine' → search_jobs_by_project_name only. "
-    "'Project 350' → search_jobs_by_identifier(\"350\") only. "
-    "'Submittals for 350' → search_submittals(project_number=\"350\") only. "
-    "'Submittals for Lennar' → search_submittals(project_name=\"Lennar\") only. "
-    "'Pull submittals AND releases for 350' → BOTH "
-    "search_jobs_by_identifier(\"350\") and search_submittals(project_number=\"350\"). "
-    "'What submittals does Daniel have?' → search_submittals(ball_in_court=\"Daniel\"). "
-    "'What's in my court?' / 'On my plate?' / 'What's on my to-do?' / "
-    "'What should I be working on today?' → "
-    "search_submittals(ball_in_court=<your first_name from the Current user "
-    "block in the system context>). These are ball-in-court questions about "
-    "MY submittals — call search_submittals, NOT get_my_notifications. "
-    "Do not infer that 'project X' alone means 'show me submittals too'. "
-    "NOTIFICATIONS DISPATCH: call get_my_notifications ONLY when the user "
-    "asks specifically about mentions, notifications, '@me', alerts, or "
-    "'what's new for me'. Do NOT call it for ball-in-court / on-my-plate "
-    "questions — those go to search_submittals as above. "
+    "Ball-in-court / 'on my plate' / 'what should I work on' questions are "
+    "submittal questions: pass the user's first_name from the Current user "
+    "block to search_submittals(ball_in_court=...). They are NOT notification "
+    "questions. "
+    "When the user asks for change history alongside a release, call "
+    "search_jobs_by_identifier AND get_release_history in the same turn. "
     "EMAIL RULES: When the user asks you to send or write an email, ALWAYS "
     "call create_email_draft first — never claim to have sent without a "
     "draft. After drafting, summarize the draft (To, Subject, Body) and ask "
@@ -67,7 +45,7 @@ class BananaBoyAPIError(RuntimeError):
 _CLIENT_KEY = "_banana_boy_anthropic_client"
 
 
-def _get_client():
+def get_client():
     api_key = current_app.config.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise BananaBoyConfigError("ANTHROPIC_API_KEY is not configured")
@@ -115,7 +93,7 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
     if extra_system_context:
         system_prompt = f"{SYSTEM_PROMPT}\n\n{extra_system_context}"
 
-    client = _get_client()
+    client = get_client()
     messages = list(history)
 
     for iteration in range(MAX_TOOL_ITERATIONS):

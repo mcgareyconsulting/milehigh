@@ -325,7 +325,7 @@ def get_release_history(job: int, release: str, max_events: int = 50,
     """Audit trail for a single (job, release). Newest-first.
 
     Reuses `_extract_new_value_from_payload` so the human-readable summary
-    matches the rest of the app. Joinedload on `User` keeps actor lookup O(1).
+    matches the rest of the app.
     """
     if job is None or release is None or str(release).strip() == "":
         return {"error": "both job and release are required", "events": []}
@@ -345,7 +345,6 @@ def get_release_history(job: int, release: str, max_events: int = 50,
     if not include_system_echoes:
         q = q.filter(ReleaseEvents.is_system_echo == False)  # noqa: E712
 
-    total = q.count()
     rows = q.order_by(ReleaseEvents.created_at.desc()).limit(max_events).all()
 
     events = []
@@ -380,10 +379,13 @@ def get_release_history(job: int, release: str, max_events: int = 50,
             "release": release_str,
             "include_system_echoes": include_system_echoes,
         },
-        "total_event_count": total,
         "returned_event_count": len(events),
+        "has_more": len(events) == max_events,
         "events": events,
     }
+
+
+TERMINAL_SUBMITTAL_STATUSES = ("closed",)
 
 
 def _submittal_to_compact(s: Submittals) -> dict:
@@ -403,6 +405,41 @@ def _submittal_to_compact(s: Submittals) -> dict:
     }
 
 
+def query_open_submittals(*, project_name: str | None = None,
+                          project_number: str | None = None,
+                          ball_in_court_substrings: list[str] | None = None,
+                          exclude_closed: bool = False,
+                          limit: int = 20):
+    """Build and execute the submittals query shared by the search tool and
+    the daily brief. Returns ORM rows in display order. Caller serializes."""
+    from sqlalchemy import or_
+
+    q = Submittals.query
+    if project_number:
+        q = q.filter(Submittals.project_number == str(project_number))
+    if project_name:
+        q = q.filter(Submittals.project_name.ilike(f"%{project_name.strip()}%"))
+    if ball_in_court_substrings:
+        # ball_in_court is a comma-separated multi-assignee string
+        # (see app/procore/helpers.py). Substring match handles partial names.
+        q = q.filter(or_(*[
+            Submittals.ball_in_court.ilike(f"%{s.strip()}%")
+            for s in ball_in_court_substrings if s and s.strip()
+        ]))
+    if exclude_closed:
+        q = q.filter(or_(*[
+            Submittals.status.is_(None),
+            *[~Submittals.status.ilike(f"%{s}%") for s in TERMINAL_SUBMITTAL_STATUSES],
+        ]))
+
+    return (
+        q.order_by(Submittals.last_updated.desc().nullslast(),
+                   Submittals.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def search_submittals(project_name: str | None = None,
                       project_number: str | None = None,
                       ball_in_court: str | None = None,
@@ -415,21 +452,11 @@ def search_submittals(project_name: str | None = None,
         }
     limit = _clamp_limit(limit, default=20, ceiling=50)
 
-    q = Submittals.query
-    if project_number:
-        q = q.filter(Submittals.project_number == str(project_number))
-    if project_name:
-        q = q.filter(Submittals.project_name.ilike(f"%{project_name.strip()}%"))
-    if ball_in_court:
-        # ball_in_court is a comma-separated multi-assignee string
-        # (see app/procore/helpers.py). Substring match handles partial names.
-        q = q.filter(Submittals.ball_in_court.ilike(f"%{ball_in_court.strip()}%"))
-
-    rows = (
-        q.order_by(Submittals.last_updated.desc().nullslast(),
-                   Submittals.created_at.desc())
-        .limit(limit)
-        .all()
+    rows = query_open_submittals(
+        project_name=project_name,
+        project_number=project_number,
+        ball_in_court_substrings=[ball_in_court] if ball_in_court else None,
+        limit=limit,
     )
 
     return {

@@ -94,11 +94,11 @@ export default function ChatModal({ user, onClose, onUserChange }) {
                                     ? 'Daily 6:30am brief is on — click to turn off'
                                     : 'Get a daily 6:30am brief in this chat'
                             }
-                            className={
+                            className={`px-2 py-0.5 rounded text-xs disabled:opacity-50 ${
                                 briefOn
-                                    ? 'px-2 py-0.5 rounded bg-amber-100/90 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 hover:bg-amber-200/90 dark:hover:bg-amber-900/80 text-xs disabled:opacity-50'
-                                    : 'px-2 py-0.5 rounded bg-white/70 dark:bg-slate-800/70 text-gray-700 dark:text-slate-200 hover:text-gray-900 dark:hover:text-slate-100 text-xs disabled:opacity-50'
-                            }
+                                    ? 'bg-amber-100/90 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 hover:bg-amber-200/90 dark:hover:bg-amber-900/80'
+                                    : 'bg-white/70 dark:bg-slate-800/70 text-gray-700 dark:text-slate-200 hover:text-gray-900 dark:hover:text-slate-100'
+                            }`}
                         >
                             {briefOn ? '☼ Daily brief' : 'Daily brief'}
                         </button>
