@@ -205,8 +205,8 @@ def test_stage_change_to_dynamic_preserves_fab_order(client, app):
         assert job.fab_order == 20
 
 
-def test_stage_change_to_empty_dynamic_stage_preserves_fab_order(client, app):
-    """Moving to an empty Fabrication stage leaves fab_order untouched."""
+def test_stage_change_to_welded_qc_empty_paint_deck_bumps_to_3(client, app):
+    """Fab → Welded QC with empty paint deck: lands at 3 (floor above tiers 1-2)."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 10)
         db.session.commit()
@@ -222,11 +222,11 @@ def test_stage_change_to_empty_dynamic_stage_preserves_fab_order(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == 10
+        assert job.fab_order == 3
 
 
-def test_stage_change_to_welded_qc_preserves_fab_order(client, app):
-    """Moving to Welded QC (dynamic) leaves fab_order untouched."""
+def test_stage_change_to_welded_qc_bumps_to_back_of_paint_deck(client, app):
+    """Fab → Welded QC lands at max(WQC + Paint Start) + 1, not preserving the old fab_order."""
     with app.app_context():
         make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
@@ -242,7 +242,101 @@ def test_stage_change_to_welded_qc_preserves_fab_order(client, app):
 
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
+        # No other R2S items → floor=2, +1=3
+        assert job.fab_order == 3
+
+
+def test_stage_change_to_welded_qc_with_existing_paint_deck(client, app):
+    """Fab → Welded QC with WQC=5, Paint Start=7, plus a fab item at 4 → bump to 8 (only R2S counted)."""
+    with app.app_context():
+        make_release(1, "A", "Weld Complete", "FABRICATION", 4)
+        make_release(2, "A", "Welded QC", "READY_TO_SHIP", 5)
+        make_release(3, "A", "Paint Start", "READY_TO_SHIP", 7)
+        make_release(4, "A", "Released", "FABRICATION", 30)
+        db.session.commit()
+
+    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
+        resp = client.patch(
+            '/brain/update-stage/4/A',
+            json={'stage': 'Welded QC'},
+            content_type='application/json'
+        )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=4, release="A").first()
+        assert job.fab_order == 8
+
+
+def test_stage_change_paint_start_to_welded_qc_preserves_fab_order(client, app):
+    """Already in R2S (Paint Start → Welded QC): backwards move preserves fab_order."""
+    with app.app_context():
+        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
+        make_release(2, "A", "Paint Start", "READY_TO_SHIP", 7)
+        db.session.commit()
+
+    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
+        resp = client.patch(
+            '/brain/update-stage/2/A',
+            json={'stage': 'Welded QC'},
+            content_type='application/json'
+        )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        job = Releases.query.filter_by(job=2, release="A").first()
+        assert job.fab_order == 7
+
+
+def test_stage_change_welded_qc_resave_preserves_fab_order(client, app):
+    """Re-saving a Welded QC release as Welded QC does not bump it."""
+    with app.app_context():
+        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
+        make_release(2, "A", "Welded QC", "READY_TO_SHIP", 9)
+        db.session.commit()
+
+    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
+        # Re-save job 1 (currently at fab_order=5) as Welded QC.
+        # If the bump fired, it would jump to 10 (max=9 + 1).
+        resp = client.patch(
+            '/brain/update-stage/1/A',
+            json={'stage': 'Welded QC'},
+            content_type='application/json'
+        )
+
+    # The same-stage write may dedup at the event layer; whether it returns
+    # 200 or a dedup status, the fab_order MUST not change.
+    with app.app_context():
+        job = Releases.query.filter_by(job=1, release="A").first()
         assert job.fab_order == 5
+
+
+def test_stage_change_to_welded_qc_collision_with_fab_min_allowed(client, app):
+    """Bump landing at min(FAB) is allowed — no clamp, duplicates across stages OK."""
+    with app.app_context():
+        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 9)
+        make_release(2, "A", "Weld Complete", "FABRICATION", 10)
+        make_release(3, "A", "Released", "FABRICATION", 30)
+        db.session.commit()
+
+    with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
+        # Job 3 (FAB, fab_order=30) → Welded QC. Bump = max(WQC=9) + 1 = 10,
+        # which equals job 2's fab_order in fabrication. Allowed.
+        resp = client.patch(
+            '/brain/update-stage/3/A',
+            json={'stage': 'Welded QC'},
+            content_type='application/json'
+        )
+
+    assert resp.status_code == 200
+
+    with app.app_context():
+        moved = Releases.query.filter_by(job=3, release="A").first()
+        fab_neighbor = Releases.query.filter_by(job=2, release="A").first()
+        assert moved.fab_order == 10
+        assert fab_neighbor.fab_order == 10  # unchanged — collision permitted
 
 
 def test_stage_change_to_shipping_planning_sets_tier_2(client, app):
