@@ -45,8 +45,9 @@ class UpdateFabOrderCommand:
     fab_order: Optional[float]
     source: str = "Brain"  # Will be formatted as 'Brain:username' automatically
     source_of_update: str = "Brain"  # Matches route's hardcoded value
-    # When True, skip the final recalculate_all_jobs_scheduling call — useful when
-    # the caller is batching multiple updates and will run the cascade once at the end.
+    # When True, skip the final recalculate_all_jobs_scheduling call — used by
+    # the /brain/events/<id>/undo bundling path so the cascade runs once after
+    # the parent + linked children all revert.
     defer_cascade: bool = False
     # When set, merged into the event payload as `undone_event_id`. Used by the
     # /brain/events/<id>/undo endpoint to link the undo event to its source and

@@ -21,17 +21,7 @@ import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 import { useTheme } from '../context/ThemeContext';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, stashSession = null }) {
-    // Stash session helpers — when an active session exists, mutating handlers
-    // queue to the server instead of applying directly. Pending view replaces
-    // the displayed value with the queued new_value; Print view shows baseline.
-    const stashActive = !!stashSession?.activeSession;
-    const stashPendingView = stashActive && stashSession?.viewMode === 'pending';
-    const _stashChange = (field) => {
-        if (!stashActive) return null;
-        const key = `${row['Job #']}-${row['Release #']}-${field}`;
-        return stashSession?.changesByKey?.[key] || null;
-    };
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
@@ -404,19 +394,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
-        if (stashActive) {
-            setUpdatingStage(true);
-            try {
-                await stashSession.stash(jobNumber, releaseNumber, 'stage', newStage);
-            } catch (error) {
-                console.error(`[STAGE stash] Failed:`, error);
-                alert(`Failed to stash stage: ${error.message}`);
-            } finally {
-                setUpdatingStage(false);
-            }
-            return;
-        }
-
         const oldStage = localStage;
         const oldJobComp = localJobComp;
         const oldFabOrder = localFabOrder;
@@ -470,19 +447,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const releaseNumber = row['Release #'];
         const parsedValue = newValue === '' ? null : parseFloat(newValue);
 
-        if (stashActive) {
-            setUpdatingFabOrder(true);
-            try {
-                await stashSession.stash(jobNumber, releaseNumber, 'fab_order', parsedValue);
-            } catch (error) {
-                console.error(`[FAB_ORDER stash] Failed:`, error);
-                alert(`Failed to stash fab order: ${error.message}`);
-            } finally {
-                setUpdatingFabOrder(false);
-            }
-            return;
-        }
-
         const oldValue = localFabOrder;
 
         // Optimistic update
@@ -518,19 +482,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
-        if (stashActive) {
-            setUpdatingNotes(true);
-            try {
-                await stashSession.stash(jobNumber, releaseNumber, 'notes', newValue);
-            } catch (error) {
-                console.error(`[NOTES stash] Failed:`, error);
-                alert(`Failed to stash notes: ${error.message}`);
-            } finally {
-                setUpdatingNotes(false);
-            }
-            return;
-        }
-
         const oldValue = localNotes;
 
         // Optimistic update
@@ -560,22 +511,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     };
 
     const handleJobCompChange = async (newValue) => {
-        const jobNumber = row['Job #'];
-        const releaseNumber = row['Release #'];
-
-        if (stashActive) {
-            setUpdatingJobComp(true);
-            try {
-                await stashSession.stash(jobNumber, releaseNumber, 'job_comp', newValue);
-            } catch (error) {
-                console.error(`[JOB_COMP stash] Failed:`, error);
-                alert(`Failed to stash job comp: ${error.message}`);
-            } finally {
-                setUpdatingJobComp(false);
-            }
-            return;
-        }
-
         const oldValue = localJobComp ?? '';
         const oldStage = localStage;
         const oldFabOrder = localFabOrder;
@@ -614,19 +549,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
-        if (stashActive) {
-            setUpdatingInvoiced(true);
-            try {
-                await stashSession.stash(jobNumber, releaseNumber, 'invoiced', newValue);
-            } catch (error) {
-                console.error(`[INVOICED stash] Failed:`, error);
-                alert(`Failed to stash invoiced: ${error.message}`);
-            } finally {
-                setUpdatingInvoiced(false);
-            }
-            return;
-        }
-
         const oldValue = localInvoiced ?? '';
         setLocalInvoiced(newValue);
         setUpdatingInvoiced(true);
@@ -646,24 +568,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const handleStartInstallSave = async (dateValue) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
-
-        if (stashActive) {
-            setUpdatingStartInstall(true);
-            try {
-                await stashSession.stash(jobNumber, releaseNumber, 'start_install', {
-                    action: 'set',
-                    date: dateValue,
-                    is_hard_date: true,
-                });
-                setIsStartInstallModalOpen(false);
-            } catch (error) {
-                console.error(`[START_INSTALL stash] Failed:`, error);
-                alert(`Failed to stash start install: ${error.message}`);
-            } finally {
-                setUpdatingStartInstall(false);
-            }
-            return;
-        }
 
         const oldValue = localStartInstall;
 
@@ -701,24 +605,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const handleClearHardDate = async () => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
-
-        if (stashActive) {
-            setUpdatingStartInstall(true);
-            try {
-                await stashSession.stash(jobNumber, releaseNumber, 'start_install', {
-                    action: 'clear',
-                    date: null,
-                    is_hard_date: false,
-                });
-                setIsStartInstallModalOpen(false);
-            } catch (error) {
-                console.error(`[START_INSTALL clear stash] Failed:`, error);
-                alert(`Failed to stash clear hard date: ${error.message}`);
-            } finally {
-                setUpdatingStartInstall(false);
-            }
-            return;
-        }
 
         const oldValue = localStartInstall;
 
@@ -842,34 +728,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const isDragOver = dragOverIndex === rowIndex;
     const isBeingDragged = isDragging === rowIndex;
 
-    const formatPendingValue = (field, change) => {
-        const v = change.new_value;
-        if (v === null || v === undefined) return '—';
-        if (field === 'stage') {
-            const opt = stageOptions.find(o => o.value === v);
-            return opt ? opt.label : v;
-        }
-        if (field === 'start_install') {
-            if (typeof v === 'object') {
-                if (v.action === 'clear') return 'clear date';
-                if (v.date) return v.date;
-                return '—';
-            }
-            return String(v);
-        }
-        if (field === 'notes' && String(v).length > 28) return String(v).slice(0, 25) + '…';
-        return String(v) || '—';
-    };
-
-    const PendingHint = ({ field, change }) => {
-        if (!stashPendingView || !change) return null;
-        return (
-            <div className="text-[9px] font-semibold text-amber-700 dark:text-amber-400 mt-0.5 leading-tight">
-                → {formatPendingValue(field, change)}
-            </div>
-        );
-    };
-
     return (
         <>
             {/* Drop indicator line - appears above the row when dragging over */}
@@ -914,22 +772,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     } else {
                         rawValue = formatCellValue(rawValue, column);
                     }
-
-                    // Stash pending highlight: when a stash session is active and the
-                    // user is viewing "Pending", outline any cell that has a queued change
-                    // and overlay the queued new value.
-                    const _stashFieldForColumn = ({
-                        'Stage': 'stage',
-                        'Fab Order': 'fab_order',
-                        'Notes': 'notes',
-                        'Job Comp': 'job_comp',
-                        'Invoiced': 'invoiced',
-                        'Start install': 'start_install',
-                    })[column];
-                    const _stashChangeForCell = _stashFieldForColumn ? _stashChange(_stashFieldForColumn) : null;
-                    const pendingHighlight = stashPendingView && _stashChangeForCell
-                        ? 'ring-4 ring-amber-500 ring-inset'
-                        : '';
 
                     // Job and Description: wrap to 2 lines then truncate with ellipsis
                     const shouldWrapAndTruncate = column === 'Job' || column === 'Description';
@@ -987,7 +829,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
                                 style={{ minWidth: '160px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -1004,7 +846,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         >
                                             {currentLabel}
                                         </button>
-                                        <PendingHint field="stage" change={_stashChangeForCell} />
                                         {showStageDropdown && (
                                             <>
                                                 <div
@@ -1058,7 +899,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
                                 style={isDuplicateFabOrder ? { backgroundColor: dupColor } : undefined}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -1105,7 +946,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     placeholder="—"
                                     style={isDuplicateFabOrder ? { minWidth: '60px', backgroundColor: dupColor } : { minWidth: '60px' }}
                                 />
-                                <PendingHint field="fab_order" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1115,7 +955,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center whitespace-normal ${pendingHighlight}`}
+                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center whitespace-normal`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -1161,7 +1001,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         <path d="M12 7v5l3 2" />
                                     </svg>
                                 </button>
-                                <PendingHint field="notes" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1172,7 +1011,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1199,7 +1038,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     placeholder="—"
                                     style={{ minWidth: '48px' }}
                                 />
-                                <PendingHint field="job_comp" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1210,7 +1048,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1237,7 +1075,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     placeholder="—"
                                     style={{ minWidth: '48px' }}
                                 />
-                                <PendingHint field="invoiced" change={_stashChangeForCell} />
                             </td>
                         );
                     }
@@ -1257,12 +1094,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''} ${pendingHighlight}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
                             >
                                 <span>{displayValue}</span>
-                                <PendingHint field="start_install" change={_stashChangeForCell} />
                             </td>
                         );
                     }
