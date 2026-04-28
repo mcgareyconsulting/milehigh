@@ -1022,9 +1022,9 @@ def update_notes(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Releases, db, ReleaseEvents
-    from app.services.job_event_service import JobEventService
-    
+    from app.models import db
+    from app.brain.job_log.features.notes.command import UpdateNotesCommand
+
     logger.info(f"update_notes called", extra={
         'job': job,
         'release': release,
@@ -1033,86 +1033,25 @@ def update_notes(job, release):
 
     try:
         notes = request.json.get('notes', '')
-        # Convert to string, allow empty string
-        if notes is None:
-            notes = ''
-        else:
-            notes = str(notes).strip()
 
-        # Fetch job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
+        # Pre-flight: 404 vs 400 distinction matches the original route contract.
+        from app.models import Releases
+        if not Releases.query.filter_by(job=job, release=release).first():
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        # Capture old state for payload
-        old_notes = job_record.notes
+        try:
+            result = UpdateNotesCommand(
+                job_id=job, release=release, notes=notes,
+            ).execute()
+        except ValueError as ve:
+            if str(ve) == "Event already exists":
+                return jsonify({'error': 'Event already exists'}), 400
+            raise
 
-        # Create event (handles deduplication, logging internally)
-        event = JobEventService.create(
-            job=job,
-            release=release,
-            action='update_notes',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
-            payload={
-                'from': old_notes,
-                'to': notes
-            }
-        )
-
-        # Check if event was deduplicated
-        if event is None:
-            logger.info(f"Event already exists for job {job}-{release} notes update")
-            return jsonify({'error': 'Event already exists'}), 400
-        
-        # Update job fields (overwrite)
-        job_record.notes = notes if notes else None
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
-
-        # Add Trello update to outbox (async - will be processed by outbox service)
-        # DB changes are committed first, then outbox handles Trello updates asynchronously
-        # This ensures DB changes are never lost due to Trello API failures
-        outbox_item_created = False
-        
-        if job_record.trello_card_id and notes:
-            try:
-                # Create outbox item - will be processed asynchronously by outbox service
-                OutboxService.add(
-                    destination='trello',
-                    action='update_notes',
-                    event_id=event.id
-                )
-                outbox_item_created = True
-                logger.info(f"Outbox item created for Trello notes update (job {job}-{release})")
-            except Exception as outbox_error:
-                # Log error but don't fail the operation - DB update is more important
-                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
-        else:
-            if not job_record.trello_card_id:
-                logger.warning(
-                    f"Job {job}-{release} has no trello_card_id, skipping Trello update",
-                    extra={'job': job, 'release': release}
-                )
-            elif not notes:
-                logger.info(f"Notes is empty for job {job}-{release}, skipping Trello comment")
-        
-        # Close event only if no outbox item was created
-        if not outbox_item_created:
-            JobEventService.close(event.id)
-        
-        # Commit all DB changes first (this is the critical operation)
-        db.session.commit()
-        
-        logger.info(f"update_notes completed successfully", extra={
-            'job': job,
-            'release': release,
-            'event_id': event.id
-        })
-        
         return jsonify({
             'status': 'success',
-            'event_id': event.id
+            'event_id': result.event_id,
         }), 200
     except Exception as e:
         logger.error(f"update_notes failed", exc_info=True, extra={
@@ -1121,7 +1060,7 @@ def update_notes(job, release):
             'error': str(e),
             'error_type': type(e).__name__
         })
-        
+
         try:
             from app.services.system_log_service import SystemLogService
             SystemLogService.log_error(
@@ -1136,7 +1075,7 @@ def update_notes(job, release):
             )
         except:
             pass
-        
+
         db.session.rollback()
         return jsonify({
             'error': str(e),
@@ -1398,83 +1337,28 @@ def update_start_install(job, release):
                 'message': 'Not a hard date - formula-driven dates are not updated manually'
             }), 200
 
-        # Fetch job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
+        # Pre-flight 404 check — preserves the route's original 404 vs 400 distinction
+        # before we delegate to the command.
+        if not Releases.query.filter_by(job=job, release=release).first():
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        # Capture old state for payload
-        old_start_install = job_record.start_install
-
-        # Create event (handles deduplication, logging internally)
-        event = JobEventService.create(
-            job=job,
-            release=release,
-            action='update_start_install',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
-            payload={
-                'from': old_start_install.isoformat() if old_start_install else None,
-                'to': start_install_date.isoformat() if start_install_date else None,
-                'is_hard_date': is_hard_date
-            }
-        )
-
-        # Check if event was deduplicated
-        if event is None:
-            logger.info(f"Event already exists for job {job}-{release} start_install update")
-            return jsonify({'error': 'Event already exists'}), 400
-        
-        # Update job fields
-        job_record.start_install = start_install_date
-        # Clear formula fields when setting a hard date
-        job_record.start_install_formula = None
-        job_record.start_install_formulaTF = False
-
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
-
-        # Update Trello card due date if card exists
-        if job_record.trello_card_id:
-            try:
-                # Send start_install date to Trello as the due date (not start date)
-                update_trello_card(
-                    card_id=job_record.trello_card_id,
-                    new_due_date=start_install_date,
-                    clear_due_date=(start_install_date is None)
-                )
-                logger.info(f"Trello card due date updated for job {job}-{release} (start_install sent as due date)")
-            except Exception as trello_error:
-                # Log error but don't fail the operation - DB update is more important
-                logger.error(f"Failed to update Trello card due date for job {job}-{release}: {trello_error}", exc_info=True)
-        else:
-            logger.warning(
-                f"Job {job}-{release} has no trello_card_id, skipping Trello update",
-                extra={'job': job, 'release': release}
-            )
-
-        # Close event — no outbox needed (Trello update is synchronous above)
-        JobEventService.close(event.id)
-
-        # Commit all DB changes
-        db.session.commit()
-
-        # Recalculate all fab jobs so the queue adjusts for the new hard date
+        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
         try:
-            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-        except Exception as cascade_error:
-            logger.error(f"Scheduling cascade failed after hard-date update: {cascade_error}", exc_info=True)
-
-        logger.info(f"update_start_install completed successfully", extra={
-            'job': job,
-            'release': release,
-            'event_id': event.id
-        })
+            result = UpdateStartInstallCommand(
+                job_id=job,
+                release=release,
+                start_install=start_install_date,
+                is_hard_date=is_hard_date,
+            ).execute()
+        except ValueError as ve:
+            if str(ve) == "Event already exists":
+                return jsonify({'error': 'Event already exists'}), 400
+            raise
 
         return jsonify({
             'status': 'success',
-            'event_id': event.id
+            'event_id': result.event_id,
         }), 200
         
     except Exception as e:
@@ -2042,6 +1926,119 @@ def get_events():
         def event_key(ev):
             return (ev.id, 'job' if hasattr(ev, 'job') else 'submittal')
 
+        # Eligibility precompute: bulk-fetch current values from both
+        # Releases (for job events) and Submittals (for DWL events). The
+        # frontend uses `current_value` to determine if the Undo button
+        # should be enabled — equality with the event's `to`/`new` value
+        # means the event hasn't been superseded by a later edit.
+        from app.models import Releases
+        UNDO_WHITELIST = {
+            'update_stage', 'update_notes', 'update_fab_order', 'update_start_install',
+        }
+        UNDO_FIELD = {
+            'update_stage': 'stage',
+            'update_notes': 'notes',
+            'update_fab_order': 'fab_order',
+            'update_start_install': 'start_install',
+        }
+        # DWL whitelist: submittal events with action='updated' whose payload
+        # targets one of these fields. Mirrors _DWL_UNDO_FIELDS in the undo
+        # endpoint below; kept as a local dict here to avoid forward-import
+        # awkwardness within this same module.
+        DWL_PAYLOAD_TO_COLUMN = {
+            'order_number': 'order_number',
+            'notes': 'notes',
+            'submittal_drafting_status': 'submittal_drafting_status',
+        }
+
+        release_pairs = {
+            (ev.job, ev.release)
+            for ev in all_events
+            if hasattr(ev, 'job') and ev.action in UNDO_WHITELIST and ev.job is not None and ev.release
+        }
+        release_lookup = {}
+        if release_pairs:
+            from sqlalchemy import and_, or_
+            # SQLAlchemy `tuple_().in_()` is awkward across dialects; emit an OR of equality pairs.
+            conditions = [
+                and_(Releases.job == j, Releases.release == r)
+                for (j, r) in release_pairs
+            ]
+            rows = Releases.query.filter(or_(*conditions)).all()
+            for row in rows:
+                release_lookup[(row.job, row.release)] = row
+
+        # Submittal lookup for DWL events.
+        submittal_ids = {
+            str(ev.submittal_id)
+            for ev in all_events
+            if not hasattr(ev, 'job')
+            and ev.action == 'updated'
+            and isinstance(ev.payload, dict)
+            and ev.submittal_id
+            and any(k in DWL_PAYLOAD_TO_COLUMN for k in ev.payload)
+        }
+        submittal_lookup = {}
+        if submittal_ids:
+            for s in Submittals.query.filter(Submittals.submittal_id.in_(submittal_ids)).all():
+                submittal_lookup[str(s.submittal_id)] = s
+
+        def _current_value(ev):
+            if hasattr(ev, 'job'):
+                if ev.action not in UNDO_WHITELIST:
+                    return None
+                row = release_lookup.get((ev.job, ev.release))
+                if row is None:
+                    return None
+                field = UNDO_FIELD[ev.action]
+                val = getattr(row, field, None)
+                # Normalize start_install to ISO string for parity with payload encoding.
+                if field == 'start_install' and val is not None:
+                    return val.isoformat()
+                return val
+            # SubmittalEvents — DWL undo eligibility.
+            if ev.action != 'updated' or not isinstance(ev.payload, dict):
+                return None
+            matches = [k for k in ev.payload if k in DWL_PAYLOAD_TO_COLUMN
+                       and isinstance(ev.payload[k], dict)
+                       and 'old' in ev.payload[k] and 'new' in ev.payload[k]]
+            if len(matches) != 1:
+                return None
+            row = submittal_lookup.get(str(ev.submittal_id))
+            if row is None:
+                return None
+            return getattr(row, DWL_PAYLOAD_TO_COLUMN[matches[0]], None)
+
+        # Build a parent->children index from events in this batch. The undo
+        # endpoint bundles children by `payload.parent_event_id`; surfacing
+        # them here lets the confirm dialog enumerate "this will also revert
+        # X". Children outside the current batch are missed by this view, but
+        # the backend bundle still applies them correctly.
+        event_by_id = {ev.id: ev for ev in all_events if hasattr(ev, 'job')}
+        children_by_parent = {}
+        for ev in all_events:
+            if not hasattr(ev, 'job'):
+                continue
+            ev_payload = ev.payload if isinstance(ev.payload, dict) else None
+            if ev_payload is None:
+                continue
+            pid = ev_payload.get('parent_event_id')
+            if pid is not None and pid in event_by_id and ev.action in UNDO_WHITELIST:
+                children_by_parent.setdefault(pid, []).append(ev)
+
+        def _linked_children(ev):
+            if not hasattr(ev, 'job'):
+                return []
+            return [
+                {
+                    'id': c.id,
+                    'action': c.action,
+                    'from': (c.payload or {}).get('from'),
+                    'to': (c.payload or {}).get('to'),
+                }
+                for c in children_by_parent.get(ev.id, [])
+            ]
+
         return jsonify({
             'events': [{
                 'id': event.id,
@@ -2056,7 +2053,9 @@ def get_events():
                 'external_user_id': getattr(event, 'external_user_id', None),
                 'user_name': user_names.get(event_key(event)),
                 'created_at': format_datetime_mountain(event.created_at),
-                'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
+                'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None,
+                'current_value': _current_value(event),
+                'linked_children': _linked_children(event),
             } for event in all_events],
             'total': len(all_events),
             'filters': {
@@ -2073,6 +2072,419 @@ def get_events():
     except Exception as e:
         logger.error("Error getting job events", error=str(e))
         return jsonify({"error": str(e)}), 500
+
+
+# ==============================================================================
+# Undo
+# ==============================================================================
+
+# Whitelist of actions that can be undone via the Events tab. Each maps to the
+# Releases column whose value is reverted, so the staleness check can compare
+# `payload.to` to the live value before applying the undo.
+_UNDO_WHITELIST_FIELD = {
+    'update_stage': 'stage',
+    'update_notes': 'notes',
+    'update_fab_order': 'fab_order',
+    'update_start_install': 'start_install',
+}
+
+
+def _staleness_check(event, job_record):
+    """Return None if the event is still revertible against the current row, or
+    a (current, expected) tuple if stale. Only meaningful for whitelist actions."""
+    field = _UNDO_WHITELIST_FIELD[event.action]
+    current = getattr(job_record, field, None)
+    if field == 'start_install' and current is not None:
+        current_for_compare = current.isoformat()
+    else:
+        current_for_compare = current
+    expected = (event.payload or {}).get('to')
+    if current_for_compare != expected:
+        return (current_for_compare, expected)
+    return None
+
+
+def _dispatch_undo(event, *, source, defer_cascade):
+    """Run the appropriate update command to revert `event`. Returns the new
+    result object (with .event_id). Caller is responsible for the staleness
+    check; this function assumes it's already passed."""
+    payload = event.payload or {}
+    action = event.action
+    if action == 'update_stage':
+        from app.brain.job_log.features.stage.command import UpdateStageCommand
+        return UpdateStageCommand(
+            job_id=event.job, release=event.release,
+            stage=payload['from'],
+            source=source,
+            undone_event_id=event.id,
+            defer_cascade=defer_cascade,
+        ).execute()
+    if action == 'update_notes':
+        from app.brain.job_log.features.notes.command import UpdateNotesCommand
+        return UpdateNotesCommand(
+            job_id=event.job, release=event.release,
+            notes=payload['from'] or '',
+            source=source,
+            undone_event_id=event.id,
+        ).execute()
+    if action == 'update_fab_order':
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        return UpdateFabOrderCommand(
+            job_id=event.job, release=event.release,
+            fab_order=payload['from'],
+            source=source,
+            undone_event_id=event.id,
+            defer_cascade=defer_cascade,
+        ).execute()
+    if action == 'update_start_install':
+        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
+        from datetime import datetime as _dt
+        from_str = payload['from']
+        from_date = _dt.strptime(from_str, '%Y-%m-%d').date() if from_str else None
+        return UpdateStartInstallCommand(
+            job_id=event.job, release=event.release,
+            start_install=from_date,
+            is_hard_date=payload.get('is_hard_date', True),
+            source=source,
+            undone_event_id=event.id,
+        ).execute()
+    raise ValueError(f"Unsupported undo action: {action}")
+
+
+@brain_bp.route("/events/<int:event_id>/undo", methods=["POST"])
+@admin_required
+def undo_event(event_id):
+    """
+    Revert a ReleaseEvents row by re-applying its `payload.from` through the
+    standard update pipeline for that action. The new event(s) carry
+    `payload.undone_event_id` linking back to the source event(s).
+
+    **Linked-event bundling.** Some commands (notably `UpdateStageCommand`)
+    write follow-on `update_fab_order` or `updated`(job_comp) events whose
+    payload includes `parent_event_id: <stage_event.id>`. When undoing the
+    parent, we revert each whitelist child too — running the children with
+    `defer_cascade=True` and the parent last so the scheduling cascade
+    fires once at the end.
+
+    Validates parent + all whitelist children:
+      - action is in the whitelist
+      - payload has both `from` and `to` keys
+      - `payload.from != payload.to`
+      - current Releases value for the field matches `payload.to` (staleness)
+
+    Returns 409 with a structured body when *anything* in the bundle is stale.
+    """
+    from app.models import Releases
+
+    event = ReleaseEvents.query.get(event_id)
+    if event is None:
+        return jsonify({'error': 'Event not found'}), 404
+
+    if event.action not in _UNDO_WHITELIST_FIELD:
+        return jsonify({'error': f"Action '{event.action}' is not undoable"}), 400
+
+    payload = event.payload or {}
+    if 'from' not in payload or 'to' not in payload:
+        return jsonify({'error': "Event payload missing 'from' or 'to'"}), 400
+    if payload['from'] == payload['to']:
+        return jsonify({'error': 'No-op event (from == to) cannot be undone'}), 400
+    # Undo events are not themselves undoable. To reverse one, edit the value
+    # directly in the Job Log — undo-the-undo via this endpoint would obscure
+    # the audit trail and confuse the bundling logic (a cascade-aware undo of
+    # a non-cascade-aware undo).
+    if payload.get('undone_event_id') is not None:
+        return jsonify({
+            'error': "Undo events are not undoable. Edit the value in the Job Log directly."
+        }), 400
+
+    job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
+    if job_record is None:
+        return jsonify({'error': 'Release not found'}), 404
+
+    # Find children (events that were emitted as side-effects of this one).
+    # Cross-DB JSON path queries are awkward; the per-(job, release) event
+    # volume is small, so just filter in Python.
+    siblings = ReleaseEvents.query.filter_by(
+        job=event.job, release=event.release
+    ).all()
+    children = [
+        c for c in siblings
+        if isinstance(c.payload, dict)
+        and c.payload.get('parent_event_id') == event.id
+        and c.action in _UNDO_WHITELIST_FIELD
+        and c.payload.get('from') != c.payload.get('to')
+    ]
+
+    # Staleness check: parent + every whitelist child must still match
+    # `payload.to` against the live Releases row. If anything is stale, fail
+    # the whole bundle so partial reverts can't corrupt state.
+    parent_stale = _staleness_check(event, job_record)
+    child_stale = [(c, _staleness_check(c, job_record)) for c in children]
+    child_stale = [(c, s) for c, s in child_stale if s is not None]
+    if parent_stale or child_stale:
+        return jsonify({
+            'error': 'stale',
+            'current': parent_stale[0] if parent_stale else None,
+            'expected': parent_stale[1] if parent_stale else None,
+            'stale_children': [
+                {'event_id': c.id, 'action': c.action,
+                 'current': s[0], 'expected': s[1]}
+                for c, s in child_stale
+            ],
+            'message': (
+                "Stale — the release was edited after this event. Undo would "
+                "overwrite a later change. Refresh and try again."
+            ),
+        }), 409
+
+    source = "Brain"
+
+    # Apply parent FIRST so any fixed-tier / state-driven constraints in the
+    # children's commands clear before we touch fab_order. Concretely: if the
+    # parent is `Welded QC → Shipping planning` with a child fab_order
+    # auto-assign to 2, undoing the child first would re-enter
+    # UpdateFabOrderCommand while stage is still 'Shipping planning' (fixed
+    # tier 2), and the command's own override would force fab_order back to 2
+    # — a silent no-op revert.
+    #
+    # When there are children, defer the cascade across the bundle and run
+    # it once at the end. With no children, let the parent's command run its
+    # own cascade as it normally would.
+    has_children = bool(children)
+    linked_event_ids = []
+    try:
+        result = _dispatch_undo(event, source=source, defer_cascade=has_children)
+        for child in children:
+            child_result = _dispatch_undo(child, source=source, defer_cascade=True)
+            linked_event_ids.append(child_result.event_id)
+    except ValueError as ve:
+        logger.warning(f"Undo failed for event {event_id}: {ve}")
+        return jsonify({'error': str(ve)}), 400
+
+    if has_children:
+        try:
+            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+        except Exception as cascade_err:
+            logger.error(
+                f"Scheduling cascade failed after bundled undo of event {event_id}: {cascade_err}",
+                exc_info=True,
+            )
+
+    return jsonify({
+        'status': 'success',
+        'event_id': result.event_id,
+        'linked_event_ids': linked_event_ids,
+    }), 200
+
+
+# ------------------------------------------------------------------------------
+# DWL (SubmittalEvents) undo
+# ------------------------------------------------------------------------------
+#
+# Three Submittals fields are undoable on the Events tab. None of them call
+# Procore — undo writes the DB column directly and emits a new SubmittalEvents
+# row, mirroring the "silent revert" intent. The Procore-bound `status` field
+# stays out of the whitelist, so a user clicking Undo on a Procore status
+# event will get a 400 (or a disabled button on the frontend).
+#
+# All three operations come through DWL routes that emit SubmittalEvents with
+# `action='updated'` and a payload shaped like `{<field>: {old, new}}`. We key
+# eligibility on the payload key, not on a per-field action.
+_DWL_UNDO_FIELDS = {
+    'order_number': 'order_number',
+    'notes': 'notes',
+    'submittal_drafting_status': 'submittal_drafting_status',
+}
+
+
+def _dwl_payload_field(payload):
+    """Identify which whitelist field this submittal-event payload targets.
+    Returns the field name (e.g. 'order_number') or None if the payload
+    doesn't match a single in-scope field."""
+    if not isinstance(payload, dict):
+        return None
+    matches = [
+        k for k in payload
+        if k in _DWL_UNDO_FIELDS and isinstance(payload[k], dict)
+        and 'old' in payload[k] and 'new' in payload[k]
+    ]
+    if len(matches) != 1:
+        # 0 → no in-scope field in this payload
+        # 2+ → ambiguous; rare in practice, refuse rather than guess
+        return None
+    return matches[0]
+
+
+def _validate_swap_partner(payload):
+    """If the event's payload encodes a swap partner (from a step operation),
+    return (partner_submittal_id, partner_old, partner_new). Otherwise None.
+
+    Step events look like:
+      { order_number: {old, new}, order_step: 'up'|'down',
+        swapped_with: { submittal_id, order_number: {old, new} } }
+    """
+    swap = payload.get('swapped_with')
+    if not isinstance(swap, dict):
+        return None
+    sid = swap.get('submittal_id')
+    inner = swap.get('order_number')
+    if sid is None or not isinstance(inner, dict):
+        return None
+    if 'old' not in inner or 'new' not in inner:
+        return None
+    return (str(sid), inner['old'], inner['new'])
+
+
+@brain_bp.route("/submittal-events/<int:event_id>/undo", methods=["POST"])
+@admin_required
+def undo_submittal_event(event_id):
+    """
+    Revert a single SubmittalEvents row by writing the DB column back to
+    `payload[field].old` and emitting a new SubmittalEvents row with
+    `payload.undone_event_id` linking back. Does NOT call Procore.
+
+    **Step / swap handling.** If the original event came from `step_submittal_order`,
+    its payload embeds the neighbor's change in `payload.swapped_with` (the
+    DWL step route doesn't emit a separate event for the neighbor). When that
+    field is present, undo also reverts the neighbor's order_number and emits
+    a second SubmittalEvents row tagged with `parent_event_id` so the audit
+    trail shows the linked side-effect.
+    """
+    from app.models import SubmittalEvents
+    from app.procore.helpers import create_submittal_payload_hash
+    from sqlalchemy.exc import IntegrityError
+
+    event = SubmittalEvents.query.get(event_id)
+    if event is None:
+        return jsonify({'error': 'Event not found'}), 404
+
+    if event.action != 'updated':
+        return jsonify({'error': f"Action '{event.action}' is not undoable"}), 400
+
+    payload = event.payload or {}
+    if payload.get('undone_event_id') is not None:
+        return jsonify({
+            'error': "Undo events are not undoable. Edit the value in the Drafting Work Load directly."
+        }), 400
+
+    field = _dwl_payload_field(payload)
+    if field is None:
+        return jsonify({
+            'error': "Payload does not target an undoable field "
+                     "(order_number, notes, submittal_drafting_status)."
+        }), 400
+
+    inner = payload[field]
+    if inner['old'] == inner['new']:
+        return jsonify({'error': 'No-op event (old == new) cannot be undone'}), 400
+
+    submittal = Submittals.query.filter_by(submittal_id=str(event.submittal_id)).first()
+    if submittal is None:
+        return jsonify({'error': 'Submittal not found'}), 404
+
+    column = _DWL_UNDO_FIELDS[field]
+    current = getattr(submittal, column, None)
+    if current != inner['new']:
+        return jsonify({
+            'error': 'stale',
+            'current': current,
+            'expected': inner['new'],
+            'message': (
+                f"Stale — current value is {current!r}, expected {inner['new']!r}. "
+                "Undo would overwrite a later change."
+            ),
+        }), 409
+
+    # Detect a swap partner. Only meaningful for order_number reverts.
+    partner = _validate_swap_partner(payload) if field == 'order_number' else None
+    partner_submittal = None
+    if partner is not None:
+        partner_sid, partner_old, partner_new = partner
+        partner_submittal = Submittals.query.filter_by(submittal_id=partner_sid).first()
+        if partner_submittal is None:
+            # Loud failure: don't silently lose the linked revert.
+            return jsonify({
+                'error': f"Swap partner submittal {partner_sid} not found — "
+                         "manually fix order in the Drafting Work Load."
+            }), 400
+        if partner_submittal.order_number != partner_new:
+            return jsonify({
+                'error': 'stale',
+                'current': partner_submittal.order_number,
+                'expected': partner_new,
+                'partner_submittal_id': partner_sid,
+                'message': (
+                    f"Stale — swap partner {partner_sid} order is "
+                    f"{partner_submittal.order_number!r}, expected {partner_new!r}. "
+                    "Undo would overwrite a later change."
+                ),
+            }), 409
+
+    # Apply primary revert. The DWL routes don't run cascade or outbox logic
+    # for these fields, so we mirror that — write the column, bump
+    # last_updated, emit a new SubmittalEvents row.
+    setattr(submittal, column, inner['old'])
+    submittal.last_updated = datetime.utcnow()
+
+    user = get_current_user()
+    user_id = user.id if user else None
+
+    new_payload = {
+        field: {'old': inner['new'], 'new': inner['old']},
+        'undone_event_id': event.id,
+    }
+    new_hash = create_submittal_payload_hash('updated', str(submittal.submittal_id), new_payload)
+    new_event = SubmittalEvents(
+        submittal_id=str(submittal.submittal_id),
+        action='updated',
+        payload=new_payload,
+        payload_hash=new_hash,
+        source='Brain',
+        internal_user_id=user_id,
+    )
+    db.session.add(new_event)
+
+    linked_event_ids = []
+    try:
+        # Flush so new_event.id is populated before we link the partner event.
+        db.session.flush()
+
+        if partner is not None:
+            partner_sid, partner_old, partner_new = partner
+            partner_submittal.order_number = partner_old
+            partner_submittal.last_updated = datetime.utcnow()
+            partner_payload = {
+                'order_number': {'old': partner_new, 'new': partner_old},
+                'undone_event_id': event.id,
+                'parent_event_id': new_event.id,
+            }
+            partner_hash = create_submittal_payload_hash(
+                'updated', str(partner_submittal.submittal_id), partner_payload
+            )
+            partner_event = SubmittalEvents(
+                submittal_id=str(partner_submittal.submittal_id),
+                action='updated',
+                payload=partner_payload,
+                payload_hash=partner_hash,
+                source='Brain',
+                internal_user_id=user_id,
+            )
+            db.session.add(partner_event)
+            db.session.flush()
+            linked_event_ids.append(partner_event.id)
+
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Duplicate event — undo already applied?'}), 400
+
+    return jsonify({
+        'status': 'success',
+        'event_id': new_event.id,
+        'linked_event_ids': linked_event_ids,
+    }), 200
+
 
 # ==============================================================================
 # Trello Routes

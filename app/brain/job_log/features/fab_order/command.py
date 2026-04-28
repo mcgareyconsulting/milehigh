@@ -48,6 +48,10 @@ class UpdateFabOrderCommand:
     # When True, skip the final recalculate_all_jobs_scheduling call — useful when
     # the caller is batching multiple updates and will run the cascade once at the end.
     defer_cascade: bool = False
+    # When set, merged into the event payload as `undone_event_id`. Used by the
+    # /brain/events/<id>/undo endpoint to link the undo event to its source and
+    # perturb the dedup hash so undo-the-undo within 30s doesn't collide.
+    undone_event_id: Optional[int] = None
 
     def execute(self) -> FabOrderUpdateResult:
         """
@@ -98,15 +102,16 @@ class UpdateFabOrderCommand:
         payload_from = None if (isinstance(old_fab_order, float) and math.isnan(old_fab_order)) else old_fab_order
         payload_to = None if (self.fab_order is not None and isinstance(self.fab_order, float) and math.isnan(self.fab_order)) else self.fab_order
         
+        event_payload = {'from': payload_from, 'to': payload_to}
+        if self.undone_event_id is not None:
+            event_payload['undone_event_id'] = self.undone_event_id
+
         event = JobEventService.create(
             job=self.job_id,
             release=self.release,
             action='update_fab_order',
             source=self.source,
-            payload={
-                'from': payload_from,
-                'to': payload_to
-            }
+            payload=event_payload,
         )
 
         # Check if event was deduplicated
