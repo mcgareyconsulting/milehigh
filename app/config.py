@@ -102,6 +102,27 @@ class Config:
         "https://www.googleapis.com/auth/gmail.compose",
     ]
 
+    # Microsoft (Entra ID) OAuth — per-user Outlook Mail.Read for Banana Boy.
+    # Distinct from AZURE_CLIENT_ID/SECRET, which is the app-level
+    # client-credentials registration used by OneDrive/Excel polling.
+    MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID")
+    MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET")
+    # Use 'common' for multi-tenant + personal, 'organizations' for any
+    # work/school tenant, or a specific tenant GUID for single-tenant.
+    MS_TENANT = os.environ.get("MS_TENANT", "common")
+    MS_REDIRECT_URI = os.environ.get(
+        "MS_REDIRECT_URI",
+        "http://localhost:8000/api/auth/microsoft/callback",
+    )
+    MS_OAUTH_SCOPES = [
+        "openid",
+        "email",
+        "profile",
+        "offline_access",
+        "User.Read",
+        "Mail.Read",
+    ]
+
 
 class LocalConfig(Config):
     """Configuration for local development."""

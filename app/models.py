@@ -70,6 +70,10 @@ class User(db.Model):
         'GoogleCredentials', backref='user', uselist=False,
         cascade='all, delete-orphan'
     )
+    outlook_credentials = db.relationship(
+        'MicrosoftCredentials', backref='user', uselist=False,
+        cascade='all, delete-orphan'
+    )
     
     def __repr__(self):
         return f"<User {self.username}>"
@@ -143,6 +147,48 @@ class GoogleCredentials(db.Model):
             self.scopes = token["scope"]
         if token.get("id_token"):
             self.id_token = token["id_token"]
+        self.last_refreshed_at = datetime.utcnow()
+
+
+class MicrosoftCredentials(db.Model):
+    """Per-user Microsoft (Entra ID) OAuth credentials for Outlook Mail."""
+    __tablename__ = "microsoft_credentials"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'),
+        unique=True, nullable=False, index=True
+    )
+    provider = db.Column(db.String(32), nullable=False, default='microsoft')
+    ms_oid = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    tenant_id = db.Column(db.String(255), nullable=True, index=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    access_token = db.Column(db.Text, nullable=False)
+    refresh_token = db.Column(db.Text, nullable=True)
+    token_expires_at = db.Column(db.DateTime, nullable=False)
+    scopes = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False,
+        default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    last_refreshed_at = db.Column(db.DateTime, nullable=True)
+
+    @classmethod
+    def get_for_user(cls, user_id):
+        return cls.query.filter_by(user_id=user_id).first()
+
+    def is_expired(self, buffer_seconds: int = 60) -> bool:
+        return datetime.utcnow() >= self.token_expires_at - timedelta(seconds=buffer_seconds)
+
+    def update_from_token_response(self, token: dict) -> None:
+        if "access_token" in token:
+            self.access_token = token["access_token"]
+        if token.get("refresh_token"):
+            self.refresh_token = token["refresh_token"]
+        expires_in = int(token.get("expires_in", 3600))
+        self.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        if token.get("scope"):
+            self.scopes = token["scope"]
         self.last_refreshed_at = datetime.utcnow()
 
 

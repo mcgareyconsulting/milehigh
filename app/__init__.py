@@ -29,6 +29,7 @@ from app.procore import procore_bp
 from app.brain import brain_bp
 from app.auth.routes import auth_bp
 from app.auth import google as _google_oauth_routes  # noqa: F401  attaches /google/* to auth_bp
+from app.auth import microsoft as _microsoft_oauth_routes  # noqa: F401  attaches /microsoft/* to auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
 from app.onedrive import onedrive_bp
