@@ -4,7 +4,7 @@ import io
 from unittest.mock import patch
 
 from app.banana_boy.client import BananaBoyAPIError, BananaBoyConfigError
-from app.banana_boy.voice_client import clean_for_speech
+from app.banana_boy.voice_client import clean_for_speech, extract_spoken_block
 from app.models import ChatMessage
 
 
@@ -166,6 +166,103 @@ def test_voice_degrades_to_text_when_tts_fails(app, client, logged_in_user, mock
     # User+assistant rows are persisted regardless.
     with app.app_context():
         assert ChatMessage.query.count() == 2
+
+
+def test_extract_spoken_block_returns_chat_and_spoken():
+    text = (
+        "Here's the urgent DWL by submittal manager:\n\n"
+        "| Manager | Count |\n|---|---|\n| Jane | 4 |\n\n"
+        "<spoken>Jane is carrying four urgent items, two of them overdue. "
+        "Bob's queue looks healthy.</spoken>"
+    )
+    chat, spoken = extract_spoken_block(text)
+    assert "<spoken>" not in chat
+    assert "Jane is carrying four urgent items" not in chat
+    assert chat.startswith("Here's the urgent DWL by submittal manager:")
+    assert spoken == (
+        "Jane is carrying four urgent items, two of them overdue. "
+        "Bob's queue looks healthy."
+    )
+
+
+def test_extract_spoken_block_missing_returns_original():
+    text = "No tag here, just prose."
+    chat, spoken = extract_spoken_block(text)
+    assert chat == text
+    assert spoken is None
+
+
+def test_extract_spoken_block_handles_empty_block():
+    chat, spoken = extract_spoken_block("Hello.<spoken>   </spoken>")
+    assert chat == "Hello."
+    assert spoken is None
+
+
+def test_voice_uses_spoken_block_for_tts_and_strips_from_chat(
+    app, client, logged_in_user
+):
+    full_reply = (
+        "Got 4 urgent on Jane's plate:\n\n"
+        "1. **Foo** — overdue 3 days\n"
+        "2. **Bar** — overdue 1 day\n"
+        "3. **Baz** — due today\n"
+        "4. **Qux** — due in 2 days\n\n"
+        "<spoken>Jane has four urgent submittals — two are overdue. "
+        "Foo is the worst at three days late.</spoken>"
+    )
+    fake_mp3 = b"ID3-fake"
+    with patch("app.banana_boy.routes.transcribe", return_value="urgent for jane"), \
+         patch("app.banana_boy.routes.generate_reply", return_value=full_reply), \
+         patch("app.banana_boy.routes.synthesize", return_value=fake_mp3) as syn_mock:
+        resp = _post_audio(client)
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    # Chat content has the <spoken> block stripped.
+    assert "<spoken>" not in body["message"]["content"]
+    assert "Foo" in body["message"]["content"]  # data still there
+    assert body["message"]["content"].startswith("Got 4 urgent on Jane's plate:")
+
+    # TTS received the model-authored spoken text (not the full reply, not
+    # the markdown-stripped fallback) and was told it was already clean.
+    syn_mock.assert_called_once()
+    assert syn_mock.call_args.args[0] == (
+        "Jane has four urgent submittals — two are overdue. "
+        "Foo is the worst at three days late."
+    )
+    assert syn_mock.call_args.kwargs.get("already_clean") is True
+
+    # Persisted assistant row is the cleaned chat content.
+    with app.app_context():
+        rows = ChatMessage.query.filter_by(role="assistant").all()
+        assert len(rows) == 1
+        assert "<spoken>" not in rows[0].content
+
+
+def test_voice_falls_back_to_clean_for_speech_when_spoken_missing(
+    app, client, logged_in_user
+):
+    """If the model forgets the <spoken> block, we still synthesize from the
+    cleaned full reply rather than failing or going silent."""
+    full_reply = "Just some prose with no spoken tag."
+    with patch("app.banana_boy.routes.transcribe", return_value="hi"), \
+         patch("app.banana_boy.routes.generate_reply", return_value=full_reply), \
+         patch("app.banana_boy.routes.synthesize", return_value=b"mp3") as syn_mock:
+        resp = _post_audio(client)
+
+    assert resp.status_code == 200
+    syn_mock.assert_called_once()
+    assert syn_mock.call_args.args[0] == full_reply
+    assert syn_mock.call_args.kwargs.get("already_clean") is False
+
+
+def test_voice_passes_voice_mode_true_to_generate_reply(
+    app, client, logged_in_user, mock_haiku_reply
+):
+    with patch("app.banana_boy.routes.transcribe", return_value="hello"), \
+         patch("app.banana_boy.routes.synthesize", return_value=b"mp3"):
+        _post_audio(client)
+    assert mock_haiku_reply.call_args.kwargs.get("voice_mode") is True
 
 
 def test_voice_propagates_chat_502_after_user_row_persisted(app, client, logged_in_user):

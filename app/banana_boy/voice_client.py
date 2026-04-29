@@ -28,6 +28,26 @@ _CLIENT_KEY = "_banana_boy_openai_client"
 _TABLE_LINE_RE = re.compile(r'^\s*\|.*\|\s*$')
 _NUMBERED_LIST_RE = re.compile(r'^\s*\d+[.)]\s')
 _BULLET_LIST_RE = re.compile(r'^\s*[-*+•]\s')
+_SPOKEN_BLOCK_RE = re.compile(r'<spoken>(.*?)</spoken>', re.DOTALL | re.IGNORECASE)
+
+
+def extract_spoken_block(text: str) -> tuple[str, str | None]:
+    """Split a reply into (chat_text, spoken_text).
+
+    The model emits a trailing <spoken>...</spoken> block in voice mode (see
+    VOICE_ADDENDUM in client.py). The block is stripped from the chat text so
+    users don't see the scaffolding; the inner text is what gets read aloud.
+
+    Returns the original text + None if no block is found.
+    """
+    if not text:
+        return text, None
+    match = _SPOKEN_BLOCK_RE.search(text)
+    if not match:
+        return text, None
+    spoken = match.group(1).strip() or None
+    chat = (text[:match.start()] + text[match.end():]).strip()
+    return chat, spoken
 
 
 def clean_for_speech(text: str) -> str:
@@ -128,16 +148,19 @@ def transcribe(audio_bytes: bytes, *, filename: str = "voice.webm",
     return text
 
 
-def synthesize(text: str, *, usage_sink: list | None = None) -> bytes:
+def synthesize(text: str, *, usage_sink: list | None = None,
+               already_clean: bool = False) -> bytes:
     """Synthesize speech from text via OpenAI TTS. Returns mp3 bytes.
 
+    If `already_clean=True`, skip the markdown-stripping pass — used when the
+    caller already extracted a model-authored <spoken> block.
     If `usage_sink` is provided, appends a usage dict (model, input_chars,
     output_bytes, duration_ms, cost_usd, payload).
     """
     if not text:
         raise BananaBoyAPIError("synthesize() called with empty text")
 
-    payload = clean_for_speech(text)
+    payload = text.strip() if already_clean else clean_for_speech(text)
     if not payload:
         # If cleanup removed everything (response was pure data), fall back so we
         # don't return silent audio — the full reply is still in the chat window.

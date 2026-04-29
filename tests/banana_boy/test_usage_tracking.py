@@ -150,7 +150,7 @@ def test_voice_writes_three_usage_rows(app, client, logged_in_user):
         t_mock.side_effect = _t
 
         # synthesize: same pattern
-        def _s(text, *, usage_sink):
+        def _s(text, *, usage_sink, already_clean=False):
             usage_sink.append({
                 "provider": "openai",
                 "operation": "speech",

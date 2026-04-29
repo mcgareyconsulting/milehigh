@@ -12,7 +12,7 @@ from app.banana_boy.client import (
 )
 from app.banana_boy.gmail_client import fetch_recent_threads
 from app.banana_boy.usage import persist_usage
-from app.banana_boy.voice_client import synthesize, transcribe
+from app.banana_boy.voice_client import extract_spoken_block, synthesize, transcribe
 from app.logging_config import get_logger
 from app.models import ChatMessage, ROLE_ASSISTANT, ROLE_USER, db
 
@@ -60,12 +60,16 @@ def list_messages():
     return jsonify({"messages": [m.to_dict() for m in rows]})
 
 
-def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None) -> ChatMessage:
+def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None,
+                   voice_mode: bool = False) -> ChatMessage:
     """Persist a user turn, run the agent, persist the reply, return the assistant row.
 
     Raises BananaBoyConfigError / BananaBoyAPIError; the user row is committed before
     the upstream call so partial-failure history is preserved (tests rely on this).
     If `usage_sink` is given, Anthropic per-call usage is appended to it.
+    When `voice_mode=True`, the trailing <spoken>...</spoken> block is stripped
+    from the persisted chat content and stashed on the returned object as
+    `_spoken_text` for the voice route to feed to TTS.
     """
     prior = _recent_history(user.id, HISTORY_LIMIT - 1)
     user_turn = ChatMessage(user_id=user.id, role=ROLE_USER, content=user_text)
@@ -99,17 +103,25 @@ def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None) -> C
         extra_system_context=extra_context,
         tool_context={"user_id": user.id},
         usage_sink=usage_sink,
+        voice_mode=voice_mode,
     )
+
+    spoken_text = None
+    if voice_mode:
+        reply_text, spoken_text = extract_spoken_block(reply_text)
 
     assistant_turn = ChatMessage(user_id=user.id, role=ROLE_ASSISTANT, content=reply_text)
     db.session.add(assistant_turn)
     db.session.commit()
+    assistant_turn._spoken_text = spoken_text  # transient; voice_chat reads this
 
     logger.info(
         "banana_boy_chat",
         user_id=user.id,
         prompt_chars=len(user_text),
         reply_chars=len(reply_text),
+        voice_mode=voice_mode,
+        has_spoken_block=bool(spoken_text),
     )
     return assistant_turn
 
@@ -180,7 +192,8 @@ def voice_chat():
         transcript = transcript[:MAX_MESSAGE_LENGTH]
 
     try:
-        assistant_turn = _run_chat_turn(user, transcript, usage_sink=usage_sink)
+        assistant_turn = _run_chat_turn(user, transcript, usage_sink=usage_sink,
+                                        voice_mode=True)
     except BananaBoyConfigError as exc:
         logger.error("Banana Boy not configured", error=str(exc))
         persist_usage(usage_sink, user_id=user.id, chat_message_id=None)
@@ -190,8 +203,13 @@ def voice_chat():
         persist_usage(usage_sink, user_id=user.id, chat_message_id=None)
         return jsonify({"error": "assistant is unavailable"}), 502
 
+    spoken_text = getattr(assistant_turn, "_spoken_text", None)
+    # Prefer the model-authored spoken summary; fall back to cleaning the full
+    # reply if the model forgot to emit a <spoken> block.
+    tts_input = spoken_text or assistant_turn.content
     try:
-        audio_mp3 = synthesize(assistant_turn.content, usage_sink=usage_sink)
+        audio_mp3 = synthesize(tts_input, usage_sink=usage_sink,
+                               already_clean=bool(spoken_text))
         audio_b64 = base64.b64encode(audio_mp3).decode("ascii")
         audio_mime = "audio/mpeg"
     except BananaBoyConfigError as exc:

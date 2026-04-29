@@ -67,6 +67,20 @@ SYSTEM_PROMPT = (
     "to grant draft/send permission."
 )
 
+VOICE_ADDENDUM = (
+    "VOICE MODE: This reply will also be read aloud. Write the chat reply "
+    "as you normally would (tables, bullets, and data dumps are fine — those "
+    "go in the chat window). At the very end, append a single "
+    "<spoken>...</spoken> block containing a short, plain-prose summary that "
+    "will be the ONLY thing read aloud. Rules for the spoken block: "
+    "1–4 sentences; no markdown, no bullets, no list symbols, no headings; "
+    "lead with the headline, then call out the 1–2 most important specifics "
+    "(names, counts, standout numbers). If the chat reply is already a "
+    "short conversational answer, still wrap that text in <spoken> so it "
+    "is what gets spoken. Always include the <spoken> block — never omit it "
+    "in voice mode."
+)
+
 
 class BananaBoyConfigError(RuntimeError):
     """Raised when the Anthropic API key is missing."""
@@ -154,7 +168,7 @@ def _record_anthropic_usage(usage_sink, *, iteration, duration_ms, system_prompt
 
 
 def generate_reply(history, extra_system_context: str = "", tool_context: dict | None = None,
-                   usage_sink: list | None = None):
+                   usage_sink: list | None = None, voice_mode: bool = False):
     """Run the chat turn, including any tool-use round trips.
 
     `history` is a list of {role, content} the chat route built. `extra_system_context`
@@ -162,12 +176,16 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
     `tool_context` carries per-request data tools may need (e.g. user_id).
     If `usage_sink` is provided, one dict per Anthropic API call is appended
     describing tokens, duration, prompt sent and response.
+    `voice_mode=True` appends VOICE_ADDENDUM so the model emits a trailing
+    <spoken>...</spoken> block for the TTS layer.
     Returns the final assistant text. Raises BananaBoyAPIError on upstream failure.
     """
     tool_context = tool_context or {}
     system_prompt = SYSTEM_PROMPT
+    if voice_mode:
+        system_prompt = f"{system_prompt}\n\n{VOICE_ADDENDUM}"
     if extra_system_context:
-        system_prompt = f"{SYSTEM_PROMPT}\n\n{extra_system_context}"
+        system_prompt = f"{system_prompt}\n\n{extra_system_context}"
 
     client = _get_client()
     messages = list(history)

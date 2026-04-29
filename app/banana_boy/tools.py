@@ -8,6 +8,7 @@ User-scoped tools read `context["user_id"]` rather than trusting any
 user-supplied identifier — never let the LLM pretend to be a different user.
 """
 import re
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy.orm import joinedload
@@ -119,7 +120,14 @@ TOOL_DEFINITIONS = [
             "for job-release identifiers ('440-271') — those are release-only. "
             "If the user says 'pull submittals AND releases for 350', call "
             "both this tool and search_jobs_by_identifier in the same turn. "
-            "Pass at least one filter."
+            "Pass at least one filter. "
+            "For DWL / urgency analysis: combine urgent_only=True with a "
+            "high limit (e.g. 100) to pull the full urgency ladder, then "
+            "group results by submittal_manager when the user asks for a "
+            "'by submittal manager' or 'per submittal manager' summary. "
+            "Each result includes days_since_bic_update (aging signal), "
+            "days_until_due (negative ⇒ overdue), lifespan_days, and notes — "
+            "use these to surface delayed projects vs. healthy ones."
         ),
         "input_schema": {
             "type": "object",
@@ -136,6 +144,10 @@ TOOL_DEFINITIONS = [
                     "type": "string",
                     "description": "Person currently owning the submittal. Substring match against the comma-separated assignee field. Example: 'Daniel'.",
                 },
+                "submittal_manager": {
+                    "type": "string",
+                    "description": "Submittal manager name fragment (substring, case-insensitive). Use to filter or drill into a single submittal manager's submittals when the user asks 'urgent submittals for submittal manager X' or wants to focus on one manager.",
+                },
                 "urgent_only": {
                     "type": "boolean",
                     "description": "If true, restrict to urgent submittals — defined as order_number < 1. Sorted by order_number ascending (most urgent first). Use when the user asks 'what's urgent', 'urgent submittals', 'priority submittals', or combines urgency with another filter (e.g. 'urgent ones in my court').",
@@ -143,7 +155,7 @@ TOOL_DEFINITIONS = [
                 },
                 "limit": {
                     "type": "integer",
-                    "description": "Max rows (default 20, hard cap 50).",
+                    "description": "Max rows (default 20, hard cap 100). Use 100 for full DWL/urgency-by-PM summaries.",
                     "default": 20,
                 },
             },
@@ -392,6 +404,24 @@ def get_release_history(job: int, release: str, max_events: int = 50,
 
 
 def _submittal_to_compact(s: Submittals) -> dict:
+    today = date.today()
+    days_since_bic_update = None
+    if s.last_bic_update:
+        days_since_bic_update = (datetime.utcnow() - s.last_bic_update).days
+
+    lifespan_days = None
+    if s.created_at:
+        created_d = s.created_at.date() if hasattr(s.created_at, "date") else s.created_at
+        lifespan_days = (today - created_d).days
+
+    days_until_due = None
+    if s.due_date:
+        days_until_due = (s.due_date - today).days
+
+    notes = s.notes
+    if notes and len(notes) > 500:
+        notes = notes[:500] + "…"
+
     return {
         "submittal_id": s.submittal_id,
         "title": s.title,
@@ -402,15 +432,21 @@ def _submittal_to_compact(s: Submittals) -> dict:
         "order_number": s.order_number,
         "drafting_status": s.submittal_drafting_status,
         "due_date": s.due_date.isoformat() if s.due_date else None,
+        "days_until_due": days_until_due,
         "project_number": s.project_number,
         "project_name": s.project_name,
+        "notes": notes,
         "last_updated": s.last_updated.isoformat() if s.last_updated else None,
+        "last_bic_update": s.last_bic_update.isoformat() if s.last_bic_update else None,
+        "days_since_bic_update": days_since_bic_update,
+        "lifespan_days": lifespan_days,
     }
 
 
 def search_submittals(project_name: str | None = None,
                       project_number: str | None = None,
                       ball_in_court: str | None = None,
+                      submittal_manager: str | None = None,
                       urgent_only: bool = False,
                       limit: int = 20) -> dict[str, Any]:
     """Submittals search with optional filters. At least one filter required.
@@ -418,12 +454,12 @@ def search_submittals(project_name: str | None = None,
     urgent_only=True restricts to submittals with order_number < 1 (excludes NULL)
     and sorts by order_number ascending so the most urgent come first.
     """
-    if not (project_name or project_number or ball_in_court or urgent_only):
+    if not (project_name or project_number or ball_in_court or submittal_manager or urgent_only):
         return {
-            "error": "pass at least one filter (project_name, project_number, ball_in_court, or urgent_only)",
+            "error": "pass at least one filter (project_name, project_number, ball_in_court, submittal_manager, or urgent_only)",
             "results": [],
         }
-    limit = _clamp_limit(limit, default=20, ceiling=50)
+    limit = _clamp_limit(limit, default=20, ceiling=100)
 
     q = Submittals.query
     if project_number:
@@ -434,6 +470,8 @@ def search_submittals(project_name: str | None = None,
         # ball_in_court is a comma-separated multi-assignee string
         # (see app/procore/helpers.py). Substring match handles partial names.
         q = q.filter(Submittals.ball_in_court.ilike(f"%{ball_in_court.strip()}%"))
+    if submittal_manager:
+        q = q.filter(Submittals.submittal_manager.ilike(f"%{submittal_manager.strip()}%"))
     if urgent_only:
         q = q.filter(Submittals.order_number < 1)
 
@@ -451,6 +489,7 @@ def search_submittals(project_name: str | None = None,
             "project_name": project_name,
             "project_number": project_number,
             "ball_in_court": ball_in_court,
+            "submittal_manager": submittal_manager,
             "urgent_only": urgent_only,
             "limit": limit,
         },
