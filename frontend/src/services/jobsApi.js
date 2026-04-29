@@ -104,6 +104,19 @@ class JobsApi {
         }
     }
 
+    async renumberFabricationFabOrders({ dryRun = false } = {}) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/renumber-fabrication-fab-orders`,
+                null,
+                { params: { dry_run: dryRun } }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to renumber fabrication fab orders');
+        }
+    }
+
     async updateNotes(job, release, notes) {
         try {
             const response = await axios.patch(

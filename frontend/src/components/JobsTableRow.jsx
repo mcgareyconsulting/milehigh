@@ -894,7 +894,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         const displayValue = localFabOrder === null || localFabOrder === undefined ? '—' : formatCellValue(localFabOrder, column);
                         const fabOrderGroup = stageToGroup?.[localStage] || 'FABRICATION';
                         const groupDupes = duplicateFabOrders?.get?.(fabOrderGroup);
-                        const isDuplicateFabOrder = !!groupDupes && localFabOrder != null && localFabOrder >= 4 && groupDupes.has(localFabOrder);
+                        const isDuplicateFabOrder = !!groupDupes && localFabOrder != null && localFabOrder >= 3 && groupDupes.has(localFabOrder);
                         const dupColor = isDuplicateFabOrder ? (stageGroupDupColors?.[fabOrderGroup] || '#f97316') : null;
                         return (
                             <td

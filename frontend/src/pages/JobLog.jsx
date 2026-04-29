@@ -62,6 +62,9 @@ function JobLog() {
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [archivePreview, setArchivePreview] = useState(null);
     const [archiving, setArchiving] = useState(false);
+    const [showRenumberModal, setShowRenumberModal] = useState(false);
+    const [renumberPreview, setRenumberPreview] = useState(null);
+    const [renumbering, setRenumbering] = useState(false);
     const tableScrollRef = useRef(null);
 
     // Use the filters hook
@@ -259,13 +262,14 @@ function JobLog() {
     // stage group*. The client uses Welded QC (READY_TO_SHIP) for paint-sequence
     // ordering, so its numbering naturally collides with FABRICATION numbering — those
     // cross-group collisions are not real conflicts. 80.555 is the DEFAULT_FAB_ORDER
-    // sentinel and values < 4 are reserved tiers; both are excluded.
+    // sentinel and values < 3 are reserved fixed tiers; both are excluded. The
+    // FABRICATION dynamic block starts at 3, so ties at 3+ are real collisions.
     // Returns Map<groupKey, Set<number>> keyed by stage group.
     const duplicateFabOrders = useMemo(() => {
         const countsByGroup = new Map();
         for (const row of reviewDisplayJobs) {
             const fo = row['Fab Order'];
-            if (fo == null || fo < 4 || fo === 80.555) continue;
+            if (fo == null || fo < 3 || fo === 80.555) continue;
             const group = stageToGroup?.[row['Stage']] || 'FABRICATION';
             let counts = countsByGroup.get(group);
             if (!counts) {
@@ -936,6 +940,23 @@ function JobLog() {
                                                 Send to Archive
                                             </button>
                                         )}
+                                        {isAdmin && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const data = await jobsApi.renumberFabricationFabOrders({ dryRun: true });
+                                                        setRenumberPreview(data);
+                                                        setShowRenumberModal(true);
+                                                    } catch (err) {
+                                                        alert(`Failed to load renumber preview: ${err.message}`);
+                                                    }
+                                                }}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                                                title="Admin only — compress FABRICATION group fab_order values to a contiguous block starting at 3, preserving relative order. Welded QC and later stages are untouched."
+                                            >
+                                                🔢 Renumber Fab Order
+                                            </button>
+                                        )}
                                         <button
                                             onClick={handleReleaseClick}
                                             className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
@@ -1321,6 +1342,108 @@ function JobLog() {
                                         className="px-4 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {archiving ? 'Archiving...' : `Confirm Archive (${archivePreview.count})`}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Renumber Fab Order Modal */}
+                {showRenumberModal && renumberPreview && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+                            <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 rounded-t-xl">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-bold text-white">Renumber Fab Order</h2>
+                                    <button
+                                        onClick={() => setShowRenumberModal(false)}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                        disabled={renumbering}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="p-6 overflow-y-auto flex-1">
+                                <p className="mb-3 text-sm text-gray-700 dark:text-slate-300">
+                                    Compresses FABRICATION group <code>fab_order</code> values to a contiguous block starting at <strong>3</strong>, preserving the current relative order. Welded QC, Paint Start, and later stages are untouched.
+                                </p>
+                                <div className="mb-4 grid grid-cols-4 gap-3 text-sm">
+                                    <div className="bg-gray-50 dark:bg-slate-700 rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">FAB total</div>
+                                        <div className="text-lg font-bold">{renumberPreview.total_fabrication}</div>
+                                    </div>
+                                    <div className="bg-amber-50 dark:bg-amber-900/30 rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">Will change</div>
+                                        <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{renumberPreview.changed}</div>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-slate-700 rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">Unchanged</div>
+                                        <div className="text-lg font-bold">{renumberPreview.unchanged}</div>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-slate-700 rounded p-2" title="Releases at the 80.555 placeholder are preserved as-is.">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">Placeholder (80.555)</div>
+                                        <div className="text-lg font-bold">{renumberPreview.placeholder_preserved ?? 0}</div>
+                                    </div>
+                                </div>
+                                {renumberPreview.changed === 0 ? (
+                                    <p className="text-gray-600 dark:text-slate-300">Nothing to do — fab_orders are already compressed.</p>
+                                ) : (
+                                    <div className="max-h-64 overflow-y-auto border border-gray-200 dark:border-slate-600 rounded">
+                                        <table className="w-full text-xs">
+                                            <thead className="bg-gray-100 dark:bg-slate-700 sticky top-0">
+                                                <tr>
+                                                    <th className="px-2 py-1 text-left">Job-Release</th>
+                                                    <th className="px-2 py-1 text-left">Stage</th>
+                                                    <th className="px-2 py-1 text-right">From</th>
+                                                    <th className="px-2 py-1 text-right">→</th>
+                                                    <th className="px-2 py-1 text-right">To</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {renumberPreview.changes.map((c, i) => (
+                                                    <tr key={`${c.job}-${c.release}`} className={`${c.changed === false ? 'opacity-60' : ''} ${i % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-gray-50 dark:bg-slate-750'}`}>
+                                                        <td className="px-2 py-1 font-mono">{c.job}-{c.release}</td>
+                                                        <td className="px-2 py-1">{c.stage}</td>
+                                                        <td className="px-2 py-1 text-right text-gray-500">{c.from ?? '—'}</td>
+                                                        <td className="px-2 py-1 text-right text-gray-400">→</td>
+                                                        <td className={`px-2 py-1 text-right ${c.changed === false ? 'text-gray-500' : 'font-bold'}`}>{c.to}{c.changed === false ? ' (no change)' : ''}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-600 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowRenumberModal(false)}
+                                    className="px-4 py-2 rounded text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600"
+                                    disabled={renumbering}
+                                >
+                                    Cancel
+                                </button>
+                                {renumberPreview.changed > 0 && (
+                                    <button
+                                        onClick={async () => {
+                                            setRenumbering(true);
+                                            try {
+                                                const result = await jobsApi.renumberFabricationFabOrders({ dryRun: false });
+                                                setShowRenumberModal(false);
+                                                setRenumberPreview(null);
+                                                await refetch(true);
+                                                alert(`Renumbered ${result.changed} release${result.changed !== 1 ? 's' : ''}.`);
+                                            } catch (err) {
+                                                alert(`Failed to renumber: ${err.message}`);
+                                            } finally {
+                                                setRenumbering(false);
+                                            }
+                                        }}
+                                        disabled={renumbering}
+                                        className="px-4 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {renumbering ? 'Renumbering...' : `Apply (${renumberPreview.changed})`}
                                     </button>
                                 )}
                             </div>
