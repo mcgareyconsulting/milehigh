@@ -1,0 +1,31 @@
+release,description,stage,stage_group,is_archived,pm,by,released,start_install,comp_eta,fab_hrs,install_hrs,days_since_release,is_active,on_time_status,median_close,worst_close,eta_vs_median_days,eta_vs_today_days,historical_median_days,historical_p90_days,historical_n
+253,Elevator 2 Metals,Complete,COMPLETE,True,GA,RJA,2026-01-05,2026-04-28,2026-04-29,7.798,4.0,114,False,,,,,,,,
+273,Area 2 Structural Steel Embeds,Complete,COMPLETE,True,GA,DEP,2026-01-12,2026-04-29,2026-04-29,18.25,0.0,107,False,,,,,,,,
+274,Area 3 Structural Steel Embed,Complete,COMPLETE,True,GA,DEP,2026-01-12,2026-04-29,2026-04-29,1.5,0.0,107,False,,,,,,,,
+275,Area 4 Structural Steel Embeds,Complete,COMPLETE,True,GA,DEP,2026-01-12,2026-04-29,2026-04-29,5.0,0.0,107,False,,,,,,,,
+276,Area 6 Structural Steel Embeds,Complete,COMPLETE,True,GA,DEP,2026-01-12,2026-01-19,2026-02-12,2.5,0.0,107,False,,,,,,,,
+289,RFI 74 Double Wall Hold Down Embeds,Released,FABRICATION,True,GA,DTS,2026-01-16,2026-05-12,2026-05-12,1.0,0.0,103,True,OVERDUE,2026-02-26,2026-04-24,75,13,41.0,98.0,160
+294,Area 6 Structural Steel,Complete,COMPLETE,False,GA,DEP,2026-02-17,2026-03-12,2026-03-17,35.7,52.2,71,False,,,,,,,,
+299,Pre-cast Stair Core 2,Shipping completed,COMPLETE,False,GA,CBA,2026-01-28,2026-04-14,2026-04-15,47.4,6.8,91,False,,,,,,,,
+389,Area 2 Structural Steel.389 S1,Shipping completed,COMPLETE,False,GA,DEP,2026-03-05,2026-04-02,2026-05-13,377.6,473.4,55,False,,,,,,,,
+408,Area 3 Structural Steel,Shipping completed,COMPLETE,False,GA,DEP,2026-04-09,2026-04-23,2026-04-28,29.1,33.1,20,False,,,,,,,,
+430,Area 4 Structural Steel,Paint Start,READY_TO_SHIP,False,GA,DEP,2026-03-11,2026-05-04,2026-05-06,99.2,145.3,49,True,STRETCHING,2026-04-21,2026-06-17,15,7,41.0,98.0,160
+431,Hold Down Embed Install Area 2,Shipping completed,COMPLETE,False,GA,DCR,2026-03-09,2026-04-23,2026-04-27,0.0,18.6,51,False,,,,,,,,
+432,Hold Down Embed Install Area 3,Shipping completed,COMPLETE,False,GA,DCR,2026-03-09,2026-04-14,2026-04-16,0.0,23.5,51,False,,,,,,,,
+433,Hold Down Embed Install Area 4,Store at MHMW for shipping,READY_TO_SHIP,False,GA,DCR,2026-03-09,2026-04-14,2026-04-16,0.0,20.0,51,True,STRETCHING,2026-04-19,2026-06-15,-3,-13,41.0,98.0,160
+434,Hold Down Embed Install Area 5,Complete,COMPLETE,False,GA,DCR,2026-03-09,2026-05-06,2026-05-08,0.0,17.5,51,False,,,,,,,,
+435,Hold Down Embed Install Area 6,Complete,COMPLETE,False,GA,DCR,2026-03-09,2026-04-28,2026-04-30,0.0,17.9,51,False,,,,,,,,
+437,CO#04 Additional HD Embeds,Complete,COMPLETE,False,GA,DCR,2026-03-10,2026-04-28,2026-05-01,25.0,35.0,50,False,,,,,,,,
+493,CO#07 Additional HD Embeds 2,Complete,COMPLETE,False,GA,DCR,2026-03-30,2026-05-06,2026-05-11,25.0,35.0,30,False,,,,,,,,
+495,Area 6 Extended Clips,Complete,COMPLETE,False,GA,DEP,2026-04-01,2026-04-23,2026-04-23,0.0,0.0,28,False,,,,,,,,
+510,HD19 Strap,Complete,COMPLETE,False,GA,DCR,2026-04-06,2026-04-29,2026-04-30,2.0,2.0,23,False,,,,,,,,
+511,Retail Lvl 2 Holdowns,Welded QC,READY_TO_SHIP,False,GA,DCR,2026-04-06,2026-04-22,2026-04-23,0.5,1.7,23,True,ON TRACK,2026-05-17,2026-07-13,-24,-6,41.0,98.0,160
+552,Garage CMU TOW Connection,Welded QC,READY_TO_SHIP,False,GA,CBA,2026-04-16,2026-05-07,2026-05-14,24.0,80.0,13,True,ON TRACK,2026-05-27,2026-07-23,-13,15,41.0,98.0,160
+560,RFI #139 Elev 2 & Retail Mechanical Shaft,Weld Complete,FABRICATION,False,GA,DTS,2026-04-21,2026-04-24,2026-05-07,5.1,22.2,8,True,ON TRACK,2026-06-01,2026-07-28,-25,8,41.0,98.0,160
+668,Curb Protection,Complete,COMPLETE,False,GA,DTS,2026-08-07,2026-05-06,2026-05-06,6.0,0.0,-100,False,,,,,,,,
+753,Hold Down Embeds - Droped Shipped,Complete,COMPLETE,True,GA,DCR,2025-09-18,2026-04-23,2026-04-23,69.5,0.0,223,False,,,,,,,,
+840,Embed EP-6,Complete,COMPLETE,True,GA,DCR,2025-10-10,2025-10-16,2025-10-16,0.25,0.0,201,False,,,,,,,,
+857,Hold Down Embed Extra,Complete,COMPLETE,True,GA,DCR,2025-10-16,2026-04-23,2026-04-23,3.75,0.0,195,False,,,,,,,,
+V250,RFI 128 baseplate,Complete,COMPLETE,False,GA,GA,,2026-04-08,,1.0,1.0,,False,,,,,,,,
+V547,EP1 Embeds,Complete,COMPLETE,False,GA,GA,2026-03-31,2026-04-23,2026-04-23,5.0,0.0,29,False,,,,,,,,
+V902,Elevator Hoist Beams,Complete,COMPLETE,True,GA,RJA,2026-02-18,2026-02-24,2026-03-09,1.0,1.0,70,False,,,,,,,,
