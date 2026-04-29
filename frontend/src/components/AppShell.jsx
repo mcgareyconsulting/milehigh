@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
+import ChatBubble from './BananaBoy/ChatBubble';
 
 function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
@@ -223,6 +224,8 @@ function AppShellInner({ isAuthenticated }) {
       <main className="flex-1 w-full min-h-0 flex flex-col">
         <Outlet />
       </main>
+
+      {isAuthenticated && <ChatBubble />}
     </div>
   );
 }
