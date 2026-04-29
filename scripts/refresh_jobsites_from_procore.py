@@ -122,7 +122,6 @@ def build_entry(
         "is_active": (existing or {}).get("is_active", True),
         "radius_meters": radius,
         "geofence_geojson": polygon,
-        "geometry": polygon,
     }
 
     changes = []

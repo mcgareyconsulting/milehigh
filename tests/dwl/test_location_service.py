@@ -14,7 +14,7 @@ def _make_project(job_number, polygon_coords, is_active=True):
     p = Projects(
         name=f"Project {job_number}",
         job_number=job_number,
-        geometry={"type": "Polygon", "coordinates": [polygon_coords]},
+        geofence_geojson={"type": "Polygon", "coordinates": [polygon_coords]},
         is_active=is_active,
     )
     db.session.add(p)

@@ -541,8 +541,9 @@ class LocationService:
                 stmt = text("""
                     SELECT job_number FROM projects
                     WHERE is_active = true
+                    AND geofence_geojson IS NOT NULL
                     AND ST_DWithin(
-                        ST_GeomFromGeoJSON(geometry::text)::geography,
+                        ST_GeomFromGeoJSON(geofence_geojson::text)::geography,
                         ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
                         :buffer_meters
                     )
@@ -565,7 +566,7 @@ class LocationService:
         sites = Projects.query.filter_by(is_active=True).all()
         job_numbers = []
         for site in sites:
-            geom = site.geometry
+            geom = site.geofence_geojson
             if isinstance(geom, dict) and geom.get("type") == "Polygon":
                 coords = geom.get("coordinates")
                 if coords and LocationEngine.point_in_polygon(lng, lat, coords):
