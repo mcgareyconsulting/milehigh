@@ -83,6 +83,14 @@ const MentionInput = forwardRef(function MentionInput({
 
     useImperativeHandle(ref, () => inputRef.current, []);
 
+    useEffect(() => {
+        if (!multiline) return;
+        const el = inputRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    }, [value, multiline]);
+
     const filtered = (users || []).filter(u => {
         const name = `${u.first_name} ${u.last_name}`.toLowerCase();
         return name.includes(filterText.toLowerCase());
@@ -163,7 +171,8 @@ const MentionInput = forwardRef(function MentionInput({
     };
 
     const defaultInputClass = "w-full px-2.5 py-1.5 text-xs border border-gray-300 dark:border-slate-500 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-transparent";
-    const resolvedClass = className || defaultInputClass;
+    const multilineExtras = " resize-none overflow-y-auto max-h-48";
+    const resolvedClass = className || (multiline ? defaultInputClass + multilineExtras : defaultInputClass);
 
     const sharedProps = {
         ref: inputRef,
