@@ -82,6 +82,9 @@ class Config:
     # Anthropic (Banana Boy assistant)
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+    # OpenAI (Banana Boy voice: Whisper ASR + TTS)
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
     # Google OAuth (Sign in with Google + Gmail readonly for Banana Boy)
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")

@@ -1,8 +1,10 @@
 """Anthropic Claude wrapper for Banana Boy with tool-use loop."""
 import json
+import time
 
 from flask import current_app
 
+from app.banana_boy.pricing import anthropic_cost
 from app.banana_boy.tools import TOOL_DEFINITIONS, execute_tool
 from app.logging_config import get_logger
 
@@ -13,7 +15,11 @@ MAX_TOKENS = 1024
 MAX_TOOL_ITERATIONS = 5
 SYSTEM_PROMPT = (
     "You are Banana Boy, a friendly personal assistant inside the MHMW operations app. "
-    "Be concise and direct. If you don't know something, say so. "
+    "Talk like the crew you work with — fab shop and field guys, blue-collar, "
+    "American working-class. Be concise and direct. Use contractions ('that's', "
+    "'we're', 'you've got'). Skip corporate filler ('I'd be happy to', "
+    "'Certainly,', 'I have identified...') — just answer. Plain words over "
+    "fancy ones. No emojis. If you don't know something, say so. "
     "When the user asks about a specific job, release, or project, call the "
     "search tools rather than guessing. Identifiers look like '410-271' "
     "(job-release) or just '410' (job). "
@@ -40,6 +46,12 @@ SYSTEM_PROMPT = (
     "search_submittals(ball_in_court=<your first_name from the Current user "
     "block in the system context>). These are ball-in-court questions about "
     "MY submittals — call search_submittals, NOT get_my_notifications. "
+    "URGENCY: 'what's urgent', 'urgent submittals', 'priority submittals', "
+    "'what's hot', 'rush jobs' → search_submittals(urgent_only=true). "
+    "Combine with other filters when asked, e.g. 'urgent ones in my court' → "
+    "search_submittals(ball_in_court=<first_name>, urgent_only=true), "
+    "'urgent on Lennar' → search_submittals(project_name=\"Lennar\", urgent_only=true). "
+    "Urgency is defined by order_number < 1; lower is more urgent. "
     "Do not infer that 'project X' alone means 'show me submittals too'. "
     "NOTIFICATIONS DISPATCH: call get_my_notifications ONLY when the user "
     "asks specifically about mentions, notifications, '@me', alerts, or "
@@ -102,12 +114,54 @@ def _extract_text(content_blocks):
     return "".join(parts).strip()
 
 
-def generate_reply(history, extra_system_context: str = "", tool_context: dict | None = None):
+def _record_anthropic_usage(usage_sink, *, iteration, duration_ms, system_prompt,
+                            messages_sent, response):
+    """Append a usage dict to usage_sink describing this Anthropic call."""
+    if usage_sink is None:
+        return
+    u = getattr(response, "usage", None)
+    input_tokens = getattr(u, "input_tokens", None) if u else None
+    output_tokens = getattr(u, "output_tokens", None) if u else None
+    cache_read = getattr(u, "cache_read_input_tokens", None) if u else None
+    cache_creation = getattr(u, "cache_creation_input_tokens", None) if u else None
+
+    response_blocks = [_block_to_dict(b) for b in response.content]
+
+    usage_sink.append({
+        "provider": "anthropic",
+        "operation": "chat",
+        "model": HAIKU_MODEL,
+        "iteration": iteration,
+        "duration_ms": duration_ms,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cache_read_tokens": cache_read,
+        "cache_creation_tokens": cache_creation,
+        "cost_usd": anthropic_cost(
+            HAIKU_MODEL,
+            input_tokens=input_tokens or 0,
+            output_tokens=output_tokens or 0,
+            cache_read_tokens=cache_read or 0,
+            cache_creation_tokens=cache_creation or 0,
+        ),
+        "payload": {
+            "system": system_prompt,
+            "messages": messages_sent,
+            "stop_reason": getattr(response, "stop_reason", None),
+            "response_blocks": response_blocks,
+        },
+    })
+
+
+def generate_reply(history, extra_system_context: str = "", tool_context: dict | None = None,
+                   usage_sink: list | None = None):
     """Run the chat turn, including any tool-use round trips.
 
     `history` is a list of {role, content} the chat route built. `extra_system_context`
     is appended to SYSTEM_PROMPT (used by the chat route for Gmail context).
     `tool_context` carries per-request data tools may need (e.g. user_id).
+    If `usage_sink` is provided, one dict per Anthropic API call is appended
+    describing tokens, duration, prompt sent and response.
     Returns the final assistant text. Raises BananaBoyAPIError on upstream failure.
     """
     tool_context = tool_context or {}
@@ -119,6 +173,10 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
     messages = list(history)
 
     for iteration in range(MAX_TOOL_ITERATIONS):
+        # Snapshot the messages we're about to send (deep enough that subsequent
+        # appends don't mutate what we record).
+        messages_sent = json.loads(json.dumps(messages, default=str))
+        t0 = time.monotonic()
         try:
             response = client.messages.create(
                 model=HAIKU_MODEL,
@@ -130,6 +188,16 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
         except Exception as exc:
             logger.error("Anthropic API call failed", error=str(exc), exc_info=True)
             raise BananaBoyAPIError(str(exc)) from exc
+        duration_ms = int((time.monotonic() - t0) * 1000)
+
+        _record_anthropic_usage(
+            usage_sink,
+            iteration=iteration,
+            duration_ms=duration_ms,
+            system_prompt=system_prompt,
+            messages_sent=messages_sent,
+            response=response,
+        )
 
         if response.stop_reason != "tool_use":
             text = _extract_text(response.content)

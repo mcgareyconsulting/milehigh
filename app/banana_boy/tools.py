@@ -136,6 +136,11 @@ TOOL_DEFINITIONS = [
                     "type": "string",
                     "description": "Person currently owning the submittal. Substring match against the comma-separated assignee field. Example: 'Daniel'.",
                 },
+                "urgent_only": {
+                    "type": "boolean",
+                    "description": "If true, restrict to urgent submittals — defined as order_number < 1. Sorted by order_number ascending (most urgent first). Use when the user asks 'what's urgent', 'urgent submittals', 'priority submittals', or combines urgency with another filter (e.g. 'urgent ones in my court').",
+                    "default": False,
+                },
                 "limit": {
                     "type": "integer",
                     "description": "Max rows (default 20, hard cap 50).",
@@ -406,11 +411,16 @@ def _submittal_to_compact(s: Submittals) -> dict:
 def search_submittals(project_name: str | None = None,
                       project_number: str | None = None,
                       ball_in_court: str | None = None,
+                      urgent_only: bool = False,
                       limit: int = 20) -> dict[str, Any]:
-    """Submittals search with optional filters. At least one required."""
-    if not (project_name or project_number or ball_in_court):
+    """Submittals search with optional filters. At least one filter required.
+
+    urgent_only=True restricts to submittals with order_number < 1 (excludes NULL)
+    and sorts by order_number ascending so the most urgent come first.
+    """
+    if not (project_name or project_number or ball_in_court or urgent_only):
         return {
-            "error": "at least one of project_name, project_number, or ball_in_court is required",
+            "error": "pass at least one filter (project_name, project_number, ball_in_court, or urgent_only)",
             "results": [],
         }
     limit = _clamp_limit(limit, default=20, ceiling=50)
@@ -424,19 +434,24 @@ def search_submittals(project_name: str | None = None,
         # ball_in_court is a comma-separated multi-assignee string
         # (see app/procore/helpers.py). Substring match handles partial names.
         q = q.filter(Submittals.ball_in_court.ilike(f"%{ball_in_court.strip()}%"))
+    if urgent_only:
+        q = q.filter(Submittals.order_number < 1)
 
-    rows = (
-        q.order_by(Submittals.last_updated.desc().nullslast(),
-                   Submittals.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    if urgent_only:
+        q = q.order_by(Submittals.order_number.asc().nullslast(),
+                       Submittals.last_updated.desc())
+    else:
+        q = q.order_by(Submittals.last_updated.desc().nullslast(),
+                       Submittals.created_at.desc())
+
+    rows = q.limit(limit).all()
 
     return {
         "query": {
             "project_name": project_name,
             "project_number": project_number,
             "ball_in_court": ball_in_court,
+            "urgent_only": urgent_only,
             "limit": limit,
         },
         "result_count": len(rows),

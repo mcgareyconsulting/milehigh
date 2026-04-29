@@ -15,6 +15,15 @@ export async function sendMessage(message) {
     return data.message;
 }
 
+export async function sendVoiceMessage(audioBlob, filename = 'voice.webm') {
+    const fd = new FormData();
+    fd.append('audio', audioBlob, filename);
+    const { data } = await axios.post(`${BASE}/voice/chat`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data; // { transcript, message, audio_b64, audio_mime }
+}
+
 export async function clearMessages() {
     await axios.delete(`${BASE}/messages`);
 }

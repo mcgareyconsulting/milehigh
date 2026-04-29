@@ -4,12 +4,15 @@ import { useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useBananaBoyChat } from '../../hooks/useBananaBoyChat';
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import BananaBoyAnimation from './BananaBoyAnimation';
 import { buildGoogleLinkUrl, messageForGoogleError } from '../../services/googleAuthApi';
 import { setBananaBoyPreferences } from '../../services/bananaBoyApi';
 
 export default function ChatModal({ user, onClose, onUserChange }) {
-    const { messages, loading, sending, error, send, clear } = useBananaBoyChat(true);
+    const { messages, loading, sending, error, send, sendVoice, clear } = useBananaBoyChat(true);
+    const { isRecording, error: recorderError, start: startRecording, stop: stopRecording } = useVoiceRecorder();
+    const audioRef = useRef(null);
     const [draft, setDraft] = useState('');
     const [briefSaving, setBriefSaving] = useState(false);
     const listRef = useRef(null);
@@ -73,6 +76,44 @@ export default function ChatModal({ user, onClose, onUserChange }) {
         if (messages.length === 0) return;
         await clear();
     };
+
+    const playReply = (audioB64, audioMime) => {
+        if (!audioB64) return;
+        try {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+            const a = new Audio(`data:${audioMime || 'audio/mpeg'};base64,${audioB64}`);
+            audioRef.current = a;
+            a.play().catch(() => { /* user gesture issue — silently skip */ });
+        } catch {
+            /* ignore playback errors */
+        }
+    };
+
+    const handleVoiceStart = async (e) => {
+        e?.preventDefault();
+        if (sending || isRecording) return;
+        await startRecording();
+    };
+
+    const handleVoiceStop = async (e) => {
+        e?.preventDefault();
+        if (!isRecording) return;
+        const blob = await stopRecording();
+        if (!blob || blob.size === 0) return;
+        const ext = (blob.type && blob.type.includes('mp4')) ? 'mp4' : 'webm';
+        const data = await sendVoice(blob, `voice.${ext}`);
+        if (data?.audio_b64) playReply(data.audio_b64, data.audio_mime);
+    };
+
+    useEffect(() => () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+    }, []);
 
     return createPortal(
         <div
@@ -150,8 +191,17 @@ export default function ChatModal({ user, onClose, onUserChange }) {
                 {sending && (
                     <div className="text-sm text-gray-500 dark:text-slate-400 italic">Banana Boy is thinking…</div>
                 )}
+                {isRecording && (
+                    <div className="text-sm text-red-600 dark:text-red-400 italic flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        Listening… release to send
+                    </div>
+                )}
                 {error && (
                     <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
+                )}
+                {recorderError && !error && (
+                    <div className="text-sm text-amber-700 dark:text-amber-400">{recorderError}</div>
                 )}
             </div>
 
@@ -166,6 +216,24 @@ export default function ChatModal({ user, onClose, onUserChange }) {
                     className="flex-1 resize-none rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                     disabled={sending}
                 />
+                <button
+                    type="button"
+                    onMouseDown={handleVoiceStart}
+                    onMouseUp={handleVoiceStop}
+                    onMouseLeave={isRecording ? handleVoiceStop : undefined}
+                    onTouchStart={handleVoiceStart}
+                    onTouchEnd={handleVoiceStop}
+                    disabled={sending}
+                    title={isRecording ? 'Release to send' : 'Hold to talk'}
+                    aria-pressed={isRecording}
+                    className={
+                        isRecording
+                            ? 'px-3 py-2 rounded-lg text-white bg-red-500 hover:bg-red-600 select-none'
+                            : 'px-3 py-2 rounded-lg text-white bg-gray-500 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed select-none'
+                    }
+                >
+                    🎤
+                </button>
                 <button
                     type="submit"
                     disabled={sending || !draft.trim()}

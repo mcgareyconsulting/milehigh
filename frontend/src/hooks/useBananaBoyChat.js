@@ -3,6 +3,7 @@ import {
     clearMessages as clearMessagesApi,
     fetchMessages,
     sendMessage as sendMessageApi,
+    sendVoiceMessage as sendVoiceMessageApi,
 } from '../services/bananaBoyApi';
 
 export function useBananaBoyChat(enabled) {
@@ -60,6 +61,47 @@ export function useBananaBoyChat(enabled) {
         }
     }, [sending]);
 
+    const sendVoice = useCallback(async (audioBlob, filename) => {
+        if (!audioBlob || sending) return null;
+
+        const pendingId = `pending-voice-${Date.now()}`;
+        const optimistic = {
+            id: pendingId,
+            role: 'user',
+            content: '🎤 …',
+            created_at: new Date().toISOString(),
+            pending: true,
+        };
+        setMessages((prev) => [...prev, optimistic]);
+        setSending(true);
+        setError(null);
+
+        try {
+            const data = await sendVoiceMessageApi(audioBlob, filename);
+            const userTurn = {
+                id: `voice-user-${data.message.id}`,
+                role: 'user',
+                content: data.transcript,
+                created_at: new Date().toISOString(),
+            };
+            setMessages((prev) => [
+                ...prev.filter((m) => m.id !== pendingId),
+                userTurn,
+                data.message,
+            ]);
+            return data;
+        } catch (err) {
+            const msg = err.response?.data?.error || err.message;
+            setError(msg);
+            setMessages((prev) =>
+                prev.map((m) => (m.id === pendingId ? { ...m, pending: false, failed: true } : m))
+            );
+            return null;
+        } finally {
+            setSending(false);
+        }
+    }, [sending]);
+
     const clear = useCallback(async () => {
         try {
             await clearMessagesApi();
@@ -70,5 +112,5 @@ export function useBananaBoyChat(enabled) {
         }
     }, []);
 
-    return { messages, loading, sending, error, send, clear };
+    return { messages, loading, sending, error, send, sendVoice, clear };
 }
