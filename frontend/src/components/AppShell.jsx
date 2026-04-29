@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
+import ChatBubble from './BananaBoy/ChatBubble';
 
 const DOUG_PRANK_ALLOWLIST = new Set([
   'mcgareyconsulting@gmail.com',
@@ -241,6 +242,8 @@ function AppShellInner({ isAuthenticated }) {
       <main className="flex-1 w-full min-h-0 flex flex-col">
         <Outlet />
       </main>
+
+      {isAuthenticated && <ChatBubble />}
     </div>
   );
 }
