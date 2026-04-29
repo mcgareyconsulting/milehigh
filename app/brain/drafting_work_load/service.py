@@ -539,7 +539,7 @@ class LocationService:
         if dialect == "postgresql":
             try:
                 stmt = text("""
-                    SELECT job_number FROM job_sites
+                    SELECT job_number FROM projects
                     WHERE is_active = true
                     AND ST_DWithin(
                         ST_GeomFromGeoJSON(geometry::text)::geography,
@@ -559,6 +559,7 @@ class LocationService:
                     return [r[0] for r in rows]
             except Exception as e:
                 logger.warning("PostGIS location check failed, using Python fallback: %s", e)
+                db.session.rollback()
 
         # Fallback: strict point-in-polygon (SQLite or PostGIS unavailable)
         sites = Projects.query.filter_by(is_active=True).all()
