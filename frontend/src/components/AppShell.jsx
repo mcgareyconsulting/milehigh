@@ -19,6 +19,10 @@ import { LocationProvider, useLocationContext } from '../context/LocationContext
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 
+const DOUG_PRANK_ALLOWLIST = new Set([
+  'dferrin@mhmw.com',
+]);
+
 function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,10 +30,15 @@ function AppShellInner({ isAuthenticated }) {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isDoug, setIsDoug] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
-      checkAuth().then(user => setIsAdmin(user?.is_admin || false));
+      checkAuth().then(user => {
+        setIsAdmin(user?.is_admin || false);
+        const email = user?.username?.trim().toLowerCase();
+        setIsDoug(!!email && DOUG_PRANK_ALLOWLIST.has(email));
+      });
     }
   }, [isAuthenticated]);
 
@@ -67,6 +76,14 @@ function AppShellInner({ isAuthenticated }) {
         >
           Map
         </button>
+
+        {isDoug && (
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 11 }).map((_, i) => (
+              <img key={i} src="/doug.gif" alt="" className="h-9 w-9 rounded" />
+            ))}
+          </div>
+        )}
 
         {/* Centered title */}
         <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none">
