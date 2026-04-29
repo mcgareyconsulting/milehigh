@@ -728,8 +728,6 @@ class Projects(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     job_number = db.Column(db.String(100), nullable=False)
-    # GeoJSON polygon: {"type": "Polygon", "coordinates": [[[lng, lat, z?], ...]]}
-    geometry = db.Column(db.JSON, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -739,6 +737,8 @@ class Projects(db.Model):
     longitude = db.Column(db.Float)
     radius_meters = db.Column(db.Float)
     pm_id = db.Column(db.Integer, db.ForeignKey('project_managers.id'))
+    # GeoJSON polygon: {"type": "Polygon", "coordinates": [[[lng, lat, z?], ...]]}
+    # Single canonical column for both map rendering and on-site filtering.
     geofence_geojson = db.Column(db.JSON)
 
     pm = db.relationship('ProjectManager', backref='jobsites')
