@@ -8,9 +8,13 @@
  * imported_by: [../pages/JobLog.jsx, ../pages/Archive.jsx]
  * invariants:
  *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
- *   - Subset views (job_order, ready_to_ship, paint, paint_fab, fab) apply stage-group filters then sort by fab_order
+ *   - Subset views apply stage-group filters then sort by fab_order, EXCEPT
+ *     ready_to_ship and paint sort by stage priority (Shipping planning → Store →
+ *     Paint complete → Paint Start → Welded QC) then last_updated_at ascending.
+ *     paint_fab uses that same stage+date sort for the paint band, then fab_order
+ *     for the FABRICATION band.
  *   - totalFabHrs and totalInstallHrs are computed over ALL jobs, not the filtered displayJobs
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ * updated_by_agent: 2026-04-28T00:00:00Z
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 
@@ -228,6 +232,34 @@ export function useJobsFilters(jobs = []) {
     }, []);
 
     /**
+     * Sort jobs by stage priority (per STAGE_SORT_PRIORITY), then last_updated_at
+     * ascending (oldest first). Used by Ready-to-Ship, Paint, and the paint band of
+     * Paint+Fab — fab_order is undifferentiated within these stage tiers, so stage
+     * groups the rows and recency surfaces the items waiting longest. Unknown stages
+     * and rows with null last_updated_at sink to the bottom of their tier.
+     */
+    const sortByStageThenLastUpdated = useCallback((jobs) => {
+        return [...jobs].sort((a, b) => {
+            const stageA = String(a['Stage'] ?? '').trim();
+            const stageB = String(b['Stage'] ?? '').trim();
+            const prioA = STAGE_SORT_PRIORITY[stageA] ?? 999;
+            const prioB = STAGE_SORT_PRIORITY[stageB] ?? 999;
+            if (prioA !== prioB) return prioA - prioB;
+
+            const rawA = a['last_updated_at'];
+            const rawB = b['last_updated_at'];
+            const dateA = rawA ? new Date(rawA) : null;
+            const dateB = rawB ? new Date(rawB) : null;
+            const validA = dateA && !isNaN(dateA.getTime());
+            const validB = dateB && !isNaN(dateB.getTime());
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dateA.getTime() - dateB.getTime();
+        });
+    }, []);
+
+    /**
      * Sort jobs by fab order, then start install date as tiebreaker (for Paint+Fab view)
      */
     const sortByFabOrderThenStartInstall = useCallback((jobs) => {
@@ -340,15 +372,15 @@ export function useJobsFilters(jobs = []) {
         } else if (selectedSubset === 'ready_to_ship') {
             const readyToShipStages = ['Shipping planning', 'Store at MHMW for shipping', 'Paint complete'];
             const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
-            result = sortByFabOrder(rtsOnly);
+            result = sortByStageThenLastUpdated(rtsOnly);
         } else if (selectedSubset === 'paint') {
             const paintStages = ['Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            result = sortByFabOrder(paintOnly);
+            result = sortByStageThenLastUpdated(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
             const paintStages = ['Paint complete', 'Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            const paintSorted = sortByFabOrderThenStartInstall(paintOnly);
+            const paintSorted = sortByStageThenLastUpdated(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
             const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
             result = [...paintSorted, ...fabSorted];
@@ -364,7 +396,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByFabOrderThenStartInstall, columnSort, compareByColumn]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, columnSort, compareByColumn]);
 
     /**
      * Secondary search: jobs matching the search with all project/stage/subset
