@@ -174,6 +174,8 @@ export default function BoardDetail({ item, onUpdate, onClose }) {
                     users={mentionableUsers}
                     placeholder="Add a comment... (type @ to mention)"
                     disabled={submitting}
+                    multiline
+                    rows={2}
                 />
                 <button type="submit" disabled={!commentText.trim() || submitting}
                     className="px-3 py-1.5 text-xs font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
