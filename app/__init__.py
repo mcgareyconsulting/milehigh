@@ -34,6 +34,8 @@ from app.history import history_bp
 from app.admin import admin_bp
 from app.onedrive import onedrive_bp
 from app.banana_boy import banana_boy_bp
+from app.banana_boy.drawings import LocalDrawingLoader
+from app.banana_boy.tools import DRAWING_LOADER_KEY
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -449,6 +451,11 @@ def create_app():
     app.register_blueprint(history_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(banana_boy_bp, url_prefix="/banana-boy")
+
+    # Banana Boy compliance scan: drawing loader (local FS today, Procore later).
+    app.extensions[DRAWING_LOADER_KEY] = LocalDrawingLoader(
+        app.config["BANANA_BOY_DRAWINGS_DIR"]
+    )
 
     # Catch-all route for React Router (must be last, after all API routes)
     # This handles direct URL access to React routes like /history, /operations, etc.

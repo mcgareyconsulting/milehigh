@@ -91,8 +91,10 @@ def test_chat_writes_anthropic_usage_row(app, client, logged_in_user):
         # Linked to the assistant ChatMessage row.
         assistant = ChatMessage.query.filter_by(role="assistant").one()
         assert r.chat_message_id == assistant.id
-        # Prompt was captured.
-        assert r.payload["system"].startswith("You are Banana Boy")
+        # Prompt was captured (now a list of system blocks).
+        system_blocks = r.payload["system"]
+        assert isinstance(system_blocks, list)
+        assert system_blocks[0]["text"].startswith("You are Banana Boy")
         assert r.payload["messages"] == [{"role": "user", "content": "hi"}]
         assert r.payload["stop_reason"] == "end_turn"
 

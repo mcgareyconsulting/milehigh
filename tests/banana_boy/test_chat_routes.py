@@ -56,6 +56,73 @@ def test_chat_includes_prior_history(app, client, logged_in_user, mock_haiku_rep
         assert ChatMessage.query.count() == 4
 
 
+def test_chat_response_includes_usage_summary(app, client, logged_in_user, mock_haiku_reply):
+    """Chat reply must surface a per-turn usage summary so the UI can render
+    cost/duration under the assistant bubble."""
+    from app.banana_boy import routes as bb_routes
+
+    def fake_reply(history, *, extra_system_context="", tool_context=None,
+                   usage_sink=None, voice_mode=False):
+        if usage_sink is not None:
+            usage_sink.append({
+                "provider": "anthropic", "operation": "chat",
+                "model": "claude-haiku-4-5-20251001", "iteration": 0,
+                "duration_ms": 420,
+                "input_tokens": 1200, "output_tokens": 80,
+                "cache_read_tokens": 0, "cache_creation_tokens": 0,
+                "cost_usd": 0.0016,
+            })
+        return "ok"
+
+    mock_haiku_reply.side_effect = fake_reply
+
+    resp = client.post("/banana-boy/chat", json={"message": "hi"})
+    assert resp.status_code == 200
+    body = resp.get_json()
+
+    assert "usage" in body
+    usage = body["usage"]
+    assert usage["total_duration_ms"] == 420
+    assert abs(usage["total_cost_usd"] - 0.0016) < 1e-9
+    assert len(usage["calls"]) == 1
+    call = usage["calls"][0]
+    assert call["operation"] == "chat"
+    assert call["model"] == "claude-haiku-4-5-20251001"
+    assert call["input_tokens"] == 1200
+    assert call["output_tokens"] == 80
+
+
+def test_chat_response_aggregates_compliance_scan_usage(app, client, logged_in_user, mock_haiku_reply):
+    """When a compliance scan runs as a tool call, its Sonnet usage shows up
+    alongside the Haiku chat usage in the same response."""
+    def fake_reply(history, *, extra_system_context="", tool_context=None,
+                   usage_sink=None, voice_mode=False):
+        if usage_sink is not None:
+            usage_sink.append({
+                "provider": "anthropic", "operation": "chat",
+                "model": "claude-haiku-4-5-20251001", "iteration": 0,
+                "duration_ms": 200, "input_tokens": 300, "output_tokens": 50,
+                "cost_usd": 0.0006,
+            })
+            usage_sink.append({
+                "provider": "anthropic", "operation": "compliance_scan",
+                "model": "claude-sonnet-4-6", "iteration": None,
+                "duration_ms": 8500, "input_tokens": 30000, "output_tokens": 500,
+                "cache_creation_tokens": 3000, "cost_usd": 0.111,
+            })
+        return "scan complete"
+
+    mock_haiku_reply.side_effect = fake_reply
+
+    resp = client.post("/banana-boy/chat", json={"message": "compliance on 480-299"})
+    body = resp.get_json()
+    usage = body["usage"]
+    assert usage["total_duration_ms"] == 8700
+    assert abs(usage["total_cost_usd"] - 0.1116) < 1e-9
+    ops = [c["operation"] for c in usage["calls"]]
+    assert ops == ["chat", "compliance_scan"]
+
+
 def test_chat_rejects_empty_message(client, logged_in_user):
     resp = client.post("/banana-boy/chat", json={"message": "   "})
     assert resp.status_code == 400

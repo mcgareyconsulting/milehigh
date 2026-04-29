@@ -82,6 +82,14 @@ class Config:
     # Anthropic (Banana Boy assistant)
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+    # Banana Boy compliance scan: directory holding fab-package PDFs.
+    # Convention: {job}-{release}-fc.pdf (e.g. 480-299-fc.pdf).
+    # Defaults to <repo>/drawings.
+    BANANA_BOY_DRAWINGS_DIR = os.environ.get(
+        "BANANA_BOY_DRAWINGS_DIR",
+        str(Path(__file__).parent.parent / "drawings"),
+    )
+
     # OpenAI (Banana Boy voice: Whisper ASR + TTS)
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 

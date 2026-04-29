@@ -189,7 +189,11 @@ export default function ChatModal({ user, onClose, onUserChange }) {
                     <MessageBubble key={m.id} message={m} />
                 ))}
                 {sending && (
-                    <div className="text-sm text-gray-500 dark:text-slate-400 italic">Banana Boy is thinking…</div>
+                    <div className="text-sm text-gray-500 dark:text-slate-400 italic">
+                        {looksLikeComplianceQuery(messages)
+                            ? 'Pulling the fab drawing and scanning for compliance issues — give it a sec…'
+                            : 'Banana Boy is thinking…'}
+                    </div>
                 )}
                 {isRecording && (
                     <div className="text-sm text-red-600 dark:text-red-400 italic flex items-center gap-2">
@@ -277,13 +281,44 @@ const MD_COMPONENTS = {
     td: ({ node, ...props }) => <td className="border border-gray-300 dark:border-slate-600 px-2 py-1" {...props} />,
 };
 
+// Best-effort heuristic: if the user's latest message names a job-release
+// (e.g. "480-299") AND uses a compliance/code/drawing keyword, surface a
+// scan-specific "this takes a sec" hint while we wait. Pure UX — backend
+// makes its own dispatch decision via the LLM.
+const COMPLIANCE_KEYWORDS = /\b(compliance|code|codes|scan|drawing|drawings|fab|fc|ibc|ada|aisc|aws|osha|guard|guardrail|handrail|riser|tread)\b/i;
+const JOB_RELEASE = /\b\d{2,4}\s*[-_ ]\s*\d{2,4}\b/;
+
+function looksLikeComplianceQuery(messages) {
+    if (!messages || messages.length === 0) return false;
+    // Walk back to the most recent user message.
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const m = messages[i];
+        if (m.role !== 'user') continue;
+        const text = m.content || '';
+        return JOB_RELEASE.test(text) && COMPLIANCE_KEYWORDS.test(text);
+    }
+    return false;
+}
+
+function formatUsage(usage) {
+    if (!usage || !usage.calls || usage.calls.length === 0) return null;
+    const cost = usage.total_cost_usd || 0;
+    const seconds = (usage.total_duration_ms || 0) / 1000;
+    const totalIn = usage.calls.reduce((a, c) => a + (c.input_tokens || 0), 0);
+    const totalOut = usage.calls.reduce((a, c) => a + (c.output_tokens || 0), 0);
+    const ops = usage.calls.map((c) => c.operation).filter(Boolean);
+    const opStr = ops.length > 1 ? ` · ${ops.join(' + ')}` : '';
+    return `${seconds.toFixed(1)}s · ${totalIn.toLocaleString()} in / ${totalOut.toLocaleString()} out · $${cost.toFixed(4)}${opStr}`;
+}
+
 function MessageBubble({ message }) {
     const isUser = message.role === 'user';
     const base = 'rounded-lg px-3 py-2 text-sm break-words max-w-[85%]';
     const userCls = `${base} whitespace-pre-wrap bg-accent-500 text-white ml-auto ${message.failed ? 'opacity-60 ring-2 ring-red-400' : ''}`;
     const assistantCls = `${base} bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-slate-100`;
+    const usageLine = !isUser ? formatUsage(message.usage) : null;
     return (
-        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
             <div className={isUser ? userCls : assistantCls}>
                 {isUser ? (
                     message.content
@@ -296,6 +331,11 @@ function MessageBubble({ message }) {
                     <div className="text-xs text-red-200 mt-1">failed to send</div>
                 )}
             </div>
+            {usageLine && (
+                <div className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 ml-1 font-mono">
+                    {usageLine}
+                </div>
+            )}
         </div>
     );
 }

@@ -42,3 +42,6 @@ excel_snapshots/
 # Refresh staging db script
 refresh_staging_db.sh
 prod.dump
+
+# Banana Boy fab-drawing PDFs (loaded by LocalDrawingLoader; not source-controlled)
+drawings/

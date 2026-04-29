@@ -12,6 +12,12 @@ ANTHROPIC_PRICING = {
         "cache_read": 0.10,
         "cache_creation": 1.25,
     },
+    "claude-sonnet-4-6": {
+        "input": 3.00,
+        "output": 15.00,
+        "cache_read": 0.30,
+        "cache_creation": 3.75,
+    },
 }
 
 # OpenAI Whisper: per minute of audio.

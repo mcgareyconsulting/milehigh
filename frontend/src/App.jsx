@@ -24,6 +24,7 @@ import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
+import AdminMicrosoft from './pages/AdminMicrosoft';
 import { checkAuth } from './utils/auth';
 import './App.css';
 
@@ -64,6 +65,7 @@ function AppContent() {
             <Route path="pm-board" element={<PMBoard />} />
             <Route path="jobsite-map" element={<JobsiteMap />} />
             <Route path="board" element={<Board />} />
+            <Route path="admin/microsoft" element={<AdminMicrosoft />} />
             <Route path="*" element={<Navigate to="/job-log" replace />} />
           </>
         ) : (

@@ -84,10 +84,11 @@ export function useBananaBoyChat(enabled) {
                 content: data.transcript,
                 created_at: new Date().toISOString(),
             };
+            const assistantWithUsage = { ...data.message, usage: data.usage };
             setMessages((prev) => [
                 ...prev.filter((m) => m.id !== pendingId),
                 userTurn,
-                data.message,
+                assistantWithUsage,
             ]);
             return data;
         } catch (err) {

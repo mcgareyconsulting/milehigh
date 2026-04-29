@@ -20,3 +20,14 @@ export const MICROSOFT_ERROR_MESSAGES = {
 
 export const messageForMicrosoftError = (code) =>
     MICROSOFT_ERROR_MESSAGES[code] || (code ? "Couldn't connect Microsoft." : null);
+
+export const disconnectMicrosoft = async () => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/microsoft/disconnect`, {
+        method: 'POST',
+        credentials: 'include',
+    });
+    if (!response.ok) {
+        throw new Error(`Disconnect failed (${response.status})`);
+    }
+    return response.json();
+};

@@ -24,6 +24,37 @@ HISTORY_LIMIT = 30
 MAX_AUDIO_BYTES = 25 * 1024 * 1024  # Whisper's hard cap
 
 
+def _summarize_usage(usage_sink: list) -> dict:
+    """Compact per-turn usage summary for the chat response.
+
+    Returns total cost + duration plus a per-call breakdown so the UI can
+    show 'this turn cost $X, took Ys' under the assistant bubble.
+    """
+    calls = []
+    total_cost = 0.0
+    total_duration = 0
+    for r in usage_sink:
+        cost = r.get("cost_usd") or 0.0
+        duration = r.get("duration_ms") or 0
+        total_cost += cost
+        total_duration += duration
+        calls.append({
+            "operation": r.get("operation"),
+            "model": r.get("model"),
+            "duration_ms": duration,
+            "input_tokens": r.get("input_tokens"),
+            "output_tokens": r.get("output_tokens"),
+            "cache_read_tokens": r.get("cache_read_tokens"),
+            "cache_creation_tokens": r.get("cache_creation_tokens"),
+            "cost_usd": cost,
+        })
+    return {
+        "total_cost_usd": round(total_cost, 6),
+        "total_duration_ms": total_duration,
+        "calls": calls,
+    }
+
+
 def _format_gmail_block(threads):
     if not threads:
         return ""
@@ -151,7 +182,10 @@ def chat():
         return jsonify({"error": "assistant is unavailable"}), 502
 
     persist_usage(usage_sink, user_id=user.id, chat_message_id=assistant_turn.id)
-    return jsonify({"message": assistant_turn.to_dict()})
+    return jsonify({
+        "message": assistant_turn.to_dict(),
+        "usage": _summarize_usage(usage_sink),
+    })
 
 
 @banana_boy_bp.route("/voice/chat", methods=["POST"])
@@ -225,6 +259,7 @@ def voice_chat():
     return jsonify({
         "transcript": transcript,
         "message": assistant_turn.to_dict(),
+        "usage": _summarize_usage(usage_sink),
         "audio_b64": audio_b64,
         "audio_mime": audio_mime,
     })

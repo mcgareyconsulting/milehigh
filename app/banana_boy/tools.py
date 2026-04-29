@@ -11,9 +11,11 @@ import re
 from datetime import date, datetime
 from typing import Any
 
+from flask import current_app
 from sqlalchemy.orm import joinedload
 
 from app.auth.google_tokens import GoogleAuthError
+from app.banana_boy.compliance import scan_pdf
 from app.banana_boy.gmail_client import GmailScopeError, create_draft, send_draft
 from app.history import _extract_new_value_from_payload
 from app.logging_config import get_logger
@@ -28,6 +30,9 @@ TOOL_SEARCH_SUBMITTALS = "search_submittals"
 TOOL_CREATE_DRAFT = "create_email_draft"
 TOOL_SEND_DRAFT = "send_email_draft"
 TOOL_NOTIFICATIONS = "get_my_notifications"
+TOOL_SCAN_COMPLIANCE = "scan_drawing_compliance"
+
+DRAWING_LOADER_KEY = "banana_boy_drawings"
 
 TOOL_DEFINITIONS = [
     {
@@ -226,6 +231,35 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": [],
+        },
+    },
+    {
+        "name": TOOL_SCAN_COMPLIANCE,
+        "description": (
+            "Scan a job-release fab-drawing PDF for code compliance issues "
+            "(IBC, ADA, AISC, AWS, OSHA per the Division 05 KB). Hands the "
+            "drawing to a vision-capable sub-agent that returns PASSING / "
+            "FLAGGED / NOT_DETERMINABLE findings with verbatim page citations. "
+            "ALWAYS call this for specific-job compliance questions ('is "
+            "480-299 compliant?', 'check 410-271 for code issues', 'any "
+            "compliance issues on the Alta Flatirons fab package?'). Do NOT "
+            "answer compliance questions about a specific job from the KB "
+            "alone. Returns {error} when no fab PDF is on file for that "
+            "release — relay that fact to the user verbatim."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {
+                    "type": "integer",
+                    "description": "Job number, e.g. 480.",
+                },
+                "release": {
+                    "type": "string",
+                    "description": "Release number, e.g. '299'.",
+                },
+            },
+            "required": ["job", "release"],
         },
     },
 ]
@@ -606,10 +640,54 @@ def send_email_draft_tool(context: dict, draft_id: str) -> dict[str, Any]:
     return result
 
 
+def scan_drawing_compliance(context: dict, job: int, release: str) -> dict[str, Any]:
+    """Sub-agent compliance scan for a release's fab PDF.
+
+    Loads `{job}-{release}-fc.pdf` via the registered DrawingLoader and
+    fires a Sonnet vision call with the PDF + Division 05 KB. The Sonnet
+    call's tokens, duration, and cost are appended to `context["usage_sink"]`
+    when present so the chat route can persist them alongside the Haiku turn.
+    """
+    if job is None or release is None or str(release).strip() == "":
+        return {"error": "both job and release are required"}
+
+    loader = current_app.extensions.get(DRAWING_LOADER_KEY)
+    if loader is None:
+        return {"error": "drawing loader is not configured"}
+
+    loaded = loader.load(job, release)
+    if loaded is None:
+        return {
+            "error": f"no fab drawing on file for {job}-{release}",
+            "expected_filename": f"{job}-{release}-fc.pdf",
+        }
+    pdf_bytes, source_meta = loaded
+
+    findings = scan_pdf(
+        pdf_bytes, job, release,
+        usage_sink=context.get("usage_sink"),
+    )
+    logger.info(
+        "banana_boy_compliance_scan",
+        job=job, release=release, source=source_meta.get("source"),
+        size_bytes=source_meta.get("size_bytes"),
+    )
+    return {
+        "job": job,
+        "release": release,
+        "source": source_meta,
+        "findings": findings,
+        "model": "claude-sonnet-4-6",
+    }
+
+
+# Tools that receive the per-request `context` dict (user_id, usage_sink, ...)
+# as their first positional argument.
 USER_SCOPED_TOOLS = {
     TOOL_NOTIFICATIONS,
     TOOL_CREATE_DRAFT,
     TOOL_SEND_DRAFT,
+    TOOL_SCAN_COMPLIANCE,
 }
 
 TOOL_EXECUTORS = {
@@ -620,6 +698,7 @@ TOOL_EXECUTORS = {
     TOOL_NOTIFICATIONS: get_my_notifications,
     TOOL_CREATE_DRAFT: create_email_draft_tool,
     TOOL_SEND_DRAFT: send_email_draft_tool,
+    TOOL_SCAN_COMPLIANCE: scan_drawing_compliance,
 }
 
 

@@ -12,7 +12,9 @@ export async function fetchMessages() {
 
 export async function sendMessage(message) {
     const { data } = await axios.post(`${BASE}/chat`, { message });
-    return data.message;
+    // Attach the per-turn usage summary onto the assistant message so the
+    // chat UI can render cost/duration under the bubble.
+    return { ...data.message, usage: data.usage };
 }
 
 export async function sendVoiceMessage(audioBlob, filename = 'voice.webm') {
@@ -21,7 +23,7 @@ export async function sendVoiceMessage(audioBlob, filename = 'voice.webm') {
     const { data } = await axios.post(`${BASE}/voice/chat`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
-    return data; // { transcript, message, audio_b64, audio_mime }
+    return data; // { transcript, message, usage, audio_b64, audio_mime }
 }
 
 export async function clearMessages() {

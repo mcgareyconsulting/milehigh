@@ -4,6 +4,7 @@ import time
 
 from flask import current_app
 
+from app.banana_boy.knowledge_base import get_knowledge_base
 from app.banana_boy.pricing import anthropic_cost
 from app.banana_boy.tools import TOOL_DEFINITIONS, execute_tool
 from app.logging_config import get_logger
@@ -64,7 +65,29 @@ SYSTEM_PROMPT = (
     "unambiguous confirmation in the most recent user message (e.g. 'yes "
     "send it', 'go ahead'). If the user's intent is unclear, ask. If a tool "
     "result has needs_reconnect=true, tell the user to click 'Connect Gmail' "
-    "to grant draft/send permission."
+    "to grant draft/send permission. "
+    "KNOWLEDGE BASE: For questions about fab/install codes, dimensions, "
+    "ASTM specs, IBC/OSHA/AISC/AWS/ADA requirements, stair/railing/guardrail "
+    "rules, welding standards, or galvanizing — pull the answer straight from "
+    "the <knowledge_base> block in this system prompt. Quote specific "
+    "numbers (e.g. '44 inches minimum', 'ASTM A36') and cite the source "
+    "filename you used (shown as '## Source: <filename>' headers in the "
+    "block). If the KB doesn't cover the question, say so plainly — don't "
+    "guess code numbers. "
+    "COMPLIANCE: For SPECIFIC-job compliance questions ('is 480-299 "
+    "compliant?', 'check 410-271 for code issues', 'any compliance issues "
+    "on Alta Flatirons?'), you MUST call scan_drawing_compliance(job, "
+    "release) — never answer from the KB alone for a specific job. Relay "
+    "the sub-agent's PASSING / FLAGGED / NOT_DETERMINABLE findings as-is. "
+    "PAGE CITATIONS ARE LOAD-BEARING — every flagged or passing item must "
+    "keep its '(page N, callout: \"...\")' citation exactly as the "
+    "sub-agent wrote it. The page number is how the user finds the issue "
+    "in the fab drawing; never strip, summarize, or paraphrase it away. If "
+    "you must shorten the answer, drop entire bullets but never the page "
+    "number on the bullets you keep. If the tool returns an error (e.g. "
+    "'no fab drawing on file'), tell the user verbatim — don't fall back "
+    "to guessing. General code questions ('what's the IBC min stair "
+    "width?') still go to the KB, not to scan_drawing_compliance."
 )
 
 VOICE_ADDENDUM = (
@@ -180,12 +203,22 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
     <spoken>...</spoken> block for the TTS layer.
     Returns the final assistant text. Raises BananaBoyAPIError on upstream failure.
     """
-    tool_context = tool_context or {}
-    system_prompt = SYSTEM_PROMPT
+    tool_context = dict(tool_context or {})
+    # Make the chat usage sink available to tools (e.g. scan_drawing_compliance
+    # records its own Sonnet sub-agent call into the same sink).
+    tool_context.setdefault("usage_sink", usage_sink)
+    system_blocks: list[dict] = [{"type": "text", "text": SYSTEM_PROMPT}]
+    kb_text = get_knowledge_base()
+    if kb_text:
+        system_blocks.append({
+            "type": "text",
+            "text": f"<knowledge_base>\n{kb_text}\n</knowledge_base>",
+            "cache_control": {"type": "ephemeral"},
+        })
     if voice_mode:
-        system_prompt = f"{system_prompt}\n\n{VOICE_ADDENDUM}"
+        system_blocks.append({"type": "text", "text": VOICE_ADDENDUM})
     if extra_system_context:
-        system_prompt = f"{system_prompt}\n\n{extra_system_context}"
+        system_blocks.append({"type": "text", "text": extra_system_context})
 
     client = _get_client()
     messages = list(history)
@@ -199,7 +232,7 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
             response = client.messages.create(
                 model=HAIKU_MODEL,
                 max_tokens=MAX_TOKENS,
-                system=system_prompt,
+                system=system_blocks,
                 tools=TOOL_DEFINITIONS,
                 messages=messages,
             )
@@ -212,7 +245,7 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
             usage_sink,
             iteration=iteration,
             duration_ms=duration_ms,
-            system_prompt=system_prompt,
+            system_prompt=system_blocks,
             messages_sent=messages_sent,
             response=response,
         )
