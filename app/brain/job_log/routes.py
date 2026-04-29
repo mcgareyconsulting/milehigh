@@ -2642,6 +2642,35 @@ def renumber_fab_orders_route():
         logger.error(f"Error in renumber fab_orders: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
+
+@brain_bp.route("/renumber-fabrication-fab-orders", methods=["POST"])
+@admin_required
+def renumber_fabrication_fab_orders_route():
+    """
+    Compress FABRICATION-group fab_order values to a contiguous 3..N block,
+    preserving relative order. Admin-only.
+
+    Query Parameters:
+        dry_run (bool): If true, preview changes without committing (default: false)
+
+    Returns:
+        JSON object: {status, dry_run, changed, unchanged, total_fabrication, changes[]}
+    """
+    try:
+        from app.brain.job_log.features.fab_order.renumber_fabrication import (
+            renumber_fabrication_fab_orders,
+        )
+
+        dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+        logger.info(f"Renumber fabrication fab_orders endpoint called (dry_run={dry_run})")
+
+        result = renumber_fabrication_fab_orders(dry_run=dry_run)
+        return jsonify({"status": "success", "dry_run": dry_run, **result}), 200
+    except Exception as e:
+        logger.error(f"Error in renumber fabrication fab_orders: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @brain_bp.route("/trello-scan-create", methods=["POST"])
 @login_required
 def trello_scan_create():
