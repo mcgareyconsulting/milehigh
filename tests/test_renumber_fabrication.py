@@ -95,9 +95,11 @@ def test_dry_run_does_not_commit(app):
         assert ReleaseEvents.query.count() == events_before
 
 
-def test_no_trello_outbox_queued(app):
-    """Renumber is audit-only: no Trello outbox items are queued (sandbox has no board)."""
-    with app.app_context():
+def test_outbox_queued_when_trello_configured(app):
+    """When FAB_ORDER_FIELD_ID is set, releases with a trello_card_id get a queued
+    outbox item; ones without don't."""
+    with app.app_context(), patch('app.brain.job_log.features.fab_order.renumber_fabrication.Config') as cfg:
+        cfg.FAB_ORDER_FIELD_ID = 'fake_field_id'
         make_release(1, "A", "Released", "FABRICATION", 20, trello_card_id="abc123")
         make_release(2, "A", "Cut start", "FABRICATION", 25, trello_card_id=None)
         db.session.commit()
@@ -107,7 +109,24 @@ def test_no_trello_outbox_queued(app):
         outbox_items = TrelloOutbox.query.filter_by(
             destination='trello', action='update_fab_order'
         ).all()
-        assert len(outbox_items) == 0
+        assert len(outbox_items) == 1
+        linked_event = ReleaseEvents.query.get(outbox_items[0].event_id)
+        assert linked_event.job == 1
+
+
+def test_outbox_skipped_when_trello_not_configured(app):
+    """When FAB_ORDER_FIELD_ID is unset (sandbox/local), no outbox items are queued
+    even for releases with trello_card_ids — events still close cleanly for audit."""
+    with app.app_context(), patch('app.brain.job_log.features.fab_order.renumber_fabrication.Config') as cfg:
+        cfg.FAB_ORDER_FIELD_ID = None
+        make_release(1, "A", "Released", "FABRICATION", 20, trello_card_id="abc123")
+        db.session.commit()
+
+        renumber_fabrication_fab_orders()
+
+        assert TrelloOutbox.query.filter_by(
+            destination='trello', action='update_fab_order'
+        ).count() == 0
 
 
 def test_idempotent(app):

@@ -11,8 +11,8 @@ invariants:
   - Releases at DEFAULT_FAB_ORDER (80.555 placeholder for "no position assigned yet") are preserved as-is — they don't consume a sequence slot
   - Releases sharing the same current fab_order share the same new fab_order (intentional ties survive renumber)
   - Relative order is preserved (sort by current fab_order asc nullslast, tie-break by job/release)
-  - dry_run=True rolls back all DB changes and creates no events
-  - For each changed release, a JobEvent is created and closed immediately for audit. No Trello outbox is queued (sandbox has no Trello board wired up).
+  - dry_run=True rolls back all DB changes and creates no events or outbox items
+  - For each changed release with a trello_card_id, a JobEvent is created and a Trello outbox item is queued. Releases without a card get the event closed immediately. When Config.FAB_ORDER_FIELD_ID is unset (sandbox/local without Trello creds) the outbox is skipped entirely — events still recorded for audit.
 updated_by_agent: 2026-04-29T00:00:00Z
 """
 from datetime import datetime
@@ -20,6 +20,8 @@ from datetime import datetime
 from app.models import Releases, db
 from app.api.helpers import DEFAULT_FAB_ORDER, STAGE_TO_GROUP
 from app.services.job_event_service import JobEventService
+from app.services.outbox_service import OutboxService
+from app.config import Config
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -119,9 +121,7 @@ def renumber_fabrication_fab_orders(dry_run=False):
         # SQLite tests don't enforce the cap; Postgres rejects overflow).
         r.source_of_update = 'Brain:bulk_fab'
 
-        # Audit-only event; no Trello outbox (no sandbox board wired up). Close
-        # immediately so the event isn't left in a "pending external sync" state.
-        event = JobEventService.create_and_close(
+        event = JobEventService.create(
             job=r.job,
             release=r.release,
             action='update_fab_order',
@@ -134,6 +134,20 @@ def renumber_fabrication_fab_orders(dry_run=False):
                 "Bulk renumber: event deduped",
                 extra={'job': r.job, 'release': r.release},
             )
+            continue
+
+        # Queue Trello sync only when a card exists AND the Trello custom-field
+        # ID is configured. Sandbox/local envs without Trello creds (no
+        # FAB_ORDER_FIELD_ID) skip the outbox so we don't pile up failures.
+        trello_configured = bool(getattr(Config, 'FAB_ORDER_FIELD_ID', None))
+        if r.trello_card_id and trello_configured:
+            OutboxService.add(
+                destination='trello',
+                action='update_fab_order',
+                event_id=event.id,
+            )
+        else:
+            JobEventService.close(event.id)
 
     if dry_run:
         db.session.rollback()
