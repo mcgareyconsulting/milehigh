@@ -20,6 +20,7 @@ import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 
 const DOUG_PRANK_ALLOWLIST = new Set([
+  'mcgareyconsulting@gmail.com',
   'dferrin@mhmw.com',
 ]);
 
