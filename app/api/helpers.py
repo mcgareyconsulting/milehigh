@@ -160,6 +160,24 @@ def _get_all_variants_for_stages(canonical_stages: List[str]) -> List[str]:
     return result
 
 
+def active_releases_filter():
+    """SQLAlchemy boolean expression matching active, non-archived releases.
+
+    Active means: ``is_archived`` is False AND ``is_active`` is True or NULL.
+    NULL ``is_active`` is treated as active because legacy rows pre-date the
+    column. Use as the first arg to ``Releases.query.filter(...)``:
+
+        Releases.query.filter(active_releases_filter(), Releases.stage.in_(...))
+
+    Centralized so the "active" semantics live in one place; if the policy
+    ever shifts, every consumer changes together.
+    """
+    return (
+        (Releases.is_archived == False)  # noqa: E712
+        & ((Releases.is_active == True) | (Releases.is_active.is_(None)))  # noqa: E712
+    )
+
+
 def get_stage_position(stage: Optional[str]) -> Optional[int]:
     """Return 0-based index of a stage in DYNAMIC_STAGE_ORDER, or None if exempt/fixed-tier."""
     normalized = _normalize_stage(stage)

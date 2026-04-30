@@ -18,7 +18,7 @@ updated_by_agent: 2026-04-29T00:00:00Z
 from datetime import datetime
 
 from app.models import Releases, db
-from app.api.helpers import DEFAULT_FAB_ORDER, STAGE_TO_GROUP
+from app.api.helpers import DEFAULT_FAB_ORDER, STAGE_TO_GROUP, active_releases_filter
 from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.config import Config
@@ -49,11 +49,6 @@ def renumber_fabrication_fab_orders(dry_run=False):
             'changes': [{'job', 'release', 'stage', 'from', 'to'}, ...]  # capped
         }
     """
-    active_filter = (
-        (Releases.is_archived == False) &  # noqa: E712
-        ((Releases.is_active == True) | (Releases.is_active.is_(None)))  # noqa: E712
-    )
-
     # Match the frontend Fab filter: it derives Stage Group from `stage` via
     # STAGE_TO_GROUP at serialization time (see routes.py /get-all-jobs), not
     # from the `stage_group` column. Some rows have stale or NULL stage_group
@@ -61,7 +56,7 @@ def renumber_fabrication_fab_orders(dry_run=False):
     fab_stage_variants = [s for s, g in STAGE_TO_GROUP.items() if g == 'FABRICATION']
     all_fab_releases = (
         Releases.query
-        .filter(active_filter, Releases.stage.in_(fab_stage_variants))
+        .filter(active_releases_filter(), Releases.stage.in_(fab_stage_variants))
         .order_by(
             Releases.fab_order.asc().nullslast(),
             Releases.job.asc(),
