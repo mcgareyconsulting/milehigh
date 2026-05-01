@@ -72,7 +72,9 @@ Comment creation auto-parses `@FirstName` mentions and creates `Notification` re
 
 ### Key models (`app/models.py`)
 - `Job` — job log entries (table: `jobs`)
-- `Jobs` — geofence/job site records (table: `job_sites`)
+- `Releases` — current job log model (table: `releases`); integration code aliases `from app.models import Job as Releases`
+- `Projects` — geofence/job site records (table: `projects`); formerly `Jobs` (table `job_sites`). Has `geofence_geojson` (JSON polygon) as the single canonical geometry column. Links to job log by `job_number` string value, not FK.
+- `ProjectManager` — PM records linked to `Projects` via `pm_id` FK
 - `Submittals` — Procore submittals (table: `submittals`; previously `procore_submittals`)
 - `ReleaseEvents` / `SubmittalEvents` — audit event streams with payload-hash dedup
 - `TrelloOutbox` / `ProcoreOutbox` — reliable outbound delivery queue
@@ -81,7 +83,8 @@ Comment creation auto-parses `@FirstName` mentions and creates `Notification` re
 - `User`, `SyncOperation`, `SyncLog`, `JobChangeLog`, `ProcoreToken`
 
 ### Naming conflicts to keep in mind
-- `Job` (main) is the job log. `Jobs` is geofences (table `job_sites`).
+- `Job` (table `jobs`) is the legacy job log; `Releases` (table `releases`) is the current model.
+- `Projects` (table `projects`) replaced the former `Jobs` (table `job_sites`) model for geofences.
 - `Submittals` was renamed from `ProcoreSubmittal`; old scripts alias it: `from app.models import Submittals as ProcoreSubmittal`.
 - Integration code that bridges branches uses: `from app.models import Job as Releases`.
 
@@ -90,8 +93,15 @@ M1 (users) → M2 (rename submittals table) → M3 (release_events) → M4 (subm
 
 ### Brain / services layer
 - `app/brain/` — query and transformation logic for job log, drafting work load (DWL), map views, and the board/bug tracker
+- `app/brain/job_log/features/` — command-pattern modules for each mutable field (stage, fab_order, notes, start_install). Each feature has a `command.py` with a dataclass command and result; `execute()` handles DB write + event + outbox + cascade. Commands accept `defer_cascade=True` and `undone_event_id` for use by the undo endpoint.
 - `app/services/` — `OutboxService` (retry), `JobEventService` (deduplication with time-bucketed hashing), `DatabaseMappingService` (field mappings)
 - `app/history/` — event audit trail queries
+
+### Undo
+The `/brain/events/<id>/undo` endpoint (in `app/brain/job_log/routes.py`) reverses a `ReleaseEvents` row. Undoable actions: `update_stage`, `update_fab_order`, `update_notes`, `update_start_install`. The undo re-runs the appropriate command with the original "from" value, passing `undone_event_id` to perturb the dedup hash and link the new event to its source. Linked child events (e.g. `job_comp` cascade from a stage change) are also reverted in the same bundle, and scheduling recalc runs once after all reverts. A symmetric `/brain/submittal-events/<id>/undo` exists for Procore submittal events.
+
+### Fab order renumber
+`/brain/renumber-fabrication-fab-orders` (admin-only POST) compresses FABRICATION-group `fab_order` values to a contiguous block starting at 3, preserving relative order. Supports `?dry_run=true`. Implementation: `app/brain/job_log/features/fab_order/renumber_fabrication.py`. `DEFAULT_FAB_ORDER` (80.555) rows are preserved as-is. Rows sharing the same current fab_order share the same new value.
 
 ### Logging
 Structured logging via `structlog` (`app/logging_config.py`). Use `get_logger(__name__)` in every module. `SyncContext` context manager wraps sync operations with correlation IDs and timing. Output is JSON-structured; also writes to rotating file (`logs/app.log`, 10MB max, 5 backups).
