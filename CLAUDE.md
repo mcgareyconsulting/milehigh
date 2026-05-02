@@ -71,8 +71,10 @@ Models: `BoardItem` (status: open/in_progress/deployed/closed, priority: low/nor
 Comment creation auto-parses `@FirstName` mentions and creates `Notification` records. Frontend polls `/brain/notifications/unread-count` for the notification bell.
 
 ### Key models (`app/models.py`)
-- `Job` — job log entries (table: `jobs`)
-- `Jobs` — geofence/job site records (table: `job_sites`)
+- `Releases` — current job log entries (table: `releases`); the model the app reads/writes
+- `Job` — legacy job log model (table: `jobs`); kept for older code paths
+- `Projects` — geofence / job site records (table: `projects`); has `geofence_geojson` column (single canonical GeoJSON polygon, used by both the map renderer and the on-site location filter)
+- `ProjectManager` — PM display rows (color, name) used by the map and PM views
 - `Submittals` — Procore submittals (table: `submittals`; previously `procore_submittals`)
 - `ReleaseEvents` / `SubmittalEvents` — audit event streams with payload-hash dedup
 - `TrelloOutbox` / `ProcoreOutbox` — reliable outbound delivery queue
@@ -81,17 +83,23 @@ Comment creation auto-parses `@FirstName` mentions and creates `Notification` re
 - `User`, `SyncOperation`, `SyncLog`, `JobChangeLog`, `ProcoreToken`
 
 ### Naming conflicts to keep in mind
-- `Job` (main) is the job log. `Jobs` is geofences (table `job_sites`).
+- `Releases` (table `releases`) is the current job log. `Job` (table `jobs`) is the legacy model — most application code uses `Releases`.
+- `Projects` (table `projects`) holds geofence/job-site rows. There is no `Jobs` model anymore.
 - `Submittals` was renamed from `ProcoreSubmittal`; old scripts alias it: `from app.models import Submittals as ProcoreSubmittal`.
 - Integration code that bridges branches uses: `from app.models import Job as Releases`.
+- The Projects geofence is stored in a single column, `geofence_geojson` (the previous split with a `geometry` column was consolidated; both the on-site filter and the map renderer read from `geofence_geojson`).
 
 ### Migration order
 M1 (users) → M2 (rename submittals table) → M3 (release_events) → M4 (submittal_events) → M5 (procore_outbox) → M6 (webhook_receipts)
 
 ### Brain / services layer
 - `app/brain/` — query and transformation logic for job log, drafting work load (DWL), map views, and the board/bug tracker
+- `app/brain/job_log/features/` — feature folders that own one bounded behavior each (`fab_order/`, `notes/`, `stage/`, `start_install/`). Each folder typically contains `command.py` (write path), `events.py` (event-shape constants), `payloads.py`, `results.py`, plus any one-off migrations or helpers. The Job Log routes file delegates here rather than holding the logic inline.
+  - `fab_order/renumber_fabrication.py` — admin button on Job Log; compresses FABRICATION-group `fab_order` to a contiguous block starting at 3, preserves ties and the 80.555 placeholder, queues Trello sync only when `Config.FAB_ORDER_FIELD_ID` is set.
+  - `fab_order/migrate_unified.py` — one-time tier migration (Complete=NULL, tier 1 = 1, tier 2 = 2, dynamic stages 3+).
 - `app/services/` — `OutboxService` (retry), `JobEventService` (deduplication with time-bucketed hashing), `DatabaseMappingService` (field mappings)
 - `app/history/` — event audit trail queries
+- `scripts/` — operational scripts run from the CLI (e.g. `scripts/refresh_jobsites_from_procore.py` rebuilds `docs/jobsites.json` from Procore project data and upserts `ProjectManager` rows). Default is dry-run; pass `--apply` to write.
 
 ### Logging
 Structured logging via `structlog` (`app/logging_config.py`). Use `get_logger(__name__)` in every module. `SyncContext` context manager wraps sync operations with correlation IDs and timing. Output is JSON-structured; also writes to rotating file (`logs/app.log`, 10MB max, 5 backups).
