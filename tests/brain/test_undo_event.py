@@ -149,7 +149,7 @@ def test_undo_update_stage_reverts_release(admin_client, app):
         assert rel.source_of_update == 'Brain'
 
         # New event has plain 'Brain' source and undone_event_id link to the original.
-        new_ev = ReleaseEvents.query.get(new_event_id)
+        new_ev = db.session.get(ReleaseEvents, new_event_id)
         assert new_ev.source == 'Brain'
         assert new_ev.payload['from'] == 'Paint'
         assert new_ev.payload['to'] == 'Welded QC'
@@ -173,7 +173,7 @@ def test_undo_update_notes_reverts_release(admin_client, app):
         rel = Releases.query.filter_by(job=1234, release='A').first()
         assert rel.notes == 'Original notes'
 
-        new_ev = ReleaseEvents.query.get(resp.get_json()['event_id'])
+        new_ev = db.session.get(ReleaseEvents, resp.get_json()['event_id'])
         assert new_ev.source == 'Brain'
         assert new_ev.payload['undone_event_id'] == ev.id
 
@@ -197,7 +197,7 @@ def test_undo_update_fab_order_reverts_release(admin_client, app):
         rel = Releases.query.filter_by(job=1234, release='A').first()
         assert rel.fab_order == 10.0
 
-        new_ev = ReleaseEvents.query.get(resp.get_json()['event_id'])
+        new_ev = db.session.get(ReleaseEvents, resp.get_json()['event_id'])
         assert new_ev.source == 'Brain'
         assert new_ev.payload['undone_event_id'] == ev.id
 
@@ -223,7 +223,7 @@ def test_undo_update_start_install_reverts_release(admin_client, app):
         rel = Releases.query.filter_by(job=1234, release='A').first()
         assert rel.start_install == date(2026, 5, 15)
 
-        new_ev = ReleaseEvents.query.get(resp.get_json()['event_id'])
+        new_ev = db.session.get(ReleaseEvents, resp.get_json()['event_id'])
         assert new_ev.source == 'Brain'
         assert new_ev.payload['undone_event_id'] == ev.id
 
@@ -282,7 +282,7 @@ def test_cannot_undo_an_undo_event(admin_client, app):
 
         # The undo event's payload still carries undone_event_id (used by the
         # frontend badge and as dedup-hash defense).
-        undo_event = ReleaseEvents.query.get(undo_event_id)
+        undo_event = db.session.get(ReleaseEvents, undo_event_id)
         assert undo_event.payload['undone_event_id'] == ev.id
 
 
@@ -457,11 +457,11 @@ def test_undo_bundles_linked_fab_order_child(admin_client, app):
         assert rel.fab_order == 17.0
 
         # New parent undo event references the original parent.
-        new_parent = ReleaseEvents.query.get(body['event_id'])
+        new_parent = db.session.get(ReleaseEvents, body['event_id'])
         assert new_parent.action == 'update_stage'
         assert new_parent.payload['undone_event_id'] == parent.id
         # New child undo event references the original child.
-        new_child = ReleaseEvents.query.get(body['linked_event_ids'][0])
+        new_child = db.session.get(ReleaseEvents, body['linked_event_ids'][0])
         assert new_child.action == 'update_fab_order'
         assert new_child.payload['undone_event_id'] == child.id
 
@@ -559,7 +559,7 @@ def test_dwl_undo_order_number_reverts(admin_client, app):
         assert sub.order_number == 5.0
 
         new_event_id = resp.get_json()['event_id']
-        new_ev = SubmittalEvents.query.get(new_event_id)
+        new_ev = db.session.get(SubmittalEvents, new_event_id)
         assert new_ev.action == 'updated'
         assert new_ev.source == 'Brain'
         assert new_ev.payload['order_number'] == {'old': 8.0, 'new': 5.0}
@@ -711,7 +711,7 @@ def test_dwl_notes_route_records_persisted_value(admin_client, app):
         assert resp.status_code == 200, resp.get_json()
 
         db.session.expire_all()
-        sub = Submittals.query.get(sub_pk)
+        sub = db.session.get(Submittals, sub_pk)
         # Service strips whitespace before persisting.
         assert sub.notes == 'Test undo note'
 
@@ -729,7 +729,7 @@ def test_dwl_notes_route_records_persisted_value(admin_client, app):
         resp = admin_client.post(f'/brain/submittal-events/{ev.id}/undo')
         assert resp.status_code == 200, resp.get_json()
         db.session.expire_all()
-        assert Submittals.query.get(sub_pk).notes == 'before'
+        assert db.session.get(Submittals, sub_pk).notes == 'before'
 
 
 def test_dwl_undo_step_reverts_swap_partner(admin_client, app):
@@ -769,7 +769,7 @@ def test_dwl_undo_step_reverts_swap_partner(admin_client, app):
         assert partner.order_number == 0.9  # swapped back
 
         # The partner event links back to the primary undo event for audit trail.
-        partner_event = SubmittalEvents.query.get(body['linked_event_ids'][0])
+        partner_event = db.session.get(SubmittalEvents, body['linked_event_ids'][0])
         assert partner_event.submittal_id == '69363161'
         assert partner_event.payload['order_number'] == {'old': 0.8, 'new': 0.9}
         assert partner_event.payload['undone_event_id'] == ev.id

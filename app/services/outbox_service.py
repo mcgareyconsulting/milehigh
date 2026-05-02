@@ -289,8 +289,8 @@ class OutboxService:
                 # Derive sender initials from the event's user
                 sender_initials = 'UNK'
                 if event.internal_user_id:
-                    from app.models import User
-                    user = User.query.get(event.internal_user_id)
+                    from app.models import User, db
+                    user = db.session.get(User, event.internal_user_id)
                     if user and user.first_name and user.last_name:
                         sender_initials = (user.first_name[0] + user.last_name[0]).upper()
 
