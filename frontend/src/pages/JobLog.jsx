@@ -23,6 +23,68 @@ import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth } from '../utils/auth';
 
+// Stage completeness order (index 0 = least complete, higher = more complete).
+const STAGE_COMPLETENESS = {
+    'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
+    'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
+    'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
+    'Store at MHMW for shipping': 12, 'Shipping planning': 13,
+    'Shipping completed': 14, 'Complete': 15,
+};
+
+// Defensive Complete check — tolerates whitespace + case drift in the stage value.
+// Otherwise STAGE_COMPLETENESS['Complete']=15 (highest) would push these rows to
+// the top of the descending sort instead of the bottom.
+const isCompleteStage = (stage) =>
+    (stage || '').toString().trim().toLowerCase() === 'complete';
+
+const SHIP_COMPLETE_STAGE = 'Shipping completed';
+
+// 'X' = installed (highest); percent strings rank by their numeric value;
+// missing/blank ranks lowest so it sorts to the bottom of the ship-complete group.
+const installProgRank = (val) => {
+    if (val == null) return -1;
+    const s = val.toString().trim();
+    if (s === '') return -1;
+    if (s.toLowerCase() === 'x') return 101;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : -1;
+};
+
+// Tie-break for two rows that share the same PM + Job #.
+const compareSameJob = (a, b) => {
+    const ca = isCompleteStage(a['Stage']);
+    const cb = isCompleteStage(b['Stage']);
+    if (ca !== cb) return ca ? 1 : -1;
+
+    const sa = STAGE_COMPLETENESS[a['Stage']] ?? -1;
+    const sb = STAGE_COMPLETENESS[b['Stage']] ?? -1;
+    if (sa !== sb) return sb - sa;
+
+    if (a['Stage'] === SHIP_COMPLETE_STAGE) {
+        return installProgRank(b['Job Comp']) - installProgRank(a['Job Comp']);
+    }
+    const foA = a['Fab Order'] ?? Number.POSITIVE_INFINITY;
+    const foB = b['Fab Order'] ?? Number.POSITIVE_INFINITY;
+    return foA - foB;
+};
+
+// Mirror of STAGE_TO_BANANA_STEP in JobsTableRow.jsx — the screen Urgency column
+// shows a 5-step banana-boy progress bar; the print path needs the same mapping
+// so what you see on screen matches what comes out of the printer.
+const STAGE_TO_BANANA_STEP = {
+    'Released': 0, 'Material Ordered': 1, 'Cut start': 1, 'Cut Complete': 1,
+    'Fitup Start': 1, 'Fit Up Complete.': 1, 'Weld Start': 2, 'Weld Complete': 2,
+    'Welded QC': 3, 'Paint Start': 4, 'Paint complete': 4,
+    'Store at MHMW for shipping': 4, 'Shipping planning': 4,
+    'Shipping completed': 5, 'Complete': 5,
+};
+const getBananaProgress = (stage) => {
+    if (stage === 'Hold') return 0;
+    const step = STAGE_TO_BANANA_STEP[stage];
+    return step == null ? 0 : step / 5;
+};
+
 function JobLog() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -208,52 +270,6 @@ function JobLog() {
     // If we have jobs but displayJobs is empty, that means filters are excluding everything
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
-
-    // Stage completeness order (index 0 = least complete, higher = more complete)
-    const STAGE_COMPLETENESS = {
-        'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
-        'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
-        'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
-        'Store at MHMW for shipping': 12, 'Shipping planning': 13,
-        'Shipping completed': 14, 'Complete': 15,
-    };
-
-    // Defensive Complete check — tolerates whitespace + case drift in the stage value.
-    // Otherwise STAGE_COMPLETENESS['Complete']=15 (highest) would push these rows to
-    // the top of the descending sort instead of the bottom.
-    const isCompleteStage = (stage) =>
-        (stage || '').toString().trim().toLowerCase() === 'complete';
-
-    const SHIP_COMPLETE_STAGE = 'Shipping completed';
-
-    // 'X' = installed (highest); percent strings rank by their numeric value;
-    // missing/blank ranks lowest so it sorts to the bottom of the ship-complete group.
-    const installProgRank = (val) => {
-        if (val == null) return -1;
-        const s = val.toString().trim();
-        if (s === '') return -1;
-        if (s.toLowerCase() === 'x') return 101;
-        const n = parseFloat(s);
-        return Number.isFinite(n) ? n : -1;
-    };
-
-    // Tie-break for two rows that share the same PM + Job #.
-    const compareSameJob = (a, b) => {
-        const ca = isCompleteStage(a['Stage']);
-        const cb = isCompleteStage(b['Stage']);
-        if (ca !== cb) return ca ? 1 : -1;
-
-        const sa = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-        const sb = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-        if (sa !== sb) return sb - sa;
-
-        if (a['Stage'] === SHIP_COMPLETE_STAGE) {
-            return installProgRank(b['Job Comp']) - installProgRank(a['Job Comp']);
-        }
-        const foA = a['Fab Order'] ?? Number.POSITIVE_INFINITY;
-        const foB = b['Fab Order'] ?? Number.POSITIVE_INFINITY;
-        return foA - foB;
-    };
 
     // When Review mode is enabled, sort independently of other sort behavior:
     // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
@@ -658,16 +674,18 @@ function JobLog() {
                 size: 11in 17in landscape;
                 margin: 0.5in;
             }
-            /* Force each PM to start on a fresh front (right-hand) sheet so duplex
-               printing never lands the next PM on the back of the previous one. */
-            .pm-group {
-                break-before: right;
-                page-break-before: right;
-            }
-            .pm-group:first-child {
-                break-before: auto;
-                page-break-before: auto;
-            }
+        }
+        /* Pages are rendered as fixed 24-row chunks. Each .pm-page wrapper holds
+           one printed page; non-first chunks force a page break via inline style.
+           A .blank-filler is inserted between PMs whenever the previous PM ended
+           on a recto so the next PM lands on the following recto. All page math
+           is deterministic at HTML build time — no runtime measurement. */
+        .blank-filler {
+            page-break-before: always;
+            page-break-after: always;
+            break-before: page;
+            break-after: page;
+            height: 1px;
         }
         body {
             font-family: Arial, sans-serif;
@@ -710,7 +728,12 @@ function JobLog() {
         }
         td {
             border: 1px solid #ccc;
-            padding: 4px;
+            /* Vertical padding sized so a 24-row chunk fits inside one tabloid
+               landscape page (10in printable height). With 6px top/bottom + 20px
+               banana cell + 1px border = ~33px rows, 24 rows total ~792px; plus
+               PM header + thead + table margin (~112px) leaves ~56px of breathing
+               room before the engine splits the chunk across two pages. */
+            padding: 6px 4px;
             text-align: center;
             font-size: 9px;
             overflow: hidden;
@@ -721,12 +744,34 @@ function JobLog() {
             background-color: #dbeafe;
         }
         tr.grayed-row, tr.grayed-row:nth-child(even) {
-            background-color: #d1d5db;
+            background-color: #9ca3af;
         }
         .no-data {
             text-align: center;
             padding: 20px;
             color: #666;
+        }
+        /* Urgency column: 5 discrete banana-boy icons per cell. The screen's tiled
+           PNG approach is too heavy for the print engine to rasterize across many
+           rows at print DPI — preview scrolling stutters. Five <img> tags render
+           the same 5-step progress visual at a fraction of the cost. */
+        .banana-cell {
+            display: inline-flex;
+            align-items: center;
+            gap: 1px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            background: #FEFCE8;
+            border: 1px solid #FEF08A;
+        }
+        .banana-icon {
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+            image-rendering: pixelated;
+        }
+        .banana-icon.empty {
+            opacity: 0.22;
         }
     </style>
 </head>
@@ -734,12 +779,64 @@ function JobLog() {
     <h1>Job Log - Printed ${new Date().toLocaleString()}</h1>
 `;
 
-        // Generate table for each PM group.
-        // PM blocks are ordered alphabetically by PM, with each block internally sorted by Job #.
+        // Hard-cap of 24 rows per page. Each PM's rows are split into 24-row
+        // chunks; each chunk is its own .pm-page wrapper that forces a page break
+        // before it (except the very first chunk in the document). pages-per-PM
+        // is therefore deterministic = ceil(rowCount / 24), so we can also
+        // deterministically insert blank-filler pages between PMs to keep every
+        // PM starting on a recto (front) sheet.
+        const ROWS_PER_PAGE = 24;
+
+        const renderRowsHTML = (jobs) => {
+            let html = '';
+            jobs.forEach(job => {
+                const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
+                const isComplete = isCompleteStage(job['Stage']);
+                const isGrayed = isInstallComplete || isComplete;
+                html += `<tr${isGrayed ? ' class="grayed-row"' : ''}>`;
+                columnHeaders.forEach(column => {
+                    if (column === 'Urgency') {
+                        const stage = job['Stage'] || 'Released';
+                        const rawStep = STAGE_TO_BANANA_STEP[stage];
+                        const step = stage === 'Hold' || rawStep == null ? 0 : rawStep;
+                        const src = `${window.location.origin}/banana-boy.png`;
+                        let bananas = '';
+                        for (let n = 0; n < 5; n++) {
+                            const cls = n < step ? 'banana-icon' : 'banana-icon empty';
+                            bananas += `<img class="${cls}" src="${src}" alt="">`;
+                        }
+                        html += `<td><span class="banana-cell">${bananas}</span></td>`;
+                        return;
+                    }
+
+                    let value = job[column];
+                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
+                        value = formatDate(value);
+                    } else {
+                        value = formatCellValue(value, column);
+                    }
+                    const displayValue = String(value || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const isHardDate = column === 'Start install' && job['start_install_formulaTF'] === false && job['Start install'];
+                    html += `<td${isHardDate ? ' class="hard-date"' : ''}>${displayValue}</td>`;
+                });
+                html += '</tr>';
+            });
+            return html;
+        };
+
+        const theadHTML = '<thead><tr>' + columnHeaders.map(col => {
+            const displayHeader = col === 'Release #' ? 'rel. #' : col === 'Job Comp' ? 'Install Prog' : col;
+            return `<th>${displayHeader}</th>`;
+        }).join('') + '</tr></thead>';
+
+        let isFirstPageOverall = true;
+        let cumulativePages = 0;
+
         Object.keys(jobsByPM).sort((pmA, pmB) => {
             return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
-        }).forEach((pm) => {
+        }).forEach((pm, pmIdx) => {
             const pmJobs = jobsByPM[pm];
+            const numChunks = Math.max(1, Math.ceil(pmJobs.length / ROWS_PER_PAGE));
 
             // Build colgroup with normalized widths for uniform columns across pages
             const defaultWeight = 5;
@@ -749,91 +846,35 @@ function JobLog() {
                 return `<col style="width:${pct}%">`;
             }).join('') + '</colgroup>';
 
-            printHTML += `
-    <div class="pm-group">
-        <div class="pm-header">PM: ${pm}</div>
+            // Recto alignment: if the previous PM ended on an odd page, the next
+            // page would be verso — insert one filler to push it to the following recto.
+            if (pmIdx > 0 && cumulativePages % 2 === 1) {
+                printHTML += `<div class="blank-filler"></div>`;
+                cumulativePages += 1;
+            }
+
+            for (let chunkIdx = 0; chunkIdx < numChunks; chunkIdx++) {
+                const start = chunkIdx * ROWS_PER_PAGE;
+                const chunkJobs = pmJobs.slice(start, start + ROWS_PER_PAGE);
+                const breakStyle = isFirstPageOverall
+                    ? ''
+                    : ' style="break-before: page; page-break-before: always;"';
+                const headerHTML = chunkIdx === 0 ? `<div class="pm-header">PM: ${pm}</div>` : '';
+                printHTML += `
+    <div class="pm-page"${breakStyle}>
+        ${headerHTML}
         <table>
             ${colgroup}
-            <thead>
-                <tr>
-                    ${columnHeaders.map(col => {
-                const displayHeader = col === 'Release #' ? 'rel. #' : col === 'Job Comp' ? 'Install Prog' : col;
-                return `<th>${displayHeader}</th>`;
-            }).join('')}
-                </tr>
-            </thead>
+            ${theadHTML}
             <tbody>
-`;
-
-            pmJobs.forEach(job => {
-                const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
-                const isComplete = isCompleteStage(job['Stage']);
-                const isGrayed = isInstallComplete || isComplete;
-                printHTML += `<tr${isGrayed ? ' class="grayed-row"' : ''}>`;
-                columnHeaders.forEach(column => {
-                    // Render Urgency column as colored banana SVGs
-                    if (column === 'Urgency') {
-                        const stage = job['Stage'] || 'Released';
-                        const bananaColor = job['Banana Color'] || null;
-                        const group = stageToGroup?.[stage] || 'FABRICATION';
-
-                        let count = 1, defaultColor = 'gray';
-                        if (group === 'FABRICATION') {
-                            const colorMap = { 'Cut start': 'green', 'Material Ordered': 'green', 'Fit Up Complete.': 'yellow', 'Released': 'gray', 'Hold': 'red' };
-                            defaultColor = colorMap[stage] || 'gray';
-                            count = 1;
-                        } else if (group === 'READY_TO_SHIP') {
-                            const colorMap = { 'Welded QC': 'green', 'Paint complete': 'yellow', 'Store at MHMW for shipping': 'yellow', 'Shipping planning': 'yellow' };
-                            defaultColor = colorMap[stage] || 'yellow';
-                            count = 2;
-                        } else if (group === 'COMPLETE') {
-                            const colorMap = { 'Complete': 'gray', 'Shipping completed': 'green' };
-                            defaultColor = colorMap[stage] || 'gray';
-                            count = 3;
-                        }
-
-                        const isHold = stage === 'Hold';
-                        const effectiveColor = isHold ? 'red' : (bananaColor === 'red' ? 'red' : defaultColor);
-
-                        const fillMap = { red: '#EF4444', yellow: '#FFE135', green: '#22C55E', gray: '#9CA3AF' };
-                        const fill = fillMap[effectiveColor] || fillMap.yellow;
-                        const stroke = effectiveColor === 'gray' ? '#6B7280' : '#000000';
-
-                        const bananaSvg = `<svg width="16" height="16" viewBox="0 0 950 927.611" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><g><g fill="${fill}" stroke="${stroke}" stroke-width="22"><path d="M158.56,618.97l2.4-0.7c97-26.199,181.6-59.8,251.2-99.8c94.5-54.3,159.4-119.5,193-193.799l16-35.4l-28.699,26.2c-57,52.1-134.801,91-231.4,115.8c-81.9,21-176,31.7-279.8,31.7c-5.4,0-17.4-0.1-24.6-0.2l-16.9-0.8c-13.3-0.6-25.4,7.6-29.8,20.2l-6.6,19.1c-3.9,11.301-0.7,23.9,8.2,32c7.4,6.7,14.9,13.2,14.9,13.2s56,48.5,129.6,71.7L158.56,618.97z"/><path d="M811.86,163.17c-29.1-13.4-56.899-15.4-70.899-15.4c-1.801,0-3.5,0-4.9,0.1c-3.2-11.2-19.4-78.1-30.7-124.9c-5.2-21.5-31.1-30.2-48.2-16.1l-53.6,44.2c-14,11.5-16.9,31.7-6.7,46.7c22.4,32.9,59.5,91.7,77.7,144.8c17.2,50.3,18.7,102.9,10.5,154.6c-13.4,83.7-57.6,168.2-131.4,251.2c-40.199,45.2-84.699,86.399-132.199,123.7c-23.801,18.699-48.4,36.399-73.7,53c-2.601,1.699-32.7,19.399-53.601,30.199c-11.699,6-18.1,19-15.8,31.9l2.5,14c2.4,13.4,13.5,23.5,27,24.6c34.3,2.9,105.101,4.801,199.7-13.899c51.8-10.2,101.8-34.5,148.2-62.101c78.1-46.6,182.8-131.399,238.1-271c24.7-62.3,35.2-126.699,31.2-191.599c-3.9-63.8-20.7-112.4-34.1-142C873.66,206.771,847.06,179.271,811.86,163.17z"/><path d="M109.46,744.97c13.1,8.101,34.4,19.8,60.3,28.4c44.5,14.8,91.8,21.2,138.5,22.7l2.6,0.1l2.101-1.4c34.5-23.1,67.3-47.3,97.6-71.899c37.7-30.7,71.5-62.2,100.5-93.601c26.3-28.5,50.6-58.899,71.4-91.6c18.199-28.6,33.699-59.1,44.8-91.2c5.2-15,9.5-30.399,12.399-46.1c3-15.9,4.4-32.1,6.5-48.2c0.4-3.2,0.801-6.3,1.2-9.5l-19.899,33.9c-41.7,71.199-110.5,133.699-204.601,186c-61.2,34.1-126.8,60.1-193.6,81.199c-36.4,11.5-71.6,21.601-108.6,27.301c-14.6,2.199-25.3,14.8-25.3,29.6c0,6.4,0,13.1,0,18.9C95.36,729.87,100.66,739.47,109.46,744.97z"/></g></g></svg>`;
-
-                        const bgMap = { red: '#FEE2E2', yellow: '#FEF9C3', green: '#D1FAE5', gray: '#F3F4F6' };
-                        const borderMap = { red: '#FCA5A5', yellow: '#FDE68A', green: '#6EE7B7', gray: '#D1D5DB' };
-                        const bg = bgMap[effectiveColor] || bgMap.gray;
-                        const border = borderMap[effectiveColor] || borderMap.gray;
-
-                        printHTML += `<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:2px;padding:2px 4px;border-radius:4px;background:${bg};border:1px solid ${border};">${Array(count).fill(bananaSvg).join('')}</span></td>`;
-                        return;
-                    }
-
-                    let value = job[column];
-
-                    // Format date columns
-                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
-                        value = formatDate(value);
-                    } else {
-                        value = formatCellValue(value, column);
-                    }
-
-                    // Escape HTML
-                    const displayValue = String(value || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-                    // Apply red styling for hard dates on Start install
-                    const isHardDate = column === 'Start install' && job['start_install_formulaTF'] === false && job['Start install'];
-                    printHTML += `<td${isHardDate ? ' class="hard-date"' : ''}>${displayValue}</td>`;
-                });
-                printHTML += '</tr>';
-            });
-
-            printHTML += `
+${renderRowsHTML(chunkJobs)}
             </tbody>
         </table>
-    </div>
-`;
+    </div>`;
+                isFirstPageOverall = false;
+            }
+
+            cumulativePages += numChunks;
         });
 
         printHTML += `
@@ -841,12 +882,10 @@ function JobLog() {
 </html>
 `;
 
-        // Open print window
         const printWindow = window.open('', '_blank');
         printWindow.document.write(printHTML);
         printWindow.document.close();
 
-        // Wait for content to load, then trigger print
         printWindow.onload = () => {
             setTimeout(() => {
                 printWindow.print();
