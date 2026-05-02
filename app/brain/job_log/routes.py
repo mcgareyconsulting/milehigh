@@ -29,6 +29,7 @@ from app.models import Releases, db, ReleaseEvents, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
+from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from datetime import datetime
 import json
 import hashlib
@@ -1368,7 +1369,6 @@ def update_start_install(job, release):
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
         try:
             result = UpdateStartInstallCommand(
                 job_id=job,
@@ -2162,7 +2162,6 @@ def _dispatch_undo(event, *, source, defer_cascade):
             defer_cascade=defer_cascade,
         ).execute()
     if action == 'update_start_install':
-        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
         from datetime import datetime as _dt
         from_str = payload['from']
         from_date = _dt.strptime(from_str, '%Y-%m-%d').date() if from_str else None
