@@ -32,7 +32,12 @@ Ordering:
 """
 
 from app.models import Releases, db
-from app.api.helpers import DYNAMIC_STAGE_ORDER, FIXED_TIER_STAGES, _get_all_variants_for_stages
+from app.api.helpers import (
+    DYNAMIC_STAGE_ORDER,
+    FIXED_TIER_STAGES,
+    _get_all_variants_for_stages,
+    active_releases_filter,
+)
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -50,10 +55,7 @@ def renumber_fab_orders(dry_run=False):
     stats = {'complete_cleared': 0, 'fixed_tier_1': 0, 'fixed_tier_2': 0, 'dynamic': 0, 'total': 0}
 
     # Only renumber active, non-archived releases
-    active_filter = (
-        (Releases.is_archived == False) &  # noqa: E712
-        ((Releases.is_active == True) | (Releases.is_active.is_(None)))  # noqa: E712
-    )
+    active_filter = active_releases_filter()
 
     # Step 0: Clear fab_order for Complete releases. Complete is terminal — no
     # ordering applies — and is intentionally not in FIXED_TIER_STAGES, so
