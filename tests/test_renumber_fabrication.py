@@ -110,7 +110,7 @@ def test_outbox_queued_when_trello_configured(app):
             destination='trello', action='update_fab_order'
         ).all()
         assert len(outbox_items) == 1
-        linked_event = ReleaseEvents.query.get(outbox_items[0].event_id)
+        linked_event = db.session.get(ReleaseEvents, outbox_items[0].event_id)
         assert linked_event.job == 1
 
 

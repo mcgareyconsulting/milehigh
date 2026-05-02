@@ -44,7 +44,7 @@ def test_add_creates_pending_outbox_item(app):
         ev = _make_event()
         item = _add_move_card_item(ev.id)
 
-        fetched = TrelloOutbox.query.get(item.id)
+        fetched = db.session.get(TrelloOutbox, item.id)
         assert fetched.destination == "trello"
         assert fetched.action == "move_card"
         assert fetched.status == "pending"

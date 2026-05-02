@@ -57,7 +57,7 @@ def get_current_user():
         if not user_id:
             return None
         
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if user and user.is_active:
             return user
         return None

@@ -2176,7 +2176,7 @@ def undo_event(event_id):
     """
     from app.models import Releases
 
-    event = ReleaseEvents.query.get(event_id)
+    event = db.session.get(ReleaseEvents, event_id)
     if event is None:
         return jsonify({'error': 'Event not found'}), 404
 
@@ -2355,7 +2355,7 @@ def undo_submittal_event(event_id):
     from app.procore.helpers import create_submittal_payload_hash
     from sqlalchemy.exc import IntegrityError
 
-    event = SubmittalEvents.query.get(event_id)
+    event = db.session.get(SubmittalEvents, event_id)
     if event is None:
         return jsonify({'error': 'Event not found'}), 404
 
