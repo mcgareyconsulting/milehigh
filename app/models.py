@@ -471,6 +471,7 @@ class Releases(db.Model):
             "trello_card_description": self.trello_card_description,
             "trello_card_date": self.trello_card_date,
             "viewer_url": self.viewer_url,
+            "has_drawing": False,
             "last_updated_at": self.last_updated_at,
             "source_of_update": self.source_of_update,
             "is_active": self.is_active,
@@ -759,3 +760,59 @@ class Projects(db.Model):
         lazy='dynamic',
         viewonly=True,
     )
+
+
+class ReleaseDrawingVersion(db.Model):
+    """Versioned PDF markup history for a release's For-Construction drawing.
+
+    One PDF per release. Each user save (markup) inserts a new row; original
+    upload is version_number=1. `source_version_id` self-links to the version
+    a markup was derived from.
+    """
+    __tablename__ = 'release_drawing_versions'
+    __table_args__ = (
+        db.UniqueConstraint('release_id', 'version_number', name='_release_version_uc'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    version_number = db.Column(db.Integer, nullable=False)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default='application/pdf')
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    source_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey('release_drawing_versions.id'),
+        nullable=True,
+    )
+    note = db.Column(db.Text, nullable=True)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    release = db.relationship('Releases', backref=db.backref('drawing_versions', lazy='dynamic'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    source_version = db.relationship('ReleaseDrawingVersion', remote_side=[id])
+
+    def to_dict(self):
+        uploaded_by_name = None
+        if self.uploaded_by:
+            first = (self.uploaded_by.first_name or '').strip()
+            last = (self.uploaded_by.last_name or '').strip()
+            uploaded_by_name = (f"{first} {last}".strip()) or self.uploaded_by.username
+        return {
+            'id': self.id,
+            'release_id': self.release_id,
+            'version_number': self.version_number,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'uploaded_by': {
+                'id': self.uploaded_by_user_id,
+                'name': uploaded_by_name,
+            },
+            'uploaded_at': _dt(self.uploaded_at),
+            'source_version_id': self.source_version_id,
+            'note': self.note,
+        }
