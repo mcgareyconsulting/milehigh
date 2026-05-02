@@ -224,6 +224,37 @@ function JobLog() {
     const isCompleteStage = (stage) =>
         (stage || '').toString().trim().toLowerCase() === 'complete';
 
+    const SHIP_COMPLETE_STAGE = 'Shipping completed';
+
+    // 'X' = installed (highest); percent strings rank by their numeric value;
+    // missing/blank ranks lowest so it sorts to the bottom of the ship-complete group.
+    const installProgRank = (val) => {
+        if (val == null) return -1;
+        const s = val.toString().trim();
+        if (s === '') return -1;
+        if (s.toLowerCase() === 'x') return 101;
+        const n = parseFloat(s);
+        return Number.isFinite(n) ? n : -1;
+    };
+
+    // Tie-break for two rows that share the same PM + Job #.
+    const compareSameJob = (a, b) => {
+        const ca = isCompleteStage(a['Stage']);
+        const cb = isCompleteStage(b['Stage']);
+        if (ca !== cb) return ca ? 1 : -1;
+
+        const sa = STAGE_COMPLETENESS[a['Stage']] ?? -1;
+        const sb = STAGE_COMPLETENESS[b['Stage']] ?? -1;
+        if (sa !== sb) return sb - sa;
+
+        if (a['Stage'] === SHIP_COMPLETE_STAGE) {
+            return installProgRank(b['Job Comp']) - installProgRank(a['Job Comp']);
+        }
+        const foA = a['Fab Order'] ?? Number.POSITIVE_INFINITY;
+        const foB = b['Fab Order'] ?? Number.POSITIVE_INFINITY;
+        return foA - foB;
+    };
+
     // When Review mode is enabled, sort independently of other sort behavior:
     // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
     // 2) within each PM, sort by Project # ascending,
@@ -246,13 +277,7 @@ function JobLog() {
             const jobB = b['Job #'] || 0;
             if (jobA !== jobB) return jobA - jobB;
 
-            // Same Project #: "Complete" pinned to bottom, everything else descending by completeness
-            const isCompleteA = isCompleteStage(a['Stage']);
-            const isCompleteB = isCompleteStage(b['Stage']);
-            if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
-            const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-            const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-            return stageB - stageA;
+            return compareSameJob(a, b);
         });
 
         return sorted;
@@ -607,18 +632,12 @@ function JobLog() {
             jobsByPM[pm].push(job);
         });
 
-        // Sort each PM group by Job # ascending, then "Complete" pinned last, everything else descending
         Object.keys(jobsByPM).forEach(pm => {
             jobsByPM[pm].sort((a, b) => {
                 const jobA = a['Job #'] || 0;
                 const jobB = b['Job #'] || 0;
                 if (jobA !== jobB) return jobA - jobB;
-                const isCompleteA = isCompleteStage(a['Stage']);
-                const isCompleteB = isCompleteStage(b['Stage']);
-                if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
-                const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-                const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-                return stageB - stageA;
+                return compareSameJob(a, b);
             });
         });
 
