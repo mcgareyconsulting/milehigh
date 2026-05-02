@@ -19,7 +19,7 @@ updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from enum import Enum
 from sqlalchemy import cast, Integer, String
 
@@ -51,9 +51,12 @@ class User(db.Model):
     is_drafter = db.Column(db.Boolean, default=False, nullable=False)
     procore_id = db.Column(db.String(255), unique=True, nullable=True)
     trello_id = db.Column(db.String(255), unique=True, nullable=True)
+    email = db.Column(db.String(255), nullable=True, index=True)
+    google_sub = db.Column(db.String(255), unique=True, nullable=True, index=True)
+    wants_daily_brief = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
-    
+
     # Relationships
     job_events = db.relationship(
         'ReleaseEvents', backref='user', lazy='dynamic',
@@ -62,6 +65,10 @@ class User(db.Model):
     submittal_events = db.relationship(
         'SubmittalEvents', backref='user', lazy='dynamic',
         foreign_keys='SubmittalEvents.internal_user_id'
+    )
+    gmail_credentials = db.relationship(
+        'GoogleCredentials', backref='user', uselist=False,
+        cascade='all, delete-orphan'
     )
     
     def __repr__(self):
@@ -85,6 +92,59 @@ class ProcoreToken(db.Model):
     def get_current(cls):
         '''Get current Procore token'''
         return cls.query.order_by(cls.updated_at.desc()).first()
+
+
+class GoogleCredentials(db.Model):
+    """Per-user Google OAuth credentials (Gmail readonly + identity).
+
+    The `provider` column is forward-looking so a future Microsoft Graph
+    integration can share this table by adding rows with provider='microsoft'.
+    """
+    __tablename__ = "google_credentials"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'),
+        unique=True, nullable=False, index=True
+    )
+    provider = db.Column(db.String(32), nullable=False, default='google')
+    google_sub = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    email_verified = db.Column(db.Boolean, nullable=False, default=True)
+    # TODO(post-demo): encrypt access_token / refresh_token at rest (Fernet column).
+    access_token = db.Column(db.Text, nullable=False)
+    refresh_token = db.Column(db.Text, nullable=True)
+    token_expires_at = db.Column(db.DateTime, nullable=False)
+    scopes = db.Column(db.Text, nullable=False)
+    id_token = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False,
+        default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    last_refreshed_at = db.Column(db.DateTime, nullable=True)
+
+    @classmethod
+    def get_for_user(cls, user_id):
+        return cls.query.filter_by(user_id=user_id).first()
+
+    def is_expired(self, buffer_seconds: int = 60) -> bool:
+        return datetime.utcnow() >= self.token_expires_at - timedelta(seconds=buffer_seconds)
+
+    def update_from_token_response(self, token: dict) -> None:
+        """Apply a fresh /token response in place. Caller commits."""
+        if "access_token" in token:
+            self.access_token = token["access_token"]
+        if token.get("refresh_token"):
+            # Google may omit refresh_token on refresh; only overwrite when present.
+            self.refresh_token = token["refresh_token"]
+        expires_in = int(token.get("expires_in", 3600))
+        self.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        if token.get("scope"):
+            self.scopes = token["scope"]
+        if token.get("id_token"):
+            self.id_token = token["id_token"]
+        self.last_refreshed_at = datetime.utcnow()
+
 
 class Submittals(db.Model):
     __tablename__ = "submittals"
@@ -703,6 +763,106 @@ class Notification(db.Model):
             'submittal_title': self.submittal.title if self.submittal else None,
             'submittal_project_name': self.submittal.project_name if self.submittal else None,
             'submittal_project_number': self.submittal.project_number if self.submittal else None,
+        }
+
+
+ROLE_USER = "user"
+ROLE_ASSISTANT = "assistant"
+CHAT_ROLES = (ROLE_USER, ROLE_ASSISTANT)
+
+
+class ChatMessage(db.Model):
+    """Banana Boy chat turns, per user, in chronological order."""
+    __tablename__ = "chat_messages"
+    __table_args__ = (
+        db.CheckConstraint(
+            f"role IN ('{ROLE_USER}', '{ROLE_ASSISTANT}')",
+            name="ck_chat_messages_role",
+        ),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    role = db.Column(db.String(16), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', lazy='select')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'role': self.role,
+            'content': self.content,
+            'created_at': _dt(self.created_at),
+        }
+
+
+class BananaBoyUsage(db.Model):
+    """One row per upstream API call made on behalf of Banana Boy.
+
+    Captures provider/model, token or character or audio counts, wall-clock
+    duration, computed USD cost, and the prompt + response payload (JSON) so
+    we can audit exactly what was sent and what came back.
+    """
+    __tablename__ = "banana_boy_usage"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    chat_message_id = db.Column(
+        db.Integer, db.ForeignKey('chat_messages.id', ondelete='SET NULL'),
+        nullable=True, index=True,
+    )
+
+    provider = db.Column(db.String(32), nullable=False)        # 'anthropic' | 'openai'
+    operation = db.Column(db.String(32), nullable=False)       # 'chat' | 'transcription' | 'speech'
+    model = db.Column(db.String(64), nullable=False)
+    iteration = db.Column(db.Integer, nullable=True)           # tool-loop iteration index for chat
+
+    duration_ms = db.Column(db.Integer, nullable=False)
+
+    input_tokens = db.Column(db.Integer, nullable=True)
+    output_tokens = db.Column(db.Integer, nullable=True)
+    cache_read_tokens = db.Column(db.Integer, nullable=True)
+    cache_creation_tokens = db.Column(db.Integer, nullable=True)
+
+    input_chars = db.Column(db.Integer, nullable=True)         # TTS input length
+    output_bytes = db.Column(db.Integer, nullable=True)        # TTS audio bytes
+
+    audio_seconds = db.Column(db.Float, nullable=True)         # Whisper duration
+    audio_bytes = db.Column(db.Integer, nullable=True)         # uploaded audio size
+
+    cost_usd = db.Column(db.Float, nullable=True)
+
+    payload = db.Column(db.JSON, nullable=True)                # prompt + response summary
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', lazy='select')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'chat_message_id': self.chat_message_id,
+            'provider': self.provider,
+            'operation': self.operation,
+            'model': self.model,
+            'iteration': self.iteration,
+            'duration_ms': self.duration_ms,
+            'input_tokens': self.input_tokens,
+            'output_tokens': self.output_tokens,
+            'cache_read_tokens': self.cache_read_tokens,
+            'cache_creation_tokens': self.cache_creation_tokens,
+            'input_chars': self.input_chars,
+            'output_bytes': self.output_bytes,
+            'audio_seconds': self.audio_seconds,
+            'audio_bytes': self.audio_bytes,
+            'cost_usd': self.cost_usd,
+            'created_at': _dt(self.created_at),
         }
 
 
