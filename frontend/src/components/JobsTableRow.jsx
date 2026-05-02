@@ -571,9 +571,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
         const oldValue = localStartInstall;
 
-        // Optimistic update
+        // Optimistic update — close the modal right away; the row's cascade
+        // spinner provides the in-flight feedback. Mirrors handleClearHardDate.
         setLocalStartInstall(dateValue);
         setUpdatingStartInstall(true);
+        setIsStartInstallModalOpen(false);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
         try {
@@ -582,9 +584,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue);
 
             console.log(`[START_INSTALL] Successfully updated job ${jobNumber}-${releaseNumber} to ${dateValue}`);
-
-            // Close modal
-            setIsStartInstallModalOpen(false);
 
             // Trigger refetch to show latest state
             if (onUpdate) {

@@ -1121,7 +1121,7 @@ def update_job_comp(job, release):
     job_record.source_of_update = "Brain"
 
     from app.services.job_event_service import JobEventService
-    JobEventService.create_and_close(
+    primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
         action='updated',
@@ -1182,6 +1182,17 @@ def update_job_comp(job, release):
                 JobEventService.close(fab_event.id)
             response_extras['fab_order'] = None
 
+    if new_is_x and not old_was_x and primary_event is not None:
+        from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
+            clear_hard_date_cascade,
+        )
+        if clear_hard_date_cascade(
+            job_record,
+            parent_event_id=primary_event.id,
+            reason='job_comp_set_to_x',
+        ):
+            response_extras['hard_date_cleared'] = True
+
     db.session.commit()
 
     return jsonify({"status": "success", **response_extras}), 200
@@ -1217,7 +1228,7 @@ def update_invoiced(job, release):
     job_record.source_of_update = "Brain"
 
     from app.services.job_event_service import JobEventService
-    JobEventService.create_and_close(
+    primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
         action='updated',
@@ -1225,9 +1236,23 @@ def update_invoiced(job, release):
         payload={'field': 'invoiced', 'old_value': old_invoiced, 'new_value': invoiced_str},
     )
 
+    response_extras = {}
+    old_was_x = old_invoiced and old_invoiced.strip().upper() == 'X'
+    new_is_x = invoiced_str and invoiced_str.upper() == 'X'
+    if new_is_x and not old_was_x and primary_event is not None:
+        from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
+            clear_hard_date_cascade,
+        )
+        if clear_hard_date_cascade(
+            job_record,
+            parent_event_id=primary_event.id,
+            reason='invoiced_set_to_x',
+        ):
+            response_extras['hard_date_cleared'] = True
+
     db.session.commit()
 
-    return jsonify({"status": "success"}), 200
+    return jsonify({"status": "success", **response_extras}), 200
 
 
 @brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
