@@ -30,6 +30,7 @@ from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
+from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
 from datetime import datetime
 import json
 import hashlib
@@ -1184,9 +1185,6 @@ def update_job_comp(job, release):
             response_extras['fab_order'] = None
 
     if new_is_x and not old_was_x and primary_event is not None:
-        from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
-            clear_hard_date_cascade,
-        )
         if clear_hard_date_cascade(
             job_record,
             parent_event_id=primary_event.id,
@@ -1241,9 +1239,6 @@ def update_invoiced(job, release):
     old_was_x = old_invoiced and old_invoiced.strip().upper() == 'X'
     new_is_x = invoiced_str and invoiced_str.upper() == 'X'
     if new_is_x and not old_was_x and primary_event is not None:
-        from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
-            clear_hard_date_cascade,
-        )
         if clear_hard_date_cascade(
             job_record,
             parent_event_id=primary_event.id,
