@@ -189,6 +189,20 @@ class UpdateStageCommand:
                 )
                 extras['job_comp'] = None
 
+        # Red-date auto-clear: a hard start_install date is meaningless once the
+        # release is complete. Helper is a no-op when no hard date is present.
+        if self.stage == 'Complete':
+            from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
+                clear_hard_date_cascade,
+            )
+            if clear_hard_date_cascade(
+                job_record,
+                parent_event_id=event.id,
+                reason='stage_set_to_complete',
+                source=self.source,
+            ):
+                extras['hard_date_cleared'] = True
+
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 
