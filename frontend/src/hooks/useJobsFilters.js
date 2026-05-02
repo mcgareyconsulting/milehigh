@@ -260,6 +260,50 @@ export function useJobsFilters(jobs = []) {
     }, []);
 
     /**
+     * Sort jobs by stage priority (per STAGE_SORT_PRIORITY), then fab_order
+     * ascending, then last_updated_at ascending as a final tiebreaker. Used by
+     * Paint and the paint band of Paint+Fab so renumbering a release reorders
+     * it inside its stage band instead of sinking it via last_updated_at.
+     * Rows with null/NaN fab_order sink to the bottom of their stage.
+     */
+    const sortByStageThenFabOrder = useCallback((jobs) => {
+        return [...jobs].sort((a, b) => {
+            const stageA = String(a['Stage'] ?? '').trim();
+            const stageB = String(b['Stage'] ?? '').trim();
+            const prioA = STAGE_SORT_PRIORITY[stageA] ?? 999;
+            const prioB = STAGE_SORT_PRIORITY[stageB] ?? 999;
+            if (prioA !== prioB) return prioA - prioB;
+
+            const rawA = a['Fab Order'];
+            const rawB = b['Fab Order'];
+            const numA = rawA == null ? NaN : Number(rawA);
+            const numB = rawB == null ? NaN : Number(rawB);
+            const hasA = !isNaN(numA);
+            const hasB = !isNaN(numB);
+            if (!hasA && !hasB) {
+                // fall through to last_updated_at tiebreaker
+            } else if (!hasA) {
+                return 1;
+            } else if (!hasB) {
+                return -1;
+            } else if (numA !== numB) {
+                return numA - numB;
+            }
+
+            const dateRawA = a['last_updated_at'];
+            const dateRawB = b['last_updated_at'];
+            const dateA = dateRawA ? new Date(dateRawA) : null;
+            const dateB = dateRawB ? new Date(dateRawB) : null;
+            const validA = dateA && !isNaN(dateA.getTime());
+            const validB = dateB && !isNaN(dateB.getTime());
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dateA.getTime() - dateB.getTime();
+        });
+    }, []);
+
+    /**
      * Sort jobs by fab order, then start install date as tiebreaker (for Paint+Fab view)
      */
     const sortByFabOrderThenStartInstall = useCallback((jobs) => {
@@ -376,11 +420,11 @@ export function useJobsFilters(jobs = []) {
         } else if (selectedSubset === 'paint') {
             const paintStages = ['Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            result = sortByStageThenLastUpdated(paintOnly);
+            result = sortByStageThenFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
             const paintStages = ['Paint complete', 'Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            const paintSorted = sortByStageThenLastUpdated(paintOnly);
+            const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
             const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
             result = [...paintSorted, ...fabSorted];
@@ -396,7 +440,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, columnSort, compareByColumn]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
 
     /**
      * Secondary search: jobs matching the search with all project/stage/subset
