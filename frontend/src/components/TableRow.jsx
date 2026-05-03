@@ -225,19 +225,17 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
     // Prevent drag start from protected cells
     const handleProtectedCellMouseDown = (e) => {
-        // Allow select elements to work normally (don't prevent default)
         const target = e.target;
-        const isSelectElement = target.tagName === 'SELECT' ||
-            target.closest('select') !== null;
+        const isSelectElement = target.tagName === 'SELECT' || target.closest('select') !== null;
+        const isInputElement = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+            || target.closest('input') !== null || target.closest('textarea') !== null;
 
-        if (isSelectElement) {
-            // Don't prevent default for select elements - let them open normally
+        if (isSelectElement || isInputElement) {
             e.stopPropagation();
             return;
         }
 
         e.stopPropagation();
-        // Prevent drag from starting on these cells
         e.preventDefault();
     };
 
