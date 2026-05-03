@@ -56,6 +56,7 @@ function JobLog() {
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isDrafter, setIsDrafter] = useState(false);
     const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('jl_minimized') === 'true'
@@ -104,10 +105,12 @@ function JobLog() {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setIsDrafter(user?.is_drafter || false);
                 setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
+                setIsDrafter(false);
                 setShowScrollbars(false);
             }
         };
@@ -1209,6 +1212,7 @@ function JobLog() {
                                                                     stageGroupColors={stageGroupColors}
                                                                     stageGroupDupColors={stageGroupDupColors}
                                                                     isAdmin={isAdmin}
+                                                                    isDrafter={isDrafter}
                                                                     onDelete={handleDeleteJob}
                                                                     tableScrollRef={tableScrollRef}
                                                                     duplicateFabOrders={duplicateFabOrders}
@@ -1250,6 +1254,7 @@ function JobLog() {
                                                             stageGroupColors={stageGroupColors}
                                                             stageGroupDupColors={stageGroupDupColors}
                                                             isAdmin={isAdmin}
+                                                            isDrafter={isDrafter}
                                                             onDelete={handleDeleteJob}
                                                             tableScrollRef={tableScrollRef}
                                                             duplicateFabOrders={duplicateFabOrders}

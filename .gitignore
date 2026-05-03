@@ -39,6 +39,9 @@ Thumbs.db
 # Snapshot files
 excel_snapshots/
 
+# PDF markup uploads (per-release drawing versions; ephemeral on Render)
+app/storage/
+
 # Refresh staging db script
 refresh_staging_db.sh
 prod.dump
