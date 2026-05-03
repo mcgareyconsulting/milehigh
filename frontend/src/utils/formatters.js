@@ -87,14 +87,19 @@ export function formatDateShort(dateValue) {
 }
 
 /**
- * Format a cell value for display
+ * Format a cell value for display. When `columnName` is `'Fab Hrs'` or
+ * `'Install HRS'`, numeric values are rounded to 2 decimal places.
  */
-export function formatCellValue(value) {
+export function formatCellValue(value, columnName) {
     if (value === null || value === undefined || value === '') {
         return '—';
     }
     if (Array.isArray(value)) {
         return value.join(', ');
+    }
+    if (columnName === 'Fab Hrs' || columnName === 'Install HRS') {
+        const numValue = parseFloat(value);
+        if (!Number.isNaN(numValue)) return numValue.toFixed(2);
     }
     return value;
 }
