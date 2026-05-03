@@ -22,6 +22,9 @@ import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth } from '../utils/auth';
+import JobLogPrintView from '../components/JobLogPrintView';
+import { isCompleteStage } from '../utils/stageProgress';
+import { formatDateShort, formatCellValue } from '../utils/formatters';
 
 // Stage completeness order (index 0 = least complete, higher = more complete).
 const STAGE_COMPLETENESS = {
@@ -31,12 +34,6 @@ const STAGE_COMPLETENESS = {
     'Store at MHMW for shipping': 12, 'Shipping planning': 13,
     'Shipping completed': 14, 'Complete': 15,
 };
-
-// Defensive Complete check — tolerates whitespace + case drift in the stage value.
-// Otherwise STAGE_COMPLETENESS['Complete']=15 (highest) would push these rows to
-// the top of the descending sort instead of the bottom.
-const isCompleteStage = (stage) =>
-    (stage || '').toString().trim().toLowerCase() === 'complete';
 
 const SHIP_COMPLETE_STAGE = 'Shipping completed';
 
@@ -49,6 +46,21 @@ const installProgRank = (val) => {
     if (s.toLowerCase() === 'x') return 101;
     const n = parseFloat(s);
     return Number.isFinite(n) ? n : -1;
+};
+
+// PM (alphabetical) → Job # (asc) → compareSameJob tie-break. Returns a new sorted array.
+const reviewSort = (jobs) => {
+    const sorted = [...jobs];
+    sorted.sort((a, b) => {
+        const pmA = (a['PM'] || 'No PM').toString();
+        const pmB = (b['PM'] || 'No PM').toString();
+        if (pmA !== pmB) return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
+        const jobA = a['Job #'] || 0;
+        const jobB = b['Job #'] || 0;
+        if (jobA !== jobB) return jobA - jobB;
+        return compareSameJob(a, b);
+    });
+    return sorted;
 };
 
 // Tie-break for two rows that share the same PM + Job #.
@@ -67,22 +79,6 @@ const compareSameJob = (a, b) => {
     const foA = a['Fab Order'] ?? Number.POSITIVE_INFINITY;
     const foB = b['Fab Order'] ?? Number.POSITIVE_INFINITY;
     return foA - foB;
-};
-
-// Mirror of STAGE_TO_BANANA_STEP in JobsTableRow.jsx — the screen Urgency column
-// shows a 5-step banana-boy progress bar; the print path needs the same mapping
-// so what you see on screen matches what comes out of the printer.
-const STAGE_TO_BANANA_STEP = {
-    'Released': 0, 'Material Ordered': 1, 'Cut start': 1, 'Cut Complete': 1,
-    'Fitup Start': 1, 'Fit Up Complete.': 1, 'Weld Start': 2, 'Weld Complete': 2,
-    'Welded QC': 3, 'Paint Start': 4, 'Paint complete': 4,
-    'Store at MHMW for shipping': 4, 'Shipping planning': 4,
-    'Shipping completed': 5, 'Complete': 5,
-};
-const getBananaProgress = (stage) => {
-    if (stage === 'Hold') return 0;
-    const step = STAGE_TO_BANANA_STEP[stage];
-    return step == null ? 0 : step / 5;
 };
 
 function JobLog() {
@@ -219,50 +215,6 @@ function JobLog() {
     const handleDragLeave = () => { };
     const handleDrop = () => { };
 
-    const formatDate = (dateValue) => {
-        if (!dateValue) return '—';
-        try {
-            // Handle ISO date strings (YYYY-MM-DD) - parse directly to avoid timezone issues
-            if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
-                // Extract date parts directly from ISO string to avoid timezone conversion
-                const parts = dateValue.split('T')[0].split('-');
-                if (parts.length === 3) {
-                    const year = parts[0];
-                    const month = parts[1];
-                    const day = parts[2];
-                    // Return in MM/DD/YY format
-                    return `${month}/${day}/${year.slice(-2)}`;
-                }
-            }
-            // Fallback to Date object parsing for other formats
-            const date = new Date(dateValue);
-            if (isNaN(date.getTime())) return '—';
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const year = String(date.getFullYear()).slice(-2);
-            return `${month}/${day}/${year}`;
-        } catch (e) {
-            return '—';
-        }
-    };
-
-    const formatCellValue = (value, columnName) => {
-        if (value === null || value === undefined || value === '') {
-            return '—';
-        }
-        if (Array.isArray(value)) {
-            return value.join(', ');
-        }
-        // Format Fab Hrs and Install HRS to 2 decimal places
-        if (columnName === 'Fab Hrs' || columnName === 'Install HRS') {
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-                return numValue.toFixed(2);
-            }
-        }
-        return value;
-    };
-
     const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
 
     // Check if we have data to display
@@ -271,33 +223,14 @@ function JobLog() {
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
 
-    // When Review mode is enabled, sort independently of other sort behavior:
-    // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
-    // 2) within each PM, sort by Project # ascending,
-    // 3) within each Project #, sort by stage completeness (most complete first).
-    const reviewDisplayJobs = useMemo(() => {
-        if (!reviewMode) return displayJobs;
+    // Review-mode sort: PM (alphabetical) → Job # (asc) → compareSameJob tie-break.
+    const reviewDisplayJobs = useMemo(
+        () => (reviewMode ? reviewSort(displayJobs) : displayJobs),
+        [displayJobs, reviewMode]
+    );
 
-        const sorted = [...displayJobs];
-        sorted.sort((a, b) => {
-            const pmKeyA = (a['PM'] || 'No PM').toString();
-            const pmKeyB = (b['PM'] || 'No PM').toString();
-
-            // Different PMs: alphabetical by PM name (case-insensitive)
-            if (pmKeyA !== pmKeyB) {
-                return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
-            }
-
-            // Same PM: sort by Project # (Job #) ascending
-            const jobA = a['Job #'] || 0;
-            const jobB = b['Job #'] || 0;
-            if (jobA !== jobB) return jobA - jobB;
-
-            return compareSameJob(a, b);
-        });
-
-        return sorted;
-    }, [displayJobs, reviewMode]);
+    // Print always uses the review sort regardless of the on-screen toggle.
+    const printSortedJobs = useMemo(() => reviewSort(displayJobs), [displayJobs]);
 
     // Compute fab_order values that appear on more than one release *within the same
     // stage group*. The client uses Welded QC (READY_TO_SHIP) for paint-sequence
@@ -623,275 +556,7 @@ function JobLog() {
         URL.revokeObjectURL(url);
     };
 
-    const handlePrint = () => {
-        // First, sort all jobs by Job # first, then PM
-        const sortedJobs = [...jobs].sort((a, b) => {
-            // First sort by Job #
-            const jobA = a['Job #'] || 0;
-            const jobB = b['Job #'] || 0;
-            if (jobA !== jobB) {
-                return jobA - jobB;
-            }
-            // Then sort by PM (treat null/empty as empty string for sorting)
-            const pmA = (a['PM'] || '').toString().toLowerCase();
-            const pmB = (b['PM'] || '').toString().toLowerCase();
-            return pmA.localeCompare(pmB);
-        });
-
-        // Group jobs by PM, maintaining the sorted order within each PM group
-        const jobsByPM = {};
-        sortedJobs.forEach(job => {
-            const pm = job['PM'] || 'No PM';
-            if (!jobsByPM[pm]) {
-                jobsByPM[pm] = [];
-            }
-            jobsByPM[pm].push(job);
-        });
-
-        Object.keys(jobsByPM).forEach(pm => {
-            jobsByPM[pm].sort((a, b) => {
-                const jobA = a['Job #'] || 0;
-                const jobB = b['Job #'] || 0;
-                if (jobA !== jobB) return jobA - jobB;
-                return compareSameJob(a, b);
-            });
-        });
-
-        // Create printable HTML
-        let printHTML = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Job Log - Print</title>
-    <style>
-        * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-        }
-        @media print {
-            @page {
-                /* 11x17 tabloid in landscape orientation */
-                size: 11in 17in landscape;
-                margin: 0.5in;
-            }
-        }
-        /* Pages are rendered as fixed 24-row chunks. Each .pm-page wrapper holds
-           one printed page; non-first chunks force a page break via inline style.
-           A .blank-filler is inserted between PMs whenever the previous PM ended
-           on a recto so the next PM lands on the following recto. All page math
-           is deterministic at HTML build time — no runtime measurement. */
-        .blank-filler {
-            page-break-before: always;
-            page-break-after: always;
-            break-before: page;
-            break-after: page;
-            height: 1px;
-        }
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 10px;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            font-size: 18px;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        .pm-header {
-            font-size: 14px;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            padding: 8px;
-            background-color: #f0f0f0;
-            border-bottom: 2px solid #333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            table-layout: fixed;
-        }
-        .hard-date {
-            background-color: #EF4444;
-            color: white;
-            font-weight: bold;
-        }
-        th {
-            background-color: #e0e0e0;
-            border: 1px solid #999;
-            padding: 6px 4px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 9px;
-            white-space: nowrap;
-        }
-        td {
-            border: 1px solid #ccc;
-            /* Vertical padding sized so a 24-row chunk fits inside one tabloid
-               landscape page (10in printable height). With 6px top/bottom + 20px
-               banana cell + 1px border = ~33px rows, 24 rows total ~792px; plus
-               PM header + thead + table margin (~112px) leaves ~56px of breathing
-               room before the engine splits the chunk across two pages. */
-            padding: 6px 4px;
-            text-align: center;
-            font-size: 9px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            word-wrap: break-word;
-        }
-        tr:nth-child(even) {
-            background-color: #dbeafe;
-        }
-        tr.grayed-row, tr.grayed-row:nth-child(even) {
-            background-color: #9ca3af;
-        }
-        .no-data {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-        }
-        /* Urgency column: 5 discrete banana-boy icons per cell. The screen's tiled
-           PNG approach is too heavy for the print engine to rasterize across many
-           rows at print DPI — preview scrolling stutters. Five <img> tags render
-           the same 5-step progress visual at a fraction of the cost. */
-        .banana-cell {
-            display: inline-flex;
-            align-items: center;
-            gap: 1px;
-            padding: 2px 4px;
-            border-radius: 4px;
-            background: #FEFCE8;
-            border: 1px solid #FEF08A;
-        }
-        .banana-icon {
-            width: 16px;
-            height: 16px;
-            display: inline-block;
-            image-rendering: pixelated;
-        }
-        .banana-icon.empty {
-            opacity: 0.22;
-        }
-    </style>
-</head>
-<body>
-    <h1>Job Log - Printed ${new Date().toLocaleString()}</h1>
-`;
-
-        // Hard-cap of 24 rows per page. Each PM's rows are split into 24-row
-        // chunks; each chunk is its own .pm-page wrapper that forces a page break
-        // before it (except the very first chunk in the document). pages-per-PM
-        // is therefore deterministic = ceil(rowCount / 24), so we can also
-        // deterministically insert blank-filler pages between PMs to keep every
-        // PM starting on a recto (front) sheet.
-        const ROWS_PER_PAGE = 24;
-
-        const renderRowsHTML = (jobs) => {
-            let html = '';
-            jobs.forEach(job => {
-                const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
-                const isComplete = isCompleteStage(job['Stage']);
-                const isGrayed = isInstallComplete || isComplete;
-                html += `<tr${isGrayed ? ' class="grayed-row"' : ''}>`;
-                columnHeaders.forEach(column => {
-                    if (column === 'Urgency') {
-                        const stage = job['Stage'] || 'Released';
-                        const rawStep = STAGE_TO_BANANA_STEP[stage];
-                        const step = stage === 'Hold' || rawStep == null ? 0 : rawStep;
-                        const src = `${window.location.origin}/banana-boy.png`;
-                        let bananas = '';
-                        for (let n = 0; n < 5; n++) {
-                            const cls = n < step ? 'banana-icon' : 'banana-icon empty';
-                            bananas += `<img class="${cls}" src="${src}" alt="">`;
-                        }
-                        html += `<td><span class="banana-cell">${bananas}</span></td>`;
-                        return;
-                    }
-
-                    let value = job[column];
-                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
-                        value = formatDate(value);
-                    } else {
-                        value = formatCellValue(value, column);
-                    }
-                    const displayValue = String(value || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    const isHardDate = column === 'Start install' && job['start_install_formulaTF'] === false && job['Start install'];
-                    html += `<td${isHardDate ? ' class="hard-date"' : ''}>${displayValue}</td>`;
-                });
-                html += '</tr>';
-            });
-            return html;
-        };
-
-        const theadHTML = '<thead><tr>' + columnHeaders.map(col => {
-            const displayHeader = col === 'Release #' ? 'rel. #' : col === 'Job Comp' ? 'Install Prog' : col;
-            return `<th>${displayHeader}</th>`;
-        }).join('') + '</tr></thead>';
-
-        let isFirstPageOverall = true;
-        let cumulativePages = 0;
-
-        Object.keys(jobsByPM).sort((pmA, pmB) => {
-            return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
-        }).forEach((pm, pmIdx) => {
-            const pmJobs = jobsByPM[pm];
-            const numChunks = Math.max(1, Math.ceil(pmJobs.length / ROWS_PER_PAGE));
-
-            // Build colgroup with normalized widths for uniform columns across pages
-            const defaultWeight = 5;
-            const totalWeight = columnHeaders.reduce((sum, col) => sum + (COLUMN_WIDTH_PERCENT[col] ?? defaultWeight), 0);
-            const colgroup = '<colgroup>' + columnHeaders.map(col => {
-                const pct = ((COLUMN_WIDTH_PERCENT[col] ?? defaultWeight) / totalWeight * 100).toFixed(2);
-                return `<col style="width:${pct}%">`;
-            }).join('') + '</colgroup>';
-
-            // Recto alignment: if the previous PM ended on an odd page, the next
-            // page would be verso — insert one filler to push it to the following recto.
-            if (pmIdx > 0 && cumulativePages % 2 === 1) {
-                printHTML += `<div class="blank-filler"></div>`;
-                cumulativePages += 1;
-            }
-
-            for (let chunkIdx = 0; chunkIdx < numChunks; chunkIdx++) {
-                const start = chunkIdx * ROWS_PER_PAGE;
-                const chunkJobs = pmJobs.slice(start, start + ROWS_PER_PAGE);
-                const breakStyle = isFirstPageOverall
-                    ? ''
-                    : ' style="break-before: page; page-break-before: always;"';
-                const headerHTML = chunkIdx === 0 ? `<div class="pm-header">PM: ${pm}</div>` : '';
-                printHTML += `
-    <div class="pm-page"${breakStyle}>
-        ${headerHTML}
-        <table>
-            ${colgroup}
-            ${theadHTML}
-            <tbody>
-${renderRowsHTML(chunkJobs)}
-            </tbody>
-        </table>
-    </div>`;
-                isFirstPageOverall = false;
-            }
-
-            cumulativePages += numChunks;
-        });
-
-        printHTML += `
-</body>
-</html>
-`;
-
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(printHTML);
-        printWindow.document.close();
-
-        printWindow.onload = () => {
-            setTimeout(() => {
-                printWindow.print();
-            }, 250);
-        };
-    };
+    const handlePrint = () => window.print();
 
     return (
         <>
@@ -1246,8 +911,8 @@ ${renderRowsHTML(chunkJobs)}
                                                                     row={row}
                                                                     columns={columnHeaders}
                                                                     isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                                    formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
-                                                                    formatDate={formatDate}
+                                                                    formatCellValue={formatCellValue}
+                                                                    formatDate={formatDateShort}
                                                                     rowIndex={index}
                                                                     onDragStart={handleDragStart}
                                                                     onDragOver={handleDragOver}
@@ -1287,8 +952,8 @@ ${renderRowsHTML(chunkJobs)}
                                                             row={row}
                                                             columns={columnHeaders}
                                                             isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                            formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
-                                                            formatDate={formatDate}
+                                                            formatCellValue={formatCellValue}
+                                                            formatDate={formatDateShort}
                                                             rowIndex={index}
                                                             onDragStart={handleDragStart}
                                                             onDragOver={handleDragOver}
@@ -1670,6 +1335,12 @@ ${renderRowsHTML(chunkJobs)}
                 )}
 
             </div>
+
+            <JobLogPrintView
+                jobs={printSortedJobs}
+                columnHeaders={columnHeaders}
+                columnWidthPercent={COLUMN_WIDTH_PERCENT}
+            />
         </>
     );
 }

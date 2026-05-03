@@ -20,6 +20,7 @@ import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
 import { useTheme } from '../context/ThemeContext';
+import { getBananaProgress } from '../utils/stageProgress';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -180,32 +181,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         }
-    };
-
-    // 5-step urgency banana fill (XXXOO-style). Each stage maps to one of five levels
-    // so the column reads at a glance. Hold is a pause: 0% fill.
-    const STAGE_TO_BANANA_STEP = {
-        'Released': 0,
-        'Material Ordered': 1,
-        'Cut start': 1,
-        'Cut Complete': 1,
-        'Fitup Start': 1,
-        'Fit Up Complete.': 1,
-        'Weld Start': 2,
-        'Weld Complete': 2,
-        'Welded QC': 3,
-        'Paint Start': 4,
-        'Paint complete': 4,
-        'Store at MHMW for shipping': 4,
-        'Shipping planning': 4,
-        'Shipping completed': 5,
-        'Complete': 5,
-    };
-    const getBananaProgress = (stage) => {
-        if (stage === 'Hold') return 0;
-        const step = STAGE_TO_BANANA_STEP[stage];
-        if (step == null) return 0;
-        return step / 5;
     };
 
     // Local state for stage
