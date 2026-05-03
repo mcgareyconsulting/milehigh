@@ -24,11 +24,13 @@ from flask import jsonify, request, g
 from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
+from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, Submittals, User
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
+from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
 from datetime import datetime
 import json
@@ -291,6 +293,22 @@ def _create_payload_hash(action, job_number, release_number, excel_data_dict):
     hash_string = f"{action}:{job_number}:{release_number}:{payload_json}"
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
+
+def _release_ids_with_drawings(release_ids):
+    """One-shot batched lookup of which release IDs have at least one (non-deleted) drawing version."""
+    if not release_ids:
+        return set()
+    rows = (
+        db.session.query(ReleaseDrawingVersion.release_id)
+        .filter(
+            ReleaseDrawingVersion.release_id.in_(release_ids),
+            ReleaseDrawingVersion.is_deleted.is_(False),
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows}
+
 # ==============================================================================
 # Job Data Routes
 # ==============================================================================
@@ -401,6 +419,7 @@ def get_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'has_drawing': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -421,6 +440,17 @@ def get_jobs():
                 })
                 logger.warning(error_msg, exc_info=True)
                 continue
+
+        # Patch has_drawing in one batched query (avoids N+1)
+        try:
+            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            for j in job_list:
+                j['has_drawing'] = j['id'] in ids_with_drawings
+        except Exception as drawing_lookup_error:
+            logger.warning(
+                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
 
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
@@ -662,6 +692,7 @@ def get_all_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'has_drawing': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -681,6 +712,17 @@ def get_all_jobs():
                 })
                 logger.warning(error_msg, exc_info=True)
                 continue
+
+        # Patch has_drawing in one batched query (avoids N+1)
+        try:
+            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            for j in job_list:
+                j['has_drawing'] = j['id'] in ids_with_drawings
+        except Exception as drawing_lookup_error:
+            logger.warning(
+                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
 
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
@@ -1121,7 +1163,6 @@ def update_job_comp(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
     primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
@@ -1225,7 +1266,6 @@ def update_invoiced(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
     primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
@@ -1271,7 +1311,6 @@ def update_start_install(job, release):
         JSON object with 'status': 'success' or 'error'
     """
     from app.models import Releases, db
-    from app.services.job_event_service import JobEventService
     from datetime import datetime, date
     
     logger.info(f"update_start_install called", extra={
@@ -1363,7 +1402,6 @@ def update_start_install(job, release):
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
         try:
             result = UpdateStartInstallCommand(
                 job_id=job,
@@ -2157,7 +2195,6 @@ def _dispatch_undo(event, *, source, defer_cascade):
             defer_cascade=defer_cascade,
         ).execute()
     if action == 'update_start_install':
-        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
         from datetime import datetime as _dt
         from_str = payload['from']
         from_date = _dt.strptime(from_str, '%Y-%m-%d').date() if from_str else None
@@ -2776,7 +2813,6 @@ def delete_job(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2845,7 +2881,6 @@ def update_job_column(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2917,7 +2952,6 @@ def archive_preview():
 @handle_errors("unarchive release", raw_error=True)
 def unarchive_release(job, release):
     """Unarchive a single release (set is_archived=False)."""
-    from app.services.job_event_service import JobEventService
 
     r, err = get_or_404(Releases, f'Release {job}-{release} not found', job=job, release=str(release))
     if err:
@@ -2945,7 +2979,6 @@ def unarchive_release(job, release):
 @handle_errors("archive releases", raw_error=True)
 def archive_confirm():
     """Archive all eligible releases (both job_comp and invoiced = 'X', not yet archived)."""
-    from app.services.job_event_service import JobEventService
 
     releases = _archivable_query().all()
     count = 0

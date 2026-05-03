@@ -21,7 +21,7 @@ import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
 import JobLogPrintView from '../components/JobLogPrintView';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
@@ -114,6 +114,8 @@ function JobLog() {
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isDrafter, setIsDrafter] = useState(false);
+    const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('jl_minimized') === 'true'
     );
@@ -161,9 +163,13 @@ function JobLog() {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setIsDrafter(user?.is_drafter || false);
+                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
+                setIsDrafter(false);
+                setShowScrollbars(false);
             }
         };
         fetchUserInfo();
@@ -848,7 +854,10 @@ function JobLog() {
 
                             {!loading && !fetchError && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <div ref={tableScrollRef} className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                    <div
+                                        ref={tableScrollRef}
+                                        className={`${showScrollbars ? '' : 'job-log-table-scroll-hide-scrollbar'} overflow-auto flex-1`.trim()}
+                                    >
                                         <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                             <thead className="sticky top-0 z-10">
                                                 <tr>
@@ -926,6 +935,7 @@ function JobLog() {
                                                                     stageGroupColors={stageGroupColors}
                                                                     stageGroupDupColors={stageGroupDupColors}
                                                                     isAdmin={isAdmin}
+                                                                    isDrafter={isDrafter}
                                                                     onDelete={handleDeleteJob}
                                                                     tableScrollRef={tableScrollRef}
                                                                     duplicateFabOrders={duplicateFabOrders}
@@ -967,6 +977,7 @@ function JobLog() {
                                                             stageGroupColors={stageGroupColors}
                                                             stageGroupDupColors={stageGroupDupColors}
                                                             isAdmin={isAdmin}
+                                                            isDrafter={isDrafter}
                                                             onDelete={handleDeleteJob}
                                                             tableScrollRef={tableScrollRef}
                                                             duplicateFabOrders={duplicateFabOrders}

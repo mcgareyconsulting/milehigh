@@ -19,18 +19,68 @@ import { JobDetailsModal } from './JobDetailsModal';
 import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { BananaIcon } from './BananaIcon';
+import { PdfMarkupModal } from './PdfMarkupModal';
+import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
+import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 import { getBananaProgress } from '../utils/stageProgress';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
+    const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
+    const [pdfMarkupVersionId, setPdfMarkupVersionId] = useState(null);
+    const [pdfMarkupMode, setPdfMarkupMode] = useState('edit');
+    const [pdfHistoryOpen, setPdfHistoryOpen] = useState(false);
+    const [hasDrawingLocal, setHasDrawingLocal] = useState(Boolean(row.has_drawing));
     const [showActionMenu, setShowActionMenu] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editField, setEditField] = useState('');
     const [editValue, setEditValue] = useState('');
     const [saving, setSaving] = useState(false);
+
+    // Keep local has_drawing flag in sync if parent re-renders the row
+    useEffect(() => { setHasDrawingLocal(Boolean(row.has_drawing)); }, [row.has_drawing]);
+
+    const canMarkup = isAdmin || isDrafter;
+    const drawingFileInputRef = useRef(null);
+
+    const openLatestMarkup = async (mode = 'edit') => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing/versions`, { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const latest = (data?.versions || [])[0];
+            if (!latest) return;
+            setPdfMarkupVersionId(latest.id);
+            setPdfMarkupMode(mode);
+            setPdfMarkupOpen(true);
+        } catch (e) {
+            console.error('open markup failed', e);
+        }
+    };
+
+    const handleDrawingUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing`, {
+                method: 'POST',
+                body: fd,
+                credentials: 'include',
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            setHasDrawingLocal(true);
+        } catch (e) {
+            console.error('drawing upload failed', e);
+            alert(`Upload failed: ${e.message || e}`);
+        } finally {
+            if (drawingFileInputRef.current) drawingFileInputRef.current.value = '';
+        }
+    };
 
     // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X).
     // Tolerates whitespace + case drift on the stage value.
@@ -1112,30 +1162,80 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
-                    // Handle Release # column - make it a link to viewer_url if available
+                    // Handle Release # column — smart fallback:
+                    //   has_drawing → click opens in-app markup; show small history icon
+                    //   else viewer_url → click opens Procore (preserves prior behavior)
+                    //   plus an upload icon (drafter/admin) when no drawing yet
                     if (column === 'Release #') {
                         const viewerUrl = row.viewer_url;
-                        // Check if viewer_url exists and is not empty
-                        if (viewerUrl && viewerUrl.trim() !== '') {
-                            return (
-                                <td
-                                    key={`${row.id}-${column}`}
-                                    className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
-                                    title={`${rawValue} - Click to open Procore viewer`}
-                                >
-                                    <a
-                                        href={viewerUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        {rawValue}
-                                    </a>
-                                </td>
-                            );
-                        }
-                        // If no viewer_url, render normally
+                        const hasDrawing = hasDrawingLocal;
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
+                            >
+                                <div className="flex items-center justify-center gap-1">
+                                    {hasDrawing ? (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openLatestMarkup(canMarkup ? 'edit' : 'view');
+                                            }}
+                                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium"
+                                            title="Open in-app markup viewer"
+                                        >
+                                            {rawValue}
+                                        </button>
+                                    ) : viewerUrl && viewerUrl.trim() !== '' ? (
+                                        <a
+                                            href={viewerUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            title="Open Procore viewer"
+                                        >
+                                            {rawValue}
+                                        </a>
+                                    ) : (
+                                        <span>{rawValue}</span>
+                                    )}
+
+                                    {hasDrawing && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setPdfHistoryOpen(true); }}
+                                            className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
+                                            title="Drawing version history"
+                                            aria-label="Drawing version history"
+                                        >
+                                            🕒
+                                        </button>
+                                    )}
+                                    {!hasDrawing && canMarkup && (
+                                        <>
+                                            <input
+                                                ref={drawingFileInputRef}
+                                                type="file"
+                                                accept="application/pdf,.pdf"
+                                                onChange={handleDrawingUpload}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); drawingFileInputRef.current?.click(); }}
+                                                className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
+                                                title="Upload FC drawing PDF"
+                                                aria-label="Upload FC drawing PDF"
+                                            >
+                                                ⬆
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </td>
+                        );
                     }
 
                     return (
@@ -1240,6 +1340,25 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 jobNumber={row['Job #']}
                 releaseNumber={row['Release #']}
                 startInstallFormulaTF={row['start_install_formulaTF']}
+            />
+            <PdfMarkupModal
+                isOpen={pdfMarkupOpen}
+                releaseId={row.id}
+                versionId={pdfMarkupVersionId}
+                mode={pdfMarkupMode}
+                onClose={() => setPdfMarkupOpen(false)}
+                onSaved={() => { setHasDrawingLocal(true); }}
+            />
+            <PdfVersionHistoryModal
+                isOpen={pdfHistoryOpen}
+                releaseId={row.id}
+                onClose={() => setPdfHistoryOpen(false)}
+                onOpenVersion={(vid, mode) => {
+                    setPdfHistoryOpen(false);
+                    setPdfMarkupVersionId(vid);
+                    setPdfMarkupMode(canMarkup ? mode : 'view');
+                    setPdfMarkupOpen(true);
+                }}
             />
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
