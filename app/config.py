@@ -52,6 +52,11 @@ class Config:
     EXCEL_INDEX_ADJ = int(os.environ.get("EXCEL_INDEX_ADJ", 0))
     SNAPSHOTS_DIR = os.environ.get("SNAPSHOTS_DIR", "snapshots")
 
+    # Per-release marked-up PDF storage. In prod set to a sibling of SNAPSHOTS_DIR
+    # on the Render persistent disk (e.g. /var/data/pdfs). Local dev falls back
+    # to <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.
+    PDF_STORAGE_ROOT = os.environ.get("PDF_STORAGE_ROOT")
+
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")
     PROCORE_SANDBOX_BASE_URL = os.environ.get("PROCORE_SANDBOX_BASE_URL")
