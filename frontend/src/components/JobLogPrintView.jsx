@@ -4,11 +4,11 @@ import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { BananaIcon } from './BananaIcon';
 import './JobLogPrintView.css';
 
-// Calibrated effective page height for legal-landscape print. The printable
-// area is 720px @ 96dpi, but `tr { break-inside: avoid }` consistently leaves
-// ~50–60px of slack at the bottom of each page, so 660 matches what Chrome
-// actually produces. If `@page size` in the CSS changes, retune this.
-const EFFECTIVE_PAGE_HEIGHT_PX = 660;
+// 7.5in printable height (8.5in page − 0.5in margins × 2) at 96 CSS px/in.
+// SAFETY_PX absorbs hairline borders and sub-pixel rounding so a row that
+// measures within ~6px of the bottom doesn't get wrongly fit onto the page.
+const PAGE_HEIGHT_PX = 720;
+const PAGE_SAFETY_PX = 6;
 const PRINT_TABLE_WIDTH_PX = 1248; // 13in × 96dpi
 const MEASURE_STYLE_ID = 'job-log-print-measure';
 
@@ -110,12 +110,41 @@ const MEASURE_STYLE = `
         font-family: Arial, sans-serif !important;
         font-size: 10px !important;
     }
-    .job-log-print-only .pm-header { font-size: 14px; font-weight: bold; margin: 0 0 8px; padding: 6px 8px; }
+    .job-log-print-only .pm-header { font-size: 14px; font-weight: bold; margin: 0 0 8px; padding: 6px 8px; border-bottom: 2px solid #333; }
     .job-log-print-only table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
     .job-log-print-only th { border: 1px solid #999; padding: 6px 4px; font-weight: bold; font-size: 9px; }
     .job-log-print-only td { border: 1px solid #ccc; padding: 6px 4px; font-size: 9px; }
     .job-log-print-only td.urgency-cell { padding: 2px 4px; }
 `;
+
+// Predict how many printed pages a .pm-section will consume, by simulating
+// what Chrome does: each row is kept whole (`tr { break-inside: avoid }`),
+// thead repeats on continuation pages (`display: table-header-group`), and
+// page 1 has the .pm-header above the table. Replaces the prior division
+// approximation, which overcounted when slack was < the assumed 60px and
+// caused unnecessary blank pages to be inserted between PMs.
+function predictPrintPages(section) {
+    const pmHeader = section.querySelector('.pm-header');
+    const thead = section.querySelector('thead');
+    const rows = section.querySelectorAll('tbody tr');
+    if (!rows.length) return 1;
+
+    const pmHeaderH = pmHeader ? pmHeader.getBoundingClientRect().height : 0;
+    const theadH = thead ? thead.getBoundingClientRect().height : 0;
+    const limit = PAGE_HEIGHT_PX - PAGE_SAFETY_PX;
+
+    let pages = 1;
+    let pageY = pmHeaderH + theadH;
+    for (const row of rows) {
+        const rowH = row.getBoundingClientRect().height;
+        if (pageY + rowH > limit && pageY > theadH) {
+            pages += 1;
+            pageY = theadH;
+        }
+        pageY += rowH;
+    }
+    return pages;
+}
 
 export default function JobLogPrintView({ jobs, columnHeaders, columnWidthPercent }) {
     const rootRef = useRef(null);
@@ -168,8 +197,10 @@ export default function JobLogPrintView({ jobs, columnHeaders, columnWidthPercen
                 const fillerTargets = [];
 
                 sections.forEach((sec, idx) => {
-                    const h = sec.getBoundingClientRect().height;
-                    const pages = Math.max(1, Math.ceil(h / EFFECTIVE_PAGE_HEIGHT_PX));
+                    const pages = predictPrintPages(sec);
+                    // currentPage is the page where this PM will start. If even
+                    // (verso/back of sheet), insert a filler so it lands on a
+                    // recto (front of sheet) instead.
                     if (idx > 0 && currentPage % 2 === 0) {
                         fillerTargets.push(sec);
                         currentPage += 1;
