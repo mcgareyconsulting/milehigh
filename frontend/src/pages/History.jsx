@@ -15,6 +15,8 @@ import { useState } from 'react';
 import axios from 'axios';
 
 import { API_BASE_URL } from '../utils/api';
+import { PdfMarkupModal } from '../components/PdfMarkupModal';
+import { PdfVersionHistoryModal } from '../components/PdfVersionHistoryModal';
 
 function History() {
     const [job, setJob] = useState('');
@@ -28,6 +30,25 @@ function History() {
     const [error, setError] = useState(null);
     const [submitted, setSubmitted] = useState(false);
     const [searchMetadata, setSearchMetadata] = useState(null);
+    const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
+    const [pdfMarkupVersionId, setPdfMarkupVersionId] = useState(null);
+    const [pdfMarkupMode, setPdfMarkupMode] = useState('view');
+    const [pdfHistoryOpen, setPdfHistoryOpen] = useState(false);
+
+    const openLatestMarkup = async (releaseId, mode = 'view') => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions`, { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const latest = (data?.versions || [])[0];
+            if (!latest) return;
+            setPdfMarkupVersionId(latest.id);
+            setPdfMarkupMode(mode);
+            setPdfMarkupOpen(true);
+        } catch (e) {
+            console.error('open markup failed', e);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -465,16 +486,36 @@ function History() {
                                                                 <dd>{selectedJobDetails.trello_list_name || '—'}</dd>
                                                             </div>
                                                         </dl>
-                                                        {selectedJobDetails.viewer_url && (
-                                                            <a
-                                                                href={selectedJobDetails.viewer_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="mt-6 inline-flex items-center px-4 py-2 rounded-lg bg-accent-500 text-white font-semibold hover:bg-accent-600 transition"
-                                                            >
-                                                                Open Viewer
-                                                            </a>
-                                                        )}
+                                                        <div className="mt-6 flex flex-wrap gap-2">
+                                                            {selectedJobDetails.has_drawing && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openLatestMarkup(selectedJobDetails.id, 'edit')}
+                                                                        className="inline-flex items-center px-4 py-2 rounded-lg bg-accent-500 text-white font-semibold hover:bg-accent-600 transition"
+                                                                    >
+                                                                        Open Markup
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPdfHistoryOpen(true)}
+                                                                        className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-accent-500 text-accent-700 font-semibold hover:bg-accent-50 transition"
+                                                                    >
+                                                                        View History
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            {selectedJobDetails.viewer_url && (
+                                                                <a
+                                                                    href={selectedJobDetails.viewer_url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold hover:bg-gray-100 transition"
+                                                                >
+                                                                    Open in Procore
+                                                                </a>
+                                                            )}
+                                                        </div>
                                                     </>
                                                 ) : (
                                                     <p className="text-gray-500 mt-4 text-sm">
@@ -548,6 +589,24 @@ function History() {
                     </div>
                 </div>
             </div>
+            <PdfMarkupModal
+                isOpen={pdfMarkupOpen}
+                releaseId={selectedJobDetails?.id}
+                versionId={pdfMarkupVersionId}
+                mode={pdfMarkupMode}
+                onClose={() => setPdfMarkupOpen(false)}
+            />
+            <PdfVersionHistoryModal
+                isOpen={pdfHistoryOpen}
+                releaseId={selectedJobDetails?.id}
+                onClose={() => setPdfHistoryOpen(false)}
+                onOpenVersion={(vid, mode) => {
+                    setPdfHistoryOpen(false);
+                    setPdfMarkupVersionId(vid);
+                    setPdfMarkupMode(mode);
+                    setPdfMarkupOpen(true);
+                }}
+            />
         </div>
     );
 }
