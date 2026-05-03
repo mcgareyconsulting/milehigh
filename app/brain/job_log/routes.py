@@ -24,6 +24,7 @@ from flask import jsonify, request, g
 from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
+from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
@@ -1122,7 +1123,6 @@ def update_job_comp(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
     primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
@@ -1226,7 +1226,6 @@ def update_invoiced(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
     primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
@@ -1272,7 +1271,6 @@ def update_start_install(job, release):
         JSON object with 'status': 'success' or 'error'
     """
     from app.models import Releases, db
-    from app.services.job_event_service import JobEventService
     from datetime import datetime, date
     
     logger.info(f"update_start_install called", extra={
@@ -2775,7 +2773,6 @@ def delete_job(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2844,7 +2841,6 @@ def update_job_column(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2916,7 +2912,6 @@ def archive_preview():
 @handle_errors("unarchive release", raw_error=True)
 def unarchive_release(job, release):
     """Unarchive a single release (set is_archived=False)."""
-    from app.services.job_event_service import JobEventService
 
     r, err = get_or_404(Releases, f'Release {job}-{release} not found', job=job, release=str(release))
     if err:
@@ -2944,7 +2939,6 @@ def unarchive_release(job, release):
 @handle_errors("archive releases", raw_error=True)
 def archive_confirm():
     """Archive all eligible releases (both job_comp and invoiced = 'X', not yet archived)."""
-    from app.services.job_event_service import JobEventService
 
     releases = _archivable_query().all()
     count = 0
