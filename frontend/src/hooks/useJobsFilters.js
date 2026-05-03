@@ -259,13 +259,6 @@ export function useJobsFilters(jobs = []) {
         });
     }, []);
 
-    /**
-     * Sort jobs by stage priority (per STAGE_SORT_PRIORITY), then fab_order
-     * ascending, then last_updated_at ascending as a final tiebreaker. Used by
-     * Paint and the paint band of Paint+Fab so renumbering a release reorders
-     * it inside its stage band instead of sinking it via last_updated_at.
-     * Rows with null/NaN fab_order sink to the bottom of their stage.
-     */
     const sortByStageThenFabOrder = useCallback((jobs) => {
         return [...jobs].sort((a, b) => {
             const stageA = String(a['Stage'] ?? '').trim();
@@ -274,26 +267,15 @@ export function useJobsFilters(jobs = []) {
             const prioB = STAGE_SORT_PRIORITY[stageB] ?? 999;
             if (prioA !== prioB) return prioA - prioB;
 
-            const rawA = a['Fab Order'];
-            const rawB = b['Fab Order'];
-            const numA = rawA == null ? NaN : Number(rawA);
-            const numB = rawB == null ? NaN : Number(rawB);
+            const numA = a['Fab Order'] == null ? NaN : Number(a['Fab Order']);
+            const numB = b['Fab Order'] == null ? NaN : Number(b['Fab Order']);
             const hasA = !isNaN(numA);
             const hasB = !isNaN(numB);
-            if (!hasA && !hasB) {
-                // fall through to last_updated_at tiebreaker
-            } else if (!hasA) {
-                return 1;
-            } else if (!hasB) {
-                return -1;
-            } else if (numA !== numB) {
-                return numA - numB;
-            }
+            if (hasA && hasB && numA !== numB) return numA - numB;
+            if (hasA !== hasB) return hasA ? -1 : 1;
 
-            const dateRawA = a['last_updated_at'];
-            const dateRawB = b['last_updated_at'];
-            const dateA = dateRawA ? new Date(dateRawA) : null;
-            const dateB = dateRawB ? new Date(dateRawB) : null;
+            const dateA = a['last_updated_at'] ? new Date(a['last_updated_at']) : null;
+            const dateB = b['last_updated_at'] ? new Date(b['last_updated_at']) : null;
             const validA = dateA && !isNaN(dateA.getTime());
             const validB = dateB && !isNaN(dateB.getTime());
             if (!validA && !validB) return 0;
