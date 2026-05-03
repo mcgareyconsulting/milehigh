@@ -25,7 +25,7 @@ import { AlertMessage } from '../components/AlertMessage';
 import { AddProjectModal } from '../components/AddProjectModal';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
@@ -96,6 +96,7 @@ function DraftingWorkLoad() {
     // User role status
     const [isAdmin, setIsAdmin] = useState(false);
     const [isDrafter, setIsDrafter] = useState(false);
+    const [showScrollbars, setShowScrollbars] = useState(false);
     const [userLoading, setUserLoading] = useState(true);
     const canEditDrafterFields = isAdmin || isDrafter;
 
@@ -106,10 +107,12 @@ function DraftingWorkLoad() {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
                 setIsDrafter(user?.is_drafter || false);
+                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
                 setIsDrafter(false);
+                setShowScrollbars(false);
             } finally {
                 setUserLoading(false);
             }
@@ -465,7 +468,7 @@ function DraftingWorkLoad() {
                                 {/* Scrollbar hidden via CSS; scroll still works with wheel/trackpad */}
                                 <div
                                     ref={scrollContainerRef}
-                                    className="dwl-table-scroll-hide-scrollbar flex-1 min-h-0 overflow-x-hidden"
+                                    className={`${showScrollbars ? '' : 'dwl-table-scroll-hide-scrollbar'} flex-1 min-h-0 overflow-x-hidden`.trim()}
                                     style={{ overflowY: 'auto' }}
                                 >
                                     <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
