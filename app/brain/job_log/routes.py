@@ -30,7 +30,8 @@ from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
 from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlalchemy import or_
 import json
 import hashlib
 import csv
@@ -753,33 +754,43 @@ def get_gantt_data():
         - 500: Server error
     """
     from app.models import Releases
-    from app.trello.utils import add_business_days
-    from datetime import date
     from collections import defaultdict
-    
+
     try:
-        # Get all jobs that have start_install dates and are in FABRICATION or READY_TO_SHIP stage_group
+        # Eligibility for the installer timeline:
+        #  - start_install must be a hard date (formulaTF != True). NULL formulaTF is treated as hard.
+        #  - install_hrs must be present and > 0 so we can derive a comp_eta window.
+        #  - stage_group in FABRICATION, READY_TO_SHIP, or COMPLETE — "Shipping Complete"
+        #    rows are shipped-but-not-installed and belong on the timeline. The frontend's
+        #    filterComplete path drops only stage == 'Complete' rows.
         jobs = Releases.query.filter(
             Releases.start_install.isnot(None),
-            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP'])
+            or_(Releases.start_install_formulaTF.is_(False),
+                Releases.start_install_formulaTF.is_(None)),
+            Releases.install_hrs.isnot(None),
+            Releases.install_hrs > 0,
+            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE'])
         ).all()
-        
+
         # Group jobs by project (job number)
         projects_dict = defaultdict(lambda: {
             'releases': [],
             'start_dates': [],
             'end_dates': []
         })
-        
+
         for job in jobs:
             project_key = job.job
             start_install = job.start_install
-            
-            # Calculate comp_eta: use existing if present, otherwise add 2 business days
-            if job.comp_eta:
-                comp_eta = job.comp_eta
-            else:
-                comp_eta = add_business_days(start_install, 2)
+
+            # SQL `> 0` does not reliably exclude NaN across DB backends — guard here.
+            if job.install_hrs is None or math.isnan(job.install_hrs) or job.install_hrs <= 0:
+                continue
+
+            # comp_eta = start_install + ceil(install_hrs / 24) calendar days.
+            # 24 = 3 installers * 8 hrs/day. Floor at 1 day so every release has a visible bar.
+            days_to_complete = max(1, math.ceil(job.install_hrs / 24))
+            comp_eta = start_install + timedelta(days=days_to_complete)
             
             # Store release data
             release_data = {
