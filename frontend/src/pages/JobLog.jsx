@@ -21,7 +21,65 @@ import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
+import { isCompleteStage } from '../utils/stageProgress';
+import { formatDateShort, formatCellValue } from '../utils/formatters';
+
+// Stage completeness order (index 0 = least complete, higher = more complete).
+const STAGE_COMPLETENESS = {
+    'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
+    'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
+    'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
+    'Store at MHMW for shipping': 12, 'Shipping planning': 13,
+    'Shipping completed': 14, 'Complete': 15,
+};
+
+const SHIP_COMPLETE_STAGE = 'Shipping completed';
+
+// 'X' = installed (highest); percent strings rank by their numeric value;
+// missing/blank ranks lowest so it sorts to the bottom of the ship-complete group.
+const installProgRank = (val) => {
+    if (val == null) return -1;
+    const s = val.toString().trim();
+    if (s === '') return -1;
+    if (s.toLowerCase() === 'x') return 101;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : -1;
+};
+
+// PM (alphabetical) → Job # (asc) → compareSameJob tie-break. Returns a new sorted array.
+const reviewSort = (jobs) => {
+    const sorted = [...jobs];
+    sorted.sort((a, b) => {
+        const pmA = (a['PM'] || 'No PM').toString();
+        const pmB = (b['PM'] || 'No PM').toString();
+        if (pmA !== pmB) return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
+        const jobA = a['Job #'] || 0;
+        const jobB = b['Job #'] || 0;
+        if (jobA !== jobB) return jobA - jobB;
+        return compareSameJob(a, b);
+    });
+    return sorted;
+};
+
+// Tie-break for two rows that share the same PM + Job #.
+const compareSameJob = (a, b) => {
+    const ca = isCompleteStage(a['Stage']);
+    const cb = isCompleteStage(b['Stage']);
+    if (ca !== cb) return ca ? 1 : -1;
+
+    const sa = STAGE_COMPLETENESS[a['Stage']] ?? -1;
+    const sb = STAGE_COMPLETENESS[b['Stage']] ?? -1;
+    if (sa !== sb) return sb - sa;
+
+    if (a['Stage'] === SHIP_COMPLETE_STAGE) {
+        return installProgRank(b['Job Comp']) - installProgRank(a['Job Comp']);
+    }
+    const foA = a['Fab Order'] ?? Number.POSITIVE_INFINITY;
+    const foB = b['Fab Order'] ?? Number.POSITIVE_INFINITY;
+    return foA - foB;
+};
 
 function JobLog() {
     const navigate = useNavigate();
@@ -34,6 +92,7 @@ function JobLog() {
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
     const [cascadeStatus, setCascadeStatus] = useState(null); // null | 'recalculating' | 'done'
+    const [printing, setPrinting] = useState(false);
     const cascadeTimeoutRef = useRef(null);
 
     const handleCascadeRecalculating = useCallback((isRecalculating) => {
@@ -56,6 +115,8 @@ function JobLog() {
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isDrafter, setIsDrafter] = useState(false);
+    const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('jl_minimized') === 'true'
     );
@@ -103,9 +164,13 @@ function JobLog() {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setIsDrafter(user?.is_drafter || false);
+                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
+                setIsDrafter(false);
+                setShowScrollbars(false);
             }
         };
         fetchUserInfo();
@@ -157,50 +222,6 @@ function JobLog() {
     const handleDragLeave = () => { };
     const handleDrop = () => { };
 
-    const formatDate = (dateValue) => {
-        if (!dateValue) return '—';
-        try {
-            // Handle ISO date strings (YYYY-MM-DD) - parse directly to avoid timezone issues
-            if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
-                // Extract date parts directly from ISO string to avoid timezone conversion
-                const parts = dateValue.split('T')[0].split('-');
-                if (parts.length === 3) {
-                    const year = parts[0];
-                    const month = parts[1];
-                    const day = parts[2];
-                    // Return in MM/DD/YY format
-                    return `${month}/${day}/${year.slice(-2)}`;
-                }
-            }
-            // Fallback to Date object parsing for other formats
-            const date = new Date(dateValue);
-            if (isNaN(date.getTime())) return '—';
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const year = String(date.getFullYear()).slice(-2);
-            return `${month}/${day}/${year}`;
-        } catch (e) {
-            return '—';
-        }
-    };
-
-    const formatCellValue = (value, columnName) => {
-        if (value === null || value === undefined || value === '') {
-            return '—';
-        }
-        if (Array.isArray(value)) {
-            return value.join(', ');
-        }
-        // Format Fab Hrs and Install HRS to 2 decimal places
-        if (columnName === 'Fab Hrs' || columnName === 'Install HRS') {
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-                return numValue.toFixed(2);
-            }
-        }
-        return value;
-    };
-
     const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
 
     // Check if we have data to display
@@ -209,54 +230,14 @@ function JobLog() {
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
 
-    // Stage completeness order (index 0 = least complete, higher = more complete)
-    const STAGE_COMPLETENESS = {
-        'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
-        'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
-        'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
-        'Store at MHMW for shipping': 12, 'Shipping planning': 13,
-        'Shipping completed': 14, 'Complete': 15,
-    };
+    // Review-mode sort: PM (alphabetical) → Job # (asc) → compareSameJob tie-break.
+    const reviewDisplayJobs = useMemo(
+        () => (reviewMode ? reviewSort(displayJobs) : displayJobs),
+        [displayJobs, reviewMode]
+    );
 
-    // Defensive Complete check — tolerates whitespace + case drift in the stage value.
-    // Otherwise STAGE_COMPLETENESS['Complete']=15 (highest) would push these rows to
-    // the top of the descending sort instead of the bottom.
-    const isCompleteStage = (stage) =>
-        (stage || '').toString().trim().toLowerCase() === 'complete';
-
-    // When Review mode is enabled, sort independently of other sort behavior:
-    // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
-    // 2) within each PM, sort by Project # ascending,
-    // 3) within each Project #, sort by stage completeness (most complete first).
-    const reviewDisplayJobs = useMemo(() => {
-        if (!reviewMode) return displayJobs;
-
-        const sorted = [...displayJobs];
-        sorted.sort((a, b) => {
-            const pmKeyA = (a['PM'] || 'No PM').toString();
-            const pmKeyB = (b['PM'] || 'No PM').toString();
-
-            // Different PMs: alphabetical by PM name (case-insensitive)
-            if (pmKeyA !== pmKeyB) {
-                return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
-            }
-
-            // Same PM: sort by Project # (Job #) ascending
-            const jobA = a['Job #'] || 0;
-            const jobB = b['Job #'] || 0;
-            if (jobA !== jobB) return jobA - jobB;
-
-            // Same Project #: "Complete" pinned to bottom, everything else descending by completeness
-            const isCompleteA = isCompleteStage(a['Stage']);
-            const isCompleteB = isCompleteStage(b['Stage']);
-            if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
-            const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-            const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-            return stageB - stageA;
-        });
-
-        return sorted;
-    }, [displayJobs, reviewMode]);
+    // Print always uses the review sort regardless of the on-screen toggle.
+    const printSortedJobs = useMemo(() => reviewSort(displayJobs), [displayJobs]);
 
     // Compute fab_order values that appear on more than one release *within the same
     // stage group*. The client uses Welded QC (READY_TO_SHIP) for paint-sequence
@@ -582,256 +563,21 @@ function JobLog() {
         URL.revokeObjectURL(url);
     };
 
-    const handlePrint = () => {
-        // First, sort all jobs by Job # first, then PM
-        const sortedJobs = [...jobs].sort((a, b) => {
-            // First sort by Job #
-            const jobA = a['Job #'] || 0;
-            const jobB = b['Job #'] || 0;
-            if (jobA !== jobB) {
-                return jobA - jobB;
-            }
-            // Then sort by PM (treat null/empty as empty string for sorting)
-            const pmA = (a['PM'] || '').toString().toLowerCase();
-            const pmB = (b['PM'] || '').toString().toLowerCase();
-            return pmA.localeCompare(pmB);
-        });
-
-        // Group jobs by PM, maintaining the sorted order within each PM group
-        const jobsByPM = {};
-        sortedJobs.forEach(job => {
-            const pm = job['PM'] || 'No PM';
-            if (!jobsByPM[pm]) {
-                jobsByPM[pm] = [];
-            }
-            jobsByPM[pm].push(job);
-        });
-
-        // Sort each PM group by Job # ascending, then "Complete" pinned last, everything else descending
-        Object.keys(jobsByPM).forEach(pm => {
-            jobsByPM[pm].sort((a, b) => {
-                const jobA = a['Job #'] || 0;
-                const jobB = b['Job #'] || 0;
-                if (jobA !== jobB) return jobA - jobB;
-                const isCompleteA = isCompleteStage(a['Stage']);
-                const isCompleteB = isCompleteStage(b['Stage']);
-                if (isCompleteA !== isCompleteB) return isCompleteA ? 1 : -1;
-                const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-                const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-                return stageB - stageA;
+    const handlePrint = async () => {
+        if (printing) return;
+        setPrinting(true);
+        try {
+            await generateJobLogReviewPdf({
+                jobs: printSortedJobs,
+                columnHeaders,
+                columnWidthPercent: COLUMN_WIDTH_PERCENT,
             });
-        });
-
-        // Create printable HTML
-        let printHTML = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Job Log - Print</title>
-    <style>
-        * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+        } catch (err) {
+            console.error('Failed to generate Job Log Review PDF', err);
+            alert('Failed to generate PDF. See console for details.');
+        } finally {
+            setPrinting(false);
         }
-        @media print {
-            @page {
-                /* 11x17 tabloid in landscape orientation */
-                size: 11in 17in landscape;
-                margin: 0.5in;
-            }
-            /* Force each PM to start on a fresh front (right-hand) sheet so duplex
-               printing never lands the next PM on the back of the previous one. */
-            .pm-group {
-                break-before: right;
-                page-break-before: right;
-            }
-            .pm-group:first-child {
-                break-before: auto;
-                page-break-before: auto;
-            }
-        }
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 10px;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            font-size: 18px;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        .pm-header {
-            font-size: 14px;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            padding: 8px;
-            background-color: #f0f0f0;
-            border-bottom: 2px solid #333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            table-layout: fixed;
-        }
-        .hard-date {
-            background-color: #EF4444;
-            color: white;
-            font-weight: bold;
-        }
-        th {
-            background-color: #e0e0e0;
-            border: 1px solid #999;
-            padding: 6px 4px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 9px;
-            white-space: nowrap;
-        }
-        td {
-            border: 1px solid #ccc;
-            padding: 4px;
-            text-align: center;
-            font-size: 9px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            word-wrap: break-word;
-        }
-        tr:nth-child(even) {
-            background-color: #dbeafe;
-        }
-        tr.grayed-row, tr.grayed-row:nth-child(even) {
-            background-color: #d1d5db;
-        }
-        .no-data {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-    <h1>Job Log - Printed ${new Date().toLocaleString()}</h1>
-`;
-
-        // Generate table for each PM group.
-        // PM blocks are ordered alphabetically by PM, with each block internally sorted by Job #.
-        Object.keys(jobsByPM).sort((pmA, pmB) => {
-            return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
-        }).forEach((pm) => {
-            const pmJobs = jobsByPM[pm];
-
-            // Build colgroup with normalized widths for uniform columns across pages
-            const defaultWeight = 5;
-            const totalWeight = columnHeaders.reduce((sum, col) => sum + (COLUMN_WIDTH_PERCENT[col] ?? defaultWeight), 0);
-            const colgroup = '<colgroup>' + columnHeaders.map(col => {
-                const pct = ((COLUMN_WIDTH_PERCENT[col] ?? defaultWeight) / totalWeight * 100).toFixed(2);
-                return `<col style="width:${pct}%">`;
-            }).join('') + '</colgroup>';
-
-            printHTML += `
-    <div class="pm-group">
-        <div class="pm-header">PM: ${pm}</div>
-        <table>
-            ${colgroup}
-            <thead>
-                <tr>
-                    ${columnHeaders.map(col => {
-                const displayHeader = col === 'Release #' ? 'rel. #' : col === 'Job Comp' ? 'Install Prog' : col;
-                return `<th>${displayHeader}</th>`;
-            }).join('')}
-                </tr>
-            </thead>
-            <tbody>
-`;
-
-            pmJobs.forEach(job => {
-                const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
-                const isComplete = isCompleteStage(job['Stage']);
-                const isGrayed = isInstallComplete || isComplete;
-                printHTML += `<tr${isGrayed ? ' class="grayed-row"' : ''}>`;
-                columnHeaders.forEach(column => {
-                    // Render Urgency column as colored banana SVGs
-                    if (column === 'Urgency') {
-                        const stage = job['Stage'] || 'Released';
-                        const group = stageToGroup?.[stage] || 'FABRICATION';
-
-                        let count = 1, defaultColor = 'gray';
-                        if (group === 'FABRICATION') {
-                            const colorMap = { 'Cut start': 'green', 'Material Ordered': 'green', 'Fit Up Complete.': 'yellow', 'Released': 'gray', 'Hold': 'red' };
-                            defaultColor = colorMap[stage] || 'gray';
-                            count = 1;
-                        } else if (group === 'READY_TO_SHIP') {
-                            const colorMap = { 'Welded QC': 'green', 'Paint complete': 'yellow', 'Store at MHMW for shipping': 'yellow', 'Shipping planning': 'yellow' };
-                            defaultColor = colorMap[stage] || 'yellow';
-                            count = 2;
-                        } else if (group === 'COMPLETE') {
-                            const colorMap = { 'Complete': 'gray', 'Shipping completed': 'green' };
-                            defaultColor = colorMap[stage] || 'gray';
-                            count = 3;
-                        }
-
-                        const isHold = stage === 'Hold';
-                        const effectiveColor = isHold ? 'red' : defaultColor;
-
-                        const fillMap = { red: '#EF4444', yellow: '#FFE135', green: '#22C55E', gray: '#9CA3AF' };
-                        const fill = fillMap[effectiveColor] || fillMap.yellow;
-                        const stroke = effectiveColor === 'gray' ? '#6B7280' : '#000000';
-
-                        const bananaSvg = `<svg width="16" height="16" viewBox="0 0 950 927.611" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><g><g fill="${fill}" stroke="${stroke}" stroke-width="22"><path d="M158.56,618.97l2.4-0.7c97-26.199,181.6-59.8,251.2-99.8c94.5-54.3,159.4-119.5,193-193.799l16-35.4l-28.699,26.2c-57,52.1-134.801,91-231.4,115.8c-81.9,21-176,31.7-279.8,31.7c-5.4,0-17.4-0.1-24.6-0.2l-16.9-0.8c-13.3-0.6-25.4,7.6-29.8,20.2l-6.6,19.1c-3.9,11.301-0.7,23.9,8.2,32c7.4,6.7,14.9,13.2,14.9,13.2s56,48.5,129.6,71.7L158.56,618.97z"/><path d="M811.86,163.17c-29.1-13.4-56.899-15.4-70.899-15.4c-1.801,0-3.5,0-4.9,0.1c-3.2-11.2-19.4-78.1-30.7-124.9c-5.2-21.5-31.1-30.2-48.2-16.1l-53.6,44.2c-14,11.5-16.9,31.7-6.7,46.7c22.4,32.9,59.5,91.7,77.7,144.8c17.2,50.3,18.7,102.9,10.5,154.6c-13.4,83.7-57.6,168.2-131.4,251.2c-40.199,45.2-84.699,86.399-132.199,123.7c-23.801,18.699-48.4,36.399-73.7,53c-2.601,1.699-32.7,19.399-53.601,30.199c-11.699,6-18.1,19-15.8,31.9l2.5,14c2.4,13.4,13.5,23.5,27,24.6c34.3,2.9,105.101,4.801,199.7-13.899c51.8-10.2,101.8-34.5,148.2-62.101c78.1-46.6,182.8-131.399,238.1-271c24.7-62.3,35.2-126.699,31.2-191.599c-3.9-63.8-20.7-112.4-34.1-142C873.66,206.771,847.06,179.271,811.86,163.17z"/><path d="M109.46,744.97c13.1,8.101,34.4,19.8,60.3,28.4c44.5,14.8,91.8,21.2,138.5,22.7l2.6,0.1l2.101-1.4c34.5-23.1,67.3-47.3,97.6-71.899c37.7-30.7,71.5-62.2,100.5-93.601c26.3-28.5,50.6-58.899,71.4-91.6c18.199-28.6,33.699-59.1,44.8-91.2c5.2-15,9.5-30.399,12.399-46.1c3-15.9,4.4-32.1,6.5-48.2c0.4-3.2,0.801-6.3,1.2-9.5l-19.899,33.9c-41.7,71.199-110.5,133.699-204.601,186c-61.2,34.1-126.8,60.1-193.6,81.199c-36.4,11.5-71.6,21.601-108.6,27.301c-14.6,2.199-25.3,14.8-25.3,29.6c0,6.4,0,13.1,0,18.9C95.36,729.87,100.66,739.47,109.46,744.97z"/></g></g></svg>`;
-
-                        const bgMap = { red: '#FEE2E2', yellow: '#FEF9C3', green: '#D1FAE5', gray: '#F3F4F6' };
-                        const borderMap = { red: '#FCA5A5', yellow: '#FDE68A', green: '#6EE7B7', gray: '#D1D5DB' };
-                        const bg = bgMap[effectiveColor] || bgMap.gray;
-                        const border = borderMap[effectiveColor] || borderMap.gray;
-
-                        printHTML += `<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:2px;padding:2px 4px;border-radius:4px;background:${bg};border:1px solid ${border};">${Array(count).fill(bananaSvg).join('')}</span></td>`;
-                        return;
-                    }
-
-                    let value = job[column];
-
-                    // Format date columns
-                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
-                        value = formatDate(value);
-                    } else {
-                        value = formatCellValue(value, column);
-                    }
-
-                    // Escape HTML
-                    const displayValue = String(value || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-                    // Apply red styling for hard dates on Start install
-                    const isHardDate = column === 'Start install' && job['start_install_formulaTF'] === false && job['Start install'];
-                    printHTML += `<td${isHardDate ? ' class="hard-date"' : ''}>${displayValue}</td>`;
-                });
-                printHTML += '</tr>';
-            });
-
-            printHTML += `
-            </tbody>
-        </table>
-    </div>
-`;
-        });
-
-        printHTML += `
-</body>
-</html>
-`;
-
-        // Open print window
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(printHTML);
-        printWindow.document.close();
-
-        // Wait for content to load, then trigger print
-        printWindow.onload = () => {
-            setTimeout(() => {
-                printWindow.print();
-            }, 250);
-        };
     };
 
     return (
@@ -896,10 +642,11 @@ function JobLog() {
                                     <div className="flex items-center gap-1.5">
                                         <button
                                             onClick={handlePrint}
-                                            disabled={!hasData || loading}
+                                            disabled={!hasData || loading || !reviewMode || printing}
+                                            title={!reviewMode ? 'Enable Review mode to export the PDF' : 'Build a per-PM legal-landscape PDF and download it'}
                                             className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
-                                            🖨️ Print
+                                            {printing ? '⏳ Building…' : '🖨️ Print'}
                                         </button>
                                         <button
                                             onClick={() => navigate('/pm-board')}
@@ -1124,7 +871,10 @@ function JobLog() {
 
                             {!loading && !fetchError && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <div ref={tableScrollRef} className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                    <div
+                                        ref={tableScrollRef}
+                                        className={`${showScrollbars ? '' : 'job-log-table-scroll-hide-scrollbar'} overflow-auto flex-1`.trim()}
+                                    >
                                         <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                             <thead className="sticky top-0 z-10">
                                                 <tr>
@@ -1187,8 +937,8 @@ function JobLog() {
                                                                     row={row}
                                                                     columns={columnHeaders}
                                                                     isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                                    formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
-                                                                    formatDate={formatDate}
+                                                                    formatCellValue={formatCellValue}
+                                                                    formatDate={formatDateShort}
                                                                     rowIndex={index}
                                                                     onDragStart={handleDragStart}
                                                                     onDragOver={handleDragOver}
@@ -1202,6 +952,7 @@ function JobLog() {
                                                                     stageGroupColors={stageGroupColors}
                                                                     stageGroupDupColors={stageGroupDupColors}
                                                                     isAdmin={isAdmin}
+                                                                    isDrafter={isDrafter}
                                                                     onDelete={handleDeleteJob}
                                                                     tableScrollRef={tableScrollRef}
                                                                     duplicateFabOrders={duplicateFabOrders}
@@ -1228,8 +979,8 @@ function JobLog() {
                                                             row={row}
                                                             columns={columnHeaders}
                                                             isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                            formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
-                                                            formatDate={formatDate}
+                                                            formatCellValue={formatCellValue}
+                                                            formatDate={formatDateShort}
                                                             rowIndex={index}
                                                             onDragStart={handleDragStart}
                                                             onDragOver={handleDragOver}
@@ -1243,6 +994,7 @@ function JobLog() {
                                                             stageGroupColors={stageGroupColors}
                                                             stageGroupDupColors={stageGroupDupColors}
                                                             isAdmin={isAdmin}
+                                                            isDrafter={isDrafter}
                                                             onDelete={handleDeleteJob}
                                                             tableScrollRef={tableScrollRef}
                                                             duplicateFabOrders={duplicateFabOrders}
@@ -1611,6 +1363,7 @@ function JobLog() {
                 )}
 
             </div>
+
         </>
     );
 }
