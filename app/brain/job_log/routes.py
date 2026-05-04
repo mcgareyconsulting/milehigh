@@ -391,7 +391,6 @@ def get_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
-                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
@@ -439,11 +438,12 @@ def get_jobs():
                     'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
-            # Override displayed Start install with calculated value for jobs still
-            # in FABRICATION that don't have a hard (red) date. Once a release
-            # leaves fabrication, its start_install freezes at the DB-stored value.
+            # Override displayed Start install with the calculated projection only
+            # when the row is NOT a hard date. The previous gate used Banana Color
+            # ('red') as a proxy and silently masked hard dates whose urgency
+            # banana was anything else.
             for job in job_list:
-                if (job.get('Banana Color') != 'red'
+                if (job.get('start_install_formulaTF') is not False
                         and job.get('install_start_date')
                         and job.get('Stage Group') == 'FABRICATION'):
                     job['Start install'] = job['install_start_date']
@@ -652,7 +652,6 @@ def get_all_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
-                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
@@ -699,11 +698,12 @@ def get_all_jobs():
                     'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
-            # Override displayed Start install with calculated value for jobs still
-            # in FABRICATION that don't have a hard (red) date. Once a release
-            # leaves fabrication, its start_install freezes at the DB-stored value.
+            # Override displayed Start install with the calculated projection only
+            # when the row is NOT a hard date. The previous gate used Banana Color
+            # ('red') as a proxy and silently masked hard dates whose urgency
+            # banana was anything else.
             for job in job_list:
-                if (job.get('Banana Color') != 'red'
+                if (job.get('start_install_formulaTF') is not False
                         and job.get('install_start_date')
                         and job.get('Stage Group') == 'FABRICATION'):
                     job['Start install'] = job['install_start_date']
@@ -713,7 +713,7 @@ def get_all_jobs():
                 exc_info=True
             )
             # Continue without scheduling fields if calculation fails
-        
+
         # Build response
         response_data = {
             "jobs": job_list,

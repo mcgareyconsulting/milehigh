@@ -755,7 +755,6 @@ function JobLog() {
                     // Render Urgency column as colored banana SVGs
                     if (column === 'Urgency') {
                         const stage = job['Stage'] || 'Released';
-                        const bananaColor = job['Banana Color'] || null;
                         const group = stageToGroup?.[stage] || 'FABRICATION';
 
                         let count = 1, defaultColor = 'gray';
@@ -774,7 +773,7 @@ function JobLog() {
                         }
 
                         const isHold = stage === 'Hold';
-                        const effectiveColor = isHold ? 'red' : (bananaColor === 'red' ? 'red' : defaultColor);
+                        const effectiveColor = isHold ? 'red' : defaultColor;
 
                         const fillMap = { red: '#EF4444', yellow: '#FFE135', green: '#22C55E', gray: '#9CA3AF' };
                         const fill = fillMap[effectiveColor] || fillMap.yellow;
