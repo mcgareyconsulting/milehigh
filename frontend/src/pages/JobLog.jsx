@@ -22,7 +22,7 @@ import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
-import JobLogPrintView from '../components/JobLogPrintView';
+import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 
@@ -92,6 +92,7 @@ function JobLog() {
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
     const [cascadeStatus, setCascadeStatus] = useState(null); // null | 'recalculating' | 'done'
+    const [printing, setPrinting] = useState(false);
     const cascadeTimeoutRef = useRef(null);
 
     const handleCascadeRecalculating = useCallback((isRecalculating) => {
@@ -562,7 +563,22 @@ function JobLog() {
         URL.revokeObjectURL(url);
     };
 
-    const handlePrint = () => window.print();
+    const handlePrint = async () => {
+        if (printing) return;
+        setPrinting(true);
+        try {
+            await generateJobLogReviewPdf({
+                jobs: printSortedJobs,
+                columnHeaders,
+                columnWidthPercent: COLUMN_WIDTH_PERCENT,
+            });
+        } catch (err) {
+            console.error('Failed to generate Job Log Review PDF', err);
+            alert('Failed to generate PDF. See console for details.');
+        } finally {
+            setPrinting(false);
+        }
+    };
 
     return (
         <>
@@ -626,10 +642,11 @@ function JobLog() {
                                     <div className="flex items-center gap-1.5">
                                         <button
                                             onClick={handlePrint}
-                                            disabled={!hasData || loading}
+                                            disabled={!hasData || loading || !reviewMode || printing}
+                                            title={!reviewMode ? 'Enable Review mode to export the PDF' : 'Build a per-PM legal-landscape PDF and download it'}
                                             className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
-                                            🖨️ Print
+                                            {printing ? '⏳ Building…' : '🖨️ Print'}
                                         </button>
                                         <button
                                             onClick={() => navigate('/pm-board')}
@@ -1347,11 +1364,6 @@ function JobLog() {
 
             </div>
 
-            <JobLogPrintView
-                jobs={printSortedJobs}
-                columnHeaders={columnHeaders}
-                columnWidthPercent={COLUMN_WIDTH_PERCENT}
-            />
         </>
     );
 }
