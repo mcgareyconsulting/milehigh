@@ -50,6 +50,12 @@ const DAY_PX = 80;
 const PAD_DAYS = 14;
 const SIDEBAR_PX = 192;
 
+const DAY_GRID_STYLE = {
+    backgroundImage: 'linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px)',
+    backgroundSize: `${DAY_PX}px 100%`,
+    backgroundRepeat: 'repeat'
+};
+
 function GanttChart({ filterComplete = false }) {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -63,6 +69,9 @@ function GanttChart({ filterComplete = false }) {
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerValue, setDatePickerValue] = useState('');
     const scrollContainerRef = useRef(null);
+    // Set by nav handlers (and once after data loads) to request a scroll on the next render.
+    // Drag-driven re-renders don't set this, so the chart never auto-scrolls mid-drag.
+    const scrollIntentRef = useRef(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -208,12 +217,15 @@ function GanttChart({ filterComplete = false }) {
         const key = releaseKey(release);
         const initial = overrides[key] ?? { startDate: release.startDate, endDate: release.endDate };
         const initialDuration = daysBetween(initial.startDate, initial.endDate);
+        let lastDaysDelta = null;
 
         setDragging(true);
         setHoveredItem(null);
 
         const onMove = (moveEvent) => {
             const daysDelta = Math.round((moveEvent.clientX - dragStartX) / DAY_PX);
+            if (daysDelta === lastDaysDelta) return;
+            lastDaysDelta = daysDelta;
             let newStart = initial.startDate;
             let newEnd = initial.endDate;
 
@@ -253,9 +265,13 @@ function GanttChart({ filterComplete = false }) {
             : `${startMonth} ${start.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
     }, [viewStart]);
 
-    const goPrevWeek = () => setViewStart(addDays(viewStart, -7));
-    const goNextWeek = () => setViewStart(addDays(viewStart, 7));
-    const goToday = () => setViewStart(mondayOf(todayIso()));
+    const navigateTo = (next, behavior = 'smooth') => {
+        scrollIntentRef.current = { targetWeek: next, behavior };
+        setViewStart(next);
+    };
+    const goPrevWeek = () => navigateTo(addDays(viewStart, -7));
+    const goNextWeek = () => navigateTo(addDays(viewStart, 7));
+    const goToday = () => navigateTo(mondayOf(todayIso()));
 
     const openDatePicker = () => {
         setDatePickerValue(viewStart);
@@ -263,23 +279,29 @@ function GanttChart({ filterComplete = false }) {
     };
     const jumpToPickedDate = () => {
         if (datePickerValue) {
-            setViewStart(mondayOf(datePickerValue));
+            navigateTo(mondayOf(datePickerValue));
         }
         setDatePickerOpen(false);
     };
 
-    // Auto-scroll the viewport so viewStart sits flush with the sidebar's right edge.
+    // Set initial-scroll intent once the chart first renders with real data.
     useEffect(() => {
-        if (!scrollContainerRef.current) return;
-        const targetX = daysBetween(chartRange.firstDay, viewStart) * DAY_PX;
-        scrollContainerRef.current.scrollTo({ left: targetX, behavior: 'smooth' });
-    }, [viewStart, chartRange.firstDay]);
+        if (!initialLoad && !scrollIntentRef.current) {
+            scrollIntentRef.current = { targetWeek: viewStart, behavior: 'auto' };
+        }
+    }, [initialLoad, viewStart]);
 
-    const dayGridStyle = {
-        backgroundImage: 'linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px)',
-        backgroundSize: `${DAY_PX}px 100%`,
-        backgroundRepeat: 'repeat'
-    };
+    // Consume the scroll intent — runs after every render that might have made the
+    // intent's target date land at a stable position. Drag re-renders never set
+    // an intent, so the chart stays put while the user drags.
+    useEffect(() => {
+        const intent = scrollIntentRef.current;
+        if (!intent || !scrollContainerRef.current) return;
+        if (intent.targetWeek !== viewStart) return;
+        const targetX = daysBetween(chartRange.firstDay, intent.targetWeek) * DAY_PX;
+        scrollContainerRef.current.scrollTo({ left: targetX, behavior: intent.behavior });
+        scrollIntentRef.current = null;
+    }, [viewStart, chartRange.firstDay]);
 
     const viewStartLeftPx = daysBetween(chartRange.firstDay, viewStart) * DAY_PX;
     const viewWindowWidthPx = VIEW_DAYS * DAY_PX;
@@ -395,7 +417,7 @@ function GanttChart({ filterComplete = false }) {
                                                 </div>
                                                 <div
                                                     className="relative bg-white flex-shrink-0"
-                                                    style={{ width: chartRange.totalPx, height: 24, ...dayGridStyle }}
+                                                    style={{ width: chartRange.totalPx, height: 24, ...DAY_GRID_STYLE }}
                                                 >
                                                     {/* Snapped-week tint */}
                                                     <div
@@ -425,19 +447,20 @@ function GanttChart({ filterComplete = false }) {
                                                             })}
                                                             onMouseLeave={handleMouseLeave}
                                                         >
-                                                            <div
-                                                                className="absolute left-0 top-0 h-full cursor-ew-resize"
-                                                                style={{ width: '8px' }}
-                                                                onMouseDown={(e) => startDrag(e, release, 'resize-start')}
-                                                            />
+                                                            {[
+                                                                { side: 'left-0', mode: 'resize-start' },
+                                                                { side: 'right-0', mode: 'resize-end' }
+                                                            ].map(({ side, mode }) => (
+                                                                <div
+                                                                    key={mode}
+                                                                    className={`absolute ${side} top-0 h-full cursor-ew-resize`}
+                                                                    style={{ width: '8px' }}
+                                                                    onMouseDown={(e) => startDrag(e, release, mode)}
+                                                                />
+                                                            ))}
                                                             <span className="text-white text-[10px] font-medium truncate pointer-events-none px-1">
                                                                 {release.job}-{release.release}
                                                             </span>
-                                                            <div
-                                                                className="absolute right-0 top-0 h-full cursor-ew-resize"
-                                                                style={{ width: '8px' }}
-                                                                onMouseDown={(e) => startDrag(e, release, 'resize-end')}
-                                                            />
                                                         </div>
                                                     )}
                                                 </div>
