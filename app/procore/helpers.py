@@ -260,8 +260,13 @@ def create_submittal_event(
     is_system_echo: bool = False,
 ) -> bool:
     """
-    Create a SubmittalEvents record with user attribution. Idempotent (skips if payload_hash exists).
+    Create a SubmittalEvents record with user attribution.
     Lives in helpers to avoid circular imports (procore imports brain; brain routes need this).
+
+    Dedup is handled upstream by is_duplicate_webhook() (burst dedup at the receipt
+    layer). Identical payload_hash inserts are allowed so legitimate human actions
+    that produce the same payload (e.g. a value oscillating back through the same
+    string) are not silently dropped.
 
     Args:
         submittal_id: Submittal ID (string)
@@ -272,7 +277,7 @@ def create_submittal_event(
         internal_user_id: Optional app user id (e.g. from get_current_user()); used when source='Brain', no webhook
 
     Returns:
-        bool: True if event was created, False if skipped (duplicate or no payload)
+        bool: True if event was created, False if skipped (no payload)
     """
     if not payload and action == 'updated':
         return False
@@ -292,17 +297,7 @@ def create_submittal_event(
         is_system_echo=is_system_echo,
     )
     db.session.add(event)
-    try:
-        db.session.commit()
-    except IntegrityError as e:
-        db.session.rollback()
-        if "payload_hash" in str(e) or "unique" in str(e).lower() or "duplicate" in str(e).lower():
-            logger.debug(
-                "SubmittalEvent duplicate (payload_hash already exists) for submittal %s %s, skipping",
-                submittal_id, action,
-            )
-            return False
-        raise
+    db.session.commit()
     logger.info(
         "Created SubmittalEvent for submittal %s %s (external_user_id=%s, internal_user_id=%s, is_system_echo=%s)",
         submittal_id, action, external_user_id, internal_user_id, is_system_echo,

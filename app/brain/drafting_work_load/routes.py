@@ -510,21 +510,14 @@ def update_submittal_procore_status():
     outbox_entry.status = 'completed'
     outbox_entry.completed_at = datetime.utcnow()
 
-    # Create Brain event *before* committing submittal so we always record it;
-    # otherwise a fast webhook can create the same payload and our create would be skipped as duplicate.
     user = get_current_user()
     try:
-        created = create_submittal_event(
+        create_submittal_event(
             submittal_id, "updated",
             {"status": {"old": old_status, "new": new_status}},
             webhook_payload=None, source="Brain",
             internal_user_id=user.id if user else None,
         )
-        if not created:
-            logger.debug(
-                "SubmittalEvent for Procore status update skipped (likely duplicate payload_hash) submittal_id=%s",
-                submittal_id,
-            )
     except Exception as event_err:
         logger.error(
             "Failed to create SubmittalEvent for Procore status update: %s",
