@@ -54,6 +54,16 @@ def procore_webhook():
 
     if request.method == "POST":
 
+        # TEMP PROBE (Phase 1.2): dump headers when env flag is on so we can
+        # identify Procore's per-delivery unique header. Remove once delivery-id
+        # dedup lands.
+        if cfg.PROCORE_WEBHOOK_LOG_HEADERS:
+            redacted = {
+                k: ("<redacted>" if k.lower() in ("authorization", "cookie", "x-api-key") else v)
+                for k, v in request.headers.items()
+            }
+            current_app.logger.info("Procore webhook headers: %s", redacted)
+
         try:
             payload = request.get_json(silent=True) or {}
         except:

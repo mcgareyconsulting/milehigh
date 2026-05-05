@@ -83,6 +83,14 @@ class Config:
     PROCORE_WEBHOOK_RETRY_DELAY_SECONDS = float(
         os.environ.get("PROCORE_WEBHOOK_RETRY_DELAY_SECONDS", "1.5")
     )
+
+    # Temporary probe: log all incoming Procore webhook request headers so we
+    # can identify the per-delivery unique header name before wiring up
+    # delivery-id dedup. Remove once Phase 1.2 lands. See
+    # docs/procore-webhook-plan.md Phase 1.2 open question #1.
+    PROCORE_WEBHOOK_LOG_HEADERS = os.environ.get(
+        "PROCORE_WEBHOOK_LOG_HEADERS", "false"
+    ).lower() in ("1", "true", "yes")
     
     # CORS configuration
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
