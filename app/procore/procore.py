@@ -22,6 +22,7 @@ import logging
 import re
 import json
 import os
+import time
 import hashlib
 import requests
 from datetime import datetime
@@ -632,8 +633,44 @@ def check_and_update_submittal(project_id, submittal_id, webhook_payload=None, s
         if result is None:
             logger.warning(f"Failed to parse submittal data for submittal {submittal_id}")
             return False, False, False, False, None, None, None
-        
+
         _, ball_in_court, approvers, status, title, submittal_manager = result
+
+        # Retry-on-mismatch: Procore commits multi-field updates non-atomically.
+        # A single poll-back can return BIC updated but status stale, or the BIC
+        # array stale relative to the workflow sequence. If the first read
+        # disagrees with the DB on any tracked field, sleep briefly and re-read.
+        # If the second read differs from the first, prefer the later read.
+        if cfg.PROCORE_WEBHOOK_RETRY_ENABLED:
+            db_snapshot = Submittals.query.filter_by(
+                submittal_id=str(submittal_id)
+            ).first()
+            if db_snapshot is not None:
+                first_tuple = (ball_in_court, status, title, submittal_manager)
+                db_tuple = (
+                    db_snapshot.ball_in_court or None,
+                    db_snapshot.status or None,
+                    db_snapshot.title or None,
+                    db_snapshot.submittal_manager or None,
+                )
+                normalized_first = tuple(v if v else None for v in first_tuple)
+                if normalized_first != db_tuple:
+                    time.sleep(cfg.PROCORE_WEBHOOK_RETRY_DELAY_SECONDS)
+                    retry_result = handle_submittal_update(project_id, submittal_id)
+                    if retry_result is not None:
+                        _, r_ball, r_approvers, r_status, r_title, r_manager = retry_result
+                        retry_tuple = (r_ball, r_status, r_title, r_manager)
+                        if tuple(v if v else None for v in retry_tuple) != normalized_first:
+                            logger.info(
+                                "Procore retry returned newer values for submittal %s; "
+                                "preferring later read (first=%r, second=%r)",
+                                submittal_id, first_tuple, retry_tuple,
+                            )
+                            ball_in_court = r_ball
+                            approvers = r_approvers
+                            status = r_status
+                            title = r_title
+                            submittal_manager = r_manager
 
         # Re-fetch with a row-level lock so concurrent webhook deliveries serialize here
         # rather than both detecting the same mismatch and writing duplicate events.

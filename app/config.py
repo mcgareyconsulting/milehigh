@@ -72,6 +72,17 @@ class Config:
     # Procore service account used by this app to make API calls.
     # Webhooks triggered by this user ID are Brain-originated echoes.
     PROCORE_CONNECTOR_USER_ID = os.environ.get("PROCORE_CONNECTOR_USER_ID", "14554506")
+
+    # Retry-on-mismatch in check_and_update_submittal: when the first Procore
+    # poll-back returns a tracked field that disagrees with the DB, sleep and
+    # re-read once to defeat Procore's eventual-consistency window. See
+    # docs/procore-webhook-plan.md Phase 1.3.
+    PROCORE_WEBHOOK_RETRY_ENABLED = os.environ.get(
+        "PROCORE_WEBHOOK_RETRY_ENABLED", "true"
+    ).lower() in ("1", "true", "yes")
+    PROCORE_WEBHOOK_RETRY_DELAY_SECONDS = float(
+        os.environ.get("PROCORE_WEBHOOK_RETRY_DELAY_SECONDS", "1.5")
+    )
     
     # CORS configuration
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
