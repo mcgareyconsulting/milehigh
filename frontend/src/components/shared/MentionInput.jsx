@@ -107,10 +107,20 @@ const MentionInput = forwardRef(function MentionInput({
 
         const textBefore = val.slice(0, cursor);
         const atMatch = textBefore.match(/@(\w*)$/);
+        const isDeletion = e.nativeEvent?.inputType?.startsWith('delete') ?? false;
+
         if (atMatch) {
-            setShowDropdown(true);
-            setFilterText(atMatch[1]);
-            setTriggerPos(atMatch.index);
+            if (!isDeletion) {
+                setShowDropdown(true);
+                setFilterText(atMatch[1]);
+                setTriggerPos(atMatch.index);
+            } else {
+                setFilterText(atMatch[1]);
+                if (showDropdown) {
+                    setShowDropdown(false);
+                    setTriggerPos(null);
+                }
+            }
         } else {
             setShowDropdown(false);
             setTriggerPos(null);

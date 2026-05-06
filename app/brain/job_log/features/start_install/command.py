@@ -5,7 +5,7 @@ purpose: Encapsulate the hard-date start_install update workflow (DB write, even
 exports:
   UpdateStartInstallCommand: Dataclass command that executes a start_install update with all side effects
   StartInstallUpdateResult: Dataclass result with event_id and start_install
-imports_from: [app.models, app.services.job_event_service, app.brain.trello.helpers (update_trello_card)]
+imports_from: [app.models, app.services.job_event_service, app.trello.api (update_trello_card)]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Hard date sets start_install_formulaTF=False and clears start_install_formula
@@ -21,6 +21,7 @@ from typing import Optional
 from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
+from app.trello.api import update_trello_card
 
 logger = get_logger(__name__)
 
@@ -66,9 +67,6 @@ class UpdateStartInstallCommand:
     undone_event_id: Optional[int] = None
 
     def execute(self) -> StartInstallUpdateResult:
-        # Lazy import — avoid circular with routes module.
-        from app.brain.job_log.routes import update_trello_card
-
         job_record: Releases = Releases.query.filter_by(
             job=self.job_id, release=self.release
         ).first()
