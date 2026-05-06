@@ -1,7 +1,7 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: Drains the Trello webhook queue on a thread pool, holding the sync lock to prevent OneDrive contention.
+purpose: Drains the Trello webhook queue on a thread pool, holding the sync lock to serialize webhook handlers against the scheduled queue drainer.
 exports:
   trello_bp: Flask blueprint for /trello routes (webhook receiver, thread stats)
   drain_trello_queue: Processes queued events when the sync lock is free (called by APScheduler every 5 min)
@@ -11,7 +11,7 @@ exports:
 imports_from: [app/trello/utils, app/trello/sync, app/sync_lock, flask, concurrent.futures]
 imported_by: [app/__init__.py]
 invariants:
-  - Must hold sync_lock before calling sync_from_trello — Trello and OneDrive cannot run concurrently.
+  - Must hold sync_lock before calling sync_from_trello — webhook handler and queue drainer cannot run concurrently.
   - When lock is held, events are queued (HTTP 202) not dropped; queue full returns 429.
   - drain_trello_queue is a scheduler job — get_current_user() will return None; do not call it here.
   - executor is a 10-worker ThreadPoolExecutor; increasing workers risks sync lock contention.

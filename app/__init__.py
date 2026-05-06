@@ -5,7 +5,7 @@ purpose: Flask app factory — registers all blueprints, starts APScheduler (que
 exports:
   create_app: Factory that builds and returns the configured Flask application
   init_scheduler: Starts APScheduler with queue-drainer (5 min) and heartbeat (30 min) jobs
-imports_from: [app/trello, app/procore, app/brain, app/auth/routes, app/history, app/admin, app/onedrive, app/models, app/config, app/db_config, app/logging_config, app/services/outbox_service, app/trello/api, apscheduler]
+imports_from: [app/trello, app/procore, app/brain, app/auth/routes, app/history, app/admin, app/models, app/config, app/db_config, app/logging_config, app/services/outbox_service, app/trello/api, apscheduler]
 imported_by: [run.py]
 invariants:
   - Scheduler only starts on one process: checks WERKZEUG_RUN_MAIN or IS_RENDER_SCHEDULER to avoid duplication in multi-worker deploys.
@@ -30,7 +30,6 @@ from app.brain import brain_bp
 from app.auth.routes import auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
-from app.onedrive import onedrive_bp
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -63,9 +62,6 @@ def init_scheduler(app):
         }
     }
     scheduler = BackgroundScheduler(executors=executors)
-
-    # OneDrive poll disabled — Brain job log is now the source of truth
-    logger.info("OneDrive poll disabled — migrated to Brain job log as source of truth")
 
     # --- Queue drainer job (runs every 5 minutes) ---
     def queue_drainer():
@@ -230,7 +226,7 @@ def create_app():
         outbox_thread.start()
         logger.info("Outbox retry worker thread started successfully")
 
-        # Initialize the scheduler for OneDrive polling
+        # Initialize the scheduler for Trello queue drainer + heartbeat
         init_scheduler(app)
 
     # Configure static file serving for React frontend
@@ -415,7 +411,6 @@ def create_app():
     # Register blueprints before catch-all so API routes (e.g. POST /api/auth/login) are matched first
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(procore_bp, url_prefix="/procore")
-    app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
     # app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(brain_bp, url_prefix="/brain")
     app.register_blueprint(auth_bp)
