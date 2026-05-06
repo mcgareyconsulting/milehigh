@@ -18,7 +18,6 @@ from app.auth.utils import (
 from app.models import (
     Releases,
     ReleaseDrawingVersion,
-    User,
     db,
 )
 from app.services.job_event_service import JobEventService
@@ -32,14 +31,6 @@ from app.brain.job_log.features.pdf_markup.payloads import is_pdf_bytes
 from app.brain.job_log.features.pdf_markup.storage import absolute_path
 
 logger = get_logger(__name__)
-
-
-def _resolve_user_display_name(user: User) -> str:
-    if not user:
-        return None
-    first = (user.first_name or '').strip()
-    last = (user.last_name or '').strip()
-    return (f"{first} {last}".strip()) or user.username
 
 
 @brain_bp.route('/releases/<int:release_id>/drawing', methods=['POST'])
