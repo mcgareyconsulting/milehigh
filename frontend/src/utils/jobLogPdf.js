@@ -1,7 +1,7 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Builds a paginated, per-PM legal-landscape PDF of the Job Log Review tab. Each PM block is padded to an even page count so subsequent PMs land on the recto when printed double-sided.
+ * purpose: Builds a paginated, per-PM legal-landscape PDF of the Job Log Review tab. Each PM block starts on a fresh page and non-final PMs are padded to even page count so subsequent PMs land on the recto when printed double-sided.
  * exports:
  *   generateJobLogReviewPdf: async ({ jobs, columnHeaders, columnWidthPercent }) → triggers PDF download
  * imports_from: [jspdf, jspdf-autotable, ./formatters, ./stageProgress]
@@ -19,7 +19,6 @@ import { isCompleteStage, getBananaProgress } from './stageProgress';
 const PAGE_WIDTH_PT = 1008;
 const PAGE_HEIGHT_PT = 612;
 const MARGIN_PT = 36;
-const PM_HEADER_HEIGHT_PT = 22;
 
 const BANANA_IMG_SRC = '/banana-boy.png';
 const BANANA_UNFILLED_OPACITY = 0.22;
@@ -29,15 +28,28 @@ const BANANA_UNFILLED_OPACITY = 0.22;
 // per row and the banana count varies between rows. The image is drawn into
 // the cell vertically centered.
 const BANANA_DPI_SCALE = 3;
-const BANANA_DRAW_HEIGHT_PT = 14;
+const BANANA_DRAW_HEIGHT_PT = 10;
+
+// Cap wrapped text at this many lines per cell; further wrapping is replaced
+// with an ellipsis on the last kept line. Two lines balances density vs.
+// keeping the description readable.
+const MAX_LINES_PER_CELL = 2;
 
 const PRINT_WIDTH_OVERRIDES = {
-    'Urgency': 8,
-    'Description': 10,
+    'Urgency': 4,
+    'Stage': 7,
+    'Description': 11,
     'Fab Order': 4,
     'Comp. ETA': 4,
-    'Job': 7,
+    'Job': 10,
     'Notes': 8,
+};
+
+// Hard character cap applied before autoTable wraps. Truncated values get a
+// trailing ellipsis (…). The MAX_LINES_PER_CELL wrap cap still applies on top.
+const PRINT_CHAR_LIMITS = {
+    'Job': 25,
+    'Description': 25,
 };
 
 const HEADER_LABELS = {
@@ -53,7 +65,6 @@ const COLOR_HARD_DATE = [239, 68, 68];
 const COLOR_HEAD_FILL = [224, 224, 224];
 const COLOR_HEAD_LINE = [153, 153, 153];
 const COLOR_BODY_LINE = [204, 204, 204];
-const COLOR_PM_HEADER_FILL = [240, 240, 240];
 
 function loadImage(src) {
     return new Promise((resolve, reject) => {
@@ -154,7 +165,12 @@ function formatCell(job, column) {
     const value = DATE_COLUMNS.has(column)
         ? formatDateShort(raw)
         : formatCellValue(raw, column);
-    return String(value || '—');
+    const text = String(value || '—');
+    const limit = PRINT_CHAR_LIMITS[column];
+    if (limit && text.length > limit) {
+        return text.slice(0, limit - 1).trimEnd() + '…';
+    }
+    return text;
 }
 
 // Build a parallel rowMeta array (indexed by data.row.index) that the
@@ -174,23 +190,6 @@ function buildRows(jobs, columnHeaders) {
         body.push(columnHeaders.map((col) => formatCell(job, col)));
     }
     return { body, meta };
-}
-
-function drawPmHeader(doc, pm) {
-    doc.setFillColor(...COLOR_PM_HEADER_FILL);
-    doc.rect(MARGIN_PT, MARGIN_PT, PAGE_WIDTH_PT - MARGIN_PT * 2, PM_HEADER_HEIGHT_PT, 'F');
-    doc.setDrawColor(51);
-    doc.setLineWidth(1.5);
-    doc.line(
-        MARGIN_PT,
-        MARGIN_PT + PM_HEADER_HEIGHT_PT,
-        PAGE_WIDTH_PT - MARGIN_PT,
-        MARGIN_PT + PM_HEADER_HEIGHT_PT,
-    );
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(0);
-    doc.text(`PM: ${pm}`, MARGIN_PT + 6, MARGIN_PT + 15);
 }
 
 function timestampStr() {
@@ -220,11 +219,11 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
         format: [PAGE_WIDTH_PT, PAGE_HEIGHT_PT],
     });
 
-    const tableTopY = MARGIN_PT + PM_HEADER_HEIGHT_PT + 6;
+    const tableTopY = MARGIN_PT;
     const startInstallIdx = columnHeaders.indexOf('Start install');
     const urgencyIdx = columnHeaders.indexOf('Urgency');
 
-    pmGroups.forEach(({ pm, rows: pmRows }, groupIdx) => {
+    pmGroups.forEach(({ rows: pmRows }, groupIdx) => {
         if (groupIdx > 0) doc.addPage();
         const startPage = doc.internal.getNumberOfPages();
         const { body, meta } = buildRows(pmRows, columnHeaders);
@@ -238,8 +237,8 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
             showHead: 'everyPage',
             styles: {
                 font: 'helvetica',
-                fontSize: 7.5,
-                cellPadding: { top: 1.5, bottom: 1.5, left: 3, right: 3 },
+                fontSize: 7,
+                cellPadding: { top: 0.75, bottom: 0.75, left: 3, right: 3 },
                 lineColor: COLOR_BODY_LINE,
                 lineWidth: 0.5,
                 halign: 'center',
@@ -250,17 +249,25 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
                 fillColor: COLOR_HEAD_FILL,
                 textColor: 0,
                 fontStyle: 'bold',
-                fontSize: 8,
-                cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
+                fontSize: 7.5,
+                cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
                 lineColor: COLOR_HEAD_LINE,
                 lineWidth: 0.5,
             },
             columnStyles,
-            willDrawPage: () => {
-                drawPmHeader(doc, pm);
-            },
             didParseCell: (data) => {
                 if (data.section !== 'body') return;
+
+                // Cap wrap at MAX_LINES_PER_CELL; ellipsize the last kept line
+                // when the original wrap produced more than that.
+                if (Array.isArray(data.cell.text) && data.cell.text.length > MAX_LINES_PER_CELL) {
+                    const kept = data.cell.text.slice(0, MAX_LINES_PER_CELL);
+                    const lastIdx = kept.length - 1;
+                    const last = kept[lastIdx] ?? '';
+                    kept[lastIdx] = last.length > 1 ? last.slice(0, -1).trimEnd() + '…' : '…';
+                    data.cell.text = kept;
+                }
+
                 const rowMeta = meta[data.row.index];
                 if (!rowMeta) return;
 
