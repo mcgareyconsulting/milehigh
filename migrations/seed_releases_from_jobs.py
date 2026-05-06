@@ -80,7 +80,6 @@ def migrate() -> bool:
                     fab_order=job.fab_order,
                     stage=job.trello_list_name,  # Derive stage from trello_list_name
                     stage_group=None,  # Not in Job model
-                    banana_color=None,  # Not in Job model
                     start_install=job.start_install,
                     start_install_formula=job.start_install_formula,
                     start_install_formulaTF=job.start_install_formulaTF,
