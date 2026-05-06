@@ -102,7 +102,7 @@ def make_user(username, *, password_hash="x", password_set=True,
     return user
 
 
-def make_release(job, release, *, stage="Cut start", stage_group="FABRICATION",
+def make_release(job, release, *, stage="Cut Start", stage_group="FABRICATION",
                  fab_order=10, job_name="Test Job", **extra):
     from app.models import Releases, db
     r = Releases(

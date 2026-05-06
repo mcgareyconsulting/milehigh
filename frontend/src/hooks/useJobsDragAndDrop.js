@@ -7,8 +7,8 @@
  * imports_from: [react]
  * imported_by: [../pages/JobLog.jsx]
  * invariants:
- *   - Fixed-tier stages (Shipping Complete, Paint Complete, Store, etc.) cannot be dragged or dropped onto
- *   - Dynamic fab_order range starts at 3; positions 1-2 are reserved for fixed tiers
+ *   - Fixed-tier stages (Install Start/Complete, Ship Complete, Paint Complete, Store, etc.) cannot be dragged or dropped onto
+ *   - Dynamic fab_order range starts at 3; positions 0-2 are reserved for fixed tiers
  *   - Backend handles collision cascade when a new fab_order conflicts with existing values
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
@@ -16,13 +16,13 @@ import { useState, useCallback } from 'react';
 
 /**
  * All jobs share one unified fab_order pool.
- * Fixed-tier stages (fab_order 1 or 2) are not draggable.
+ * Fixed-tier stages (fab_order 0, 1, or 2) and Complete (NULL) are not draggable.
  */
 const FIXED_TIER_STAGES = new Set([
-    'Shipping completed', 'Shipping Complete', 'Complete',
-    'Paint complete', 'Paint Complete',
-    'Store at MHMW for shipping', 'Store at Shop',
-    'Shipping planning', 'Shipping Planning',
+    'Install Start', 'Install Complete',
+    'Ship Complete',
+    'Paint Complete', 'Store at MHMW', 'Ship Planning',
+    'Complete',
 ]);
 
 function isFixedTierJob(job) {

@@ -3,7 +3,9 @@
 schema_version: 1
 purpose: Centralize stage-mapping constants and job-display transforms so every consumer shares one source of truth.
 exports:
-  STAGE_TO_GROUP: Dict mapping every stage variant to its group (FABRICATION, READY_TO_SHIP, COMPLETE)
+  STAGE_TO_GROUP: Canonical-name dict mapping every stage to its group (FABRICATION, READY_TO_SHIP, COMPLETE)
+  STAGE_HOUR_PERCENTAGES: Per-stage % remaining of fab and install hour budgets
+  get_install_modifier: Return the remaining-install-hours multiplier (0.0-1.0) derived from STAGE_HOUR_PERCENTAGES
   transform_job_for_display: Convert a raw job dict into the frontend display format
   get_stage_group_from_stage: Resolve a stage name to its group with case-insensitive fallback
   add_scheduling_fields_to_jobs: Enrich job dicts with projected dates and queue metrics
@@ -11,8 +13,9 @@ exports:
 imports_from: [typing, datetime, app.models]
 imported_by: [app/api/routes.py, app/seed.py, app/trello/api.py, app/trello/list_mapper.py, app/trello/scripts/sync_releases.py, app/trello/scripts/find_missing_cards.py, app/brain/job_log/routes.py, app/brain/job_log/features/fab_order/command.py, app/brain/job_log/features/fab_order/migrate_unified.py, app/brain/job_log/features/fab_order/fix_null_fab_orders.py]
 invariants:
-  - STAGE_TO_GROUP must contain both canonical and variant spellings; missing variants cause silent None returns
-  - FIXED_TIER_STAGES (tiers 1-2) are reserved; dynamic fab_order must be >= 3
+  - STAGE_TO_GROUP keys are canonical names only; case-insensitive fallback in lookups absorbs incidental drift
+  - FIXED_TIER_STAGES (tiers 0-2) are reserved; dynamic fab_order must be >= 3
+  - STAGE_HOUR_PERCENTAGES must have an entry for every stage in STAGE_TO_GROUP (asserted in tests)
   - clamp_fab_order skips bounds when lower >= upper (inverted ranges from overlapping stages)
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 
@@ -22,62 +25,65 @@ from typing import Dict, Any, Union, List, Optional
 from datetime import date
 from app.models import Releases
 
-# Stage to stage_group mapping
-# Includes both user-provided names and actual stage names used in the codebase
+# Stage → stage_group mapping. Canonical names only. Old variants
+# ("Cut start", "Fit Up Complete.", "Paint complete", "Store at Shop",
+# "Store at MHMW for shipping", "Shipping planning/completed/Complete") were
+# canonicalized in migration M_canonicalize_stages — case-insensitive lookup
+# in get_stage_group_from_stage / _normalize_stage handles incidental drift
+# (typos, unmigrated mid-flight payloads).
 STAGE_TO_GROUP = {
-    # FABRICATION group
-    "Released": "FABRICATION",
-    "Cut Start": "FABRICATION",
-    "Cut start": "FABRICATION",  # Actual name used in codebase
-    "Cut Complete": "FABRICATION",
-    "Fitup Start": "FABRICATION",
-    "Fitup Complete": "FABRICATION",
-    "Fit Up Complete.": "FABRICATION",  # Actual name used in codebase
-    "Weld Start": "FABRICATION",
-    "Weld Complete": "FABRICATION",
-    "Hold": "FABRICATION",  # Job log only stage
-    "Material Ordered": "FABRICATION",  # Job log only stage
+    # FABRICATION
+    "Released":         "FABRICATION",
+    "Material Ordered": "FABRICATION",
+    "Cut Start":        "FABRICATION",
+    "Cut Complete":     "FABRICATION",
+    "Fitup Start":      "FABRICATION",
+    "Fitup Complete":   "FABRICATION",
+    "Weld Start":       "FABRICATION",
+    "Weld Complete":    "FABRICATION",
+    "Hold":             "FABRICATION",
 
-    # READY_TO_SHIP group
-    "Welded QC": "READY_TO_SHIP",
-    "Paint Start": "READY_TO_SHIP",
-    "Paint Complete": "READY_TO_SHIP",
-    "Paint complete": "READY_TO_SHIP",  # Actual name used in codebase
-    "Store at Shop": "READY_TO_SHIP",
-    "Store at MHMW for shipping": "READY_TO_SHIP",  # Actual name used in codebase
-    "Shipping Planning": "READY_TO_SHIP",
-    "Shipping planning": "READY_TO_SHIP",  # Actual name used in codebase
+    # READY_TO_SHIP
+    "Welded QC":        "READY_TO_SHIP",
+    "Paint Start":      "READY_TO_SHIP",
+    "Paint Complete":   "READY_TO_SHIP",
+    "Store at MHMW":    "READY_TO_SHIP",
+    "Ship Planning":    "READY_TO_SHIP",
 
-    
-    # COMPLETE group
-    "Shipping Complete": "COMPLETE",
-    "Shipping completed": "COMPLETE",  # Actual name used in codebase
-    "Complete": "COMPLETE",
+    # COMPLETE — Ship Complete + the new Install stages + final Complete
+    "Ship Complete":    "COMPLETE",
+    "Install Start":    "COMPLETE",
+    "Install Complete": "COMPLETE",
+    "Complete":         "COMPLETE",
 }
 
 # Default fab_order for newly created releases when no value is provided
 DEFAULT_FAB_ORDER = 80.555
 
 # Fixed tiers: stages auto-assigned to a shared fab_order value (not user-orderable).
-# Note: Stage='Complete' is intentionally NOT in any tier — Complete releases hold
+# Tier 0 is reserved for the post-shipping/installation stages (closest to done);
+# tier 1 = Ship Complete; tier 2 = Paint Complete + the in-shop shipping holds.
+# Stage='Complete' is intentionally NOT in any tier — Complete releases hold
 # fab_order=NULL (terminal stage; nothing to order). The fab_order migration
 # clears any stale value on Complete releases.
 FIXED_TIER_STAGES = {
-    1: ["Shipping completed", "Shipping Complete"],
-    2: ["Paint complete", "Paint Complete", "Store at MHMW for shipping", "Store at Shop", "Shipping planning", "Shipping Planning"],
+    0: ["Install Start", "Install Complete"],
+    1: ["Ship Complete"],
+    2: ["Paint Complete", "Store at MHMW", "Ship Planning"],
 }
 
-# Dynamic stages ordered by priority (lower index = lower fab_order = closer to completion)
-# fab_order 3+ is assigned sequentially within each stage block
+# Dynamic stages ordered by priority (lower index = lower fab_order = closer to completion).
+# fab_order 3+ is assigned sequentially within each stage block. Tiers 0–2 are
+# reserved for fixed-tier stages above.
 DYNAMIC_STAGE_ORDER = [
     "Welded QC",
     "Paint Start",
     "Weld Complete",
     "Weld Start",
-    "Fit Up Complete.",
+    "Fitup Complete",
     "Fitup Start",
     "Cut Complete",
-    "Cut start",
+    "Cut Start",
     "Material Ordered",
     "Released",
 ]
@@ -87,23 +93,76 @@ STAGE_ORDER = {
     "FABRICATION": [
         "Released",
         "Material Ordered",
-        "Cut start",
+        "Cut Start",
         "Cut Complete",
         "Fitup Start",
-        "Fit Up Complete.",
+        "Fitup Complete",
         "Weld Start",
         "Weld Complete",
     ],
     "READY_TO_SHIP": [
         "Welded QC",
         "Paint Start",
-        "Paint complete",
-        "Store at MHMW for shipping",
-        "Shipping planning",
+        "Paint Complete",
+        "Store at MHMW",
+        "Ship Planning",
     ],
 }
 
 STAGE_ORDER_EXEMPT = {"Hold"}
+
+# Per-stage hour-budget snapshot used by the comp-ETA calculation (not yet
+# consumed at the call sites — written here for future use). Values are
+# percentages of the original budget *remaining* at that stage:
+#   fab     — % of fabrication hours not yet burned
+#   install — % of installation hours not yet burned
+#
+# Source: client-provided "Banana Code" matrix (2026-05-05). Keep this dict in
+# sync with STAGE_TO_GROUP — the integrity test asserts every stage_group key
+# has an entry here.
+STAGE_HOUR_PERCENTAGES = {
+    "Released":         {"fab": 100, "install": 0},
+    "Material Ordered": {"fab": 100, "install": 0},
+    "Cut Start":        {"fab": 90,  "install": 0},
+    "Cut Complete":     {"fab": 90,  "install": 0},
+    "Fitup Start":      {"fab": 75,  "install": 0},
+    "Fitup Complete":   {"fab": 50,  "install": 0},
+    "Weld Start":       {"fab": 40,  "install": 100},
+    "Weld Complete":    {"fab": 0,   "install": 100},
+    "Hold":             {"fab": 0,   "install": 100},
+    "Welded QC":        {"fab": 0,   "install": 100},
+    "Paint Start":      {"fab": 0,   "install": 100},
+    "Paint Complete":   {"fab": 0,   "install": 100},
+    "Store at MHMW":    {"fab": 0,   "install": 100},
+    "Ship Planning":    {"fab": 0,   "install": 100},
+    "Ship Complete":    {"fab": 0,   "install": 100},
+    "Install Start":    {"fab": 0,   "install": 50},
+    "Install Complete": {"fab": 0,   "install": 0},
+    "Complete":         {"fab": 0,   "install": 0},
+}
+
+
+def get_install_modifier(stage: Optional[str]) -> float:
+    """Return the remaining-install-hours multiplier (0.0–1.0) for a stage.
+
+    Derived from STAGE_HOUR_PERCENTAGES so the per-stage matrix is the single
+    source of truth. Unknown stages default to 0.0 (conservatively excluded
+    from install-hour totals — the matrix covers every canonical stage, so
+    a miss almost always indicates a non-canonical drift to investigate).
+    """
+    if not stage:
+        return 0.0
+    pct = STAGE_HOUR_PERCENTAGES.get(stage)
+    if pct is None:
+        # Case-insensitive fallback for incidental drift
+        stage_lower = stage.lower()
+        for key, value in STAGE_HOUR_PERCENTAGES.items():
+            if key.lower() == stage_lower:
+                pct = value
+                break
+    if pct is None:
+        return 0.0
+    return pct["install"] / 100.0
 
 # Single source of truth for "how far along is this stage on the release lifecycle."
 # Used by the inbound Trello rank gate in TrelloListMapper: when an inbound webhook
@@ -111,29 +170,30 @@ STAGE_ORDER_EXEMPT = {"Hold"}
 # or ahead of the inbound list, we skip the apply (echoes, backward Trello drags,
 # and same-zone moves all collapse to this single check).
 #
-# Variants (e.g. "Cut start" + "Cut Start") share a rank — they are the same
-# conceptual stage. Hold is a sentinel above every real rank so a release on Hold
-# is never advanced or rolled back by Trello drags; only Brain transitions out.
+# Hold is a sentinel above every real rank so a release on Hold is never advanced
+# or rolled back by Trello drags; only Brain transitions out.
 #
 # This dict is DB stage names only. The 6 actual Trello lists live in
 # TrelloListMapper.VALID_TRELLO_LISTS — the rank derivation is in list_mapper.py.
 STAGE_PROGRESSION_RANK = {
-    "Released":                       0,
-    "Material Ordered":               1,
-    "Cut start":                      2, "Cut Start":           2,
-    "Cut Complete":                   3,
-    "Fitup Start":                    4,
-    "Fitup Complete":                 5, "Fit Up Complete.":    5,
-    "Weld Start":                     6,
-    "Weld Complete":                  7,
-    "Welded QC":                      9,
-    "Paint Start":                   10,
-    "Paint complete":                11, "Paint Complete":     11,
-    "Store at MHMW for shipping":    12, "Store at Shop":      12,
-    "Shipping planning":             13, "Shipping Planning":  13,
-    "Shipping completed":            14, "Shipping Complete":  14,
-    "Complete":                      15,
-    "Hold":                          99,
+    "Released":          0,
+    "Material Ordered":  1,
+    "Cut Start":         2,
+    "Cut Complete":      3,
+    "Fitup Start":       4,
+    "Fitup Complete":    5,
+    "Weld Start":        6,
+    "Weld Complete":     7,
+    "Welded QC":         9,
+    "Paint Start":      10,
+    "Paint Complete":   11,
+    "Store at MHMW":    12,
+    "Ship Planning":    13,
+    "Ship Complete":    14,
+    "Install Start":    15,
+    "Install Complete": 16,
+    "Complete":         17,
+    "Hold":             99,
 }
 
 
@@ -291,14 +351,15 @@ def clamp_fab_order(value, lower, upper, strict_upper=False):
 def get_stage_group_from_stage(stage: Optional[str]) -> Optional[str]:
     """
     Map a stage name to its corresponding stage_group.
-    
-    Handles both user-provided stage names and actual stage names used in the codebase.
-    
+
     Args:
-        stage: Stage name (e.g., 'Released', 'Cut Start', 'Cut start', 'Paint Complete', etc.)
-        
+        stage: Canonical stage name (e.g., 'Released', 'Cut Start', 'Fitup Complete',
+               'Install Start', 'Complete'). Case-insensitive lookup is applied as
+               a fallback to absorb incidental drift.
+
     Returns:
-        Stage group name (e.g., 'FABRICATION', 'READY_TO_SHIP', 'COMPLETE') or None if stage is not mapped
+        Stage group name ('FABRICATION', 'READY_TO_SHIP', or 'COMPLETE') or None
+        if the stage is not mapped.
     """
     if not stage:
         return None

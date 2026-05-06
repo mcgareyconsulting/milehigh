@@ -93,19 +93,21 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Material Ordered', label: 'Material Ordered' },
-        { value: 'Cut start', label: 'Cut start' },
+        { value: 'Cut Start', label: 'Cut Start' },
         { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Fitup Start', label: 'Fitup start' },
-        { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Fitup Complete', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Paint Complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
-        { value: 'Store at MHMW for shipping', label: 'Store' },
-        { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Store at MHMW', label: 'Store' },
+        { value: 'Ship Planning', label: 'Ship plan' },
+        { value: 'Ship Complete', label: 'Ship comp' },
+        { value: 'Install Start', label: 'Install start' },
+        { value: 'Install Complete', label: 'Install comp' },
         { value: 'Complete', label: 'Complete' }
     ];
 
@@ -119,7 +121,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Cut start': {
+        'Cut Start': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600
@@ -143,7 +145,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Fit Up Complete.': {
+        'Fitup Complete': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600
@@ -159,7 +161,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(253 224 71)', // yellow-300
             className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
         },
-        'Paint complete': {
+        'Paint Complete': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -167,7 +169,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(110 231 183)', // emerald-300
             className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Store at MHMW for shipping': {
+        'Store at MHMW': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -175,7 +177,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(110 231 183)', // emerald-300
             className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Shipping planning': {
+        'Ship Planning': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -183,7 +185,23 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(110 231 183)', // emerald-300
             className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Shipping completed': {
+        'Ship Complete': {
+            light: 'rgb(237 233 254)', // violet-100 (gentle purple)
+            base: 'rgb(139 92 246)', // violet-500
+            dark: 'rgb(124 58 237)', // violet-600
+            text: 'rgb(91 33 182)', // violet-800
+            border: 'rgb(196 181 253)', // violet-300
+            className: 'bg-violet-100 text-violet-800 border-violet-300'
+        },
+        'Install Start': {
+            light: 'rgb(237 233 254)', // violet-100 (gentle purple)
+            base: 'rgb(139 92 246)', // violet-500
+            dark: 'rgb(124 58 237)', // violet-600
+            text: 'rgb(91 33 182)', // violet-800
+            border: 'rgb(196 181 253)', // violet-300
+            className: 'bg-violet-100 text-violet-800 border-violet-300'
+        },
+        'Install Complete': {
             light: 'rgb(237 233 254)', // violet-100 (gentle purple)
             base: 'rgb(139 92 246)', // violet-500
             dark: 'rgb(124 58 237)', // violet-600

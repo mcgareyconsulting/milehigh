@@ -21,7 +21,7 @@ Covers:
   groups (e.g. FABRICATION → READY_TO_SHIP) restores both `stage` and
   `stage_group` correctly.
 - Linked-event bundling — when a stage change forces a fab_order side-effect
-  (e.g. moving to a fixed-tier stage like 'Shipping planning' which auto-
+  (e.g. moving to a fixed-tier stage like 'Ship Planning' which auto-
   assigns fab_order=2), undoing the parent stage event also reverts the
   linked fab_order event in a single atomic operation.
 - Stale child — bundle fails 409 if any child has been independently edited.
@@ -383,17 +383,17 @@ def test_events_feed_includes_current_value_for_whitelist(admin_client, app):
 # ---------------------------------------------------------------------------
 
 def test_undo_cross_group_stage_change_restores_stage_group(admin_client, app):
-    """Moving a release into 'Shipping planning' (READY_TO_SHIP) and then
+    """Moving a release into 'Ship Planning' (READY_TO_SHIP) and then
     undoing it must restore stage_group=FABRICATION, not just the stage."""
     with app.app_context():
         rel = _make_release(
-            stage='Shipping planning',
+            stage='Ship Planning',
             stage_group='READY_TO_SHIP',
             fab_order=2.0,
         )
         ev = _seed_event(
             action='update_stage',
-            payload={'from': 'Weld Complete', 'to': 'Shipping planning'},
+            payload={'from': 'Weld Complete', 'to': 'Ship Planning'},
         )
         db.session.commit()
 
@@ -418,16 +418,16 @@ def test_undo_bundles_linked_fab_order_child(admin_client, app):
     parent stage event must also revert the child fab_order event."""
     with app.app_context():
         # Live state mirrors what UpdateStageCommand would have produced for a
-        # 'Weld Complete' (fab_order=17) → 'Shipping planning' (fab_order=2)
+        # 'Weld Complete' (fab_order=17) → 'Ship Planning' (fab_order=2)
         # transition.
         rel = _make_release(
-            stage='Shipping planning',
+            stage='Ship Planning',
             stage_group='READY_TO_SHIP',
             fab_order=2.0,
         )
         parent = _seed_event(
             action='update_stage',
-            payload={'from': 'Weld Complete', 'to': 'Shipping planning'},
+            payload={'from': 'Weld Complete', 'to': 'Ship Planning'},
         )
         child = _seed_event(
             action='update_fab_order',
@@ -473,13 +473,13 @@ def test_undo_bundle_fails_when_child_is_stale(admin_client, app):
         # Parent event matches live stage. Child says fab_order should be 2,
         # but live fab_order is 5 (someone edited it independently).
         rel = _make_release(
-            stage='Shipping planning',
+            stage='Ship Planning',
             stage_group='READY_TO_SHIP',
             fab_order=5.0,
         )
         parent = _seed_event(
             action='update_stage',
-            payload={'from': 'Weld Complete', 'to': 'Shipping planning'},
+            payload={'from': 'Weld Complete', 'to': 'Ship Planning'},
         )
         _seed_event(
             action='update_fab_order',
@@ -503,7 +503,7 @@ def test_undo_bundle_fails_when_child_is_stale(admin_client, app):
         # Live state untouched — no partial revert.
         db.session.expire_all()
         rel = Releases.query.filter_by(job=1234, release='A').first()
-        assert rel.stage == 'Shipping planning'
+        assert rel.stage == 'Ship Planning'
         assert rel.fab_order == 5.0
 
 
@@ -511,10 +511,10 @@ def test_events_feed_includes_linked_children(admin_client, app):
     """The events feed surfaces linked children so the confirm dialog can
     enumerate what will be reverted."""
     with app.app_context():
-        _make_release(stage='Shipping planning', fab_order=2.0)
+        _make_release(stage='Ship Planning', fab_order=2.0)
         parent = _seed_event(
             action='update_stage',
-            payload={'from': 'Weld Complete', 'to': 'Shipping planning'},
+            payload={'from': 'Weld Complete', 'to': 'Ship Planning'},
         )
         child = _seed_event(
             action='update_fab_order',

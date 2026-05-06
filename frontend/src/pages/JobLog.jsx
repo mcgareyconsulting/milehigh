@@ -27,15 +27,16 @@ import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 
 // Stage completeness order (index 0 = least complete, higher = more complete).
+// Canonical names — see app/api/helpers.py STAGE_PROGRESSION_RANK.
 const STAGE_COMPLETENESS = {
-    'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
-    'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
-    'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
-    'Store at MHMW for shipping': 12, 'Shipping planning': 13,
-    'Shipping completed': 14, 'Complete': 15,
+    'Released':         0, 'Material Ordered': 1, 'Cut Start':       2, 'Cut Complete':     3,
+    'Fitup Start':      4, 'Fitup Complete':   5, 'Weld Start':      6, 'Weld Complete':    7,
+    'Welded QC':        9, 'Paint Start':     10, 'Paint Complete': 11,
+    'Store at MHMW':   12, 'Ship Planning':   13, 'Ship Complete':  14,
+    'Install Start':   15, 'Install Complete':16, 'Complete':       17,
 };
 
-const SHIP_COMPLETE_STAGE = 'Shipping completed';
+const SHIP_COMPLETE_STAGE = 'Ship Complete';
 
 // 'X' = installed (highest); percent strings rank by their numeric value;
 // missing/blank ranks lowest so it sorts to the bottom of the ship-complete group.
@@ -735,7 +736,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
-                                            title="Show only releases in Shipping planning, Store at MHMW for shipping, or Paint complete — i.e., work that's finished production and ready to leave."
+                                            title="Show only releases in Ship Planning, Store at MHMW, or Paint Complete — i.e., work that's finished production and ready to leave."
                                         >
                                             Ready to Ship
                                         </button>
@@ -761,7 +762,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
-                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
+                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint Complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
                                         >
                                             Paint+Fab
                                         </button>

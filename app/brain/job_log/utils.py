@@ -30,14 +30,8 @@ def determine_stage_from_db_fields(job):
         job: Job model instance with stage attribute
             
     Returns:
-        str: The stage name (e.g., 'Cut start', 'Fit Up Complete.', 'Paint complete', etc.)
+        str: The stage name (e.g., 'Cut Start', 'Fitup Complete', 'Paint Complete', etc.)
              or 'Released' if stage is None/empty
-             
-    Example:
-        >>> job = Job.query.first()
-        >>> stage = determine_stage_from_db_fields(job)
-        >>> print(stage)
-        'Cut start'
     """
     # Use stage field directly from database
     if hasattr(job, 'stage') and job.stage:

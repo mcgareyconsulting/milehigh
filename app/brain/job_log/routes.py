@@ -910,7 +910,7 @@ def update_stage(job, release):
     app/brain/job_log/features/stage/command.py for the full workflow.
 
     Request Body:
-        {"stage": "Released" | "Cut start" | "Fit Up Complete." | ...}
+        {"stage": "Released" | "Cut Start" | "Fitup Complete" | ...}
     """
     from app.brain.job_log.features.stage.command import UpdateStageCommand
 
@@ -2309,9 +2309,9 @@ def undo_event(event_id):
 
     # Apply parent FIRST so any fixed-tier / state-driven constraints in the
     # children's commands clear before we touch fab_order. Concretely: if the
-    # parent is `Welded QC → Shipping planning` with a child fab_order
+    # parent is `Welded QC → Ship Planning` with a child fab_order
     # auto-assign to 2, undoing the child first would re-enter
-    # UpdateFabOrderCommand while stage is still 'Shipping planning' (fixed
+    # UpdateFabOrderCommand while stage is still 'Ship Planning' (fixed
     # tier 2), and the command's own override would force fab_order back to 2
     # — a silent no-op revert.
     #
