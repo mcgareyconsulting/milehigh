@@ -26,14 +26,18 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User
+from app.models import (
+    Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User,
+    SyncOperation, SyncLog, SubmittalEvents, TrelloOutbox,
+)
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
-from datetime import datetime, timedelta
-from sqlalchemy import or_
+from datetime import datetime, timedelta, date
+from sqlalchemy import or_, func, and_
+from collections import defaultdict
 import json
 import hashlib
 import csv
@@ -336,9 +340,6 @@ def get_jobs():
         - 200: Success
         - 500: Server error
     """
-    from app.models import Releases
-    from datetime import datetime
-    
     try:
         # Set limit
         limit = 1000  # Higher limit since we're filtering by timestamp
@@ -614,8 +615,6 @@ def get_all_jobs():
         - 200: Success
         - 500: Server error
     """
-    from app.models import Releases
-    
     try:
         # Get page parameter from request (default to 1)
         page = request.args.get('page', 1, type=int)
@@ -795,9 +794,6 @@ def get_gantt_data():
         - 200: Success
         - 500: Server error
     """
-    from app.models import Releases
-    from collections import defaultdict
-
     try:
         # Eligibility for the installer timeline:
         #  - start_install must be a hard date (formulaTF != True). NULL formulaTF is treated as hard.
@@ -978,8 +974,7 @@ def update_fab_order(job, release):
     """
     from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
     from app.services.system_log_service import SystemLogService
-    from app.models import db
-    
+
     logger.info(f"update_fab_order called", extra={
         'job': job,
         'release': release,
@@ -1076,7 +1071,6 @@ def update_notes(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import db
     from app.brain.job_log.features.notes.command import UpdateNotesCommand
 
     logger.info(f"update_notes called", extra={
@@ -1089,7 +1083,6 @@ def update_notes(job, release):
         notes = request.json.get('notes', '')
 
         # Pre-flight: 404 vs 400 distinction matches the original route contract.
-        from app.models import Releases
         if not Releases.query.filter_by(job=job, release=release).first():
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
@@ -1189,7 +1182,6 @@ def update_job_comp(job, release):
     if old_was_x and not new_is_x:
         current_stage = job_record.stage or 'Released'
         if current_stage == 'Complete':
-            from app.models import ReleaseEvents
             recent_stage_events = ReleaseEvents.query.filter_by(
                 job=job, release=release, action='update_stage'
             ).order_by(ReleaseEvents.created_at.desc()).limit(20).all()
@@ -1321,9 +1313,6 @@ def update_start_install(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Releases, db
-    from datetime import datetime, date
-    
     logger.info(f"update_start_install called", extra={
         'job': job,
         'release': release,
@@ -1685,8 +1674,6 @@ def get_operation_filters():
     """
     Get all distinct operation dates and types from the database.
     """
-    from app.models import SyncOperation, db
-    from sqlalchemy import func
     try:
         # build dates list
         date_rows = (
@@ -1718,7 +1705,6 @@ def get_operation_types():
     """
     Get all distinct operation types from the database.
     """
-    from app.models import SyncOperation, db
     try:
         type_rows = (
             db.session.query(SyncOperation.operation_type)
@@ -1738,7 +1724,6 @@ def get_operation_types():
 @login_required
 def sync_operations():
         """Get sync operations filtered by date range, operation_type, and source_id."""
-        from app.models import SyncOperation
         try:
             # Query parameters
             limit = request.args.get('limit', 50, type=int)
@@ -1786,7 +1771,6 @@ def sync_operations():
 @login_required
 def sync_operation_logs(operation_id):
         """Get detailed logs for a specific sync operation."""
-        from app.models import SyncLog
         from app.datetime_utils import format_datetime_mountain
         try:
             logs = SyncLog.query.filter_by(operation_id=operation_id)\
@@ -1817,7 +1801,6 @@ def get_event_filters():
     Get all distinct event dates and sources from ReleaseEvents and SubmittalEvents.
     Dates are computed in Mountain Time to match the display timezone.
     """
-    from app.models import ReleaseEvents, SubmittalEvents, db
     from zoneinfo import ZoneInfo
     MT = ZoneInfo("America/Denver")
     UTC = ZoneInfo("UTC")
@@ -1862,7 +1845,6 @@ def get_event_filters():
         sources_set.update(r[0] for r in submittal_source_rows)
         sources = sorted(sources_set)
 
-        from app.models import User
         user_id_rows = (
             db.session.query(ReleaseEvents.internal_user_id)
             .distinct()
@@ -1895,8 +1877,6 @@ def _resolve_event_user_names(all_events):
     via the users table.
     Returns dict: event_key -> user_display (e.g. "John Smith" or None).
     """
-    from app.models import User
-
     # Collect all internal user IDs
     internal_ids = set()
     for event in all_events:
@@ -1922,7 +1902,6 @@ def _resolve_event_user_names(all_events):
 @login_required
 def get_events():
     """Get events filtered by date range and source."""
-    from app.models import ReleaseEvents, SubmittalEvents
     from app.datetime_utils import format_datetime_mountain
     try:
         # Query parameters
@@ -2000,7 +1979,6 @@ def get_events():
         # frontend uses `current_value` to determine if the Undo button
         # should be enabled — equality with the event's `to`/`new` value
         # means the event hasn't been superseded by a later edit.
-        from app.models import Releases
         UNDO_WHITELIST = {
             'update_stage', 'update_notes', 'update_fab_order', 'update_start_install',
         }
@@ -2027,7 +2005,6 @@ def get_events():
         }
         release_lookup = {}
         if release_pairs:
-            from sqlalchemy import and_, or_
             # SQLAlchemy `tuple_().in_()` is awkward across dialects; emit an OR of equality pairs.
             conditions = [
                 and_(Releases.job == j, Releases.release == r)
@@ -2206,9 +2183,8 @@ def _dispatch_undo(event, *, source, defer_cascade):
             defer_cascade=defer_cascade,
         ).execute()
     if action == 'update_start_install':
-        from datetime import datetime as _dt
         from_str = payload['from']
-        from_date = _dt.strptime(from_str, '%Y-%m-%d').date() if from_str else None
+        from_date = datetime.strptime(from_str, '%Y-%m-%d').date() if from_str else None
         return UpdateStartInstallCommand(
             job_id=event.job, release=event.release,
             start_install=from_date,
@@ -2242,8 +2218,6 @@ def undo_event(event_id):
 
     Returns 409 with a structured body when *anything* in the bundle is stale.
     """
-    from app.models import Releases
-
     event = db.session.get(ReleaseEvents, event_id)
     if event is None:
         return jsonify({'error': 'Event not found'}), 404
@@ -2419,7 +2393,6 @@ def undo_submittal_event(event_id):
     a second SubmittalEvents row tagged with `parent_event_id` so the audit
     trail shows the linked side-effect.
     """
-    from app.models import SubmittalEvents
     from app.procore.helpers import create_submittal_payload_hash
     from sqlalchemy.exc import IntegrityError
 
@@ -2615,9 +2588,8 @@ def preview_scheduling():
         - 200: Success
         - 500: Server error
     """
-    from datetime import datetime
     from app.brain.job_log.scheduling.preview import preview_scheduling_changes
-    
+
     try:
         # Get optional parameters
         reference_date_str = request.args.get('reference_date')
@@ -3030,9 +3002,6 @@ def sync_health():
       - outbox: counts of failed / pending / stuck-processing outbox items
     """
     from app.trello.list_mapper import TrelloListMapper
-    from app.models import Releases, ReleaseEvents, TrelloOutbox
-    from sqlalchemy import func
-    from datetime import timedelta
 
     try:
         now = datetime.utcnow()
