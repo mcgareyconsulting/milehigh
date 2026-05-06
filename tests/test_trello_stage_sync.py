@@ -73,7 +73,7 @@ class TestRankGate:
         assert job.stage == "Welded QC"
 
     def test_complete_to_shipping_completed_echo_is_skipped(self):
-        """The literal #70 bug: DB Complete (15) + inbound 'Shipping completed' (14)."""
+        """The literal #70 bug: DB Complete (high) + inbound 'Shipping completed'."""
         job = stub_job("Complete")
         applied = TrelloListMapper.apply_trello_list_to_db(job, "Shipping completed", "op-1")
         assert applied is False
@@ -87,17 +87,18 @@ class TestRankGate:
         assert job.stage == "Released"
 
     def test_equal_rank_different_string_blocked(self):
-        """Variant rename via inbound is blocked: DB and Trello vocabularies stay separate.
+        """Inbound at the same rank zone is blocked: the floor of the zone is
+        the entry stage, so DB at the same rank is not 'behind'.
 
-        DB 'Store at Shop' (rank 12) + inbound 'Store at MHMW for shipping'
-        (rank 12) → skip. DB keeps its job-log vocabulary.
+        DB 'Store at MHMW' (rank 12) + inbound Trello list
+        'Store at MHMW for shipping' (floor rank 12) → skip.
         """
-        job = stub_job("Store at Shop")
+        job = stub_job("Store at MHMW")
         applied = TrelloListMapper.apply_trello_list_to_db(
             job, "Store at MHMW for shipping", "op-1"
         )
         assert applied is False
-        assert job.stage == "Store at Shop"
+        assert job.stage == "Store at MHMW"
 
     def test_backward_drag_is_blocked(self):
         """Trello drag from a higher-rank list to a lower-rank list is silently ignored.
@@ -110,18 +111,19 @@ class TestRankGate:
         assert job.stage == "Welded QC"
 
     def test_forward_catch_up_applies(self):
-        """DB behind Trello → DB catches up to the canonical Trello list name."""
+        """DB behind Trello → DB catches up to the canonical floor stage of the
+        inbound zone (not the raw list name)."""
         job = stub_job("Cut Complete")  # rank 3
         applied = TrelloListMapper.apply_trello_list_to_db(job, "Fit Up Complete.", "op-1")
         assert applied is True
-        assert job.stage == "Fit Up Complete."
+        assert job.stage == "Fitup Complete"
 
     def test_forward_catch_up_to_paint_complete(self):
-        """DB Welded QC (9) + inbound Paint complete (11) → apply."""
+        """DB Welded QC (9) + inbound 'Paint complete' (rank 11) → apply."""
         job = stub_job("Welded QC")
         applied = TrelloListMapper.apply_trello_list_to_db(job, "Paint complete", "op-1")
         assert applied is True
-        assert job.stage == "Paint complete"
+        assert job.stage == "Paint Complete"
 
     def test_hold_is_sticky_against_inbound(self):
         """DB Hold (rank 99) blocks every inbound, regardless of list."""
@@ -146,18 +148,19 @@ class TestRankGate:
         assert job.stage == "Welded QC"
 
     def test_finer_grained_substage_protected(self):
-        """All sub-stages mapping to 'Fit Up Complete.' are protected from clobber.
+        """Sub-stages within the 'Fit Up Complete.' Trello zone are protected.
 
-        A bounce-back arriving as the literal list name 'Fit Up Complete.' must
-        not overwrite a finer-grained DB sub-stage.
+        A bounce-back arriving as the list 'Fit Up Complete.' must not
+        overwrite a finer-grained DB sub-stage. (Fitup Start is now in the
+        'Released' zone; it's not in this set anymore.)
         """
-        substages = ["Fitup Start", "Weld Start", "Weld Complete", "Welded QC", "Paint Start"]
+        substages = ["Weld Start", "Weld Complete", "Welded QC", "Paint Start"]
         for stage in substages:
             job = stub_job(stage)
             applied = TrelloListMapper.apply_trello_list_to_db(
                 job, "Fit Up Complete.", f"op-{stage}"
             )
-            # All substages have rank >= the list's floor (Fitup Start, rank 4),
+            # All substages have rank >= the list's floor (Fitup Complete, rank 5),
             # so the gate skips and DB stays at the finer-grained stage.
             assert applied is False, f"Expected skip for sub-stage {stage}"
             assert job.stage == stage
@@ -167,8 +170,8 @@ class TestRankGate:
         job = stub_job("Cut Complete")
         applied = TrelloListMapper.apply_trello_list_to_db(job, "Paint complete", "op-1")
         assert applied is True
-        assert job.stage == "Paint complete"
-        # Paint complete is in READY_TO_SHIP per STAGE_TO_GROUP
+        assert job.stage == "Paint Complete"
+        # Paint Complete is in READY_TO_SHIP per STAGE_TO_GROUP
         assert job.stage_group == "READY_TO_SHIP"
 
 
@@ -177,7 +180,7 @@ class TestRankTableInvariants:
 
     def test_every_forward_map_key_has_a_rank(self):
         """The import-time assertion enforces this; this test pins the contract."""
-        forward_keys = set(TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.keys()) - {"Hold"}
+        forward_keys = set(TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.keys())
         rank_keys = set(STAGE_PROGRESSION_RANK.keys())
         missing = forward_keys - rank_keys
         assert not missing, f"Missing rank entries: {missing}"
@@ -188,11 +191,16 @@ class TestRankTableInvariants:
                 f"Trello list {list_name!r} missing from TRELLO_LIST_RANK"
             )
 
-    def test_hold_excluded_from_trello_list_floor(self):
-        """Hold's sentinel (99) must not raise the floor of 'Fit Up Complete.'."""
-        # Fitup Start is rank 4 and forward-maps to "Fit Up Complete.", so the
-        # floor of that list is 4 — not 99 (Hold).
-        assert TrelloListMapper.TRELLO_LIST_RANK["Fit Up Complete."] == 4
+    def test_hold_absent_from_forward_map(self):
+        """Hold is intentionally not in the forward map — outbound sync skips
+        the Trello move when stage=Hold rather than picking a list."""
+        assert "Hold" not in TrelloListMapper.DB_STAGE_TO_TRELLO_LIST
+        assert TrelloListMapper.get_trello_list_for_stage("Hold") is None
+
+    def test_fit_up_complete_zone_floor_is_fitup_complete(self):
+        """The floor of the 'Fit Up Complete.' Trello zone is rank 5
+        (Fitup Complete) — Fitup Start now maps to the 'Released' zone."""
+        assert TrelloListMapper.TRELLO_LIST_RANK["Fit Up Complete."] == 5
 
     def test_hold_rank_is_above_all_real_stages(self):
         max_real = max(
@@ -225,7 +233,7 @@ class TestUpdateStageCommandOutbound:
 
     def test_set_to_complete_pushes_to_trello(self, app):
         """Setting DB to Complete pushes the card; with the milestone gate fixed,
-        the forward-mapped list 'Shipping completed' differs from current list."""
+        the forward-mapped list 'Ship Complete' differs from current list."""
         with app.app_context():
             make_release(
                 1, "A", "Welded QC", "READY_TO_SHIP",
@@ -245,8 +253,8 @@ class TestUpdateStageCommandOutbound:
             assert kwargs.get("action") == "move_card"
 
     def test_substage_within_same_zone_skips_outbox(self, app):
-        """DB Welded QC (list 'Fit Up Complete.') → Paint Start (also forward-maps
-        to 'Fit Up Complete.'). Target == current → no outbox push."""
+        """DB Welded QC (list 'Fitup Complete') → Paint Start (also forward-maps
+        to 'Fitup Complete'). Target == current → no outbox push."""
         with app.app_context():
             make_release(
                 1, "A", "Welded QC", "READY_TO_SHIP",
@@ -263,7 +271,7 @@ class TestUpdateStageCommandOutbound:
             assert not m_add.called, "Same-zone moves must not push to Trello"
 
     def test_cross_zone_move_pushes(self, app):
-        """DB Welded QC (list 'Fit Up Complete.') → Paint complete (list 'Paint
+        """DB Welded QC (list 'Fitup Complete') → Paint complete (list 'Paint
         complete'). Target != current → push fires."""
         with app.app_context():
             make_release(
@@ -275,7 +283,7 @@ class TestUpdateStageCommandOutbound:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = self._patches()
             with patches[0] as m_add, patches[1], patches[2]:
-                cmd = UpdateStageCommand(job_id=1, release="A", stage="Paint complete")
+                cmd = UpdateStageCommand(job_id=1, release="A", stage="Paint Complete")
                 cmd.execute()
 
             assert m_add.called, "Cross-zone moves must push to Trello"
@@ -315,7 +323,7 @@ class TestUpdateStageCommandOutbound:
             assert not m_add.called, "Releases without a Trello card must not push"
 
     def test_store_at_shop_pushes_to_canonical_list(self, app):
-        """DB 'Store at Shop' forward-maps to 'Store at MHMW for shipping'.
+        """DB 'Store at MHMW' forward-maps to 'Store at MHMW'.
         With card on a different list, push fires (proves the fixed gate
         catches non-VALID_TRELLO_LISTS DB stages too)."""
         with app.app_context():
@@ -328,7 +336,7 @@ class TestUpdateStageCommandOutbound:
             from app.brain.job_log.features.stage.command import UpdateStageCommand
             patches = self._patches()
             with patches[0] as m_add, patches[1], patches[2]:
-                cmd = UpdateStageCommand(job_id=1, release="A", stage="Store at Shop")
+                cmd = UpdateStageCommand(job_id=1, release="A", stage="Store at MHMW")
                 cmd.execute()
 
-            assert m_add.called, "DB stage 'Store at Shop' must push to its canonical Trello list"
+            assert m_add.called, "DB stage 'Store at MHMW' must push to its canonical Trello list"

@@ -41,7 +41,7 @@ class TestRedDateProtection:
             self._make_mock_release(100, 'A', 80.0, 'Released', 3,
                                     start_install=hard_date, comp_eta=date(2026, 7, 1),
                                     start_install_formulaTF=False),
-            self._make_mock_release(100, 'B', 60.0, 'Cut start', 4,
+            self._make_mock_release(100, 'B', 60.0, 'Cut Start', 4,
                                     start_install=None, comp_eta=None,
                                     start_install_formulaTF=True),
         ]
@@ -161,8 +161,8 @@ class TestRedDateContributesToQueue:
         jobs = [
             {'fab_hrs': 100.0, 'stage': 'Released', 'fab_order': 3,
              'remaining_fab_hours': calculate_remaining_fab_hours(100.0, 'Released')},
-            {'fab_hrs': 60.0, 'stage': 'Cut start', 'fab_order': 4,
-             'remaining_fab_hours': calculate_remaining_fab_hours(60.0, 'Cut start')},
+            {'fab_hrs': 60.0, 'stage': 'Cut Start', 'fab_order': 4,
+             'remaining_fab_hours': calculate_remaining_fab_hours(60.0, 'Cut Start')},
         ]
 
         # Release B (fab_order=4) should have Release A's hours in front
@@ -173,7 +173,7 @@ class TestRedDateContributesToQueue:
         """calculate_all_job_scheduling should include all releases in queue math."""
         jobs = [
             {'fab_hrs': 80.0, 'install_hrs': 40.0, 'stage': 'Released', 'fab_order': 3},
-            {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Cut start', 'fab_order': 4},
+            {'fab_hrs': 60.0, 'install_hrs': 30.0, 'stage': 'Cut Start', 'fab_order': 4},
             {'fab_hrs': 40.0, 'install_hrs': 20.0, 'stage': 'Fit Up Complete', 'fab_order': 5},
         ]
 

@@ -29,14 +29,14 @@ def _compute_trello_list_rank(stage_to_list, valid_lists, rank_map):
     """Compute each Trello list's progression rank as the floor of its zone.
 
     Floor = lowest progression rank among the DB stages that forward-map to this
-    list, excluding Hold (Hold's sentinel rank would otherwise raise the floor of
-    "Fit Up Complete." since Hold maps there).
+    list. (Hold is now intentionally absent from stage_to_list — when stage=Hold,
+    we skip the outbound move entirely; the card stays in whatever list it's in.)
     """
     return {
         list_name: min(
             rank_map[s]
             for s, target in stage_to_list.items()
-            if target == list_name and s in rank_map and s != "Hold"
+            if target == list_name and s in rank_map
         )
         for list_name in valid_lists
     }
@@ -52,7 +52,8 @@ class TrelloListMapper:
     - Validating inbound Trello list names before applying to DB
     """
 
-    # Valid shipping states that should be preserved during sync
+    # Valid shipping states (Trello list names) that should be preserved during sync.
+    # These are board-side names — unchanged by the DB-stage canonicalization.
     VALID_SHIPPING_STATES = [
         "Paint complete",
         "Store at MHMW for shipping",
@@ -70,43 +71,56 @@ class TrelloListMapper:
     }
 
     # Many-to-one mapping: every DB stage maps to exactly one Trello list.
-    # Stages before Fitup Start stay on "Released".
-    # Stages from Fitup Start through Welded QC (and Hold) map to "Fit Up Complete.".
-    # Later stages map 1:1 to their Trello list name.
+    # Canonical DB stage names only — old variants were collapsed in migration.
+    # The 6 physical Trello list names on the right are board-side and unchanged.
+    #
+    # Hold is intentionally absent from this dict — get_trello_list_for_stage("Hold")
+    # returns None, and the outbound sync interprets None as "leave the card where
+    # it is" rather than moving it. This implements the "Leave where it is" rule
+    # from the client stage matrix.
     DB_STAGE_TO_TRELLO_LIST = {
-        # Released group — card stays on Released
-        "Released":                     "Released",
-        "Cut start":                    "Released",
-        "Cut Start":                    "Released",
-        "Cut Complete":                 "Released",
-        "Material Ordered":             "Released",
-        # Fit Up Complete. group — card moves to Fit Up Complete.
-        "Fitup Start":                  "Fit Up Complete.",
-        "Fitup Complete":               "Fit Up Complete.",
-        "Fit Up Complete.":             "Fit Up Complete.",
-        "Weld Start":                   "Fit Up Complete.",
-        "Weld Complete":                "Fit Up Complete.",
-        "Welded QC":                    "Fit Up Complete.",
-        "Hold":                         "Fit Up Complete.",
-        "Paint Start":                  "Fit Up Complete.",
-        # 1:1 stages
-        "Paint complete":               "Paint complete",
-        "Paint Complete":               "Paint complete",
-        "Store at MHMW for shipping":   "Store at MHMW for shipping",
-        "Store at Shop":                "Store at MHMW for shipping",
-        "Shipping planning":            "Shipping planning",
-        "Shipping Planning":            "Shipping planning",
-        "Shipping completed":           "Shipping completed",
-        "Shipping Complete":            "Shipping completed",
-        "Complete":                     "Shipping completed",
+        # "Released" Trello list — pre-fabrication and early cut
+        "Released":         "Released",
+        "Material Ordered": "Released",
+        "Cut Start":        "Released",
+        "Cut Complete":     "Released",
+        "Fitup Start":      "Released",
+        # "Fit Up Complete." Trello list — fitup → paint start
+        "Fitup Complete":   "Fit Up Complete.",
+        "Weld Start":       "Fit Up Complete.",
+        "Weld Complete":    "Fit Up Complete.",
+        "Welded QC":        "Fit Up Complete.",
+        "Paint Start":      "Fit Up Complete.",
+        # 1:1 mappings to the remaining 4 lists
+        "Paint Complete":   "Paint complete",
+        "Store at MHMW":    "Store at MHMW for shipping",
+        "Ship Planning":    "Shipping planning",
+        "Ship Complete":    "Shipping completed",
+        "Install Start":    "Shipping completed",
+        "Install Complete": "Shipping completed",
+        "Complete":         "Shipping completed",
     }
 
     # Derived: each Trello list's progression rank = floor of its zone (lowest DB
-    # stage rank whose forward-map is that list, excluding Hold). Used by the
-    # inbound rank gate in apply_trello_list_to_db.
+    # stage rank whose forward-map is that list). Used by the inbound rank gate in
+    # apply_trello_list_to_db.
     TRELLO_LIST_RANK = _compute_trello_list_rank(
         DB_STAGE_TO_TRELLO_LIST, VALID_TRELLO_LISTS, STAGE_PROGRESSION_RANK,
     )
+
+    # Inverse: when a Trello card lands in a list, which canonical DB stage do
+    # we set? For multi-stage zones (Released, Fit Up Complete., Shipping
+    # completed) we use the *floor* — the entry stage of that zone — because the
+    # rank gate only lets the apply through when DB is behind, so we upgrade DB
+    # to the zone's earliest stage and let Brain transitions advance further.
+    TRELLO_LIST_TO_DB_STAGE = {
+        "Released":                   "Released",
+        "Fit Up Complete.":           "Fitup Complete",
+        "Paint complete":             "Paint Complete",
+        "Store at MHMW for shipping": "Store at MHMW",
+        "Shipping planning":          "Ship Planning",
+        "Shipping completed":         "Ship Complete",
+    }
 
     @classmethod
     def determine_trello_list_from_db(cls, rec) -> Optional[str]:
@@ -207,6 +221,11 @@ class TrelloListMapper:
             if key.lower() == stage_lower:
                 return value
 
+        # Hold is intentionally absent — outbound sync skips the move when
+        # stage=Hold rather than picking a list. Don't log it as a warning.
+        if stage == "Hold":
+            return None
+
         logger.warning("No Trello list mapping for stage", stage=stage)
         return None
 
@@ -259,7 +278,8 @@ class TrelloListMapper:
             )
             return False
 
-        # DB is behind — Trello has advanced; catch up.
+        # DB is behind — Trello has advanced; catch up to the floor of the zone.
+        new_stage = cls.TRELLO_LIST_TO_DB_STAGE[trello_list_name]
         old_stage = job.stage
         logger.info(
             "Applying Trello list to database record",
@@ -267,15 +287,16 @@ class TrelloListMapper:
             job_id=job.id,
             trello_list=trello_list_name,
             current_stage=old_stage,
+            new_stage=new_stage,
             db_rank=db_rank,
             trello_rank=trello_rank,
         )
 
-        job.stage = trello_list_name
+        job.stage = new_stage
 
         # Update stage_group based on stage
         from app.api.helpers import get_stage_group_from_stage
-        job.stage_group = get_stage_group_from_stage(trello_list_name)
+        job.stage_group = get_stage_group_from_stage(new_stage)
 
         logger.info(
             "Applied Trello list to database record",
@@ -299,18 +320,32 @@ class TrelloListMapper:
         return list_name in cls.VALID_SHIPPING_STATES
 
 
-# Fail fast at import time if the rank table doesn't cover every key in the
-# forward map. Hold is excluded from the requirement because its sentinel rank
-# (99) is intentionally filtered out of TRELLO_LIST_RANK above. This catches
-# silent drift the moment it lands rather than at first webhook.
+# Fail fast at import time on silent drift between the three tables.
+# (Hold is intentionally absent from DB_STAGE_TO_TRELLO_LIST — outbound sync
+# skips the move entirely on Hold rather than picking a list.)
 _missing_rank_keys = (
     set(TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.keys())
-    - {"Hold"}
     - set(STAGE_PROGRESSION_RANK.keys())
 )
 assert not _missing_rank_keys, (
     f"STAGE_PROGRESSION_RANK is missing keys present in DB_STAGE_TO_TRELLO_LIST: "
     f"{_missing_rank_keys}"
 )
-del _missing_rank_keys
+_inverse_list_diff = (
+    set(TrelloListMapper.TRELLO_LIST_TO_DB_STAGE.keys())
+    ^ TrelloListMapper.VALID_TRELLO_LISTS
+)
+assert not _inverse_list_diff, (
+    f"TRELLO_LIST_TO_DB_STAGE keys must exactly match VALID_TRELLO_LISTS; "
+    f"diff: {_inverse_list_diff}"
+)
+_inverse_stage_unknown = (
+    set(TrelloListMapper.TRELLO_LIST_TO_DB_STAGE.values())
+    - set(TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.keys())
+)
+assert not _inverse_stage_unknown, (
+    f"TRELLO_LIST_TO_DB_STAGE values must be canonical DB stages; "
+    f"unknown: {_inverse_stage_unknown}"
+)
+del _missing_rank_keys, _inverse_list_diff, _inverse_stage_unknown
 

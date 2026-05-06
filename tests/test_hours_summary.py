@@ -17,23 +17,24 @@ class TestGetFabModifier:
     def test_released(self):
         assert get_fab_modifier('Released') == 1.0
 
-    def test_cut_start_title_case(self):
+    def test_cut_start(self):
         assert get_fab_modifier('Cut Start') == 0.9
 
-    def test_cut_start_lower(self):
-        assert get_fab_modifier('Cut start') == 0.9
-
-    def test_fit_up_complete_dot(self):
-        assert get_fab_modifier('Fit Up Complete.') == 0.5
-
-    def test_fit_up_complete(self):
-        assert get_fab_modifier('Fit Up Complete') == 0.5
+    def test_fitup_complete(self):
+        assert get_fab_modifier('Fitup Complete') == 0.5
 
     def test_welded_qc_zero(self):
         assert get_fab_modifier('Welded QC') == 0.0
 
     def test_paint_complete_zero(self):
-        assert get_fab_modifier('Paint complete') == 0.0
+        assert get_fab_modifier('Paint Complete') == 0.0
+
+    def test_install_start_zero(self):
+        # Past fab — install_start is included in install hour planning, not fab
+        assert get_fab_modifier('Install Start') == 0.0
+
+    def test_install_complete_zero(self):
+        assert get_fab_modifier('Install Complete') == 0.0
 
     def test_complete_zero(self):
         assert get_fab_modifier('Complete') == 0.0
@@ -96,7 +97,7 @@ class TestCalculateTotalFabHrs:
         jobs = [
             {'Fab Hrs': 100, 'Stage': 'Released'},       # 100 * 1.0 = 100
             {'Fab Hrs': 200, 'Stage': 'Cut Start'},       # 200 * 0.9 = 180
-            {'Fab Hrs': 120, 'Stage': 'Fit Up Complete'}, # 120 * 0.5 = 60
+            {'Fab Hrs': 120, 'Stage': 'Fitup Complete'},  # 120 * 0.5 = 60
             {'Fab Hrs': 80,  'Stage': 'Welded QC'},       # 80  * 0.0 = 0
         ]
         assert calculate_total_fab_hrs(jobs) == pytest.approx(340.0)
@@ -153,7 +154,7 @@ class TestCalculateTotalInstallHrs:
         jobs = [
             {'Install HRS': 100, 'Job Comp': 0.0, 'Stage': 'Released'},
             {'Install HRS': 80,  'Job Comp': 0.0, 'Stage': 'Cut Start'},
-            {'Install HRS': 60,  'Job Comp': 0.0, 'Stage': 'Fit Up Complete'},
+            {'Install HRS': 60,  'Job Comp': 0.0, 'Stage': 'Fitup Complete'},
         ]
         assert calculate_total_install_hrs(jobs) == pytest.approx(0.0)
 

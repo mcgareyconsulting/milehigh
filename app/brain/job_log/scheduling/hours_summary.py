@@ -18,15 +18,17 @@ Aggregate KPI helpers: total remaining fab hours and total remaining install hou
 """
 
 _FAB_MODIFIER_TABLE = {
-    'Released': 1.0,
-    'Cut Start': 0.9, 'Cut start': 0.9,
-    'Fit up Comp': 0.5, 'Fit Up Complete': 0.5, 'Fit Up Complete.': 0.5, 'Fitup comp': 0.5,
-    'WeldingQC': 0.0, 'Welded QC': 0.0, 'Welding QC': 0.0,
-    'Paint Complete': 0.0, 'Paint complete': 0.0, 'Paint comp': 0.0,
-    'Store': 0.0, 'Store at MHMW for shipping': 0.0,
-    'Ship Planning': 0.0, 'Shipping planning': 0.0,
-    'Ship Complete': 0.0, 'Shipping completed': 0.0,
-    'Complete': 0.0,
+    'Released':         1.0,
+    'Cut Start':        0.9,
+    'Fitup Complete':   0.5,
+    'Welded QC':        0.0,
+    'Paint Complete':   0.0,
+    'Store at MHMW':    0.0,
+    'Ship Planning':    0.0,
+    'Ship Complete':    0.0,
+    'Install Start':    0.0,
+    'Install Complete': 0.0,
+    'Complete':         0.0,
 }
 
 

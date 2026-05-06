@@ -20,19 +20,21 @@ function PMBoardList({ jobs, onUpdate }) {
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Material Ordered', label: 'Material Ordered' },
-        { value: 'Cut start', label: 'Cut start' },
+        { value: 'Cut Start', label: 'Cut Start' },
         { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Fitup Start', label: 'Fitup start' },
-        { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Fitup Complete', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Paint Complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
-        { value: 'Store at MHMW for shipping', label: 'Store' },
-        { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Store at MHMW', label: 'Store' },
+        { value: 'Ship Planning', label: 'Ship plan' },
+        { value: 'Ship Complete', label: 'Ship comp' },
+        { value: 'Install Start', label: 'Install start' },
+        { value: 'Install Complete', label: 'Install comp' },
         { value: 'Complete', label: 'Complete' }
     ];
 
@@ -44,7 +46,7 @@ function PMBoardList({ jobs, onUpdate }) {
             text: 'rgb(30 64 175)',
             border: 'rgb(147 197 253)',
         },
-        'Cut start': {
+        'Cut Start': {
             light: 'rgb(219 234 254)',
             base: 'rgb(59 130 246)',
             text: 'rgb(30 64 175)',
@@ -62,7 +64,7 @@ function PMBoardList({ jobs, onUpdate }) {
             text: 'rgb(30 64 175)',
             border: 'rgb(147 197 253)',
         },
-        'Fit Up Complete.': {
+        'Fitup Complete': {
             light: 'rgb(219 234 254)',
             base: 'rgb(59 130 246)',
             text: 'rgb(30 64 175)',
@@ -86,25 +88,37 @@ function PMBoardList({ jobs, onUpdate }) {
             text: 'rgb(133 77 14)',
             border: 'rgb(253 224 71)',
         },
-        'Paint complete': {
+        'Paint Complete': {
             light: 'rgb(209 250 229)',
             base: 'rgb(16 185 129)',
             text: 'rgb(6 95 70)',
             border: 'rgb(110 231 183)',
         },
-        'Store at MHMW for shipping': {
+        'Store at MHMW': {
             light: 'rgb(209 250 229)',
             base: 'rgb(16 185 129)',
             text: 'rgb(6 95 70)',
             border: 'rgb(110 231 183)',
         },
-        'Shipping planning': {
+        'Ship Planning': {
             light: 'rgb(209 250 229)',
             base: 'rgb(16 185 129)',
             text: 'rgb(6 95 70)',
             border: 'rgb(110 231 183)',
         },
-        'Shipping completed': {
+        'Ship Complete': {
+            light: 'rgb(237 233 254)',
+            base: 'rgb(139 92 246)',
+            text: 'rgb(91 33 182)',
+            border: 'rgb(196 181 253)',
+        },
+        'Install Start': {
+            light: 'rgb(237 233 254)',
+            base: 'rgb(139 92 246)',
+            text: 'rgb(91 33 182)',
+            border: 'rgb(196 181 253)',
+        },
+        'Install Complete': {
             light: 'rgb(237 233 254)',
             base: 'rgb(139 92 246)',
             text: 'rgb(91 33 182)',
