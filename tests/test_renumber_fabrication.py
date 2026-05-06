@@ -37,8 +37,8 @@ def test_compresses_drifted_fabrication_fab_orders(app):
     preserving relative order."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 20)
-        make_release(2, "A", "Cut start", "FABRICATION", 25)
-        make_release(3, "A", "Fit Up Complete.", "FABRICATION", 30)
+        make_release(2, "A", "Cut Start", "FABRICATION", 25)
+        make_release(3, "A", "Fitup Complete", "FABRICATION", 30)
         make_release(4, "A", "Weld Complete", "FABRICATION", 40)
         db.session.commit()
 
@@ -61,8 +61,8 @@ def test_does_not_touch_non_fabrication_rows(app):
         make_release(1, "A", "Released", "FABRICATION", 50)
         make_release(2, "A", "Welded QC", "READY_TO_SHIP", 3)
         make_release(3, "A", "Paint Start", "READY_TO_SHIP", 4)
-        make_release(4, "A", "Shipping completed", "COMPLETE", 1)
-        make_release(5, "A", "Paint complete", "READY_TO_SHIP", 2)
+        make_release(4, "A", "Ship Complete", "COMPLETE", 1)
+        make_release(5, "A", "Paint Complete", "READY_TO_SHIP", 2)
         make_release(6, "A", "Complete", "COMPLETE", None)
         db.session.commit()
 
@@ -80,7 +80,7 @@ def test_dry_run_does_not_commit(app):
     """dry_run=True returns the change list but rolls back; no events created."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 20)
-        make_release(2, "A", "Cut start", "FABRICATION", 25)
+        make_release(2, "A", "Cut Start", "FABRICATION", 25)
         db.session.commit()
 
         events_before = ReleaseEvents.query.count()
@@ -101,7 +101,7 @@ def test_outbox_queued_when_trello_configured(app):
     with app.app_context(), patch('app.brain.job_log.features.fab_order.renumber_fabrication.Config') as cfg:
         cfg.FAB_ORDER_FIELD_ID = 'fake_field_id'
         make_release(1, "A", "Released", "FABRICATION", 20, trello_card_id="abc123")
-        make_release(2, "A", "Cut start", "FABRICATION", 25, trello_card_id=None)
+        make_release(2, "A", "Cut Start", "FABRICATION", 25, trello_card_id=None)
         db.session.commit()
 
         renumber_fabrication_fab_orders()
@@ -133,7 +133,7 @@ def test_idempotent(app):
     """Running renumber twice produces zero changes the second time."""
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 50)
-        make_release(2, "A", "Cut start", "FABRICATION", 60)
+        make_release(2, "A", "Cut Start", "FABRICATION", 60)
         db.session.commit()
 
         renumber_fabrication_fab_orders()
@@ -179,10 +179,10 @@ def test_duplicate_fab_orders_compress_to_same_slot(app):
         # Three rows tied at 12 should all become the same new value;
         # next distinct group bumps to the next slot.
         make_release(1, "A", "Released", "FABRICATION", 5)
-        make_release(2, "A", "Cut start", "FABRICATION", 12)
-        make_release(3, "A", "Cut start", "FABRICATION", 12)
-        make_release(4, "A", "Cut start", "FABRICATION", 12)
-        make_release(5, "A", "Fit Up Complete.", "FABRICATION", 18)
+        make_release(2, "A", "Cut Start", "FABRICATION", 12)
+        make_release(3, "A", "Cut Start", "FABRICATION", 12)
+        make_release(4, "A", "Cut Start", "FABRICATION", 12)
+        make_release(5, "A", "Fitup Complete", "FABRICATION", 18)
         db.session.commit()
 
         renumber_fabrication_fab_orders()
@@ -202,7 +202,7 @@ def test_default_fab_order_placeholder_is_preserved(app):
 
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 20)
-        make_release(2, "A", "Cut start", "FABRICATION", 25)
+        make_release(2, "A", "Cut Start", "FABRICATION", 25)
         make_release(3, "A", "Released", "FABRICATION", DEFAULT_FAB_ORDER)
         make_release(4, "A", "Released", "FABRICATION", DEFAULT_FAB_ORDER)
         db.session.commit()

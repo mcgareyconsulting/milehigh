@@ -23,7 +23,7 @@ def _make_release(job, release, **kwargs):
         job=job,
         release=release,
         job_name="Test Job",
-        stage="Cut start",
+        stage="Cut Start",
         stage_group="FABRICATION",
         fab_order=10,
     )

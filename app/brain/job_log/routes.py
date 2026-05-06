@@ -24,13 +24,16 @@ from flask import jsonify, request, g
 from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
+from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, Submittals, User
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
+from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlalchemy import or_
 import json
 import hashlib
 import csv
@@ -291,6 +294,22 @@ def _create_payload_hash(action, job_number, release_number, excel_data_dict):
     hash_string = f"{action}:{job_number}:{release_number}:{payload_json}"
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
+
+def _release_ids_with_drawings(release_ids):
+    """One-shot batched lookup of which release IDs have at least one (non-deleted) drawing version."""
+    if not release_ids:
+        return set()
+    rows = (
+        db.session.query(ReleaseDrawingVersion.release_id)
+        .filter(
+            ReleaseDrawingVersion.release_id.in_(release_ids),
+            ReleaseDrawingVersion.is_deleted.is_(False),
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows}
+
 # ==============================================================================
 # Job Data Routes
 # ==============================================================================
@@ -390,7 +409,6 @@ def get_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
-                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
@@ -401,6 +419,7 @@ def get_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'has_drawing': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -422,6 +441,17 @@ def get_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
+        # Patch has_drawing in one batched query (avoids N+1)
+        try:
+            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            for j in job_list:
+                j['has_drawing'] = j['id'] in ids_with_drawings
+        except Exception as drawing_lookup_error:
+            logger.warning(
+                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
         from app.api.helpers import add_scheduling_fields_to_jobs
@@ -438,11 +468,12 @@ def get_jobs():
                     'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
-            # Override displayed Start install with calculated value for jobs still
-            # in FABRICATION that don't have a hard (red) date. Once a release
-            # leaves fabrication, its start_install freezes at the DB-stored value.
+            # Override displayed Start install with the calculated projection only
+            # when the row is NOT a hard date. The previous gate used Banana Color
+            # ('red') as a proxy and silently masked hard dates whose urgency
+            # banana was anything else.
             for job in job_list:
-                if (job.get('Banana Color') != 'red'
+                if (job.get('start_install_formulaTF') is not False
                         and job.get('install_start_date')
                         and job.get('Stage Group') == 'FABRICATION'):
                     job['Start install'] = job['install_start_date']
@@ -651,7 +682,6 @@ def get_all_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
-                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
@@ -662,6 +692,7 @@ def get_all_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'has_drawing': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -682,6 +713,17 @@ def get_all_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
+        # Patch has_drawing in one batched query (avoids N+1)
+        try:
+            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            for j in job_list:
+                j['has_drawing'] = j['id'] in ids_with_drawings
+        except Exception as drawing_lookup_error:
+            logger.warning(
+                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
         from app.api.helpers import add_scheduling_fields_to_jobs
@@ -698,11 +740,12 @@ def get_all_jobs():
                     'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
-            # Override displayed Start install with calculated value for jobs still
-            # in FABRICATION that don't have a hard (red) date. Once a release
-            # leaves fabrication, its start_install freezes at the DB-stored value.
+            # Override displayed Start install with the calculated projection only
+            # when the row is NOT a hard date. The previous gate used Banana Color
+            # ('red') as a proxy and silently masked hard dates whose urgency
+            # banana was anything else.
             for job in job_list:
-                if (job.get('Banana Color') != 'red'
+                if (job.get('start_install_formulaTF') is not False
                         and job.get('install_start_date')
                         and job.get('Stage Group') == 'FABRICATION'):
                     job['Start install'] = job['install_start_date']
@@ -712,7 +755,7 @@ def get_all_jobs():
                 exc_info=True
             )
             # Continue without scheduling fields if calculation fails
-        
+
         # Build response
         response_data = {
             "jobs": job_list,
@@ -753,33 +796,43 @@ def get_gantt_data():
         - 500: Server error
     """
     from app.models import Releases
-    from app.trello.utils import add_business_days
-    from datetime import date
     from collections import defaultdict
-    
+
     try:
-        # Get all jobs that have start_install dates and are in FABRICATION or READY_TO_SHIP stage_group
+        # Eligibility for the installer timeline:
+        #  - start_install must be a hard date (formulaTF != True). NULL formulaTF is treated as hard.
+        #  - install_hrs must be present and > 0 so we can derive a comp_eta window.
+        #  - stage_group in FABRICATION, READY_TO_SHIP, or COMPLETE — "Shipping Complete"
+        #    rows are shipped-but-not-installed and belong on the timeline. The frontend's
+        #    filterComplete path drops only stage == 'Complete' rows.
         jobs = Releases.query.filter(
             Releases.start_install.isnot(None),
-            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP'])
+            or_(Releases.start_install_formulaTF.is_(False),
+                Releases.start_install_formulaTF.is_(None)),
+            Releases.install_hrs.isnot(None),
+            Releases.install_hrs > 0,
+            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE'])
         ).all()
-        
+
         # Group jobs by project (job number)
         projects_dict = defaultdict(lambda: {
             'releases': [],
             'start_dates': [],
             'end_dates': []
         })
-        
+
         for job in jobs:
             project_key = job.job
             start_install = job.start_install
-            
-            # Calculate comp_eta: use existing if present, otherwise add 2 business days
-            if job.comp_eta:
-                comp_eta = job.comp_eta
-            else:
-                comp_eta = add_business_days(start_install, 2)
+
+            # SQL `> 0` does not reliably exclude NaN across DB backends — guard here.
+            if job.install_hrs is None or math.isnan(job.install_hrs) or job.install_hrs <= 0:
+                continue
+
+            # comp_eta = start_install + ceil(install_hrs / 24) calendar days.
+            # 24 = 3 installers * 8 hrs/day. Floor at 1 day so every release has a visible bar.
+            days_to_complete = max(1, math.ceil(job.install_hrs / 24))
+            comp_eta = start_install + timedelta(days=days_to_complete)
             
             # Store release data
             release_data = {
@@ -857,7 +910,7 @@ def update_stage(job, release):
     app/brain/job_log/features/stage/command.py for the full workflow.
 
     Request Body:
-        {"stage": "Released" | "Cut start" | "Fit Up Complete." | ...}
+        {"stage": "Released" | "Cut Start" | "Fitup Complete" | ...}
     """
     from app.brain.job_log.features.stage.command import UpdateStageCommand
 
@@ -1121,7 +1174,6 @@ def update_job_comp(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
     primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
@@ -1225,7 +1277,6 @@ def update_invoiced(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
     primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
@@ -1271,7 +1322,6 @@ def update_start_install(job, release):
         JSON object with 'status': 'success' or 'error'
     """
     from app.models import Releases, db
-    from app.services.job_event_service import JobEventService
     from datetime import datetime, date
     
     logger.info(f"update_start_install called", extra={
@@ -1363,7 +1413,6 @@ def update_start_install(job, release):
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
         try:
             result = UpdateStartInstallCommand(
                 job_id=job,
@@ -2157,7 +2206,6 @@ def _dispatch_undo(event, *, source, defer_cascade):
             defer_cascade=defer_cascade,
         ).execute()
     if action == 'update_start_install':
-        from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
         from datetime import datetime as _dt
         from_str = payload['from']
         from_date = _dt.strptime(from_str, '%Y-%m-%d').date() if from_str else None
@@ -2261,9 +2309,9 @@ def undo_event(event_id):
 
     # Apply parent FIRST so any fixed-tier / state-driven constraints in the
     # children's commands clear before we touch fab_order. Concretely: if the
-    # parent is `Welded QC → Shipping planning` with a child fab_order
+    # parent is `Welded QC → Ship Planning` with a child fab_order
     # auto-assign to 2, undoing the child first would re-enter
-    # UpdateFabOrderCommand while stage is still 'Shipping planning' (fixed
+    # UpdateFabOrderCommand while stage is still 'Ship Planning' (fixed
     # tier 2), and the command's own override would force fab_order back to 2
     # — a silent no-op revert.
     #
@@ -2776,7 +2824,6 @@ def delete_job(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2845,7 +2892,6 @@ def update_job_column(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2917,7 +2963,6 @@ def archive_preview():
 @handle_errors("unarchive release", raw_error=True)
 def unarchive_release(job, release):
     """Unarchive a single release (set is_archived=False)."""
-    from app.services.job_event_service import JobEventService
 
     r, err = get_or_404(Releases, f'Release {job}-{release} not found', job=job, release=str(release))
     if err:
@@ -2945,7 +2990,6 @@ def unarchive_release(job, release):
 @handle_errors("archive releases", raw_error=True)
 def archive_confirm():
     """Archive all eligible releases (both job_comp and invoiced = 'X', not yet archived)."""
-    from app.services.job_event_service import JobEventService
 
     releases = _archivable_query().all()
     count = 0

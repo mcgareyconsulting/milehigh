@@ -182,10 +182,25 @@ def _get_job_change_history(job, release):
             })
             job_releases.add((event.job, event.release))
 
+        from app.models import ReleaseDrawingVersion, db
+        release_ids_with_drawings = set()
+        if job_records:
+            release_ids_with_drawings = {
+                row[0] for row in
+                db.session.query(ReleaseDrawingVersion.release_id)
+                .filter(
+                    ReleaseDrawingVersion.release_id.in_([jr.id for jr in job_records]),
+                    ReleaseDrawingVersion.is_deleted.is_(False),
+                )
+                .distinct()
+                .all()
+            }
+
         for job_row in job_records:
             job_key = (job_row.job, job_row.release)
             job_releases.add(job_key)
             job_details.append({
+                'id': job_row.id,
                 'job': job_row.job,
                 'release': job_row.release,
                 'job_name': job_row.job_name,
@@ -193,7 +208,8 @@ def _get_job_change_history(job, release):
                 'install_hrs': job_row.install_hrs,
                 'start_install': job_row.start_install.isoformat() if job_row.start_install else None,
                 'trello_list_name': job_row.trello_list_name,
-                'viewer_url': job_row.viewer_url
+                'viewer_url': job_row.viewer_url,
+                'has_drawing': job_row.id in release_ids_with_drawings,
             })
 
         if not job_releases and job_records:

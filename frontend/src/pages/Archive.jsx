@@ -17,13 +17,14 @@ import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
 
 function Archive() {
     const navigate = useNavigate();
     const { jobs, columns, loading, error: fetchError, refetch } = useArchiveDataFetching();
 
     const [isAdmin, setIsAdmin] = useState(false);
+    const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('ar_minimized') === 'true'
     );
@@ -33,8 +34,10 @@ function Archive() {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch {
                 setIsAdmin(false);
+                setShowScrollbars(false);
             }
         };
         fetchUserInfo();
@@ -305,7 +308,7 @@ function Archive() {
 
                         {!loading && !fetchError && (
                             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                <div className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                <div className={`${showScrollbars ? '' : 'job-log-table-scroll-hide-scrollbar'} overflow-auto flex-1`.trim()}>
                                     <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                         <thead className="sticky top-0 z-10">
                                             <tr>

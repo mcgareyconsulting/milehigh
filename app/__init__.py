@@ -137,6 +137,10 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Cap multipart upload body size — used by the PDF markup endpoints. Flask
+    # turns oversize requests into a 413 automatically.
+    app.config.setdefault('MAX_CONTENT_LENGTH', 50 * 1024 * 1024)
+
     # Configure database separately
     configure_database(app)
 

@@ -41,7 +41,7 @@ def test_fab_order_manual_edit_no_stage_bounds(app):
 def test_fab_order_manual_edit_accepts_any_value_above_3(app):
     """Manual edit accepts any value >= 3 regardless of other stages."""
     with app.app_context():
-        make_release(1, "A", "Cut start", "FABRICATION", 20)
+        make_release(1, "A", "Cut Start", "FABRICATION", 20)
         released = make_release(2, "A", "Released", "FABRICATION", 30)
         db.session.commit()
 
@@ -87,7 +87,7 @@ def test_complete_forces_null_fab_order(app):
 def test_shipping_completed_overrides_input(app):
     """Shipping completed (tier 1) always gets fab_order=1 regardless of input."""
     with app.app_context():
-        sc = make_release(1, "A", "Shipping completed", "COMPLETE", None)
+        sc = make_release(1, "A", "Ship Complete", "COMPLETE", None)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -101,7 +101,7 @@ def test_shipping_completed_overrides_input(app):
 def test_fixed_tier_paint_complete(app):
     """Paint complete always gets fab_order=2."""
     with app.app_context():
-        pc = make_release(1, "A", "Paint complete", "READY_TO_SHIP", None)
+        pc = make_release(1, "A", "Paint Complete", "READY_TO_SHIP", None)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -132,7 +132,7 @@ def test_no_cascade_allows_duplicates(app):
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
         welded = make_release(2, "A", "Weld Complete", "FABRICATION", 5)
-        fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 7)
+        fitup = make_release(3, "A", "Fitup Complete", "FABRICATION", 7)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
@@ -153,7 +153,7 @@ def test_fixed_tiers_unchanged_on_manual_edit(app):
     """Fixed-tier releases keep their values when other releases are edited."""
     with app.app_context():
         complete = make_release(1, "A", "Complete", "COMPLETE", 1)
-        paint = make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
+        paint = make_release(2, "A", "Paint Complete", "READY_TO_SHIP", 2)
         wqc = make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
         welded = make_release(4, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
@@ -178,7 +178,7 @@ def test_duplicate_fab_order_no_cascade(app):
     with app.app_context():
         wqc = make_release(1, "A", "Welded QC", "READY_TO_SHIP", 3)
         welded = make_release(2, "A", "Weld Complete", "FABRICATION", 5)
-        fitup = make_release(3, "A", "Fit Up Complete.", "FABRICATION", 8)
+        fitup = make_release(3, "A", "Fitup Complete", "FABRICATION", 8)
         released = make_release(4, "A", "Released", "FABRICATION", 12)
         db.session.commit()
 

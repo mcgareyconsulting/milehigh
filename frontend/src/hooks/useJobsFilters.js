@@ -9,8 +9,8 @@
  * invariants:
  *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
  *   - Subset views apply stage-group filters then sort by fab_order, EXCEPT
- *     ready_to_ship and paint sort by stage priority (Shipping planning → Store →
- *     Paint complete → Paint Start → Welded QC) then last_updated_at ascending.
+ *     ready_to_ship and paint sort by stage priority (Ship Planning → Store at MHMW →
+ *     Paint Complete → Paint Start → Welded QC) then last_updated_at ascending.
  *     paint_fab uses that same stage+date sort for the paint band, then fab_order
  *     for the FABRICATION band.
  *   - totalFabHrs and totalInstallHrs are computed over ALL jobs, not the filtered displayJobs
@@ -19,27 +19,52 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 
 const _FAB_MODIFIER = {
-    'Released': 1.0,
-    'Cut Start': 0.9, 'Cut start': 0.9,
-    'Fit up Comp': 0.5, 'Fit Up Complete': 0.5, 'Fit Up Complete.': 0.5, 'Fitup comp': 0.5,
-    'WeldingQC': 0.0, 'Welded QC': 0.0, 'Welding QC': 0.0,
-    'Paint Start': 0.0,
-    'Paint Complete': 0.0, 'Paint complete': 0.0, 'Paint comp': 0.0,
-    'Store': 0.0, 'Store at MHMW for shipping': 0.0,
-    'Ship Planning': 0.0, 'Shipping planning': 0.0,
-    'Ship Complete': 0.0, 'Shipping completed': 0.0,
-    'Complete': 0.0,
+    'Released':         1.0,
+    'Cut Start':        0.9,
+    'Fitup Complete':   0.5,
+    'Welded QC':        0.0,
+    'Paint Start':      0.0,
+    'Paint Complete':   0.0,
+    'Store at MHMW':    0.0,
+    'Ship Planning':    0.0,
+    'Ship Complete':    0.0,
+    'Install Start':    0.0,
+    'Install Complete': 0.0,
+    'Complete':         0.0,
+};
+
+// Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
+// in app/api/helpers.py — keep in sync. Drives the totalInstallHrs KPI; Job Comp
+// no longer factors here (install progress is now stage-driven via Install Start
+// and Install Complete transitions).
+const _INSTALL_MODIFIER = {
+    'Released':         0.0,
+    'Material Ordered': 0.0,
+    'Cut Start':        0.0,
+    'Cut Complete':     0.0,
+    'Fitup Start':      0.0,
+    'Fitup Complete':   0.0,
+    'Weld Start':       1.0,
+    'Weld Complete':    1.0,
+    'Hold':             1.0,
+    'Welded QC':        1.0,
+    'Paint Start':      1.0,
+    'Paint Complete':   1.0,
+    'Store at MHMW':    1.0,
+    'Ship Planning':    1.0,
+    'Ship Complete':    1.0,
+    'Install Start':    0.5,
+    'Install Complete': 0.0,
+    'Complete':         0.0,
 };
 
 function _getFabModifier(stage) {
     return stage in _FAB_MODIFIER ? _FAB_MODIFIER[stage] : 1.0;
 }
 
-function _parseJobComp(val) {
-    if (val === null || val === undefined || val === '') return 0.0;
-    const frac = parseFloat(val);
-    if (isNaN(frac)) return 0.0;
-    return Math.min(frac, 1.0);
+function _getInstallModifier(stage) {
+    // Unknown stages default to 0 (excluded), mirroring the backend.
+    return stage in _INSTALL_MODIFIER ? _INSTALL_MODIFIER[stage] : 0.0;
 }
 
 /**
@@ -196,14 +221,11 @@ export function useJobsFilters(jobs = []) {
      * (e.g. all Ready-to-Ship fixed-tier stages share fab_order = 2)
      */
     const STAGE_SORT_PRIORITY = {
-        'Shipping planning': 1,
-        'Shipping Planning': 1,
-        'Store at MHMW for shipping': 2,
-        'Store at Shop': 2,
-        'Paint complete': 3,
+        'Ship Planning':  1,
+        'Store at MHMW':  2,
         'Paint Complete': 3,
-        'Paint Start': 3.5,
-        'Welded QC': 4,
+        'Paint Start':    3.5,
+        'Welded QC':      4,
     };
 
     /**
@@ -259,13 +281,6 @@ export function useJobsFilters(jobs = []) {
         });
     }, []);
 
-    /**
-     * Sort jobs by stage priority (per STAGE_SORT_PRIORITY), then fab_order
-     * ascending, then last_updated_at ascending as a final tiebreaker. Used by
-     * Paint and the paint band of Paint+Fab so renumbering a release reorders
-     * it inside its stage band instead of sinking it via last_updated_at.
-     * Rows with null/NaN fab_order sink to the bottom of their stage.
-     */
     const sortByStageThenFabOrder = useCallback((jobs) => {
         return [...jobs].sort((a, b) => {
             const stageA = String(a['Stage'] ?? '').trim();
@@ -274,26 +289,15 @@ export function useJobsFilters(jobs = []) {
             const prioB = STAGE_SORT_PRIORITY[stageB] ?? 999;
             if (prioA !== prioB) return prioA - prioB;
 
-            const rawA = a['Fab Order'];
-            const rawB = b['Fab Order'];
-            const numA = rawA == null ? NaN : Number(rawA);
-            const numB = rawB == null ? NaN : Number(rawB);
+            const numA = a['Fab Order'] == null ? NaN : Number(a['Fab Order']);
+            const numB = b['Fab Order'] == null ? NaN : Number(b['Fab Order']);
             const hasA = !isNaN(numA);
             const hasB = !isNaN(numB);
-            if (!hasA && !hasB) {
-                // fall through to last_updated_at tiebreaker
-            } else if (!hasA) {
-                return 1;
-            } else if (!hasB) {
-                return -1;
-            } else if (numA !== numB) {
-                return numA - numB;
-            }
+            if (hasA && hasB && numA !== numB) return numA - numB;
+            if (hasA !== hasB) return hasA ? -1 : 1;
 
-            const dateRawA = a['last_updated_at'];
-            const dateRawB = b['last_updated_at'];
-            const dateA = dateRawA ? new Date(dateRawA) : null;
-            const dateB = dateRawB ? new Date(dateRawB) : null;
+            const dateA = a['last_updated_at'] ? new Date(a['last_updated_at']) : null;
+            const dateB = b['last_updated_at'] ? new Date(b['last_updated_at']) : null;
             const validA = dateA && !isNaN(dateA.getTime());
             const validB = dateB && !isNaN(dateB.getTime());
             if (!validA && !validB) return 0;
@@ -414,7 +418,7 @@ export function useJobsFilters(jobs = []) {
         } else if (selectedSubset === 'job_order') {
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'ready_to_ship') {
-            const readyToShipStages = ['Shipping planning', 'Store at MHMW for shipping', 'Paint complete'];
+            const readyToShipStages = ['Ship Planning', 'Store at MHMW', 'Paint Complete'];
             const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByStageThenLastUpdated(rtsOnly);
         } else if (selectedSubset === 'paint') {
@@ -422,7 +426,7 @@ export function useJobsFilters(jobs = []) {
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByStageThenFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
-            const paintStages = ['Paint complete', 'Welded QC', 'Paint Start'];
+            const paintStages = ['Paint Complete', 'Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
@@ -472,22 +476,24 @@ export function useJobsFilters(jobs = []) {
      * FABRICATION = Fab, READY_TO_SHIP = Ready to Ship, COMPLETE = Complete.
      */
     const stageToGroup = {
-        'Released': 'FABRICATION',
-        'Cut start': 'FABRICATION',
-        'Cut Complete': 'FABRICATION',
-        'Fitup Start': 'FABRICATION',
-        'Fit Up Complete.': 'FABRICATION',
-        'Weld Start': 'FABRICATION',
-        'Weld Complete': 'FABRICATION',
-        'Hold': 'FABRICATION',
+        'Released':         'FABRICATION',
         'Material Ordered': 'FABRICATION',
-        'Welded QC': 'READY_TO_SHIP',
-        'Paint Start': 'READY_TO_SHIP',
-        'Paint complete': 'READY_TO_SHIP',
-        'Store at MHMW for shipping': 'READY_TO_SHIP',
-        'Shipping planning': 'READY_TO_SHIP',
-        'Shipping completed': 'COMPLETE',
-        'Complete': 'COMPLETE',
+        'Cut Start':        'FABRICATION',
+        'Cut Complete':     'FABRICATION',
+        'Fitup Start':      'FABRICATION',
+        'Fitup Complete':   'FABRICATION',
+        'Weld Start':       'FABRICATION',
+        'Weld Complete':    'FABRICATION',
+        'Hold':             'FABRICATION',
+        'Welded QC':        'READY_TO_SHIP',
+        'Paint Start':      'READY_TO_SHIP',
+        'Paint Complete':   'READY_TO_SHIP',
+        'Store at MHMW':    'READY_TO_SHIP',
+        'Ship Planning':    'READY_TO_SHIP',
+        'Ship Complete':    'COMPLETE',
+        'Install Start':    'COMPLETE',
+        'Install Complete': 'COMPLETE',
+        'Complete':         'COMPLETE',
     };
 
     /**
@@ -514,19 +520,21 @@ export function useJobsFilters(jobs = []) {
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Material Ordered', label: 'Material Ordered' },
-        { value: 'Cut start', label: 'Cut start' },
+        { value: 'Cut Start', label: 'Cut Start' },
         { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Fitup Start', label: 'Fitup start' },
-        { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Fitup Complete', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Paint Complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
-        { value: 'Store at MHMW for shipping', label: 'Store' },
-        { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Store at MHMW', label: 'Store' },
+        { value: 'Ship Planning', label: 'Ship plan' },
+        { value: 'Ship Complete', label: 'Ship comp' },
+        { value: 'Install Start', label: 'Install start' },
+        { value: 'Install Complete', label: 'Install comp' },
         { value: 'Complete', label: 'Complete' }
     ];
 
@@ -534,71 +542,41 @@ export function useJobsFilters(jobs = []) {
      * Color mapping for each stage (matching dropdown colors)
      * Unselected: lighter background, selected: darker background with white text
      */
+    const _BLUE = {
+        unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+        selected: 'bg-blue-600 text-white border-blue-700'
+    };
+    const _EMERALD = {
+        unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+        selected: 'bg-emerald-600 text-white border-emerald-700'
+    };
+    const _VIOLET = {
+        unselected: 'bg-violet-100 text-violet-800 border-violet-300',
+        selected: 'bg-violet-600 text-white border-violet-700'
+    };
+    const _YELLOW = {
+        unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+        selected: 'bg-yellow-600 text-white border-yellow-700'
+    };
     const stageColors = {
-        'Released': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Cut start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Cut Complete': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Fitup Start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Fit Up Complete.': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Welded QC': {
-            unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-            selected: 'bg-yellow-600 text-white border-yellow-700'
-        },
-        'Paint Start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Paint complete': {
-            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-            selected: 'bg-emerald-600 text-white border-emerald-700'
-        },
-        'Store at MHMW for shipping': {
-            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-            selected: 'bg-emerald-600 text-white border-emerald-700'
-        },
-        'Shipping planning': {
-            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-            selected: 'bg-emerald-600 text-white border-emerald-700'
-        },
-        'Shipping completed': {
-            unselected: 'bg-violet-100 text-violet-800 border-violet-300',
-            selected: 'bg-violet-600 text-white border-violet-700'
-        },
-        'Complete': {
-            unselected: 'bg-violet-100 text-violet-800 border-violet-300',
-            selected: 'bg-violet-600 text-white border-violet-700'
-        },
-        'Hold': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Weld Start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Weld Complete': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Material Ordered': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        }
+        'Released':         _BLUE,
+        'Material Ordered': _BLUE,
+        'Cut Start':        _BLUE,
+        'Cut Complete':     _BLUE,
+        'Fitup Start':      _BLUE,
+        'Fitup Complete':   _BLUE,
+        'Weld Start':       _BLUE,
+        'Weld Complete':    _BLUE,
+        'Hold':             _BLUE,
+        'Welded QC':        _YELLOW,
+        'Paint Start':      _BLUE,
+        'Paint Complete':   _EMERALD,
+        'Store at MHMW':    _EMERALD,
+        'Ship Planning':    _EMERALD,
+        'Ship Complete':    _VIOLET,
+        'Install Start':    _VIOLET,
+        'Install Complete': _VIOLET,
+        'Complete':         _VIOLET,
     };
 
     /**
@@ -618,10 +596,16 @@ export function useJobsFilters(jobs = []) {
         jobs.reduce((sum, job) => sum + (job['Fab Hrs'] || 0) * _getFabModifier(job['Stage'] || ''), 0),
     [jobs]);
 
+    // Stage-driven install hour total. Each stage carries an install %
+    // (Install Start = 50%, Install Complete = 0%, etc.) per the matrix in
+    // app/api/helpers.py STAGE_HOUR_PERCENTAGES. Job Comp is no longer a
+    // factor — it's still used for completion gating and the install-prog
+    // review sort, but not for this KPI.
     const totalInstallHrs = useMemo(() =>
         jobs.reduce((sum, job) => {
-            if (_getFabModifier(job['Stage'] || '') > 0.0) return sum;
-            return sum + (job['Install HRS'] || 0) * (1.0 - _parseJobComp(job['Job Comp']));
+            const modifier = _getInstallModifier(job['Stage'] || '');
+            if (modifier === 0.0) return sum;
+            return sum + (job['Install HRS'] || 0) * modifier;
         }, 0),
     [jobs]);
 
