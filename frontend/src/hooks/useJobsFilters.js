@@ -33,15 +33,38 @@ const _FAB_MODIFIER = {
     'Complete':         0.0,
 };
 
+// Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
+// in app/api/helpers.py — keep in sync. Drives the totalInstallHrs KPI; Job Comp
+// no longer factors here (install progress is now stage-driven via Install Start
+// and Install Complete transitions).
+const _INSTALL_MODIFIER = {
+    'Released':         0.0,
+    'Material Ordered': 0.0,
+    'Cut Start':        0.0,
+    'Cut Complete':     0.0,
+    'Fitup Start':      0.0,
+    'Fitup Complete':   0.0,
+    'Weld Start':       1.0,
+    'Weld Complete':    1.0,
+    'Hold':             1.0,
+    'Welded QC':        1.0,
+    'Paint Start':      1.0,
+    'Paint Complete':   1.0,
+    'Store at MHMW':    1.0,
+    'Ship Planning':    1.0,
+    'Ship Complete':    1.0,
+    'Install Start':    0.5,
+    'Install Complete': 0.0,
+    'Complete':         0.0,
+};
+
 function _getFabModifier(stage) {
     return stage in _FAB_MODIFIER ? _FAB_MODIFIER[stage] : 1.0;
 }
 
-function _parseJobComp(val) {
-    if (val === null || val === undefined || val === '') return 0.0;
-    const frac = parseFloat(val);
-    if (isNaN(frac)) return 0.0;
-    return Math.min(frac, 1.0);
+function _getInstallModifier(stage) {
+    // Unknown stages default to 0 (excluded), mirroring the backend.
+    return stage in _INSTALL_MODIFIER ? _INSTALL_MODIFIER[stage] : 0.0;
 }
 
 /**
@@ -573,10 +596,16 @@ export function useJobsFilters(jobs = []) {
         jobs.reduce((sum, job) => sum + (job['Fab Hrs'] || 0) * _getFabModifier(job['Stage'] || ''), 0),
     [jobs]);
 
+    // Stage-driven install hour total. Each stage carries an install %
+    // (Install Start = 50%, Install Complete = 0%, etc.) per the matrix in
+    // app/api/helpers.py STAGE_HOUR_PERCENTAGES. Job Comp is no longer a
+    // factor — it's still used for completion gating and the install-prog
+    // review sort, but not for this KPI.
     const totalInstallHrs = useMemo(() =>
         jobs.reduce((sum, job) => {
-            if (_getFabModifier(job['Stage'] || '') > 0.0) return sum;
-            return sum + (job['Install HRS'] || 0) * (1.0 - _parseJobComp(job['Job Comp']));
+            const modifier = _getInstallModifier(job['Stage'] || '');
+            if (modifier === 0.0) return sum;
+            return sum + (job['Install HRS'] || 0) * modifier;
         }, 0),
     [jobs]);
 

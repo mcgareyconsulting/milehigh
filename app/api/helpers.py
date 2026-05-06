@@ -4,7 +4,8 @@ schema_version: 1
 purpose: Centralize stage-mapping constants and job-display transforms so every consumer shares one source of truth.
 exports:
   STAGE_TO_GROUP: Canonical-name dict mapping every stage to its group (FABRICATION, READY_TO_SHIP, COMPLETE)
-  STAGE_HOUR_PERCENTAGES: Per-stage % remaining of fab and install hour budgets (for future comp-ETA calc)
+  STAGE_HOUR_PERCENTAGES: Per-stage % remaining of fab and install hour budgets
+  get_install_modifier: Return the remaining-install-hours multiplier (0.0-1.0) derived from STAGE_HOUR_PERCENTAGES
   transform_job_for_display: Convert a raw job dict into the frontend display format
   get_stage_group_from_stage: Resolve a stage name to its group with case-insensitive fallback
   add_scheduling_fields_to_jobs: Enrich job dicts with projected dates and queue metrics
@@ -139,6 +140,29 @@ STAGE_HOUR_PERCENTAGES = {
     "Install Complete": {"fab": 0,   "install": 0},
     "Complete":         {"fab": 0,   "install": 0},
 }
+
+
+def get_install_modifier(stage: Optional[str]) -> float:
+    """Return the remaining-install-hours multiplier (0.0–1.0) for a stage.
+
+    Derived from STAGE_HOUR_PERCENTAGES so the per-stage matrix is the single
+    source of truth. Unknown stages default to 0.0 (conservatively excluded
+    from install-hour totals — the matrix covers every canonical stage, so
+    a miss almost always indicates a non-canonical drift to investigate).
+    """
+    if not stage:
+        return 0.0
+    pct = STAGE_HOUR_PERCENTAGES.get(stage)
+    if pct is None:
+        # Case-insensitive fallback for incidental drift
+        stage_lower = stage.lower()
+        for key, value in STAGE_HOUR_PERCENTAGES.items():
+            if key.lower() == stage_lower:
+                pct = value
+                break
+    if pct is None:
+        return 0.0
+    return pct["install"] / 100.0
 
 # Single source of truth for "how far along is this stage on the release lifecycle."
 # Used by the inbound Trello rank gate in TrelloListMapper: when an inbound webhook
