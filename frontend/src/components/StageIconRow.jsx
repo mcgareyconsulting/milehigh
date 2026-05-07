@@ -3,27 +3,35 @@
  * schema_version: 1
  * purpose: Banana Code progress indicator — renders 7 department icons (Admin → Install) per release, colored by the stage's position in the spec mapping.
  * exports:
- *   StageIconRow: Per-row indicator. Props: stage (string), iconSize (number, default 20).
- * imports_from: [react, ../utils/stageProgress]
- * imported_by: [frontend/src/components/JobsTableRow.jsx]
+ *   StageIconRow: Per-row indicator. Props: stage (string), iconSize (number).
+ *   BananaCodeHeader: Column header (title + 7 dept short labels), aligned to StageIconRow.
+ * imports_from: [react, ../utils/stageProgress, ../utils/holdFlag]
+ * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
  *   - Icon assets live at /icons/<dept>_<state>.png (gray/green/half/yellow).
- *   - Hold stage overlays a small red flag on the Weld slot.
- *   - Pixel-art icons render with imageRendering: pixelated for crispness.
+ *   - Hold stage overlays a small red flag on the Weld slot via shared geometry.
+ *   - Source PNGs are 2:3 portrait; rendered at that aspect ratio.
  */
 import React from 'react';
 import {
     DEPARTMENTS,
     DEPARTMENT_LABELS,
+    DEPARTMENT_LABELS_SHORT,
+    BANANA_CODE_ICON_SIZE,
     getStageIconRow,
     isHoldStage,
 } from '../utils/stageProgress';
+import {
+    HOLD_FLAG_VIEWBOX,
+    HOLD_FLAG_COLORS,
+    HOLD_FLAG_POLE,
+    HOLD_FLAG_POINTS,
+    HOLD_FLAG_STROKE_WIDTH,
+} from '../utils/holdFlag';
 
 const ICON_BASE = '/icons';
-
-// Source PNGs are 1024×1536 (2:3 portrait). Render at the same aspect ratio
-// so the bananas don't get squashed.
-const ICON_ASPECT = 2 / 3;
+const ICON_ASPECT_W_OVER_H = 2 / 3;
+const HOLD_FLAG_PATH_D = `M ${HOLD_FLAG_POINTS.map(([x, y]) => `${x} ${y}`).join(' L ')} Z`;
 
 function HoldFlag({ width }) {
     const flagSize = Math.max(10, Math.round(width * 0.7));
@@ -31,7 +39,7 @@ function HoldFlag({ width }) {
         <svg
             width={flagSize}
             height={flagSize}
-            viewBox="0 0 16 16"
+            viewBox={`0 0 ${HOLD_FLAG_VIEWBOX} ${HOLD_FLAG_VIEWBOX}`}
             xmlns="http://www.w3.org/2000/svg"
             style={{
                 position: 'absolute',
@@ -42,18 +50,30 @@ function HoldFlag({ width }) {
             }}
             aria-hidden="true"
         >
-            <line x1="3" y1="1" x2="3" y2="15" stroke="#1f2937" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M3 2 L13 4 L9 6.5 L13 9 L3 7.5 Z" fill="#dc2626" stroke="#7f1d1d" strokeWidth="0.75" strokeLinejoin="round" />
+            <line
+                x1={HOLD_FLAG_POLE.x1} y1={HOLD_FLAG_POLE.y1}
+                x2={HOLD_FLAG_POLE.x2} y2={HOLD_FLAG_POLE.y2}
+                stroke={HOLD_FLAG_COLORS.pole}
+                strokeWidth={HOLD_FLAG_POLE.width}
+                strokeLinecap="round"
+            />
+            <path
+                d={HOLD_FLAG_PATH_D}
+                fill={HOLD_FLAG_COLORS.fill}
+                stroke={HOLD_FLAG_COLORS.stroke}
+                strokeWidth={HOLD_FLAG_STROKE_WIDTH}
+                strokeLinejoin="round"
+            />
         </svg>
     );
 }
 
-export function StageIconRow({ stage, iconSize = 22 }) {
+function StageIconRowImpl({ stage, iconSize = BANANA_CODE_ICON_SIZE }) {
     const row = getStageIconRow(stage);
     const hold = isHoldStage(stage);
     const titleStage = stage || 'Released';
     const w = iconSize;
-    const h = Math.round(iconSize / ICON_ASPECT); // 2:3 portrait
+    const h = Math.round(iconSize / ICON_ASPECT_W_OVER_H);
 
     return (
         <div className="flex items-center justify-center gap-1" title={`Stage: ${titleStage}`}>
@@ -78,6 +98,30 @@ export function StageIconRow({ stage, iconSize = 22 }) {
                     </span>
                 );
             })}
+        </div>
+    );
+}
+
+export const StageIconRow = React.memo(StageIconRowImpl);
+
+// Column header for the Banana Code column. Renders the "Banana Code" title
+// stacked over 7 short dept labels whose per-slot width matches StageIconRow's
+// per-icon width — pass the same iconSize to keep them aligned.
+export function BananaCodeHeader({ iconSize = BANANA_CODE_ICON_SIZE }) {
+    return (
+        <div className="flex flex-col items-center leading-tight">
+            <span>Banana Code</span>
+            <div className="flex items-center justify-center gap-1 mt-0.5 text-[8px] font-medium normal-case tracking-normal text-gray-500 dark:text-slate-400">
+                {DEPARTMENT_LABELS_SHORT.map((d) => (
+                    <span
+                        key={d}
+                        className="inline-block text-center overflow-hidden"
+                        style={{ width: iconSize }}
+                    >
+                        {d}
+                    </span>
+                ))}
+            </div>
         </div>
     );
 }

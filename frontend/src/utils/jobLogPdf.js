@@ -18,8 +18,17 @@ import {
     isCompleteStage,
     isHoldStage,
     DEPARTMENTS,
+    ICON_STATES,
     getStageIconRow,
 } from './stageProgress';
+import {
+    HOLD_FLAG_VIEWBOX,
+    HOLD_FLAG_COLORS,
+    HOLD_FLAG_POLE,
+    HOLD_FLAG_POINTS,
+    HOLD_FLAG_STROKE_WIDTH,
+} from './holdFlag';
+import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 
 const PAGE_WIDTH_PT = 1008;
 const PAGE_HEIGHT_PT = 612;
@@ -30,11 +39,9 @@ const MARGIN_PT = 36;
 // per-row icon size identical (so the 7-icon row doesn't wobble between rows).
 const ICON_DPI_SCALE = 3;
 const ICON_ROW_DRAW_HEIGHT_PT = 12;
-const ICON_STATES = ['gray', 'green', 'half', 'yellow'];
 
 // Cap wrapped text at this many lines per cell; further wrapping is replaced
-// with an ellipsis on the last kept line. Two lines balances density vs.
-// keeping the description readable.
+// with an ellipsis on the last kept line.
 const MAX_LINES_PER_CELL = 2;
 
 const PRINT_WIDTH_OVERRIDES = {
@@ -52,11 +59,6 @@ const PRINT_WIDTH_OVERRIDES = {
 const PRINT_CHAR_LIMITS = {
     'Job': 25,
     'Description': 25,
-};
-
-const HEADER_LABELS = {
-    'Release #': 'rel. #',
-    'Job Comp': 'Install Prog',
 };
 
 const DATE_COLUMNS = new Set(['Released', 'Start install', 'Comp. ETA']);
@@ -77,17 +79,21 @@ function loadImage(src) {
     });
 }
 
-// Load all 28 dept × state icon images once, return a {dept_state: HTMLImageElement} map.
-async function loadIconAssets() {
-    const entries = [];
-    for (const dept of DEPARTMENTS) {
-        for (const state of ICON_STATES) {
-            const key = `${dept}_${state}`;
-            entries.push(loadImage(`/icons/${key}.png`).then((img) => [key, img]));
+// Load all 28 dept × state icon images once and cache the decoded HTMLImageElement
+// map for the lifetime of the page. Re-exporting the same PDF reuses the cache.
+let _iconAssetsPromise = null;
+function getIconAssets() {
+    if (!_iconAssetsPromise) {
+        const entries = [];
+        for (const dept of DEPARTMENTS) {
+            for (const state of ICON_STATES) {
+                const key = `${dept}_${state}`;
+                entries.push(loadImage(`/icons/${key}.png`).then((img) => [key, img]));
+            }
         }
+        _iconAssetsPromise = Promise.all(entries).then(Object.fromEntries);
     }
-    const settled = await Promise.all(entries);
-    return Object.fromEntries(settled);
+    return _iconAssetsPromise;
 }
 
 // Render the seven dept icons for a given stage into a row PNG. Source PNGs
@@ -132,24 +138,25 @@ function drawHoldFlag(ctx, anchorX, anchorY, iconSize) {
     const y = anchorY - flagH * 0.15;
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(flagW / 16, flagH / 16);
+    ctx.scale(flagW / HOLD_FLAG_VIEWBOX, flagH / HOLD_FLAG_VIEWBOX);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = 1.5;
+
+    ctx.strokeStyle = HOLD_FLAG_COLORS.pole;
+    ctx.lineWidth = HOLD_FLAG_POLE.width;
     ctx.beginPath();
-    ctx.moveTo(3, 1);
-    ctx.lineTo(3, 15);
+    ctx.moveTo(HOLD_FLAG_POLE.x1, HOLD_FLAG_POLE.y1);
+    ctx.lineTo(HOLD_FLAG_POLE.x2, HOLD_FLAG_POLE.y2);
     ctx.stroke();
-    ctx.fillStyle = '#dc2626';
-    ctx.strokeStyle = '#7f1d1d';
-    ctx.lineWidth = 0.75;
+
+    ctx.fillStyle = HOLD_FLAG_COLORS.fill;
+    ctx.strokeStyle = HOLD_FLAG_COLORS.stroke;
+    ctx.lineWidth = HOLD_FLAG_STROKE_WIDTH;
     ctx.beginPath();
-    ctx.moveTo(3, 2);
-    ctx.lineTo(13, 4);
-    ctx.lineTo(9, 6.5);
-    ctx.lineTo(13, 9);
-    ctx.lineTo(3, 7.5);
+    HOLD_FLAG_POINTS.forEach(([px, py], i) => {
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    });
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -252,11 +259,11 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
         return;
     }
 
-    const iconAssets = await loadIconAssets();
+    const iconAssets = await getIconAssets();
     const iconRowProvider = makeIconRowProvider(iconAssets);
     const pmGroups = groupByPm(jobs);
     const columnStyles = buildColumnStyles(columnHeaders, columnWidthPercent);
-    const head = [columnHeaders.map((col) => HEADER_LABELS[col] ?? col)];
+    const head = [columnHeaders.map((col) => HEADER_OVERRIDES[col] ?? col)];
 
     const doc = new jsPDF({
         orientation: 'landscape',

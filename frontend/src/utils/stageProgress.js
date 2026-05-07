@@ -12,9 +12,19 @@ export const isHoldStage = (stage) =>
 // Department order shown in the Banana Code column, left → right.
 export const DEPARTMENTS = ['admin', 'cut', 'fitup', 'weld', 'paint', 'ship', 'install'];
 
-// Display labels paired with DEPARTMENTS (1:1 by index). Used for the column
-// sub-header above each icon and for tooltips.
+// Display labels paired with DEPARTMENTS (1:1 by index). Used for tooltips.
 export const DEPARTMENT_LABELS = ['Admin', 'Cut', 'Fitup', 'Weld', 'Paint', 'Ship', 'Install'];
+
+// Short forms used in the Banana Code column header above each icon. Same
+// 1:1 alignment with DEPARTMENTS — keep in lock-step.
+export const DEPARTMENT_LABELS_SHORT = ['Adm', 'Cut', 'Fit', 'Weld', 'Paint', 'Ship', 'Inst'];
+
+// Single source of truth for icon size + per-slot width. Rendering sites must
+// pass this through so header sub-labels and the icon row stay aligned.
+export const BANANA_CODE_ICON_SIZE = 26;
+
+// Valid icon states. Mirrors the suffix of the icon filenames in /icons.
+export const ICON_STATES = ['gray', 'green', 'half', 'yellow'];
 
 // Authoritative stage → 7-icon-state mapping (MHMW Banana Code spec).
 // Each value is a tuple aligned to DEPARTMENTS:

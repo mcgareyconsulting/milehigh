@@ -16,8 +16,10 @@ import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 
 function Archive() {
     const navigate = useNavigate();
@@ -314,17 +316,6 @@ function Archive() {
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
-                                                    const HEADER_OVERRIDES = {
-                                                        'Job #': 'Job',
-                                                        'Release #': 'Rel',
-                                                        'Job': 'Job Name',
-                                                        'Install HRS': 'Install Hrs',
-                                                        'Paint color': 'Paint Color',
-                                                        'BY': 'By',
-                                                        'Start install': 'Start Install',
-                                                        'Comp. ETA': 'Comp ETA',
-                                                        'Job Comp': 'Install Prog',
-                                                    };
                                                     const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                     const colWidthPct = columnWidthPercents[column];
                                                     const isUrgency = column === 'Urgency';
@@ -335,20 +326,7 @@ function Archive() {
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
                                                             {isUrgency ? (
-                                                                <div className="flex flex-col items-center leading-tight">
-                                                                    <span>Banana Code</span>
-                                                                    <div className="flex items-center justify-center gap-1 mt-0.5 text-[8px] font-medium normal-case tracking-normal text-gray-500 dark:text-slate-400">
-                                                                        {['Adm', 'Cut', 'Fit', 'Weld', 'Paint', 'Ship', 'Inst'].map((d) => (
-                                                                            <span
-                                                                                key={d}
-                                                                                className="inline-block text-center overflow-hidden"
-                                                                                style={{ width: 26 }}
-                                                                            >
-                                                                                {d}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
+                                                                <BananaCodeHeader />
                                                             ) : (
                                                                 displayHeader
                                                             )}

@@ -826,12 +826,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
 
 
-                    // Urgency column: 7-icon Banana Code row reflecting stage progression.
-                    // NOTE: minWidth/iconSize here, the Stage cell minWidth below, and the
-                    // Job/Description hard-caps further down are tuned for a desktop/laptop
-                    // viewport (~1280–1700px wide). See the long comment on
-                    // COLUMN_WIDTH_PERCENT in pages/JobLog.jsx for the responsive plan
-                    // (mobile, tablet, ultrawide) before changing any of these values.
+                    // See COLUMN_WIDTH_PERCENT in pages/JobLog.jsx for the viewport
+                    // tuning + responsive plan before changing min-widths in this file.
                     if (column === 'Urgency') {
                         return (
                             <td
@@ -841,7 +837,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <StageIconRow stage={localStage} iconSize={26} />
+                                <StageIconRow stage={localStage} />
                             </td>
                         );
                     }
@@ -1262,8 +1258,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 }`}
                             title={tooltipValue}
                             style={shouldWrapAndTruncate ? {
-                                maxWidth: column === 'Job' ? '170px' : '170px',
-                                width: column === 'Job' ? '170px' : '170px'
+                                maxWidth: '170px',
+                                width: '170px'
                             } : {}}
                         >
                             {shouldWrapAndTruncate ? (
