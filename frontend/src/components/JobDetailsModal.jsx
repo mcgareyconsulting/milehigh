@@ -10,12 +10,13 @@
  *   - Renders via createPortal to document.body to escape table overflow clipping
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+
+import { EventsModal } from './EventsModal';
 
 export function JobDetailsModal({ isOpen, onClose, job }) {
-    const navigate = useNavigate();
+    const [eventsOpen, setEventsOpen] = useState(false);
 
     if (!isOpen || !job) return null;
 
@@ -71,8 +72,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
 
     const handleEventsClick = () => {
         if (jobNumber && releaseNumber) {
-            navigate(`/events?job=${jobNumber}&release=${releaseNumber}`);
-            onClose();
+            setEventsOpen(true);
         }
     };
 
@@ -182,6 +182,17 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
         </div>
     );
 
-    return createPortal(modalContent, document.body);
+    return (
+        <>
+            {createPortal(modalContent, document.body)}
+            <EventsModal
+                isOpen={eventsOpen}
+                onClose={() => setEventsOpen(false)}
+                title={`Events — ${jobNumber}${releaseNumber ? `-${releaseNumber}` : ''}`}
+                jobFilter={jobNumber}
+                releaseFilter={releaseNumber}
+            />
+        </>
+    );
 }
 

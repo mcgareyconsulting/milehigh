@@ -17,6 +17,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { formatDate, formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import MentionInput from './shared/MentionInput';
+import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 
 export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
@@ -26,6 +27,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const [pendingNotes, setPendingNotes] = useState(null);
     const [editingDueDate, setEditingDueDate] = useState(false);
     const [dueDateValue, setDueDateValue] = useState('');
+    const [detailsOpen, setDetailsOpen] = useState(false);
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
     const dueDateInputRef = useRef(null);
@@ -637,11 +639,24 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-name`}
+                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-name`}
                                 style={{ maxWidth: '280px' }}
-                                title={fullProjectName}
+                                title={fullProjectName ? `${fullProjectName} — Click to view details` : ''}
                             >
-                                {truncatedProjectName}
+                                {submittalId ? (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDetailsOpen(true);
+                                        }}
+                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-medium"
+                                    >
+                                        {truncatedProjectName}
+                                    </button>
+                                ) : (
+                                    <span className="text-gray-900 dark:text-slate-100">{truncatedProjectName}</span>
+                                )}
                             </td>
                         );
                     }
@@ -826,6 +841,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     );
                 })}
             </tr>
+            <SubmittalDetailsModal
+                isOpen={detailsOpen}
+                onClose={() => setDetailsOpen(false)}
+                submittal={row}
+            />
         </>
     );
 }
