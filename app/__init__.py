@@ -91,6 +91,28 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # --- Nightly FC PDF Pack retry worker (2:00 AM server local time) ---
+    # Procore's Final PDF Pack can land up to ~24h after a release hits the
+    # job log; this catches the misses by retrying releases with NULL
+    # viewer_url that were released within the last 7 days.
+    def fc_pdf_retry():
+        from app.procore.fc_retry_worker import retry_missing_fc_viewer_urls
+        with app.app_context():
+            try:
+                retry_missing_fc_viewer_urls(trigger="cron")
+            except Exception as e:
+                logger.error("FC PDF retry job failed", error=str(e), exc_info=True)
+
+    scheduler.add_job(
+        func=fc_pdf_retry,
+        trigger="cron",
+        hour=2,
+        minute=0,
+        id="fc_pdf_retry",
+        name="FC PDF Pack Retry",
+        replace_existing=True,
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -106,6 +128,12 @@ def init_scheduler(app):
             "name": "Scheduler Heartbeat",
             "schedule": "Every 30 minutes",
             "description": "Confirms scheduler is alive",
+        },
+        {
+            "id": "fc_pdf_retry",
+            "name": "FC PDF Pack Retry",
+            "schedule": "Daily at 02:00",
+            "description": "Retry Procore FC viewer_url for releases missing it (last 7 days)",
         },
     ]
 

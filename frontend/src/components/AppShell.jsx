@@ -151,6 +151,20 @@ function AppShellInner({ isAuthenticated }) {
             </button>
           )}
 
+          {/* FC Collection runs (admin only) */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin/fc-collection')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/admin/fc-collection')
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+                }`}
+            >
+              FC Collection
+            </button>
+          )}
+
           {/* Notification bell (authenticated users only) */}
           {isAuthenticated && <NotificationBell />}
 

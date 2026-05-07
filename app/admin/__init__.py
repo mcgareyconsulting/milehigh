@@ -17,7 +17,7 @@ updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 import os
 
 from flask import Blueprint, current_app, jsonify, request, g
-from app.models import Projects, ReleaseDrawingVersion, db
+from app.models import Projects, ReleaseDrawingVersion, FcCollectionRun, db
 from app.auth.utils import admin_required
 from app.brain.map.utils.geofence import generate_geofence_polygon
 from app.brain.job_log.features.pdf_markup.storage import absolute_path
@@ -222,3 +222,44 @@ def disk_pdfs_summary():
         'per_release': per_release[:50],            # top 50 largest
     })
     return jsonify(info), 200
+
+
+@admin_bp.route('/fc-collection/runs', methods=['GET'])
+@admin_required
+def fc_collection_runs_list():
+    """Return summaries for the most recent FC PDF Pack retry runs (no per-release detail)."""
+    runs = (
+        FcCollectionRun.query
+        .order_by(FcCollectionRun.run_at.desc())
+        .limit(30)
+        .all()
+    )
+    return jsonify({"runs": [r.to_summary_dict() for r in runs]}), 200
+
+
+@admin_bp.route('/fc-collection/runs/<int:run_id>', methods=['GET'])
+@admin_required
+def fc_collection_run_detail(run_id):
+    """Return one run with the full per-release breakdown (succeeded / still_missing / errored)."""
+    run = FcCollectionRun.query.get(run_id)
+    if not run:
+        return jsonify({"error": "run not found"}), 404
+    return jsonify(run.to_dict()), 200
+
+
+@admin_bp.route('/fc-collection/run-now', methods=['POST'])
+@admin_required
+def fc_collection_run_now():
+    """Manually fire the FC PDF Pack retry pass and return the resulting run summary.
+
+    Useful for stakeholders who want to refresh now rather than wait for the
+    2:00 AM cron, or for verifying the worker after a deploy.
+    """
+    from app.procore.fc_retry_worker import retry_missing_fc_viewer_urls
+    try:
+        summary = retry_missing_fc_viewer_urls(trigger="manual")
+        return jsonify({"success": True, "run": summary}), 200
+    except Exception as exc:
+        logger.error("Manual FC retry run failed: %s", exc, exc_info=True)
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 500
