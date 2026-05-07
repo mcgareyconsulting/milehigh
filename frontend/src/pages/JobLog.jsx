@@ -20,11 +20,13 @@ import { useJobsFilters } from '../hooks/useJobsFilters';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
 import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
+import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 
 // Stage completeness order (index 0 = least complete, higher = more complete).
 // Canonical names — see app/api/helpers.py STAGE_PROGRESSION_RANK.
@@ -297,26 +299,54 @@ function JobLog() {
      * Job log column widths as percentage of table width. Tune these to taste; they are
      * normalized so visible columns always sum to 100%. Only columns listed here get
      * custom widths; others share the remainder equally.
+     *
+     * --------------------------------------------------------------------------
+     * VIEWPORT TUNING (foundation, not final)
+     * --------------------------------------------------------------------------
+     * These percentages — together with the per-cell `min-width`s in JobsTableRow.jsx
+     * (Job Name 170px, Description 170px, Stage 140px, Urgency 230px, Fab Order
+     * input 48px, Notes textarea no-floor) and the `iconSize=26` Banana Code row
+     * with 4px gaps — are tuned for a standard desktop / laptop viewport, roughly
+     * 1280–1700px wide.
+     *
+     * On smaller screens the Banana Code's 230px floor + min-widths above will push
+     * the table into horizontal scroll. On large/ultrawide screens (>1920) the
+     * extra room distributes proportionally and the icons stay 26px (the Urgency
+     * cell will just gain whitespace).
+     *
+     * TODO when adding responsive breakpoints:
+     *   - Mobile (<768px): drop the Banana Code column entirely, or collapse the
+     *     7 dept icons to a single overall-progress badge. Hide low-signal
+     *     columns (PM, BY, Fab Hrs, Install Hrs, Comp. ETA).
+     *   - Tablet (768–1280px): show 5 of the 7 dept icons (skip Admin + Store-at-MHMW
+     *     equivalents) and shrink iconSize to 20.
+     *   - Large desktop (>1920px): bump iconSize to 30 so the banana row scales with
+     *     the rest of the table instead of leaving a gap.
+     *
+     * Sub-label widths in the Banana Code header (currently 26px each, gap-1)
+     * MUST stay equal to the icon size + gap in `StageIconRow` so the per-icon
+     * labels line up with the icons below.
+     * --------------------------------------------------------------------------
      */
     const COLUMN_WIDTH_PERCENT = {
         'Job #': 3,
         'Release #': 3,
-        'Job': 6,
-        'Description': 7,
-        'Fab Hrs': 4,
-        'Install HRS': 5,
-        'Paint color': 6,
+        'Job': 9,
+        'Description': 8,
+        'Fab Hrs': 3,
+        'Install HRS': 3,
+        'Paint color': 5,
         'PM': 3,
         'BY': 3,
-        'Released': 5,
-        'Fab Order': 6,
-        'Stage': 9,
-        'Urgency': 7,
-        'Start install': 5,
-        'Comp. ETA': 5,
-        'Job Comp': 5,
-        'Invoiced': 5,
-        'Notes': 10,
+        'Released': 4,
+        'Fab Order': 4,
+        'Stage': 6,
+        'Urgency': 14,
+        'Start install': 4,
+        'Comp. ETA': 4,
+        'Job Comp': 4,
+        'Invoiced': 4,
+        'Notes': 9,
         'Actions': 5,
     };
 
@@ -881,19 +911,21 @@ function JobLog() {
                                                 <tr>
                                                     {columnHeaders.map((column) => {
                                                         const isReleaseNumber = column === 'Release #';
-                                                        // Display "rel. #" for Release # column header
-                                                        const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
+                                                        const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                         const colWidthPct = columnWidthPercents[column];
                                                         const isFilterable = FILTERABLE_COLUMNS.has(column);
                                                         const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
                                                         const colSelected = columnFilters[column] ?? [];
+                                                        const isUrgency = column === 'Urgency';
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-xs' : 'py-0.5 text-[10px]'} text-center font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
+                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-xs' : 'py-0.5 text-[10px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
-                                                                {isFilterable ? (
+                                                                {isUrgency ? (
+                                                                    <BananaCodeHeader />
+                                                                ) : isFilterable ? (
                                                                     <ColumnHeaderFilter
                                                                         column={column}
                                                                         values={colInfo?.values ?? []}
@@ -913,7 +945,7 @@ function JobLog() {
                                                         );
                                                     })}
                                                     {isAdmin && (
-                                                        <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600 w-12">
+                                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600 w-8">
                                                             ⚙
                                                         </th>
                                                     )}
