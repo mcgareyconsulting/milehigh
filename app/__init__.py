@@ -166,9 +166,8 @@ def create_app():
 
     @app.after_request
     def apply_cache_headers(response):
-        # Hashed bundles are content-addressed; cache forever.
-        # HTML shell must revalidate so a deploy can't be missed by a cached tab.
-        # API responses must never be cached — session-scoped, frequently mutating.
+        # The HTML shell must revalidate every load — without this, a tab cached pre-deploy
+        # rides forever on stale bundle hashes (Render purges old chunks on each deploy).
         path = request.path or ""
         if path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"

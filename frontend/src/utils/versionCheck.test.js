@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { checkVersion, CLIENT_VERSION } from './versionCheck';
+import { checkVersion } from './versionCheck';
+import { CLIENT_VERSION } from './version';
 
 describe('checkVersion', () => {
   let fetchSpy;

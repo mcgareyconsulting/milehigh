@@ -1,27 +1,23 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { checkVersion } from '../utils/versionCheck';
 
-// Sticky banner that prompts the user to reload when the server is running a
-// newer build than the one this tab booted with. Dismissible, but reappears on
-// the next focus-triggered check (per docs/context.md 2c).
 export default function UpdateAvailableBanner() {
   const [stale, setStale] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
-  const runCheck = useCallback(async () => {
-    const { stale: isStale } = await checkVersion();
-    setStale(isStale);
-    if (isStale) setDismissed(false);
-  }, []);
-
   useEffect(() => {
+    const runCheck = async () => {
+      const { stale: isStale } = await checkVersion();
+      setStale(isStale);
+      if (isStale) setDismissed(false);
+    };
     runCheck();
     const onVisibility = () => {
       if (document.visibilityState === 'visible') runCheck();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [runCheck]);
+  }, []);
 
   if (!stale || dismissed) return null;
 

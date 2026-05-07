@@ -1,9 +1,7 @@
 import { API_BASE_URL } from './api';
 import { CLIENT_VERSION } from './version';
 
-// Fetches /api/version and reports whether the server's build differs from
-// the build this tab loaded with. Network failures resolve to "not stale" so
-// transient outages don't surface a false positive.
+// Network failures resolve to "not stale" so transient outages don't show a false-positive banner.
 export async function checkVersion() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/version`, {
@@ -20,5 +18,3 @@ export async function checkVersion() {
     return { stale: false, server: null };
   }
 }
-
-export { CLIENT_VERSION };
