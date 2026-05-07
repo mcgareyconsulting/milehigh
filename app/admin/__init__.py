@@ -22,7 +22,7 @@ from app.auth.utils import admin_required
 from app.brain.map.utils.geofence import generate_geofence_polygon
 from app.brain.job_log.features.pdf_markup.storage import absolute_path
 from app.logging_config import get_logger
-from app.route_utils import handle_errors, require_json
+from app.route_utils import handle_errors, require_json, get_or_404
 from app.procore.client import get_procore_client
 from app.procore.procore import get_project_info
 
@@ -226,6 +226,7 @@ def disk_pdfs_summary():
 
 @admin_bp.route('/fc-collection/runs', methods=['GET'])
 @admin_required
+@handle_errors("list FC collection runs")
 def fc_collection_runs_list():
     """Return summaries for the most recent FC PDF Pack retry runs (no per-release detail)."""
     runs = (
@@ -239,16 +240,18 @@ def fc_collection_runs_list():
 
 @admin_bp.route('/fc-collection/runs/<int:run_id>', methods=['GET'])
 @admin_required
+@handle_errors("fetch FC collection run")
 def fc_collection_run_detail(run_id):
     """Return one run with the full per-release breakdown (succeeded / still_missing / errored)."""
-    run = FcCollectionRun.query.get(run_id)
-    if not run:
-        return jsonify({"error": "run not found"}), 404
+    run, err = get_or_404(FcCollectionRun, error_msg="run not found", id=run_id)
+    if err:
+        return err
     return jsonify(run.to_dict()), 200
 
 
 @admin_bp.route('/fc-collection/run-now', methods=['POST'])
 @admin_required
+@handle_errors("run FC collection", raw_error=True)
 def fc_collection_run_now():
     """Manually fire the FC PDF Pack retry pass and return the resulting run summary.
 
@@ -256,10 +259,5 @@ def fc_collection_run_now():
     2:00 AM cron, or for verifying the worker after a deploy.
     """
     from app.procore.fc_retry_worker import retry_missing_fc_viewer_urls
-    try:
-        summary = retry_missing_fc_viewer_urls(trigger="manual")
-        return jsonify({"success": True, "run": summary}), 200
-    except Exception as exc:
-        logger.error("Manual FC retry run failed: %s", exc, exc_info=True)
-        db.session.rollback()
-        return jsonify({"success": False, "error": str(exc)}), 500
+    summary = retry_missing_fc_viewer_urls(trigger="manual")
+    return jsonify({"success": True, "run": summary}), 200

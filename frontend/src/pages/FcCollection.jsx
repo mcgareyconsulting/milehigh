@@ -6,10 +6,22 @@ import {
     triggerFcCollectionRun,
 } from '../services/fcCollectionApi';
 
+const BUCKET_TONES = {
+    succeeded:     { label: 'Pulled this run', heading: 'text-emerald-700 dark:text-emerald-300', chip: 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200', empty: 'Nothing was pulled in this run.', tooltipField: null },
+    still_missing: { label: 'Still missing',   heading: 'text-amber-700 dark:text-amber-300',     chip: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200', empty: 'No releases left waiting.',         tooltipField: 'reason' },
+    errored:       { label: 'Errored',         heading: 'text-red-700 dark:text-red-300',         chip: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200',           empty: null,                                tooltipField: 'error' },
+};
+
+const STAT_TONES = {
+    slate:   'text-slate-700 dark:text-slate-200',
+    emerald: 'text-emerald-700 dark:text-emerald-400',
+    amber:   'text-amber-700 dark:text-amber-400',
+    red:     'text-red-600 dark:text-red-400',
+};
+
 function formatTimestamp(iso) {
     if (!iso) return '—';
-    const d = new Date(iso);
-    return d.toLocaleString();
+    return new Date(iso).toLocaleString();
 }
 
 function formatDuration(ms) {
@@ -18,84 +30,59 @@ function formatDuration(ms) {
     return `${(ms / 1000).toFixed(1)} s`;
 }
 
-function ReleaseChip({ entry }) {
+function BucketSection({ bucket, items }) {
+    const { label, heading, chip, empty, tooltipField } = BUCKET_TONES[bucket];
+    if (items.length === 0 && empty === null) return null;
     return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 mr-1.5 mb-1.5">
-            <span className="font-mono">{entry.job}-{entry.release}</span>
-        </span>
-    );
-}
-
-function RunDetailRows({ detail }) {
-    if (!detail) return null;
-    const buckets = detail.details || {};
-    const succeeded = buckets.succeeded || [];
-    const stillMissing = buckets.still_missing || [];
-    const errored = buckets.errored || [];
-
-    return (
-        <div className="bg-slate-50 dark:bg-slate-900 px-6 py-5 border-t border-slate-200 dark:border-slate-700 space-y-4">
-            <div>
-                <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
-                    Pulled this run ({succeeded.length})
-                </div>
-                {succeeded.length === 0 ? (
-                    <div className="text-xs text-slate-500 dark:text-slate-400 italic">Nothing was pulled in this run.</div>
-                ) : (
-                    <div className="flex flex-wrap">
-                        {succeeded.map(e => <ReleaseChip key={`s-${e.job}-${e.release}`} entry={e} />)}
-                    </div>
-                )}
+        <div>
+            <div className={`text-sm font-semibold mb-2 ${heading}`}>
+                {label} ({items.length})
             </div>
-
-            <div>
-                <div className="text-sm font-semibold text-amber-700 dark:text-amber-300 mb-2">
-                    Still missing ({stillMissing.length})
-                </div>
-                {stillMissing.length === 0 ? (
-                    <div className="text-xs text-slate-500 dark:text-slate-400 italic">No releases left waiting.</div>
-                ) : (
-                    <div className="flex flex-wrap">
-                        {stillMissing.map(e => (
-                            <span
-                                key={`m-${e.job}-${e.release}`}
-                                title={e.reason || ''}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 mr-1.5 mb-1.5"
-                            >
-                                <span className="font-mono">{e.job}-{e.release}</span>
-                            </span>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {errored.length > 0 && (
-                <div>
-                    <div className="text-sm font-semibold text-red-700 dark:text-red-300 mb-2">
-                        Errored ({errored.length})
-                    </div>
-                    <div className="flex flex-wrap">
-                        {errored.map(e => (
-                            <span
-                                key={`e-${e.job}-${e.release}`}
-                                title={e.error || ''}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 mr-1.5 mb-1.5"
-                            >
-                                <span className="font-mono">{e.job}-{e.release}</span>
-                            </span>
-                        ))}
-                    </div>
+            {items.length === 0 ? (
+                <div className="text-xs text-slate-500 dark:text-slate-400 italic">{empty}</div>
+            ) : (
+                <div className="flex flex-wrap">
+                    {items.map(e => (
+                        <span
+                            key={`${bucket}-${e.job}-${e.release}`}
+                            title={tooltipField ? (e[tooltipField] || '') : ''}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md mr-1.5 mb-1.5 ${chip}`}
+                        >
+                            <span className="font-mono">{e.job}-{e.release}</span>
+                        </span>
+                    ))}
                 </div>
             )}
         </div>
     );
 }
 
+function RunDetailRows({ detail }) {
+    if (!detail) return null;
+    const buckets = detail.details || {};
+    return (
+        <div className="bg-slate-50 dark:bg-slate-900 px-6 py-5 border-t border-slate-200 dark:border-slate-700 space-y-4">
+            <BucketSection bucket="succeeded"     items={buckets.succeeded     || []} />
+            <BucketSection bucket="still_missing" items={buckets.still_missing || []} />
+            <BucketSection bucket="errored"       items={buckets.errored       || []} />
+        </div>
+    );
+}
+
+function Stat({ label, value, tone = 'slate' }) {
+    return (
+        <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</div>
+            <div className={`text-2xl font-bold tabular-nums ${STAT_TONES[tone] || STAT_TONES.slate}`}>{value}</div>
+        </div>
+    );
+}
+
 export default function FcCollection() {
-    const [authChecked, setAuthChecked] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [runs, setRuns] = useState([]);
-    const [loading, setLoading] = useState(true);
+    // null = pending, true/false = resolved. Avoids a separate authChecked flag.
+    const [isAdmin, setIsAdmin] = useState(null);
+    // null = not yet loaded; array = loaded. Avoids a separate loading flag.
+    const [runs, setRuns] = useState(null);
     const [running, setRunning] = useState(false);
     const [expandedId, setExpandedId] = useState(null);
     const [detailById, setDetailById] = useState({});
@@ -105,26 +92,23 @@ export default function FcCollection() {
         (async () => {
             const user = await checkAuth();
             setIsAdmin(!!user?.is_admin);
-            setAuthChecked(true);
         })();
     }, []);
 
     const loadRuns = useCallback(async () => {
-        setLoading(true);
         setError(null);
         try {
             const list = await fetchFcCollectionRuns();
             setRuns(list);
         } catch (e) {
             setError('Failed to load runs.');
-        } finally {
-            setLoading(false);
+            setRuns([]);
         }
     }, []);
 
     useEffect(() => {
-        if (authChecked && isAdmin) loadRuns();
-    }, [authChecked, isAdmin, loadRuns]);
+        if (isAdmin) loadRuns();
+    }, [isAdmin, loadRuns]);
 
     const handleRunNow = async () => {
         if (running) return;
@@ -156,7 +140,7 @@ export default function FcCollection() {
         }
     };
 
-    if (!authChecked) {
+    if (isAdmin === null) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-slate-900">
                 <div className="text-gray-600 dark:text-slate-400">Loading...</div>
@@ -175,7 +159,7 @@ export default function FcCollection() {
         );
     }
 
-    const latest = runs[0];
+    const latest = runs && runs[0];
 
     return (
         <div className="max-w-6xl mx-auto px-6 py-8">
@@ -205,7 +189,6 @@ export default function FcCollection() {
                 </div>
             )}
 
-            {/* Latest summary card */}
             <div className="mb-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
                 {latest ? (
                     <>
@@ -221,17 +204,18 @@ export default function FcCollection() {
                     </>
                 ) : (
                     <div className="text-sm text-slate-500 dark:text-slate-400">
-                        No runs recorded yet. Click <strong>Run now</strong> to fire the worker.
+                        {runs === null
+                            ? 'Loading…'
+                            : <>No runs recorded yet. Click <strong>Run now</strong> to fire the worker.</>}
                     </div>
                 )}
             </div>
 
-            {/* History table */}
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
                 <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700">
                     <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Recent runs</h2>
                 </div>
-                {loading ? (
+                {runs === null ? (
                     <div className="px-5 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">Loading…</div>
                 ) : runs.length === 0 ? (
                     <div className="px-5 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">No runs yet.</div>
@@ -280,22 +264,6 @@ export default function FcCollection() {
                     </table>
                 )}
             </div>
-        </div>
-    );
-}
-
-const TONES = {
-    slate:   'text-slate-700 dark:text-slate-200',
-    emerald: 'text-emerald-700 dark:text-emerald-400',
-    amber:   'text-amber-700 dark:text-amber-400',
-    red:     'text-red-600 dark:text-red-400',
-};
-
-function Stat({ label, value, tone = 'slate' }) {
-    return (
-        <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</div>
-            <div className={`text-2xl font-bold tabular-nums ${TONES[tone] || TONES.slate}`}>{value}</div>
         </div>
     );
 }
