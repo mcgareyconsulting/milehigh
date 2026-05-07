@@ -129,6 +129,38 @@ const formatPayloadValue = (action, value) => {
     return String(value);
 };
 
+// Build the list of cascaded reverts shown below the primary undo line. Job events
+// surface them via `linked_children`; DWL step events embed the swapped neighbor's
+// change in `payload.swapped_with` rather than emitting a separate child event.
+function buildLinkedRevertItems(undoTarget) {
+    const items = [];
+    if (undoTarget.linked_children && undoTarget.linked_children.length > 0) {
+        for (const c of undoTarget.linked_children) {
+            items.push({
+                key: `child-${c.id}`,
+                label: UNDO_ACTION_LABEL[c.action] || c.action,
+                from: c.to,
+                to: c.from,
+            });
+        }
+    }
+    const swap = undoTarget.payload?.swapped_with;
+    if (swap && swap.submittal_id && swap.order_number) {
+        items.push({
+            key: `swap-${swap.submittal_id}`,
+            label: `Order on submittal ${swap.submittal_id}`,
+            from: swap.order_number.new,
+            to: swap.order_number.old,
+        });
+    }
+    return items;
+}
+
+const UNDO_DISCLAIMER = {
+    submittal: 'Reverts the database value only — no Procore update is sent.',
+    job: 'Undo reverts this row only. Cascaded changes outside this row (scheduling for other releases, other rows in the same stash session) are not rolled back.',
+};
+
 export function EventsList({
     submittalId = '',
     jobFilter = '',
@@ -410,26 +442,7 @@ export function EventsList({
                             </p>
                         )}
                         {(() => {
-                            const items = [];
-                            if (undoTarget.linked_children && undoTarget.linked_children.length > 0) {
-                                for (const c of undoTarget.linked_children) {
-                                    items.push({
-                                        key: `child-${c.id}`,
-                                        label: UNDO_ACTION_LABEL[c.action] || c.action,
-                                        from: c.to,
-                                        to: c.from,
-                                    });
-                                }
-                            }
-                            const swap = undoTarget.payload?.swapped_with;
-                            if (swap && swap.submittal_id && swap.order_number) {
-                                items.push({
-                                    key: `swap-${swap.submittal_id}`,
-                                    label: `Order on submittal ${swap.submittal_id}`,
-                                    from: swap.order_number.new,
-                                    to: swap.order_number.old,
-                                });
-                            }
+                            const items = buildLinkedRevertItems(undoTarget);
                             if (items.length === 0) return null;
                             return (
                                 <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
@@ -454,9 +467,7 @@ export function EventsList({
                             );
                         })()}
                         <p className="text-xs text-gray-500 dark:text-slate-400 italic mb-5">
-                            {undoTarget.type === 'submittal'
-                                ? 'Reverts the database value only — no Procore update is sent.'
-                                : 'Undo reverts this row only. Cascaded changes outside this row (scheduling for other releases, other rows in the same stash session) are not rolled back.'}
+                            {UNDO_DISCLAIMER[undoTarget.type] || UNDO_DISCLAIMER.job}
                         </p>
                         <div className="flex justify-end gap-2">
                             <button
