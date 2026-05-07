@@ -84,12 +84,17 @@ export function NotesHistoryModal({ isOpen, onClose, job, release, currentNotes 
             onClick={onClose}
         >
             <div
-                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col transform transition-all"
+                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-xl w-full mx-4 max-h-[80vh] flex flex-col transform transition-all"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl">
+                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-5 py-3 rounded-t-xl">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">Notes History</h2>
+                        <div>
+                            <h2 className="text-base font-semibold text-white leading-tight">Notes History</h2>
+                            <p className="text-xs text-white text-opacity-90 mt-0.5">
+                                Job {job} — Release {release}
+                            </p>
+                        </div>
                         <button
                             onClick={onClose}
                             className="text-white hover:text-gray-200 dark:hover:text-slate-200 transition-colors text-2xl font-bold leading-none"
@@ -98,12 +103,9 @@ export function NotesHistoryModal({ isOpen, onClose, job, release, currentNotes 
                             ×
                         </button>
                     </div>
-                    <p className="text-sm text-white text-opacity-90 mt-1">
-                        Job {job} — Release {release}
-                    </p>
                 </div>
 
-                <div className="p-6 overflow-y-auto flex-1">
+                <div className="px-5 py-4 overflow-y-auto flex-1">
                     {loading && (
                         <p className="text-sm text-gray-500 dark:text-slate-400 italic">
                             Loading…
@@ -120,7 +122,7 @@ export function NotesHistoryModal({ isOpen, onClose, job, release, currentNotes 
                         </p>
                     )}
                     {!loading && !error && displayItems.length > 0 && (
-                        <ul className="space-y-4">
+                        <ul className="space-y-3">
                             {displayItems.map((item) => {
                                 if (item.synthetic) {
                                     return (
@@ -163,10 +165,10 @@ export function NotesHistoryModal({ isOpen, onClose, job, release, currentNotes 
                     )}
                 </div>
 
-                <div className="bg-gray-50 dark:bg-slate-700 px-6 py-4 rounded-b-xl border-t border-gray-200 dark:border-slate-600">
+                <div className="bg-gray-50 dark:bg-slate-700 px-5 py-3 rounded-b-xl border-t border-gray-200 dark:border-slate-600 flex justify-end">
                     <button
                         onClick={onClose}
-                        className="w-full px-4 py-2 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
+                        className="px-4 py-1.5 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-200 rounded-md text-sm font-medium hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
                     >
                         Close
                     </button>

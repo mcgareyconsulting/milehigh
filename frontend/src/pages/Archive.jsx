@@ -16,8 +16,10 @@ import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 
 function Archive() {
     const navigate = useNavigate();
@@ -314,20 +316,25 @@ function Archive() {
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
-                                                    const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
+                                                    const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                     const colWidthPct = columnWidthPercents[column];
+                                                    const isUrgency = column === 'Urgency';
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 align-middle text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
-                                                            {displayHeader}
+                                                            {isUrgency ? (
+                                                                <BananaCodeHeader />
+                                                            ) : (
+                                                                displayHeader
+                                                            )}
                                                         </th>
                                                     );
                                                 })}
                                                 {isAdmin && (
-                                                    <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                    <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-8">
                                                         ⚙
                                                     </th>
                                                 )}

@@ -30,6 +30,7 @@ from app.brain import brain_bp
 from app.auth.routes import auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
+from app.api import api_bp
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -190,6 +191,19 @@ def create_app():
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     )
+
+    @app.after_request
+    def apply_cache_headers(response):
+        # The HTML shell must revalidate every load — without this, a tab cached pre-deploy
+        # rides forever on stale bundle hashes (Render purges old chunks on each deploy).
+        path = request.path or ""
+        if path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        elif path.startswith("/assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif response.mimetype == "text/html":
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     # Configure React frontend serving
     FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
@@ -439,7 +453,7 @@ def create_app():
     # Register blueprints before catch-all so API routes (e.g. POST /api/auth/login) are matched first
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(procore_bp, url_prefix="/procore")
-    # app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(brain_bp, url_prefix="/brain")
     app.register_blueprint(auth_bp)
     app.register_blueprint(history_bp)
