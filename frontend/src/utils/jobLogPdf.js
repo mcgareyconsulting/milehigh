@@ -9,26 +9,28 @@
  * invariants:
  *   - Page format is legal landscape (14in x 8.5in = 1008pt x 612pt)
  *   - Each PM section starts on a fresh page; non-final PMs are padded to even page count
- *   - Urgency cells render rasterized BananaIcon canvases keyed by stage progress
+ *   - Urgency cells render a rasterized 7-icon Banana Code row keyed by stage name
  */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatDateShort, formatCellValue } from './formatters';
-import { isCompleteStage, getBananaProgress } from './stageProgress';
+import {
+    isCompleteStage,
+    isHoldStage,
+    DEPARTMENTS,
+    getStageIconRow,
+} from './stageProgress';
 
 const PAGE_WIDTH_PT = 1008;
 const PAGE_HEIGHT_PT = 612;
 const MARGIN_PT = 36;
 
-const BANANA_IMG_SRC = '/banana-boy.png';
-const BANANA_UNFILLED_OPACITY = 0.22;
-// Render canvases at 3× the PDF-point dimensions so the embedded PNG stays
-// crisp on print. The banana strip is rendered at a FIXED height regardless
-// of the cell's actual row height — otherwise tile width (vertical-fit) drifts
-// per row and the banana count varies between rows. The image is drawn into
-// the cell vertically centered.
-const BANANA_DPI_SCALE = 3;
-const BANANA_DRAW_HEIGHT_PT = 10;
+// Banana Code icon row — 7 dept icons rendered into the Urgency cell.
+// 3× DPI so the embedded PNG stays crisp on print. Fixed draw height keeps
+// per-row icon size identical (so the 7-icon row doesn't wobble between rows).
+const ICON_DPI_SCALE = 3;
+const ICON_ROW_DRAW_HEIGHT_PT = 12;
+const ICON_STATES = ['gray', 'green', 'half', 'yellow'];
 
 // Cap wrapped text at this many lines per cell; further wrapping is replaced
 // with an ellipsis on the last kept line. Two lines balances density vs.
@@ -75,54 +77,97 @@ function loadImage(src) {
     });
 }
 
-// Rasterize the tiled banana progress bar to a dataURL PNG at the actual
-// cell aspect ratio. Mirrors BananaIcon: repeat-x at vertical-fit, low-alpha
-// base layer + full-alpha clipped foreground covering `progress * width`.
-function buildBananaPng(bananaImg, progress, canvasW, canvasH) {
+// Load all 28 dept × state icon images once, return a {dept_state: HTMLImageElement} map.
+async function loadIconAssets() {
+    const entries = [];
+    for (const dept of DEPARTMENTS) {
+        for (const state of ICON_STATES) {
+            const key = `${dept}_${state}`;
+            entries.push(loadImage(`/icons/${key}.png`).then((img) => [key, img]));
+        }
+    }
+    const settled = await Promise.all(entries);
+    return Object.fromEntries(settled);
+}
+
+// Render the seven dept icons for a given stage into a row PNG. Source PNGs
+// are 2:3 portrait, so we render each icon at that aspect ratio centered in
+// its slot. Smooth interpolation (imageSmoothingEnabled=true) is what these
+// illustration assets want — pixelated rendering hard-edges the curves.
+const ICON_ASPECT_W_OVER_H = 2 / 3;
+
+function buildIconRowPng(iconAssets, stage, canvasW, canvasH) {
     const canvas = document.createElement('canvas');
     canvas.width = canvasW;
     canvas.height = canvasH;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
-    const tileH = canvasH;
-    const tileW = bananaImg.width * (tileH / bananaImg.height);
-    if (tileW <= 0) return canvas.toDataURL('image/png');
-    const tilesNeeded = Math.ceil(canvasW / tileW);
+    const row = getStageIconRow(stage);
+    const slotW = canvasW / DEPARTMENTS.length;
+    const iconH = canvasH;
+    const iconW = Math.min(slotW, iconH * ICON_ASPECT_W_OVER_H);
 
-    ctx.globalAlpha = BANANA_UNFILLED_OPACITY;
-    for (let i = 0; i < tilesNeeded; i++) {
-        ctx.drawImage(bananaImg, i * tileW, 0, tileW, tileH);
-    }
+    DEPARTMENTS.forEach((dept, i) => {
+        const state = row[i];
+        const img = iconAssets[`${dept}_${state}`];
+        const xOffset = i * slotW + (slotW - iconW) / 2;
+        if (img) ctx.drawImage(img, xOffset, 0, iconW, iconH);
+    });
 
-    const fillW = Math.max(0, Math.min(1, progress)) * canvasW;
-    if (fillW > 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, fillW, canvasH);
-        ctx.clip();
-        ctx.globalAlpha = 1;
-        for (let i = 0; i < tilesNeeded; i++) {
-            ctx.drawImage(bananaImg, i * tileW, 0, tileW, tileH);
-        }
-        ctx.restore();
+    if (isHoldStage(stage)) {
+        const weldIdx = DEPARTMENTS.indexOf('weld');
+        const slotX = weldIdx * slotW + (slotW - iconW) / 2;
+        drawHoldFlag(ctx, slotX + iconW, 0, iconW);
     }
 
     return canvas.toDataURL('image/png');
 }
 
-// Returns a getter that lazily produces a per-(progress, w) banana PNG at a
+function drawHoldFlag(ctx, anchorX, anchorY, iconSize) {
+    const flagH = Math.max(6, iconSize * 0.55);
+    const flagW = flagH;
+    const x = anchorX - flagW * 0.65;
+    const y = anchorY - flagH * 0.15;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(flagW / 16, flagH / 16);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(3, 1);
+    ctx.lineTo(3, 15);
+    ctx.stroke();
+    ctx.fillStyle = '#dc2626';
+    ctx.strokeStyle = '#7f1d1d';
+    ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(3, 2);
+    ctx.lineTo(13, 4);
+    ctx.lineTo(9, 6.5);
+    ctx.lineTo(13, 9);
+    ctx.lineTo(3, 7.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Returns a getter that lazily produces a per-(stage, w) icon-row PNG at a
 // FIXED draw height. Within the Urgency column the cell width is constant, so
-// this collapses to one PNG per unique progress value.
-function makeBananaProvider(bananaImg) {
+// this collapses to one PNG per unique stage value.
+function makeIconRowProvider(iconAssets) {
     const cache = new Map();
-    const hPx = Math.max(2, Math.round(BANANA_DRAW_HEIGHT_PT * BANANA_DPI_SCALE));
-    return (progress, drawWPt) => {
-        const wPx = Math.max(2, Math.round(drawWPt * BANANA_DPI_SCALE));
-        const key = `${progress}|${wPx}`;
+    const hPx = Math.max(2, Math.round(ICON_ROW_DRAW_HEIGHT_PT * ICON_DPI_SCALE));
+    return (stage, drawWPt) => {
+        const wPx = Math.max(2, Math.round(drawWPt * ICON_DPI_SCALE));
+        const key = `${stage}|${wPx}`;
         let png = cache.get(key);
         if (!png) {
-            png = buildBananaPng(bananaImg, progress, wPx, hPx);
+            png = buildIconRowPng(iconAssets, stage, wPx, hPx);
             cache.set(key, png);
         }
         return png;
@@ -183,7 +228,7 @@ function buildRows(jobs, columnHeaders) {
         const isGrayed = isInstallComplete || isCompleteStage(job['Stage']);
         meta.push({
             isGrayed,
-            progress: getBananaProgress(job['Stage'] || 'Released'),
+            stage: job['Stage'] || 'Released',
             startInstallHard:
                 job['start_install_formulaTF'] === false && Boolean(job['Start install']),
         });
@@ -207,8 +252,8 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
         return;
     }
 
-    const bananaImg = await loadImage(BANANA_IMG_SRC);
-    const bananaProvider = makeBananaProvider(bananaImg);
+    const iconAssets = await loadIconAssets();
+    const iconRowProvider = makeIconRowProvider(iconAssets);
     const pmGroups = groupByPm(jobs);
     const columnStyles = buildColumnStyles(columnHeaders, columnWidthPercent);
     const head = [columnHeaders.map((col) => HEADER_LABELS[col] ?? col)];
@@ -291,9 +336,9 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
 
                 const padX = 3;
                 const drawW = data.cell.width - padX * 2;
-                const drawH = Math.min(BANANA_DRAW_HEIGHT_PT, data.cell.height - 2);
+                const drawH = Math.min(ICON_ROW_DRAW_HEIGHT_PT, data.cell.height - 2);
                 if (drawW <= 0 || drawH <= 0) return;
-                const png = bananaProvider(rowMeta.progress, drawW);
+                const png = iconRowProvider(rowMeta.stage, drawW);
                 const drawX = data.cell.x + padX;
                 const drawY = data.cell.y + (data.cell.height - drawH) / 2;
                 doc.addImage(png, 'PNG', drawX, drawY, drawW, drawH);

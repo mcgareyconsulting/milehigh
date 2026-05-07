@@ -314,20 +314,49 @@ function Archive() {
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
-                                                    const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
+                                                    const HEADER_OVERRIDES = {
+                                                        'Job #': 'Job',
+                                                        'Release #': 'Rel',
+                                                        'Job': 'Job Name',
+                                                        'Install HRS': 'Install Hrs',
+                                                        'Paint color': 'Paint Color',
+                                                        'BY': 'By',
+                                                        'Start install': 'Start Install',
+                                                        'Comp. ETA': 'Comp ETA',
+                                                        'Job Comp': 'Install Prog',
+                                                    };
+                                                    const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                     const colWidthPct = columnWidthPercents[column];
+                                                    const isUrgency = column === 'Urgency';
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 align-middle text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
-                                                            {displayHeader}
+                                                            {isUrgency ? (
+                                                                <div className="flex flex-col items-center leading-tight">
+                                                                    <span>Banana Code</span>
+                                                                    <div className="flex items-center justify-center gap-1 mt-0.5 text-[8px] font-medium normal-case tracking-normal text-gray-500 dark:text-slate-400">
+                                                                        {['Adm', 'Cut', 'Fit', 'Weld', 'Paint', 'Ship', 'Inst'].map((d) => (
+                                                                            <span
+                                                                                key={d}
+                                                                                className="inline-block text-center overflow-hidden"
+                                                                                style={{ width: 26 }}
+                                                                            >
+                                                                                {d}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                displayHeader
+                                                            )}
                                                         </th>
                                                     );
                                                 })}
                                                 {isAdmin && (
-                                                    <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                    <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-8">
                                                         ⚙
                                                     </th>
                                                 )}

@@ -4,7 +4,7 @@
  * purpose: Renders a single job-log table row with inline stage editing, urgency indicators, action menus, and detail/date modals.
  * exports:
  *   JobsTableRow: Feature-rich table row for the Job Log with inline editing and admin actions
- * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./BananaIcon]
+ * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./StageIconRow]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
  *   - Stage dropdown options must stay in sync with PMBoardList stage definitions
@@ -18,12 +18,11 @@ import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
 import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
-import { BananaIcon } from './BananaIcon';
+import { StageIconRow } from './StageIconRow';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
-import { getBananaProgress } from '../utils/stageProgress';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -92,7 +91,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Stage options with simplified names for display (in progression order)
     const stageOptions = [
         { value: 'Released', label: 'Released' },
-        { value: 'Material Ordered', label: 'Material Ordered' },
+        { value: 'Material Ordered', label: 'Mat. Order' },
         { value: 'Cut Start', label: 'Cut Start' },
         { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Fitup Start', label: 'Fitup start' },
@@ -827,23 +826,22 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
 
 
-                    // Urgency column: banana-boy progress fill; not interactive (red date handles urgency).
+                    // Urgency column: 7-icon Banana Code row reflecting stage progression.
+                    // NOTE: minWidth/iconSize here, the Stage cell minWidth below, and the
+                    // Job/Description hard-caps further down are tuned for a desktop/laptop
+                    // viewport (~1280–1700px wide). See the long comment on
+                    // COLUMN_WIDTH_PERCENT in pages/JobLog.jsx for the responsive plan
+                    // (mobile, tablet, ultrawide) before changing any of these values.
                     if (column === 'Urgency') {
-                        const progress = getBananaProgress(localStage);
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
-                                style={{ minWidth: '160px' }}
+                                style={{ minWidth: '230px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <div
-                                    className="w-full flex items-center justify-center p-1 rounded-md border bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700 ring-1 ring-yellow-100 dark:ring-yellow-800"
-                                    title={`Release progress: ${Math.round(progress * 100)}%`}
-                                >
-                                    <BananaIcon progress={progress} width={140} height={36} />
-                                </div>
+                                <StageIconRow stage={localStage} iconSize={26} />
                             </td>
                         );
                     }
@@ -872,7 +870,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
-                                style={{ minWidth: '160px' }}
+                                style={{ minWidth: '115px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -883,7 +881,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                             type="button"
                                             onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
                                             disabled={updatingStage}
-                                            className={`w-full min-w-[100px] px-2 py-0.5 text-[10px] border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
+                                            className={`w-full px-1.5 py-0.5 text-[10px] border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
                                             style={solidStyle}
                                         >
                                             {currentLabel}
@@ -897,7 +895,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                 />
                                                 <div
                                                     ref={stageListRef}
-                                                    className={`absolute left-0 right-0 ${dropdownDirection === 'up' ? 'bottom-full mb-0.5' : 'top-full mt-0.5'} rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 min-w-[100px] max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col`}
+                                                    className={`absolute left-0 right-0 ${dropdownDirection === 'up' ? 'bottom-full mb-0.5' : 'top-full mt-0.5'} rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col`}
                                                 >
                                                     {rotatedStageOptions.map((option) => {
                                                         const optionColors = getStageColors(option.value);
@@ -911,7 +909,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                                     handleStageChange(option.value);
                                                                     setShowStageDropdown(false);
                                                                 }}
-                                                                className={`w-full px-2 py-1.5 text-[10px] font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
+                                                                className={`w-full px-1.5 py-1 text-[10px] font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
                                                                 style={{
                                                                     backgroundColor: optionColors.light,
                                                                     color: optionColors.text,
@@ -986,7 +984,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     disabled={updatingFabOrder || isGrayed}
                                     className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'text-white font-bold' : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100'} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
-                                    style={isDuplicateFabOrder ? { minWidth: '60px', backgroundColor: dupColor } : { minWidth: '60px' }}
+                                    style={isDuplicateFabOrder ? { minWidth: '48px', backgroundColor: dupColor } : { minWidth: '48px' }}
                                 />
                             </td>
                         );
@@ -1023,7 +1021,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                     rows={2}
-                                    style={{ minWidth: '120px' }}
                                 />
                                 <button
                                     type="button"
@@ -1153,12 +1150,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
                                 title={`${tooltipValue} - Click to view details`}
                                 onClick={() => setIsModalOpen(true)}
                                 style={{
-                                    maxWidth: '120px',
-                                    width: '120px'
+                                    maxWidth: '170px',
+                                    width: '170px'
                                 }}
                             >
                                 <div
@@ -1167,7 +1164,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         WebkitLineClamp: 2,
                                         WebkitBoxOrient: 'vertical',
                                         overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
+                                        textOverflow: 'clip',
                                         lineHeight: '1.2',
                                         textAlign: 'center'
                                     }}
@@ -1265,8 +1262,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 }`}
                             title={tooltipValue}
                             style={shouldWrapAndTruncate ? {
-                                maxWidth: column === 'Job' ? '120px' : '150px',
-                                width: column === 'Job' ? '120px' : '150px'
+                                maxWidth: column === 'Job' ? '170px' : '170px',
+                                width: column === 'Job' ? '170px' : '170px'
                             } : {}}
                         >
                             {shouldWrapAndTruncate ? (
@@ -1291,8 +1288,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 })}
                 {isAdmin && (
                     <td
-                        className={`px-2 ${cellPy} text-center align-middle border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 w-12 relative`}
-                        style={{ width: '48px' }}
+                        className={`px-1 ${cellPy} text-center align-middle border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 w-8 relative`}
+                        style={{ width: '32px' }}
                     >
                         <button
                             onClick={() => setShowActionMenu(v => !v)}
