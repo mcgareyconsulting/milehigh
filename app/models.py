@@ -814,3 +814,45 @@ class ReleaseDrawingVersion(db.Model):
             'source_version_id': self.source_version_id,
             'note': self.note,
         }
+
+
+class FcCollectionRun(db.Model):
+    """One row per nightly (or manual) FC PDF Pack retry pass.
+
+    Stores summary counts plus the per-release breakdown so the admin page can
+    show stakeholders exactly which releases were missing, which got pulled,
+    and which are still outstanding. Table is pruned to the most recent 30 runs
+    by the worker after each insert.
+    """
+    __tablename__ = "fc_collection_runs"
+    id = db.Column(db.Integer, primary_key=True)
+    run_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    trigger = db.Column(db.String(16), nullable=False, default='cron')  # 'cron' | 'manual'
+    candidates = db.Column(db.Integer, nullable=False, default=0)
+    succeeded = db.Column(db.Integer, nullable=False, default=0)
+    still_missing = db.Column(db.Integer, nullable=False, default=0)
+    errored = db.Column(db.Integer, nullable=False, default=0)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    # details = {
+    #   "succeeded":     [{"job": 1234, "release": "V2", "viewer_url": "..."}],
+    #   "still_missing": [{"job": 1234, "release": "V3", "reason": "..."}],
+    #   "errored":       [{"job": 1234, "release": "V4", "error": "..."}]
+    # }
+    details = db.Column(db.JSON, nullable=False, default=dict)
+
+    def to_summary_dict(self):
+        return {
+            'id': self.id,
+            'run_at': _dt(self.run_at),
+            'trigger': self.trigger,
+            'candidates': self.candidates,
+            'succeeded': self.succeeded,
+            'still_missing': self.still_missing,
+            'errored': self.errored,
+            'duration_ms': self.duration_ms,
+        }
+
+    def to_dict(self):
+        d = self.to_summary_dict()
+        d['details'] = self.details or {}
+        return d
