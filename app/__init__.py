@@ -34,7 +34,11 @@ from app.history import history_bp
 from app.admin import admin_bp
 from app.api import api_bp
 from app.banana_boy import banana_boy_bp
-from app.banana_boy.drawings import LocalDrawingLoader
+from app.banana_boy.drawings import (
+    CompositeDrawingLoader,
+    LocalDrawingLoader,
+    ReleaseDrawingVersionLoader,
+)
 from app.banana_boy.tools import DRAWING_LOADER_KEY
 
 from app.trello.api import create_trello_card_from_excel_data
@@ -486,9 +490,12 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(banana_boy_bp, url_prefix="/banana-boy")
 
-    # Banana Boy compliance scan: drawing loader (local FS today, Procore later).
-    app.extensions[DRAWING_LOADER_KEY] = LocalDrawingLoader(
-        app.config["BANANA_BOY_DRAWINGS_DIR"]
+    # Banana Boy compliance scan: prefer the latest marked-up version from the
+    # PDF markup feature; fall back to the on-disk {job}-{release}-fc.pdf if a
+    # release has no markup history yet.
+    app.extensions[DRAWING_LOADER_KEY] = CompositeDrawingLoader(
+        ReleaseDrawingVersionLoader(),
+        LocalDrawingLoader(app.config["BANANA_BOY_DRAWINGS_DIR"]),
     )
 
     # Catch-all route for React Router (must be last, after all API routes)

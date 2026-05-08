@@ -17,9 +17,17 @@ from sqlalchemy.orm import joinedload
 from app.auth.google_tokens import GoogleAuthError
 from app.banana_boy.compliance import scan_pdf
 from app.banana_boy.gmail_client import GmailScopeError, create_draft, send_draft
+from app.banana_boy.markup_diff import scan_markup_diff_pdfs
 from app.history import _extract_new_value_from_payload
 from app.logging_config import get_logger
-from app.models import Notification, ReleaseEvents, Releases, Submittals, db
+from app.models import (
+    Notification,
+    ReleaseDrawingVersion,
+    ReleaseEvents,
+    Releases,
+    Submittals,
+    db,
+)
 
 logger = get_logger(__name__)
 
@@ -31,6 +39,8 @@ TOOL_CREATE_DRAFT = "create_email_draft"
 TOOL_SEND_DRAFT = "send_email_draft"
 TOOL_NOTIFICATIONS = "get_my_notifications"
 TOOL_SCAN_COMPLIANCE = "scan_drawing_compliance"
+TOOL_LIST_DRAWING_VERSIONS = "list_drawing_versions"
+TOOL_SCAN_MARKUP_DIFF = "scan_markup_diff"
 
 DRAWING_LOADER_KEY = "banana_boy_drawings"
 
@@ -240,12 +250,16 @@ TOOL_DEFINITIONS = [
             "(IBC, ADA, AISC, AWS, OSHA per the Division 05 KB). Hands the "
             "drawing to a vision-capable sub-agent that returns PASSING / "
             "FLAGGED / NOT_DETERMINABLE findings with verbatim page citations. "
-            "ALWAYS call this for specific-job compliance questions ('is "
-            "480-299 compliant?', 'check 410-271 for code issues', 'any "
-            "compliance issues on the Alta Flatirons fab package?'). Do NOT "
-            "answer compliance questions about a specific job from the KB "
-            "alone. Returns {error} when no fab PDF is on file for that "
-            "release — relay that fact to the user verbatim."
+            "When the release has marked-up drawing versions on file, this "
+            "automatically scans the latest marked-up version (so drafter "
+            "redlines and text annotations are picked up); otherwise it falls "
+            "back to the on-disk fab PDF. ALWAYS call this for specific-job "
+            "compliance questions ('is 480-299 compliant?', 'check 410-271 "
+            "for code issues', 'any compliance issues on the Alta Flatirons "
+            "fab package?'). Do NOT answer compliance questions about a "
+            "specific job from the KB alone. Returns {error} when no fab PDF "
+            "is on file for that release — relay that fact to the user "
+            "verbatim."
         ),
         "input_schema": {
             "type": "object",
@@ -257,6 +271,77 @@ TOOL_DEFINITIONS = [
                 "release": {
                     "type": "string",
                     "description": "Release number, e.g. '299'.",
+                },
+            },
+            "required": ["job", "release"],
+        },
+    },
+    {
+        "name": TOOL_LIST_DRAWING_VERSIONS,
+        "description": (
+            "List the marked-up drawing versions on file for a job-release. "
+            "Returns version_number (1 = original upload), uploaded_by, "
+            "uploaded_at, note, and source_version_id (which prior version "
+            "this one was derived from). Use this when the user asks about "
+            "drawing history ('what versions of the drawing for 480-299 do "
+            "we have?', 'who marked up the latest 410-271 drawing?', 'list "
+            "drawing versions for ...'). Returns an empty list when no "
+            "versions exist."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {
+                    "type": "integer",
+                    "description": "Job number, e.g. 480.",
+                },
+                "release": {
+                    "type": "string",
+                    "description": "Release number, e.g. '299'.",
+                },
+            },
+            "required": ["job", "release"],
+        },
+    },
+    {
+        "name": TOOL_SCAN_MARKUP_DIFF,
+        "description": (
+            "Compare two marked-up drawing versions for a release and report "
+            "what changed between them. Hands BOTH PDFs to a vision-capable "
+            "sub-agent which returns the markups added between the 'from' "
+            "and 'to' versions — text annotations quoted verbatim, ink and "
+            "stamp annotations described spatially, by page. Defaults: 'to' "
+            "= latest version, 'from' = the version it was derived from "
+            "(source_version_id) or the immediately previous version_number "
+            "if the lineage link is missing. Use when the user asks 'what "
+            "changed in the latest markup', 'what did <person> add to the "
+            "drawing', 'show me the redlines on 480-299'. Returns {error} "
+            "when the release does not have at least two versions on file."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {
+                    "type": "integer",
+                    "description": "Job number, e.g. 480.",
+                },
+                "release": {
+                    "type": "string",
+                    "description": "Release number, e.g. '299'.",
+                },
+                "from_version": {
+                    "type": "integer",
+                    "description": (
+                        "Optional version_number to diff from (the earlier "
+                        "version). Defaults to the predecessor of `to_version`."
+                    ),
+                },
+                "to_version": {
+                    "type": "integer",
+                    "description": (
+                        "Optional version_number to diff to (the later "
+                        "version). Defaults to the latest non-deleted version."
+                    ),
                 },
             },
             "required": ["job", "release"],
@@ -681,6 +766,143 @@ def scan_drawing_compliance(context: dict, job: int, release: str) -> dict[str, 
     }
 
 
+def list_drawing_versions(job: int, release: str) -> dict[str, Any]:
+    """Return the marked-up drawing version history for a release.
+
+    Read-only; safe to call without a signed-in user. Skips soft-deleted rows
+    and orders newest-first.
+    """
+    if job is None or release is None or str(release).strip() == "":
+        return {"error": "both job and release are required"}
+
+    release_row = Releases.query.filter_by(job=job, release=str(release)).first()
+    if release_row is None:
+        return {"error": f"no release on file for {job}-{release}"}
+
+    versions = (
+        ReleaseDrawingVersion.query
+        .filter_by(release_id=release_row.id, is_deleted=False)
+        .order_by(ReleaseDrawingVersion.version_number.desc())
+        .all()
+    )
+
+    out = []
+    for idx, v in enumerate(versions):
+        uploaded_by_name = None
+        if v.uploaded_by is not None:
+            first = (v.uploaded_by.first_name or "").strip()
+            last = (v.uploaded_by.last_name or "").strip()
+            uploaded_by_name = (f"{first} {last}".strip()) or v.uploaded_by.username
+        out.append({
+            "version_number": v.version_number,
+            "uploaded_by": uploaded_by_name,
+            "uploaded_at": v.uploaded_at.isoformat() if v.uploaded_at else None,
+            "note": v.note,
+            "source_version_id": v.source_version_id,
+            "is_latest": idx == 0,
+        })
+
+    return {"job": job, "release": release, "versions": out}
+
+
+def scan_markup_diff(context: dict, job: int, release: str,
+                     from_version: int | None = None,
+                     to_version: int | None = None) -> dict[str, Any]:
+    """Sub-agent diff scan over two marked-up drawing versions.
+
+    Defaults to (latest, latest.source_version_id-or-previous). Loads both PDF
+    blobs from storage, fires a Sonnet vision call, and appends one usage
+    record to `context["usage_sink"]` when present.
+    """
+    from app.brain.job_log.features.pdf_markup.storage import read_pdf
+
+    if job is None or release is None or str(release).strip() == "":
+        return {"error": "both job and release are required"}
+
+    release_row = Releases.query.filter_by(job=job, release=str(release)).first()
+    if release_row is None:
+        return {"error": f"no release on file for {job}-{release}"}
+
+    versions = (
+        ReleaseDrawingVersion.query
+        .filter_by(release_id=release_row.id, is_deleted=False)
+        .order_by(ReleaseDrawingVersion.version_number.desc())
+        .all()
+    )
+    if len(versions) < 2:
+        return {
+            "error": (
+                f"{job}-{release} needs at least two drawing versions to diff "
+                f"(found {len(versions)})"
+            ),
+        }
+
+    by_number = {v.version_number: v for v in versions}
+    latest = versions[0]
+
+    to_v = by_number.get(to_version) if to_version is not None else latest
+    if to_v is None:
+        return {"error": f"version {to_version} not found for {job}-{release}"}
+
+    if from_version is not None:
+        from_v = by_number.get(from_version)
+        if from_v is None:
+            return {"error": f"version {from_version} not found for {job}-{release}"}
+    elif to_v.source_version_id is not None:
+        from_v = next(
+            (v for v in versions if v.id == to_v.source_version_id),
+            None,
+        )
+        if from_v is None:
+            from_v = next(
+                (v for v in versions if v.version_number < to_v.version_number),
+                None,
+            )
+    else:
+        from_v = next(
+            (v for v in versions if v.version_number < to_v.version_number),
+            None,
+        )
+
+    if from_v is None or from_v.id == to_v.id:
+        return {
+            "error": (
+                f"could not find an earlier version to diff against v{to_v.version_number} "
+                f"for {job}-{release}"
+            ),
+        }
+
+    try:
+        from_bytes = read_pdf(from_v.storage_key)
+        to_bytes = read_pdf(to_v.storage_key)
+    except FileNotFoundError as exc:
+        return {"error": f"drawing version blob missing: {exc}"}
+
+    findings = scan_markup_diff_pdfs(
+        from_bytes=from_bytes,
+        to_bytes=to_bytes,
+        job=job,
+        release=release,
+        from_version=from_v.version_number,
+        to_version=to_v.version_number,
+        usage_sink=context.get("usage_sink"),
+    )
+    logger.info(
+        "banana_boy_markup_diff_scan",
+        job=job, release=release,
+        from_version=from_v.version_number,
+        to_version=to_v.version_number,
+    )
+    return {
+        "job": job,
+        "release": release,
+        "from_version": from_v.version_number,
+        "to_version": to_v.version_number,
+        "findings": findings,
+        "model": "claude-sonnet-4-6",
+    }
+
+
 # Tools that receive the per-request `context` dict (user_id, usage_sink, ...)
 # as their first positional argument.
 USER_SCOPED_TOOLS = {
@@ -688,6 +910,7 @@ USER_SCOPED_TOOLS = {
     TOOL_CREATE_DRAFT,
     TOOL_SEND_DRAFT,
     TOOL_SCAN_COMPLIANCE,
+    TOOL_SCAN_MARKUP_DIFF,
 }
 
 TOOL_EXECUTORS = {
@@ -699,6 +922,8 @@ TOOL_EXECUTORS = {
     TOOL_CREATE_DRAFT: create_email_draft_tool,
     TOOL_SEND_DRAFT: send_email_draft_tool,
     TOOL_SCAN_COMPLIANCE: scan_drawing_compliance,
+    TOOL_LIST_DRAWING_VERSIONS: list_drawing_versions,
+    TOOL_SCAN_MARKUP_DIFF: scan_markup_diff,
 }
 
 

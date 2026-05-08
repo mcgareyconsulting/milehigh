@@ -87,7 +87,21 @@ SYSTEM_PROMPT = (
     "number on the bullets you keep. If the tool returns an error (e.g. "
     "'no fab drawing on file'), tell the user verbatim — don't fall back "
     "to guessing. General code questions ('what's the IBC min stair "
-    "width?') still go to the KB, not to scan_drawing_compliance."
+    "width?') still go to the KB, not to scan_drawing_compliance. "
+    "DRAWING MARKUPS: Drafters can mark up the FC drawing for a release in "
+    "the Job Log (pen, ink, text annotations, stamps); each save creates a "
+    "new version_number under that release. scan_drawing_compliance "
+    "automatically reads the LATEST marked-up version when one exists, so "
+    "compliance findings already reflect drafter redlines. Two more tools "
+    "are available for markup-specific questions: list_drawing_versions("
+    "job, release) returns the version history (uploader, when, note); "
+    "scan_markup_diff(job, release [, from_version, to_version]) compares "
+    "two versions and reports the markups added between them. Use "
+    "list_drawing_versions when the user asks 'what drawing versions do "
+    "we have for X' or 'who marked it up'. Use scan_markup_diff when the "
+    "user asks 'what changed in the latest markup', 'show me the redlines', "
+    "or 'what did <person> add'. Quote text annotations verbatim from the "
+    "tool's output; cite page numbers."
 )
 
 VOICE_ADDENDUM = (
