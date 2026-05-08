@@ -1,15 +1,15 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Wraps all authenticated pages with the top navigation bar, theme toggle, location controls, and notification bell.
+ * purpose: Wraps all authenticated pages with the top navigation bar, theme toggle, location controls, and notification bell. Collapses nav into a slide-in drawer below the lg: breakpoint for iPad and phone.
  * exports:
  *   AppShell: Layout shell with nav chrome, renders child routes via Outlet
- * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch, ./NotificationBell]
+ * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
  *   - Admin-only nav items are gated on checkAuth result
  *   - LocationProvider wraps the inner shell so all children can access geolocation context
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Header height: 3.5rem (h-14) up to 3xl, then 4rem to give 27"+ / TV more room.
  */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
@@ -18,12 +18,14 @@ import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
+import MobileNavDrawer from './MobileNavDrawer';
 
 function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, isOldMan, toggleDark, toggleOldMan } = useTheme();
   const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -51,38 +53,51 @@ function AppShellInner({ isAuthenticated }) {
 
   const isActive = (path) => location.pathname.startsWith(path);
 
+  const navBtn = (path, label) => (
+    <button
+      type="button"
+      onClick={() => navigate(path)}
+      className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive(path)
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+        }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="flex flex-col w-full min-h-screen bg-[#f8fafc] dark:bg-slate-900">
       {/* Top bar */}
-      <header className="relative flex items-center h-14 px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0">
+      <header
+        className="relative flex items-center h-14 3xl:h-16 px-3 lg:px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         {/* Quick search */}
         <QuickSearch />
 
-        {/* Map shortcut */}
-        <button
-          type="button"
-          onClick={() => navigate('/jobsite-map')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/jobsite-map')
-            ? 'bg-accent-500 text-white'
-            : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-            }`}
-        >
-          Map
-        </button>
+        {/* Map shortcut — visible on lg+ only */}
+        <div className="hidden lg:flex">
+          {navBtn('/jobsite-map', 'Map')}
+        </div>
 
-        {/* Centered title */}
-        <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none">
+        {/* Centered title — absolute positioning only at lg+; flex spacer below */}
+        <h1 className="hidden lg:block absolute left-1/2 -translate-x-1/2 text-xl 3xl:text-2xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none">
+          MHMW Brain
+        </h1>
+        {/* Mobile/iPad title — inline, smaller */}
+        <h1 className="lg:hidden flex-1 text-center text-base font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none truncate">
           MHMW Brain
         </h1>
 
-        {/* Right cluster */}
+        {/* Right cluster — full nav at lg+, condensed below */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Location filter button */}
+          {/* Location toggle — visible at lg+ inline; hidden on smaller (lives in drawer) */}
           <button
             type="button"
             onClick={handleLocationToggle}
             disabled={locationRequesting}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
+            className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
               locationEnabled
                 ? 'bg-green-500 text-white hover:bg-green-600'
                 : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
@@ -101,60 +116,18 @@ function AppShellInner({ isAuthenticated }) {
             )}
           </button>
 
-          {/* Job Log shortcut */}
-          <button
-            type="button"
-            onClick={() => navigate('/job-log')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/job-log')
-              ? 'bg-accent-500 text-white'
-              : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-              }`}
-          >
-            Job Log
-          </button>
+          {/* Inline nav buttons — lg+ only */}
+          <div className="hidden lg:flex items-center gap-2">
+            {navBtn('/job-log', 'Job Log')}
+            {navBtn('/drafting-work-load', 'Drafting WL')}
+            {navBtn('/events', 'Events')}
+            {isAdmin && navBtn('/board', 'Bug Tracker')}
+          </div>
 
-          {/* Drafting Work Load shortcut */}
-          <button
-            type="button"
-            onClick={() => navigate('/drafting-work-load')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/drafting-work-load')
-              ? 'bg-accent-500 text-white'
-              : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-              }`}
-          >
-            Drafting WL
-          </button>
-
-          {/* Events shortcut */}
-          <button
-            type="button"
-            onClick={() => navigate('/events')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/events')
-              ? 'bg-accent-500 text-white'
-              : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-              }`}
-          >
-            Events
-          </button>
-
-          {/* Board (admin only) */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => navigate('/board')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isActive('/board')
-                ? 'bg-accent-500 text-white'
-                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-                }`}
-            >
-              Bug Tracker
-            </button>
-          )}
-
-          {/* Notification bell (authenticated users only) */}
+          {/* Notification bell (always visible if authenticated) */}
           {isAuthenticated && <NotificationBell />}
 
-          {/* Theme picker */}
+          {/* Theme picker (always visible) */}
           <div className="relative" data-theme-menu>
             <button
               type="button"
@@ -200,12 +173,12 @@ function AppShellInner({ isAuthenticated }) {
             )}
           </div>
 
-          {/* Login / Logout */}
+          {/* Login / Logout — lg+ inline, smaller hidden */}
           {isAuthenticated ? (
             <button
               type="button"
               onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="hidden lg:inline-flex px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               Logout
             </button>
@@ -213,13 +186,37 @@ function AppShellInner({ isAuthenticated }) {
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="px-4 py-2 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-md ring-2 ring-accent-400 ring-offset-2 dark:ring-offset-slate-800 focus:outline-none focus:ring-2 focus:ring-accent-500"
+              className="hidden lg:inline-flex px-4 py-2 text-sm font-medium text-white bg-accent-500 hover:bg-accent-600 rounded-lg shadow-md ring-2 ring-accent-400 ring-offset-2 dark:ring-offset-slate-800 focus:outline-none focus:ring-2 focus:ring-accent-500"
             >
               Log in
             </button>
           )}
+
+          {/* Hamburger — visible below lg only */}
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="lg:hidden p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Open menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
         </div>
       </header>
+
+      <MobileNavDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        isAuthenticated={isAuthenticated}
+        isAdmin={isAdmin}
+        locationEnabled={locationEnabled}
+        locationRequesting={locationRequesting}
+        onLocationToggle={handleLocationToggle}
+        onLogout={handleLogout}
+        onLogin={() => navigate('/login')}
+      />
 
       {/* Main content */}
       <main className="flex-1 w-full min-h-0 flex flex-col">

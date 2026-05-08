@@ -27,6 +27,9 @@ import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
+import ViewToggle, { useViewMode } from '../components/ViewToggle';
+import JobLogCardGrid from '../components/JobLogCardGrid';
+import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
 
 // Stage completeness order (index 0 = least complete, higher = more complete).
 // Canonical names — see app/api/helpers.py STAGE_PROGRESSION_RANK.
@@ -130,6 +133,12 @@ function JobLog() {
     const [renumberPreview, setRenumberPreview] = useState(null);
     const [renumbering, setRenumbering] = useState(false);
     const tableScrollRef = useRef(null);
+
+    // View mode (auto/table/cards). Auto picks cards on iPad-sized screens.
+    const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
+    const isTabletOrSmaller = useIsTabletOrSmaller();
+    const { is3xl, isMobile } = useBreakpoint();
+    const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
 
     // Use the filters hook
     const {
@@ -613,7 +622,16 @@ function JobLog() {
 
     return (
         <>
-            <div className="w-full h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
+            <div
+                className="w-full h-[calc(100vh-3.5rem)] 3xl:h-[calc(100vh-4rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 3xl:py-4 3xl:px-6 flex flex-col"
+                style={{
+                    width: '100%',
+                    minWidth: '100%',
+                    paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
+                    paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
+                    paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+                }}
+            >
                 <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
 
@@ -634,7 +652,10 @@ function JobLog() {
 
                                 {/* Row 1: Project name buttons — only visible when expanded */}
                                 {!isFilterMinimized && (
-                                    <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+                                    <div
+                                        className="grid gap-1"
+                                        style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 140 : 100}px, 1fr))` }}
+                                    >
                                         <button
                                             onClick={() => setSelectedProjectNames([])}
                                             className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
@@ -668,9 +689,10 @@ function JobLog() {
                                 )}
 
                                 {/* Row 2: Actions (left) + Stage filters (center-right) + Chevron (far right) — always visible */}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                     {/* Action buttons inline */}
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <ViewToggle value={viewMode} onChange={setViewMode} />
                                         <button
                                             onClick={handlePrint}
                                             disabled={!hasData || loading || !reviewMode || printing}
@@ -848,7 +870,7 @@ function JobLog() {
                                                 onChange={(e) => setSearch(e.target.value)}
                                                 placeholder="Job #, release, name, description..."
                                                 title="Live-filter the visible rows by Job #, Release #, project name, or description. Case-insensitive substring match."
-                                                className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
                                         </div>
                                         <button
@@ -900,7 +922,22 @@ function JobLog() {
                                 </div>
                             )}
 
-                            {!loading && !fetchError && (
+                            {!loading && !fetchError && effectiveView === 'cards' && (
+                                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                                    <JobLogCardGrid
+                                        jobs={reviewDisplayJobs}
+                                        secondaryResults={secondarySearchResults}
+                                        search={search}
+                                        jumpToTarget={jumpToTarget}
+                                        stageToGroup={stageToGroup}
+                                        stageGroupColors={stageGroupColors}
+                                        hasJobsData={hasJobsData}
+                                        iconSize={is3xl ? 26 : 20}
+                                    />
+                                </div>
+                            )}
+
+                            {!loading && !fetchError && effectiveView === 'table' && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
                                     <div
                                         ref={tableScrollRef}
