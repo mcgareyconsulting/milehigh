@@ -29,6 +29,9 @@ import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
+import ViewToggle, { useViewMode } from '../components/ViewToggle';
+import SubmittalCardGrid from '../components/SubmittalCardGrid';
+import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
@@ -61,6 +64,10 @@ function DraftingWorkLoad() {
     const [resortError, setResortError] = useState(null);
     const [addProjectOpen, setAddProjectOpen] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(false);
+    const [viewMode, setViewMode] = useViewMode('dwl_view', 'auto');
+    const isTabletOrSmaller = useIsTabletOrSmaller();
+    const { is3xl } = useBreakpoint();
+    const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
     // When a jump-to param is present, load all tabs so we can find the row regardless of its status
@@ -211,16 +218,26 @@ function DraftingWorkLoad() {
     return (
         <>
             <style>{columnWidthStyles}</style>
-            <div className="w-full h-[calc(100vh-3.5rem)] flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900" style={{ width: '100%', minWidth: '100%' }}>
+            <div
+                className="w-full h-[calc(100vh-3.5rem)] 3xl:h-[calc(100vh-4rem)] flex flex-col bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900"
+                style={{
+                    width: '100%',
+                    minWidth: '100%',
+                    paddingLeft: 'env(safe-area-inset-left)',
+                    paddingRight: 'env(safe-area-inset-right)',
+                    paddingBottom: 'env(safe-area-inset-bottom)',
+                }}
+            >
                 <div className="flex-1 min-h-0 max-w-full mx-auto w-full py-2 px-2 flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
                         {/* Title bar - fixed, does not scroll */}
                         <div className={`flex-shrink-0 px-4 py-3 ${selectedTab === 'draft' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}>
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <div>
-                                    <h1 className="text-3xl font-bold text-white">Drafting Work Load</h1>
+                                    <h1 className="text-xl md:text-2xl 3xl:text-3xl font-bold text-white">Drafting Work Load</h1>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+                                    <ViewToggle value={viewMode} onChange={setViewMode} className="bg-white/95" />
                                     {isAdmin && (
                                     <button
                                         onClick={() => setAddProjectOpen(true)}
@@ -463,7 +480,16 @@ function DraftingWorkLoad() {
                             </div>
                         )}
 
-                        {!loading && !fetchError && (
+                        {!loading && !fetchError && effectiveView === 'cards' && (
+                            <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
+                                <SubmittalCardGrid
+                                    rows={displayRows}
+                                    jumpToTarget={jumpToTarget}
+                                />
+                            </div>
+                        )}
+
+                        {!loading && !fetchError && effectiveView === 'table' && (
                             <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
                                 {/* Scrollbar hidden via CSS; scroll still works with wheel/trackpad */}
                                 <div

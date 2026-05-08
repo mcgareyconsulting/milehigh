@@ -120,7 +120,7 @@ export default function QuickSearch() {
 
       {/* Dropdown results panel */}
       {isOpen && (
-        <div className="fixed left-4 right-4 mt-1 z-50 max-h-[45vh] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-xl" style={{ top: '3.75rem' }}>
+        <div className="fixed left-4 right-4 mt-1 z-50 max-h-[45vh] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-xl top-[3.75rem] 3xl:top-[4.25rem]">
           {loading && (
             <p className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400">Searching…</p>
           )}
