@@ -29,64 +29,31 @@ class SchedulingConfig:
     DO NOT CHANGE these values without explicit approval.
     """
     
-    # Stage → Remaining Fab % Mapping
-    # This is the authoritative mapping that replaces all legacy Excel logic
-    # Maps both canonical names and database variations
+    # Stage → Remaining Fab % Mapping (canonical names only).
+    # Values mirror the Excel workbook; do not change without explicit approval.
+    # Note: app.api.helpers.STAGE_HOUR_PERCENTAGES is the future source of truth
+    # for both fab and install percentages (per the client "Banana Code" matrix);
+    # this dict is the legacy fab-only map still consumed by the scheduling
+    # calculator. Values here have not been reconciled with the new matrix yet.
     STAGE_REMAINING_FAB_PERCENTAGE: Dict[str, float] = {
-        # Released - 100%
-        'Released': 1.0,
-
-        # Material Ordered - 100%
+        'Released':         1.0,
         'Material Ordered': 1.0,
-
-        # Cut Start / Cut Complete - 90% (handles variations)
-        'Cut Start': 0.9,
-        'Cut start': 0.9,
-        'Cut Complete': 0.9,
-
-        # Fitup Start - 90%
-        'Fitup Start': 0.9,
-
-        # Fit Up Complete - 50% (handles variations)
-        'Fit up Comp': 0.5,
-        'Fit Up Complete.': 0.5,
-        'Fit Up Complete': 0.5,
-        'Fitup comp': 0.5,
-
-        # Weld Start - 50%
-        'Weld Start': 0.5,
-
-        # Weld Complete / Welded QC - 10% (handles variations)
-        'Weld Complete': 0.1,
-        'WeldingQC': 0.1,
-        'Welded QC': 0.1,
-        'Welding QC': 0.1,
-
-        # Paint Start - 10%
-        'Paint Start': 0.1,
-        
-        # Hold - 100% (full hours, cascades off previous release)
-        'Hold': 1.0,
-
-        # Paint Complete - 0% (handles variations)
-        'Paint Complete': 0.0,
-        'Paint complete': 0.0,
-        'Paint comp': 0.0,
-        
-        # Store - 0%
-        'Store': 0.0,
-        'Store at MHMW for shipping': 0.0,
-        
-        # Ship Planning - 0%
-        'Ship Planning': 0.0,
-        'Shipping planning': 0.0,
-        
-        # Ship Complete - 0% (handles variations)
-        'Ship Complete': 0.0,
-        'Shipping completed': 0.0,
-        
-        # Complete - 0%
-        'Complete': 0.0,
+        'Cut Start':        0.9,
+        'Cut Complete':     0.9,
+        'Fitup Start':      0.9,
+        'Fitup Complete':   0.5,
+        'Weld Start':       0.5,
+        'Weld Complete':    0.1,
+        'Welded QC':        0.1,
+        'Paint Start':      0.1,
+        'Hold':             1.0,  # full hours, cascades off previous release
+        'Paint Complete':   0.0,
+        'Store at MHMW':    0.0,
+        'Ship Planning':    0.0,
+        'Ship Complete':    0.0,
+        'Install Start':    0.0,
+        'Install Complete': 0.0,
+        'Complete':         0.0,
     }
     
     # Fabrication capacity (fixed daily capacity)
@@ -104,7 +71,7 @@ class SchedulingConfig:
         Get the remaining fabrication percentage for a given stage.
         
         Args:
-            stage: Stage name (e.g., 'Released', 'Cut Start', 'Fit Up Complete.', etc.)
+            stage: Stage name (e.g., 'Released', 'Cut Start', 'Fitup Complete', etc.)
             
         Returns:
             float: Percentage as decimal (0.0 to 1.0)

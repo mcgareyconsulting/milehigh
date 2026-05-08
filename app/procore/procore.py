@@ -118,6 +118,35 @@ def get_projects_by_company_id(company_id, project_number):
             return project["id"]
     return None
 
+
+def fetch_all_projects(company_id):
+    """Fetch every Procore project in one call. Returns {project_number_str: project_id}."""
+    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects?company_id={company_id}"
+    headers = {
+        "Authorization": f"Bearer {get_access_token()}",
+        "Procore-Company-Id": str(company_id),
+    }
+    projects = _request_json(url, headers=headers) or []
+    return {p["project_number"]: p["id"] for p in projects}
+
+
+def fetch_all_submittals(project_id):
+    """Fetch every submittal for a project in one call (unfiltered)."""
+    url = f"{cfg.PROD_PROCORE_BASE_URL}/rest/v1.1/projects/{project_id}/submittals"
+    headers = {"Authorization": f"Bearer {get_access_token()}"}
+    result = _request_json(url, headers=headers)
+    return result if isinstance(result, list) else []
+
+
+def submittals_for_release(all_submittals, job, release):
+    """Filter a pre-fetched submittal list to the FC submittals matching one (job, release)."""
+    identifier = f"{job}-{release}".strip().lower()
+    return [
+        s for s in all_submittals
+        if _identifier_matches(identifier, _normalize_title(s.get("title", "")))
+        and (s.get("type") or {}).get("name") == "For Construction"
+    ]
+
 # Function to get project id by project name
 def get_project_id_by_project_name(project_name):
     # get procore client

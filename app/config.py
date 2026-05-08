@@ -46,11 +46,10 @@ class Config:
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
 
-    # OneDrive/Excel configuration
-    ONEDRIVE_USER_EMAIL = os.environ.get("ONEDRIVE_USER_EMAIL")
-    ONEDRIVE_FILE_PATH = os.environ.get("ONEDRIVE_FILE_PATH")
-    EXCEL_INDEX_ADJ = int(os.environ.get("EXCEL_INDEX_ADJ", 0))
-    SNAPSHOTS_DIR = os.environ.get("SNAPSHOTS_DIR", "snapshots")
+    # Per-release marked-up PDF storage. In prod set to an absolute path on the
+    # Render persistent disk (e.g. /var/data/pdfs). Local dev falls back to
+    # <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.
+    PDF_STORAGE_ROOT = os.environ.get("PDF_STORAGE_ROOT")
 
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")

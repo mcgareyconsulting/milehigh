@@ -16,14 +16,17 @@ import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 
 function Archive() {
     const navigate = useNavigate();
     const { jobs, columns, loading, error: fetchError, refetch } = useArchiveDataFetching();
 
     const [isAdmin, setIsAdmin] = useState(false);
+    const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('ar_minimized') === 'true'
     );
@@ -33,8 +36,10 @@ function Archive() {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch {
                 setIsAdmin(false);
+                setShowScrollbars(false);
             }
         };
         fetchUserInfo();
@@ -305,26 +310,31 @@ function Archive() {
 
                         {!loading && !fetchError && (
                             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                <div className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                <div className={`${showScrollbars ? '' : 'job-log-table-scroll-hide-scrollbar'} overflow-auto flex-1`.trim()}>
                                     <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                         <thead className="sticky top-0 z-10">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
-                                                    const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
+                                                    const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                     const colWidthPct = columnWidthPercents[column];
+                                                    const isUrgency = column === 'Urgency';
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 align-middle text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
-                                                            {displayHeader}
+                                                            {isUrgency ? (
+                                                                <BananaCodeHeader />
+                                                            ) : (
+                                                                displayHeader
+                                                            )}
                                                         </th>
                                                     );
                                                 })}
                                                 {isAdmin && (
-                                                    <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                    <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-8">
                                                         ⚙
                                                     </th>
                                                 )}

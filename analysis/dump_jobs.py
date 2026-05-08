@@ -11,7 +11,7 @@ conn = psycopg2.connect(url, sslmode="require")
 print("releases...")
 releases = pd.read_sql(
     "SELECT id, job, release, job_name, description, fab_hrs, install_hrs, "
-    "pm, \"by\", released, fab_order, stage, stage_group, banana_color, "
+    "pm, \"by\", released, fab_order, stage, stage_group, "
     "start_install, comp_eta, job_comp, invoiced, "
     "trello_card_id, trello_list_name, last_updated_at, source_of_update, "
     "is_active, is_archived FROM releases",

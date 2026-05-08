@@ -4,7 +4,7 @@
  * purpose: Renders a single job-log table row with inline stage editing, urgency indicators, action menus, and detail/date modals.
  * exports:
  *   JobsTableRow: Feature-rich table row for the Job Log with inline editing and admin actions
- * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./BananaIcon]
+ * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./StageIconRow]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
  *   - Stage dropdown options must stay in sync with PMBoardList stage definitions
@@ -18,18 +18,68 @@ import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
 import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
-import { BananaIcon } from './BananaIcon';
+import { StageIconRow } from './StageIconRow';
+import { PdfMarkupModal } from './PdfMarkupModal';
+import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
+import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
+    const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
+    const [pdfMarkupVersionId, setPdfMarkupVersionId] = useState(null);
+    const [pdfMarkupMode, setPdfMarkupMode] = useState('edit');
+    const [pdfHistoryOpen, setPdfHistoryOpen] = useState(false);
+    const [hasDrawingLocal, setHasDrawingLocal] = useState(Boolean(row.has_drawing));
     const [showActionMenu, setShowActionMenu] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editField, setEditField] = useState('');
     const [editValue, setEditValue] = useState('');
     const [saving, setSaving] = useState(false);
+
+    // Keep local has_drawing flag in sync if parent re-renders the row
+    useEffect(() => { setHasDrawingLocal(Boolean(row.has_drawing)); }, [row.has_drawing]);
+
+    const canMarkup = isAdmin || isDrafter;
+    const drawingFileInputRef = useRef(null);
+
+    const openLatestMarkup = async (mode = 'edit') => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing/versions`, { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const latest = (data?.versions || [])[0];
+            if (!latest) return;
+            setPdfMarkupVersionId(latest.id);
+            setPdfMarkupMode(mode);
+            setPdfMarkupOpen(true);
+        } catch (e) {
+            console.error('open markup failed', e);
+        }
+    };
+
+    const handleDrawingUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing`, {
+                method: 'POST',
+                body: fd,
+                credentials: 'include',
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            setHasDrawingLocal(true);
+        } catch (e) {
+            console.error('drawing upload failed', e);
+            alert(`Upload failed: ${e.message || e}`);
+        } finally {
+            if (drawingFileInputRef.current) drawingFileInputRef.current.value = '';
+        }
+    };
 
     // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X).
     // Tolerates whitespace + case drift on the stage value.
@@ -41,20 +91,22 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Stage options with simplified names for display (in progression order)
     const stageOptions = [
         { value: 'Released', label: 'Released' },
-        { value: 'Material Ordered', label: 'Material Ordered' },
-        { value: 'Cut start', label: 'Cut start' },
+        { value: 'Material Ordered', label: 'Mat. Order' },
+        { value: 'Cut Start', label: 'Cut Start' },
         { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Fitup Start', label: 'Fitup start' },
-        { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Fitup Complete', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Paint Complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
-        { value: 'Store at MHMW for shipping', label: 'Store' },
-        { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Store at MHMW', label: 'Store' },
+        { value: 'Ship Planning', label: 'Ship plan' },
+        { value: 'Ship Complete', label: 'Ship comp' },
+        { value: 'Install Start', label: 'Install start' },
+        { value: 'Install Complete', label: 'Install comp' },
         { value: 'Complete', label: 'Complete' }
     ];
 
@@ -68,7 +120,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Cut start': {
+        'Cut Start': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600
@@ -92,7 +144,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         },
-        'Fit Up Complete.': {
+        'Fitup Complete': {
             light: 'rgb(219 234 254)', // blue-100
             base: 'rgb(59 130 246)', // blue-500
             dark: 'rgb(37 99 235)', // blue-600
@@ -108,7 +160,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(253 224 71)', // yellow-300
             className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
         },
-        'Paint complete': {
+        'Paint Complete': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -116,7 +168,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(110 231 183)', // emerald-300
             className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Store at MHMW for shipping': {
+        'Store at MHMW': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -124,7 +176,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(110 231 183)', // emerald-300
             className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Shipping planning': {
+        'Ship Planning': {
             light: 'rgb(209 250 229)', // emerald-100 (green)
             base: 'rgb(16 185 129)', // emerald-500
             dark: 'rgb(5 150 105)', // emerald-600
@@ -132,7 +184,23 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(110 231 183)', // emerald-300
             className: 'bg-emerald-100 text-emerald-800 border-emerald-300'
         },
-        'Shipping completed': {
+        'Ship Complete': {
+            light: 'rgb(237 233 254)', // violet-100 (gentle purple)
+            base: 'rgb(139 92 246)', // violet-500
+            dark: 'rgb(124 58 237)', // violet-600
+            text: 'rgb(91 33 182)', // violet-800
+            border: 'rgb(196 181 253)', // violet-300
+            className: 'bg-violet-100 text-violet-800 border-violet-300'
+        },
+        'Install Start': {
+            light: 'rgb(237 233 254)', // violet-100 (gentle purple)
+            base: 'rgb(139 92 246)', // violet-500
+            dark: 'rgb(124 58 237)', // violet-600
+            text: 'rgb(91 33 182)', // violet-800
+            border: 'rgb(196 181 253)', // violet-300
+            className: 'bg-violet-100 text-violet-800 border-violet-300'
+        },
+        'Install Complete': {
             light: 'rgb(237 233 254)', // violet-100 (gentle purple)
             base: 'rgb(139 92 246)', // violet-500
             dark: 'rgb(124 58 237)', // violet-600
@@ -180,32 +248,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             border: 'rgb(147 197 253)', // blue-300
             className: 'bg-blue-100 text-blue-800 border-blue-300'
         }
-    };
-
-    // 5-step urgency banana fill (XXXOO-style). Each stage maps to one of five levels
-    // so the column reads at a glance. Hold is a pause: 0% fill.
-    const STAGE_TO_BANANA_STEP = {
-        'Released': 0,
-        'Material Ordered': 1,
-        'Cut start': 1,
-        'Cut Complete': 1,
-        'Fitup Start': 1,
-        'Fit Up Complete.': 1,
-        'Weld Start': 2,
-        'Weld Complete': 2,
-        'Welded QC': 3,
-        'Paint Start': 4,
-        'Paint complete': 4,
-        'Store at MHMW for shipping': 4,
-        'Shipping planning': 4,
-        'Shipping completed': 5,
-        'Complete': 5,
-    };
-    const getBananaProgress = (stage) => {
-        if (stage === 'Hold') return 0;
-        const step = STAGE_TO_BANANA_STEP[stage];
-        if (step == null) return 0;
-        return step / 5;
     };
 
     // Local state for stage
@@ -571,9 +613,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
         const oldValue = localStartInstall;
 
-        // Optimistic update
+        // Optimistic update — close the modal right away; the row's cascade
+        // spinner provides the in-flight feedback. Mirrors handleClearHardDate.
         setLocalStartInstall(dateValue);
         setUpdatingStartInstall(true);
+        setIsStartInstallModalOpen(false);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
         try {
@@ -582,9 +626,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue);
 
             console.log(`[START_INSTALL] Successfully updated job ${jobNumber}-${releaseNumber} to ${dateValue}`);
-
-            // Close modal
-            setIsStartInstallModalOpen(false);
 
             // Trigger refetch to show latest state
             if (onUpdate) {
@@ -785,23 +826,18 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
 
 
-                    // Urgency column: banana-boy progress fill; not interactive (red date handles urgency).
+                    // See COLUMN_WIDTH_PERCENT in pages/JobLog.jsx for the viewport
+                    // tuning + responsive plan before changing min-widths in this file.
                     if (column === 'Urgency') {
-                        const progress = getBananaProgress(localStage);
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
-                                style={{ minWidth: '160px' }}
+                                style={{ minWidth: '230px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
-                                <div
-                                    className="w-full flex items-center justify-center p-1 rounded-md border bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700 ring-1 ring-yellow-100 dark:ring-yellow-800"
-                                    title={`Release progress: ${Math.round(progress * 100)}%`}
-                                >
-                                    <BananaIcon progress={progress} width={140} height={36} />
-                                </div>
+                                <StageIconRow stage={localStage} />
                             </td>
                         );
                     }
@@ -830,7 +866,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
-                                style={{ minWidth: '160px' }}
+                                style={{ minWidth: '115px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -841,7 +877,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                             type="button"
                                             onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
                                             disabled={updatingStage}
-                                            className={`w-full min-w-[100px] px-2 py-0.5 text-[10px] border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
+                                            className={`w-full px-1.5 py-0.5 text-[10px] border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
                                             style={solidStyle}
                                         >
                                             {currentLabel}
@@ -855,7 +891,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                 />
                                                 <div
                                                     ref={stageListRef}
-                                                    className={`absolute left-0 right-0 ${dropdownDirection === 'up' ? 'bottom-full mb-0.5' : 'top-full mt-0.5'} rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 min-w-[100px] max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col`}
+                                                    className={`absolute left-0 right-0 ${dropdownDirection === 'up' ? 'bottom-full mb-0.5' : 'top-full mt-0.5'} rounded-md border-2 border-gray-300 dark:border-slate-500 shadow-lg z-20 max-h-64 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-800 flex flex-col`}
                                                 >
                                                     {rotatedStageOptions.map((option) => {
                                                         const optionColors = getStageColors(option.value);
@@ -869,7 +905,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                                     handleStageChange(option.value);
                                                                     setShowStageDropdown(false);
                                                                 }}
-                                                                className={`w-full px-2 py-1.5 text-[10px] font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
+                                                                className={`w-full px-1.5 py-1 text-[10px] font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
                                                                 style={{
                                                                     backgroundColor: optionColors.light,
                                                                     color: optionColors.text,
@@ -894,7 +930,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         const displayValue = localFabOrder === null || localFabOrder === undefined ? '—' : formatCellValue(localFabOrder, column);
                         const fabOrderGroup = stageToGroup?.[localStage] || 'FABRICATION';
                         const groupDupes = duplicateFabOrders?.get?.(fabOrderGroup);
-                        const isDuplicateFabOrder = !!groupDupes && localFabOrder != null && localFabOrder >= 4 && groupDupes.has(localFabOrder);
+                        const isDuplicateFabOrder = !!groupDupes && localFabOrder != null && localFabOrder >= 3 && groupDupes.has(localFabOrder);
                         const dupColor = isDuplicateFabOrder ? (stageGroupDupColors?.[fabOrderGroup] || '#f97316') : null;
                         return (
                             <td
@@ -944,7 +980,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     disabled={updatingFabOrder || isGrayed}
                                     className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'text-white font-bold' : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100'} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
-                                    style={isDuplicateFabOrder ? { minWidth: '60px', backgroundColor: dupColor } : { minWidth: '60px' }}
+                                    style={isDuplicateFabOrder ? { minWidth: '48px', backgroundColor: dupColor } : { minWidth: '48px' }}
                                 />
                             </td>
                         );
@@ -981,7 +1017,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                     rows={2}
-                                    style={{ minWidth: '120px' }}
                                 />
                                 <button
                                     type="button"
@@ -1111,12 +1146,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
                                 title={`${tooltipValue} - Click to view details`}
                                 onClick={() => setIsModalOpen(true)}
                                 style={{
-                                    maxWidth: '120px',
-                                    width: '120px'
+                                    maxWidth: '170px',
+                                    width: '170px'
                                 }}
                             >
                                 <div
@@ -1125,7 +1160,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         WebkitLineClamp: 2,
                                         WebkitBoxOrient: 'vertical',
                                         overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
+                                        textOverflow: 'clip',
                                         lineHeight: '1.2',
                                         textAlign: 'center'
                                     }}
@@ -1138,30 +1173,80 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
-                    // Handle Release # column - make it a link to viewer_url if available
+                    // Handle Release # column — smart fallback:
+                    //   has_drawing → click opens in-app markup; show small history icon
+                    //   else viewer_url → click opens Procore (preserves prior behavior)
+                    //   plus an upload icon (drafter/admin) when no drawing yet
                     if (column === 'Release #') {
                         const viewerUrl = row.viewer_url;
-                        // Check if viewer_url exists and is not empty
-                        if (viewerUrl && viewerUrl.trim() !== '') {
-                            return (
-                                <td
-                                    key={`${row.id}-${column}`}
-                                    className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
-                                    title={`${rawValue} - Click to open Procore viewer`}
-                                >
-                                    <a
-                                        href={viewerUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        {rawValue}
-                                    </a>
-                                </td>
-                            );
-                        }
-                        // If no viewer_url, render normally
+                        const hasDrawing = hasDrawingLocal;
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
+                            >
+                                <div className="flex items-center justify-center gap-1">
+                                    {hasDrawing ? (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openLatestMarkup(canMarkup ? 'edit' : 'view');
+                                            }}
+                                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium"
+                                            title="Open in-app markup viewer"
+                                        >
+                                            {rawValue}
+                                        </button>
+                                    ) : viewerUrl && viewerUrl.trim() !== '' ? (
+                                        <a
+                                            href={viewerUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            title="Open Procore viewer"
+                                        >
+                                            {rawValue}
+                                        </a>
+                                    ) : (
+                                        <span>{rawValue}</span>
+                                    )}
+
+                                    {hasDrawing && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setPdfHistoryOpen(true); }}
+                                            className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
+                                            title="Drawing version history"
+                                            aria-label="Drawing version history"
+                                        >
+                                            🕒
+                                        </button>
+                                    )}
+                                    {!hasDrawing && canMarkup && (
+                                        <>
+                                            <input
+                                                ref={drawingFileInputRef}
+                                                type="file"
+                                                accept="application/pdf,.pdf"
+                                                onChange={handleDrawingUpload}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); drawingFileInputRef.current?.click(); }}
+                                                className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
+                                                title="Upload FC drawing PDF"
+                                                aria-label="Upload FC drawing PDF"
+                                            >
+                                                ⬆
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </td>
+                        );
                     }
 
                     return (
@@ -1173,8 +1258,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 }`}
                             title={tooltipValue}
                             style={shouldWrapAndTruncate ? {
-                                maxWidth: column === 'Job' ? '120px' : '150px',
-                                width: column === 'Job' ? '120px' : '150px'
+                                maxWidth: '170px',
+                                width: '170px'
                             } : {}}
                         >
                             {shouldWrapAndTruncate ? (
@@ -1199,8 +1284,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 })}
                 {isAdmin && (
                     <td
-                        className={`px-2 ${cellPy} text-center align-middle border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 w-12 relative`}
-                        style={{ width: '48px' }}
+                        className={`px-1 ${cellPy} text-center align-middle border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 w-8 relative`}
+                        style={{ width: '32px' }}
                     >
                         <button
                             onClick={() => setShowActionMenu(v => !v)}
@@ -1266,6 +1351,25 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 jobNumber={row['Job #']}
                 releaseNumber={row['Release #']}
                 startInstallFormulaTF={row['start_install_formulaTF']}
+            />
+            <PdfMarkupModal
+                isOpen={pdfMarkupOpen}
+                releaseId={row.id}
+                versionId={pdfMarkupVersionId}
+                mode={pdfMarkupMode}
+                onClose={() => setPdfMarkupOpen(false)}
+                onSaved={() => { setHasDrawingLocal(true); }}
+            />
+            <PdfVersionHistoryModal
+                isOpen={pdfHistoryOpen}
+                releaseId={row.id}
+                onClose={() => setPdfHistoryOpen(false)}
+                onOpenVersion={(vid, mode) => {
+                    setPdfHistoryOpen(false);
+                    setPdfMarkupVersionId(vid);
+                    setPdfMarkupMode(canMarkup ? mode : 'view');
+                    setPdfMarkupOpen(true);
+                }}
             />
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

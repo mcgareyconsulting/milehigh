@@ -67,7 +67,7 @@ def test_bounds_welded_qc_no_earlier_stages(app):
 def test_bounds_released_only_earlier_stages(app):
     """Released (pos=5, last): lower=max of all earlier stages; no later stages."""
     with app.app_context():
-        make_release(1, "A", "Cut start", "FABRICATION", 20)
+        make_release(1, "A", "Cut Start", "FABRICATION", 20)
         make_release(2, "A", "Material Ordered", "FABRICATION", 15)
         db.session.commit()
 
@@ -80,7 +80,7 @@ def test_bounds_welded_between_stages(app):
     """Welded (pos=1): lower=max(Welded QC), upper=min(Fit Up Complete onward)."""
     with app.app_context():
         make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
-        make_release(2, "A", "Fit Up Complete.", "FABRICATION", 20)
+        make_release(2, "A", "Fitup Complete", "FABRICATION", 20)
         make_release(3, "A", "Released", "FABRICATION", 30)
         db.session.commit()
 
@@ -93,7 +93,7 @@ def test_bounds_cross_group_unified(app):
     """Bounds work across old stage_groups — Welded QC and Welded are neighbors."""
     with app.app_context():
         make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
-        make_release(2, "A", "Fit Up Complete.", "FABRICATION", 15)
+        make_release(2, "A", "Fitup Complete", "FABRICATION", 15)
         db.session.commit()
 
         lower, upper = get_fab_order_bounds("Weld Complete", 99, "Z")
@@ -118,11 +118,11 @@ def test_bounds_fixed_tier_exempt(app):
         make_release(1, "A", "Released", "FABRICATION", 5)
         db.session.commit()
 
-        lower, upper = get_fab_order_bounds("Shipping completed", 99, "Z")
+        lower, upper = get_fab_order_bounds("Ship Complete", 99, "Z")
         assert lower is None
         assert upper is None
 
-        lower, upper = get_fab_order_bounds("Paint complete", 99, "Z")
+        lower, upper = get_fab_order_bounds("Paint Complete", 99, "Z")
         assert lower is None
         assert upper is None
 
@@ -172,7 +172,7 @@ def test_stage_change_to_paint_complete_sets_tier_2(client, app):
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
         resp = client.patch(
             '/brain/update-stage/1/A',
-            json={'stage': 'Paint complete'},
+            json={'stage': 'Paint Complete'},
             content_type='application/json'
         )
 
@@ -348,7 +348,7 @@ def test_stage_change_to_shipping_planning_sets_tier_2(client, app):
     with patch('app.brain.job_log.routes.get_list_id_by_stage', return_value=None):
         resp = client.patch(
             '/brain/update-stage/1/A',
-            json={'stage': 'Shipping planning'},
+            json={'stage': 'Ship Planning'},
             content_type='application/json'
         )
 
@@ -708,7 +708,7 @@ def test_endpoint_fixed_tiers_unchanged(client, app):
     """Fixed-tier jobs keep their values when other releases are edited."""
     with app.app_context():
         make_release(1, "A", "Complete", "COMPLETE", 1)
-        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
+        make_release(2, "A", "Paint Complete", "READY_TO_SHIP", 2)
         make_release(3, "A", "Welded QC", "READY_TO_SHIP", 4)
         make_release(4, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
@@ -766,8 +766,8 @@ def test_renumber_sets_fixed_tiers(app):
     """renumber_fab_orders clears Complete to NULL, Shipping completed->1, Paint complete->2."""
     with app.app_context():
         make_release(1, "A", "Complete", "COMPLETE", 50)
-        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 99)
-        make_release(3, "A", "Shipping completed", "COMPLETE", 88)
+        make_release(2, "A", "Paint Complete", "READY_TO_SHIP", 99)
+        make_release(3, "A", "Ship Complete", "COMPLETE", 88)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
@@ -786,7 +786,7 @@ def test_renumber_dynamic_sequential(app):
     with app.app_context():
         make_release(1, "A", "Released", "FABRICATION", 99)
         make_release(2, "A", "Welded QC", "READY_TO_SHIP", 50)
-        make_release(3, "A", "Cut start", "FABRICATION", 75)
+        make_release(3, "A", "Cut Start", "FABRICATION", 75)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
@@ -841,11 +841,11 @@ def test_renumber_returns_stats(app):
     with app.app_context():
         # Stage='Complete' starts with a stale fab_order=50; should be cleared to NULL.
         make_release(1, "A", "Complete", "COMPLETE", 50)
-        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 99)
+        make_release(2, "A", "Paint Complete", "READY_TO_SHIP", 99)
         make_release(3, "A", "Weld Complete", "FABRICATION", 75)
         make_release(4, "A", "Released", "FABRICATION", 80)
         # Add a Shipping completed so fixed_tier_1 has something to renumber.
-        make_release(5, "A", "Shipping completed", "COMPLETE", 88)
+        make_release(5, "A", "Ship Complete", "COMPLETE", 88)
         db.session.commit()
 
         from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
@@ -867,7 +867,7 @@ def test_renumber_idempotent(app):
     with app.app_context():
         # Stage='Complete' is correct only when fab_order is NULL.
         make_release(1, "A", "Complete", "COMPLETE", None)
-        make_release(2, "A", "Paint complete", "READY_TO_SHIP", 2)
+        make_release(2, "A", "Paint Complete", "READY_TO_SHIP", 2)
         make_release(3, "A", "Welded QC", "READY_TO_SHIP", 3)
         make_release(4, "A", "Released", "FABRICATION", 4)
         db.session.commit()
@@ -958,7 +958,7 @@ def test_stage_change_between_fabrication_stages_preserves_fab_order(client, app
         make_release(2, "A", "Weld Complete", "FABRICATION", 8)
         make_release(3, "A", "Weld Complete", "FABRICATION", 9)
         make_release(4, "A", "Weld Complete", "FABRICATION", 10)
-        make_release(5, "A", "Fit Up Complete.", "FABRICATION", 11)
+        make_release(5, "A", "Fitup Complete", "FABRICATION", 11)
         make_release(1, "A", "Released", "FABRICATION", 30)
         db.session.commit()
 

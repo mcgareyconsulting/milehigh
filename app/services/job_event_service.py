@@ -105,7 +105,7 @@ class JobEventService:
         """Mark event as applied"""
         from app.models import ReleaseEvents, db
 
-        event = ReleaseEvents.query.get(event_id)
+        event = db.session.get(ReleaseEvents, event_id)
         if event:
             event.applied_at = datetime.utcnow()
             logger.debug(f"Event {event_id} marked as applied")

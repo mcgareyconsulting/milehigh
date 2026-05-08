@@ -17,8 +17,14 @@ from app.api import api_bp
 from app.models import Releases, db
 from app.api.helpers import transform_job_for_display
 from app.logging_config import get_logger
+from app.version import BUILD_SHA, RELEASED_AT
 
 logger = get_logger(__name__)
+
+
+@api_bp.route("/version", methods=["GET"])
+def version():
+    return jsonify({"version": BUILD_SHA, "releasedAt": RELEASED_AT}), 200
 
 
 # DISABLED: Job log functionality not working yet

@@ -10,3 +10,7 @@ class ResizeObserverStub {
     disconnect() {}
 }
 globalThis.ResizeObserver = globalThis.ResizeObserver || ResizeObserverStub;
+
+// Vite's `define` ({ __BUILD_SHA__: ... }) only runs at build time, so unit tests
+// running through vitest see a bare reference. Provide a deterministic stub.
+globalThis.__BUILD_SHA__ = globalThis.__BUILD_SHA__ || 'test';
