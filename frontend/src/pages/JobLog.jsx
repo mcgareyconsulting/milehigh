@@ -674,7 +674,7 @@ function JobLog() {
                                         <button
                                             onClick={handlePrint}
                                             disabled={!hasData || loading || !reviewMode || printing}
-                                            title={!reviewMode ? 'Enable Review mode to export the PDF' : 'Build a per-PM legal-landscape PDF and download it'}
+                                            title={!reviewMode ? 'Enable Review mode to export the PDF' : 'Build a per-PM tabloid-landscape PDF and download it'}
                                             className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
                                             {printing ? '⏳ Building…' : '🖨️ Print'}

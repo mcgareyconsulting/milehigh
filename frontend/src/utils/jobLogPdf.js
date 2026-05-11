@@ -1,13 +1,13 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Builds a paginated, per-PM legal-landscape PDF of the Job Log Review tab. Each PM block starts on a fresh page and non-final PMs are padded to even page count so subsequent PMs land on the recto when printed double-sided.
+ * purpose: Builds a paginated, per-PM tabloid-landscape PDF of the Job Log Review tab. Each PM block starts on a fresh page and non-final PMs are padded to even page count so subsequent PMs land on the recto when printed double-sided.
  * exports:
  *   generateJobLogReviewPdf: async ({ jobs, columnHeaders, columnWidthPercent }) → triggers PDF download
  * imports_from: [jspdf, jspdf-autotable, ./formatters, ./stageProgress]
  * imported_by: [pages/JobLog.jsx]
  * invariants:
- *   - Page format is legal landscape (14in x 8.5in = 1008pt x 612pt)
+ *   - Page format is tabloid landscape (17in x 11in = 1224pt x 792pt)
  *   - Each PM section starts on a fresh page; non-final PMs are padded to even page count
  *   - Urgency cells render a rasterized 7-icon Banana Code row keyed by stage name
  */
@@ -30,8 +30,8 @@ import {
 } from './holdFlag';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 
-const PAGE_WIDTH_PT = 1008;
-const PAGE_HEIGHT_PT = 612;
+const PAGE_WIDTH_PT = 1224;
+const PAGE_HEIGHT_PT = 792;
 const MARGIN_PT = 36;
 
 // Banana Code icon row — 7 dept icons rendered into the Urgency cell.
@@ -52,13 +52,6 @@ const PRINT_WIDTH_OVERRIDES = {
     'Comp. ETA': 4,
     'Job': 10,
     'Notes': 8,
-};
-
-// Hard character cap applied before autoTable wraps. Truncated values get a
-// trailing ellipsis (…). The MAX_LINES_PER_CELL wrap cap still applies on top.
-const PRINT_CHAR_LIMITS = {
-    'Job': 25,
-    'Description': 25,
 };
 
 const DATE_COLUMNS = new Set(['Released', 'Start install', 'Comp. ETA']);
@@ -217,12 +210,7 @@ function formatCell(job, column) {
     const value = DATE_COLUMNS.has(column)
         ? formatDateShort(raw)
         : formatCellValue(raw, column);
-    const text = String(value || '—');
-    const limit = PRINT_CHAR_LIMITS[column];
-    if (limit && text.length > limit) {
-        return text.slice(0, limit - 1).trimEnd() + '…';
-    }
-    return text;
+    return String(value || '—');
 }
 
 // Build a parallel rowMeta array (indexed by data.row.index) that the
@@ -287,10 +275,11 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
             margin: { top: tableTopY, left: MARGIN_PT, right: MARGIN_PT, bottom: MARGIN_PT },
             theme: 'grid',
             showHead: 'everyPage',
+            rowPageBreak: 'avoid',
             styles: {
                 font: 'helvetica',
-                fontSize: 7,
-                cellPadding: { top: 0.75, bottom: 0.75, left: 3, right: 3 },
+                fontSize: 9,
+                cellPadding: { top: 1.5, bottom: 1.5, left: 3, right: 3 },
                 lineColor: COLOR_BODY_LINE,
                 lineWidth: 0.5,
                 halign: 'center',
@@ -301,7 +290,7 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
                 fillColor: COLOR_HEAD_FILL,
                 textColor: 0,
                 fontStyle: 'bold',
-                fontSize: 7.5,
+                fontSize: 9.5,
                 cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
                 lineColor: COLOR_HEAD_LINE,
                 lineWidth: 0.5,
