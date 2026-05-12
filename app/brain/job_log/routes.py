@@ -36,6 +36,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import or_
 import json
 import hashlib
+import re
 import csv
 import io
 import string
@@ -310,6 +311,34 @@ def _release_ids_with_drawings(release_ids):
     )
     return {row[0] for row in rows}
 
+
+_VIEWER_PROJECT_ID_RE = re.compile(r"/projects/(\d+)")
+
+
+def _procore_submittal_refs_for_releases(releases):
+    """Per-release Procore IDs for the deep-link button on the Job Log modal.
+
+    submittal_id is read directly from Releases.procore_submittal_id (captured
+    at FC-drawing lookup time). project_id is parsed from viewer_url, which
+    always contains '/projects/<id>/'.
+    """
+    refs = {}
+    if not releases:
+        return refs
+
+    for r in releases:
+        if not r.procore_submittal_id or not r.viewer_url:
+            continue
+        m = _VIEWER_PROJECT_ID_RE.search(r.viewer_url)
+        if not m:
+            continue
+        refs[r.id] = {
+            "procore_submittal_id": r.procore_submittal_id,
+            "procore_project_id": m.group(1),
+        }
+
+    return refs
+
 # ==============================================================================
 # Job Data Routes
 # ==============================================================================
@@ -449,6 +478,19 @@ def get_jobs():
         except Exception as drawing_lookup_error:
             logger.warning(
                 f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
+        # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
+        try:
+            submittal_refs = _procore_submittal_refs_for_releases(jobs)
+            for j in job_list:
+                ref = submittal_refs.get(j['id'])
+                j['procore_submittal_id'] = ref['procore_submittal_id'] if ref else None
+                j['procore_project_id'] = ref['procore_project_id'] if ref else None
+        except Exception as procore_ref_error:
+            logger.warning(
+                f"Error batching procore submittal refs: {procore_ref_error}",
                 exc_info=True,
             )
 
@@ -721,6 +763,19 @@ def get_all_jobs():
         except Exception as drawing_lookup_error:
             logger.warning(
                 f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
+        # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
+        try:
+            submittal_refs = _procore_submittal_refs_for_releases(jobs)
+            for j in job_list:
+                ref = submittal_refs.get(j['id'])
+                j['procore_submittal_id'] = ref['procore_submittal_id'] if ref else None
+                j['procore_project_id'] = ref['procore_project_id'] if ref else None
+        except Exception as procore_ref_error:
+            logger.warning(
+                f"Error batching procore submittal refs: {procore_ref_error}",
                 exc_info=True,
             )
 

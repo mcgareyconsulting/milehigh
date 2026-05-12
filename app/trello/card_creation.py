@@ -226,9 +226,12 @@ def apply_card_post_creation_features(
             procore_result = get_viewer_url_for_job(job_record.job, job_record.release)
             if procore_result and procore_result.get("success") and procore_result.get("viewer_url"):
                 viewer_url = procore_result["viewer_url"]
+                submittal_id = procore_result.get("submittal_id")
                 # Update the job record with the viewer_url for future use
                 if hasattr(job_record, 'viewer_url'):
                     job_record.viewer_url = viewer_url
+                    if submittal_id is not None and hasattr(job_record, 'procore_submittal_id'):
+                        job_record.procore_submittal_id = str(submittal_id)
                     # Commit the viewer_url update
                     try:
                         db.session.commit()
