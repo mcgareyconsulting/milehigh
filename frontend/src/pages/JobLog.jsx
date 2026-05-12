@@ -692,9 +692,7 @@ function JobLog() {
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                     {/* Action buttons inline */}
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        {isAdmin && (
-                                            <ViewToggle value={viewMode} onChange={setViewMode} />
-                                        )}
+                                        <ViewToggle value={viewMode} onChange={setViewMode} />
                                         <button
                                             onClick={handlePrint}
                                             disabled={!hasData || loading || !reviewMode || printing}

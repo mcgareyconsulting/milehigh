@@ -221,9 +221,19 @@ def create_app():
         "admin/",
     ]
 
+    # Paths under an API prefix that are actually React pages and should
+    # fall through to the SPA. The admin blueprint owns most of /admin/*,
+    # but a handful of routes are React-rendered admin pages registered
+    # in frontend/src/App.jsx.
+    SPA_PATHS_UNDER_API_PREFIX = {
+        "admin/fc-collection",
+    }
+
     def is_api_route(path):
         """Check if a path is an API route that should be handled by Flask."""
         if not path:
+            return False
+        if path in SPA_PATHS_UNDER_API_PREFIX:
             return False
         # Note: /jobs is handled separately in the list_jobs route to distinguish
         # between API requests (JSON) and browser requests (React app)
