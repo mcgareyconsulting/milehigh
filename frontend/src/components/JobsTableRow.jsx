@@ -642,6 +642,34 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
+    const handleSetAsap = async () => {
+        const jobNumber = row['Job #'];
+        const releaseNumber = row['Release #'];
+
+        setIsStartInstallModalOpen(false);
+        try {
+            await jobsApi.setStartInstallAsap(jobNumber, releaseNumber, true);
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error(`[START_INSTALL] Failed to set ASAP for job ${jobNumber}-${releaseNumber}:`, error);
+            alert(`Failed to set ASAP: ${error.message}`);
+        }
+    };
+
+    const handleClearAsap = async () => {
+        const jobNumber = row['Job #'];
+        const releaseNumber = row['Release #'];
+
+        setIsStartInstallModalOpen(false);
+        try {
+            await jobsApi.setStartInstallAsap(jobNumber, releaseNumber, false);
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error(`[START_INSTALL] Failed to clear ASAP for job ${jobNumber}-${releaseNumber}:`, error);
+            alert(`Failed to clear ASAP: ${error.message}`);
+        }
+    };
+
     // Handle clearing a hard date (revert to formula-driven)
     const handleClearHardDate = async () => {
         const jobNumber = row['Job #'];
@@ -1116,22 +1144,31 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
                     // Handle Start install column with clickable cell that opens modal
                     if (column === 'Start install') {
-                        const displayValue = formatDate(localStartInstall);
+                        const isAsap = row['start_install_asap'] === true;
+                        const displayValue = isAsap ? 'ASAP' : formatDate(localStartInstall);
                         // Hard date is when start_install_formulaTF is explicitly false and there's a date value
-                        const isHardDate = row['start_install_formulaTF'] === false && localStartInstall;
+                        const isHardDate = !isAsap && row['start_install_formulaTF'] === false && localStartInstall;
                         // Formula date is when start_install_formulaTF is true or formula starts with '='
-                        const isFormulaDate = row['start_install_formulaTF'] === true || (row['start_install_formula'] && row['start_install_formula'].startsWith('='));
+                        const isFormulaDate = !isAsap && (row['start_install_formulaTF'] === true || (row['start_install_formula'] && row['start_install_formula'].startsWith('=')));
                         // IMPORTANT: avoid conflicting bg-* utilities (Tailwind utility order, not class string order,
                         // determines the winner). If we include both rowBgClass and bg-red-500, the row bg can win,
                         // leaving white text on a light background (looks blank until hover).
-                        const startInstallBgClass = isHardDate ? 'bg-red-500 text-white hover:bg-red-600 font-semibold' : `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+                        const startInstallBgClass = (isAsap || isHardDate)
+                            ? 'bg-red-500 text-white hover:bg-red-600 font-semibold'
+                            : `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+
+                        const titleText = isAsap
+                            ? 'ASAP — release will jump from Paint Complete to Shipping Planning. Click to edit.'
+                            : isFormulaDate
+                                ? `${displayValue} (Formula-driven - Click to set hard date)`
+                                : `${displayValue} - Click to edit`;
 
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
-                                title={isFormulaDate ? `${displayValue} (Formula-driven - Click to set hard date)` : `${displayValue} - Click to edit`}
+                                title={titleText}
                             >
                                 <span>{displayValue}</span>
                             </td>
@@ -1348,9 +1385,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 currentDate={localStartInstall}
                 onSave={handleStartInstallSave}
                 onClearHardDate={handleClearHardDate}
+                onSetAsap={handleSetAsap}
+                onClearAsap={handleClearAsap}
                 jobNumber={row['Job #']}
                 releaseNumber={row['Release #']}
                 startInstallFormulaTF={row['start_install_formulaTF']}
+                isAsap={row['start_install_asap'] === true}
             />
             <PdfMarkupModal
                 isOpen={pdfMarkupOpen}

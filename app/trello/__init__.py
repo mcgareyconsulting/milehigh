@@ -86,6 +86,10 @@ def trello_webhook():
         return "", 200
 
     if request.method == "POST":
+        if current_app.config.get("TRELLO_MOCK"):
+            current_app.logger.info("[TRELLO_MOCK] inbound webhook dropped")
+            return "", 200
+
         data = request.json
         event_info = parse_webhook_data(data)
         app = current_app._get_current_object()

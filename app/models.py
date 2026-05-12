@@ -408,6 +408,7 @@ class Releases(db.Model):
     )  # Changed from install to start_install and Date type
     start_install_formula = db.Column(db.String(256))  # New field for formula
     start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
+    start_install_asap = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -457,6 +458,7 @@ class Releases(db.Model):
             "start_install": self.start_install,
             "start_install_formula": self.start_install_formula,
             "start_install_formulaTF": self.start_install_formulaTF,
+            "start_install_asap": self.start_install_asap,
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,

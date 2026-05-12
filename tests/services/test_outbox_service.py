@@ -67,6 +67,38 @@ def test_process_item_move_card_success(app):
         mock_api.assert_called_once_with("card-123", new_list_id="list-xyz")
 
 
+def test_trello_mock_move_card_writes_list_fields_and_skips_api(app):
+    """With TRELLO_MOCK=True, process_item should NOT hit Trello's API and
+    should mirror the move onto the Releases row + close the event."""
+    with app.app_context():
+        r = make_release(
+            1, "A",
+            trello_card_id="card-123",
+            trello_list_id="old-list",
+            trello_list_name="Paint start",
+            stage="Paint Start",
+        )
+        ev = _make_event(to_value="Ship Planning")
+        item = _add_move_card_item(ev.id)
+
+        app.config["TRELLO_MOCK"] = True
+        try:
+            with patch("app.trello.api.update_trello_card") as mock_api:
+                assert OutboxService.process_item(item) is True
+            mock_api.assert_not_called()
+        finally:
+            app.config["TRELLO_MOCK"] = False
+
+        db.session.refresh(item)
+        db.session.refresh(r)
+        db.session.refresh(ev)
+        assert item.status == "completed"
+        assert item.error_message is None
+        assert r.trello_list_name == "Shipping planning"
+        assert r.trello_list_id and r.trello_list_id.startswith("mock-")
+        assert ev.applied_at is not None
+
+
 def test_process_item_failure_increments_retry_with_backoff(app):
     with app.app_context():
         make_release(1, "A", trello_card_id="card-123")
