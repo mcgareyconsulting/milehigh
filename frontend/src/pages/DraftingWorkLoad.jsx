@@ -237,7 +237,9 @@ function DraftingWorkLoad() {
                                     <h1 className="text-xl md:text-2xl 3xl:text-3xl font-bold text-white">Drafting Work Load</h1>
                                 </div>
                                 <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-                                    <ViewToggle value={viewMode} onChange={setViewMode} className="bg-white/95" />
+                                    {isAdmin && (
+                                        <ViewToggle value={viewMode} onChange={setViewMode} className="bg-white/95" />
+                                    )}
                                     {isAdmin && (
                                     <button
                                         onClick={() => setAddProjectOpen(true)}
