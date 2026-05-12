@@ -935,10 +935,12 @@ def get_viewer_url_for_job(job_number, release_number):
 
         # Extract viewer urls from final pdfs
         viewer_url = final_pdfs[0]["viewer_url"]
+        submittal_id = final_pdfs[0].get("submittal_id")
 
         return {
             "success": True,
             "viewer_url": viewer_url,
+            "submittal_id": submittal_id,
             "job": job_number,
             "release": release_number
         }
@@ -1002,17 +1004,21 @@ def add_procore_link_to_trello_card(job, release):
 
     # Extract viewer urls from final pdfs
     viewer_url = final_pdfs[0]["viewer_url"]
+    submittal_id = final_pdfs[0].get("submittal_id")
 
     # Add procore link to trello card
     add_procore_link(card_id, viewer_url)
 
-    # Persist viewer URL on job record
+    # Persist viewer URL + submittal_id on job record
     job_record.viewer_url = viewer_url
+    if submittal_id is not None:
+        job_record.procore_submittal_id = str(submittal_id)
     db.session.commit()
 
     return {
         "card_id": card_id,
         "viewer_url": viewer_url,
+        "submittal_id": submittal_id,
     }
 
 

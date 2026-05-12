@@ -421,6 +421,7 @@ class Releases(db.Model):
     trello_card_description = db.Column(db.String(512), nullable=True)
     trello_card_date = db.Column(db.Date, nullable=True)
     viewer_url = db.Column(db.String(512), nullable=True)
+    procore_submittal_id = db.Column(db.String(64), nullable=True)
 
     # Changelog tracking
     last_updated_at = db.Column(db.DateTime, nullable=True)
@@ -469,6 +470,7 @@ class Releases(db.Model):
             "trello_card_description": self.trello_card_description,
             "trello_card_date": self.trello_card_date,
             "viewer_url": self.viewer_url,
+            "procore_submittal_id": self.procore_submittal_id,
             "has_drawing": False,
             "last_updated_at": self.last_updated_at,
             "source_of_update": self.source_of_update,

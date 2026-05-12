@@ -63,14 +63,16 @@ def _candidate_snapshot():
     return [(job, release, card_id) for job, release, card_id in rows]
 
 
-def _persist_viewer_url(job, release, viewer_url, card_id):
-    """Write viewer_url to the Releases row and add the FC Drawing link to
-    Trello, mirroring the original first-attempt flow in
+def _persist_viewer_url(job, release, viewer_url, card_id, submittal_id=None):
+    """Write viewer_url (and submittal_id) to the Releases row and add the FC
+    Drawing link to Trello, mirroring the original first-attempt flow in
     `add_procore_link_to_trello_card`."""
     record = Releases.query.filter_by(job=job, release=release).first()
     if record is None:
         return
     record.viewer_url = viewer_url
+    if submittal_id is not None:
+        record.procore_submittal_id = str(submittal_id)
     db.session.commit()
     if card_id:
         try:
@@ -97,13 +99,14 @@ def _process_release(project_id, job, release, card_id, all_submittals):
         return "still_missing", {**base, "reason": "no Final PDF Pack on submittal yet"}
 
     viewer_url = final_pdfs[0]["viewer_url"]
+    submittal_id = final_pdfs[0].get("submittal_id")
     try:
-        _persist_viewer_url(job, release, viewer_url, card_id)
+        _persist_viewer_url(job, release, viewer_url, card_id, submittal_id=submittal_id)
     except Exception as exc:
         logger.exception("FC retry: persist failed", job=job, release=release)
         _safe_rollback()
         return "errored", {**base, "error": f"persist failed: {exc}"}
-    return "succeeded", {**base, "viewer_url": viewer_url}
+    return "succeeded", {**base, "viewer_url": viewer_url, "submittal_id": submittal_id}
 
 
 def _process_candidates(candidates, project_map, buckets):
