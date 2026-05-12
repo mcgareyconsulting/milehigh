@@ -69,6 +69,13 @@ def get_list_id_by_stage(stage):
         logger.info(f"Stage '{stage}' has no Trello list mapping, skipping outbox creation")
         return None
 
+    from flask import current_app
+    if current_app.config.get("TRELLO_MOCK"):
+        # Synthetic deterministic id — never sent to Trello; only persisted on Releases
+        # so downstream reads stay consistent. Slug matches the forward-mapped list name.
+        slug = trello_list_name.lower().replace(" ", "-").replace(".", "").replace("/", "-")
+        return f"mock-{slug}"
+
     try:
         list_info = get_list_by_name(trello_list_name)
         if list_info and 'id' in list_info:
@@ -441,6 +448,7 @@ def get_jobs():
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
+                    'start_install_asap': serialize_value(job.start_install_asap),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -727,6 +735,7 @@ def get_all_jobs():
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
+                    'start_install_asap': serialize_value(job.start_install_asap),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -1389,7 +1398,46 @@ def update_start_install(job, release):
         start_install_str = request.json.get('start_install')
         is_hard_date = request.json.get('is_hard_date', True)  # Default to True for backward compatibility
         clear_hard_date = request.json.get('clear_hard_date', False)
+        asap = request.json.get('asap')  # tri-state: True sets ASAP, False clears, absent = ignore
         start_install_date = None
+
+        # ASAP set/clear — visual flag only; does not write start_install or formula fields,
+        # so no Trello due-date push and no scheduling recalc (formula isn't changing).
+        if asap is True or asap is False:
+            job_record = Releases.query.filter_by(job=job, release=release).first()
+            if not job_record:
+                return jsonify({'error': 'Job not found'}), 404
+
+            old_asap = bool(job_record.start_install_asap)
+            new_asap = bool(asap)
+            action = 'set_asap' if new_asap else 'clear_asap'
+
+            event = JobEventService.create(
+                job=job,
+                release=release,
+                action=action,
+                source='Brain',
+                payload={'from': old_asap, 'to': new_asap},
+            )
+            if event is None:
+                return jsonify({'error': 'Event already exists'}), 400
+
+            job_record.start_install_asap = new_asap
+            job_record.last_updated_at = datetime.utcnow()
+            job_record.source_of_update = 'Brain'
+
+            JobEventService.close(event.id)
+            db.session.commit()
+
+            logger.info(
+                f"ASAP {'set' if new_asap else 'cleared'} for job {job}-{release}",
+                extra={'event_id': event.id},
+            )
+            return jsonify({
+                'status': 'success',
+                'event_id': event.id,
+                'start_install_asap': new_asap,
+            }), 200
 
         # Handle clearing a hard date (revert to formula-driven)
         if clear_hard_date:
@@ -2210,6 +2258,8 @@ _UNDO_WHITELIST_FIELD = {
     'update_notes': 'notes',
     'update_fab_order': 'fab_order',
     'update_start_install': 'start_install',
+    'set_asap': 'start_install_asap',
+    'clear_asap': 'start_install_asap',
 }
 
 
@@ -2271,6 +2321,31 @@ def _dispatch_undo(event, *, source, defer_cascade):
             source=source,
             undone_event_id=event.id,
         ).execute()
+    if action in ('set_asap', 'clear_asap'):
+        from types import SimpleNamespace
+        from datetime import datetime as _dt
+        from app.models import Releases
+        target_val = bool(payload['from'])
+        inverse_action = 'set_asap' if target_val else 'clear_asap'
+        job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
+        new_event = JobEventService.create(
+            job=event.job, release=event.release,
+            action=inverse_action,
+            source=source,
+            payload={
+                'from': bool(payload['to']),
+                'to': target_val,
+                'undone_event_id': event.id,
+            },
+        )
+        if new_event is None:
+            raise ValueError("Event already exists")
+        job_record.start_install_asap = target_val
+        job_record.last_updated_at = _dt.utcnow()
+        job_record.source_of_update = source
+        JobEventService.close(new_event.id)
+        db.session.commit()
+        return SimpleNamespace(event_id=new_event.id)
     raise ValueError(f"Unsupported undo action: {action}")
 
 

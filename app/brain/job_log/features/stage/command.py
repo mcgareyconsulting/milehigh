@@ -89,7 +89,25 @@ class UpdateStageCommand:
 
         old_stage = job_record.stage if job_record.stage else 'Released'
 
+        # ASAP intercept: a release flagged ASAP that hits Paint Complete is ripped
+        # straight to Ship Planning. We override self.stage here so the rest of the
+        # flow (stage_group sync, fab_order auto-assign, Trello outbox) all naturally
+        # target Ship Planning. The event payload retains `via: 'Paint Complete'` and
+        # `asap_intercepted: True` for audit/undo clarity. One DB event, one Trello move.
         event_payload = {'from': old_stage, 'to': self.stage}
+        if (
+            self.stage == 'Paint Complete'
+            and bool(getattr(job_record, 'start_install_asap', False))
+            and old_stage != 'Ship Planning'
+        ):
+            self.stage = 'Ship Planning'
+            event_payload = {
+                'from': old_stage,
+                'to': 'Ship Planning',
+                'asap_intercepted': True,
+                'via': 'Paint Complete',
+            }
+
         if self.undone_event_id is not None:
             event_payload['undone_event_id'] = self.undone_event_id
 

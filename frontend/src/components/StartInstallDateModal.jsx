@@ -1,25 +1,29 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Lets users set or clear the Start Install date on a release. Any date entered is treated as a hard date; a separate Clear button reverts to formula-driven scheduling.
+ * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date; ASAP is a visual flag (no date written) that triggers Paint Complete → Ship Planning auto-advance.
  * exports:
- *   StartInstallDateModal: Date-picker modal with Save and Clear actions
+ *   StartInstallDateModal: Date-picker modal with Save, Set ASAP, Clear Hard Date, Clear ASAP actions
  * imports_from: [react]
  * imported_by: [frontend/src/components/JobsTableRow.jsx]
  * invariants:
  *   - Any non-empty date submitted via Save is persisted as a hard date (is_hard_date=true).
- *   - Clear button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate).
- * updated_by_agent: 2026-04-21T00:00:00Z
+ *   - ASAP toggle is mutually exclusive with the date input; when on, the date input is disabled and the confirm button reads "Set ASAP".
+ *   - Clear Hard Date button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate && !isAsap).
+ *   - Clear ASAP button is only shown when the row currently has ASAP set (isAsap === true).
+ * updated_by_agent: 2026-05-12T00:00:00Z
  */
 import React, { useState, useEffect } from 'react';
 
-export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, onClearHardDate, jobNumber, releaseNumber, startInstallFormulaTF }) {
+export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap }) {
     const [dateInput, setDateInput] = useState('');
+    const [asapToggle, setAsapToggle] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (isOpen) {
-            if (currentDate) {
+            setAsapToggle(!!isAsap);
+            if (currentDate && !isAsap) {
                 try {
                     const isoDate = typeof currentDate === 'string'
                         ? currentDate.split('T')[0]
@@ -32,7 +36,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                             return `${y}-${m}-${day}`;
                         })();
                     setDateInput(isoDate || '');
-                } catch (e) {
+                } catch {
                     setDateInput('');
                 }
             } else {
@@ -40,14 +44,25 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
             }
             setError('');
         }
-    }, [isOpen, currentDate]);
+    }, [isOpen, currentDate, isAsap]);
 
     const handleDateInputChange = (e) => {
         setDateInput(e.target.value);
         setError('');
     };
 
+    const handleAsapToggle = (e) => {
+        const next = e.target.checked;
+        setAsapToggle(next);
+        setError('');
+        if (next) setDateInput('');
+    };
+
     const handleSave = () => {
+        if (asapToggle) {
+            onSetAsap();
+            return;
+        }
         if (!dateInput) {
             setError('Please select a date');
             return;
@@ -57,11 +72,15 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
 
     const handleCancel = () => {
         setDateInput('');
+        setAsapToggle(!!isAsap);
         setError('');
         onClose();
     };
 
     if (!isOpen) return null;
+
+    const confirmLabel = asapToggle ? 'Set ASAP' : 'Save Date';
+    const confirmEnabled = asapToggle || !!dateInput;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -86,6 +105,21 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                 </div>
 
                 <div className="p-6">
+                    <label className="flex items-start gap-2 mb-4 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={asapToggle}
+                            onChange={handleAsapToggle}
+                            className="mt-1 h-4 w-4 accent-red-600"
+                        />
+                        <span>
+                            <span className="block text-sm font-semibold text-gray-700">ASAP Mode</span>
+                            <span className="block text-xs text-gray-500">
+                                Skip Paint Complete and rip to Shipping Planning automatically.
+                            </span>
+                        </span>
+                    </label>
+
                     <div className="mb-6">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                             Date
@@ -94,26 +128,37 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                             type="date"
                             value={dateInput}
                             onChange={handleDateInputChange}
+                            disabled={asapToggle}
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 ${
                                 error ? 'border-red-500' : 'border-gray-300'
-                            }`}
+                            } ${asapToggle ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                         />
                         {error && (
                             <p className="text-red-600 text-sm mt-1">{error}</p>
                         )}
                         <p className="text-gray-500 text-xs mt-2">
-                            Saving a date sets it as a hard date. Start Install dates cascade automatically.
+                            {asapToggle
+                                ? 'ASAP releases keep the formula-driven date and display "ASAP" in red.'
+                                : 'Saving a date sets it as a hard date. Start Install dates cascade automatically.'}
                         </p>
                     </div>
 
                     <div className="flex justify-between gap-3">
-                        <div>
-                            {startInstallFormulaTF === false && currentDate && onClearHardDate && (
+                        <div className="flex gap-2">
+                            {!isAsap && startInstallFormulaTF === false && currentDate && onClearHardDate && (
                                 <button
                                     onClick={onClearHardDate}
                                     className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg font-medium hover:bg-red-200 transition-all"
                                 >
                                     Clear Hard Date
+                                </button>
+                            )}
+                            {isAsap && onClearAsap && (
+                                <button
+                                    onClick={onClearAsap}
+                                    className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg font-medium hover:bg-red-200 transition-all"
+                                >
+                                    Clear ASAP
                                 </button>
                             )}
                         </div>
@@ -126,14 +171,16 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                             </button>
                             <button
                                 onClick={handleSave}
-                                disabled={!dateInput}
+                                disabled={!confirmEnabled}
                                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                    dateInput
-                                        ? 'bg-accent-500 text-white hover:bg-accent-600'
+                                    confirmEnabled
+                                        ? (asapToggle
+                                            ? 'bg-red-600 text-white hover:bg-red-700'
+                                            : 'bg-accent-500 text-white hover:bg-accent-600')
                                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                             >
-                                Save
+                                {confirmLabel}
                             </button>
                         </div>
                     </div>

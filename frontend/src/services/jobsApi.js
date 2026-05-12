@@ -192,6 +192,18 @@ class JobsApi {
         }
     }
 
+    async setStartInstallAsap(job, release, asap) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
+                { asap }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, asap ? 'Failed to set ASAP' : 'Failed to clear ASAP');
+        }
+    }
+
     async releaseJobData(csvData) {
         try {
             const response = await axios.post(

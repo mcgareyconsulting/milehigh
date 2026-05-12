@@ -40,6 +40,12 @@ class Config:
     UNASSIGNED_CARDS_LIST_ID = os.environ.get("UNASSIGNED_CARDS_LIST_ID")
     FAB_ORDER_FIELD_ID = os.environ.get("FAB_ORDER_FIELD_ID")
     TRELLO_WEBHOOK_URL = os.environ.get("TRELLO_WEBHOOK_URL")
+
+    # Mock Trello mode: when '1', outbound `move_card` outbox items are simulated
+    # (Releases.trello_list_id/name updated directly, no api.trello.com call) and
+    # inbound /trello/webhook POSTs are dropped. Lets dev exercise the outbox
+    # plumbing for the ASAP cascade without touching the real Trello board.
+    TRELLO_MOCK = os.environ.get("TRELLO_MOCK", "0") == "1"
     
     # Azure configuration
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")

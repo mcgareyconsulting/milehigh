@@ -177,6 +177,8 @@ def create_app():
     logger.info(
         f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}..."
     )
+    if app.config.get("TRELLO_MOCK"):
+        logger.info("TRELLO_MOCK enabled — outbound move_card calls will be simulated and inbound webhooks dropped")
 
     # Get allowed origins from environment variable
     allowed_origins = app.config.get("CORS_ORIGINS", "*")

@@ -34,6 +34,21 @@ def test_head_returns_200(client):
     assert client.head("/trello/webhook").status_code == 200
 
 
+def test_webhook_dropped_when_trello_mock_enabled(client, app):
+    """With TRELLO_MOCK=True, the POST handler returns 200 immediately and
+    never parses the payload or touches the executor."""
+    app.config["TRELLO_MOCK"] = True
+    try:
+        with patch("app.trello.parse_webhook_data") as mock_parse, \
+             patch("app.trello.executor") as mock_executor:
+            resp = client.post("/trello/webhook", json=_BODY)
+        assert resp.status_code == 200
+        mock_parse.assert_not_called()
+        mock_executor.submit.assert_not_called()
+    finally:
+        app.config["TRELLO_MOCK"] = False
+
+
 def test_unhandled_event_returns_200_without_submitting(client):
     with patch("app.trello.parse_webhook_data", return_value=_UNHANDLED), \
          patch("app.trello.executor") as mock_executor, \
