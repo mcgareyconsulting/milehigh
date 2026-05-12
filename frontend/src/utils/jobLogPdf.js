@@ -280,6 +280,7 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
                 font: 'helvetica',
                 fontSize: 9,
                 cellPadding: { top: 1.5, bottom: 1.5, left: 3, right: 3 },
+                textColor: 0,
                 lineColor: COLOR_BODY_LINE,
                 lineWidth: 0.5,
                 halign: 'center',
