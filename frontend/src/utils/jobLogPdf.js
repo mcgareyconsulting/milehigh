@@ -60,8 +60,36 @@ const COLOR_GRAYED = [156, 163, 175];
 const COLOR_EVEN_ROW = [219, 234, 254];
 const COLOR_HARD_DATE = [239, 68, 68];
 const COLOR_HEAD_FILL = [224, 224, 224];
-const COLOR_HEAD_LINE = [153, 153, 153];
-const COLOR_BODY_LINE = [204, 204, 204];
+const COLOR_HEAD_LINE = [40, 40, 40];
+const COLOR_BODY_LINE = [40, 40, 40];
+
+// Stage → stage_group → fill/text RGB. Mirrors useJobsFilters.js:478-506 so the
+// printed Stage cell carries the same color signal as the in-app dropdown.
+const STAGE_TO_GROUP = {
+    'Released': 'FABRICATION',
+    'Material Ordered': 'FABRICATION',
+    'Cut Start': 'FABRICATION',
+    'Cut Complete': 'FABRICATION',
+    'Fitup Start': 'FABRICATION',
+    'Fitup Complete': 'FABRICATION',
+    'Weld Start': 'FABRICATION',
+    'Weld Complete': 'FABRICATION',
+    'Hold': 'FABRICATION',
+    'Welded QC': 'READY_TO_SHIP',
+    'Paint Start': 'READY_TO_SHIP',
+    'Paint Complete': 'READY_TO_SHIP',
+    'Store at MHMW': 'READY_TO_SHIP',
+    'Ship Planning': 'READY_TO_SHIP',
+    'Ship Complete': 'COMPLETE',
+    'Install Start': 'COMPLETE',
+    'Install Complete': 'COMPLETE',
+    'Complete': 'COMPLETE',
+};
+const STAGE_GROUP_COLORS = {
+    FABRICATION:   { fill: [219, 234, 254], text: [30, 64, 175] },
+    READY_TO_SHIP: { fill: [209, 250, 229], text: [6, 95, 70] },
+    COMPLETE:      { fill: [237, 233, 254], text: [91, 33, 182] },
+};
 
 function loadImage(src) {
     return new Promise((resolve, reject) => {
@@ -262,6 +290,7 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
     const tableTopY = MARGIN_PT;
     const startInstallIdx = columnHeaders.indexOf('Start install');
     const urgencyIdx = columnHeaders.indexOf('Urgency');
+    const stageIdx = columnHeaders.indexOf('Stage');
 
     pmGroups.forEach(({ rows: pmRows }, groupIdx) => {
         if (groupIdx > 0) doc.addPage();
@@ -312,6 +341,17 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
 
                 const rowMeta = meta[data.row.index];
                 if (!rowMeta) return;
+
+                // Stage cell carries its group color regardless of grayed/even-row tint.
+                if (data.column.index === stageIdx) {
+                    const palette = STAGE_GROUP_COLORS[STAGE_TO_GROUP[rowMeta.stage]];
+                    if (palette) {
+                        data.cell.styles.fillColor = palette.fill;
+                        data.cell.styles.textColor = palette.text;
+                        data.cell.styles.fontStyle = 'bold';
+                        return;
+                    }
+                }
 
                 if (rowMeta.isGrayed) {
                     data.cell.styles.fillColor = COLOR_GRAYED;
