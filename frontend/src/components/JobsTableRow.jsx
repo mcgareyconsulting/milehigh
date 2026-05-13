@@ -24,7 +24,7 @@ import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
@@ -429,7 +429,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const isGrayed = isComplete || jobCompIsX;
     const rowBgClass = isGrayed ? 'bg-gray-300 dark:bg-slate-600' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-100 dark:bg-slate-700/80');
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
-    const cellText = isOldMan ? 'text-xs' : 'text-[10px]';
+    const cellText = isOldMan ? 'text-[13px]' : 'text-[11px]';
 
     // Handle stage change
     const handleStageChange = async (newStage) => {
@@ -851,7 +851,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
                     // Reduce padding for Release # column
                     const isReleaseNumber = column === 'Release #';
-                    const paddingClass = isReleaseNumber ? 'px-1' : 'px-2';
+                    const paddingClass = compact ? 'px-0.5' : (isReleaseNumber ? 'px-1' : 'px-2');
 
 
                     // See COLUMN_WIDTH_PERCENT in pages/JobLog.jsx for the viewport
@@ -894,7 +894,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
-                                style={{ minWidth: '115px' }}
+                                style={compact ? { width: '92px', minWidth: '92px', maxWidth: '92px' } : { minWidth: '115px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -905,7 +905,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                             type="button"
                                             onClick={() => !updatingStage && setShowStageDropdown((v) => !v)}
                                             disabled={updatingStage}
-                                            className={`w-full px-1.5 py-0.5 text-[10px] border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
+                                            className={`w-full ${compact ? 'px-1' : 'px-1.5'} py-0.5 ${cellText} border-2 rounded font-medium text-center transition-all ${updatingStage ? 'opacity-50 cursor-wait' : ''}`}
                                             style={solidStyle}
                                         >
                                             {currentLabel}
@@ -933,7 +933,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                                                     handleStageChange(option.value);
                                                                     setShowStageDropdown(false);
                                                                 }}
-                                                                className={`w-full px-1.5 py-1 text-[10px] font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
+                                                                className={`w-full px-1.5 py-1 ${cellText} font-medium text-center first:rounded-t-md last:rounded-b-md hover:brightness-95 ${isSelected ? 'ring-1 ring-inset ring-gray-400 dark:ring-slate-400' : ''}`}
                                                                 style={{
                                                                     backgroundColor: optionColors.light,
                                                                     color: optionColors.text,
@@ -1006,9 +1006,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingFabOrder || isGrayed}
-                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'text-white font-bold' : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100'} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isDuplicateFabOrder ? 'text-white font-bold' : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100'} text-center ${updatingFabOrder ? 'opacity-50 cursor-wait' : ''} ${isGrayed ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     placeholder="—"
-                                    style={isDuplicateFabOrder ? { minWidth: '48px', backgroundColor: dupColor } : { minWidth: '48px' }}
+                                    style={(() => {
+                                        const mw = compact ? '28px' : '48px';
+                                        const maxW = compact ? '40px' : undefined;
+                                        const base = { minWidth: mw, ...(maxW ? { maxWidth: maxW, width: maxW } : {}) };
+                                        return isDuplicateFabOrder ? { ...base, backgroundColor: dupColor } : base;
+                                    })()}
                                 />
                             </td>
                         );
@@ -1042,7 +1047,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingNotes}
-                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 resize-none ${updatingNotes ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                     rows={2}
                                 />
@@ -1097,7 +1102,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingJobComp}
-                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingJobComp ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingJobComp ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                     style={{ minWidth: '48px' }}
                                 />
@@ -1134,7 +1139,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         }
                                     }}
                                     disabled={updatingInvoiced}
-                                    className={`w-full px-1 py-0.5 text-[10px] border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingInvoiced ? 'opacity-50 cursor-wait' : ''}`}
+                                    className={`w-full px-1 py-0.5 ${cellText} border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-center ${updatingInvoiced ? 'opacity-50 cursor-wait' : ''}`}
                                     placeholder="—"
                                     style={{ minWidth: '48px' }}
                                 />

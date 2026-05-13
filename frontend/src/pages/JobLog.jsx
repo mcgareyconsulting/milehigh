@@ -29,6 +29,7 @@ import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
 import JobLogCardGrid from '../components/JobLogCardGrid';
+import JobLogRowList from '../components/JobLogRowList';
 import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
 
 // Stage completeness order (index 0 = least complete, higher = more complete).
@@ -137,7 +138,7 @@ function JobLog() {
     // View mode (auto/table/cards). Auto picks cards on iPad-sized screens.
     const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
     const isTabletOrSmaller = useIsTabletOrSmaller();
-    const { is3xl, isMobile } = useBreakpoint();
+    const { isMobile } = useBreakpoint();
     const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
 
     // Use the filters hook
@@ -924,15 +925,24 @@ function JobLog() {
 
                             {!loading && !fetchError && effectiveView === 'cards' && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <JobLogCardGrid
+                                    <JobLogRowList
                                         jobs={reviewDisplayJobs}
                                         secondaryResults={secondarySearchResults}
                                         search={search}
                                         jumpToTarget={jumpToTarget}
+                                        columns={columnHeaders}
+                                        formatCellValue={formatCellValue}
+                                        formatDate={formatDateShort}
+                                        onUpdate={() => refetch(true)}
+                                        onCascadeRecalculating={handleCascadeRecalculating}
                                         stageToGroup={stageToGroup}
                                         stageGroupColors={stageGroupColors}
+                                        stageGroupDupColors={stageGroupDupColors}
+                                        isAdmin={isAdmin}
+                                        isDrafter={isDrafter}
+                                        onDelete={handleDeleteJob}
+                                        duplicateFabOrders={duplicateFabOrders}
                                         hasJobsData={hasJobsData}
-                                        iconSize={is3xl ? 26 : 20}
                                     />
                                 </div>
                             )}
@@ -957,7 +967,7 @@ function JobLog() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-xs' : 'py-0.5 text-[10px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
+                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
                                                                 {isUrgency ? (
