@@ -30,7 +30,7 @@ import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
-import SubmittalCardGrid from '../components/SubmittalCardGrid';
+import SubmittalRowList from '../components/SubmittalRowList';
 import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
 
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
@@ -484,7 +484,7 @@ function DraftingWorkLoad() {
 
                         {!loading && !fetchError && effectiveView === 'cards' && (
                             <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
-                                <SubmittalCardGrid
+                                <SubmittalRowList
                                     rows={displayRows}
                                     jumpToTarget={jumpToTarget}
                                 />
