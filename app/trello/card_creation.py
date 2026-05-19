@@ -108,28 +108,53 @@ def create_trello_card_core(
     card_title: str,
     card_description: str,
     list_id: str,
-    position: str = "top"
+    position: str = "top",
+    idempotency_check: bool = False,
 ) -> Dict[str, Any]:
     """
     Core function to create a Trello card.
-    
+
     This is the shared logic for creating a card in Trello.
     All other card creation functions should use this.
-    
+
     Args:
         card_title: Card title
         card_description: Card description
         list_id: Trello list ID to create card in
         position: Position in list ("top", "bottom", or numeric)
-    
+        idempotency_check: When True, GET the target list first and adopt
+            an existing card with the same title instead of POSTing. Use on
+            retries to avoid duplicates from Trello 5xx false-negatives.
+
     Returns:
         Dictionary with:
             - success: bool
             - card_data: dict (if success)
             - card_id: str (if success)
+            - adopted: bool (True if an existing card was reused rather than created)
             - error: str (if not success)
     """
     try:
+        if idempotency_check:
+            try:
+                from app.trello.api import find_card_in_list_by_name
+                existing = find_card_in_list_by_name(list_id, card_title)
+                if existing:
+                    logger.warning(
+                        f"Idempotency: adopting existing Trello card {existing['id']} "
+                        f"with matching title in list {list_id} (skipping POST)"
+                    )
+                    return {
+                        "success": True,
+                        "card_data": existing,
+                        "card_id": existing["id"],
+                        "adopted": True,
+                    }
+            except Exception as scan_err:
+                # If the lookup fails we fall through to the create path; better
+                # to risk a duplicate than to block the retry entirely.
+                logger.warning(f"Idempotency scan failed, proceeding with create: {scan_err}")
+
         url = "https://api.trello.com/1/cards"
         payload = {
             "key": cfg.TRELLO_API_KEY,
@@ -139,20 +164,21 @@ def create_trello_card_core(
             "idList": list_id,
             "pos": position
         }
-        
+
         logger.info(f"Creating Trello card in list {list_id}")
         response = requests.post(url, params=payload)
         response.raise_for_status()
-        
+
         card_data = response.json()
         logger.info(f"Trello card created successfully: {card_data['id']}")
-        
+
         return {
             "success": True,
             "card_data": card_data,
-            "card_id": card_data['id']
+            "card_id": card_data['id'],
+            "adopted": False,
         }
-        
+
     except Exception as err:
         error_msg = f"Error creating Trello card: {str(err)}"
         logger.error(error_msg, exc_info=True)

@@ -367,8 +367,18 @@ class OutboxService:
                 # Rebuild excel_data_dict from the event payload
                 excel_data_dict = event.payload or {}
 
+                # On retries, scan the target list first and adopt any
+                # existing card with the same title. Trello sometimes
+                # returns 5xx on POST /1/cards but creates the card anyway,
+                # which without this check produces one duplicate per retry.
+                is_retry = (outbox_item.retry_count or 0) > 0
+
                 try:
-                    trello_result = create_trello_card_for_job(job_record, excel_data_dict)
+                    trello_result = create_trello_card_for_job(
+                        job_record,
+                        excel_data_dict,
+                        idempotency_check=is_retry,
+                    )
 
                     if trello_result and trello_result.get('success'):
                         outbox_item.status = 'completed'
@@ -379,7 +389,11 @@ class OutboxService:
                         JobEventService.close(event.id)
                         db.session.commit()
 
-                        logger.info(f"Outbox {outbox_item.id} completed successfully (create_card for {event.job}-{event.release})")
+                        adopted_note = " (adopted existing card)" if trello_result.get('adopted') else ""
+                        logger.info(
+                            f"Outbox {outbox_item.id} completed successfully "
+                            f"(create_card for {event.job}-{event.release}){adopted_note}"
+                        )
                         return True
                     else:
                         error_msg = trello_result.get('error', 'Unknown error') if trello_result else 'Trello card creation returned None'

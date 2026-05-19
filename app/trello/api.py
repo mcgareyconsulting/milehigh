@@ -233,6 +233,32 @@ def get_trello_card_by_id(card_id):
         return None
 
 
+def find_card_in_list_by_name(list_id, card_name):
+    """
+    Find an existing open card in a list whose name matches `card_name` exactly.
+
+    Used by the create-card retry path to detect cards that Trello created
+    despite returning a 5xx on a prior POST (a known false-negative mode that
+    otherwise produces duplicates on every retry).
+
+    Returns the card dict (id, name, ...) on first exact match, or None.
+    Raises requests.HTTPError if the GET itself fails — caller should treat
+    that as "unknown" and fall through to the create path.
+    """
+    url = f"https://api.trello.com/1/lists/{list_id}/cards"
+    params = {
+        "key": cfg.TRELLO_API_KEY,
+        "token": cfg.TRELLO_TOKEN,
+        "fields": "id,name,url,idList,idBoard,shortLink,shortUrl",
+    }
+    response = requests.get(url, params=params, timeout=10)
+    response.raise_for_status()
+    for card in response.json() or []:
+        if card.get("name") == card_name:
+            return card
+    return None
+
+
 def get_trello_cards_from_subset():
     """
     Fetch all Trello cards from the board and filter them based on a specific subset.

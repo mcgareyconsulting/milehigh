@@ -96,14 +96,20 @@ def update_job_stage_fields(job_record, stage):
     job_record.stage_group = get_stage_group_from_stage(stage)
     logger.debug(f"Job stage updated to: {stage}, stage_group updated to: {job_record.stage_group}")
 
-def create_trello_card_for_job(job, excel_data_dict):
+def create_trello_card_for_job(job, excel_data_dict, idempotency_check=False):
     """
     Create a Trello card for an existing job.
-    
+
     Args:
         job: Job database object (may be newly created)
         excel_data_dict: Dictionary with job data in Excel format
-    
+        idempotency_check: When True (used on outbox retries), scan the target
+            list for a card with the same title before POSTing and adopt it
+            if found. Prevents duplicate cards when a prior attempt got a
+            Trello 5xx false-negative. When a card is adopted, post-creation
+            features (Fab Order / FC Drawing / notes / mirror) are skipped
+            since the original attempt likely already applied them.
+
     Returns:
         Dictionary with success status and card info, or None if card already exists
     """
@@ -173,49 +179,59 @@ def create_trello_card_for_job(job, excel_data_dict):
             card_title=card_title,
             card_description=card_description,
             list_id=list_id,
-            position="top"
+            position="top",
+            idempotency_check=idempotency_check,
         )
-        
+
         if not create_result["success"]:
             return {
                 "success": False,
                 "error": create_result.get("error", "Failed to create card")
             }
-        
+
         card_data = create_result["card_data"]
         card_id = create_result["card_id"]
-        
+        adopted = create_result.get("adopted", False)
+
         # Update the job record with Trello card data
         success = update_job_record_with_trello_data(job, card_data)
-        
+
         if success:
             logger.info(f"Successfully updated database record with Trello data")
         else:
             logger.error(f"Failed to update database record with Trello data")
-        
-        # Get values for post-creation features
-        fab_order_value = excel_data_dict.get('Fab Order') or job.fab_order
-        notes_value = excel_data_dict.get('Notes') or job.notes
-        
-        # Apply post-creation features (Fab Order, FC Drawing, notes, mirror card)
-        # jl_routes now works identically to scanner - creates mirror cards
-        post_creation_results = apply_card_post_creation_features(
-            card_id=card_id,
-            list_id=list_id,
-            job_record=job,
-            fab_order=fab_order_value if fab_order_value is not None and not pd.isna(fab_order_value) else None,
-            notes=notes_value,
-            create_mirror=True,  # jl_routes now creates mirror cards like scanner
-            operation_id=None
-        )
-        
+
+        if adopted:
+            # Skip Fab Order / FC Drawing / notes / mirror — these aren't
+            # idempotent and were applied by the original attempt that
+            # produced this card.
+            logger.warning(
+                f"Adopted existing Trello card {card_id} for job {job.job}-{job.release}; "
+                f"skipping post-creation features"
+            )
+            mirror_card_id = None
+        else:
+            fab_order_value = excel_data_dict.get('Fab Order') or job.fab_order
+            notes_value = excel_data_dict.get('Notes') or job.notes
+            post_creation_results = apply_card_post_creation_features(
+                card_id=card_id,
+                list_id=list_id,
+                job_record=job,
+                fab_order=fab_order_value if fab_order_value is not None and not pd.isna(fab_order_value) else None,
+                notes=notes_value,
+                create_mirror=True,
+                operation_id=None
+            )
+            mirror_card_id = post_creation_results.get("mirror_card_id")
+
         return {
             "success": True,
             "card_id": card_data["id"],
-            "card_name": card_data["name"],
-            "card_url": card_data["url"],
+            "card_name": card_data.get("name"),
+            "card_url": card_data.get("url"),
             "list_name": list_name,
-            "mirror_card_id": post_creation_results.get("mirror_card_id")
+            "mirror_card_id": mirror_card_id,
+            "adopted": adopted,
         }
         
     except Exception as e:
