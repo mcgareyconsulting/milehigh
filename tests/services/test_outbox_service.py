@@ -193,3 +193,92 @@ def test_process_pending_items_skips_future_retry(app):
         with _trello_move_patches() as mock_api:
             assert OutboxService.process_pending_items(limit=10) == 0
         mock_api.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# create_card idempotency on retry
+# ---------------------------------------------------------------------------
+
+def _add_create_card_item(event_id, retry_count=0):
+    item = OutboxService.add(destination="trello", action="create_card", event_id=event_id)
+    item.retry_count = retry_count
+    db.session.commit()
+    return item
+
+
+def test_create_card_first_attempt_does_not_request_idempotency(app):
+    """First attempt (retry_count=0) must NOT trigger the list-scan — avoids
+    an extra GET on the hot path for normal card creations."""
+    with app.app_context():
+        make_release(1, "A", trello_card_id=None)
+        ev = _make_event(action="created")
+        item = _add_create_card_item(ev.id, retry_count=0)
+
+        fresh = {
+            "success": True,
+            "adopted": False,
+            "card_id": "fresh-1",
+            "card_data": {"id": "fresh-1", "name": "x", "url": "u"},
+        }
+        with patch(
+            "app.brain.job_log.routes.create_trello_card_for_job",
+            return_value=fresh,
+        ) as mock_create:
+            assert OutboxService.process_item(item) is True
+
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs.get("idempotency_check") is False
+
+        db.session.refresh(item)
+        assert item.status == "completed"
+
+
+def test_create_card_retry_passes_idempotency_check_true(app):
+    """retry_count>=1 must set idempotency_check=True so the wrapper scans
+    the target list before re-POSTing."""
+    with app.app_context():
+        make_release(1, "A", trello_card_id=None)
+        ev = _make_event(action="created")
+        item = _add_create_card_item(ev.id, retry_count=2)
+
+        adopted = {
+            "success": True,
+            "adopted": True,
+            "card_id": "adopted-9",
+            "card_data": {"id": "adopted-9", "name": "x", "url": "u"},
+        }
+        with patch(
+            "app.brain.job_log.routes.create_trello_card_for_job",
+            return_value=adopted,
+        ) as mock_create:
+            assert OutboxService.process_item(item) is True
+
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs.get("idempotency_check") is True
+
+        db.session.refresh(item)
+        assert item.status == "completed"
+        assert item.error_message is None
+
+
+def test_create_card_retry_failure_does_not_double_invoke(app):
+    """If the retry still fails, the outbox increments retry_count and stays
+    pending — sanity-check that the contract didn't regress."""
+    with app.app_context():
+        make_release(1, "A", trello_card_id=None)
+        ev = _make_event(action="created")
+        item = _add_create_card_item(ev.id, retry_count=1)
+
+        with patch(
+            "app.brain.job_log.routes.create_trello_card_for_job",
+            return_value={"success": False, "error": "still 500"},
+        ) as mock_create:
+            assert OutboxService.process_item(item) is False
+
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs.get("idempotency_check") is True
+
+        db.session.refresh(item)
+        assert item.retry_count == 2
+        assert item.status == "pending"
+        assert "still 500" in (item.error_message or "")
