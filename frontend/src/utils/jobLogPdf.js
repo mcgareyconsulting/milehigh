@@ -49,6 +49,7 @@ const MAX_LINES_PER_CELL = 2;
 const BODY_FONT_SIZE = 9;          // matches styles.fontSize
 const LINE_HEIGHT_RATIO = 1.15;    // jspdf-autotable FONT_ROW_RATIO
 const CELL_PAD_V = 1.5;            // body cellPadding top == bottom
+const CELL_PAD_H = 3;             // body cellPadding left == right
 const TWO_LINE_MIN_HEIGHT_PT =
     MAX_LINES_PER_CELL * BODY_FONT_SIZE * LINE_HEIGHT_RATIO + CELL_PAD_V * 2;
 
@@ -256,9 +257,34 @@ function formatCell(job, column) {
     return String(value || '—');
 }
 
+// Hard-cap a cell's text to MAX_LINES_PER_CELL lines based on the actual column
+// width, ellipsizing the last kept line. autotable's own width-wrapping happens
+// after didParseCell, so capping there only catches explicit newlines — long
+// values (e.g. Notes) still wrap to 3+ lines and grow the row. Pre-truncating
+// here guarantees every row stays at the uniform two-line height. The font must
+// be set to match the body style before calling (done in buildRows).
+function truncateToTwoLines(doc, text, innerWidth) {
+    const str = String(text ?? '');
+    if (!str || innerWidth <= 0) return str;
+    const lines = doc.splitTextToSize(str, innerWidth);
+    if (lines.length <= MAX_LINES_PER_CELL) return lines.join('\n');
+    const kept = lines.slice(0, MAX_LINES_PER_CELL);
+    const ellipsis = '…';
+    let last = kept[kept.length - 1];
+    while (last.length > 0 && doc.getTextWidth(last + ellipsis) > innerWidth) {
+        last = last.slice(0, -1);
+    }
+    kept[kept.length - 1] = last.replace(/\s+$/, '') + ellipsis;
+    return kept.join('\n');
+}
+
 // Build a parallel rowMeta array (indexed by data.row.index) that the
 // didParseCell / didDrawCell hooks read for coloring + Urgency rendering.
-function buildRows(jobs, columnHeaders) {
+// innerWidths[i] is the usable text width (pt) of column i, used to pre-cap
+// cell text to two lines so all rows share the same height.
+function buildRows(jobs, columnHeaders, doc, innerWidths) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(BODY_FONT_SIZE);
     const body = [];
     const meta = [];
     for (const job of jobs) {
@@ -270,7 +296,9 @@ function buildRows(jobs, columnHeaders) {
             startInstallHard:
                 job['start_install_formulaTF'] === false && Boolean(job['Start install']),
         });
-        body.push(columnHeaders.map((col) => formatCell(job, col)));
+        body.push(columnHeaders.map(
+            (col, i) => truncateToTwoLines(doc, formatCell(job, col), innerWidths[i]),
+        ));
     }
     return { body, meta };
 }
@@ -294,6 +322,12 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
     const iconRowProvider = makeIconRowProvider(iconAssets);
     const pmGroups = groupByPm(jobs);
     const columnStyles = buildColumnStyles(columnHeaders, columnWidthPercent);
+    // Usable text width per column (cell width minus L/R padding). The extra 1pt
+    // margin makes our wrap slightly more aggressive than autotable's so it never
+    // produces an extra line beyond what we measured here.
+    const innerWidths = columnHeaders.map(
+        (_, i) => columnStyles[i].cellWidth - CELL_PAD_H * 2 - 1,
+    );
     const head = [columnHeaders.map(
         (col) => PRINT_HEADER_OVERRIDES[col] ?? HEADER_OVERRIDES[col] ?? col,
     )];
@@ -312,7 +346,7 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
     pmGroups.forEach(({ rows: pmRows }, groupIdx) => {
         if (groupIdx > 0) doc.addPage();
         const startPage = doc.internal.getNumberOfPages();
-        const { body, meta } = buildRows(pmRows, columnHeaders);
+        const { body, meta } = buildRows(pmRows, columnHeaders, doc, innerWidths);
 
         autoTable(doc, {
             head,
