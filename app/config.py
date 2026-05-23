@@ -77,6 +77,11 @@ class Config:
     # Procore service account used by this app to make API calls.
     # Webhooks triggered by this user ID are Brain-originated echoes.
     PROCORE_CONNECTOR_USER_ID = os.environ.get("PROCORE_CONNECTOR_USER_ID", "14554506")
+    # Delay before a submittal webhook triggers a reconcile re-fetch. The reconcile
+    # safety net re-runs check_and_update_submittal to catch fields dropped by burst
+    # dedup or not yet propagated by Procore at the time the live webhook was processed.
+    # 60s comfortably clears the 15s burst window plus Procore read-after-write lag.
+    PROCORE_RECONCILE_DELAY_SECONDS = int(os.environ.get("PROCORE_RECONCILE_DELAY_SECONDS", "60"))
     
     # CORS configuration
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
