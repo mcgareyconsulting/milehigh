@@ -21,8 +21,11 @@ Routes:
     GET /api/submittals/history
 """
 
+from datetime import datetime, timezone
+
 from flask import Blueprint, jsonify, request
-from app.datetime_utils import format_datetime_mountain
+from app.auth.utils import invoicing_report_access_required
+from app.datetime_utils import format_datetime_mountain, get_mountain_timezone
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -58,6 +61,14 @@ def _extract_new_value_from_payload(action, payload):
                 parts.append(f"Release: {payload['Release']}")
             return " | ".join(parts) if parts else "Job created"
         return "Job created"
+
+    # Field-level updates carry the changed field name explicitly:
+    # {'field': <name>, 'old_value': ..., 'new_value': ...}
+    if isinstance(payload, dict) and 'field' in payload:
+        field = payload['field']
+        if 'new_value' in payload:
+            return f"{field} → {payload['new_value']}"
+        return str(field)
 
     if isinstance(payload, dict):
         for key in ['to', 'value', 'new_value', 'status', 'stage', 'state']:
@@ -120,6 +131,32 @@ def _extract_submittal_new_value_from_payload(action, payload):
         return f"{len(payload)} fields updated"
 
     return str(payload) if payload else None
+
+
+def _month_range_utc(year, month):
+    """Return [start, end) naive-UTC datetimes bounding a Mountain-Time month.
+
+    Event timestamps are stored as naive UTC; we compute the month boundaries in
+    Mountain Time (how the user thinks about a month) and convert to UTC so the
+    filter lines up with stored values.
+    """
+    mtn = get_mountain_timezone()
+    start_local = datetime(year, month, 1, tzinfo=mtn)
+    if month == 12:
+        end_local = datetime(year + 1, 1, 1, tzinfo=mtn)
+    else:
+        end_local = datetime(year, month + 1, 1, tzinfo=mtn)
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+
+def _project_sort_key(number):
+    """Sort numeric project numbers naturally; non-numeric ones sort after."""
+    try:
+        return (0, int(number))
+    except (ValueError, TypeError):
+        return (1, str(number))
 
 
 # ---------------------------------------------------------------------------
@@ -333,3 +370,172 @@ def submittal_change_history():
     """Get submittal change history via query parameter (submittal_id)."""
     submittal_id = request.args.get('submittal_id', type=str)
     return _get_submittal_change_history(submittal_id)
+
+
+@history_bp.route("/api/reports/monthly-invoicing")
+@invoicing_report_access_required
+def monthly_invoicing_report():
+    """Monthly invoicing report: change history for all releases and submittals
+    in a given month, grouped by project.
+
+    Query params (default to the current Mountain-Time month):
+        year=<int>&month=<int>
+
+    Only projects with at least one release or submittal change event in the
+    month are included; each item carries only that month's events.
+    """
+    from app.models import ReleaseEvents, SubmittalEvents, Releases, Submittals, Projects
+
+    now_mtn = datetime.now(get_mountain_timezone())
+    year = request.args.get('year', type=int) or now_mtn.year
+    month = request.args.get('month', type=int) or now_mtn.month
+    if month < 1 or month > 12:
+        return jsonify({'error': 'Invalid month', 'message': 'month must be between 1 and 12'}), 400
+
+    try:
+        start_utc, end_utc = _month_range_utc(year, month)
+
+        release_events = ReleaseEvents.query.filter(
+            ReleaseEvents.created_at >= start_utc,
+            ReleaseEvents.created_at < end_utc,
+            ReleaseEvents.is_system_echo == False,  # noqa: E712
+        ).order_by(ReleaseEvents.created_at.asc()).all()
+
+        submittal_events = SubmittalEvents.query.filter(
+            SubmittalEvents.created_at >= start_utc,
+            SubmittalEvents.created_at < end_utc,
+            SubmittalEvents.is_system_echo == False,  # noqa: E712
+        ).order_by(SubmittalEvents.created_at.asc()).all()
+
+        # Bulk-fetch parent records to avoid N+1 lookups.
+        release_keys = {(e.job, e.release) for e in release_events}
+        submittal_ids = {e.submittal_id for e in submittal_events}
+
+        releases_by_key = {}
+        if release_keys:
+            jobs = {k[0] for k in release_keys}
+            for r in Releases.query.filter(Releases.job.in_(jobs)).all():
+                releases_by_key[(r.job, r.release)] = r
+
+        submittals_by_id = {}
+        if submittal_ids:
+            for s in Submittals.query.filter(Submittals.submittal_id.in_(submittal_ids)).all():
+                submittals_by_id[s.submittal_id] = s
+
+        # Canonical project names keyed by project number (string).
+        project_numbers = {str(job) for (job, _release) in release_keys}
+        for sid in submittal_ids:
+            s = submittals_by_id.get(sid)
+            if s and s.project_number:
+                project_numbers.add(str(s.project_number))
+
+        project_names = {}
+        if project_numbers:
+            for p in Projects.query.filter(Projects.job_number.in_(project_numbers)).all():
+                project_names[str(p.job_number)] = p.name
+
+        projects = {}
+
+        def _bucket(number, fallback_name):
+            bucket = projects.get(number)
+            if bucket is None:
+                bucket = {
+                    'project_number': number,
+                    'project_name': project_names.get(number) or fallback_name,
+                    '_releases': {},
+                    '_submittals': {},
+                }
+                projects[number] = bucket
+            elif not bucket['project_name'] and fallback_name:
+                bucket['project_name'] = fallback_name
+            return bucket
+
+        for e in release_events:
+            number = str(e.job)
+            r = releases_by_key.get((e.job, e.release))
+            bucket = _bucket(number, r.job_name if r else None)
+            rkey = (e.job, e.release)
+            item = bucket['_releases'].get(rkey)
+            if item is None:
+                item = {
+                    'job': e.job,
+                    'release': e.release,
+                    'description': r.description if r else None,
+                    'pm': r.pm if r else None,
+                    'stage': r.stage if r else None,
+                    'install_prog': r.job_comp if r else None,
+                    'invoiced': r.invoiced if r else None,
+                    'events': [],
+                }
+                bucket['_releases'][rkey] = item
+            item['events'].append({
+                'id': e.id,
+                'action': e.action,
+                'new_value': _extract_new_value_from_payload(e.action, e.payload),
+                'payload': e.payload,
+                'source': e.source,
+                'internal_user_id': e.internal_user_id,
+                'external_user_id': e.external_user_id,
+                'created_at': format_datetime_mountain(e.created_at),
+            })
+
+        for e in submittal_events:
+            s = submittals_by_id.get(e.submittal_id)
+            number = str(s.project_number) if (s and s.project_number) else 'Unknown'
+            bucket = _bucket(number, s.project_name if s else None)
+            item = bucket['_submittals'].get(e.submittal_id)
+            if item is None:
+                item = {
+                    'submittal_id': e.submittal_id,
+                    'title': s.title if s else None,
+                    'status': s.status if s else None,
+                    'ball_in_court': s.ball_in_court if s else None,
+                    'submittal_manager': s.submittal_manager if s else None,
+                    'events': [],
+                }
+                bucket['_submittals'][e.submittal_id] = item
+            item['events'].append({
+                'id': e.id,
+                'action': e.action,
+                'new_value': _extract_submittal_new_value_from_payload(e.action, e.payload),
+                'payload': e.payload,
+                'source': e.source,
+                'internal_user_id': e.internal_user_id,
+                'external_user_id': e.external_user_id,
+                'created_at': format_datetime_mountain(e.created_at),
+            })
+
+        result_projects = []
+        for number in sorted(projects.keys(), key=_project_sort_key):
+            bucket = projects[number]
+            releases_list = []
+            for rkey in sorted(bucket['_releases'].keys(), key=lambda k: (k[0], str(k[1]))):
+                item = bucket['_releases'][rkey]
+                item['total_changes'] = len(item['events'])
+                item['events'].reverse()  # most recent change first
+                releases_list.append(item)
+            submittals_list = []
+            for sid in sorted(bucket['_submittals'].keys(), key=str):
+                item = bucket['_submittals'][sid]
+                item['total_changes'] = len(item['events'])
+                item['events'].reverse()  # most recent change first
+                submittals_list.append(item)
+            result_projects.append({
+                'project_number': bucket['project_number'],
+                'project_name': bucket['project_name'],
+                'releases': releases_list,
+                'submittals': submittals_list,
+            })
+
+        return jsonify({
+            'year': year,
+            'month': month,
+            'month_label': datetime(year, month, 1).strftime('%B %Y'),
+            'generated_at': format_datetime_mountain(datetime.utcnow()),
+            'total_projects': len(result_projects),
+            'projects': result_projects,
+        }), 200
+
+    except Exception as e:
+        logger.exception("Error generating monthly invoicing report")
+        return jsonify({'error': 'Failed to generate report', 'message': str(e)}), 500

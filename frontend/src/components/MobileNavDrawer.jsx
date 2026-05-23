@@ -3,7 +3,7 @@
  * schema_version: 1
  * purpose: Slide-in mobile/iPad drawer that exposes the AppShell nav links when the horizontal button row is collapsed.
  * exports:
- *   MobileNavDrawer: Drawer with nav links. Props: open, onClose, isAuthenticated, isAdmin, locationEnabled, locationRequesting, onLocationToggle, onLogout, onLogin.
+ *   MobileNavDrawer: Drawer with nav links. Props: open, onClose, isAuthenticated, isAdmin, canSeeReport, locationEnabled, locationRequesting, onLocationToggle, onLogout, onLogin.
  * imports_from: [react, react-router-dom]
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
@@ -30,6 +30,7 @@ export default function MobileNavDrawer({
     onClose,
     isAuthenticated,
     isAdmin,
+    canSeeReport,
     locationEnabled,
     locationRequesting,
     onLocationToggle,
@@ -67,13 +68,13 @@ export default function MobileNavDrawer({
         <>
             {/* Backdrop */}
             <div
-                className="fixed inset-0 z-50 bg-black/40 lg:hidden"
+                className="fixed inset-0 z-50 bg-black/40 min-[1440px]:hidden"
                 onClick={onClose}
                 aria-hidden="true"
             />
             {/* Drawer */}
             <aside
-                className="fixed top-0 right-0 z-50 h-full w-72 max-w-[85vw] bg-white dark:bg-slate-800 shadow-xl border-l border-gray-200 dark:border-slate-600 lg:hidden flex flex-col animate-slide-in-right"
+                className="fixed top-0 right-0 z-50 h-full w-72 max-w-[85vw] bg-white dark:bg-slate-800 shadow-xl border-l border-gray-200 dark:border-slate-600 min-[1440px]:hidden flex flex-col animate-slide-in-right"
                 style={{ paddingTop: 'env(safe-area-inset-top)' }}
                 role="dialog"
                 aria-label="Navigation menu"
@@ -126,6 +127,16 @@ export default function MobileNavDrawer({
                             {item.label}
                         </button>
                     ))}
+
+                    {canSeeReport && (
+                        <button
+                            type="button"
+                            onClick={() => go('/invoicing-report')}
+                            className={itemClass(isActive('/invoicing-report'))}
+                        >
+                            Invoicing
+                        </button>
+                    )}
 
                     {isAdmin && ADMIN_ITEMS.map(item => (
                         <button

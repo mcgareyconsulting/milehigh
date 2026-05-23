@@ -47,3 +47,7 @@ const USERS_WITH_VISIBLE_SCROLLBARS = new Set(['khearn@mhmw.com']);
 export const userWantsVisibleScrollbars = (user) =>
     !!user?.username && USERS_WITH_VISIBLE_SCROLLBARS.has(user.username.toLowerCase());
 
+// Monthly invoicing report is visible to khearn plus any admin.
+export const userCanAccessInvoicing = (user) =>
+    !!user && (user.is_admin || (user.username || '').toLowerCase() === 'khearn@mhmw.com');
+
