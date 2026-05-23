@@ -147,7 +147,7 @@ class TestStageCompleteCascade:
             assert len(job_comp_children) == 1
             assert job_comp_children[0].payload.get("reason") == "stage_set_to_install_complete"
 
-    def test_stage_to_complete_does_not_touch_job_comp(self, app):
+    def test_stage_to_complete_sets_job_comp(self, app):
         with app.app_context():
             r = _make_release(1, "A", stage="Weld Start", job_comp=None)
             db.session.commit()
@@ -159,7 +159,7 @@ class TestStageCompleteCascade:
 
             db.session.refresh(r)
             assert r.stage == "Complete"
-            assert r.job_comp is None  # Complete is inert toward Install Prog
+            assert r.job_comp == "X"  # Complete is part of the complete zone now
 
             job_comp_children = [
                 e for e in ReleaseEvents.query.all()
@@ -167,7 +167,64 @@ class TestStageCompleteCascade:
                 and isinstance(e.payload, dict)
                 and e.payload.get("field") == "job_comp"
             ]
+            assert len(job_comp_children) == 1
+            assert job_comp_children[0].payload.get("reason") == "stage_set_to_complete"
+
+    def test_install_complete_to_complete_keeps_job_comp(self, app):
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Install Complete",
+                stage_group="COMPLETE",
+                job_comp="X",
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Complete").execute()
+
+            db.session.refresh(r)
+            assert r.stage == "Complete"
+            assert r.job_comp == "X"  # moving within the complete zone keeps the 'X'
+
+            # No job_comp event — neither a set nor a clear — for an in-zone move.
+            job_comp_children = [
+                e for e in ReleaseEvents.query.all()
+                if e.action == "updated"
+                and isinstance(e.payload, dict)
+                and e.payload.get("field") == "job_comp"
+            ]
             assert job_comp_children == []
+
+    def test_stage_off_complete_clears_job_comp(self, app):
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Complete",
+                stage_group="COMPLETE",
+                job_comp="X",
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Weld Start").execute()
+
+            db.session.refresh(r)
+            assert r.stage == "Weld Start"
+            assert r.job_comp is None  # leaving the complete zone clears the 'X'
+
+            job_comp_children = [
+                e for e in ReleaseEvents.query.all()
+                if e.action == "updated"
+                and isinstance(e.payload, dict)
+                and e.payload.get("field") == "job_comp"
+                and e.payload.get("reason") == "stage_changed_from_complete"
+            ]
+            assert len(job_comp_children) == 1
 
     def test_stage_off_install_complete_clears_job_comp(self, app):
         with app.app_context():

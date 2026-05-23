@@ -440,15 +440,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const oldJobComp = localJobComp;
         const oldFabOrder = localFabOrder;
         setLocalStage(newStage); // Optimistic update
-        // If setting to Install Complete, optimistically update job_comp and fab_order
-        if (newStage === 'Install Complete') {
+        // 'Install Complete' and 'Complete' form one "complete zone" for the
+        // Install Prog marker: entering it sets job_comp='X', leaving it clears
+        // the 'X' (mirrors the backend cascade in stage/command.py).
+        const COMPLETE_ZONE = ['Install Complete', 'Complete'];
+        if (COMPLETE_ZONE.includes(newStage)) {
             setLocalJobComp('X');
             setJobCompInputValue('X');
             setLocalFabOrder(null);
             setFabOrderInputValue('');
         }
-        // If changing away from Install Complete, clear job_comp 'X'
-        if (oldStage === 'Install Complete' && newStage !== 'Install Complete') {
+        if (COMPLETE_ZONE.includes(oldStage) && !COMPLETE_ZONE.includes(newStage)) {
             if ((localJobComp || '').trim().toUpperCase() === 'X') {
                 setLocalJobComp('');
                 setJobCompInputValue('');
