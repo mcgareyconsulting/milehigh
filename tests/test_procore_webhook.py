@@ -5,7 +5,7 @@ covered in tests/procore/test_helpers.py.
 """
 from unittest.mock import patch, MagicMock
 
-from app.models import Submittals, db
+from app.models import Submittals, SubmittalReconcile, db
 
 
 def _payload(resource_id=42, project_id=99, reason="update", resource_type="submittals"):
@@ -122,3 +122,55 @@ def test_unknown_event_type_is_ignored(client):
 
     mock_create.assert_not_called()
     mock_update.assert_not_called()
+
+
+# ---- reconcile safety net enqueue ----
+
+def test_update_webhook_enqueues_reconcile(app, client):
+    with patch("app.procore.is_duplicate_webhook", return_value=False), \
+         patch("app.procore.create_submittal_from_webhook"), \
+         patch(
+             "app.procore.check_and_update_submittal",
+             return_value=(False, False, False, False, _record_mock(), "Drafter A", "Open"),
+         ):
+        client.post("/procore/webhook", json=_payload(resource_id=42, reason="update"))
+
+    with app.app_context():
+        rows = SubmittalReconcile.query.filter_by(submittal_id="42", status="pending").all()
+        assert len(rows) == 1
+        assert rows[0].project_id == 99
+
+
+def test_deduplicated_webhook_still_enqueues_reconcile(app, client):
+    """Even a burst-dedup-rejected delivery must schedule a reconcile — that dropped
+    delivery may have carried the only copy of a real change (the original bug)."""
+    with patch("app.procore.is_duplicate_webhook", return_value=True), \
+         patch("app.procore.check_and_update_submittal") as mock_update:
+        resp = client.post("/procore/webhook", json=_payload(resource_id=42, reason="update"))
+
+    assert resp.get_json()["status"] == "deduplicated"
+    mock_update.assert_not_called()
+    with app.app_context():
+        assert SubmittalReconcile.query.filter_by(submittal_id="42", status="pending").count() == 1
+
+
+def test_burst_of_webhooks_coalesces_to_one_reconcile(app, client):
+    with patch("app.procore.is_duplicate_webhook", side_effect=[False, True, True]), \
+         patch("app.procore.create_submittal_from_webhook"), \
+         patch(
+             "app.procore.check_and_update_submittal",
+             return_value=(False, False, False, False, _record_mock(), "Drafter A", "Open"),
+         ):
+        for _ in range(3):
+            client.post("/procore/webhook", json=_payload(resource_id=42, reason="update"))
+
+    with app.app_context():
+        assert SubmittalReconcile.query.filter_by(submittal_id="42").count() == 1
+
+
+def test_unknown_event_type_does_not_enqueue_reconcile(app, client):
+    with patch("app.procore.is_duplicate_webhook", return_value=False):
+        client.post("/procore/webhook", json=_payload(resource_id=42, reason="delete"))
+
+    with app.app_context():
+        assert SubmittalReconcile.query.count() == 0

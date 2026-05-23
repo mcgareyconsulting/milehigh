@@ -607,6 +607,29 @@ class WebhookReceipt(db.Model):
     received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
+class SubmittalReconcile(db.Model):
+    """
+    Delayed reconcile queue for Procore submittals — the safety net for burst-dedup
+    and Procore read-after-write lag.
+
+    Every submittal webhook schedules one row here (~60s out). The outbox retry worker
+    re-runs check_and_update_submittal, catching any field whose change was dropped by
+    burst dedup (is_duplicate_webhook) or had not yet propagated when the live webhook
+    was processed. Enqueue is coalescing: at most one 'pending' row per submittal_id,
+    so a burst of deliveries produces a single reconcile read.
+    """
+    __tablename__ = 'submittal_reconcile'
+    id = db.Column(db.Integer, primary_key=True)
+    submittal_id = db.Column(db.String(255), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=False)
+    scheduled_for = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending, processing, completed, failed
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    last_error = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+
 class BoardItem(db.Model):
     """Feature requests, bugs, and tasks tracked on The Board."""
     __tablename__ = "board_items"

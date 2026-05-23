@@ -29,6 +29,7 @@ from app.procore.procore import (
 )
 
 from app.procore.helpers import resolve_webhook_user_ids, is_duplicate_webhook, create_submittal_event as _create_submittal_event_helper
+from app.procore.reconcile import ProcoreReconcileService
 
 from app.logging_config import get_logger
 from app.config import Config as cfg
@@ -97,6 +98,13 @@ def procore_webhook():
             "Received Procore webhook: resource=%s, event_type=%s, id=%s, project=%s",
             resource_type, event_type, resource_id, project_id
         )
+
+        # Schedule a delayed reconcile re-fetch (~60s out) BEFORE the dedup check, so a
+        # reconcile is enqueued for every delivery — including those burst dedup rejects.
+        # The reconcile re-runs check_and_update_submittal to catch any field dropped by
+        # dedup or not yet propagated by Procore. Coalescing keeps a burst to one row.
+        if event_type in ("create", "update"):
+            ProcoreReconcileService.schedule(resource_id, project_id)
 
         # Burst dedup: Procore sends 2-5 identical deliveries within ~7 seconds per update.
         # Write a receipt row for the first delivery in the 15s window; reject the rest.

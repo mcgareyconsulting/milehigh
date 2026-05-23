@@ -257,6 +257,8 @@ def create_app():
         import time
         from app.services.outbox_service import OutboxService
 
+        from app.procore.reconcile import ProcoreReconcileService
+
         def outbox_retry_worker():
             """Background thread that continuously processes pending outbox items for retries."""
             logger.info("Outbox retry worker thread started")
@@ -265,7 +267,9 @@ def create_app():
                     with app.app_context():
                         # Process pending items that are ready for retry
                         processed = OutboxService.process_pending_items(limit=10)
-                        if processed == 0:
+                        # Process due Procore submittal reconciles (delayed re-fetch safety net)
+                        reconciled = ProcoreReconcileService.process_due(limit=10)
+                        if processed + reconciled == 0:
                             # No items to process, wait a bit before checking again
                             time.sleep(2)
                         else:
