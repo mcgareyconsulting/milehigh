@@ -22,7 +22,7 @@ import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { checkAuth } from '../utils/auth';
 import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
@@ -123,7 +123,6 @@ function JobLog() {
     );
     const [isAdmin, setIsAdmin] = useState(false);
     const [isDrafter, setIsDrafter] = useState(false);
-    const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('jl_minimized') === 'true'
     );
@@ -178,12 +177,10 @@ function JobLog() {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
                 setIsDrafter(user?.is_drafter || false);
-                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
                 setIsDrafter(false);
-                setShowScrollbars(false);
             }
         };
         fetchUserInfo();
@@ -951,7 +948,7 @@ function JobLog() {
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
                                     <div
                                         ref={tableScrollRef}
-                                        className={`${showScrollbars ? '' : 'job-log-table-scroll-hide-scrollbar'} overflow-auto flex-1`.trim()}
+                                        className="job-log-table-scroll overflow-auto flex-1"
                                     >
                                         <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                             <thead className="sticky top-0 z-10">
