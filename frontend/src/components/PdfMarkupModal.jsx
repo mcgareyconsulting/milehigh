@@ -1,10 +1,16 @@
 /**
  * Fullscreen PDF markup modal — renders a release's drawing version with
- * pdf.js's built-in AnnotationEditor (pen + text), and saves the result as
- * the next version via POST /brain/releases/<id>/drawing.
+ * pdf.js's built-in AnnotationEditor (pen + text) plus shape tools
+ * (line/arrow/box/circle) and a stroke-thickness control, and saves the result
+ * as the next version via POST /brain/releases/<id>/drawing.
  *
- * Tablet-friendly: native pointer events, large toolbar hit targets,
- * touch-action: none on the canvas wrapper to suppress scroll/pinch hijack.
+ * Shapes have no native pdf.js editor: a transparent overlay captures the drag
+ * and the result is injected as an Ink annotation (built from point paths) so
+ * it persists via saveDocument() and behaves like any other annotation.
+ *
+ * Tablet-friendly: native pointer events, large toolbar hit targets. The scroll
+ * container allows one-finger pan in Hand mode and suppresses touch while a
+ * drawing tool is active; two-finger pinch-to-zoom is handled explicitly.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -46,7 +52,85 @@ const TOOL = {
     HAND: pdfjsLib.AnnotationEditorType.NONE,
     INK: pdfjsLib.AnnotationEditorType.INK,
     FREETEXT: pdfjsLib.AnnotationEditorType.FREETEXT,
+    // Shape tools have no native pdf.js editor — they are drawn through an
+    // input overlay and committed as Ink annotations (see commitShape). String
+    // sentinels keep them distinct from the numeric AnnotationEditorType values.
+    LINE: 'line',
+    ARROW: 'arrow',
+    SQUARE: 'square',
+    CIRCLE: 'circle',
 };
+
+const SHAPE_TOOLS = new Set([TOOL.LINE, TOOL.ARROW, TOOL.SQUARE, TOOL.CIRCLE]);
+const isShapeTool = (t) => SHAPE_TOOLS.has(t);
+
+// Stroke-width presets shared by the pen and shapes (pdf.js "thickness" units).
+const THICKNESS = { Thin: 2, Medium: 6, Thick: 12 };
+
+function hexToRgbArray(hex) {
+    const h = hex.replace('#', '');
+    return [
+        parseInt(h.slice(0, 2), 16),
+        parseInt(h.slice(2, 4), 16),
+        parseInt(h.slice(4, 6), 16),
+    ];
+}
+
+// Two arrowhead barbs for an arrow from s -> e (page-space points).
+function arrowHeadPoints(s, e) {
+    const ang = Math.atan2(e.y - s.y, e.x - s.x);
+    const len = 18;
+    const spread = Math.PI / 7;
+    return {
+        a: { x: e.x - len * Math.cos(ang - spread), y: e.y - len * Math.sin(ang - spread) },
+        b: { x: e.x - len * Math.cos(ang + spread), y: e.y - len * Math.sin(ang + spread) },
+    };
+}
+
+// Build a shape as a list of polylines (each an array of {x,y}) in page space.
+// Rect/arrow use separate 2-point segments so corners stay crisp (pdf.js
+// bezier-smooths long polylines); the circle uses one sampled polyline.
+function buildShapeCssPaths(shape, s, e) {
+    switch (shape) {
+        case TOOL.LINE:
+            return [[s, e]];
+        case TOOL.ARROW: {
+            const { a, b } = arrowHeadPoints(s, e);
+            return [[s, e], [a, e], [b, e]];
+        }
+        case TOOL.SQUARE: {
+            const p1 = { x: s.x, y: s.y };
+            const p2 = { x: e.x, y: s.y };
+            const p3 = { x: e.x, y: e.y };
+            const p4 = { x: s.x, y: e.y };
+            return [[p1, p2], [p2, p3], [p3, p4], [p4, p1]];
+        }
+        case TOOL.CIRCLE: {
+            const cx = (s.x + e.x) / 2;
+            const cy = (s.y + e.y) / 2;
+            const rx = Math.abs(e.x - s.x) / 2;
+            const ry = Math.abs(e.y - s.y) / 2;
+            const N = 64;
+            const pts = [];
+            for (let i = 0; i <= N; i++) {
+                const a = (i / N) * 2 * Math.PI;
+                pts.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
+            }
+            // Emit consecutive points as separate straight chords rather than one
+            // closed polyline: pdf.js bezier-smooths long polylines, and the seam
+            // of a closed loop produces control-point overshoot that inflates the
+            // bounding box. 64 short chords read as a smooth ellipse but give an
+            // exact bbox (same approach as the square's edges).
+            const segments = [];
+            for (let i = 0; i < pts.length - 1; i++) {
+                segments.push([pts[i], pts[i + 1]]);
+            }
+            return segments;
+        }
+        default:
+            return [];
+    }
+}
 
 export function PdfMarkupModal({
     isOpen,
@@ -57,11 +141,14 @@ export function PdfMarkupModal({
     onSaved,
 }) {
     const containerRef = useRef(null);
+    const overlayRef = useRef(null);
+    const shapeStartRef = useRef(null);  // { x, y } client coords of the in-progress shape
     const viewerStateRef = useRef({
         pdfDocument: null,
         pdfViewer: null,
         eventBus: null,
         loadingTask: null,
+        uiManager: null,
     });
 
     const [loading, setLoading] = useState(true);
@@ -70,9 +157,12 @@ export function PdfMarkupModal({
     const [tool, setTool] = useState(TOOL.HAND);
     const [color, setColor] = useState(COLORS[0]);
     const [fontSize, setFontSize] = useState(16);
+    const [thickness, setThickness] = useState(THICKNESS.Medium);
     const [note, setNote] = useState('');
     const [dirty, setDirty] = useState(false);
     const [ticks, setTicks] = useState([]);  // scrollbar ticks for each annotation
+    const [shapeDraft, setShapeDraft] = useState(null);  // { sx, sy, ex, ey } overlay-relative preview
+    const [hasSelection, setHasSelection] = useState(false);  // an editor is currently selected
 
     const isEdit = mode === 'edit';
 
@@ -88,6 +178,9 @@ export function PdfMarkupModal({
         setDirty(false);
         setTool(TOOL.HAND);
         setTicks([]);
+        setShapeDraft(null);
+        shapeStartRef.current = null;
+        setHasSelection(false);
         setNote('');  // optional save-note resets every time the editor opens
 
         const init = async () => {
@@ -116,8 +209,18 @@ export function PdfMarkupModal({
                     // over-zoom wide FC drawings on big screens.
                     pdfViewer.currentScaleValue = 'page-fit';
                 });
-                eventBus.on('annotationeditorstateschanged', () => {
+                eventBus.on('annotationeditorstateschanged', (e) => {
                     setDirty(true);
+                    const details = e?.details;
+                    if (details && 'hasSelectedEditor' in details) {
+                        setHasSelection(!!details.hasSelectedEditor);
+                    }
+                });
+                // The UIManager is created during setDocument (NONE mode still
+                // creates it); capture it so shape tools can inject Ink editors
+                // via uiManager.getLayer(pageIndex).deserialize/add.
+                eventBus.on('annotationeditoruimanager', ({ uiManager }) => {
+                    viewerStateRef.current.uiManager = uiManager;
                 });
 
                 const refreshTicks = async () => {
@@ -139,7 +242,7 @@ export function PdfMarkupModal({
                         const currentVer = viewerStateRef.current.currentVersionNumber;
                         for (const ann of annots) {
                             if (!['FreeText', 'Ink', 'Stamp'].includes(ann.subtype)) continue;
-                            const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(ann.rect);
+                            const [x1, y1, , y2] = viewport.convertToViewportRectangle(ann.rect);
                             const top = Math.min(y1, y2);
                             const fp = fingerprintAnnotation(ann, pageNum);
                             const versionNumber = originMap.has(fp) ? originMap.get(fp) : currentVer;
@@ -253,7 +356,7 @@ export function PdfMarkupModal({
             try { state.loadingTask?.destroy?.(); } catch { /* noop */ }
             try { state.pdfViewer?.cleanup?.(); } catch { /* noop */ }
             try { state.pdfDocument?.destroy?.(); } catch { /* noop */ }
-            viewerStateRef.current = { pdfDocument: null, pdfViewer: null, eventBus: null, loadingTask: null };
+            viewerStateRef.current = { pdfDocument: null, pdfViewer: null, eventBus: null, loadingTask: null, uiManager: null };
         };
     }, [isOpen, releaseId, versionId]);
 
@@ -262,7 +365,10 @@ export function PdfMarkupModal({
         const pdfViewer = viewerStateRef.current.pdfViewer;
         if (!pdfViewer || !isEdit) return;
         try {
-            pdfViewer.annotationEditorMode = { mode: tool };
+            // Shape tools ride on the INK editor layer (which provides the page
+            // layers we inject into); the shape input overlay handles drawing.
+            const mode = isShapeTool(tool) ? TOOL.INK : tool;
+            pdfViewer.annotationEditorMode = { mode };
         } catch {
             // pdfViewer not yet ready — ignored, will retry on next state change.
         }
@@ -297,6 +403,55 @@ export function PdfMarkupModal({
         } catch { /* swallow */ }
     }, [fontSize, tool, isEdit]);
 
+    // Apply stroke-thickness changes to the pen. Shapes read `thickness`
+    // directly when committed, so only the live INK editor needs the dispatch.
+    useEffect(() => {
+        const eventBus = viewerStateRef.current.eventBus;
+        if (!eventBus || !isEdit || tool !== TOOL.INK) return;
+        const params = pdfjsLib.AnnotationEditorParamsType;
+        try {
+            if (params?.INK_THICKNESS != null) {
+                eventBus.dispatch('switchannotationeditorparams', { type: params.INK_THICKNESS, value: thickness });
+            }
+        } catch { /* swallow */ }
+    }, [thickness, tool, isEdit]);
+
+    // Two-finger pinch-to-zoom. pdf.js's own TouchManager only resizes the
+    // selected editor, so page zoom is handled here: adjust currentScale by the
+    // change in finger distance. Single-finger touches fall through to native
+    // pan-scroll (touch-action on the container).
+    useEffect(() => {
+        if (!isOpen) return;
+        const container = containerRef.current;
+        if (!container) return;
+        let lastDist = null;
+        const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+        const onTouchMove = (e) => {
+            if (e.touches.length !== 2) return;
+            e.preventDefault();
+            const d = dist(e.touches);
+            if (lastDist != null && d > 0) {
+                const pdfViewer = viewerStateRef.current.pdfViewer;
+                if (pdfViewer) {
+                    const current = pdfViewer.currentScale || 1;
+                    pdfViewer.currentScale = Math.min(8, Math.max(0.25, current * (d / lastDist)));
+                }
+            }
+            lastDist = d;
+        };
+        const onTouchEnd = (e) => {
+            if (e.touches.length < 2) lastDist = null;
+        };
+        container.addEventListener('touchmove', onTouchMove, { passive: false });
+        container.addEventListener('touchend', onTouchEnd);
+        container.addEventListener('touchcancel', onTouchEnd);
+        return () => {
+            container.removeEventListener('touchmove', onTouchMove);
+            container.removeEventListener('touchend', onTouchEnd);
+            container.removeEventListener('touchcancel', onTouchEnd);
+        };
+    }, [isOpen]);
+
     // Esc-to-close
     useEffect(() => {
         if (!isOpen) return;
@@ -326,6 +481,123 @@ export function PdfMarkupModal({
         const pdfViewer = viewerStateRef.current.pdfViewer;
         if (!pdfViewer) return;
         pdfViewer.currentScaleValue = 'page-width';
+    };
+
+    // Which rendered page is under a screen point, plus its scaled viewport and
+    // on-screen rect (used to map the gesture into PDF page coordinates).
+    const getPageAtClientPoint = (clientX, clientY) => {
+        const pdfViewer = viewerStateRef.current.pdfViewer;
+        const doc = viewerStateRef.current.pdfDocument;
+        if (!pdfViewer || !doc) return null;
+        for (let i = 0; i < doc.numPages; i++) {
+            const pv = pdfViewer.getPageView(i);
+            if (!pv || !pv.div || !pv.viewport) continue;
+            const r = pv.div.getBoundingClientRect();
+            if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+                return { pageIndex: i, viewport: pv.viewport, rect: r };
+            }
+        }
+        return null;
+    };
+
+    // Convert a drag (start -> end, client coords) into an Ink annotation on the
+    // page under the start point and inject it via the editor layer so it
+    // persists through saveDocument() and behaves like any other annotation.
+    const commitShape = async (startClient, endClient) => {
+        const uiManager = viewerStateRef.current.uiManager;
+        if (!uiManager) return;
+        const page = getPageAtClientPoint(startClient.x, startClient.y);
+        if (!page) return;
+        const { pageIndex, viewport, rect } = page;
+        const s = { x: startClient.x - rect.left, y: startClient.y - rect.top };
+        const e = { x: endClient.x - rect.left, y: endClient.y - rect.top };
+        if (Math.hypot(e.x - s.x, e.y - s.y) < 4) return;  // ignore taps/tiny drags
+
+        const cssPaths = buildShapeCssPaths(tool, s, e);
+        if (!cssPaths.length) return;
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        const points = cssPaths.map((path) => {
+            const flat = [];
+            for (const p of path) {
+                const [px, py] = viewport.convertToPdfPoint(p.x, p.y);
+                flat.push(px, py);
+                if (px < minX) minX = px;
+                if (px > maxX) maxX = px;
+                if (py < minY) minY = py;
+                if (py > maxY) maxY = py;
+            }
+            return Float32Array.from(flat);
+        });
+
+        const pad = thickness / 2 + 1;
+        const obj = {
+            annotationType: pdfjsLib.AnnotationEditorType.INK,
+            color: hexToRgbArray(color),
+            opacity: 1,
+            thickness,
+            paths: { points },
+            pageIndex,
+            rect: [minX - pad, minY - pad, maxX + pad, maxY + pad],
+            // pdf.js initializes every editor's rotation to the page's view
+            // rotation (architectural PDFs are often stored rotated). The points
+            // are in unrotated PDF space (convertToPdfPoint), so deserialize maps
+            // them through the rotation-matched rescale and the selection box
+            // lands on the right axes. Hardcoding 0 here put the box on swapped
+            // axes for rotated pages.
+            rotation: viewport.rotation || 0,
+        };
+
+        try {
+            const layer = uiManager.getLayer(pageIndex);
+            if (!layer) return;
+            const editor = await layer.deserialize(obj);
+            if (editor) {
+                layer.add(editor);
+                setDirty(true);
+            }
+        } catch (err) {
+            console.error('Failed to add shape:', err);
+        }
+    };
+
+    const onShapePointerDown = (e) => {
+        if (!isShapeTool(tool)) return;
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        const r = overlayRef.current?.getBoundingClientRect();
+        if (!r) return;
+        shapeStartRef.current = { x: e.clientX, y: e.clientY };
+        const ox = e.clientX - r.left;
+        const oy = e.clientY - r.top;
+        setShapeDraft({ sx: ox, sy: oy, ex: ox, ey: oy });
+    };
+
+    const onShapePointerMove = (e) => {
+        if (!shapeStartRef.current) return;
+        const r = overlayRef.current?.getBoundingClientRect();
+        if (!r) return;
+        const ex = e.clientX - r.left;
+        const ey = e.clientY - r.top;
+        setShapeDraft((d) => (d ? { ...d, ex, ey } : d));
+    };
+
+    const onShapePointerUp = (e) => {
+        const start = shapeStartRef.current;
+        shapeStartRef.current = null;
+        setShapeDraft(null);
+        if (!start) return;
+        commitShape(start, { x: e.clientX, y: e.clientY });
+    };
+
+    // Delete the currently-selected annotation(s). pdf.js's delete() is
+    // undoable and works for both saved and not-yet-saved editors; this is the
+    // touch equivalent of pressing Delete/Backspace.
+    const deleteSelected = () => {
+        const uiManager = viewerStateRef.current.uiManager;
+        if (!uiManager) return;
+        uiManager.delete();
+        setHasSelection(false);
+        setDirty(true);
     };
 
     const tryClose = () => {
@@ -400,10 +672,21 @@ export function PdfMarkupModal({
                 .annotationEditorLayer .freeTextEditor { cursor: move !important; }
                 .annotationEditorLayer .freeTextEditor > .internal { cursor: text !important; }
 
-                /* Hand mode: existing annotations stay visible but become
-                   non-interactive (no select/drag/edit). Pen/Text re-enable. */
+                /* Hand mode = move/select. pdf.js disables editor-layer pointer
+                   events in NONE mode (adds .disabled); we re-enable them so
+                   existing annotations — pen strokes, shapes, text — can be
+                   selected and dragged. NONE mode binds no create-on-click
+                   handler, so empty-space clicks create nothing, and the
+                   container's touch-action still allows one-finger pan-scroll. */
                 [data-tool="hand"] .annotationEditorLayer,
-                [data-tool="hand"] .annotationEditorLayer * {
+                [data-tool="hand"] .annotationEditorLayer.disabled {
+                    pointer-events: auto !important;
+                }
+
+                /* Shape mode: suppress the editor layer so the shape input
+                   overlay — not the native ink pen — handles drawing. */
+                [data-tool="shape"] .annotationEditorLayer,
+                [data-tool="shape"] .annotationEditorLayer * {
                     pointer-events: none !important;
                 }
 
@@ -452,6 +735,30 @@ export function PdfMarkupModal({
                         {toolBtn('Hand', TOOL.HAND, 'Move/select')}
                         {toolBtn('Pen', TOOL.INK)}
                         {toolBtn('Text', TOOL.FREETEXT)}
+                        {toolBtn('Line', TOOL.LINE)}
+                        {toolBtn('Arrow', TOOL.ARROW)}
+                        {toolBtn('Box', TOOL.SQUARE, 'Square')}
+                        {toolBtn('Circle', TOOL.CIRCLE)}
+                        {(tool === TOOL.INK || isShapeTool(tool)) && (
+                            <div className="flex items-center gap-1 ml-2">
+                                {Object.entries(THICKNESS).map(([label, value]) => (
+                                    <button
+                                        key={label}
+                                        type="button"
+                                        onClick={() => setThickness(value)}
+                                        className={`px-3 py-3 min-h-[44px] rounded-md text-sm font-semibold border ${
+                                            thickness === value
+                                                ? 'bg-accent-600 text-white border-accent-600'
+                                                : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-100'
+                                        }`}
+                                        title={`${label} stroke`}
+                                        aria-label={`${label} stroke width`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         {tool === TOOL.FREETEXT && (
                             <div className="flex items-center gap-1 ml-2">
                                 <button
@@ -483,6 +790,16 @@ export function PdfMarkupModal({
                                 />
                             ))}
                         </div>
+                        <button
+                            type="button"
+                            onClick={deleteSelected}
+                            disabled={!hasSelection}
+                            className="ml-2 px-4 py-3 min-h-[44px] rounded-md font-semibold border border-red-300 text-red-700 bg-white hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title="Delete selected annotation (or press Delete)"
+                            aria-label="Delete selected annotation"
+                        >
+                            Delete
+                        </button>
                         <input
                             type="text"
                             value={note}
@@ -519,11 +836,57 @@ export function PdfMarkupModal({
                 <div
                     ref={containerRef}
                     className="absolute inset-0 overflow-auto"
-                    style={{ touchAction: 'none', position: 'absolute' }}
-                    data-tool={tool === TOOL.HAND ? 'hand' : tool === TOOL.INK ? 'pen' : 'text'}
+                    // Hand mode allows one-finger pan-scroll; drawing tools
+                    // suppress it so finger/stylus drags become strokes.
+                    style={{ touchAction: tool === TOOL.HAND ? 'pan-x pan-y' : 'none', position: 'absolute' }}
+                    data-tool={
+                        tool === TOOL.HAND ? 'hand'
+                            : tool === TOOL.INK ? 'pen'
+                                : tool === TOOL.FREETEXT ? 'text'
+                                    : 'shape'
+                    }
                 >
                     <div className="pdfViewer" />
                 </div>
+
+                {/* Shape input overlay: captures the drag for line/arrow/box/circle,
+                    shows a live preview, and commits the result as an Ink annotation
+                    on pointer-up. Only mounted while a shape tool is active. */}
+                {isEdit && isShapeTool(tool) && (
+                    <div
+                        ref={overlayRef}
+                        className="absolute inset-0 z-10"
+                        style={{ touchAction: 'none', cursor: 'crosshair' }}
+                        onPointerDown={onShapePointerDown}
+                        onPointerMove={onShapePointerMove}
+                        onPointerUp={onShapePointerUp}
+                        onPointerCancel={onShapePointerUp}
+                        onWheel={(e) => {
+                            const c = containerRef.current;
+                            if (c) { c.scrollTop += e.deltaY; c.scrollLeft += e.deltaX; }
+                        }}
+                    >
+                        {shapeDraft && (
+                            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                                {buildShapeCssPaths(
+                                    tool,
+                                    { x: shapeDraft.sx, y: shapeDraft.sy },
+                                    { x: shapeDraft.ex, y: shapeDraft.ey },
+                                ).map((path, idx) => (
+                                    <polyline
+                                        key={idx}
+                                        points={path.map((p) => `${p.x},${p.y}`).join(' ')}
+                                        fill="none"
+                                        stroke={color}
+                                        strokeWidth={thickness}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    />
+                                ))}
+                            </svg>
+                        )}
+                    </div>
+                )}
 
                 {/* Annotation ticks overlaid on the right edge of the scroll track.
                     Click jumps the scroll container to that annotation. */}
