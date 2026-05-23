@@ -1,7 +1,7 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: Idempotently clear a hard start_install date as a cascade from a completion-marking action (stage='Complete', job_comp='X', invoiced='X'), emitting a child audit event linked by parent_event_id.
+purpose: Idempotently clear a hard start_install date as a cascade from a completion-marking action (stage='Complete', stage='Install Complete', job_comp='X', invoiced='X'), emitting a child audit event linked by parent_event_id.
 exports:
   clear_hard_date_cascade: Function that clears the hard-date flag and emits a child event when a hard date is present
 imports_from: [app.models, app.services.job_event_service]
@@ -22,6 +22,7 @@ logger = get_logger(__name__)
 
 CascadeReason = Literal[
     'stage_set_to_complete',
+    'stage_set_to_install_complete',
     'job_comp_set_to_x',
     'invoiced_set_to_x',
 ]
