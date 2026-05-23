@@ -122,6 +122,8 @@ function AppShellInner({ isAuthenticated }) {
             {navBtn('/drafting-work-load', 'Drafting WL')}
             {navBtn('/events', 'Events')}
             {isAdmin && navBtn('/board', 'Bug Tracker')}
+            {isAdmin && navBtn('/admin/photo-scan', 'Photo Scan')}
+            {isAdmin && navBtn('/admin/photo-locate', 'Photo Locate')}
           </div>
 
           {/* Notification bell (always visible if authenticated) */}

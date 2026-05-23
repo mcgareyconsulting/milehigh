@@ -84,6 +84,10 @@ class Config:
     # Admin PIN for health scan admin page
     ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
 
+    # AI vision (photo code scan research — feature/photo-mode-research)
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
 
 class LocalConfig(Config):
     """Configuration for local development."""

@@ -26,6 +26,8 @@ import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
 import FcCollection from './pages/FcCollection';
+import PhotoScanAdmin from './pages/PhotoScanAdmin';
+import PhotoLocateAdmin from './pages/PhotoLocateAdmin';
 import { checkAuth } from './utils/auth';
 import './App.css';
 
@@ -69,6 +71,8 @@ function AppContent() {
               <Route path="jobsite-map" element={<JobsiteMap />} />
               <Route path="board" element={<Board />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
+              <Route path="admin/photo-scan" element={<PhotoScanAdmin />} />
+              <Route path="admin/photo-locate" element={<PhotoLocateAdmin />} />
               <Route path="*" element={<Navigate to="/job-log" replace />} />
             </>
           ) : (

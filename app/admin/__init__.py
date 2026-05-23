@@ -14,7 +14,10 @@ invariants:
   - add_project_confirm uses lazy imports for create_webhook_and_trigger and sync_submittals_for_project to avoid circular imports
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
+import base64
 import os
+import re
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import Blueprint, current_app, jsonify, request, g
 from app.models import Projects, ReleaseDrawingVersion, FcCollectionRun, db
@@ -25,6 +28,14 @@ from app.logging_config import get_logger
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.procore.client import get_procore_client
 from app.procore.procore import get_project_info
+from app.admin.photo_scan import (
+    scan_with_anthropic, scan_with_openai,
+    locate_with_anthropic, locate_with_openai,
+    is_heic,
+)
+
+HEIC_ERROR = ('HEIC/HEIF images (e.g. iPhone photos) are not supported by the '
+              'vision APIs. Please convert to JPEG or PNG and try again.')
 
 logger = get_logger(__name__)
 
@@ -261,3 +272,119 @@ def fc_collection_run_now():
     from app.procore.fc_retry_worker import retry_missing_fc_viewer_urls
     summary = retry_missing_fc_viewer_urls(trigger="manual")
     return jsonify({"success": True, "run": summary}), 200
+
+
+MAX_PHOTO_BYTES = 18 * 1024 * 1024  # stay under provider ~20MB limits
+
+
+@admin_bp.route('/photo-scan', methods=['POST'])
+@admin_required
+@handle_errors("scan photo for job code")
+def scan_photo():
+    """Scan an uploaded photo for a 3- or 6-digit job code with both AI providers.
+
+    Research endpoint (feature/photo-mode-research): runs Anthropic and OpenAI
+    vision in parallel and returns each provider's parsed code, latency, and cost
+    so we can compare which is best/fastest/cheapest. Read-only — no DB writes.
+    """
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': "Missing 'file' part"}), 400
+
+    media_type = (file.mimetype or '').lower()
+    if not media_type.startswith('image/'):
+        return jsonify({'error': 'File must be an image'}), 400
+
+    image_bytes = file.read()
+    if not image_bytes:
+        return jsonify({'error': 'Empty file'}), 400
+    if len(image_bytes) > MAX_PHOTO_BYTES:
+        return jsonify({'error': 'Image too large (max ~18MB)'}), 400
+    if is_heic(image_bytes):
+        return jsonify({'error': HEIC_ERROR}), 400
+
+    image_b64 = base64.b64encode(image_bytes).decode()
+
+    # Run both providers concurrently. Worker threads need the app context to
+    # read API keys from current_app.config, so push it inside each task.
+    app = current_app._get_current_object()
+
+    def run(fn):
+        with app.app_context():
+            return fn(image_b64, media_type)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(run, scan_with_anthropic),
+                   executor.submit(run, scan_with_openai)]
+        results = [f.result() for f in futures]
+
+    logger.info(
+        "photo_scan complete",
+        file_size=len(image_bytes),
+        results=[{r['provider']: r['code'], 'ms': r['elapsed_ms'],
+                  'usd': r['cost_usd'], 'error': r['error']} for r in results],
+    )
+    return jsonify({"results": results}), 200
+
+
+@admin_bp.route('/photo-locate', methods=['POST'])
+@admin_required
+@handle_errors("locate code in photo")
+def locate_photo_code():
+    """Locate a known 6-digit code in an uploaded photo and return its bounding box.
+
+    Research endpoint (feature/photo-mode-research): the user supplies the photo
+    and the expected code; the vision model returns a normalized [0,1] bounding
+    box so the frontend can draw a circle over it. `provider` selects 'anthropic'
+    (default), 'openai', or 'both'. Read-only — no DB writes.
+    """
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': "Missing 'file' part"}), 400
+
+    code = (request.form.get('code') or '').strip()
+    if not re.fullmatch(r'\d{3}-\d{3}', code):
+        return jsonify({'error': 'code must be in XXX-YYY format (e.g. 482-913)'}), 400
+
+    provider = (request.form.get('provider') or 'anthropic').lower()
+    if provider not in ('anthropic', 'openai', 'both'):
+        return jsonify({'error': "provider must be 'anthropic', 'openai', or 'both'"}), 400
+
+    media_type = (file.mimetype or '').lower()
+    if not media_type.startswith('image/'):
+        return jsonify({'error': 'File must be an image'}), 400
+
+    image_bytes = file.read()
+    if not image_bytes:
+        return jsonify({'error': 'Empty file'}), 400
+    if len(image_bytes) > MAX_PHOTO_BYTES:
+        return jsonify({'error': 'Image too large (max ~18MB)'}), 400
+    if is_heic(image_bytes):
+        return jsonify({'error': HEIC_ERROR}), 400
+
+    image_b64 = base64.b64encode(image_bytes).decode()
+
+    fns = []
+    if provider in ('anthropic', 'both'):
+        fns.append(locate_with_anthropic)
+    if provider in ('openai', 'both'):
+        fns.append(locate_with_openai)
+
+    # Run providers concurrently; worker threads need the app context to read keys.
+    app = current_app._get_current_object()
+
+    def run(fn):
+        with app.app_context():
+            return fn(image_b64, media_type, code)
+
+    with ThreadPoolExecutor(max_workers=len(fns)) as executor:
+        results = [f.result() for f in [executor.submit(run, fn) for fn in fns]]
+
+    logger.info(
+        "photo_locate complete",
+        file_size=len(image_bytes), code=code, provider=provider,
+        results=[{r['provider']: r['found'], 'box': r['box'],
+                  'ms': r['elapsed_ms'], 'usd': r['cost_usd'],
+                  'error': r['error']} for r in results],
+    )
+    return jsonify({"results": results}), 200
