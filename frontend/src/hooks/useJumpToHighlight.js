@@ -22,7 +22,7 @@ export const JUMP_TO_HIGHLIGHT_MS = 3500;
 const TABLE_STICKY_HEADER_OFFSET = 44;
 
 /** Selectors for table scroll containers (Job Log, Drafting Work Load, etc.) — scroll only the container, not the page */
-const TABLE_SCROLL_CONTAINER_SELECTORS = '.job-log-table-scroll-hide-scrollbar, .dwl-table-scroll-hide-scrollbar';
+const TABLE_SCROLL_CONTAINER_SELECTORS = '.job-log-table-scroll, .dwl-table-scroll';
 
 /**
  * Scroll a row into view inside a table scroll container only (no page scroll).

@@ -25,7 +25,7 @@ import { AlertMessage } from '../components/AlertMessage';
 import { AddProjectModal } from '../components/AddProjectModal';
 import { generateDraftingWorkLoadPDF } from '../utils/pdfUtils';
 import { formatDate, formatCellValue } from '../utils/formatters';
-import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { checkAuth } from '../utils/auth';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
@@ -36,14 +36,6 @@ import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
 // Responsive column width styles for larger screens (2xl breakpoint: 1536px+)
 // Laptop sizes are kept as default (max-width only), only larger screens get adjusted max-widths
 const columnWidthStyles = `
-    /* Hide scrollbar on table scroll area; scrolling still works via wheel/trackpad */
-    .dwl-table-scroll-hide-scrollbar {
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE / Edge */
-    }
-    .dwl-table-scroll-hide-scrollbar::-webkit-scrollbar {
-        display: none; /* Chrome, Safari, Edge */
-    }
     @media (min-width: 1536px) {
         /* Reduce column max-widths on very large screens to prevent bloating */
         .dwl-col-name { max-width: 260px !important; }
@@ -103,7 +95,6 @@ function DraftingWorkLoad() {
     // User role status
     const [isAdmin, setIsAdmin] = useState(false);
     const [isDrafter, setIsDrafter] = useState(false);
-    const [showScrollbars, setShowScrollbars] = useState(false);
     const [userLoading, setUserLoading] = useState(true);
     const canEditDrafterFields = isAdmin || isDrafter;
 
@@ -114,12 +105,10 @@ function DraftingWorkLoad() {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
                 setIsDrafter(user?.is_drafter || false);
-                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
                 setIsDrafter(false);
-                setShowScrollbars(false);
             } finally {
                 setUserLoading(false);
             }
@@ -491,10 +480,9 @@ function DraftingWorkLoad() {
 
                         {!loading && !fetchError && effectiveView === 'table' && (
                             <div className="flex-1 min-h-0 flex flex-col border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden bg-white dark:bg-slate-800 min-w-0">
-                                {/* Scrollbar hidden via CSS; scroll still works with wheel/trackpad */}
                                 <div
                                     ref={scrollContainerRef}
-                                    className={`${showScrollbars ? '' : 'dwl-table-scroll-hide-scrollbar'} flex-1 min-h-0 overflow-x-hidden`.trim()}
+                                    className="dwl-table-scroll flex-1 min-h-0 overflow-x-hidden"
                                     style={{ overflowY: 'auto' }}
                                 >
                                     <table className="w-full" style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
