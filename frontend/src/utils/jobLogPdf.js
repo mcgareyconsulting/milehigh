@@ -44,9 +44,24 @@ const ICON_ROW_DRAW_HEIGHT_PT = 12;
 // with an ellipsis on the last kept line.
 const MAX_LINES_PER_CELL = 2;
 
+// Floor every body row at the natural height of a 2-line cell so all rows print
+// at a uniform height (single-line rows grow to match wrapped ones).
+const BODY_FONT_SIZE = 9;          // matches styles.fontSize
+const LINE_HEIGHT_RATIO = 1.15;    // jspdf-autotable FONT_ROW_RATIO
+const CELL_PAD_V = 1.5;            // body cellPadding top == bottom
+const TWO_LINE_MIN_HEIGHT_PT =
+    MAX_LINES_PER_CELL * BODY_FONT_SIZE * LINE_HEIGHT_RATIO + CELL_PAD_V * 2;
+
+// Print-only header label overrides (the column key/data field is unchanged).
+// Kept separate from the shared HEADER_OVERRIDES so this doesn't rename the
+// on-screen Job Log / Archive table headers.
+const PRINT_HEADER_OVERRIDES = {
+    'Urgency': 'Banana Code',
+};
+
 const PRINT_WIDTH_OVERRIDES = {
-    'Urgency': 4,
-    'Stage': 7,
+    'Urgency': 6,
+    'Stage': 5,
     'Description': 11,
     'Fab Order': 4,
     'Comp. ETA': 4,
@@ -279,7 +294,9 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
     const iconRowProvider = makeIconRowProvider(iconAssets);
     const pmGroups = groupByPm(jobs);
     const columnStyles = buildColumnStyles(columnHeaders, columnWidthPercent);
-    const head = [columnHeaders.map((col) => HEADER_OVERRIDES[col] ?? col)];
+    const head = [columnHeaders.map(
+        (col) => PRINT_HEADER_OVERRIDES[col] ?? HEADER_OVERRIDES[col] ?? col,
+    )];
 
     const doc = new jsPDF({
         orientation: 'landscape',
@@ -324,6 +341,9 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
                 cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
                 lineColor: COLOR_HEAD_LINE,
                 lineWidth: 0.5,
+            },
+            bodyStyles: {
+                minCellHeight: TWO_LINE_MIN_HEIGHT_PT,
             },
             columnStyles,
             didParseCell: (data) => {
