@@ -20,20 +20,21 @@ function PMBoardList({ jobs, onUpdate }) {
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Material Ordered', label: 'Material Ordered' },
-        { value: 'Cut start', label: 'Cut start' },
+        { value: 'Cut Start', label: 'Cut Start' },
         { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Fitup Start', label: 'Fitup start' },
-        { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Fitup Complete', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
-        { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Paint Complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
-        { value: 'Store at MHMW for shipping', label: 'Store' },
-        { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Store at MHMW', label: 'Store' },
+        { value: 'Ship Planning', label: 'Ship plan' },
+        { value: 'Ship Complete', label: 'Ship comp' },
+        { value: 'Install Start', label: 'Install start' },
+        { value: 'Install Complete', label: 'Install comp' },
         { value: 'Complete', label: 'Complete' }
     ];
 
@@ -45,7 +46,7 @@ function PMBoardList({ jobs, onUpdate }) {
             text: 'rgb(30 64 175)',
             border: 'rgb(147 197 253)',
         },
-        'Cut start': {
+        'Cut Start': {
             light: 'rgb(219 234 254)',
             base: 'rgb(59 130 246)',
             text: 'rgb(30 64 175)',
@@ -63,7 +64,7 @@ function PMBoardList({ jobs, onUpdate }) {
             text: 'rgb(30 64 175)',
             border: 'rgb(147 197 253)',
         },
-        'Fit Up Complete.': {
+        'Fitup Complete': {
             light: 'rgb(219 234 254)',
             base: 'rgb(59 130 246)',
             text: 'rgb(30 64 175)',
@@ -87,25 +88,37 @@ function PMBoardList({ jobs, onUpdate }) {
             text: 'rgb(133 77 14)',
             border: 'rgb(253 224 71)',
         },
-        'Paint complete': {
+        'Paint Complete': {
             light: 'rgb(209 250 229)',
             base: 'rgb(16 185 129)',
             text: 'rgb(6 95 70)',
             border: 'rgb(110 231 183)',
         },
-        'Store at MHMW for shipping': {
+        'Store at MHMW': {
             light: 'rgb(209 250 229)',
             base: 'rgb(16 185 129)',
             text: 'rgb(6 95 70)',
             border: 'rgb(110 231 183)',
         },
-        'Shipping planning': {
+        'Ship Planning': {
             light: 'rgb(209 250 229)',
             base: 'rgb(16 185 129)',
             text: 'rgb(6 95 70)',
             border: 'rgb(110 231 183)',
         },
-        'Shipping completed': {
+        'Ship Complete': {
+            light: 'rgb(237 233 254)',
+            base: 'rgb(139 92 246)',
+            text: 'rgb(91 33 182)',
+            border: 'rgb(196 181 253)',
+        },
+        'Install Start': {
+            light: 'rgb(237 233 254)',
+            base: 'rgb(139 92 246)',
+            text: 'rgb(91 33 182)',
+            border: 'rgb(196 181 253)',
+        },
+        'Install Complete': {
             light: 'rgb(237 233 254)',
             base: 'rgb(139 92 246)',
             text: 'rgb(91 33 182)',
@@ -118,12 +131,6 @@ function PMBoardList({ jobs, onUpdate }) {
             border: 'rgb(196 181 253)',
         },
         'Hold': {
-            light: 'rgb(219 234 254)',
-            base: 'rgb(59 130 246)',
-            text: 'rgb(30 64 175)',
-            border: 'rgb(147 197 253)',
-        },
-        'Welded': {
             light: 'rgb(219 234 254)',
             base: 'rgb(59 130 246)',
             text: 'rgb(30 64 175)',
@@ -238,18 +245,9 @@ function PMBoardList({ jobs, onUpdate }) {
         }
     };
 
-    const getJobCardStyle = (job, stage) => {
-        const colors = stageColors[stage] || stageColors['Released'];
-        return {
-            backgroundColor: colors.light,
-            borderColor: colors.border,
-            color: colors.text,
-        };
-    };
-
     return (
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4 bg-gray-100 flex flex-col">
-            <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-2 flex flex-col">
+            <div className="flex gap-2 flex-1 min-h-0">
                 {stageOptions.map((stageOption) => {
                     const stage = stageOption.value;
                     const stageJobs = jobsByStage[stage] || [];
@@ -259,40 +257,36 @@ function PMBoardList({ jobs, onUpdate }) {
                     return (
                         <div
                             key={stage}
-                            className={`flex-1 min-w-[280px] min-h-0 bg-gray-50 rounded-lg shadow-sm flex flex-col ${
-                                isDragOver ? 'ring-2 ring-blue-400' : ''
-                            }`}
+                            className={`flex-1 min-w-[220px] min-h-0 bg-gray-50 dark:bg-slate-700/40 border border-gray-200 dark:border-slate-600 rounded-lg flex flex-col transition-shadow ${isDragOver ? 'ring-2 ring-blue-500/60 shadow-md' : ''}`}
                             onDragOver={(e) => handleDragOver(e, stage)}
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, stage)}
                         >
-                            {/* Column Header */}
+                            {/* Column header */}
                             <div
-                                className="px-4 py-3 rounded-t-lg font-semibold text-sm text-white"
-                                style={{
-                                    backgroundColor: colors.base,
-                                }}
+                                className="px-2.5 py-1.5 border-t-[3px] rounded-t-lg bg-white dark:bg-slate-800 flex items-center justify-between"
+                                style={{ borderTopColor: colors.base }}
                             >
-                                <div className="flex items-center justify-between">
-                                    <span>{stageOption.label}</span>
-                                    <span className="bg-white bg-opacity-30 px-2 py-0.5 rounded text-xs">
-                                        {stageJobs.length}
-                                    </span>
-                                </div>
+                                <span className="text-[11px] font-bold uppercase tracking-wide text-gray-700 dark:text-slate-200 truncate">
+                                    {stageOption.label}
+                                </span>
+                                <span className="bg-gray-100 dark:bg-slate-600 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0">
+                                    {stageJobs.length}
+                                </span>
                             </div>
 
-                            {/* Column Content */}
-                            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                            {/* Column content */}
+                            <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
                                 {stageJobs.length === 0 ? (
-                                    <div className="text-center text-gray-400 text-sm py-8">
-                                        No jobs
+                                    <div className="text-center text-gray-400 dark:text-slate-500 text-xs py-6">
+                                        —
                                     </div>
                                 ) : (
                                     stageJobs.map((job) => {
                                         const jobId = `${job['Job #']}-${job['Release #']}`;
                                         const isUpdating = updatingJobs.has(jobId);
-                                        const isDragging = draggedJob && 
-                                            draggedJob['Job #'] === job['Job #'] && 
+                                        const isDragging = draggedJob &&
+                                            draggedJob['Job #'] === job['Job #'] &&
                                             draggedJob['Release #'] === job['Release #'];
 
                                         return (
@@ -302,31 +296,31 @@ function PMBoardList({ jobs, onUpdate }) {
                                                 onDragStart={(e) => handleDragStart(e, job)}
                                                 onDragEnd={handleDragEnd}
                                                 onClick={() => handleCardClick(job, stage)}
-                                                className={`p-3 rounded-lg shadow-sm cursor-pointer transition-all border-2 ${
-                                                    isDragging ? 'opacity-50' : ''
-                                                } ${isUpdating ? 'opacity-50 cursor-wait' : 'hover:shadow-md'}`}
-                                                style={getJobCardStyle(job, stage)}
+                                                className={`relative bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-md cursor-pointer transition-all overflow-hidden ${isDragging ? 'opacity-50' : ''} ${isUpdating ? 'opacity-50 cursor-wait' : 'hover:shadow-md hover:border-gray-300 dark:hover:border-slate-500'}`}
                                             >
-                                                <div className="flex items-start justify-between gap-2 mb-1">
-                                                    <span className="font-semibold text-sm shrink-0">
-                                                        {job['Job #']}-{job['Release #']}
-                                                    </span>
-                                                    {job['Fab Order'] !== null && job['Fab Order'] !== undefined && (
-                                                        <span className="text-xs font-medium shrink-0">
-                                                            {job['Fab Order']}
+                                                <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: colors.base }} />
+                                                <div className="pl-2.5 pr-2 py-1.5">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <span className="font-semibold text-xs text-gray-900 dark:text-slate-100 shrink-0">
+                                                            {job['Job #']}-{job['Release #']}
                                                         </span>
+                                                        {job['Fab Order'] !== null && job['Fab Order'] !== undefined && (
+                                                            <span className="text-[10px] font-medium text-gray-500 dark:text-slate-400 shrink-0">
+                                                                #{job['Fab Order']}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {job['Job'] && (
+                                                        <div className="text-[11px] text-gray-700 dark:text-slate-300 truncate mt-0.5" title={job['Job']}>
+                                                            {job['Job']}
+                                                        </div>
+                                                    )}
+                                                    {job['Description'] && (
+                                                        <div className="text-[11px] text-gray-500 dark:text-slate-400 line-clamp-2 mt-0.5" title={job['Description']}>
+                                                            {job['Description']}
+                                                        </div>
                                                     )}
                                                 </div>
-                                                {job['Job'] && (
-                                                    <div className="text-xs mb-1 font-medium truncate" title={job['Job']}>
-                                                        {job['Job']}
-                                                    </div>
-                                                )}
-                                                {job['Description'] && (
-                                                    <div className="text-xs text-gray-600 line-clamp-2" title={job['Description']}>
-                                                        {job['Description']}
-                                                    </div>
-                                                )}
                                             </div>
                                         );
                                     })

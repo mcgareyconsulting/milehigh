@@ -13,7 +13,7 @@ SANDBOX_URL = "postgresql://sandbox_mhmw_db_user:SLnOrx7QQXDrWmXhKgQx9Dm84dqQZEq
 COLUMNS = [
     "job", "release", "job_name", "description", "fab_hrs", "install_hrs",
     "paint_color", "pm", "by", "released", "fab_order", "stage", "stage_group",
-    "banana_color", "start_install", "start_install_formula", "start_install_formulaTF",
+    "start_install", "start_install_formula", "start_install_formulaTF",
     "comp_eta", "job_comp", "invoiced", "notes", "last_updated_at", "source_of_update",
     "is_active", "is_archived",
 ]

@@ -32,17 +32,11 @@ from app.trello.api import (
     get_list_by_name,
     update_trello_card,
     add_comment_to_trello_card,
-    update_mirror_card_date_range,
     parse_num_guys_from_description,
     update_installation_duration_in_description,
     update_num_guys_in_description,
-    parse_installation_duration,
     update_trello_card_description,
     update_card_custom_field_number,
-    copy_trello_card,
-    link_cards,
-    card_has_link_to,
-    add_procore_link,
 )
 from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, TrelloOutbox, db
 from datetime import datetime, date, timezone, time, timedelta
@@ -52,7 +46,6 @@ from app.services.job_event_service import JobEventService
 import uuid
 import re
 from app.config import Config as cfg
-from app.procore.procore import add_procore_link_to_trello_card
 
 from app.trello.operations import create_sync_operation, update_sync_operation
 from app.trello.context import sync_operation_context
@@ -224,8 +217,6 @@ def sync_from_trello(event_info):
             # Just return - not an error, card isn't tracked
             return
 
-        duplicate_card_id = None
-
         # Skip echo webhooks from Brain's own Trello API calls (outbox -> update_trello_card).
         # Cross-reference with Outbox by card (job/release) and change content so we don't
         # skip legitimate user changes (e.g. Brain moves to A, user moves to B).
@@ -385,93 +376,85 @@ def sync_from_trello(event_info):
             
             # Capture old stage value before applying list mapping
             old_stage_before_list_move = rec.stage
-            
-            # Apply list mapping to database
-            TrelloListMapper.apply_trello_list_to_db(rec, rec.trello_list_name, sync_op.operation_id)
-            
-            # Always create JobEvent for list moves - the webhook confirms the move happened
-            # Use to_list_name as the stage name to match frontend format
-            stage = to_list_name
-            # Use from_list_name from webhook for "from" value (more reliable than DB stage)
-            # Fall back to old_stage_before_list_move if from_list_name is not available
-            from_stage = from_list_name if from_list_name else (old_stage_before_list_move if old_stage_before_list_move else None)
-            
-            safe_log_sync_event(
-                sync_op.operation_id,
-                "INFO",
-                "Creating stage update event for list move",
-                job=rec.job,
-                release=rec.release,
-                from_list=from_list_name,
-                to_list=to_list_name,
-                old_stage=old_stage_before_list_move,
-                new_stage=stage
+
+            # Apply list mapping to database. Returns True only if the rank gate
+            # actually advanced rec.stage; False means the inbound was skipped
+            # (echo of our own push, backward Trello drag, or DB already at/ahead
+            # of the inbound list zone).
+            applied = TrelloListMapper.apply_trello_list_to_db(
+                rec, rec.trello_list_name, sync_op.operation_id
             )
-            
-            event = JobEventService.create(
-                job=rec.job,
-                release=rec.release,
-                action="update_stage",
-                source=trello_source,
-                payload={"from": from_stage, "to": stage},
-                external_user_id=trello_user_id,
-            )
-            if event:
-                created_events.append(event)
+
+            if applied:
+                # Use to_list_name as the stage name to match frontend format
+                stage = to_list_name
+                # Use from_list_name from webhook for "from" value (more reliable
+                # than DB stage); fall back to old DB stage if unavailable.
+                from_stage = (
+                    from_list_name
+                    if from_list_name
+                    else (old_stage_before_list_move if old_stage_before_list_move else None)
+                )
+
                 safe_log_sync_event(
                     sync_op.operation_id,
                     "INFO",
-                    "JobEvent created for stage update",
-                    job=rec.job,
-                    release=rec.release,
-                    from_list=from_list_name,
-                    to_stage=stage,
-                    event_id=event.id
-                )
-            else:
-                safe_log_sync_event(
-                    sync_op.operation_id,
-                    "WARNING",
-                    "Duplicate stage update event detected, skipping",
+                    "Creating stage update event for list move",
                     job=rec.job,
                     release=rec.release,
                     from_list=from_list_name,
                     to_list=to_list_name,
-                    payload_from=from_stage,
-                    payload_to=stage
+                    old_stage=old_stage_before_list_move,
+                    new_stage=stage,
+                )
+
+                event = JobEventService.create(
+                    job=rec.job,
+                    release=rec.release,
+                    action="update_stage",
+                    source=trello_source,
+                    payload={"from": from_stage, "to": stage},
+                    external_user_id=trello_user_id,
+                )
+                if event:
+                    created_events.append(event)
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "INFO",
+                        "JobEvent created for stage update",
+                        job=rec.job,
+                        release=rec.release,
+                        from_list=from_list_name,
+                        to_stage=stage,
+                        event_id=event.id,
+                    )
+                else:
+                    safe_log_sync_event(
+                        sync_op.operation_id,
+                        "WARNING",
+                        "Duplicate stage update event detected, skipping",
+                        job=rec.job,
+                        release=rec.release,
+                        from_list=from_list_name,
+                        to_list=to_list_name,
+                        payload_from=from_stage,
+                        payload_to=stage,
+                    )
+            else:
+                # Rank gate skipped the apply — DB stage was not advanced. No
+                # phantom update_stage event is recorded; the audit trail stays
+                # honest. The skip itself is logged inside apply_trello_list_to_db.
+                safe_log_sync_event(
+                    sync_op.operation_id,
+                    "INFO",
+                    "Skipping JobEvent — inbound Trello list move did not advance DB stage",
+                    job=rec.job,
+                    release=rec.release,
+                    from_list=from_list_name,
+                    to_list=to_list_name,
+                    db_stage=old_stage_before_list_move,
                 )
             
-            destination_name = event_info.get("to")
-            # Temporarily disable duplicate-and-link flow for Fit Up Complete cards.
-            # Keeping the structure ensures the surrounding sync logic still runs without Trello duplication.
-            # if destination_name == "Fit Up Complete.":
-            #     target_list_id = cfg.UNASSIGNED_CARDS_LIST_ID
-            #     if target_list_id:
-            #         if not card_has_link_to(card_id):
-            #             cloned = copy_trello_card(card_id, target_list_id)
-            #             duplicate_card_id = cloned["id"]
-            #             link_cards(card_id, duplicate_card_id)
-            #             update_trello_card(card_id, clear_due_date=True)
-            #             update_trello_card(duplicate_card_id, clear_due_date=True)
-            #             safe_log_sync_event(
-            #                 sync_op.operation_id,
-            #                 "INFO",
-            #                 "Fit Up duplicate created and linked",
-            #                 new_card_id=duplicate_card_id,
-            #             )
-            #         else:
-            #             safe_log_sync_event(
-            #                 sync_op.operation_id,
-            #                 "INFO",
-            #                 "Fit Up duplicate already exists; skipping clone",
-            #             )
-            #     else:
-            #         safe_log_sync_event(
-            #             sync_op.operation_id,
-            #             "WARNING",
-            #             "Unassigned cards list ID not configured; skipping duplicate",
-            #         )
-
             # Sort both source and destination lists by Fab Order (only for target lists)
             if cfg.FAB_ORDER_FIELD_ID:
                 # Sort destination list (where card was moved to)
@@ -493,22 +476,7 @@ def sync_from_trello(event_info):
                         sync_op.operation_id,
                         "source"
                     )
-            
-            if duplicate_card_id:
-                viewer_url = rec.viewer_url
-                if not viewer_url:
-                    procore_result = add_procore_link_to_trello_card(rec.job, rec.release)
-                    if procore_result and procore_result.get("viewer_url"):
-                        viewer_url = procore_result["viewer_url"]
-                if viewer_url:
-                    add_procore_link(duplicate_card_id, viewer_url)
-                    safe_log_sync_event(
-                        sync_op.operation_id,
-                        "INFO",
-                        "Procore link copied to duplicate card",
-                        new_card_id=duplicate_card_id,
-                    )
-        
+
         # Handle description changes - update Number of Guys and recalculate installation duration if needed
         if event_info.get("has_description_change", False):
             new_description = card_data.get("desc", "") or ""
@@ -594,15 +562,4 @@ def sync_from_trello(event_info):
         # - Mark sync_op as FAILED
         # - Log error
         # - Re-raise exception
-
-# Helper: detect if start_install is formula-driven
-def is_formula_cell(row):
-    formula_val = row.get("start_install_formula")
-    formulaTF_val = row.get("start_install_formulaTF")
-    return bool(formulaTF_val) or (
-        isinstance(formula_val, str) and formula_val.startswith("=")
-    )
-
-
-# sync_from_onedrive and _update_trello_card_from_excel functions removed - OneDrive polling functionality removed
 

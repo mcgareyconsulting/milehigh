@@ -8,34 +8,63 @@
  * imported_by: [../pages/JobLog.jsx, ../pages/Archive.jsx]
  * invariants:
  *   - selectedProjectNames and selectedSubset are persisted to localStorage across sessions
- *   - Subset views (job_order, ready_to_ship, paint, paint_fab, fab) apply stage-group filters then sort by fab_order
+ *   - Subset views apply stage-group filters then sort by fab_order, EXCEPT
+ *     ready_to_ship and paint sort by stage priority (Ship Planning → Store at MHMW →
+ *     Paint Complete → Paint Start → Welded QC) then last_updated_at ascending.
+ *     paint_fab uses that same stage+date sort for the paint band, then fab_order
+ *     for the FABRICATION band.
  *   - totalFabHrs and totalInstallHrs are computed over ALL jobs, not the filtered displayJobs
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ * updated_by_agent: 2026-04-28T00:00:00Z
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 
 const _FAB_MODIFIER = {
-    'Released': 1.0,
-    'Cut Start': 0.9, 'Cut start': 0.9,
-    'Fit up Comp': 0.5, 'Fit Up Complete': 0.5, 'Fit Up Complete.': 0.5, 'Fitup comp': 0.5,
-    'WeldingQC': 0.0, 'Welded QC': 0.0, 'Welding QC': 0.0, 'Welded': 0.0,
-    'Paint Start': 0.0,
-    'Paint Complete': 0.0, 'Paint complete': 0.0, 'Paint comp': 0.0,
-    'Store': 0.0, 'Store at MHMW for shipping': 0.0,
-    'Ship Planning': 0.0, 'Shipping planning': 0.0,
-    'Ship Complete': 0.0, 'Shipping completed': 0.0,
-    'Complete': 0.0,
+    'Released':         1.0,
+    'Cut Start':        0.9,
+    'Fitup Complete':   0.5,
+    'Welded QC':        0.0,
+    'Paint Start':      0.0,
+    'Paint Complete':   0.0,
+    'Store at MHMW':    0.0,
+    'Ship Planning':    0.0,
+    'Ship Complete':    0.0,
+    'Install Start':    0.0,
+    'Install Complete': 0.0,
+    'Complete':         0.0,
+};
+
+// Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
+// in app/api/helpers.py — keep in sync. Drives the totalInstallHrs KPI; Job Comp
+// no longer factors here (install progress is now stage-driven via Install Start
+// and Install Complete transitions).
+const _INSTALL_MODIFIER = {
+    'Released':         0.0,
+    'Material Ordered': 0.0,
+    'Cut Start':        0.0,
+    'Cut Complete':     0.0,
+    'Fitup Start':      0.0,
+    'Fitup Complete':   0.0,
+    'Weld Start':       1.0,
+    'Weld Complete':    1.0,
+    'Hold':             1.0,
+    'Welded QC':        1.0,
+    'Paint Start':      1.0,
+    'Paint Complete':   1.0,
+    'Store at MHMW':    1.0,
+    'Ship Planning':    1.0,
+    'Ship Complete':    1.0,
+    'Install Start':    0.5,
+    'Install Complete': 0.0,
+    'Complete':         0.0,
 };
 
 function _getFabModifier(stage) {
     return stage in _FAB_MODIFIER ? _FAB_MODIFIER[stage] : 1.0;
 }
 
-function _parseJobComp(val) {
-    if (val === null || val === undefined || val === '') return 0.0;
-    const frac = parseFloat(val);
-    if (isNaN(frac)) return 0.0;
-    return Math.min(frac, 1.0);
+function _getInstallModifier(stage) {
+    // Unknown stages default to 0 (excluded), mirroring the backend.
+    return stage in _INSTALL_MODIFIER ? _INSTALL_MODIFIER[stage] : 0.0;
 }
 
 /**
@@ -54,6 +83,29 @@ export function useJobsFilters(jobs = []) {
         () => localStorage.getItem('jl_subset') || null
     ); // 'job_order', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
 
+    // Per-column dropdown filters: { [columnName]: string[] of allowed values; '(Blanks)' represents null/empty }
+    const [columnFilters, setColumnFiltersState] = useState(() => {
+        try {
+            const raw = localStorage.getItem('jl_column_filters');
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    });
+    // Per-column sort override: { column: string|null, direction: 'asc'|'desc'|null }
+    const [columnSort, setColumnSortState] = useState(() => {
+        try {
+            const raw = localStorage.getItem('jl_column_sort');
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (parsed && parsed.column && (parsed.direction === 'asc' || parsed.direction === 'desc')) {
+                return parsed;
+            }
+        } catch {
+            /* ignore */
+        }
+        return { column: null, direction: null };
+    });
+
     // Sync filter state to localStorage
     useEffect(() => { localStorage.setItem('jl_projects', JSON.stringify(selectedProjectNames)); }, [selectedProjectNames]);
     useEffect(() => {
@@ -63,6 +115,40 @@ export function useJobsFilters(jobs = []) {
             localStorage.setItem('jl_subset', selectedSubset);
         }
     }, [selectedSubset]);
+    useEffect(() => {
+        if (Object.keys(columnFilters).length === 0) {
+            localStorage.removeItem('jl_column_filters');
+        } else {
+            localStorage.setItem('jl_column_filters', JSON.stringify(columnFilters));
+        }
+    }, [columnFilters]);
+    useEffect(() => {
+        if (!columnSort.column || !columnSort.direction) {
+            localStorage.removeItem('jl_column_sort');
+        } else {
+            localStorage.setItem('jl_column_sort', JSON.stringify(columnSort));
+        }
+    }, [columnSort]);
+
+    const setColumnFilter = useCallback((column, values) => {
+        setColumnFiltersState(prev => {
+            const next = { ...prev };
+            if (!values || values.length === 0) {
+                delete next[column];
+            } else {
+                next[column] = [...values];
+            }
+            return next;
+        });
+    }, []);
+
+    const setColumnSort = useCallback((column, direction) => {
+        if (!direction) {
+            setColumnSortState({ column: null, direction: null });
+        } else {
+            setColumnSortState({ column, direction });
+        }
+    }, []);
 
     /**
      * Check if a job matches the search string. Search is a loose substring match
@@ -106,9 +192,28 @@ export function useJobsFilters(jobs = []) {
         return true;
     }, [selectedProjectNames, selectedStages]);
 
+    /**
+     * Check if a job matches all active per-column dropdown filters.
+     * The literal '(Blanks)' in an allowed list matches null/undefined/empty values.
+     */
+    const matchesColumnFilters = useCallback((job) => {
+        for (const col in columnFilters) {
+            const allowed = columnFilters[col];
+            if (!allowed || allowed.length === 0) continue;
+            const v = job[col];
+            const isBlank = (v === null || v === undefined || String(v).trim() === '');
+            if (isBlank) {
+                if (!allowed.includes('(Blanks)')) return false;
+            } else {
+                if (!allowed.includes(String(v).trim())) return false;
+            }
+        }
+        return true;
+    }, [columnFilters]);
+
     const matchesSelectedFilter = useCallback(
-        (job) => matchesFilters(job) && matchesSearch(job, search),
-        [matchesFilters, matchesSearch, search]
+        (job) => matchesFilters(job) && matchesSearch(job, search) && matchesColumnFilters(job),
+        [matchesFilters, matchesSearch, search, matchesColumnFilters]
     );
 
     /**
@@ -116,14 +221,11 @@ export function useJobsFilters(jobs = []) {
      * (e.g. all Ready-to-Ship fixed-tier stages share fab_order = 2)
      */
     const STAGE_SORT_PRIORITY = {
-        'Shipping planning': 1,
-        'Shipping Planning': 1,
-        'Store at MHMW for shipping': 2,
-        'Store at Shop': 2,
-        'Paint complete': 3,
+        'Ship Planning':  1,
+        'Store at MHMW':  2,
         'Paint Complete': 3,
-        'Paint Start': 3.5,
-        'Welded QC': 4,
+        'Paint Start':    3.5,
+        'Welded QC':      4,
     };
 
     /**
@@ -148,6 +250,60 @@ export function useJobsFilters(jobs = []) {
                 return prioA - prioB;
             }
             return String(fabOrderA).localeCompare(String(fabOrderB));
+        });
+    }, []);
+
+    /**
+     * Sort jobs by stage priority (per STAGE_SORT_PRIORITY), then last_updated_at
+     * ascending (oldest first). Used by Ready-to-Ship, Paint, and the paint band of
+     * Paint+Fab — fab_order is undifferentiated within these stage tiers, so stage
+     * groups the rows and recency surfaces the items waiting longest. Unknown stages
+     * and rows with null last_updated_at sink to the bottom of their tier.
+     */
+    const sortByStageThenLastUpdated = useCallback((jobs) => {
+        return [...jobs].sort((a, b) => {
+            const stageA = String(a['Stage'] ?? '').trim();
+            const stageB = String(b['Stage'] ?? '').trim();
+            const prioA = STAGE_SORT_PRIORITY[stageA] ?? 999;
+            const prioB = STAGE_SORT_PRIORITY[stageB] ?? 999;
+            if (prioA !== prioB) return prioA - prioB;
+
+            const rawA = a['last_updated_at'];
+            const rawB = b['last_updated_at'];
+            const dateA = rawA ? new Date(rawA) : null;
+            const dateB = rawB ? new Date(rawB) : null;
+            const validA = dateA && !isNaN(dateA.getTime());
+            const validB = dateB && !isNaN(dateB.getTime());
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dateA.getTime() - dateB.getTime();
+        });
+    }, []);
+
+    const sortByStageThenFabOrder = useCallback((jobs) => {
+        return [...jobs].sort((a, b) => {
+            const stageA = String(a['Stage'] ?? '').trim();
+            const stageB = String(b['Stage'] ?? '').trim();
+            const prioA = STAGE_SORT_PRIORITY[stageA] ?? 999;
+            const prioB = STAGE_SORT_PRIORITY[stageB] ?? 999;
+            if (prioA !== prioB) return prioA - prioB;
+
+            const numA = a['Fab Order'] == null ? NaN : Number(a['Fab Order']);
+            const numB = b['Fab Order'] == null ? NaN : Number(b['Fab Order']);
+            const hasA = !isNaN(numA);
+            const hasB = !isNaN(numB);
+            if (hasA && hasB && numA !== numB) return numA - numB;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+
+            const dateA = a['last_updated_at'] ? new Date(a['last_updated_at']) : null;
+            const dateB = b['last_updated_at'] ? new Date(b['last_updated_at']) : null;
+            const validA = dateA && !isNaN(dateA.getTime());
+            const validB = dateB && !isNaN(dateB.getTime());
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dateA.getTime() - dateB.getTime();
         });
     }, []);
 
@@ -220,49 +376,75 @@ export function useJobsFilters(jobs = []) {
     }, [filterByStageGroups]);
 
     /**
+     * Numeric columns get numeric comparison (with nulls always sorted to the end).
+     * All other columns compare via locale-aware string compare with numeric collation.
+     */
+    const NUMERIC_COLUMNS = useMemo(() => new Set(['Job #', 'Fab Order', 'Fab Hrs', 'Install HRS']), []);
+
+    const compareByColumn = useCallback((a, b, column, direction) => {
+        const va = a?.[column];
+        const vb = b?.[column];
+        const aBlank = (va === null || va === undefined || String(va).trim() === '');
+        const bBlank = (vb === null || vb === undefined || String(vb).trim() === '');
+        // Blanks always sort to the end, regardless of direction
+        if (aBlank && bBlank) return 0;
+        if (aBlank) return 1;
+        if (bBlank) return -1;
+        let cmp;
+        if (NUMERIC_COLUMNS.has(column)) {
+            const na = Number(va);
+            const nb = Number(vb);
+            if (!isNaN(na) && !isNaN(nb)) {
+                cmp = na - nb;
+            } else {
+                cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
+            }
+        } else {
+            cmp = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+        }
+        return direction === 'desc' ? -cmp : cmp;
+    }, [NUMERIC_COLUMNS]);
+
+    /**
      * Filtered and sorted jobs for display based on selected subset
      */
     const displayJobs = useMemo(() => {
         // First apply base filters (project name, job #, release #, etc.)
         const baseFiltered = jobs.filter(matchesSelectedFilter);
 
-        // If no subset is selected, use default behavior
+        let result;
         if (!selectedSubset) {
-            return sortJobs([...baseFiltered]);
-        }
-
-        // Apply subset-specific filtering
-        let result = [];
-
-        if (selectedSubset === 'job_order') {
-            // Job Order: all releases sorted by unified fab_order
+            result = sortJobs([...baseFiltered]);
+        } else if (selectedSubset === 'job_order') {
             result = getJobOrderSubset(baseFiltered);
         } else if (selectedSubset === 'ready_to_ship') {
-            // Ready to Ship: Shipping planning, Store at MHMW for shipping, Paint complete
-            const readyToShipStages = ['Shipping planning', 'Store at MHMW for shipping', 'Paint complete'];
+            const readyToShipStages = ['Ship Planning', 'Store at MHMW', 'Paint Complete'];
             const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
-            result = sortByFabOrder(rtsOnly);
+            result = sortByStageThenLastUpdated(rtsOnly);
         } else if (selectedSubset === 'paint') {
-            // Paint: only Welded QC jobs, ascending fab order
             const paintStages = ['Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            result = sortByFabOrder(paintOnly);
+            result = sortByStageThenFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
-            // Paint+Fab: Paint complete + Welded QC, then FABRICATION group
-            // Sorted by fab_order with start_install date as tiebreaker within same fab_order
-            const paintStages = ['Paint complete', 'Welded QC', 'Paint Start'];
+            const paintStages = ['Paint Complete', 'Welded QC', 'Paint Start'];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            const paintSorted = sortByFabOrderThenStartInstall(paintOnly);
+            const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
             const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
             result = [...paintSorted, ...fabSorted];
         } else if (selectedSubset === 'fab') {
-            // Fab: Only FABRICATION stage_group
             result = getFabSubset(baseFiltered);
+        } else {
+            result = [...baseFiltered];
+        }
+
+        // Column sort overrides default/subset ordering when active
+        if (columnSort.column && columnSort.direction) {
+            result = [...result].sort((a, b) => compareByColumn(a, b, columnSort.column, columnSort.direction));
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, filterByStageGroups, sortByFabOrder, sortByFabOrderThenStartInstall]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
 
     /**
      * Secondary search: jobs matching the search with all project/stage/subset
@@ -294,23 +476,24 @@ export function useJobsFilters(jobs = []) {
      * FABRICATION = Fab, READY_TO_SHIP = Ready to Ship, COMPLETE = Complete.
      */
     const stageToGroup = {
-        'Released': 'FABRICATION',
-        'Cut start': 'FABRICATION',
-        'Cut Complete': 'FABRICATION',
-        'Fitup Start': 'FABRICATION',
-        'Fit Up Complete.': 'FABRICATION',
-        'Weld Start': 'FABRICATION',
-        'Weld Complete': 'FABRICATION',
-        'Hold': 'FABRICATION',
+        'Released':         'FABRICATION',
         'Material Ordered': 'FABRICATION',
-        'Welded': 'FABRICATION',
-        'Welded QC': 'READY_TO_SHIP',
-        'Paint Start': 'READY_TO_SHIP',
-        'Paint complete': 'READY_TO_SHIP',
-        'Store at MHMW for shipping': 'READY_TO_SHIP',
-        'Shipping planning': 'READY_TO_SHIP',
-        'Shipping completed': 'COMPLETE',
-        'Complete': 'COMPLETE',
+        'Cut Start':        'FABRICATION',
+        'Cut Complete':     'FABRICATION',
+        'Fitup Start':      'FABRICATION',
+        'Fitup Complete':   'FABRICATION',
+        'Weld Start':       'FABRICATION',
+        'Weld Complete':    'FABRICATION',
+        'Hold':             'FABRICATION',
+        'Welded QC':        'READY_TO_SHIP',
+        'Paint Start':      'READY_TO_SHIP',
+        'Paint Complete':   'READY_TO_SHIP',
+        'Store at MHMW':    'READY_TO_SHIP',
+        'Ship Planning':    'READY_TO_SHIP',
+        'Ship Complete':    'COMPLETE',
+        'Install Start':    'COMPLETE',
+        'Install Complete': 'COMPLETE',
+        'Complete':         'COMPLETE',
     };
 
     /**
@@ -322,26 +505,36 @@ export function useJobsFilters(jobs = []) {
         COMPLETE: { light: 'rgb(237 233 254)', text: 'rgb(91 33 182)', border: 'rgb(196 181 253)' },
     };
 
+    // Background color applied to a Fab Order cell when its value duplicates another
+    // fab_order *within the same stage group*. Per-group so dups in fabrication and
+    // ready-to-ship are visually distinguishable.
+    const stageGroupDupColors = {
+        FABRICATION: '#f97316',
+        READY_TO_SHIP: '#2563eb',
+        COMPLETE: '#7c3aed',
+    };
+
     /**
      * Stage options for multiselect (using simplified labels)
      */
     const stageOptions = [
         { value: 'Released', label: 'Released' },
         { value: 'Material Ordered', label: 'Material Ordered' },
-        { value: 'Cut start', label: 'Cut start' },
+        { value: 'Cut Start', label: 'Cut Start' },
         { value: 'Cut Complete', label: 'Cut comp' },
         { value: 'Fitup Start', label: 'Fitup start' },
-        { value: 'Fit Up Complete.', label: 'Fitup comp' },
+        { value: 'Fitup Complete', label: 'Fitup comp' },
         { value: 'Weld Start', label: 'Weld start' },
         { value: 'Weld Complete', label: 'Weld comp' },
-        { value: 'Welded', label: 'Welded' },
         { value: 'Welded QC', label: 'Welded QC' },
         { value: 'Paint Start', label: 'Paint Start' },
-        { value: 'Paint complete', label: 'Paint comp' },
+        { value: 'Paint Complete', label: 'Paint comp' },
         { value: 'Hold', label: 'Hold' },
-        { value: 'Store at MHMW for shipping', label: 'Store' },
-        { value: 'Shipping planning', label: 'Ship plan' },
-        { value: 'Shipping completed', label: 'Ship comp' },
+        { value: 'Store at MHMW', label: 'Store' },
+        { value: 'Ship Planning', label: 'Ship plan' },
+        { value: 'Ship Complete', label: 'Ship comp' },
+        { value: 'Install Start', label: 'Install start' },
+        { value: 'Install Complete', label: 'Install comp' },
         { value: 'Complete', label: 'Complete' }
     ];
 
@@ -349,75 +542,41 @@ export function useJobsFilters(jobs = []) {
      * Color mapping for each stage (matching dropdown colors)
      * Unselected: lighter background, selected: darker background with white text
      */
+    const _BLUE = {
+        unselected: 'bg-blue-100 text-blue-800 border-blue-300',
+        selected: 'bg-blue-600 text-white border-blue-700'
+    };
+    const _EMERALD = {
+        unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+        selected: 'bg-emerald-600 text-white border-emerald-700'
+    };
+    const _VIOLET = {
+        unselected: 'bg-violet-100 text-violet-800 border-violet-300',
+        selected: 'bg-violet-600 text-white border-violet-700'
+    };
+    const _YELLOW = {
+        unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+        selected: 'bg-yellow-600 text-white border-yellow-700'
+    };
     const stageColors = {
-        'Released': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Cut start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Cut Complete': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Fitup Start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Fit Up Complete.': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Welded QC': {
-            unselected: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-            selected: 'bg-yellow-600 text-white border-yellow-700'
-        },
-        'Paint Start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Paint complete': {
-            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-            selected: 'bg-emerald-600 text-white border-emerald-700'
-        },
-        'Store at MHMW for shipping': {
-            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-            selected: 'bg-emerald-600 text-white border-emerald-700'
-        },
-        'Shipping planning': {
-            unselected: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-            selected: 'bg-emerald-600 text-white border-emerald-700'
-        },
-        'Shipping completed': {
-            unselected: 'bg-violet-100 text-violet-800 border-violet-300',
-            selected: 'bg-violet-600 text-white border-violet-700'
-        },
-        'Complete': {
-            unselected: 'bg-violet-100 text-violet-800 border-violet-300',
-            selected: 'bg-violet-600 text-white border-violet-700'
-        },
-        'Hold': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Weld Start': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Weld Complete': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Welded': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        },
-        'Material Ordered': {
-            unselected: 'bg-blue-100 text-blue-800 border-blue-300',
-            selected: 'bg-blue-600 text-white border-blue-700'
-        }
+        'Released':         _BLUE,
+        'Material Ordered': _BLUE,
+        'Cut Start':        _BLUE,
+        'Cut Complete':     _BLUE,
+        'Fitup Start':      _BLUE,
+        'Fitup Complete':   _BLUE,
+        'Weld Start':       _BLUE,
+        'Weld Complete':    _BLUE,
+        'Hold':             _BLUE,
+        'Welded QC':        _YELLOW,
+        'Paint Start':      _BLUE,
+        'Paint Complete':   _EMERALD,
+        'Store at MHMW':    _EMERALD,
+        'Ship Planning':    _EMERALD,
+        'Ship Complete':    _VIOLET,
+        'Install Start':    _VIOLET,
+        'Install Complete': _VIOLET,
+        'Complete':         _VIOLET,
     };
 
     /**
@@ -437,10 +596,16 @@ export function useJobsFilters(jobs = []) {
         jobs.reduce((sum, job) => sum + (job['Fab Hrs'] || 0) * _getFabModifier(job['Stage'] || ''), 0),
     [jobs]);
 
+    // Stage-driven install hour total. Each stage carries an install %
+    // (Install Start = 50%, Install Complete = 0%, etc.) per the matrix in
+    // app/api/helpers.py STAGE_HOUR_PERCENTAGES. Job Comp is no longer a
+    // factor — it's still used for completion gating and the install-prog
+    // review sort, but not for this KPI.
     const totalInstallHrs = useMemo(() =>
         jobs.reduce((sum, job) => {
-            if (_getFabModifier(job['Stage'] || '') > 0.0) return sum;
-            return sum + (job['Install HRS'] || 0) * (1.0 - _parseJobComp(job['Job Comp']));
+            const modifier = _getInstallModifier(job['Stage'] || '');
+            if (modifier === 0.0) return sum;
+            return sum + (job['Install HRS'] || 0) * modifier;
         }, 0),
     [jobs]);
 
@@ -452,8 +617,12 @@ export function useJobsFilters(jobs = []) {
         setSelectedStages([]);
         setSearch('');
         setSelectedSubset(null);
+        setColumnFiltersState({});
+        setColumnSortState({ column: null, direction: null });
         localStorage.removeItem('jl_projects');
         localStorage.removeItem('jl_subset');
+        localStorage.removeItem('jl_column_filters');
+        localStorage.removeItem('jl_column_sort');
     }, []);
 
     return {
@@ -462,12 +631,16 @@ export function useJobsFilters(jobs = []) {
         selectedStages,
         search,
         selectedSubset,
+        columnFilters,
+        columnSort,
 
         // Filter setters
         setSelectedProjectNames,
         setSelectedStages,
         setSearch,
         setSelectedSubset,
+        setColumnFilter,
+        setColumnSort,
 
         // Filter options
         projectNameOptions,
@@ -475,6 +648,11 @@ export function useJobsFilters(jobs = []) {
         stageColors,
         stageToGroup,
         stageGroupColors,
+        stageGroupDupColors,
+
+        // Filter predicates (exposed so callers can compute reachable values)
+        matchesFilters,
+        matchesSearch,
 
         // Filtered and sorted jobs
         displayJobs,

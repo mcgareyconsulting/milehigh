@@ -40,17 +40,22 @@ class Config:
     UNASSIGNED_CARDS_LIST_ID = os.environ.get("UNASSIGNED_CARDS_LIST_ID")
     FAB_ORDER_FIELD_ID = os.environ.get("FAB_ORDER_FIELD_ID")
     TRELLO_WEBHOOK_URL = os.environ.get("TRELLO_WEBHOOK_URL")
+
+    # Mock Trello mode: when '1', outbound `move_card` outbox items are simulated
+    # (Releases.trello_list_id/name updated directly, no api.trello.com call) and
+    # inbound /trello/webhook POSTs are dropped. Lets dev exercise the outbox
+    # plumbing for the ASAP cascade without touching the real Trello board.
+    TRELLO_MOCK = os.environ.get("TRELLO_MOCK", "0") == "1"
     
     # Azure configuration
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
 
-    # OneDrive/Excel configuration
-    ONEDRIVE_USER_EMAIL = os.environ.get("ONEDRIVE_USER_EMAIL")
-    ONEDRIVE_FILE_PATH = os.environ.get("ONEDRIVE_FILE_PATH")
-    EXCEL_INDEX_ADJ = int(os.environ.get("EXCEL_INDEX_ADJ", 0))
-    SNAPSHOTS_DIR = os.environ.get("SNAPSHOTS_DIR", "snapshots")
+    # Per-release marked-up PDF storage. In prod set to an absolute path on the
+    # Render persistent disk (e.g. /var/data/pdfs). Local dev falls back to
+    # <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.
+    PDF_STORAGE_ROOT = os.environ.get("PDF_STORAGE_ROOT")
 
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")
@@ -72,6 +77,11 @@ class Config:
     # Procore service account used by this app to make API calls.
     # Webhooks triggered by this user ID are Brain-originated echoes.
     PROCORE_CONNECTOR_USER_ID = os.environ.get("PROCORE_CONNECTOR_USER_ID", "14554506")
+    # Delay before a submittal webhook triggers a reconcile re-fetch. The reconcile
+    # safety net re-runs check_and_update_submittal to catch fields dropped by burst
+    # dedup or not yet propagated by Procore at the time the live webhook was processed.
+    # 60s comfortably clears the 15s burst window plus Procore read-after-write lag.
+    PROCORE_RECONCILE_DELAY_SECONDS = int(os.environ.get("PROCORE_RECONCILE_DELAY_SECONDS", "60"))
     
     # CORS configuration
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")

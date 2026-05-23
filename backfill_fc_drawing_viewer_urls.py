@@ -12,6 +12,7 @@ Usage:
     python backfill_fc_drawing_viewer_urls.py --dry-run
     python backfill_fc_drawing_viewer_urls.py --job 1234
     python backfill_fc_drawing_viewer_urls.py --commit-every 50 --delay 0.5
+    python backfill_fc_drawing_viewer_urls.py --refresh-submittal-id
 """
 import argparse
 import time
@@ -58,18 +59,30 @@ def submittals_for_release(all_submittals, job, release):
     ]
 
 
-def run_backfill(dry_run=False, filter_job=None, commit_every=50, delay=0.25):
+def run_backfill(dry_run=False, filter_job=None, commit_every=50, delay=0.25, refresh_submittal_id=False):
     app = create_app()
     with app.app_context():
         # ── 1. Load records ────────────────────────────────────────────────────
-        query = db.session.query(Releases).filter(
-            Releases.is_active == True,
-            (Releases.viewer_url == None) | (Releases.viewer_url == '')
-        )
+        query = db.session.query(Releases).filter(Releases.is_active == True)
+        if refresh_submittal_id:
+            # Rows that already have viewer_url but are missing the new
+            # procore_submittal_id column (populated after the schema change).
+            query = query.filter(
+                Releases.viewer_url.isnot(None),
+                Releases.viewer_url != '',
+                Releases.procore_submittal_id.is_(None),
+            )
+        else:
+            query = query.filter(
+                (Releases.viewer_url == None) | (Releases.viewer_url == '')
+            )
         if filter_job is not None:
             query = query.filter(Releases.job == filter_job)
         records = query.all()
-        print(f"Found {len(records)} release(s) without a viewer_url.\n")
+        if refresh_submittal_id:
+            print(f"Found {len(records)} release(s) with viewer_url but no procore_submittal_id.\n")
+        else:
+            print(f"Found {len(records)} release(s) without a viewer_url.\n")
         if not records:
             return
 
@@ -138,17 +151,30 @@ def run_backfill(dry_run=False, filter_job=None, commit_every=50, delay=0.25):
                     continue
 
                 url = final_pdfs[0]["viewer_url"]
-                short = url[:80] + ("…" if len(url) > 80 else "")
-                print(f"  [OK]   {label} → {short}")
+                submittal_id = final_pdfs[0].get("submittal_id")
 
-                if not dry_run:
-                    record.viewer_url = url
-                    pending_commit += 1
+                if refresh_submittal_id:
+                    if submittal_id is None:
+                        print(f"  [SKIP] {label} — Final PDF Pack present but no submittal_id returned")
+                        failed += 1
+                        continue
+                    print(f"  [OK]   {label} → submittal_id={submittal_id} (viewer_url left as-is)")
+                    if not dry_run:
+                        record.procore_submittal_id = str(submittal_id)
+                        pending_commit += 1
+                else:
+                    short = url[:80] + ("…" if len(url) > 80 else "")
+                    print(f"  [OK]   {label} → {short} (submittal_id={submittal_id})")
+                    if not dry_run:
+                        record.viewer_url = url
+                        if submittal_id is not None:
+                            record.procore_submittal_id = str(submittal_id)
+                        pending_commit += 1
 
-                    if pending_commit >= commit_every:
-                        db.session.commit()
-                        print(f"  — committed {pending_commit} record(s)")
-                        pending_commit = 0
+                if not dry_run and pending_commit >= commit_every:
+                    db.session.commit()
+                    print(f"  — committed {pending_commit} record(s)")
+                    pending_commit = 0
 
                 updated += 1
 
@@ -280,6 +306,9 @@ if __name__ == "__main__":
                         help="Commit to DB every N successful updates (default: 50).")
     parser.add_argument("--delay", type=float, default=0.25, metavar="SEC",
                         help="Seconds to sleep between Procore API calls (default: 0.25).")
+    parser.add_argument("--refresh-submittal-id", action="store_true",
+                        help="Refresh procore_submittal_id for releases that already have a viewer_url "
+                             "but no submittal_id. Leaves viewer_url untouched.")
     args = parser.parse_args()
 
     if args.compare:
@@ -290,4 +319,5 @@ if __name__ == "__main__":
             filter_job=args.job,
             commit_every=args.commit_every,
             delay=args.delay,
+            refresh_submittal_id=args.refresh_submittal_id,
         )

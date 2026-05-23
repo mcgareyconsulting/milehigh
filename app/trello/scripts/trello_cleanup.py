@@ -36,7 +36,7 @@ import requests
 from app import create_app
 from app.config import Config as cfg
 from app.models import Job, Releases, db
-from app.sync.services.trello_list_mapper import TrelloListMapper
+from app.trello.list_mapper import TrelloListMapper
 from app.trello.api import (
     get_all_trello_cards,
     get_list_by_name,

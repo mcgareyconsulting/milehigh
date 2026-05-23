@@ -5,7 +5,7 @@ purpose: Flask app factory — registers all blueprints, starts APScheduler (que
 exports:
   create_app: Factory that builds and returns the configured Flask application
   init_scheduler: Starts APScheduler with queue-drainer (5 min) and heartbeat (30 min) jobs
-imports_from: [app/trello, app/procore, app/brain, app/auth/routes, app/history, app/admin, app/onedrive, app/models, app/config, app/db_config, app/logging_config, app/services/outbox_service, app/trello/api, apscheduler]
+imports_from: [app/trello, app/procore, app/brain, app/auth/routes, app/history, app/admin, app/models, app/config, app/db_config, app/logging_config, app/services/outbox_service, app/trello/api, apscheduler]
 imported_by: [run.py]
 invariants:
   - Scheduler only starts on one process: checks WERKZEUG_RUN_MAIN or IS_RENDER_SCHEDULER to avoid duplication in multi-worker deploys.
@@ -30,7 +30,7 @@ from app.brain import brain_bp
 from app.auth.routes import auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
-from app.onedrive import onedrive_bp
+from app.api import api_bp
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -64,9 +64,6 @@ def init_scheduler(app):
     }
     scheduler = BackgroundScheduler(executors=executors)
 
-    # OneDrive poll disabled — Brain job log is now the source of truth
-    logger.info("OneDrive poll disabled — migrated to Brain job log as source of truth")
-
     # --- Queue drainer job (runs every 5 minutes) ---
     def queue_drainer():
         with app.app_context():
@@ -95,6 +92,31 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # --- Nightly FC PDF Pack retry worker (2:00 AM Mountain Time) ---
+    # Procore's Final PDF Pack can land up to ~24h after a release hits the
+    # job log; this catches the misses by retrying releases with NULL
+    # viewer_url that were released within the last 7 days.
+    # Pinned to America/Denver so the fire time tracks MT through DST,
+    # independent of the Render container's UTC clock.
+    def fc_pdf_retry():
+        from app.procore.fc_retry_worker import retry_missing_fc_viewer_urls
+        with app.app_context():
+            try:
+                retry_missing_fc_viewer_urls(trigger="cron")
+            except Exception as e:
+                logger.error("FC PDF retry job failed", error=str(e), exc_info=True)
+
+    scheduler.add_job(
+        func=fc_pdf_retry,
+        trigger="cron",
+        hour=2,
+        minute=0,
+        timezone="America/Denver",
+        id="fc_pdf_retry",
+        name="FC PDF Pack Retry",
+        replace_existing=True,
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -110,6 +132,12 @@ def init_scheduler(app):
             "name": "Scheduler Heartbeat",
             "schedule": "Every 30 minutes",
             "description": "Confirms scheduler is alive",
+        },
+        {
+            "id": "fc_pdf_retry",
+            "name": "FC PDF Pack Retry",
+            "schedule": "Daily at 02:00 America/Denver",
+            "description": "Retry Procore FC viewer_url for releases missing it (last 7 days)",
         },
     ]
 
@@ -137,6 +165,10 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Cap multipart upload body size — used by the PDF markup endpoints. Flask
+    # turns oversize requests into a 413 automatically.
+    app.config.setdefault('MAX_CONTENT_LENGTH', 50 * 1024 * 1024)
+
     # Configure database separately
     configure_database(app)
 
@@ -145,6 +177,8 @@ def create_app():
     logger.info(
         f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}..."
     )
+    if app.config.get("TRELLO_MOCK"):
+        logger.info("TRELLO_MOCK enabled — outbound move_card calls will be simulated and inbound webhooks dropped")
 
     # Get allowed origins from environment variable
     allowed_origins = app.config.get("CORS_ORIGINS", "*")
@@ -163,6 +197,19 @@ def create_app():
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     )
 
+    @app.after_request
+    def apply_cache_headers(response):
+        # The HTML shell must revalidate every load — without this, a tab cached pre-deploy
+        # rides forever on stale bundle hashes (Render purges old chunks on each deploy).
+        path = request.path or ""
+        if path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        elif path.startswith("/assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif response.mimetype == "text/html":
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     # Configure React frontend serving
     FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
@@ -176,9 +223,19 @@ def create_app():
         "admin/",
     ]
 
+    # Paths under an API prefix that are actually React pages and should
+    # fall through to the SPA. The admin blueprint owns most of /admin/*,
+    # but a handful of routes are React-rendered admin pages registered
+    # in frontend/src/App.jsx.
+    SPA_PATHS_UNDER_API_PREFIX = {
+        "admin/fc-collection",
+    }
+
     def is_api_route(path):
         """Check if a path is an API route that should be handled by Flask."""
         if not path:
+            return False
+        if path in SPA_PATHS_UNDER_API_PREFIX:
             return False
         # Note: /jobs is handled separately in the list_jobs route to distinguish
         # between API requests (JSON) and browser requests (React app)
@@ -200,6 +257,8 @@ def create_app():
         import time
         from app.services.outbox_service import OutboxService
 
+        from app.procore.reconcile import ProcoreReconcileService
+
         def outbox_retry_worker():
             """Background thread that continuously processes pending outbox items for retries."""
             logger.info("Outbox retry worker thread started")
@@ -208,7 +267,9 @@ def create_app():
                     with app.app_context():
                         # Process pending items that are ready for retry
                         processed = OutboxService.process_pending_items(limit=10)
-                        if processed == 0:
+                        # Process due Procore submittal reconciles (delayed re-fetch safety net)
+                        reconciled = ProcoreReconcileService.process_due(limit=10)
+                        if processed + reconciled == 0:
                             # No items to process, wait a bit before checking again
                             time.sleep(2)
                         else:
@@ -226,18 +287,8 @@ def create_app():
         outbox_thread.start()
         logger.info("Outbox retry worker thread started successfully")
 
-        # Initialize the scheduler for OneDrive polling
+        # Initialize the scheduler for Trello queue drainer + heartbeat
         init_scheduler(app)
-
-        # # Check if we need to seed the database (only if empty)
-        # from app.models import Job
-        # job_count = Job.query.count()
-        # if job_count == 0:
-        #     print(f"No jobs found in database, seeding with fresh data...")
-        #     combined_data = combine_trello_excel_data()
-        #     seed_from_combined_data(combined_data)
-        # else:
-        #     print(f"Database already contains {job_count} jobs, skipping seed.")
 
     # Configure static file serving for React frontend
     # Get the path to the frontend build directory
@@ -421,8 +472,7 @@ def create_app():
     # Register blueprints before catch-all so API routes (e.g. POST /api/auth/login) are matched first
     app.register_blueprint(trello_bp, url_prefix="/trello")
     app.register_blueprint(procore_bp, url_prefix="/procore")
-    app.register_blueprint(onedrive_bp, url_prefix="/onedrive")
-    # app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(brain_bp, url_prefix="/brain")
     app.register_blueprint(auth_bp)
     app.register_blueprint(history_bp)

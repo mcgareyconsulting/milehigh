@@ -10,12 +10,13 @@
  *   - Renders via createPortal to document.body to escape table overflow clipping
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+
+import { EventsModal } from './EventsModal';
 
 export function JobDetailsModal({ isOpen, onClose, job }) {
-    const navigate = useNavigate();
+    const [eventsOpen, setEventsOpen] = useState(false);
 
     if (!isOpen || !job) return null;
 
@@ -69,10 +70,15 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
     const lastUpdatedAt = job.last_updated_at || job['Last Updated At'];
     const sourceOfUpdate = job.source_of_update || job['Source Of Update'];
 
+    const projectId = job.procore_project_id || '';
+    const submittalId = job.procore_submittal_id || '';
+    const procoreUrl = projectId && submittalId
+        ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
+        : null;
+
     const handleEventsClick = () => {
         if (jobNumber && releaseNumber) {
-            navigate(`/events?job=${jobNumber}&release=${releaseNumber}`);
-            onClose();
+            setEventsOpen(true);
         }
     };
 
@@ -153,6 +159,23 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                                 Events
                             </button>
                         )}
+                        {procoreUrl ? (
+                            <a
+                                href={procoreUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors text-center"
+                            >
+                                Procore
+                            </a>
+                        ) : (
+                            <button
+                                disabled
+                                className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-500 text-white rounded-lg font-medium cursor-not-allowed"
+                            >
+                                Procore
+                            </button>
+                        )}
                         {job.trello_card_id ? (
                             <a
                                 href={`https://trello.com/c/${job.trello_card_id}`}
@@ -182,6 +205,17 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
         </div>
     );
 
-    return createPortal(modalContent, document.body);
+    return (
+        <>
+            {createPortal(modalContent, document.body)}
+            <EventsModal
+                isOpen={eventsOpen}
+                onClose={() => setEventsOpen(false)}
+                title={`Events — ${jobNumber}${releaseNumber ? `-${releaseNumber}` : ''}`}
+                jobFilter={jobNumber}
+                releaseFilter={releaseNumber}
+            />
+        </>
+    );
 }
 

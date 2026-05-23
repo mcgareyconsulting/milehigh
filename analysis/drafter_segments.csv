@@ -1,0 +1,545 @@
+drafter,sid,start,end,duration_days,solo,project_name,sub_manager,type
+Dalton Rauer,70218974,2026-03-13 12:07:58.620721,2026-03-13 12:18:05.822254,0.007027795520833334,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Dalton Rauer,70218974,2026-03-13 13:22:24.653304,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Dalton Rauer,70229421,2026-03-13 12:23:02.575114,2026-04-13 15:51:02.020452,31.144438024745373,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,70229421,2026-04-24 15:55:37.010116,,,False,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Colton Arendt,69862774,2026-03-25 13:37:36.117240,2026-03-25 21:05:21.107678,0.31093738932870374,True,Misc. Project MHMW,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69862774,2026-04-02 16:08:05.115893,,,False,Misc. Project MHMW,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69968684,2026-03-16 21:23:11.437225,2026-03-17 13:24:34.785486,0.667631345613426,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Colton Arendt,69968684,2026-03-17 13:26:30.043556,,,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Rourke Alvarado,69680545,2026-03-17 15:23:39.417930,2026-03-17 16:18:00.955695,0.0377492796875,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69680545,2026-03-17 16:18:57.213449,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69680082,2026-03-13 13:22:03.161082,2026-03-13 13:25:04.636277,0.002100407349537037,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69680082,2026-03-13 13:25:38.815847,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70231260,2026-03-13 13:22:28.060347,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,70231365,2026-03-13 13:25:43.771374,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,69264351,2026-04-21 13:18:21.480516,,,True,Blue Room House One,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69264348,2026-04-20 18:55:54.145839,2026-04-24 16:30:09.672188,3.898790814224537,True,Blue Room House One,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69264349,2026-04-23 18:45:38.048113,,,True,Blue Room House One,Rich Losasso,Submittal for GC  Approval
+Rourke Alvarado,69264350,2026-03-13 13:31:38.625091,2026-03-17 15:40:44.316818,4.089649209803241,True,Blue Room House One,Rich Losasso,Submittal for GC  Approval
+Rourke Alvarado,69264350,2026-03-18 12:46:29.970564,2026-03-18 14:33:09.165300,0.07406475388888889,True,Blue Room House One,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69264350,2026-03-25 13:35:03.988403,2026-03-27 14:07:23.851645,2.022452120856481,True,Blue Room House One,Rich Losasso,Submittal for GC  Approval
+Dalton Rauer,69264350,2026-04-08 18:18:01.985929,,,False,Blue Room House One,Rich Losasso,Submittal for GC  Approval
+Dalton Rauer,69723610,2026-03-16 13:01:47.210795,2026-03-17 19:21:14.375153,1.263508846736111,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,69723729,2026-03-24 13:57:09.751073,2026-04-06 16:36:35.233274,13.11071159954861,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,69723729,2026-04-07 13:58:59.400183,2026-04-07 14:31:59.354879,0.022916142314814814,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,69723857,2026-04-16 16:32:11.389754,,,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,69723920,2026-04-16 16:34:26.225229,,,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,69723793,2026-04-21 13:16:18.780439,2026-04-21 13:16:35.272113,0.00019087585648148149,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,68474105,2026-03-13 14:17:13.171522,,,True,4th St. North,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,69587412,2026-03-13 15:11:31.808785,,,True,Stack at Wheat Ridge,Danny Riddell,Drafting Release Review
+Colton Arendt,70236235,2026-03-13 15:13:04.816324,,,True,Stack at Wheat Ridge,Danny Riddell,For Construction
+Dalton Rauer,69823148,2026-03-13 16:56:44.013941,2026-03-24 13:22:53.698349,10.851500976944443,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,68474070,2026-03-24 20:52:40.839773,,,True,4th St. North,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,69555470,2026-03-16 12:20:30.236656,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70199695,2026-03-16 12:21:25.823925,2026-03-16 12:33:23.671115,0.008308416550925925,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70199695,2026-03-16 12:33:31.199271,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70264335,2026-03-16 12:35:18.041764,,,True,Columbine Square,Rich Losasso,For Construction
+Colton Arendt,70264363,2026-03-16 12:36:38.988450,2026-03-27 18:12:12.079195,11.233021883622685,True,Columbine Square,Rich Losasso,Drafting Release Review
+Colton Arendt,70264363,2026-03-30 13:29:02.798143,2026-03-30 14:29:02.491469,0.041663117199074076,True,Columbine Square,Rich Losasso,Drafting Release Review
+Colton Arendt,70264363,2026-03-30 14:29:02.491469,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Rourke Alvarado,68843526,2026-03-16 13:10:19.017639,2026-03-16 19:04:23.451293,0.24588464877314814,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,68843526,2026-03-16 19:06:02.513791,2026-03-16 20:00:38.011873,0.037910857430555556,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,68843526,2026-03-17 13:00:51.153896,2026-03-17 14:32:56.324814,0.06394873747685186,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,68843526,2026-03-17 21:10:23.425548,2026-03-24 16:02:25.302246,6.786132832152778,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,68843526,2026-03-24 16:07:22.298216,2026-03-24 21:06:29.157376,0.20771827731481482,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,68843520,2026-03-16 13:11:56.922211,2026-03-17 13:20:44.600201,1.0061073841435184,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,68843520,2026-03-18 13:20:21.283378,2026-03-18 18:09:09.640077,0.2005596840162037,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,68843520,2026-03-26 12:13:22.532673,2026-03-27 14:03:20.450858,1.0763647938078704,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,68843520,2026-03-27 14:03:20.450858,2026-03-27 14:25:57.631947,0.015708114456018517,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,68843520,2026-04-06 13:44:20.019115,2026-04-08 20:19:17.828776,2.274280204409722,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,68843520,2026-04-08 20:19:17.828776,,,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,69679975,2026-03-17 15:18:43.685594,2026-03-18 12:41:46.136985,0.8910005948032407,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Rourke Alvarado,69679975,2026-03-18 13:16:59.419482,2026-03-18 16:32:08.824817,0.13552552471064813,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Rourke Alvarado,69679975,2026-03-18 16:32:08.824817,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69680471,2026-03-17 12:03:59.189947,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69680622,2026-03-17 16:29:51.184922,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,70043959,2026-03-16 18:13:48.482180,2026-03-24 16:02:05.711116,7.908532742314815,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Rourke Alvarado,70043959,2026-03-24 16:02:05.711116,2026-03-26 14:10:10.364934,1.9222760858564814,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,70043959,2026-04-15 18:19:25.868734,2026-04-15 19:45:35.927537,0.05983864355324074,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,70043959,2026-04-15 19:45:35.927537,,,False,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Colton Arendt,69717591,2026-03-16 18:17:27.154027,2026-03-26 17:04:02.730212,9.949022872511573,True,Capital Hill,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,69717591,2026-03-27 14:26:51.253781,2026-03-27 17:15:56.820480,0.1174255404976852,True,Capital Hill,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,69717591,2026-04-24 14:14:33.424056,,,False,Capital Hill,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70288811,2026-03-16 20:20:40.800239,2026-04-02 19:43:56.115278,16.97448281295139,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70288811,2026-04-03 12:03:00.420999,2026-04-03 15:33:35.126798,0.14623502082175927,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70288811,2026-04-03 15:33:35.126798,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69739893,2026-03-16 21:30:05.444626,2026-03-17 15:44:03.860482,0.7597038872222223,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69739893,2026-03-17 19:56:14.984749,2026-03-18 12:08:31.652760,0.6751929167939815,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69739893,2026-03-18 12:08:31.652760,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69739853,2026-03-17 12:06:17.384209,2026-03-17 12:11:10.094876,0.0033878549421296296,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69739853,2026-03-17 12:11:17.990146,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70298518,2026-03-17 12:04:22.240209,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,70298656,2026-03-17 12:11:43.709845,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Colton Arendt,70300563,2026-03-17 13:15:03.536287,,,True,Alta Metro Center,Gary Almeida,For Construction
+Colton Arendt,70301230,2026-03-17 13:31:39.247107,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70310344,2026-03-17 16:19:00.539434,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,70310880,2026-03-17 16:30:08.336059,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,69650727,2026-03-23 17:30:41.537503,2026-03-23 18:48:06.012133,0.05375549340277778,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69650727,2026-03-23 18:48:06.012133,2026-03-25 13:43:28.607395,1.7884559636805555,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69650727,2026-03-30 16:08:08.901961,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,69044168,2026-03-18 12:45:59.943565,,,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70333371,2026-03-18 12:08:56.128624,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Colton Arendt,70337785,2026-03-18 14:06:05.033079,2026-03-20 17:43:40.782095,2.1511082062037037,True,East Oak Townhomes,Danny Riddell,Drafting Release Review
+Colton Arendt,70337785,2026-03-25 13:08:54.496486,,,True,East Oak Townhomes,Danny Riddell,Drafting Release Review
+Rourke Alvarado,70341602,2026-03-18 15:19:52.916568,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,69993958,2026-03-18 16:57:41.377768,2026-03-18 18:15:19.469430,0.05391309793981481,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69993958,2026-03-18 18:15:35.411516,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Rourke Alvarado,62925969,2026-03-18 16:57:50.187145,,,False,Outlook Green Valley Ranch,Rich Losasso,Submittal for GC  Approval
+Dalton Rauer,70353348,2026-03-18 18:15:45.819757,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,62925740,2026-03-18 19:57:00.781367,2026-03-23 12:39:12.020938,4.695963420960648,True,Outlook Green Valley Ranch,Rich Losasso,Submittal for GC  Approval
+Dalton Rauer,62925740,2026-03-23 12:39:12.020938,,,True,Outlook Green Valley Ranch,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69044217,2026-03-27 14:13:21.804018,2026-03-27 20:09:23.115115,0.24723739695601854,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70359982,2026-03-18 20:02:22.121512,2026-03-18 20:35:32.792085,0.02304016866898148,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Dalton Rauer,70359982,2026-03-18 20:56:46.292239,2026-03-18 21:04:02.568649,0.005049495486111111,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Dalton Rauer,70359982,2026-03-18 21:04:02.568649,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Dalton Rauer,70364349,2026-03-18 21:05:45.174211,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,68474076,2026-03-20 16:26:25.643653,2026-03-26 12:27:26.497294,5.834037657881944,True,4th St. North,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,68474076,2026-04-08 12:45:39.030996,2026-04-08 20:46:10.937815,0.3337026252199074,False,4th St. North,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,68474076,2026-04-08 20:46:10.937815,2026-04-08 21:11:17.875152,0.017441404363425925,True,4th St. North,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,68474076,2026-04-08 21:11:17.875152,,,False,4th St. North,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,68474077,2026-03-24 20:41:36.580369,2026-03-30 16:51:10.624658,5.8399773644560184,True,4th St. North,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,68474077,2026-03-30 16:51:10.624658,2026-03-31 12:34:21.457015,0.8216531522800926,False,4th St. North,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,68474077,2026-03-31 12:34:21.457015,2026-04-06 19:20:01.423463,6.28171257462963,True,4th St. North,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,68474077,2026-04-06 19:20:01.423463,2026-04-15 13:53:31.409239,8.773263724259259,False,4th St. North,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,68474077,2026-04-15 13:53:31.409239,,,False,4th St. North,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70390150,2026-03-19 18:01:38.684535,2026-04-02 16:26:56.881716,13.93423839329861,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70390150,2026-04-02 18:12:04.962825,2026-04-02 18:39:14.516911,0.018860579699074075,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70390150,2026-04-02 18:39:14.516911,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70397308,2026-03-19 19:30:37.701086,2026-03-19 19:33:21.762692,0.0018988611805555557,True,Aspendale Littleton (Headwaters),Rich Losasso,Submittal for GC  Approval
+Dalton Rauer,70397308,2026-03-25 13:53:49.101046,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69044084,2026-03-24 14:18:27.313517,2026-03-24 20:27:01.435837,0.2559504898148148,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,69044084,2026-03-24 20:27:01.435837,2026-03-24 20:29:37.190208,0.0018027126273148148,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,69044084,2026-03-27 15:39:53.074223,2026-03-30 14:11:50.087834,2.938854324201389,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,69044084,2026-03-30 14:11:50.087834,2026-03-30 18:19:01.940662,0.17166496328703704,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,69044084,2026-03-30 18:19:01.940662,2026-03-31 13:43:04.898408,0.8083675665046296,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70401671,2026-03-19 20:54:57.333676,2026-03-20 15:24:18.319448,0.7703817797685185,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70401671,2026-03-20 15:29:16.317849,2026-03-20 15:30:46.638087,0.001045373125,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70401671,2026-03-20 15:40:30.175168,,,False,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70403669,2026-03-19 21:28:53.849288,2026-03-25 16:30:51.866171,5.7930326028125,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70403669,2026-04-08 20:27:06.176631,2026-04-08 21:10:45.765087,0.03031931083333333,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70403879,2026-03-19 21:32:01.990295,2026-03-25 16:44:00.048418,5.7999775245717595,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70404048,2026-03-19 21:34:02.915501,2026-03-25 16:11:21.751773,5.775912456851851,True,4th St. North,Danny Riddell,Drafting Release Review
+Colton Arendt,70409701,2026-03-20 12:51:35.261381,,,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70409999,2026-03-20 13:00:46.323442,2026-04-02 18:36:08.964004,13.232900932430555,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70409999,2026-04-13 14:25:44.561197,2026-04-13 14:28:51.754884,0.0021665935995370373,False,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70409999,2026-04-13 14:29:02.318647,,,False,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70198756,2026-03-20 13:25:28.905848,2026-03-20 13:30:18.304335,0.0033495195254629627,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70198756,2026-03-20 13:30:18.304335,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70410905,2026-03-20 13:30:22.696983,,,True,Columbine Square,Rich Losasso,For Construction
+Colton Arendt,70069178,2026-03-23 20:18:46.598208,,,True,Stack at Wheat Ridge,Danny Riddell,Drafting Release Review
+Dalton Rauer,70417564,2026-03-20 15:40:35.098350,,,True,4th St. North,Danny Riddell,For Construction
+Dalton Rauer,70444197,2026-03-23 13:53:38.373102,2026-03-24 15:35:11.292474,1.070519900138889,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70444197,2026-03-25 13:01:38.599840,2026-03-25 13:13:10.186137,0.008004471030092592,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70444197,2026-03-25 13:13:10.186137,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Colton Arendt,70444562,2026-03-23 14:03:09.792698,2026-03-31 20:51:50.946707,8.283809652881946,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,70444562,2026-04-01 13:09:33.210902,2026-04-01 15:37:56.678024,0.10304938798611112,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,70444562,2026-04-02 14:38:52.048797,2026-04-07 12:02:25.927345,4.891364335046297,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,70444562,2026-04-07 12:02:25.927345,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,70444782,2026-03-23 14:08:32.964144,2026-04-01 15:10:20.855276,9.04291540662037,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,70444782,2026-04-06 20:32:43.998368,2026-04-07 12:59:27.670013,0.6852276810763889,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,70444782,2026-04-09 15:25:52.266882,2026-04-09 16:12:42.675559,0.03252787820601852,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,70444782,2026-04-09 16:12:42.675559,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Rourke Alvarado,68481474,2026-03-23 15:17:26.295040,2026-03-24 13:10:00.939835,0.9115120925347222,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,68481474,2026-03-24 13:10:00.939835,2026-03-25 13:33:38.775882,1.0164101394328704,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,67572563,2026-03-24 14:56:23.463608,,,False,Vista Highlands,Gary Almeida,Drafting Release Review
+Colton Arendt,67572563,2026-03-24 14:56:23.463608,,,False,Vista Highlands,Gary Almeida,Drafting Release Review
+Colton Arendt,70481592,2026-03-23 20:19:18.828658,,,True,Stack at Wheat Ridge,Danny Riddell,For Construction
+Dalton Rauer,69797461,2026-03-24 12:57:59.836491,,,False,Metro Center,Gary Almeida,Drafting Release Review
+Colton Arendt,70495350,2026-03-24 13:31:18.931612,2026-03-26 17:18:14.014610,2.1575819791435187,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,70495350,2026-03-27 17:18:48.687767,,,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,70321501,2026-03-24 13:57:12.674269,2026-04-15 17:40:08.115204,22.154808344155093,True,Schuler Residence - Fencing (aka Villagio),Danny Riddell,Drafting Release Review
+Colton Arendt,70321501,2026-04-16 15:37:06.807201,2026-04-16 17:16:25.821971,0.06897007835648147,True,Schuler Residence - Fencing (aka Villagio),Danny Riddell,Drafting Release Review
+Colton Arendt,70321501,2026-04-17 15:28:04.948171,2026-04-17 15:33:41.187953,0.0038916641435185182,True,Schuler Residence - Fencing (aka Villagio),Danny Riddell,Drafting Release Review
+Colton Arendt,70497266,2026-03-24 14:04:00.838480,2026-04-01 21:31:15.179008,8.310582645,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,70497266,2026-04-03 16:25:50.932460,,,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70500067,2026-03-24 14:37:46.371806,2026-04-07 19:30:08.193409,14.203030342627313,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70500067,2026-04-07 20:54:56.185578,2026-04-08 12:18:49.607821,0.6415905352199074,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70500067,2026-04-08 12:18:49.607821,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,70501311,2026-03-24 14:57:17.860190,,,True,Vista Highlands,Gary Almeida,For Construction
+Dalton Rauer,70501571,2026-03-24 15:01:25.970353,2026-03-25 15:50:11.018815,1.0338547275694445,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70501571,2026-03-27 13:40:08.915240,,,False,Littleton Village II,Danny Riddell,Drafting Release Review
+Colton Arendt,70084876,2026-03-24 21:01:44.086346,,,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,70159265,2026-03-26 18:20:07.491813,2026-03-30 13:42:56.134136,3.8075074342939814,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70159265,2026-03-30 13:42:56.134136,2026-03-30 14:49:02.918493,0.045911855983796296,True,Metro Center,Gary Almeida,Drafting Release Review
+Colton Arendt,70159265,2026-03-30 14:49:26.757710,,,False,Metro Center,Gary Almeida,Drafting Release Review
+Colton Arendt,70535803,2026-03-25 13:02:37.840191,2026-04-08 21:53:47.945911,14.368866964351852,True,Alta Metro Center,Gary Almeida,Drafting Release Review
+Colton Arendt,70535803,2026-04-14 20:18:30.990666,,,False,Alta Metro Center,Gary Almeida,Drafting Release Review
+Colton Arendt,70536021,2026-03-25 13:09:33.445126,,,True,East Oak Townhomes,Danny Riddell,For Construction
+Dalton Rauer,70536121,2026-03-25 13:13:23.443107,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70537615,2026-03-25 13:46:06.140077,2026-04-17 12:59:07.738109,22.967379606851853,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70537615,2026-04-20 12:22:39.743028,2026-04-20 13:17:05.329456,0.037796139212962966,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70537615,2026-04-20 13:17:05.329456,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,70537582,2026-03-25 13:46:23.526450,,,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70537657,2026-03-25 13:47:45.982380,2026-04-21 14:47:36.388756,27.04155562935185,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70537657,2026-04-21 14:55:08.379413,2026-04-21 15:34:14.394454,0.027152951863425926,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70537657,2026-04-21 15:34:14.394454,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70540169,2026-03-27 14:29:06.920012,2026-04-08 21:06:04.634853,12.275667995844907,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Dalton Rauer,70540169,2026-04-16 14:55:35.305510,2026-04-16 15:24:10.475974,0.01985151,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,70540169,2026-04-21 12:28:21.763464,2026-04-21 13:01:14.182078,0.022828919143518516,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Dalton Rauer,70540169,2026-04-21 13:01:55.523856,,,False,Marshall Pointe,Gary Almeida,Drafting Release Review
+Dalton Rauer,70122019,2026-03-25 20:17:12.235832,2026-03-25 21:08:04.119815,0.03532273128472222,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70122019,2026-03-25 21:08:04.119815,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70557545,2026-03-25 19:27:52.711887,2026-03-25 19:30:24.427674,0.0017559697569444444,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70557545,2026-03-30 14:15:19.434799,2026-03-30 16:31:10.716254,0.0943435353587963,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70557545,2026-03-30 16:31:10.716254,,,False,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70121672,2026-03-25 20:24:21.525602,2026-03-25 21:15:43.366763,0.03566945788194444,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70121672,2026-03-25 21:15:43.366763,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70562110,2026-03-25 20:19:32.201321,2026-04-01 14:15:12.453724,6.74699366207176,True,The Fieldhouse,Rich Losasso,Drafting Release Review
+Dalton Rauer,70562110,2026-04-01 14:47:57.252463,2026-04-01 18:50:30.259865,0.1684375856712963,True,The Fieldhouse,Rich Losasso,Drafting Release Review
+Dalton Rauer,70562110,2026-04-01 18:50:30.259865,,,False,The Fieldhouse,Rich Losasso,Drafting Release Review
+Dalton Rauer,70564553,2026-03-25 21:08:24.869213,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70564947,2026-03-25 21:15:46.698643,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,68843521,2026-03-26 12:12:41.841955,,,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,68843522,2026-03-26 12:13:01.777875,,,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,68843527,2026-03-26 12:13:36.478615,,,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70576050,2026-03-26 13:48:05.721815,2026-03-27 14:47:55.108252,1.0415438245023148,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,70576050,2026-03-30 16:58:48.299769,,,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Colton Arendt,70581919,2026-03-26 15:33:03.038724,2026-04-01 16:18:39.975353,6.031677507280093,True,Marshall Pointe,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,70581919,2026-04-13 12:31:20.584807,2026-04-13 12:32:17.365279,0.0006571813888888889,True,Marshall Pointe,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70581919,2026-04-13 12:32:17.365279,2026-04-15 12:29:19.173385,1.9979375938194446,True,Marshall Pointe,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,70581919,2026-04-15 12:29:19.173385,,,False,Marshall Pointe,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70106341,2026-03-27 14:10:48.933448,2026-03-27 15:13:00.732229,0.04319211552083333,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70106341,2026-03-27 15:13:00.732229,2026-03-27 15:46:32.483477,0.023284157962962963,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70106341,2026-03-27 15:47:05.378217,,,False,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70177246,2026-03-26 17:30:18.857450,2026-03-26 19:04:00.721068,0.06506786594907407,True,Velo Interlocken,Rich Losasso,Drafting Release Review
+Dalton Rauer,70177246,2026-03-26 19:04:00.721068,,,False,Velo Interlocken,Rich Losasso,Drafting Release Review
+Dalton Rauer,70177323,2026-03-26 19:18:13.645846,2026-03-26 19:20:48.187010,0.0017886708796296298,True,Velo Interlocken,Rich Losasso,Drafting Release Review
+Dalton Rauer,70177323,2026-03-26 19:20:48.187010,,,False,Velo Interlocken,Rich Losasso,Drafting Release Review
+Dalton Rauer,70593109,2026-03-26 19:04:03.831481,,,True,Velo Interlocken,Rich Losasso,For Construction
+Dalton Rauer,70594380,2026-03-26 19:20:52.707642,,,True,Velo Interlocken,Rich Losasso,For Construction
+Dalton Rauer,70598251,2026-03-26 20:26:00.747050,2026-04-08 14:33:16.819954,12.755047140092593,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70598251,2026-04-15 12:25:49.073509,2026-04-15 12:34:47.217705,0.006228520787037037,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70598251,2026-04-15 12:34:47.217705,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70615597,2026-03-27 15:47:08.656751,,,True,Metro Center,Gary Almeida,For Construction
+Dalton Rauer,65111997,2026-03-27 16:19:54.977469,,,False,Novel Flatiron Crossing,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,69390739,2026-03-30 16:05:27.294432,2026-03-31 15:14:37.773460,0.9647046183796296,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,69390739,2026-03-31 15:14:37.773460,2026-03-31 20:04:23.652531,0.20122545221064814,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,69390739,2026-03-31 20:59:21.015886,,,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,70620762,2026-03-27 17:18:52.492813,,,True,Marshall Pointe,Gary Almeida,For Construction
+Colton Arendt,70644331,2026-03-30 14:30:27.477063,,,True,Columbine Square,Rich Losasso,For Construction
+Colton Arendt,70647098,2026-03-30 14:53:09.681042,,,True,Metro Center,Gary Almeida,For Construction
+Dalton Rauer,70652225,2026-03-30 16:08:47.953748,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,70653595,2026-03-30 16:33:26.980260,,,True,Littleton Village II,Danny Riddell,For Construction
+Dalton Rauer,70654422,2026-03-30 16:51:13.840207,,,True,4th St. North,Danny Riddell,For Construction
+Dalton Rauer,70660388,2026-03-30 18:19:04.944353,,,True,Alta Flatirons,Gary Almeida,For Construction
+Dalton Rauer,70679695,2026-03-31 12:16:58.763319,2026-04-20 12:54:00.972145,20.025720009560185,True,Columbine Square,Rich Losasso,Drafting Release Review
+Colton Arendt,70679695,2026-04-20 12:54:00.972145,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70679799,2026-03-31 12:21:13.153870,2026-04-20 12:54:47.380649,20.02331280994213,True,Columbine Square,Rich Losasso,Drafting Release Review
+Colton Arendt,70679799,2026-04-20 12:54:47.380649,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70679948,2026-03-31 12:26:23.808747,2026-04-06 13:58:50.588394,6.064198838506945,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70679948,2026-04-20 13:09:51.194275,2026-04-20 13:14:02.652502,0.0029103961458333332,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70679948,2026-04-20 13:14:02.652502,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Rourke Alvarado,63956243,2026-03-31 18:20:44.418150,2026-03-31 18:21:22.470212,0.00044041738425925925,True,Alta Flatirons,Gary Almeida,Submittal For Gc  Approval
+Rourke Alvarado,63956243,2026-04-15 12:29:14.176666,2026-04-15 12:31:08.351577,0.0013214688773148147,False,Alta Flatirons,Gary Almeida,Submittal For Gc  Approval
+Rourke Alvarado,63956243,2026-04-15 20:56:14.980672,2026-04-15 20:56:35.275257,0.0002348910300925926,True,Alta Flatirons,Gary Almeida,Submittal For Gc  Approval
+Rourke Alvarado,63956243,2026-04-16 19:36:17.009091,,,False,Alta Flatirons,Gary Almeida,Submittal For Gc  Approval
+Dalton Rauer,70702609,2026-03-31 19:02:16.956552,2026-04-06 16:26:49.135688,5.89203911037037,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,70702609,2026-04-06 19:26:20.142343,2026-04-06 20:24:18.784767,0.04026206509259259,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,70702609,2026-04-06 20:24:18.784767,,,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Colton Arendt,70703562,2026-03-31 19:17:49.995144,2026-04-16 15:54:31.711536,15.858816161944445,True,Sandstone Ranch,Danny Riddell,Drafting Release Review
+Colton Arendt,70703562,2026-04-17 15:52:47.661794,2026-04-17 17:48:00.793929,0.08001310341435185,True,Sandstone Ranch,Danny Riddell,Drafting Release Review
+Colton Arendt,70703562,2026-04-17 17:48:47.092423,,,True,Sandstone Ranch,Danny Riddell,Drafting Release Review
+Colton Arendt,70703630,2026-04-17 16:56:46.896751,2026-04-23 12:32:59.910441,5.8168172880787035,True,Sandstone Ranch,Danny Riddell,Drafting Release Review
+Colton Arendt,70707403,2026-04-16 15:51:39.850896,,,True,Sandstone Ranch,Danny Riddell,Drafting Release Review
+Dalton Rauer,70707563,2026-03-31 20:10:45.905310,2026-04-09 19:31:37.042154,8.972814083842593,True,Sandstone Ranch,Danny Riddell,Drafting Release Review
+Colton Arendt,70711012,2026-03-31 21:01:19.537722,,,True,Marshall Pointe,Gary Almeida,For Construction
+Dalton Rauer,70722968,2026-04-01 13:47:55.406380,2026-04-06 13:51:05.361238,5.002198551597222,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70722968,2026-04-06 13:55:42.831350,2026-04-06 14:00:23.493434,0.00324840375,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70722968,2026-04-06 14:00:23.493434,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70723566,2026-04-01 14:01:39.875007,2026-04-06 16:48:21.419363,5.115758615231482,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,70723566,2026-04-06 19:29:25.556228,,,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,70726066,2026-04-01 14:54:32.860072,2026-04-15 14:52:21.354223,13.998477941562498,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70726066,2026-04-15 15:45:36.978138,2026-04-15 18:28:32.000216,0.11313682960648148,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70726066,2026-04-15 18:28:32.000216,,,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70743455,2026-04-01 18:50:36.808217,,,True,The Fieldhouse,Rich Losasso,For Construction
+Colton Arendt,69524472,2026-04-21 15:59:43.187372,,,True,Misc. Project MHMW,Rich Losasso,Submittal for GC  Approval
+Dalton Rauer,70786650,2026-04-02 18:08:15.360658,2026-04-06 14:41:14.933905,3.8562450607291665,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70786650,2026-04-06 16:47:42.990254,2026-04-06 16:51:32.597524,0.002657491550925926,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70786650,2026-04-06 16:51:32.597524,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70786896,2026-04-02 18:13:41.354898,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70786951,2026-04-02 18:14:44.261480,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70788420,2026-04-02 18:39:18.380783,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,69524525,2026-04-13 12:24:20.092636,2026-04-13 14:08:32.214931,0.0723625265625,True,Misc. Project MHMW,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69524525,2026-04-13 14:08:32.214931,2026-04-22 12:23:42.858101,8.927206518171296,True,Misc. Project MHMW,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,69524525,2026-04-22 12:23:42.858101,,,False,Misc. Project MHMW,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,70805714,2026-04-03 13:50:07.348527,2026-04-06 16:36:12.276103,3.115334809907407,True,Flats at Sand Creek,Danny Riddell,Drafting Release Review
+Colton Arendt,70805714,2026-04-09 19:04:46.639704,2026-04-14 17:32:48.638308,4.9361342431018524,True,Flats at Sand Creek,Danny Riddell,Drafting Release Review
+Dalton Rauer,70806028,2026-04-03 13:57:34.565300,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,70810234,2026-04-03 15:31:30.521755,2026-04-06 13:30:27.131959,2.915932988472222,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70810234,2026-04-06 20:31:17.580792,2026-04-06 20:48:50.338876,0.012184700046296296,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70810234,2026-04-06 20:49:06.614901,2026-04-06 20:52:13.101320,0.002158407627314815,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70810234,2026-04-07 21:58:17.686707,,,True,Flats at Sand Creek,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,70812337,2026-04-03 16:15:33.938800,2026-04-09 13:29:18.804458,5.884547056226852,True,Alta Metro Center,Gary Almeida,Drafting Release Review
+Colton Arendt,70812337,2026-04-16 15:29:46.662745,,,True,Alta Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70833185,2026-04-06 13:44:23.930222,2026-04-22 12:19:10.119489,15.940812375775462,True,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70833856,2026-04-06 14:00:26.947313,,,True,Columbine Square,Rich Losasso,For Construction
+Dalton Rauer,70842820,2026-04-06 16:52:00.470272,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Rourke Alvarado,65512063,2026-04-06 17:11:10.079227,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,64579560,2026-04-06 17:11:14.395737,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,65933306,2026-04-06 17:11:16.618371,,,True,Alta Flatirons,Gary Almeida,For Construction
+Rourke Alvarado,65769217,2026-04-06 17:11:18.841636,,,True,Alta Flatirons,Gary Almeida,For Construction
+Rourke Alvarado,65924511,2026-04-06 17:11:23.661154,,,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Colton Arendt,63956241,2026-04-06 17:11:30.608886,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,63956240,2026-04-06 17:11:32.594870,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,63956239,2026-04-06 17:11:34.696417,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,63956237,2026-04-06 17:11:36.785377,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,63956233,2026-04-06 17:11:41.446120,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,63956228,2026-04-06 17:11:52.697550,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,63956227,2026-04-06 17:11:54.685563,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,63956223,2026-04-06 17:12:00.961954,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,63956220,2026-04-06 17:12:02.858911,,,False,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,56235187,2026-04-06 17:14:37.625490,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Submittal for GC  Approval
+Dalton Rauer,65207935,2026-04-06 17:14:47.966083,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,65031665,2026-04-06 17:14:50.251704,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,64878002,2026-04-06 17:14:52.094147,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,64863082,2026-04-06 17:14:54.100026,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,64782055,2026-04-06 17:14:55.938527,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,63548785,2026-04-06 17:14:57.992911,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Colton Arendt,63530153,2026-04-06 17:15:00.044240,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Colton Arendt,63499656,2026-04-06 17:15:03.103229,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Colton Arendt,56448172,2026-04-06 17:15:05.008264,,,False,Banyan High Point,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,63706572,2026-04-06 17:15:06.856127,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,48814073,2026-04-06 17:15:10.615866,,,False,Banyan High Point,Rich Losasso,Submittal for GC  Approval
+Colton Arendt,63706105,2026-04-06 17:15:12.467793,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,60977545,2026-04-06 17:15:14.117006,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,65976731,2026-04-06 17:15:15.795900,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,63706363,2026-04-06 17:15:17.401073,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Rourke Alvarado,65717397,2026-04-06 17:15:21.133265,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,65331454,2026-04-06 17:15:27.160855,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,64735537,2026-04-06 17:15:30.945151,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Rourke Alvarado,65135067,2026-04-06 17:15:32.635864,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,63685777,2026-04-06 17:15:34.409107,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,64735484,2026-04-06 17:15:36.619508,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Rourke Alvarado,65096401,2026-04-06 17:15:38.397100,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,63384923,2026-04-06 17:15:40.632132,,,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,64540775,2026-04-06 17:15:42.439949,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Dalton Rauer,65045812,2026-04-06 17:15:44.310309,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,63706232,2026-04-06 17:15:46.274851,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,64540603,2026-04-06 17:15:47.982263,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,64600443,2026-04-06 17:15:49.906259,,,True,Banyan High Point,Rich Losasso,For Construction
+Rourke Alvarado,62691345,2026-04-06 17:15:52.058290,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,64401939,2026-04-06 17:15:53.849482,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Dalton Rauer,64128113,2026-04-06 17:15:55.597262,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,63706158,2026-04-06 17:15:57.440306,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,63529952,2026-04-06 17:15:59.293428,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,63494318,2026-04-06 17:16:04.335642,,,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,61515985,2026-04-06 17:16:08.195440,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,63410567,2026-04-06 17:16:10.159111,,,True,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,63587514,2026-04-06 17:16:11.840140,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,56235307,2026-04-06 17:16:15.477151,,,False,Aspendale Littleton (Headwaters),Rich Losasso,Drafting Release Review
+Colton Arendt,63587460,2026-04-06 17:16:17.772583,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59487749,2026-04-06 17:16:19.759407,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,61711937,2026-04-06 17:16:24.005204,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59487695,2026-04-06 17:16:25.684151,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59487643,2026-04-06 17:16:31.491266,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59499028,2026-04-06 17:16:33.278780,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59487570,2026-04-06 17:16:35.010016,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59498994,2026-04-06 17:16:36.730369,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59487500,2026-04-06 17:16:38.534540,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59498939,2026-04-06 17:16:40.330673,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59487438,2026-04-06 17:16:42.243539,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59498880,2026-04-06 17:16:43.953573,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59487296,2026-04-06 17:16:45.581063,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59487741,2026-04-06 17:16:47.254523,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59486881,2026-04-06 17:16:49.012175,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59487686,2026-04-06 17:16:51.104764,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59486613,2026-04-06 17:16:52.755942,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59486564,2026-04-06 17:16:56.123498,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,58005527,2026-04-06 17:16:57.812290,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,56625789,2026-04-06 17:17:01.184994,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,59388992,2026-04-06 17:17:03.017618,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,57912592,2026-04-06 17:17:06.726423,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,59009989,2026-04-06 17:17:10.533365,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,65875978,2026-04-06 17:17:12.383093,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,65290381,2026-04-06 17:17:14.429536,,,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,64976750,2026-04-06 17:17:17.203732,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Rourke Alvarado,64976436,2026-04-06 17:17:19.227006,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Rourke Alvarado,64857951,2026-04-06 17:17:21.187033,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,64442001,2026-04-06 17:17:23.452066,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,70858640,2026-04-06 20:24:04.057859,2026-04-06 20:43:47.420731,0.013696329537037037,True,Alta Flatirons,Gary Almeida,For Construction
+Dalton Rauer,70858666,2026-04-06 20:24:39.640971,,,True,Alta Flatirons,Gary Almeida,For Construction
+Colton Arendt,70869252,2026-04-07 12:03:08.607534,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Colton Arendt,70880471,2026-04-07 15:56:09.599183,,,True,Alta Flatirons,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,57913043,2026-04-07 18:21:24.007444,,,False,Littleton Village II,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70889345,2026-04-07 18:21:26.546034,2026-04-13 16:07:30.968650,5.90699563212963,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70889345,2026-04-22 14:35:23.919774,2026-04-22 15:43:45.396781,0.04747079869212963,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70889345,2026-04-22 15:44:16.229465,,,False,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,69144455,2026-04-13 14:15:14.912761,,,False,Novel Flatiron Crossing,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,70905945,2026-04-08 12:18:53.025443,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,70906786,2026-04-08 12:45:15.045513,2026-04-13 15:52:38.028891,5.130127122430555,True,East Oak Townhomes,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,70907229,2026-04-08 12:53:43.333667,2026-04-15 18:26:54.939456,7.2313843262615745,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Colton Arendt,70907229,2026-04-15 21:13:35.512169,2026-04-16 12:20:07.437663,0.6295361746990741,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Colton Arendt,70907229,2026-04-16 12:20:18.859013,,,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,70834671,2026-04-20 14:16:20.722774,,,True,Blossom Commons,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,69994584,2026-04-08 17:05:41.057227,,,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995170,2026-04-08 17:07:24.025190,2026-04-08 18:18:43.122644,0.04952659090277777,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995170,2026-04-08 18:18:43.122644,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995469,2026-04-08 17:10:07.388372,2026-04-08 18:17:04.135082,0.04649012395833333,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995469,2026-04-08 18:17:04.135082,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995689,2026-04-08 17:18:12.822489,2026-04-08 18:17:15.853109,0.04100729884259259,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995689,2026-04-08 18:17:15.853109,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995736,2026-04-08 17:20:17.451244,,,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995529,2026-04-08 17:11:58.828086,,,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995245,2026-04-08 17:08:31.637518,2026-04-08 18:19:23.543941,0.04921187989583334,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,69995245,2026-04-08 18:19:23.543941,,,False,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,70927835,2026-04-08 18:18:05.170713,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70927891,2026-04-08 18:18:41.759817,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70927918,2026-04-08 18:19:27.198728,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70927959,2026-04-08 18:20:12.349338,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70928026,2026-04-08 18:21:23.415805,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70928060,2026-04-08 18:22:06.206450,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,70928086,2026-04-08 18:22:44.037243,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Rourke Alvarado,68447032,2026-04-08 18:40:48.580325,2026-04-14 12:35:18.496778,5.746179588576389,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Rourke Alvarado,68447032,2026-04-14 12:35:18.496778,2026-04-14 15:58:18.357978,0.14097061574074074,False,Alta Flatirons,Gary Almeida,Drafting Release Review
+Colton Arendt,68447032,2026-04-14 15:58:51.640814,,,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,70932253,2026-04-08 19:28:48.605791,2026-04-20 15:42:14.721378,11.842663374849538,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70932253,2026-04-20 15:42:14.721378,,,False,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,70937906,2026-04-08 21:11:21.311047,,,True,4th St. North,Danny Riddell,For Construction
+Colton Arendt,70944069,2026-04-09 12:21:57.697122,,,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,66445618,2026-04-09 12:21:59.155409,2026-04-09 13:54:54.716278,0.06453195450231482,True,East Oak Townhomes,Danny Riddell,Submittal For Gc  Approval
+Colton Arendt,66445736,2026-04-09 12:22:58.278920,2026-04-09 19:57:11.559673,0.31543149019675926,True,East Oak Townhomes,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70952687,2026-04-09 15:37:46.730972,2026-04-09 15:49:45.209261,0.0083157209375,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70952687,2026-04-09 15:52:52.545249,2026-04-09 15:53:17.162525,0.0002849221759259259,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70952687,2026-04-09 15:53:17.162525,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,70953421,2026-04-09 15:53:37.682545,,,True,Columbine Square,Rich Losasso,For Construction
+Colton Arendt,70954536,2026-04-09 16:17:53.827241,,,True,Aspendale Littleton (Headwaters),Rich Losasso,For Construction
+Dalton Rauer,70976333,2026-04-10 12:17:34.550967,2026-04-13 13:48:09.088575,3.062899740833333,True,The Fieldhouse,Rich Losasso,Drafting Release Review
+Dalton Rauer,70976333,2026-04-13 13:48:09.088575,2026-04-13 13:55:48.750146,0.005320157071759259,True,The Fieldhouse,Rich Losasso,Drafting Release Review
+Dalton Rauer,70976333,2026-04-13 13:55:48.750146,,,False,The Fieldhouse,Rich Losasso,Drafting Release Review
+Dalton Rauer,70983376,2026-04-10 14:36:03.442481,2026-04-10 14:36:31.774971,0.000327922337962963,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70983376,2026-04-10 14:51:23.980070,2026-04-10 14:59:02.969213,0.005312374340277778,True,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70983376,2026-04-10 14:59:02.969213,,,False,4th St. North,Danny Riddell,Drafting Release Review
+Dalton Rauer,70984624,2026-04-10 14:59:38.704133,,,True,4th St. North,Danny Riddell,For Construction
+Dalton Rauer,70996885,2026-04-10 18:59:20.690681,2026-04-15 21:02:56.247652,5.08582820568287,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70997035,2026-04-10 19:02:19.210210,2026-04-15 20:13:14.269104,5.049248366828704,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Dalton Rauer,70997035,2026-04-20 20:18:53.886186,2026-04-21 12:59:41.845225,0.6949995259143519,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Colton Arendt,70997035,2026-04-22 13:34:15.266684,,,True,Littleton Village II,Danny Riddell,Drafting Release Review
+Colton Arendt,68578029,2026-04-13 12:28:39.032321,2026-04-13 12:30:07.623815,0.0010253645138888889,False,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,68578029,2026-04-13 12:30:07.623815,2026-04-13 14:03:40.749552,0.06496673306712963,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Rourke Alvarado,68578029,2026-04-13 14:03:40.749552,,,False,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,71017252,2026-04-13 13:56:11.842992,,,True,The Fieldhouse,Rich Losasso,For Construction
+Colton Arendt,71017852,2026-04-14 15:56:59.498836,,,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Dalton Rauer,71018468,2026-04-13 14:16:25.898223,,,True,Novel Flatiron Crossing,Gary Almeida,For Construction
+Dalton Rauer,71018984,2026-04-13 14:25:52.772652,,,True,Novel Flatiron Crossing,Gary Almeida,For Construction
+Dalton Rauer,71019182,2026-04-13 14:29:21.459826,,,True,Metro Center,Gary Almeida,For Construction
+Dalton Rauer,68850459,2026-04-22 16:31:23.424529,2026-04-23 15:07:52.908688,0.9420079185069444,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,71034236,2026-04-15 21:28:50.819769,2026-04-16 15:41:44.303661,0.7589523598611112,True,Vista Highlands,Gary Almeida,Drafting Release Review
+Dalton Rauer,71034236,2026-04-17 13:33:14.422056,,,False,Vista Highlands,Gary Almeida,Drafting Release Review
+Colton Arendt,71034826,2026-04-16 14:20:31.564114,,,True,Vista Highlands,Gary Almeida,Drafting Release Review
+Colton Arendt,69970247,2026-04-14 17:33:44.571244,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,68850501,2026-04-14 16:05:48.539800,2026-04-15 18:29:23.162888,1.0997062857407407,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,68850501,2026-04-15 18:29:32.652306,,,False,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Colton Arendt,69970339,2026-04-14 17:35:33.067485,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,68850521,2026-04-14 15:37:56.671371,2026-04-15 18:55:56.770915,1.1375011521296297,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,68850521,2026-04-15 18:55:56.770915,2026-04-15 19:30:55.001659,0.024285078055555555,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,68850521,2026-04-15 19:30:55.001659,2026-04-15 20:21:35.104550,0.035186376053240744,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,68850521,2026-04-21 21:41:35.371877,,,False,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Dalton Rauer,71070914,2026-04-14 16:14:30.882457,2026-04-14 16:30:16.472136,0.010944324988425926,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Colton Arendt,71070914,2026-04-14 16:30:16.472136,,,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Colton Arendt,71075204,2026-04-14 17:31:32.878077,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71075353,2026-04-14 17:33:48.357187,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71075454,2026-04-14 17:35:37.079116,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71085687,2026-04-14 20:19:42.938823,,,True,Alta Metro Center,Gary Almeida,For Construction
+Dalton Rauer,71094739,2026-04-15 12:35:19.611907,2026-04-15 12:35:34.432878,0.0001715390162037037,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,71097846,2026-04-15 13:54:35.445889,,,True,Sandstone Ranch,Danny Riddell,For Construction
+Colton Arendt,71098820,2026-04-15 14:12:13.855145,,,True,Flats at Sand Creek,Danny Riddell,For Construction
+Dalton Rauer,71108436,2026-04-15 16:59:39.771075,2026-04-22 13:00:29.284667,6.833906407314815,True,Martin Residence,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,71108436,2026-04-22 19:09:38.003937,,,False,Martin Residence,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,71114170,2026-04-15 18:28:59.373972,,,True,Metro Center,Gary Almeida,For Construction
+Dalton Rauer,71114228,2026-04-15 18:30:01.484572,2026-04-15 18:30:33.415086,0.00036956613425925925,True,Novel Flatiron Crossing,Gary Almeida,For Construction
+Dalton Rauer,71118666,2026-04-15 19:46:04.177742,,,True,Novel Flatiron Crossing,Gary Almeida,For Construction
+Colton Arendt,71128921,2026-04-16 12:20:59.664458,,,True,Alta Flatirons,Gary Almeida,For Construction
+Colton Arendt,68843528,2026-04-22 16:16:09.420221,2026-04-22 22:12:49.845514,0.24769010755787038,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,68843528,2026-04-22 22:12:49.845514,2026-04-24 21:09:32.422728,1.9560483473842591,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Rourke Alvarado,68446902,2026-04-16 14:56:38.195769,2026-04-16 14:56:55.379783,0.00019888905092592594,True,Alta Flatirons,Gary Almeida,Drafting Release Review
+Rourke Alvarado,68446902,2026-04-16 14:56:55.379783,,,False,Alta Flatirons,Gary Almeida,Drafting Release Review
+Colton Arendt,69585032,2026-04-16 16:37:29.913281,,,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,71142463,2026-04-16 16:46:43.757099,,,True,Alta Metro Center,Gary Almeida,For Construction
+Dalton Rauer,69651778,2026-04-20 13:17:40.628087,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,71171664,2026-04-17 13:33:17.774117,,,True,Vista Highlands,Gary Almeida,For Construction
+Colton Arendt,71179918,2026-04-17 15:34:23.649915,2026-04-17 16:56:19.082854,0.05689158494212963,True,Schuler Residence - Fencing (aka Villagio),Danny Riddell,Drafting Release Review
+Colton Arendt,71179918,2026-04-17 16:58:07.794110,,,True,Schuler Residence - Fencing (aka Villagio),Danny Riddell,Drafting Release Review
+Colton Arendt,71185268,2026-04-17 17:05:40.655289,,,True,Schuler Residence - Fencing (aka Villagio),Danny Riddell,Drafting Release Review
+Colton Arendt,71187084,2026-04-17 17:48:50.233024,,,True,Sandstone Ranch,Danny Riddell,For Construction
+Colton Arendt,69972528,2026-04-21 12:27:15.560074,2026-04-22 14:18:49.247217,1.0774732308217594,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69972528,2026-04-22 14:18:49.247217,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69972624,2026-04-21 12:26:19.233947,2026-04-22 12:25:13.069936,0.9992342128356482,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69972624,2026-04-22 12:25:13.069936,2026-04-22 14:21:23.821635,0.08067999651620371,False,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69972624,2026-04-22 14:21:23.821635,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69972778,2026-04-21 12:24:55.176410,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69970891,2026-04-21 12:37:23.289932,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69971149,2026-04-20 12:35:16.310308,2026-04-20 12:35:36.684326,0.0002358103935185185,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69971149,2026-04-22 14:14:45.151686,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69971296,2026-04-20 21:29:10.439734,2026-04-22 14:16:46.471420,1.6997225889583334,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Colton Arendt,69971296,2026-04-22 14:16:46.471420,,,True,Heritage on Hover,Rich Losasso,Drafting Release Review
+Dalton Rauer,71210512,2026-04-20 13:14:06.131507,,,True,Outlook Green Valley Ranch,Rich Losasso,For Construction
+Dalton Rauer,71210627,2026-04-20 13:17:08.933945,,,True,Banyan High Point,Rich Losasso,For Construction
+Colton Arendt,71210630,2026-04-20 13:17:14.580515,,,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,71210681,2026-04-20 13:18:12.358284,,,True,Banyan High Point,Rich Losasso,For Construction
+Rourke Alvarado,71210792,2026-04-20 13:20:55.584787,,,False,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Colton Arendt,71211207,2026-04-20 13:31:22.956960,,,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Dalton Rauer,71248674,2026-04-21 12:17:56.057693,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Colton Arendt,71249019,2026-04-21 12:27:20.277325,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,71249253,2026-04-21 12:35:25.184387,,,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69650775,2026-04-21 15:58:50.822344,2026-04-21 16:09:43.116215,0.007549697581018518,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,69650775,2026-04-21 16:10:12.798887,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,71249722,2026-04-21 12:48:33.416007,,,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,71250173,2026-04-21 13:01:59.755749,,,True,Marshall Pointe,Gary Almeida,For Construction
+Dalton Rauer,70835706,2026-04-21 13:36:08.572905,,,True,Blossom Commons,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70835096,2026-04-21 13:36:24.282670,,,True,Blossom Commons,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,70835132,2026-04-21 13:36:42.426489,,,True,Blossom Commons,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,71255402,2026-04-21 14:46:47.023762,2026-04-21 18:56:02.078474,0.1730909110185185,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,71255402,2026-04-21 20:03:12.231904,,,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Colton Arendt,70834922,2026-04-21 15:09:07.726877,,,True,Blossom Commons,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,70835008,2026-04-21 15:22:50.550697,,,True,Blossom Commons,Danny Riddell,Submittal for GC  Approval
+Colton Arendt,70834961,2026-04-21 15:23:11.182634,,,True,Blossom Commons,Danny Riddell,Submittal for GC  Approval
+Dalton Rauer,71258740,2026-04-21 15:34:17.847713,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,71260515,2026-04-21 16:10:15.980265,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,71282357,2026-04-21 20:06:06.926861,,,True,Outlook Green Valley Ranch,Rich Losasso,
+Dalton Rauer,71282581,2026-04-21 20:08:33.554938,,,True,Outlook Green Valley Ranch,Rich Losasso,Drafting Release Review
+Dalton Rauer,71286542,2026-04-21 21:31:53.072404,,,True,Novel Flatiron Crossing,Gary Almeida,Drafting Release Review
+Colton Arendt,71287688,2026-04-21 22:04:22.725832,,,True,Marshall Pointe,Gary Almeida,Drafting Release Review
+Colton Arendt,71295321,2026-04-22 12:22:03.617449,2026-04-22 14:25:51.736410,0.08597359908564815,True,Misc. Project MHMW,Rich Losasso,Drafting Release Review
+Colton Arendt,71295321,2026-04-22 14:27:10.064505,,,True,Misc. Project MHMW,Rich Losasso,Drafting Release Review
+Colton Arendt,71295383,2026-04-22 12:24:39.421071,,,True,Misc. Project MHMW,Rich Losasso,Drafting Release Review
+Dalton Rauer,70611480,2026-04-23 12:22:36.394754,2026-04-23 12:26:52.677719,0.0029662380208333333,True,Idaho Springs Police Station,Rich Losasso,Drafting Release Review
+Dalton Rauer,70611480,2026-04-23 12:27:23.532848,,,False,Idaho Springs Police Station,Rich Losasso,Drafting Release Review
+Colton Arendt,71299292,2026-04-22 14:03:28.902714,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71299735,2026-04-22 14:14:48.454057,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71299847,2026-04-22 14:16:49.880497,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71299938,2026-04-22 14:18:52.578937,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71300125,2026-04-22 14:22:17.257349,,,True,Heritage on Hover,Rich Losasso,For Construction
+Colton Arendt,71300266,2026-04-22 14:24:42.231774,,,True,Heritage on Hover,Rich Losasso,For Construction
+Dalton Rauer,71302299,2026-04-22 14:56:19.801911,2026-04-22 19:22:16.941036,0.18468911024305557,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,71302299,2026-04-22 21:02:29.192742,,,True,Metro Center,Gary Almeida,Drafting Release Review
+Dalton Rauer,68843530,2026-04-22 19:35:07.789163,2026-04-22 19:56:02.401254,0.014520973275462963,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,71307899,2026-04-22 15:44:19.487530,,,True,Littleton Village II,Danny Riddell,For Construction
+Dalton Rauer,71322117,2026-04-22 19:09:41.115774,2026-04-23 16:01:55.841192,0.8696148775231481,True,Martin Residence,Gary Almeida,Drafting Release Review
+Dalton Rauer,71322117,2026-04-24 13:55:22.171682,,,True,Martin Residence,Gary Almeida,Drafting Release Review
+Colton Arendt,71328428,2026-04-22 21:36:12.183858,,,True,Stack at Wheat Ridge,Danny Riddell,Drafting Release Review
+Dalton Rauer,71335259,2026-04-23 12:27:26.780356,,,True,Idaho Springs Police Station,Rich Losasso,For Construction
+Dalton Rauer,69656561,2026-04-23 14:20:24.080690,2026-04-23 14:39:38.891210,0.0133658625,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656561,2026-04-23 14:39:38.891210,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656658,2026-04-23 14:30:06.255631,2026-04-23 14:38:50.420217,0.00606671974537037,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656658,2026-04-23 14:38:50.420217,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656699,2026-04-23 14:31:43.308712,2026-04-23 14:37:55.373473,0.0043063051041666665,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656699,2026-04-23 14:37:55.373473,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656739,2026-04-23 14:33:00.254792,,,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656799,2026-04-23 14:33:42.699007,2026-04-23 14:37:19.056141,0.0025041334953703706,True,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,69656799,2026-04-23 14:37:19.056141,,,False,Columbine Square,Rich Losasso,Drafting Release Review
+Dalton Rauer,71341552,2026-04-23 14:37:22.141557,,,True,Columbine Square,Rich Losasso,For Construction
+Dalton Rauer,71341597,2026-04-23 14:38:18.796879,,,True,Columbine Square,Rich Losasso,For Construction
+Dalton Rauer,71341650,2026-04-23 14:39:17.238154,,,True,Columbine Square,Rich Losasso,For Construction
+Dalton Rauer,71341683,2026-04-23 14:40:02.862649,,,True,Columbine Square,Rich Losasso,For Construction
+Dalton Rauer,71341728,2026-04-23 14:40:49.891007,,,True,Columbine Square,Rich Losasso,For Construction
+Dalton Rauer,71342035,2026-04-23 14:46:48.973456,2026-04-23 15:40:18.973340,0.037152776435185185,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,71342035,2026-04-23 17:18:04.261527,2026-04-23 18:55:05.387092,0.0673741384837963,True,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,71342035,2026-04-23 18:55:05.387092,,,False,Banyan High Point,Rich Losasso,Drafting Release Review
+Dalton Rauer,71343864,2026-04-23 15:19:51.361780,,,True,Metro Center,Gary Almeida,For Construction
+Dalton Rauer,71356515,2026-04-23 18:55:25.223605,,,True,Banyan High Point,Rich Losasso,For Construction
+Dalton Rauer,71361329,2026-04-23 20:13:41.991044,,,True,Aspendale Littleton (Headwaters),Rich Losasso,Submittal for GC  Approval
+Colton Arendt,71374657,2026-04-24 13:45:11.132622,,,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,71375423,2026-04-24 14:01:30.475767,,,True,Martin Residence,Gary Almeida,For Construction
+Dalton Rauer,71375495,2026-04-24 14:03:04.702566,2026-04-24 15:43:52.892370,0.07000219680555556,True,Alta Metro Center,Gary Almeida,Submittal for GC  Approval
+Dalton Rauer,71383178,2026-04-24 15:55:58.018577,,,True,Novel Flatiron Crossing,Gary Almeida,For Construction

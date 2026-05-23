@@ -16,25 +16,38 @@ import { useNavigate } from 'react-router-dom';
 import { useArchiveDataFetching } from '../hooks/useArchiveDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { HEADER_OVERRIDES } from '../constants/columnHeaders';
+import ViewToggle, { useViewMode } from '../components/ViewToggle';
+import JobLogCardGrid from '../components/JobLogCardGrid';
+import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
 
 function Archive() {
     const navigate = useNavigate();
     const { jobs, columns, loading, error: fetchError, refetch } = useArchiveDataFetching();
 
     const [isAdmin, setIsAdmin] = useState(false);
+    const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('ar_minimized') === 'true'
     );
+
+    const [viewMode, setViewMode] = useViewMode('ar_view', 'auto');
+    const isTabletOrSmaller = useIsTabletOrSmaller();
+    const { is3xl, isMobile } = useBreakpoint();
+    const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
 
     useEffect(() => {
         const fetchUserInfo = async () => {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch {
                 setIsAdmin(false);
+                setShowScrollbars(false);
             }
         };
         fetchUserInfo();
@@ -166,7 +179,16 @@ function Archive() {
     }, [columnHeaders]);
 
     return (
-        <div className="w-full h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
+        <div
+            className="w-full h-[calc(100vh-3.5rem)] 3xl:h-[calc(100vh-4rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 3xl:py-4 3xl:px-6 flex flex-col"
+            style={{
+                width: '100%',
+                minWidth: '100%',
+                paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
+                paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
+                paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+            }}
+        >
             <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
 
@@ -187,7 +209,10 @@ function Archive() {
 
                             {/* Row 1: Project name buttons — only visible when expanded */}
                             {!isFilterMinimized && (
-                                <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+                                <div
+                                    className="grid gap-1"
+                                    style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 140 : 100}px, 1fr))` }}
+                                >
                                     <button
                                         onClick={() => setSelectedProjectNames([])}
                                         className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
@@ -220,8 +245,9 @@ function Archive() {
                             )}
 
                             {/* Row 2: Actions + chevron — always visible */}
-                            <div className="flex items-center gap-1.5">
-                                <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <ViewToggle value={viewMode} onChange={setViewMode} />
                                     <button
                                         onClick={() => navigate('/job-log')}
                                         className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
@@ -264,7 +290,7 @@ function Archive() {
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
                                             placeholder="Job #, release, name, description..."
-                                            className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                            className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                         />
                                     </div>
                                 </div>
@@ -303,28 +329,46 @@ function Archive() {
                             </div>
                         )}
 
-                        {!loading && !fetchError && (
+                        {!loading && !fetchError && effectiveView === 'cards' && (
                             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                <div className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                <JobLogCardGrid
+                                    jobs={displayJobs}
+                                    search={search}
+                                    stageToGroup={stageToGroup}
+                                    stageGroupColors={stageGroupColors}
+                                    hasJobsData={hasJobsData}
+                                    iconSize={is3xl ? 26 : 20}
+                                />
+                            </div>
+                        )}
+
+                        {!loading && !fetchError && effectiveView === 'table' && (
+                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                                <div className={`${showScrollbars ? '' : 'job-log-table-scroll-hide-scrollbar'} overflow-auto flex-1`.trim()}>
                                     <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                         <thead className="sticky top-0 z-10">
                                             <tr>
                                                 {columnHeaders.map((column) => {
                                                     const isReleaseNumber = column === 'Release #';
-                                                    const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
+                                                    const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                     const colWidthPct = columnWidthPercents[column];
+                                                    const isUrgency = column === 'Urgency';
                                                     return (
                                                         <th
                                                             key={column}
-                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                            className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 align-middle text-center text-[11px] font-bold text-gray-900 dark:text-slate-100 bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
                                                             style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                         >
-                                                            {displayHeader}
+                                                            {isUrgency ? (
+                                                                <BananaCodeHeader />
+                                                            ) : (
+                                                                displayHeader
+                                                            )}
                                                         </th>
                                                     );
                                                 })}
                                                 {isAdmin && (
-                                                    <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                    <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-8">
                                                         ⚙
                                                     </th>
                                                 )}

@@ -24,14 +24,19 @@ from flask import jsonify, request, g
 from app.brain.job_log.utils import serialize_value
 from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
+from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, Submittals, User
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
-from datetime import datetime
+from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
+from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
+from datetime import datetime, timedelta
+from sqlalchemy import or_
 import json
 import hashlib
+import re
 import csv
 import io
 import string
@@ -64,6 +69,13 @@ def get_list_id_by_stage(stage):
         logger.info(f"Stage '{stage}' has no Trello list mapping, skipping outbox creation")
         return None
 
+    from flask import current_app
+    if current_app.config.get("TRELLO_MOCK"):
+        # Synthetic deterministic id — never sent to Trello; only persisted on Releases
+        # so downstream reads stay consistent. Slug matches the forward-mapped list name.
+        slug = trello_list_name.lower().replace(" ", "-").replace(".", "").replace("/", "-")
+        return f"mock-{slug}"
+
     try:
         list_info = get_list_by_name(trello_list_name)
         if list_info and 'id' in list_info:
@@ -84,14 +96,20 @@ def update_job_stage_fields(job_record, stage):
     job_record.stage_group = get_stage_group_from_stage(stage)
     logger.debug(f"Job stage updated to: {stage}, stage_group updated to: {job_record.stage_group}")
 
-def create_trello_card_for_job(job, excel_data_dict):
+def create_trello_card_for_job(job, excel_data_dict, idempotency_check=False):
     """
     Create a Trello card for an existing job.
-    
+
     Args:
         job: Job database object (may be newly created)
         excel_data_dict: Dictionary with job data in Excel format
-    
+        idempotency_check: When True (used on outbox retries), scan the target
+            list for a card with the same title before POSTing and adopt it
+            if found. Prevents duplicate cards when a prior attempt got a
+            Trello 5xx false-negative. When a card is adopted, post-creation
+            features (Fab Order / FC Drawing / notes / mirror) are skipped
+            since the original attempt likely already applied them.
+
     Returns:
         Dictionary with success status and card info, or None if card already exists
     """
@@ -161,49 +179,59 @@ def create_trello_card_for_job(job, excel_data_dict):
             card_title=card_title,
             card_description=card_description,
             list_id=list_id,
-            position="top"
+            position="top",
+            idempotency_check=idempotency_check,
         )
-        
+
         if not create_result["success"]:
             return {
                 "success": False,
                 "error": create_result.get("error", "Failed to create card")
             }
-        
+
         card_data = create_result["card_data"]
         card_id = create_result["card_id"]
-        
+        adopted = create_result.get("adopted", False)
+
         # Update the job record with Trello card data
         success = update_job_record_with_trello_data(job, card_data)
-        
+
         if success:
             logger.info(f"Successfully updated database record with Trello data")
         else:
             logger.error(f"Failed to update database record with Trello data")
-        
-        # Get values for post-creation features
-        fab_order_value = excel_data_dict.get('Fab Order') or job.fab_order
-        notes_value = excel_data_dict.get('Notes') or job.notes
-        
-        # Apply post-creation features (Fab Order, FC Drawing, notes, mirror card)
-        # jl_routes now works identically to scanner - creates mirror cards
-        post_creation_results = apply_card_post_creation_features(
-            card_id=card_id,
-            list_id=list_id,
-            job_record=job,
-            fab_order=fab_order_value if fab_order_value is not None and not pd.isna(fab_order_value) else None,
-            notes=notes_value,
-            create_mirror=True,  # jl_routes now creates mirror cards like scanner
-            operation_id=None
-        )
-        
+
+        if adopted:
+            # Skip Fab Order / FC Drawing / notes / mirror — these aren't
+            # idempotent and were applied by the original attempt that
+            # produced this card.
+            logger.warning(
+                f"Adopted existing Trello card {card_id} for job {job.job}-{job.release}; "
+                f"skipping post-creation features"
+            )
+            mirror_card_id = None
+        else:
+            fab_order_value = excel_data_dict.get('Fab Order') or job.fab_order
+            notes_value = excel_data_dict.get('Notes') or job.notes
+            post_creation_results = apply_card_post_creation_features(
+                card_id=card_id,
+                list_id=list_id,
+                job_record=job,
+                fab_order=fab_order_value if fab_order_value is not None and not pd.isna(fab_order_value) else None,
+                notes=notes_value,
+                create_mirror=True,
+                operation_id=None
+            )
+            mirror_card_id = post_creation_results.get("mirror_card_id")
+
         return {
             "success": True,
             "card_id": card_data["id"],
-            "card_name": card_data["name"],
-            "card_url": card_data["url"],
+            "card_name": card_data.get("name"),
+            "card_url": card_data.get("url"),
             "list_name": list_name,
-            "mirror_card_id": post_creation_results.get("mirror_card_id")
+            "mirror_card_id": mirror_card_id,
+            "adopted": adopted,
         }
         
     except Exception as e:
@@ -289,6 +317,50 @@ def _create_payload_hash(action, job_number, release_number, excel_data_dict):
     payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'))
     hash_string = f"{action}:{job_number}:{release_number}:{payload_json}"
     return hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
+
+
+def _release_ids_with_drawings(release_ids):
+    """One-shot batched lookup of which release IDs have at least one (non-deleted) drawing version."""
+    if not release_ids:
+        return set()
+    rows = (
+        db.session.query(ReleaseDrawingVersion.release_id)
+        .filter(
+            ReleaseDrawingVersion.release_id.in_(release_ids),
+            ReleaseDrawingVersion.is_deleted.is_(False),
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+_VIEWER_PROJECT_ID_RE = re.compile(r"/projects/(\d+)")
+
+
+def _procore_submittal_refs_for_releases(releases):
+    """Per-release Procore IDs for the deep-link button on the Job Log modal.
+
+    submittal_id is read directly from Releases.procore_submittal_id (captured
+    at FC-drawing lookup time). project_id is parsed from viewer_url, which
+    always contains '/projects/<id>/'.
+    """
+    refs = {}
+    if not releases:
+        return refs
+
+    for r in releases:
+        if not r.procore_submittal_id or not r.viewer_url:
+            continue
+        m = _VIEWER_PROJECT_ID_RE.search(r.viewer_url)
+        if not m:
+            continue
+        refs[r.id] = {
+            "procore_submittal_id": r.procore_submittal_id,
+            "procore_project_id": m.group(1),
+        }
+
+    return refs
 
 # ==============================================================================
 # Job Data Routes
@@ -389,10 +461,10 @@ def get_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
-                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
+                    'start_install_asap': serialize_value(job.start_install_asap),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -400,6 +472,7 @@ def get_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'has_drawing': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -421,6 +494,30 @@ def get_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
+        # Patch has_drawing in one batched query (avoids N+1)
+        try:
+            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            for j in job_list:
+                j['has_drawing'] = j['id'] in ids_with_drawings
+        except Exception as drawing_lookup_error:
+            logger.warning(
+                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
+        # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
+        try:
+            submittal_refs = _procore_submittal_refs_for_releases(jobs)
+            for j in job_list:
+                ref = submittal_refs.get(j['id'])
+                j['procore_submittal_id'] = ref['procore_submittal_id'] if ref else None
+                j['procore_project_id'] = ref['procore_project_id'] if ref else None
+        except Exception as procore_ref_error:
+            logger.warning(
+                f"Error batching procore submittal refs: {procore_ref_error}",
+                exc_info=True,
+            )
+
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
         from app.api.helpers import add_scheduling_fields_to_jobs
@@ -437,11 +534,12 @@ def get_jobs():
                     'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
-            # Override displayed Start install with calculated value for jobs still
-            # in FABRICATION that don't have a hard (red) date. Once a release
-            # leaves fabrication, its start_install freezes at the DB-stored value.
+            # Override displayed Start install with the calculated projection only
+            # when the row is NOT a hard date. The previous gate used Banana Color
+            # ('red') as a proxy and silently masked hard dates whose urgency
+            # banana was anything else.
             for job in job_list:
-                if (job.get('Banana Color') != 'red'
+                if (job.get('start_install_formulaTF') is not False
                         and job.get('install_start_date')
                         and job.get('Stage Group') == 'FABRICATION'):
                     job['Start install'] = job['install_start_date']
@@ -650,10 +748,10 @@ def get_all_jobs():
                     'Fab Order': serialize_value(job.fab_order),
                     'Stage': stage,  # Stage field from database
                     'Stage Group': serialize_value(calculated_stage_group),  # Recalculated from current stage
-                    'Banana Color': serialize_value(job.banana_color),  # Urgency indicator: 'red', 'yellow', 'green', or None
                     'Start install': serialize_value(job.start_install),
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
+                    'start_install_asap': serialize_value(job.start_install_asap),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -661,6 +759,7 @@ def get_all_jobs():
                     'last_updated_at': serialize_value(job.last_updated_at),
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
+                    'has_drawing': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -681,6 +780,30 @@ def get_all_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
+        # Patch has_drawing in one batched query (avoids N+1)
+        try:
+            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            for j in job_list:
+                j['has_drawing'] = j['id'] in ids_with_drawings
+        except Exception as drawing_lookup_error:
+            logger.warning(
+                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
+        # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
+        try:
+            submittal_refs = _procore_submittal_refs_for_releases(jobs)
+            for j in job_list:
+                ref = submittal_refs.get(j['id'])
+                j['procore_submittal_id'] = ref['procore_submittal_id'] if ref else None
+                j['procore_project_id'] = ref['procore_project_id'] if ref else None
+        except Exception as procore_ref_error:
+            logger.warning(
+                f"Error batching procore submittal refs: {procore_ref_error}",
+                exc_info=True,
+            )
+
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
         from app.api.helpers import add_scheduling_fields_to_jobs
@@ -697,11 +820,12 @@ def get_all_jobs():
                     'is_hard_date': j.start_install_formulaTF is False,
                 })
             job_list = add_scheduling_fields_to_jobs(job_list, all_jobs_dicts)
-            # Override displayed Start install with calculated value for jobs still
-            # in FABRICATION that don't have a hard (red) date. Once a release
-            # leaves fabrication, its start_install freezes at the DB-stored value.
+            # Override displayed Start install with the calculated projection only
+            # when the row is NOT a hard date. The previous gate used Banana Color
+            # ('red') as a proxy and silently masked hard dates whose urgency
+            # banana was anything else.
             for job in job_list:
-                if (job.get('Banana Color') != 'red'
+                if (job.get('start_install_formulaTF') is not False
                         and job.get('install_start_date')
                         and job.get('Stage Group') == 'FABRICATION'):
                     job['Start install'] = job['install_start_date']
@@ -711,7 +835,7 @@ def get_all_jobs():
                 exc_info=True
             )
             # Continue without scheduling fields if calculation fails
-        
+
         # Build response
         response_data = {
             "jobs": job_list,
@@ -752,33 +876,43 @@ def get_gantt_data():
         - 500: Server error
     """
     from app.models import Releases
-    from app.trello.utils import add_business_days
-    from datetime import date
     from collections import defaultdict
-    
+
     try:
-        # Get all jobs that have start_install dates and are in FABRICATION or READY_TO_SHIP stage_group
+        # Eligibility for the installer timeline:
+        #  - start_install must be a hard date (formulaTF != True). NULL formulaTF is treated as hard.
+        #  - install_hrs must be present and > 0 so we can derive a comp_eta window.
+        #  - stage_group in FABRICATION, READY_TO_SHIP, or COMPLETE — "Shipping Complete"
+        #    rows are shipped-but-not-installed and belong on the timeline. The frontend's
+        #    filterComplete path drops only stage == 'Complete' rows.
         jobs = Releases.query.filter(
             Releases.start_install.isnot(None),
-            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP'])
+            or_(Releases.start_install_formulaTF.is_(False),
+                Releases.start_install_formulaTF.is_(None)),
+            Releases.install_hrs.isnot(None),
+            Releases.install_hrs > 0,
+            Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE'])
         ).all()
-        
+
         # Group jobs by project (job number)
         projects_dict = defaultdict(lambda: {
             'releases': [],
             'start_dates': [],
             'end_dates': []
         })
-        
+
         for job in jobs:
             project_key = job.job
             start_install = job.start_install
-            
-            # Calculate comp_eta: use existing if present, otherwise add 2 business days
-            if job.comp_eta:
-                comp_eta = job.comp_eta
-            else:
-                comp_eta = add_business_days(start_install, 2)
+
+            # SQL `> 0` does not reliably exclude NaN across DB backends — guard here.
+            if job.install_hrs is None or math.isnan(job.install_hrs) or job.install_hrs <= 0:
+                continue
+
+            # comp_eta = start_install + ceil(install_hrs / 24) calendar days.
+            # 24 = 3 installers * 8 hrs/day. Floor at 1 day so every release has a visible bar.
+            days_to_complete = max(1, math.ceil(job.install_hrs / 24))
+            comp_eta = start_install + timedelta(days=days_to_complete)
             
             # Store release data
             release_data = {
@@ -852,29 +986,16 @@ def get_gantt_data():
 def update_stage(job, release):
     """
     Update the stage for a specific job-release combination.
-    Updates the stage field directly in the database.
-
-    Parameters:
-        job: int
-        release: str
+    Thin wrapper over UpdateStageCommand — see
+    app/brain/job_log/features/stage/command.py for the full workflow.
 
     Request Body:
-        {
-            "stage": "Released" | "Cut start" | "Fit Up Complete." | "Paint complete" | etc.
-        }
-
-    Returns:
-        JSON object with 'status': 'success' or 'error'
+        {"stage": "Released" | "Cut Start" | "Fitup Complete" | ...}
     """
-    from app.models import Releases, db, ReleaseEvents
-    from app.services.job_event_service import JobEventService
-    from datetime import datetime
-    
-    # Log operation entry
-    logger.info(f"update_stage called", extra={
-        'job': job,
-        'release': release,
-        'stage': request.json.get('stage')
+    from app.brain.job_log.features.stage.command import UpdateStageCommand
+
+    logger.info("update_stage called", extra={
+        'job': job, 'release': release, 'stage': request.json.get('stage'),
     })
 
     try:
@@ -882,208 +1003,39 @@ def update_stage(job, release):
         if not stage:
             return jsonify({'error': 'Stage is required'}), 400
 
-        # Fetch job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
-            logger.warning(f"Job not found: {job}-{release}")
-            return jsonify({'error': 'Job not found'}), 404
-
-        # Capture old state for payload
-        # Use stage field directly from database (default to 'Released' if None)
-        old_stage = job_record.stage if job_record.stage else 'Released'
-
-        # Create event (handles deduplication, logging internally)
-        event = JobEventService.create(
-            job=job,
-            release=release,
-            action='update_stage',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
-            payload={
-                'from': old_stage,
-                'to': stage
-            }
-        )
-
-        # Check if event was deduplicated
-        if event is None:
-            logger.info(f"Event already exists for job {job}-{release} to stage {stage}")
-            return jsonify({'error': 'Event already exists'}), 400
-        
-        # Capture old stage_group before updating (needed for logging)
-        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier
-        old_stage_group = job_record.stage_group
-        new_stage_group = get_stage_group_from_stage(stage)
-
-        logger.info(
-            f"Stage change for job {job}-{release}: "
-            f"old_stage_group={old_stage_group}, new_stage_group={new_stage_group}, "
-            f"old_stage={old_stage}, new_stage={stage}"
-        )
-
-        # --- Unified fab_order assignment on stage change ---
-        fab_order_to_set = None
-        old_fab_order_for_update = job_record.fab_order
-
-        tier = get_fixed_tier(stage)
-        if tier is not None:
-            # Fixed-tier stage (Ready-to-Ship / Complete groups): auto-assign the tier value
-            fab_order_to_set = tier
-            logger.info(
-                f"Job {job}-{release} moving to fixed tier {tier} stage '{stage}'. "
-                f"Will set fab_order from {old_fab_order_for_update} to {fab_order_to_set}"
-            )
-        # Fabrication-group (dynamic) stages and Hold: leave fab_order untouched so the
-        # user's manual ordering is preserved across stage changes.
-
-        # Update job fields (this will update stage_group)
-        update_job_stage_fields(job_record, stage)
-
-        # If stage set to Complete, auto-set job_comp to 'X'
-        # If stage changed away from Complete, clear job_comp 'X'
-        comp_extras = {}
-        if stage == 'Complete':
-            current_job_comp = (job_record.job_comp or '').strip().upper()
-            if current_job_comp != 'X':
-                old_jc = job_record.job_comp
-                job_record.job_comp = 'X'
-                JobEventService.create_and_close(
-                    job=job, release=release,
-                    action='updated', source='Brain',
-                    payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': 'X', 'reason': 'stage_set_to_complete'},
-                )
-                comp_extras['job_comp'] = 'X'
-        elif old_stage == 'Complete' and stage != 'Complete':
-            current_job_comp = (job_record.job_comp or '').strip().upper()
-            if current_job_comp == 'X':
-                old_jc = job_record.job_comp
-                job_record.job_comp = None
-                JobEventService.create_and_close(
-                    job=job, release=release,
-                    action='updated', source='Brain',
-                    payload={'field': 'job_comp', 'old_value': old_jc, 'new_value': None, 'reason': 'stage_changed_from_complete'},
-                )
-                comp_extras['job_comp'] = None
-
-        # Update job metadata
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
-
-        # Apply the calculated fab_order
-        if fab_order_to_set is not None and fab_order_to_set != old_fab_order_for_update:
-            # Ensure payload values are valid (not NaN) - convert to None if needed
-            payload_from = None if (isinstance(old_fab_order_for_update, float) and math.isnan(old_fab_order_for_update)) else old_fab_order_for_update
-            payload_to = None if (isinstance(fab_order_to_set, float) and math.isnan(fab_order_to_set)) else fab_order_to_set
-
-            fab_order_event = JobEventService.create(
-                job=job,
-                release=release,
-                action='update_fab_order',
-                source='Brain',
-                payload={
-                    'from': payload_from,
-                    'to': payload_to,
-                    'reason': 'stage_change_unified'
-                }
-            )
-
-            if fab_order_event is None:
-                logger.warning(f"Event already exists for fab_order update on job {job}-{release}")
-            else:
-                job_record.fab_order = fab_order_to_set
-                JobEventService.close(fab_order_event.id)
-                comp_extras['fab_order'] = fab_order_to_set
-
-        # Add Trello update to outbox (async - will be processed by outbox service)
-        # DB changes are committed first, then outbox handles Trello updates asynchronously
-        # This ensures DB changes are never lost due to Trello API failures
-        outbox_item_created = False
-        new_list_id = get_list_id_by_stage(stage)
-        
-        if new_list_id and job_record.trello_card_id:
-            try:
-                # Create outbox item - will be processed asynchronously by outbox service
-                OutboxService.add(
-                    destination='trello',
-                    action='move_card',
-                    event_id=event.id
-                )
-                outbox_item_created = True
-                logger.info(f"Outbox item created for Trello stage update (job {job}-{release})")
-            except Exception as outbox_error:
-                # Log error but don't fail the operation - DB update is more important
-                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
-        else:
-            # Log why outbox item wasn't created
-            if not new_list_id:
-                logger.warning(
-                    f"Could not get list ID for stage '{stage}', skipping Trello update",
-                    extra={'job': job, 'release': release, 'stage': stage}
-                )
-            if not job_record.trello_card_id:
-                logger.warning(
-                    f"Job {job}-{release} has no trello_card_id, skipping Trello update",
-                    extra={'job': job, 'release': release}
-                )
-        
-        # Close event only if no outbox item was created (no external API call needed)
-        # If an outbox item exists, it will be closed when processing succeeds
-        if not outbox_item_created:
-            JobEventService.close(event.id)
-        
-        # Commit all DB changes first (this is the critical operation)
-        db.session.commit()
-
-        # Trigger start install cascade — stage change affects fab stage formula-driven dates
-        try:
-            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-        except Exception as cascade_err:
-            logger.error(
-                f"Scheduling cascade failed after stage change for {job}-{release}: {cascade_err}",
-                exc_info=True
-            )
-
-        logger.info(f"update_stage completed successfully", extra={
-            'job': job,
-            'release': release,
-            'event_id': event.id
-        })
+        result = UpdateStageCommand(job_id=job, release=release, stage=stage).execute()
 
         return jsonify({
             'status': 'success',
-            'event_id': event.id,
-            **comp_extras
+            'event_id': result.event_id,
+            **result.extras,
         }), 200
+
+    except ValueError as e:
+        msg = str(e)
+        if 'not found' in msg.lower():
+            return jsonify({'error': msg}), 404
+        if 'already exists' in msg.lower():
+            return jsonify({'error': 'Event already exists'}), 400
+        return jsonify({'error': msg}), 400
+
     except Exception as e:
-        # Log critical failure
-        logger.error(f"update_stage failed catastrophically", exc_info=True, extra={
-            'job': job,
-            'release': release,
-            'error': str(e),
-            'error_type': type(e).__name__
+        logger.error("update_stage failed catastrophically", exc_info=True, extra={
+            'job': job, 'release': release,
+            'error': str(e), 'error_type': type(e).__name__,
         })
-        
-        # Try to log to system_logs
         try:
             from app.services.system_log_service import SystemLogService
             SystemLogService.log_error(
                 category='operation_failure',
                 operation='update_stage',
                 error=e,
-                context={
-                    'job': job,
-                    'release': release,
-                    'stage': request.json.get('stage')
-                }
+                context={'job': job, 'release': release, 'stage': request.json.get('stage')},
             )
-        except:
-            pass  # DB might be down, console logs are our fallback
-        
+        except Exception:
+            pass
         db.session.rollback()
-        return jsonify({
-            'error': str(e),
-            'error_type': type(e).__name__
-        }), 500
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/update-fab-order/<int:job>/<release>", methods=["PATCH"])
 @login_required
@@ -1204,9 +1156,9 @@ def update_notes(job, release):
     Returns:
         JSON object with 'status': 'success' or 'error'
     """
-    from app.models import Releases, db, ReleaseEvents
-    from app.services.job_event_service import JobEventService
-    
+    from app.models import db
+    from app.brain.job_log.features.notes.command import UpdateNotesCommand
+
     logger.info(f"update_notes called", extra={
         'job': job,
         'release': release,
@@ -1215,86 +1167,25 @@ def update_notes(job, release):
 
     try:
         notes = request.json.get('notes', '')
-        # Convert to string, allow empty string
-        if notes is None:
-            notes = ''
-        else:
-            notes = str(notes).strip()
 
-        # Fetch job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
+        # Pre-flight: 404 vs 400 distinction matches the original route contract.
+        from app.models import Releases
+        if not Releases.query.filter_by(job=job, release=release).first():
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        # Capture old state for payload
-        old_notes = job_record.notes
+        try:
+            result = UpdateNotesCommand(
+                job_id=job, release=release, notes=notes,
+            ).execute()
+        except ValueError as ve:
+            if str(ve) == "Event already exists":
+                return jsonify({'error': 'Event already exists'}), 400
+            raise
 
-        # Create event (handles deduplication, logging internally)
-        event = JobEventService.create(
-            job=job,
-            release=release,
-            action='update_notes',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
-            payload={
-                'from': old_notes,
-                'to': notes
-            }
-        )
-
-        # Check if event was deduplicated
-        if event is None:
-            logger.info(f"Event already exists for job {job}-{release} notes update")
-            return jsonify({'error': 'Event already exists'}), 400
-        
-        # Update job fields (overwrite)
-        job_record.notes = notes if notes else None
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
-
-        # Add Trello update to outbox (async - will be processed by outbox service)
-        # DB changes are committed first, then outbox handles Trello updates asynchronously
-        # This ensures DB changes are never lost due to Trello API failures
-        outbox_item_created = False
-        
-        if job_record.trello_card_id and notes:
-            try:
-                # Create outbox item - will be processed asynchronously by outbox service
-                OutboxService.add(
-                    destination='trello',
-                    action='update_notes',
-                    event_id=event.id
-                )
-                outbox_item_created = True
-                logger.info(f"Outbox item created for Trello notes update (job {job}-{release})")
-            except Exception as outbox_error:
-                # Log error but don't fail the operation - DB update is more important
-                logger.error(f"Failed to create outbox for event {event.id}: {outbox_error}", exc_info=True)
-        else:
-            if not job_record.trello_card_id:
-                logger.warning(
-                    f"Job {job}-{release} has no trello_card_id, skipping Trello update",
-                    extra={'job': job, 'release': release}
-                )
-            elif not notes:
-                logger.info(f"Notes is empty for job {job}-{release}, skipping Trello comment")
-        
-        # Close event only if no outbox item was created
-        if not outbox_item_created:
-            JobEventService.close(event.id)
-        
-        # Commit all DB changes first (this is the critical operation)
-        db.session.commit()
-        
-        logger.info(f"update_notes completed successfully", extra={
-            'job': job,
-            'release': release,
-            'event_id': event.id
-        })
-        
         return jsonify({
             'status': 'success',
-            'event_id': event.id
+            'event_id': result.event_id,
         }), 200
     except Exception as e:
         logger.error(f"update_notes failed", exc_info=True, extra={
@@ -1303,7 +1194,7 @@ def update_notes(job, release):
             'error': str(e),
             'error_type': type(e).__name__
         })
-        
+
         try:
             from app.services.system_log_service import SystemLogService
             SystemLogService.log_error(
@@ -1318,7 +1209,7 @@ def update_notes(job, release):
             )
         except:
             pass
-        
+
         db.session.rollback()
         return jsonify({
             'error': str(e),
@@ -1363,8 +1254,7 @@ def update_job_comp(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
-    JobEventService.create_and_close(
+    primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
         action='updated',
@@ -1425,6 +1315,14 @@ def update_job_comp(job, release):
                 JobEventService.close(fab_event.id)
             response_extras['fab_order'] = None
 
+    if new_is_x and not old_was_x and primary_event is not None:
+        if clear_hard_date_cascade(
+            job_record,
+            parent_event_id=primary_event.id,
+            reason='job_comp_set_to_x',
+        ):
+            response_extras['hard_date_cleared'] = True
+
     db.session.commit()
 
     return jsonify({"status": "success", **response_extras}), 200
@@ -1459,8 +1357,7 @@ def update_invoiced(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = "Brain"
 
-    from app.services.job_event_service import JobEventService
-    JobEventService.create_and_close(
+    primary_event = JobEventService.create_and_close(
         job=job,
         release=release,
         action='updated',
@@ -1468,9 +1365,20 @@ def update_invoiced(job, release):
         payload={'field': 'invoiced', 'old_value': old_invoiced, 'new_value': invoiced_str},
     )
 
+    response_extras = {}
+    old_was_x = old_invoiced and old_invoiced.strip().upper() == 'X'
+    new_is_x = invoiced_str and invoiced_str.upper() == 'X'
+    if new_is_x and not old_was_x and primary_event is not None:
+        if clear_hard_date_cascade(
+            job_record,
+            parent_event_id=primary_event.id,
+            reason='invoiced_set_to_x',
+        ):
+            response_extras['hard_date_cleared'] = True
+
     db.session.commit()
 
-    return jsonify({"status": "success"}), 200
+    return jsonify({"status": "success", **response_extras}), 200
 
 
 @brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
@@ -1494,7 +1402,6 @@ def update_start_install(job, release):
         JSON object with 'status': 'success' or 'error'
     """
     from app.models import Releases, db
-    from app.services.job_event_service import JobEventService
     from datetime import datetime, date
     
     logger.info(f"update_start_install called", extra={
@@ -1507,7 +1414,46 @@ def update_start_install(job, release):
         start_install_str = request.json.get('start_install')
         is_hard_date = request.json.get('is_hard_date', True)  # Default to True for backward compatibility
         clear_hard_date = request.json.get('clear_hard_date', False)
+        asap = request.json.get('asap')  # tri-state: True sets ASAP, False clears, absent = ignore
         start_install_date = None
+
+        # ASAP set/clear — visual flag only; does not write start_install or formula fields,
+        # so no Trello due-date push and no scheduling recalc (formula isn't changing).
+        if asap is True or asap is False:
+            job_record = Releases.query.filter_by(job=job, release=release).first()
+            if not job_record:
+                return jsonify({'error': 'Job not found'}), 404
+
+            old_asap = bool(job_record.start_install_asap)
+            new_asap = bool(asap)
+            action = 'set_asap' if new_asap else 'clear_asap'
+
+            event = JobEventService.create(
+                job=job,
+                release=release,
+                action=action,
+                source='Brain',
+                payload={'from': old_asap, 'to': new_asap},
+            )
+            if event is None:
+                return jsonify({'error': 'Event already exists'}), 400
+
+            job_record.start_install_asap = new_asap
+            job_record.last_updated_at = datetime.utcnow()
+            job_record.source_of_update = 'Brain'
+
+            JobEventService.close(event.id)
+            db.session.commit()
+
+            logger.info(
+                f"ASAP {'set' if new_asap else 'cleared'} for job {job}-{release}",
+                extra={'event_id': event.id},
+            )
+            return jsonify({
+                'status': 'success',
+                'event_id': event.id,
+                'start_install_asap': new_asap,
+            }), 200
 
         # Handle clearing a hard date (revert to formula-driven)
         if clear_hard_date:
@@ -1580,83 +1526,27 @@ def update_start_install(job, release):
                 'message': 'Not a hard date - formula-driven dates are not updated manually'
             }), 200
 
-        # Fetch job record
-        job_record = Releases.query.filter_by(job=job, release=release).first()
-        if not job_record:
+        # Pre-flight 404 check — preserves the route's original 404 vs 400 distinction
+        # before we delegate to the command.
+        if not Releases.query.filter_by(job=job, release=release).first():
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
-        # Capture old state for payload
-        old_start_install = job_record.start_install
-
-        # Create event (handles deduplication, logging internally)
-        event = JobEventService.create(
-            job=job,
-            release=release,
-            action='update_start_install',
-            source='Brain',  # Will be formatted as 'Brain:username' automatically
-            payload={
-                'from': old_start_install.isoformat() if old_start_install else None,
-                'to': start_install_date.isoformat() if start_install_date else None,
-                'is_hard_date': is_hard_date
-            }
-        )
-
-        # Check if event was deduplicated
-        if event is None:
-            logger.info(f"Event already exists for job {job}-{release} start_install update")
-            return jsonify({'error': 'Event already exists'}), 400
-        
-        # Update job fields
-        job_record.start_install = start_install_date
-        # Clear formula fields when setting a hard date
-        job_record.start_install_formula = None
-        job_record.start_install_formulaTF = False
-
-        job_record.last_updated_at = datetime.utcnow()
-        job_record.source_of_update = 'Brain'
-
-        # Update Trello card due date if card exists
-        if job_record.trello_card_id:
-            try:
-                # Send start_install date to Trello as the due date (not start date)
-                update_trello_card(
-                    card_id=job_record.trello_card_id,
-                    new_due_date=start_install_date,
-                    clear_due_date=(start_install_date is None)
-                )
-                logger.info(f"Trello card due date updated for job {job}-{release} (start_install sent as due date)")
-            except Exception as trello_error:
-                # Log error but don't fail the operation - DB update is more important
-                logger.error(f"Failed to update Trello card due date for job {job}-{release}: {trello_error}", exc_info=True)
-        else:
-            logger.warning(
-                f"Job {job}-{release} has no trello_card_id, skipping Trello update",
-                extra={'job': job, 'release': release}
-            )
-
-        # Close event — no outbox needed (Trello update is synchronous above)
-        JobEventService.close(event.id)
-
-        # Commit all DB changes
-        db.session.commit()
-
-        # Recalculate all fab jobs so the queue adjusts for the new hard date
         try:
-            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
-            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
-        except Exception as cascade_error:
-            logger.error(f"Scheduling cascade failed after hard-date update: {cascade_error}", exc_info=True)
-
-        logger.info(f"update_start_install completed successfully", extra={
-            'job': job,
-            'release': release,
-            'event_id': event.id
-        })
+            result = UpdateStartInstallCommand(
+                job_id=job,
+                release=release,
+                start_install=start_install_date,
+                is_hard_date=is_hard_date,
+            ).execute()
+        except ValueError as ve:
+            if str(ve) == "Event already exists":
+                return jsonify({'error': 'Event already exists'}), 400
+            raise
 
         return jsonify({
             'status': 'success',
-            'event_id': event.id
+            'event_id': result.event_id,
         }), 200
         
     except Exception as e:
@@ -2224,6 +2114,119 @@ def get_events():
         def event_key(ev):
             return (ev.id, 'job' if hasattr(ev, 'job') else 'submittal')
 
+        # Eligibility precompute: bulk-fetch current values from both
+        # Releases (for job events) and Submittals (for DWL events). The
+        # frontend uses `current_value` to determine if the Undo button
+        # should be enabled — equality with the event's `to`/`new` value
+        # means the event hasn't been superseded by a later edit.
+        from app.models import Releases
+        UNDO_WHITELIST = {
+            'update_stage', 'update_notes', 'update_fab_order', 'update_start_install',
+        }
+        UNDO_FIELD = {
+            'update_stage': 'stage',
+            'update_notes': 'notes',
+            'update_fab_order': 'fab_order',
+            'update_start_install': 'start_install',
+        }
+        # DWL whitelist: submittal events with action='updated' whose payload
+        # targets one of these fields. Mirrors _DWL_UNDO_FIELDS in the undo
+        # endpoint below; kept as a local dict here to avoid forward-import
+        # awkwardness within this same module.
+        DWL_PAYLOAD_TO_COLUMN = {
+            'order_number': 'order_number',
+            'notes': 'notes',
+            'submittal_drafting_status': 'submittal_drafting_status',
+        }
+
+        release_pairs = {
+            (ev.job, ev.release)
+            for ev in all_events
+            if hasattr(ev, 'job') and ev.action in UNDO_WHITELIST and ev.job is not None and ev.release
+        }
+        release_lookup = {}
+        if release_pairs:
+            from sqlalchemy import and_, or_
+            # SQLAlchemy `tuple_().in_()` is awkward across dialects; emit an OR of equality pairs.
+            conditions = [
+                and_(Releases.job == j, Releases.release == r)
+                for (j, r) in release_pairs
+            ]
+            rows = Releases.query.filter(or_(*conditions)).all()
+            for row in rows:
+                release_lookup[(row.job, row.release)] = row
+
+        # Submittal lookup for DWL events.
+        submittal_ids = {
+            str(ev.submittal_id)
+            for ev in all_events
+            if not hasattr(ev, 'job')
+            and ev.action == 'updated'
+            and isinstance(ev.payload, dict)
+            and ev.submittal_id
+            and any(k in DWL_PAYLOAD_TO_COLUMN for k in ev.payload)
+        }
+        submittal_lookup = {}
+        if submittal_ids:
+            for s in Submittals.query.filter(Submittals.submittal_id.in_(submittal_ids)).all():
+                submittal_lookup[str(s.submittal_id)] = s
+
+        def _current_value(ev):
+            if hasattr(ev, 'job'):
+                if ev.action not in UNDO_WHITELIST:
+                    return None
+                row = release_lookup.get((ev.job, ev.release))
+                if row is None:
+                    return None
+                field = UNDO_FIELD[ev.action]
+                val = getattr(row, field, None)
+                # Normalize start_install to ISO string for parity with payload encoding.
+                if field == 'start_install' and val is not None:
+                    return val.isoformat()
+                return val
+            # SubmittalEvents — DWL undo eligibility.
+            if ev.action != 'updated' or not isinstance(ev.payload, dict):
+                return None
+            matches = [k for k in ev.payload if k in DWL_PAYLOAD_TO_COLUMN
+                       and isinstance(ev.payload[k], dict)
+                       and 'old' in ev.payload[k] and 'new' in ev.payload[k]]
+            if len(matches) != 1:
+                return None
+            row = submittal_lookup.get(str(ev.submittal_id))
+            if row is None:
+                return None
+            return getattr(row, DWL_PAYLOAD_TO_COLUMN[matches[0]], None)
+
+        # Build a parent->children index from events in this batch. The undo
+        # endpoint bundles children by `payload.parent_event_id`; surfacing
+        # them here lets the confirm dialog enumerate "this will also revert
+        # X". Children outside the current batch are missed by this view, but
+        # the backend bundle still applies them correctly.
+        event_by_id = {ev.id: ev for ev in all_events if hasattr(ev, 'job')}
+        children_by_parent = {}
+        for ev in all_events:
+            if not hasattr(ev, 'job'):
+                continue
+            ev_payload = ev.payload if isinstance(ev.payload, dict) else None
+            if ev_payload is None:
+                continue
+            pid = ev_payload.get('parent_event_id')
+            if pid is not None and pid in event_by_id and ev.action in UNDO_WHITELIST:
+                children_by_parent.setdefault(pid, []).append(ev)
+
+        def _linked_children(ev):
+            if not hasattr(ev, 'job'):
+                return []
+            return [
+                {
+                    'id': c.id,
+                    'action': c.action,
+                    'from': (c.payload or {}).get('from'),
+                    'to': (c.payload or {}).get('to'),
+                }
+                for c in children_by_parent.get(ev.id, [])
+            ]
+
         return jsonify({
             'events': [{
                 'id': event.id,
@@ -2238,7 +2241,9 @@ def get_events():
                 'external_user_id': getattr(event, 'external_user_id', None),
                 'user_name': user_names.get(event_key(event)),
                 'created_at': format_datetime_mountain(event.created_at),
-                'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None
+                'applied_at': format_datetime_mountain(event.applied_at) if event.applied_at else None,
+                'current_value': _current_value(event),
+                'linked_children': _linked_children(event),
             } for event in all_events],
             'total': len(all_events),
             'filters': {
@@ -2255,6 +2260,445 @@ def get_events():
     except Exception as e:
         logger.error("Error getting job events", error=str(e))
         return jsonify({"error": str(e)}), 500
+
+
+# ==============================================================================
+# Undo
+# ==============================================================================
+
+# Whitelist of actions that can be undone via the Events tab. Each maps to the
+# Releases column whose value is reverted, so the staleness check can compare
+# `payload.to` to the live value before applying the undo.
+_UNDO_WHITELIST_FIELD = {
+    'update_stage': 'stage',
+    'update_notes': 'notes',
+    'update_fab_order': 'fab_order',
+    'update_start_install': 'start_install',
+    'set_asap': 'start_install_asap',
+    'clear_asap': 'start_install_asap',
+}
+
+
+def _staleness_check(event, job_record):
+    """Return None if the event is still revertible against the current row, or
+    a (current, expected) tuple if stale. Only meaningful for whitelist actions."""
+    field = _UNDO_WHITELIST_FIELD[event.action]
+    current = getattr(job_record, field, None)
+    if field == 'start_install' and current is not None:
+        current_for_compare = current.isoformat()
+    else:
+        current_for_compare = current
+    expected = (event.payload or {}).get('to')
+    if current_for_compare != expected:
+        return (current_for_compare, expected)
+    return None
+
+
+def _dispatch_undo(event, *, source, defer_cascade):
+    """Run the appropriate update command to revert `event`. Returns the new
+    result object (with .event_id). Caller is responsible for the staleness
+    check; this function assumes it's already passed."""
+    payload = event.payload or {}
+    action = event.action
+    if action == 'update_stage':
+        from app.brain.job_log.features.stage.command import UpdateStageCommand
+        return UpdateStageCommand(
+            job_id=event.job, release=event.release,
+            stage=payload['from'],
+            source=source,
+            undone_event_id=event.id,
+            defer_cascade=defer_cascade,
+        ).execute()
+    if action == 'update_notes':
+        from app.brain.job_log.features.notes.command import UpdateNotesCommand
+        return UpdateNotesCommand(
+            job_id=event.job, release=event.release,
+            notes=payload['from'] or '',
+            source=source,
+            undone_event_id=event.id,
+        ).execute()
+    if action == 'update_fab_order':
+        from app.brain.job_log.features.fab_order.command import UpdateFabOrderCommand
+        return UpdateFabOrderCommand(
+            job_id=event.job, release=event.release,
+            fab_order=payload['from'],
+            source=source,
+            undone_event_id=event.id,
+            defer_cascade=defer_cascade,
+        ).execute()
+    if action == 'update_start_install':
+        from datetime import datetime as _dt
+        from_str = payload['from']
+        from_date = _dt.strptime(from_str, '%Y-%m-%d').date() if from_str else None
+        return UpdateStartInstallCommand(
+            job_id=event.job, release=event.release,
+            start_install=from_date,
+            is_hard_date=payload.get('is_hard_date', True),
+            source=source,
+            undone_event_id=event.id,
+        ).execute()
+    if action in ('set_asap', 'clear_asap'):
+        from types import SimpleNamespace
+        from datetime import datetime as _dt
+        from app.models import Releases
+        target_val = bool(payload['from'])
+        inverse_action = 'set_asap' if target_val else 'clear_asap'
+        job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
+        new_event = JobEventService.create(
+            job=event.job, release=event.release,
+            action=inverse_action,
+            source=source,
+            payload={
+                'from': bool(payload['to']),
+                'to': target_val,
+                'undone_event_id': event.id,
+            },
+        )
+        if new_event is None:
+            raise ValueError("Event already exists")
+        job_record.start_install_asap = target_val
+        job_record.last_updated_at = _dt.utcnow()
+        job_record.source_of_update = source
+        JobEventService.close(new_event.id)
+        db.session.commit()
+        return SimpleNamespace(event_id=new_event.id)
+    raise ValueError(f"Unsupported undo action: {action}")
+
+
+@brain_bp.route("/events/<int:event_id>/undo", methods=["POST"])
+@admin_required
+def undo_event(event_id):
+    """
+    Revert a ReleaseEvents row by re-applying its `payload.from` through the
+    standard update pipeline for that action. The new event(s) carry
+    `payload.undone_event_id` linking back to the source event(s).
+
+    **Linked-event bundling.** Some commands (notably `UpdateStageCommand`)
+    write follow-on `update_fab_order` or `updated`(job_comp) events whose
+    payload includes `parent_event_id: <stage_event.id>`. When undoing the
+    parent, we revert each whitelist child too — running the children with
+    `defer_cascade=True` and the parent last so the scheduling cascade
+    fires once at the end.
+
+    Validates parent + all whitelist children:
+      - action is in the whitelist
+      - payload has both `from` and `to` keys
+      - `payload.from != payload.to`
+      - current Releases value for the field matches `payload.to` (staleness)
+
+    Returns 409 with a structured body when *anything* in the bundle is stale.
+    """
+    from app.models import Releases
+
+    event = db.session.get(ReleaseEvents, event_id)
+    if event is None:
+        return jsonify({'error': 'Event not found'}), 404
+
+    if event.action not in _UNDO_WHITELIST_FIELD:
+        return jsonify({'error': f"Action '{event.action}' is not undoable"}), 400
+
+    payload = event.payload or {}
+    if 'from' not in payload or 'to' not in payload:
+        return jsonify({'error': "Event payload missing 'from' or 'to'"}), 400
+    if payload['from'] == payload['to']:
+        return jsonify({'error': 'No-op event (from == to) cannot be undone'}), 400
+    # Undo events are not themselves undoable. To reverse one, edit the value
+    # directly in the Job Log — undo-the-undo via this endpoint would obscure
+    # the audit trail and confuse the bundling logic (a cascade-aware undo of
+    # a non-cascade-aware undo).
+    if payload.get('undone_event_id') is not None:
+        return jsonify({
+            'error': "Undo events are not undoable. Edit the value in the Job Log directly."
+        }), 400
+
+    job_record = Releases.query.filter_by(job=event.job, release=event.release).first()
+    if job_record is None:
+        return jsonify({'error': 'Release not found'}), 404
+
+    # Find children (events that were emitted as side-effects of this one).
+    # Cross-DB JSON path queries are awkward; the per-(job, release) event
+    # volume is small, so just filter in Python.
+    siblings = ReleaseEvents.query.filter_by(
+        job=event.job, release=event.release
+    ).all()
+    children = [
+        c for c in siblings
+        if isinstance(c.payload, dict)
+        and c.payload.get('parent_event_id') == event.id
+        and c.action in _UNDO_WHITELIST_FIELD
+        and c.payload.get('from') != c.payload.get('to')
+    ]
+
+    # Staleness check: parent + every whitelist child must still match
+    # `payload.to` against the live Releases row. If anything is stale, fail
+    # the whole bundle so partial reverts can't corrupt state.
+    parent_stale = _staleness_check(event, job_record)
+    child_stale = [(c, _staleness_check(c, job_record)) for c in children]
+    child_stale = [(c, s) for c, s in child_stale if s is not None]
+    if parent_stale or child_stale:
+        return jsonify({
+            'error': 'stale',
+            'current': parent_stale[0] if parent_stale else None,
+            'expected': parent_stale[1] if parent_stale else None,
+            'stale_children': [
+                {'event_id': c.id, 'action': c.action,
+                 'current': s[0], 'expected': s[1]}
+                for c, s in child_stale
+            ],
+            'message': (
+                "Stale — the release was edited after this event. Undo would "
+                "overwrite a later change. Refresh and try again."
+            ),
+        }), 409
+
+    source = "Brain"
+
+    # Apply parent FIRST so any fixed-tier / state-driven constraints in the
+    # children's commands clear before we touch fab_order. Concretely: if the
+    # parent is `Welded QC → Ship Planning` with a child fab_order
+    # auto-assign to 2, undoing the child first would re-enter
+    # UpdateFabOrderCommand while stage is still 'Ship Planning' (fixed
+    # tier 2), and the command's own override would force fab_order back to 2
+    # — a silent no-op revert.
+    #
+    # When there are children, defer the cascade across the bundle and run
+    # it once at the end. With no children, let the parent's command run its
+    # own cascade as it normally would.
+    has_children = bool(children)
+    linked_event_ids = []
+    try:
+        result = _dispatch_undo(event, source=source, defer_cascade=has_children)
+        for child in children:
+            child_result = _dispatch_undo(child, source=source, defer_cascade=True)
+            linked_event_ids.append(child_result.event_id)
+    except ValueError as ve:
+        logger.warning(f"Undo failed for event {event_id}: {ve}")
+        return jsonify({'error': str(ve)}), 400
+
+    if has_children:
+        try:
+            from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+            recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+        except Exception as cascade_err:
+            logger.error(
+                f"Scheduling cascade failed after bundled undo of event {event_id}: {cascade_err}",
+                exc_info=True,
+            )
+
+    return jsonify({
+        'status': 'success',
+        'event_id': result.event_id,
+        'linked_event_ids': linked_event_ids,
+    }), 200
+
+
+# ------------------------------------------------------------------------------
+# DWL (SubmittalEvents) undo
+# ------------------------------------------------------------------------------
+#
+# Three Submittals fields are undoable on the Events tab. None of them call
+# Procore — undo writes the DB column directly and emits a new SubmittalEvents
+# row, mirroring the "silent revert" intent. The Procore-bound `status` field
+# stays out of the whitelist, so a user clicking Undo on a Procore status
+# event will get a 400 (or a disabled button on the frontend).
+#
+# All three operations come through DWL routes that emit SubmittalEvents with
+# `action='updated'` and a payload shaped like `{<field>: {old, new}}`. We key
+# eligibility on the payload key, not on a per-field action.
+_DWL_UNDO_FIELDS = {
+    'order_number': 'order_number',
+    'notes': 'notes',
+    'submittal_drafting_status': 'submittal_drafting_status',
+}
+
+
+def _dwl_payload_field(payload):
+    """Identify which whitelist field this submittal-event payload targets.
+    Returns the field name (e.g. 'order_number') or None if the payload
+    doesn't match a single in-scope field."""
+    if not isinstance(payload, dict):
+        return None
+    matches = [
+        k for k in payload
+        if k in _DWL_UNDO_FIELDS and isinstance(payload[k], dict)
+        and 'old' in payload[k] and 'new' in payload[k]
+    ]
+    if len(matches) != 1:
+        # 0 → no in-scope field in this payload
+        # 2+ → ambiguous; rare in practice, refuse rather than guess
+        return None
+    return matches[0]
+
+
+def _validate_swap_partner(payload):
+    """If the event's payload encodes a swap partner (from a step operation),
+    return (partner_submittal_id, partner_old, partner_new). Otherwise None.
+
+    Step events look like:
+      { order_number: {old, new}, order_step: 'up'|'down',
+        swapped_with: { submittal_id, order_number: {old, new} } }
+    """
+    swap = payload.get('swapped_with')
+    if not isinstance(swap, dict):
+        return None
+    sid = swap.get('submittal_id')
+    inner = swap.get('order_number')
+    if sid is None or not isinstance(inner, dict):
+        return None
+    if 'old' not in inner or 'new' not in inner:
+        return None
+    return (str(sid), inner['old'], inner['new'])
+
+
+@brain_bp.route("/submittal-events/<int:event_id>/undo", methods=["POST"])
+@admin_required
+def undo_submittal_event(event_id):
+    """
+    Revert a single SubmittalEvents row by writing the DB column back to
+    `payload[field].old` and emitting a new SubmittalEvents row with
+    `payload.undone_event_id` linking back. Does NOT call Procore.
+
+    **Step / swap handling.** If the original event came from `step_submittal_order`,
+    its payload embeds the neighbor's change in `payload.swapped_with` (the
+    DWL step route doesn't emit a separate event for the neighbor). When that
+    field is present, undo also reverts the neighbor's order_number and emits
+    a second SubmittalEvents row tagged with `parent_event_id` so the audit
+    trail shows the linked side-effect.
+    """
+    from app.models import SubmittalEvents
+    from app.procore.helpers import create_submittal_payload_hash
+    from sqlalchemy.exc import IntegrityError
+
+    event = db.session.get(SubmittalEvents, event_id)
+    if event is None:
+        return jsonify({'error': 'Event not found'}), 404
+
+    if event.action != 'updated':
+        return jsonify({'error': f"Action '{event.action}' is not undoable"}), 400
+
+    payload = event.payload or {}
+    if payload.get('undone_event_id') is not None:
+        return jsonify({
+            'error': "Undo events are not undoable. Edit the value in the Drafting Work Load directly."
+        }), 400
+
+    field = _dwl_payload_field(payload)
+    if field is None:
+        return jsonify({
+            'error': "Payload does not target an undoable field "
+                     "(order_number, notes, submittal_drafting_status)."
+        }), 400
+
+    inner = payload[field]
+    if inner['old'] == inner['new']:
+        return jsonify({'error': 'No-op event (old == new) cannot be undone'}), 400
+
+    submittal = Submittals.query.filter_by(submittal_id=str(event.submittal_id)).first()
+    if submittal is None:
+        return jsonify({'error': 'Submittal not found'}), 404
+
+    column = _DWL_UNDO_FIELDS[field]
+    current = getattr(submittal, column, None)
+    if current != inner['new']:
+        return jsonify({
+            'error': 'stale',
+            'current': current,
+            'expected': inner['new'],
+            'message': (
+                f"Stale — current value is {current!r}, expected {inner['new']!r}. "
+                "Undo would overwrite a later change."
+            ),
+        }), 409
+
+    # Detect a swap partner. Only meaningful for order_number reverts.
+    partner = _validate_swap_partner(payload) if field == 'order_number' else None
+    partner_submittal = None
+    if partner is not None:
+        partner_sid, partner_old, partner_new = partner
+        partner_submittal = Submittals.query.filter_by(submittal_id=partner_sid).first()
+        if partner_submittal is None:
+            # Loud failure: don't silently lose the linked revert.
+            return jsonify({
+                'error': f"Swap partner submittal {partner_sid} not found — "
+                         "manually fix order in the Drafting Work Load."
+            }), 400
+        if partner_submittal.order_number != partner_new:
+            return jsonify({
+                'error': 'stale',
+                'current': partner_submittal.order_number,
+                'expected': partner_new,
+                'partner_submittal_id': partner_sid,
+                'message': (
+                    f"Stale — swap partner {partner_sid} order is "
+                    f"{partner_submittal.order_number!r}, expected {partner_new!r}. "
+                    "Undo would overwrite a later change."
+                ),
+            }), 409
+
+    # Apply primary revert. The DWL routes don't run cascade or outbox logic
+    # for these fields, so we mirror that — write the column, bump
+    # last_updated, emit a new SubmittalEvents row.
+    setattr(submittal, column, inner['old'])
+    submittal.last_updated = datetime.utcnow()
+
+    user = get_current_user()
+    user_id = user.id if user else None
+
+    new_payload = {
+        field: {'old': inner['new'], 'new': inner['old']},
+        'undone_event_id': event.id,
+    }
+    new_hash = create_submittal_payload_hash('updated', str(submittal.submittal_id), new_payload)
+    new_event = SubmittalEvents(
+        submittal_id=str(submittal.submittal_id),
+        action='updated',
+        payload=new_payload,
+        payload_hash=new_hash,
+        source='Brain',
+        internal_user_id=user_id,
+    )
+    db.session.add(new_event)
+
+    linked_event_ids = []
+    try:
+        # Flush so new_event.id is populated before we link the partner event.
+        db.session.flush()
+
+        if partner is not None:
+            partner_sid, partner_old, partner_new = partner
+            partner_submittal.order_number = partner_old
+            partner_submittal.last_updated = datetime.utcnow()
+            partner_payload = {
+                'order_number': {'old': partner_new, 'new': partner_old},
+                'undone_event_id': event.id,
+                'parent_event_id': new_event.id,
+            }
+            partner_hash = create_submittal_payload_hash(
+                'updated', str(partner_submittal.submittal_id), partner_payload
+            )
+            partner_event = SubmittalEvents(
+                submittal_id=str(partner_submittal.submittal_id),
+                action='updated',
+                payload=partner_payload,
+                payload_hash=partner_hash,
+                source='Brain',
+                internal_user_id=user_id,
+            )
+            db.session.add(partner_event)
+            db.session.flush()
+            linked_event_ids.append(partner_event.id)
+
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Duplicate event — undo already applied?'}), 400
+
+    return jsonify({
+        'status': 'success',
+        'event_id': new_event.id,
+        'linked_event_ids': linked_event_ids,
+    }), 200
+
 
 # ==============================================================================
 # Trello Routes
@@ -2412,6 +2856,35 @@ def renumber_fab_orders_route():
         logger.error(f"Error in renumber fab_orders: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
+
+@brain_bp.route("/renumber-fabrication-fab-orders", methods=["POST"])
+@admin_required
+def renumber_fabrication_fab_orders_route():
+    """
+    Compress FABRICATION-group fab_order values to a contiguous 3..N block,
+    preserving relative order. Admin-only.
+
+    Query Parameters:
+        dry_run (bool): If true, preview changes without committing (default: false)
+
+    Returns:
+        JSON object: {status, dry_run, changed, unchanged, total_fabrication, changes[]}
+    """
+    try:
+        from app.brain.job_log.features.fab_order.renumber_fabrication import (
+            renumber_fabrication_fab_orders,
+        )
+
+        dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+        logger.info(f"Renumber fabrication fab_orders endpoint called (dry_run={dry_run})")
+
+        result = renumber_fabrication_fab_orders(dry_run=dry_run)
+        return jsonify({"status": "success", "dry_run": dry_run, **result}), 200
+    except Exception as e:
+        logger.error(f"Error in renumber fabrication fab_orders: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @brain_bp.route("/trello-scan-create", methods=["POST"])
 @login_required
 def trello_scan_create():
@@ -2497,7 +2970,6 @@ def delete_job(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2566,7 +3038,6 @@ def update_job_column(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    from app.services.job_event_service import JobEventService
     JobEventService.create_and_close(
         job=job,
         release=release,
@@ -2638,7 +3109,6 @@ def archive_preview():
 @handle_errors("unarchive release", raw_error=True)
 def unarchive_release(job, release):
     """Unarchive a single release (set is_archived=False)."""
-    from app.services.job_event_service import JobEventService
 
     r, err = get_or_404(Releases, f'Release {job}-{release} not found', job=job, release=str(release))
     if err:
@@ -2666,7 +3136,6 @@ def unarchive_release(job, release):
 @handle_errors("archive releases", raw_error=True)
 def archive_confirm():
     """Archive all eligible releases (both job_comp and invoiced = 'X', not yet archived)."""
-    from app.services.job_event_service import JobEventService
 
     releases = _archivable_query().all()
     count = 0

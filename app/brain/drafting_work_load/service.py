@@ -539,10 +539,11 @@ class LocationService:
         if dialect == "postgresql":
             try:
                 stmt = text("""
-                    SELECT job_number FROM job_sites
+                    SELECT job_number FROM projects
                     WHERE is_active = true
+                    AND geofence_geojson IS NOT NULL
                     AND ST_DWithin(
-                        ST_GeomFromGeoJSON(geometry::text)::geography,
+                        ST_GeomFromGeoJSON(geofence_geojson::text)::geography,
                         ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
                         :buffer_meters
                     )
@@ -559,12 +560,13 @@ class LocationService:
                     return [r[0] for r in rows]
             except Exception as e:
                 logger.warning("PostGIS location check failed, using Python fallback: %s", e)
+                db.session.rollback()
 
         # Fallback: strict point-in-polygon (SQLite or PostGIS unavailable)
         sites = Projects.query.filter_by(is_active=True).all()
         job_numbers = []
         for site in sites:
-            geom = site.geometry
+            geom = site.geofence_geojson
             if isinstance(geom, dict) and geom.get("type") == "Polygon":
                 coords = geom.get("coordinates")
                 if coords and LocationEngine.point_in_polygon(lng, lat, coords):

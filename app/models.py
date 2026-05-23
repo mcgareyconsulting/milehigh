@@ -403,12 +403,12 @@ class Releases(db.Model):
     fab_order = db.Column(db.Float)
     stage = db.Column(db.String(128), nullable=True)
     stage_group = db.Column(db.String(64), nullable=True)
-    banana_color = db.Column(db.String(16), nullable=True)  # 'red', 'yellow', 'green', or None
     start_install = db.Column(
         db.Date
     )  # Changed from install to start_install and Date type
     start_install_formula = db.Column(db.String(256))  # New field for formula
     start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
+    start_install_asap = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -422,6 +422,7 @@ class Releases(db.Model):
     trello_card_description = db.Column(db.String(512), nullable=True)
     trello_card_date = db.Column(db.Date, nullable=True)
     viewer_url = db.Column(db.String(512), nullable=True)
+    procore_submittal_id = db.Column(db.String(64), nullable=True)
 
     # Changelog tracking
     last_updated_at = db.Column(db.DateTime, nullable=True)
@@ -455,10 +456,10 @@ class Releases(db.Model):
             "fab_order": self.fab_order,
             "stage": self.stage,
             "stage_group": self.stage_group,
-            "banana_color": self.banana_color,
             "start_install": self.start_install,
             "start_install_formula": self.start_install_formula,
             "start_install_formulaTF": self.start_install_formulaTF,
+            "start_install_asap": self.start_install_asap,
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,
@@ -471,6 +472,8 @@ class Releases(db.Model):
             "trello_card_description": self.trello_card_description,
             "trello_card_date": self.trello_card_date,
             "viewer_url": self.viewer_url,
+            "procore_submittal_id": self.procore_submittal_id,
+            "has_drawing": False,
             "last_updated_at": self.last_updated_at,
             "source_of_update": self.source_of_update,
             "is_active": self.is_active,
@@ -604,6 +607,29 @@ class WebhookReceipt(db.Model):
     received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
+class SubmittalReconcile(db.Model):
+    """
+    Delayed reconcile queue for Procore submittals — the safety net for burst-dedup
+    and Procore read-after-write lag.
+
+    Every submittal webhook schedules one row here (~60s out). The outbox retry worker
+    re-runs check_and_update_submittal, catching any field whose change was dropped by
+    burst dedup (is_duplicate_webhook) or had not yet propagated when the live webhook
+    was processed. Enqueue is coalescing: at most one 'pending' row per submittal_id,
+    so a burst of deliveries produces a single reconcile read.
+    """
+    __tablename__ = 'submittal_reconcile'
+    id = db.Column(db.Integer, primary_key=True)
+    submittal_id = db.Column(db.String(255), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=False)
+    scheduled_for = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending, processing, completed, failed
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    last_error = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+
 class BoardItem(db.Model):
     """Feature requests, bugs, and tasks tracked on The Board."""
     __tablename__ = "board_items"
@@ -728,8 +754,6 @@ class Projects(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     job_number = db.Column(db.String(100), nullable=False)
-    # GeoJSON polygon: {"type": "Polygon", "coordinates": [[[lng, lat, z?], ...]]}
-    geometry = db.Column(db.JSON, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -739,6 +763,8 @@ class Projects(db.Model):
     longitude = db.Column(db.Float)
     radius_meters = db.Column(db.Float)
     pm_id = db.Column(db.Integer, db.ForeignKey('project_managers.id'))
+    # GeoJSON polygon: {"type": "Polygon", "coordinates": [[[lng, lat, z?], ...]]}
+    # Single canonical column for both map rendering and on-site filtering.
     geofence_geojson = db.Column(db.JSON)
 
     pm = db.relationship('ProjectManager', backref='jobsites')
@@ -759,3 +785,101 @@ class Projects(db.Model):
         lazy='dynamic',
         viewonly=True,
     )
+
+
+class ReleaseDrawingVersion(db.Model):
+    """Versioned PDF markup history for a release's For-Construction drawing.
+
+    One PDF per release. Each user save (markup) inserts a new row; original
+    upload is version_number=1. `source_version_id` self-links to the version
+    a markup was derived from.
+    """
+    __tablename__ = 'release_drawing_versions'
+    __table_args__ = (
+        db.UniqueConstraint('release_id', 'version_number', name='_release_version_uc'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    version_number = db.Column(db.Integer, nullable=False)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default='application/pdf')
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    source_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey('release_drawing_versions.id'),
+        nullable=True,
+    )
+    note = db.Column(db.Text, nullable=True)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    release = db.relationship('Releases', backref=db.backref('drawing_versions', lazy='dynamic'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    source_version = db.relationship('ReleaseDrawingVersion', remote_side=[id])
+
+    def to_dict(self):
+        uploaded_by_name = None
+        if self.uploaded_by:
+            first = (self.uploaded_by.first_name or '').strip()
+            last = (self.uploaded_by.last_name or '').strip()
+            uploaded_by_name = (f"{first} {last}".strip()) or self.uploaded_by.username
+        return {
+            'id': self.id,
+            'release_id': self.release_id,
+            'version_number': self.version_number,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'uploaded_by': {
+                'id': self.uploaded_by_user_id,
+                'name': uploaded_by_name,
+            },
+            'uploaded_at': _dt(self.uploaded_at),
+            'source_version_id': self.source_version_id,
+            'note': self.note,
+        }
+
+
+class FcCollectionRun(db.Model):
+    """One row per nightly (or manual) FC PDF Pack retry pass.
+
+    Stores summary counts plus the per-release breakdown so the admin page can
+    show stakeholders exactly which releases were missing, which got pulled,
+    and which are still outstanding. Table is pruned to the most recent 30 runs
+    by the worker after each insert.
+    """
+    __tablename__ = "fc_collection_runs"
+    id = db.Column(db.Integer, primary_key=True)
+    run_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    trigger = db.Column(db.String(16), nullable=False, default='cron')  # 'cron' | 'manual'
+    candidates = db.Column(db.Integer, nullable=False, default=0)
+    succeeded = db.Column(db.Integer, nullable=False, default=0)
+    still_missing = db.Column(db.Integer, nullable=False, default=0)
+    errored = db.Column(db.Integer, nullable=False, default=0)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    # details = {
+    #   "succeeded":     [{"job": 1234, "release": "V2", "viewer_url": "..."}],
+    #   "still_missing": [{"job": 1234, "release": "V3", "reason": "..."}],
+    #   "errored":       [{"job": 1234, "release": "V4", "error": "..."}]
+    # }
+    details = db.Column(db.JSON, nullable=False, default=dict)
+
+    def to_summary_dict(self):
+        return {
+            'id': self.id,
+            'run_at': _dt(self.run_at),
+            'trigger': self.trigger,
+            'candidates': self.candidates,
+            'succeeded': self.succeeded,
+            'still_missing': self.still_missing,
+            'errored': self.errored,
+            'duration_ms': self.duration_ms,
+        }
+
+    def to_dict(self):
+        d = self.to_summary_dict()
+        d['details'] = self.details or {}
+        return d

@@ -3,25 +3,21 @@
  * schema_version: 1
  * purpose: Displays a filterable audit trail of job and submittal events so admins can investigate what changed and when.
  * exports:
- *   Events: Page component rendering event table with date, source, user, and identifier filters
- * imports_from: [react, react-router-dom, axios, ../utils/api]
+ *   Events: Page component rendering filter UI around the shared EventsList
+ * imports_from: [react, react-router-dom, axios, ../utils/api, ../components/EventsList]
  * imported_by: [App.jsx]
  * invariants:
  *   - URL search params (submittal_id, job, release) pre-populate filters on mount and sync bidirectionally
- *   - Payload expansion is tracked per-event using a composite key of type + id
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
 import { API_BASE_URL } from '../utils/api';
+import { EventsList } from '../components/EventsList';
 
 function Events() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [selectedDate, setSelectedDate] = useState('');
     const [availableDates, setAvailableDates] = useState([]);
     const [selectedSource, setSelectedSource] = useState('');
@@ -29,13 +25,11 @@ function Events() {
     const [selectedUser, setSelectedUser] = useState('');
     const [availableUsers, setAvailableUsers] = useState([]);
     const [limit, setLimit] = useState(50);
-    const [expandedPayload, setExpandedPayload] = useState({});
     const [submittalId, setSubmittalId] = useState(searchParams.get('submittal_id') || '');
     const [jobFilter, setJobFilter] = useState(searchParams.get('job') || '');
     const [releaseFilter, setReleaseFilter] = useState(searchParams.get('release') || '');
 
     useEffect(() => {
-        // Update filters from URL params
         const urlSubmittalId = searchParams.get('submittal_id') || '';
         const urlJob = searchParams.get('job') || '';
         const urlRelease = searchParams.get('release') || '';
@@ -47,10 +41,6 @@ function Events() {
     useEffect(() => {
         fetchFilters();
     }, []);
-
-    useEffect(() => {
-        fetchEvents();
-    }, [selectedDate, limit, selectedSource, submittalId, jobFilter, releaseFilter, selectedUser]);
 
     const fetchFilters = async () => {
         try {
@@ -65,77 +55,7 @@ function Events() {
         } catch (err) {
             console.error('Error fetching filters:', err);
         }
-    }
-
-    const fetchEvents = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = { limit };
-            if (selectedDate) {
-                params.start = selectedDate;
-                params.end = selectedDate;
-            }
-            if (selectedSource) {
-                params.source = selectedSource;
-            }
-            if (submittalId) {
-                params.submittal_id = String(submittalId).trim();
-            }
-            if (jobFilter) {
-                params.job = parseInt(jobFilter, 10);
-            }
-            if (releaseFilter) {
-                params.release = String(releaseFilter).trim();
-            }
-            if (selectedUser) {
-                params.user_id = selectedUser;
-            }
-            const response = await axios.get(`${API_BASE_URL}/brain/events`, { params });
-            setEvents(response.data.events || []);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
     };
-
-    const formatDateTime = (dateString) => {
-        if (!dateString) return '—';
-        return new Date(dateString).toLocaleString();
-    };
-
-    const formatPayload = (payload) => {
-        if (!payload) return '—';
-        if (typeof payload === 'string') {
-            try {
-                payload = JSON.parse(payload);
-            } catch {
-                return payload;
-            }
-        }
-        return JSON.stringify(payload, null, 2);
-    };
-
-    const togglePayload = (eventId) => {
-        setExpandedPayload(prev => ({
-            ...prev,
-            [eventId]: !prev[eventId]
-        }));
-    };
-
-    const getSourceColor = (source) => {
-        const colors = {
-            'Trello': 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200',
-            'Excel': 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200',
-            'System': 'bg-gray-100 dark:bg-slate-600 text-gray-800 dark:text-slate-200',
-            'Procore': 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200',
-            'Brain': 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200',
-        };
-        return colors[source] || 'bg-gray-100 dark:bg-slate-600 text-gray-800 dark:text-slate-200';
-    };
-
-    const formatUserDisplay = (event) => event.user_name || '—';
 
     const resetFilters = () => {
         setSelectedDate('');
@@ -145,7 +65,6 @@ function Events() {
         setSubmittalId('');
         setJobFilter('');
         setReleaseFilter('');
-        // Clear all filters from URL
         const newParams = new URLSearchParams(searchParams);
         newParams.delete('submittal_id');
         newParams.delete('job');
@@ -293,115 +212,15 @@ function Events() {
                             )}
                         </div>
 
-                        {loading && (
-                            <div className="text-center py-12">
-                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
-                                <p className="text-gray-600 dark:text-slate-400 font-medium">Loading events...</p>
-                            </div>
-                        )}
-                        {error && (
-                            <div className="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-200 px-6 py-4 rounded-lg mb-6 shadow-sm">
-                                <div className="flex items-center">
-                                    <span className="text-xl mr-3">⚠️</span>
-                                    <div>
-                                        <p className="font-semibold">Error loading events</p>
-                                        <p className="text-sm mt-1">{error}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {!loading && !error && (
-                            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                                <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <div className="overflow-auto flex-1 min-h-0">
-                                        <table className="w-full">
-                                            <thead className="bg-gradient-to-r from-gray-50 to-accent-50 dark:from-slate-700 dark:to-slate-700">
-                                                <tr>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Date</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Source</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">User</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Identifier</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Action</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wider border-b border-gray-200 dark:border-slate-600">Payload</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-600">
-                                                {events.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan="5" className="px-6 py-12 text-center">
-                                                            <div className="text-gray-400 dark:text-slate-500 text-4xl mb-3">📭</div>
-                                                            <p className="text-gray-500 dark:text-slate-400 font-medium">No events found</p>
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    events.map((event, index) => {
-                                                        const uniqueKey = `${event.type}-${event.id}`;
-                                                        return (
-                                                            <tr
-                                                                key={uniqueKey}
-                                                                className="hover:bg-accent-50/50 dark:hover:bg-slate-700/50 transition-colors duration-150"
-                                                                style={{ animationDelay: `${index * 50}ms` }}
-                                                            >
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                                                                    {formatDateTime(event.created_at)}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getSourceColor(event.source)}`}>
-                                                                        {event.source}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                                                                    {formatUserDisplay(event)}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                                                                    {event.type === 'job'
-                                                                        ? `${event.job}-${event.release || 'N/A'}`
-                                                                        : event.submittal_id || 'N/A'
-                                                                    }
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-100">
-                                                                    {event.action}
-                                                                </td>
-                                                                <td className="px-6 py-4 text-sm">
-                                                                    {expandedPayload[uniqueKey] ? (
-                                                                        <div className="space-y-2">
-                                                                            <pre className="bg-gray-50 dark:bg-slate-700 p-3 rounded-lg text-xs overflow-x-auto max-w-md border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-200">
-                                                                                {formatPayload(event.payload)}
-                                                                            </pre>
-                                                                            <button
-                                                                                onClick={() => togglePayload(uniqueKey)}
-                                                                                className="text-xs text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 font-medium"
-                                                                            >
-                                                                                ▲ Collapse
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <button
-                                                                            onClick={() => togglePayload(uniqueKey)}
-                                                                            className="text-xs text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 font-medium"
-                                                                        >
-                                                                            ▼ View Payload
-                                                                        </button>
-                                                                    )}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <div className="flex items-center justify-between flex-shrink-0 pt-2">
-                                    <div className="bg-accent-50 dark:bg-accent-900/30 rounded-lg px-4 py-2 border border-accent-200 dark:border-accent-700">
-                                        <p className="text-sm font-semibold text-accent-700 dark:text-accent-300">
-                                            Total: <span className="text-accent-900 dark:text-accent-100">{events.length}</span> events
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        <EventsList
+                            submittalId={submittalId}
+                            jobFilter={jobFilter}
+                            releaseFilter={releaseFilter}
+                            selectedDate={selectedDate}
+                            selectedSource={selectedSource}
+                            selectedUser={selectedUser}
+                            limit={limit}
+                        />
                     </div>
                 </div>
             </div>

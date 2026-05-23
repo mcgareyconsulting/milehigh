@@ -15,6 +15,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react';
 import AppShell from './components/AppShell';
 import LoginPrompt from './components/LoginPrompt';
+import UpdateAvailableBanner from './components/UpdateAvailableBanner';
 import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import Events from './pages/Events';
@@ -24,6 +25,8 @@ import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
+import FcCollection from './pages/FcCollection';
+import InvoicingReport from './pages/InvoicingReport';
 import { checkAuth } from './utils/auth';
 import './App.css';
 
@@ -50,27 +53,32 @@ function AppContent() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login onLogin={verifyAuth} />} />
-      <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} />}>
-        {isAuthenticated ? (
-          <>
-            <Route index element={<Navigate to="/job-log" replace />} />
-            <Route path="job-log" element={<JobLog />} />
-            <Route path="archive" element={<Archive />} />
-            <Route path="events" element={<Events />} />
-            <Route path="drafting-work-load" element={<DraftingWorkLoad />} />
-            <Route path="drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
-            <Route path="pm-board" element={<PMBoard />} />
-            <Route path="jobsite-map" element={<JobsiteMap />} />
-            <Route path="board" element={<Board />} />
-            <Route path="*" element={<Navigate to="/job-log" replace />} />
-          </>
-        ) : (
-          <Route path="*" element={<LoginPrompt />} />
-        )}
-      </Route>
-    </Routes>
+    <>
+      <UpdateAvailableBanner />
+      <Routes>
+        <Route path="/login" element={<Login onLogin={verifyAuth} />} />
+        <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} />}>
+          {isAuthenticated ? (
+            <>
+              <Route index element={<Navigate to="/job-log" replace />} />
+              <Route path="job-log" element={<JobLog />} />
+              <Route path="archive" element={<Archive />} />
+              <Route path="events" element={<Events />} />
+              <Route path="drafting-work-load" element={<DraftingWorkLoad />} />
+              <Route path="drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
+              <Route path="pm-board" element={<PMBoard />} />
+              <Route path="jobsite-map" element={<JobsiteMap />} />
+              <Route path="board" element={<Board />} />
+              <Route path="invoicing-report" element={<InvoicingReport />} />
+              <Route path="admin/fc-collection" element={<FcCollection />} />
+              <Route path="*" element={<Navigate to="/job-log" replace />} />
+            </>
+          ) : (
+            <Route path="*" element={<LoginPrompt />} />
+          )}
+        </Route>
+      </Routes>
+    </>
   );
 }
 

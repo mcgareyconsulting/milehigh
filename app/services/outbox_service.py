@@ -126,7 +126,28 @@ class OutboxService:
                     outbox_item.error_message = f"Could not get list ID for stage: {stage}"
                     db.session.commit()
                     return False
-                
+
+                # TRELLO_MOCK: simulate the move locally — write the target list onto
+                # Releases (mirroring what the inbound webhook would have done) and
+                # close the event as if Trello accepted the call.
+                from flask import current_app
+                if current_app.config.get("TRELLO_MOCK"):
+                    from app.trello.list_mapper import TrelloListMapper
+                    target_list_name = TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.get(stage)
+                    job_record.trello_list_id = list_id
+                    job_record.trello_list_name = target_list_name
+                    outbox_item.status = 'completed'
+                    outbox_item.completed_at = datetime.utcnow()
+                    outbox_item.error_message = None
+                    db.session.commit()
+                    JobEventService.close(event.id)
+                    db.session.commit()
+                    logger.info(
+                        f"[TRELLO_MOCK] move_card: job {event.job}-{event.release} "
+                        f"→ list '{target_list_name}' (id={list_id}) — skipped API call"
+                    )
+                    return True
+
                 # Execute the Trello API call
                 try:
                     update_trello_card(card_id, new_list_id=list_id)
@@ -289,8 +310,8 @@ class OutboxService:
                 # Derive sender initials from the event's user
                 sender_initials = 'UNK'
                 if event.internal_user_id:
-                    from app.models import User
-                    user = User.query.get(event.internal_user_id)
+                    from app.models import User, db
+                    user = db.session.get(User, event.internal_user_id)
                     if user and user.first_name and user.last_name:
                         sender_initials = (user.first_name[0] + user.last_name[0]).upper()
 
@@ -346,8 +367,18 @@ class OutboxService:
                 # Rebuild excel_data_dict from the event payload
                 excel_data_dict = event.payload or {}
 
+                # On retries, scan the target list first and adopt any
+                # existing card with the same title. Trello sometimes
+                # returns 5xx on POST /1/cards but creates the card anyway,
+                # which without this check produces one duplicate per retry.
+                is_retry = (outbox_item.retry_count or 0) > 0
+
                 try:
-                    trello_result = create_trello_card_for_job(job_record, excel_data_dict)
+                    trello_result = create_trello_card_for_job(
+                        job_record,
+                        excel_data_dict,
+                        idempotency_check=is_retry,
+                    )
 
                     if trello_result and trello_result.get('success'):
                         outbox_item.status = 'completed'
@@ -358,7 +389,11 @@ class OutboxService:
                         JobEventService.close(event.id)
                         db.session.commit()
 
-                        logger.info(f"Outbox {outbox_item.id} completed successfully (create_card for {event.job}-{event.release})")
+                        adopted_note = " (adopted existing card)" if trello_result.get('adopted') else ""
+                        logger.info(
+                            f"Outbox {outbox_item.id} completed successfully "
+                            f"(create_card for {event.job}-{event.release}){adopted_note}"
+                        )
                         return True
                     else:
                         error_msg = trello_result.get('error', 'Unknown error') if trello_result else 'Trello card creation returned None'

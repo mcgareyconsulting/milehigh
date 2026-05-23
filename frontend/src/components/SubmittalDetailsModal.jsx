@@ -10,12 +10,14 @@
  *   - Procore URL is only rendered when both projectId and submittalId are present
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+
+import { EventsModal } from './EventsModal';
 
 export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
-    const navigate = useNavigate();
-    
+    const [eventsOpen, setEventsOpen] = useState(false);
+
     if (!isOpen || !submittal) return null;
 
     const submittalId = submittal.submittal_id || submittal['Submittals Id'] || '';
@@ -26,10 +28,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
 
     const handleEventsClick = () => {
         if (submittalId) {
-            // Ensure submittalId is a string (submittal_id is typically numeric but stored as string)
-            const submittalIdStr = String(submittalId).trim();
-            navigate(`/events?submittal_id=${submittalIdStr}`);
-            onClose();
+            setEventsOpen(true);
         }
     };
 
@@ -75,7 +74,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
     const lastBallUpdate = submittal.last_ball_in_court_update;
     const timeSinceUpdate = submittal.time_since_ball_in_court_update_seconds;
 
-    return (
+    const modalContent = (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity"
             onClick={onClose}
@@ -194,6 +193,18 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                 </div>
             </div>
         </div>
+    );
+
+    return (
+        <>
+            {createPortal(modalContent, document.body)}
+            <EventsModal
+                isOpen={eventsOpen}
+                onClose={() => setEventsOpen(false)}
+                title={`Events — Submittal ${submittalId}`}
+                submittalId={submittalId ? String(submittalId).trim() : ''}
+            />
+        </>
     );
 }
 

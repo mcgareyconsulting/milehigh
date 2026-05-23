@@ -12,14 +12,81 @@
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
 import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
+import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { BananaCodeHeader } from '../components/StageIconRow';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userWantsVisibleScrollbars } from '../utils/auth';
+import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
+import { isCompleteStage } from '../utils/stageProgress';
+import { formatDateShort, formatCellValue } from '../utils/formatters';
+import { HEADER_OVERRIDES } from '../constants/columnHeaders';
+import ViewToggle, { useViewMode } from '../components/ViewToggle';
+import JobLogCardGrid from '../components/JobLogCardGrid';
+import JobLogRowList from '../components/JobLogRowList';
+import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
+
+// Stage completeness order (index 0 = least complete, higher = more complete).
+// Canonical names — see app/api/helpers.py STAGE_PROGRESSION_RANK.
+const STAGE_COMPLETENESS = {
+    'Released':         0, 'Material Ordered': 1, 'Cut Start':       2, 'Cut Complete':     3,
+    'Fitup Start':      4, 'Fitup Complete':   5, 'Weld Start':      6, 'Weld Complete':    7,
+    'Welded QC':        9, 'Paint Start':     10, 'Paint Complete': 11,
+    'Store at MHMW':   12, 'Ship Planning':   13, 'Ship Complete':  14,
+    'Install Start':   15, 'Install Complete':16, 'Complete':       17,
+};
+
+const SHIP_COMPLETE_STAGE = 'Ship Complete';
+
+// 'X' = installed (highest); percent strings rank by their numeric value;
+// missing/blank ranks lowest so it sorts to the bottom of the ship-complete group.
+const installProgRank = (val) => {
+    if (val == null) return -1;
+    const s = val.toString().trim();
+    if (s === '') return -1;
+    if (s.toLowerCase() === 'x') return 101;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : -1;
+};
+
+// PM (alphabetical) → Job # (asc) → compareSameJob tie-break. Returns a new sorted array.
+const reviewSort = (jobs) => {
+    const sorted = [...jobs];
+    sorted.sort((a, b) => {
+        const pmA = (a['PM'] || 'No PM').toString();
+        const pmB = (b['PM'] || 'No PM').toString();
+        if (pmA !== pmB) return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
+        const jobA = a['Job #'] || 0;
+        const jobB = b['Job #'] || 0;
+        if (jobA !== jobB) return jobA - jobB;
+        return compareSameJob(a, b);
+    });
+    return sorted;
+};
+
+// Tie-break for two rows that share the same PM + Job #.
+const compareSameJob = (a, b) => {
+    const ca = isCompleteStage(a['Stage']);
+    const cb = isCompleteStage(b['Stage']);
+    if (ca !== cb) return ca ? 1 : -1;
+
+    const sa = STAGE_COMPLETENESS[a['Stage']] ?? -1;
+    const sb = STAGE_COMPLETENESS[b['Stage']] ?? -1;
+    if (sa !== sb) return sb - sa;
+
+    if (a['Stage'] === SHIP_COMPLETE_STAGE) {
+        return installProgRank(b['Job Comp']) - installProgRank(a['Job Comp']);
+    }
+    const foA = a['Fab Order'] ?? Number.POSITIVE_INFINITY;
+    const foB = b['Fab Order'] ?? Number.POSITIVE_INFINITY;
+    return foA - foB;
+};
 
 function JobLog() {
     const navigate = useNavigate();
@@ -32,6 +99,7 @@ function JobLog() {
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
     const [cascadeStatus, setCascadeStatus] = useState(null); // null | 'recalculating' | 'done'
+    const [printing, setPrinting] = useState(false);
     const cascadeTimeoutRef = useRef(null);
 
     const handleCascadeRecalculating = useCallback((isRecalculating) => {
@@ -49,17 +117,29 @@ function JobLog() {
             }, 2000);
         }
     }, []);
+    const { isOldMan } = useTheme();
     const [reviewMode, setReviewMode] = useState(
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isDrafter, setIsDrafter] = useState(false);
+    const [showScrollbars, setShowScrollbars] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(
         () => localStorage.getItem('jl_minimized') === 'true'
     );
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [archivePreview, setArchivePreview] = useState(null);
     const [archiving, setArchiving] = useState(false);
+    const [showRenumberModal, setShowRenumberModal] = useState(false);
+    const [renumberPreview, setRenumberPreview] = useState(null);
+    const [renumbering, setRenumbering] = useState(false);
     const tableScrollRef = useRef(null);
+
+    // View mode (auto/table/cards). Auto picks cards on iPad-sized screens.
+    const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
+    const isTabletOrSmaller = useIsTabletOrSmaller();
+    const { isMobile } = useBreakpoint();
+    const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
 
     // Use the filters hook
     const {
@@ -74,6 +154,7 @@ function JobLog() {
         stageColors,
         stageToGroup,
         stageGroupColors,
+        stageGroupDupColors,
         displayJobs,
         secondarySearchResults,
         totalFabHrs,
@@ -82,6 +163,12 @@ function JobLog() {
         toggleStage,
         selectedSubset,
         setSelectedSubset,
+        columnFilters,
+        columnSort,
+        setColumnFilter,
+        setColumnSort,
+        matchesFilters,
+        matchesSearch,
     } = useJobsFilters(jobs);
 
     // Fetch user auth info to check admin status
@@ -90,9 +177,13 @@ function JobLog() {
             try {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
+                setIsDrafter(user?.is_drafter || false);
+                setShowScrollbars(userWantsVisibleScrollbars(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
+                setIsDrafter(false);
+                setShowScrollbars(false);
             }
         };
         fetchUserInfo();
@@ -144,50 +235,6 @@ function JobLog() {
     const handleDragLeave = () => { };
     const handleDrop = () => { };
 
-    const formatDate = (dateValue) => {
-        if (!dateValue) return '—';
-        try {
-            // Handle ISO date strings (YYYY-MM-DD) - parse directly to avoid timezone issues
-            if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
-                // Extract date parts directly from ISO string to avoid timezone conversion
-                const parts = dateValue.split('T')[0].split('-');
-                if (parts.length === 3) {
-                    const year = parts[0];
-                    const month = parts[1];
-                    const day = parts[2];
-                    // Return in MM/DD/YY format
-                    return `${month}/${day}/${year.slice(-2)}`;
-                }
-            }
-            // Fallback to Date object parsing for other formats
-            const date = new Date(dateValue);
-            if (isNaN(date.getTime())) return '—';
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const year = String(date.getFullYear()).slice(-2);
-            return `${month}/${day}/${year}`;
-        } catch (e) {
-            return '—';
-        }
-    };
-
-    const formatCellValue = (value, columnName) => {
-        if (value === null || value === undefined || value === '') {
-            return '—';
-        }
-        if (Array.isArray(value)) {
-            return value.join(', ');
-        }
-        // Format Fab Hrs and Install HRS to 2 decimal places
-        if (columnName === 'Fab Hrs' || columnName === 'Install HRS') {
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-                return numValue.toFixed(2);
-            }
-        }
-        return value;
-    };
-
     const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
 
     // Check if we have data to display
@@ -196,61 +243,45 @@ function JobLog() {
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
 
-    // Stage completeness order (index 0 = least complete, higher = more complete)
-    const STAGE_COMPLETENESS = {
-        'Released': 0, 'Material Ordered': 1, 'Cut start': 2, 'Cut Complete': 3,
-        'Fitup Start': 4, 'Fit Up Complete.': 5, 'Weld Start': 6, 'Weld Complete': 7,
-        'Welded': 8, 'Welded QC': 9, 'Paint Start': 10, 'Paint complete': 11,
-        'Store at MHMW for shipping': 12, 'Shipping planning': 13,
-        'Shipping completed': 14, 'Complete': 15,
-    };
+    // Review-mode sort: PM (alphabetical) → Job # (asc) → compareSameJob tie-break.
+    const reviewDisplayJobs = useMemo(
+        () => (reviewMode ? reviewSort(displayJobs) : displayJobs),
+        [displayJobs, reviewMode]
+    );
 
-    // When Review mode is enabled, sort independently of other sort behavior:
-    // 1) group by PM (no intermixing of PMs), PM groups ordered alphabetically,
-    // 2) within each PM, sort by Project # ascending,
-    // 3) within each Project #, sort by stage completeness (most complete first).
-    const reviewDisplayJobs = useMemo(() => {
-        if (!reviewMode) return displayJobs;
+    // Print always uses the review sort regardless of the on-screen toggle.
+    const printSortedJobs = useMemo(() => reviewSort(displayJobs), [displayJobs]);
 
-        const sorted = [...displayJobs];
-        sorted.sort((a, b) => {
-            const pmKeyA = (a['PM'] || 'No PM').toString();
-            const pmKeyB = (b['PM'] || 'No PM').toString();
-
-            // Different PMs: alphabetical by PM name (case-insensitive)
-            if (pmKeyA !== pmKeyB) {
-                return pmKeyA.toLowerCase().localeCompare(pmKeyB.toLowerCase());
-            }
-
-            // Same PM: sort by Project # (Job #) ascending
-            const jobA = a['Job #'] || 0;
-            const jobB = b['Job #'] || 0;
-            if (jobA !== jobB) return jobA - jobB;
-
-            // Same Project #: sort by stage completeness (most complete first)
-            const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-            const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-            return stageB - stageA;
-        });
-
-        return sorted;
-    }, [displayJobs, reviewMode]);
-
-    // Compute set of fab_order values >= 4 that appear on more than one release
+    // Compute fab_order values that appear on more than one release *within the same
+    // stage group*. The client uses Welded QC (READY_TO_SHIP) for paint-sequence
+    // ordering, so its numbering naturally collides with FABRICATION numbering — those
+    // cross-group collisions are not real conflicts. 80.555 is the DEFAULT_FAB_ORDER
+    // sentinel and values < 3 are reserved fixed tiers; both are excluded. The
+    // FABRICATION dynamic block starts at 3, so ties at 3+ are real collisions.
+    // Returns Map<groupKey, Set<number>> keyed by stage group.
     const duplicateFabOrders = useMemo(() => {
-        const counts = {};
+        const countsByGroup = new Map();
         for (const row of reviewDisplayJobs) {
             const fo = row['Fab Order'];
-            if (fo != null && fo >= 4) {
-                counts[fo] = (counts[fo] || 0) + 1;
+            if (fo == null || fo < 3 || fo === 80.555) continue;
+            const group = stageToGroup?.[row['Stage']] || 'FABRICATION';
+            let counts = countsByGroup.get(group);
+            if (!counts) {
+                counts = new Map();
+                countsByGroup.set(group, counts);
             }
+            counts.set(fo, (counts.get(fo) || 0) + 1);
         }
-        const dupes = new Set();
-        for (const [val, count] of Object.entries(counts)) {
-            if (count > 1) dupes.add(Number(val));
+        const dupesByGroup = new Map();
+        for (const [group, counts] of countsByGroup) {
+            const dupes = new Set();
+            for (const [val, count] of counts) {
+                if (count > 1) dupes.add(val);
+            }
+            if (dupes.size > 0) dupesByGroup.set(group, dupes);
         }
-        return dupes;
-    }, [reviewDisplayJobs]);
+        return dupesByGroup;
+    }, [reviewDisplayJobs, stageToGroup]);
 
     // Define column order explicitly
     const columnOrder = [
@@ -278,26 +309,54 @@ function JobLog() {
      * Job log column widths as percentage of table width. Tune these to taste; they are
      * normalized so visible columns always sum to 100%. Only columns listed here get
      * custom widths; others share the remainder equally.
+     *
+     * --------------------------------------------------------------------------
+     * VIEWPORT TUNING (foundation, not final)
+     * --------------------------------------------------------------------------
+     * These percentages — together with the per-cell `min-width`s in JobsTableRow.jsx
+     * (Job Name 170px, Description 170px, Stage 140px, Urgency 230px, Fab Order
+     * input 48px, Notes textarea no-floor) and the `iconSize=26` Banana Code row
+     * with 4px gaps — are tuned for a standard desktop / laptop viewport, roughly
+     * 1280–1700px wide.
+     *
+     * On smaller screens the Banana Code's 230px floor + min-widths above will push
+     * the table into horizontal scroll. On large/ultrawide screens (>1920) the
+     * extra room distributes proportionally and the icons stay 26px (the Urgency
+     * cell will just gain whitespace).
+     *
+     * TODO when adding responsive breakpoints:
+     *   - Mobile (<768px): drop the Banana Code column entirely, or collapse the
+     *     7 dept icons to a single overall-progress badge. Hide low-signal
+     *     columns (PM, BY, Fab Hrs, Install Hrs, Comp. ETA).
+     *   - Tablet (768–1280px): show 5 of the 7 dept icons (skip Admin + Store-at-MHMW
+     *     equivalents) and shrink iconSize to 20.
+     *   - Large desktop (>1920px): bump iconSize to 30 so the banana row scales with
+     *     the rest of the table instead of leaving a gap.
+     *
+     * Sub-label widths in the Banana Code header (currently 26px each, gap-1)
+     * MUST stay equal to the icon size + gap in `StageIconRow` so the per-icon
+     * labels line up with the icons below.
+     * --------------------------------------------------------------------------
      */
     const COLUMN_WIDTH_PERCENT = {
         'Job #': 3,
         'Release #': 3,
-        'Job': 6,
-        'Description': 7,
-        'Fab Hrs': 4,
-        'Install HRS': 5,
-        'Paint color': 6,
+        'Job': 9,
+        'Description': 8,
+        'Fab Hrs': 3,
+        'Install HRS': 3,
+        'Paint color': 5,
         'PM': 3,
         'BY': 3,
-        'Released': 5,
-        'Fab Order': 6,
-        'Stage': 9,
-        'Urgency': 7,
-        'Start install': 5,
-        'Comp. ETA': 5,
-        'Job Comp': 5,
-        'Invoiced': 5,
-        'Notes': 10,
+        'Released': 4,
+        'Fab Order': 4,
+        'Stage': 6,
+        'Urgency': 14,
+        'Start install': 4,
+        'Comp. ETA': 4,
+        'Job Comp': 4,
+        'Invoiced': 4,
+        'Notes': 9,
         'Actions': 5,
     };
 
@@ -306,6 +365,50 @@ function JobLog() {
         // Only include columns that exist in the data and are in our defined order
         return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
     }, [columns]);
+
+    // Phase 1 columns that get an Excel-style header dropdown filter.
+    const FILTERABLE_COLUMNS = useMemo(() => new Set([
+        'Job #', 'Release #', 'Job', 'Stage', 'Fab Order',
+        'Paint color', 'Job Comp', 'Invoiced', 'PM', 'BY',
+    ]), []);
+
+    /**
+     * Per-column reachable values: for each filterable column C, the set of unique
+     * non-blank values present in jobs that pass every active filter except C's own
+     * column filter (Excel-style narrowing). Also tracks whether blanks are reachable.
+     */
+    const uniqueValuesByColumn = useMemo(() => {
+        const out = {};
+        FILTERABLE_COLUMNS.forEach((col) => {
+            const set = new Set();
+            let hasBlanks = false;
+            for (const job of jobs) {
+                if (!matchesFilters(job)) continue;
+                if (!matchesSearch(job, search)) continue;
+                let ok = true;
+                for (const k in columnFilters) {
+                    if (k === col) continue;
+                    const allowed = columnFilters[k];
+                    if (!allowed || allowed.length === 0) continue;
+                    const v = job[k];
+                    const blank = (v === null || v === undefined || String(v).trim() === '');
+                    if (blank ? !allowed.includes('(Blanks)') : !allowed.includes(String(v).trim())) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (!ok) continue;
+                const v = job[col];
+                if (v === null || v === undefined || String(v).trim() === '') hasBlanks = true;
+                else set.add(String(v).trim());
+            }
+            out[col] = {
+                values: [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
+                hasBlanks,
+            };
+        });
+        return out;
+    }, [jobs, columnFilters, matchesFilters, matchesSearch, search, FILTERABLE_COLUMNS]);
 
     const tableColumnCount = columnHeaders.length;
 
@@ -501,250 +604,35 @@ function JobLog() {
         URL.revokeObjectURL(url);
     };
 
-    const handlePrint = () => {
-        // First, sort all jobs by Job # first, then PM
-        const sortedJobs = [...jobs].sort((a, b) => {
-            // First sort by Job #
-            const jobA = a['Job #'] || 0;
-            const jobB = b['Job #'] || 0;
-            if (jobA !== jobB) {
-                return jobA - jobB;
-            }
-            // Then sort by PM (treat null/empty as empty string for sorting)
-            const pmA = (a['PM'] || '').toString().toLowerCase();
-            const pmB = (b['PM'] || '').toString().toLowerCase();
-            return pmA.localeCompare(pmB);
-        });
-
-        // Group jobs by PM, maintaining the sorted order within each PM group
-        const jobsByPM = {};
-        sortedJobs.forEach(job => {
-            const pm = job['PM'] || 'No PM';
-            if (!jobsByPM[pm]) {
-                jobsByPM[pm] = [];
-            }
-            jobsByPM[pm].push(job);
-        });
-
-        // Sort each PM group by Job # ascending, then stage completeness descending (Review order)
-        Object.keys(jobsByPM).forEach(pm => {
-            jobsByPM[pm].sort((a, b) => {
-                const jobA = a['Job #'] || 0;
-                const jobB = b['Job #'] || 0;
-                if (jobA !== jobB) return jobA - jobB;
-                const stageA = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-                const stageB = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-                return stageB - stageA;
+    const handlePrint = async () => {
+        if (printing) return;
+        setPrinting(true);
+        try {
+            await generateJobLogReviewPdf({
+                jobs: printSortedJobs,
+                columnHeaders,
+                columnWidthPercent: COLUMN_WIDTH_PERCENT,
             });
-        });
-
-        // Create printable HTML
-        let printHTML = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Job Log - Print</title>
-    <style>
-        @media print {
-            @page {
-                /* 11x17 tabloid in landscape orientation */
-                size: 11in 17in landscape;
-                margin: 0.5in;
-            }
-            .pm-group {
-                page-break-after: always;
-            }
-            .pm-group:last-child {
-                page-break-after: auto;
-            }
+        } catch (err) {
+            console.error('Failed to generate Job Log Review PDF', err);
+            alert('Failed to generate PDF. See console for details.');
+        } finally {
+            setPrinting(false);
         }
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 10px;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            font-size: 18px;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        .pm-header {
-            font-size: 14px;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            padding: 8px;
-            background-color: #f0f0f0;
-            border-bottom: 2px solid #333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            table-layout: fixed;
-        }
-        .hard-date {
-            background-color: #EF4444;
-            color: white;
-            font-weight: bold;
-        }
-        th {
-            background-color: #e0e0e0;
-            border: 1px solid #999;
-            padding: 6px 4px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 9px;
-            white-space: nowrap;
-        }
-        td {
-            border: 1px solid #ccc;
-            padding: 4px;
-            text-align: center;
-            font-size: 9px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            word-wrap: break-word;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        tr.grayed-row, tr.grayed-row:nth-child(even) {
-            background-color: #d1d5db;
-        }
-        .no-data {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-    <h1>Job Log - Printed ${new Date().toLocaleString()}</h1>
-`;
-
-        // Generate table for each PM group.
-        // PM blocks are ordered alphabetically by PM, with each block internally sorted by Job #.
-        Object.keys(jobsByPM).sort((pmA, pmB) => {
-            return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
-        }).forEach((pm, pmIndex, pmArray) => {
-            const pmJobs = jobsByPM[pm];
-            const isLastPM = pmIndex === pmArray.length - 1;
-
-            // Build colgroup with normalized widths for uniform columns across pages
-            const defaultWeight = 5;
-            const totalWeight = columnHeaders.reduce((sum, col) => sum + (COLUMN_WIDTH_PERCENT[col] ?? defaultWeight), 0);
-            const colgroup = '<colgroup>' + columnHeaders.map(col => {
-                const pct = ((COLUMN_WIDTH_PERCENT[col] ?? defaultWeight) / totalWeight * 100).toFixed(2);
-                return `<col style="width:${pct}%">`;
-            }).join('') + '</colgroup>';
-
-            printHTML += `
-    <div class="pm-group"${isLastPM ? '' : ' style="page-break-after: always;"'}>
-        <div class="pm-header">PM: ${pm}</div>
-        <table>
-            ${colgroup}
-            <thead>
-                <tr>
-                    ${columnHeaders.map(col => {
-                const displayHeader = col === 'Release #' ? 'rel. #' : col === 'Job Comp' ? 'Install Prog' : col;
-                return `<th>${displayHeader}</th>`;
-            }).join('')}
-                </tr>
-            </thead>
-            <tbody>
-`;
-
-            pmJobs.forEach(job => {
-                const isInstallComplete = (job['Job Comp'] || '').toString().trim().toUpperCase() === 'X';
-                printHTML += `<tr${isInstallComplete ? ' class="grayed-row"' : ''}>`;
-                columnHeaders.forEach(column => {
-                    // Render Urgency column as colored banana SVGs
-                    if (column === 'Urgency') {
-                        const stage = job['Stage'] || 'Released';
-                        const bananaColor = job['Banana Color'] || null;
-                        const group = stageToGroup?.[stage] || 'FABRICATION';
-
-                        let count = 1, defaultColor = 'gray';
-                        if (group === 'FABRICATION') {
-                            const colorMap = { 'Cut start': 'green', 'Material Ordered': 'green', 'Fit Up Complete.': 'yellow', 'Welded': 'yellow', 'Released': 'gray', 'Hold': 'red' };
-                            defaultColor = colorMap[stage] || 'gray';
-                            count = 1;
-                        } else if (group === 'READY_TO_SHIP') {
-                            const colorMap = { 'Welded QC': 'green', 'Paint complete': 'yellow', 'Store at MHMW for shipping': 'yellow', 'Shipping planning': 'yellow' };
-                            defaultColor = colorMap[stage] || 'yellow';
-                            count = 2;
-                        } else if (group === 'COMPLETE') {
-                            const colorMap = { 'Complete': 'gray', 'Shipping completed': 'green' };
-                            defaultColor = colorMap[stage] || 'gray';
-                            count = 3;
-                        }
-
-                        const isHold = stage === 'Hold';
-                        const effectiveColor = isHold ? 'red' : (bananaColor === 'red' ? 'red' : defaultColor);
-
-                        const fillMap = { red: '#EF4444', yellow: '#FFE135', green: '#22C55E', gray: '#9CA3AF' };
-                        const fill = fillMap[effectiveColor] || fillMap.yellow;
-                        const stroke = effectiveColor === 'gray' ? '#6B7280' : '#000000';
-
-                        const bananaSvg = `<svg width="16" height="16" viewBox="0 0 950 927.611" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><g><g fill="${fill}" stroke="${stroke}" stroke-width="22"><path d="M158.56,618.97l2.4-0.7c97-26.199,181.6-59.8,251.2-99.8c94.5-54.3,159.4-119.5,193-193.799l16-35.4l-28.699,26.2c-57,52.1-134.801,91-231.4,115.8c-81.9,21-176,31.7-279.8,31.7c-5.4,0-17.4-0.1-24.6-0.2l-16.9-0.8c-13.3-0.6-25.4,7.6-29.8,20.2l-6.6,19.1c-3.9,11.301-0.7,23.9,8.2,32c7.4,6.7,14.9,13.2,14.9,13.2s56,48.5,129.6,71.7L158.56,618.97z"/><path d="M811.86,163.17c-29.1-13.4-56.899-15.4-70.899-15.4c-1.801,0-3.5,0-4.9,0.1c-3.2-11.2-19.4-78.1-30.7-124.9c-5.2-21.5-31.1-30.2-48.2-16.1l-53.6,44.2c-14,11.5-16.9,31.7-6.7,46.7c22.4,32.9,59.5,91.7,77.7,144.8c17.2,50.3,18.7,102.9,10.5,154.6c-13.4,83.7-57.6,168.2-131.4,251.2c-40.199,45.2-84.699,86.399-132.199,123.7c-23.801,18.699-48.4,36.399-73.7,53c-2.601,1.699-32.7,19.399-53.601,30.199c-11.699,6-18.1,19-15.8,31.9l2.5,14c2.4,13.4,13.5,23.5,27,24.6c34.3,2.9,105.101,4.801,199.7-13.899c51.8-10.2,101.8-34.5,148.2-62.101c78.1-46.6,182.8-131.399,238.1-271c24.7-62.3,35.2-126.699,31.2-191.599c-3.9-63.8-20.7-112.4-34.1-142C873.66,206.771,847.06,179.271,811.86,163.17z"/><path d="M109.46,744.97c13.1,8.101,34.4,19.8,60.3,28.4c44.5,14.8,91.8,21.2,138.5,22.7l2.6,0.1l2.101-1.4c34.5-23.1,67.3-47.3,97.6-71.899c37.7-30.7,71.5-62.2,100.5-93.601c26.3-28.5,50.6-58.899,71.4-91.6c18.199-28.6,33.699-59.1,44.8-91.2c5.2-15,9.5-30.399,12.399-46.1c3-15.9,4.4-32.1,6.5-48.2c0.4-3.2,0.801-6.3,1.2-9.5l-19.899,33.9c-41.7,71.199-110.5,133.699-204.601,186c-61.2,34.1-126.8,60.1-193.6,81.199c-36.4,11.5-71.6,21.601-108.6,27.301c-14.6,2.199-25.3,14.8-25.3,29.6c0,6.4,0,13.1,0,18.9C95.36,729.87,100.66,739.47,109.46,744.97z"/></g></g></svg>`;
-
-                        const bgMap = { red: '#FEE2E2', yellow: '#FEF9C3', green: '#D1FAE5', gray: '#F3F4F6' };
-                        const borderMap = { red: '#FCA5A5', yellow: '#FDE68A', green: '#6EE7B7', gray: '#D1D5DB' };
-                        const bg = bgMap[effectiveColor] || bgMap.gray;
-                        const border = borderMap[effectiveColor] || borderMap.gray;
-
-                        printHTML += `<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:2px;padding:2px 4px;border-radius:4px;background:${bg};border:1px solid ${border};">${Array(count).fill(bananaSvg).join('')}</span></td>`;
-                        return;
-                    }
-
-                    let value = job[column];
-
-                    // Format date columns
-                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
-                        value = formatDate(value);
-                    } else {
-                        value = formatCellValue(value, column);
-                    }
-
-                    // Escape HTML
-                    const displayValue = String(value || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-                    // Apply red styling for hard dates on Start install
-                    const isHardDate = column === 'Start install' && job['start_install_formulaTF'] === false && job['Start install'];
-                    printHTML += `<td${isHardDate ? ' class="hard-date"' : ''}>${displayValue}</td>`;
-                });
-                printHTML += '</tr>';
-            });
-
-            printHTML += `
-            </tbody>
-        </table>
-    </div>
-`;
-        });
-
-        printHTML += `
-</body>
-</html>
-`;
-
-        // Open print window
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(printHTML);
-        printWindow.document.close();
-
-        // Wait for content to load, then trigger print
-        printWindow.onload = () => {
-            setTimeout(() => {
-                printWindow.print();
-            }, 250);
-        };
     };
 
     return (
         <>
-            <div className="w-full h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
+            <div
+                className="w-full h-[calc(100vh-3.5rem)] 3xl:h-[calc(100vh-4rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 3xl:py-4 3xl:px-6 flex flex-col"
+                style={{
+                    width: '100%',
+                    minWidth: '100%',
+                    paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
+                    paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
+                    paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+                }}
+            >
                 <div className="max-w-full mx-auto w-full h-full flex flex-col" style={{ width: '100%' }}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
 
@@ -765,7 +653,10 @@ function JobLog() {
 
                                 {/* Row 1: Project name buttons — only visible when expanded */}
                                 {!isFilterMinimized && (
-                                    <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+                                    <div
+                                        className="grid gap-1"
+                                        style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 140 : 100}px, 1fr))` }}
+                                    >
                                         <button
                                             onClick={() => setSelectedProjectNames([])}
                                             className={`w-full px-2.5 py-1 rounded text-xs font-medium transition-all ${selectedProjectNames.length === 0
@@ -799,15 +690,17 @@ function JobLog() {
                                 )}
 
                                 {/* Row 2: Actions (left) + Stage filters (center-right) + Chevron (far right) — always visible */}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                     {/* Action buttons inline */}
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <ViewToggle value={viewMode} onChange={setViewMode} />
                                         <button
                                             onClick={handlePrint}
-                                            disabled={!hasData || loading}
+                                            disabled={!hasData || loading || !reviewMode || printing}
+                                            title={!reviewMode ? 'Enable Review mode to export the PDF' : 'Build a per-PM tabloid-landscape PDF and download it'}
                                             className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
-                                            🖨️ Print
+                                            {printing ? '⏳ Building…' : '🖨️ Print'}
                                         </button>
                                         <button
                                             onClick={() => navigate('/pm-board')}
@@ -847,6 +740,23 @@ function JobLog() {
                                                 Send to Archive
                                             </button>
                                         )}
+                                        {isAdmin && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const data = await jobsApi.renumberFabricationFabOrders({ dryRun: true });
+                                                        setRenumberPreview(data);
+                                                        setShowRenumberModal(true);
+                                                    } catch (err) {
+                                                        alert(`Failed to load renumber preview: ${err.message}`);
+                                                    }
+                                                }}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                                                title="Admin only — compress FABRICATION group fab_order values to a contiguous block starting at 3, preserving relative order. Welded QC and later stages are untouched."
+                                            >
+                                                🔢 Renumber Fab Order
+                                            </button>
+                                        )}
                                         <button
                                             onClick={handleReleaseClick}
                                             className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
@@ -879,7 +789,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
-                                            title="Show only releases in Shipping planning, Store at MHMW for shipping, or Paint complete — i.e., work that's finished production and ready to leave."
+                                            title="Show only releases in Ship Planning, Store at MHMW, or Paint Complete — i.e., work that's finished production and ready to leave."
                                         >
                                             Ready to Ship
                                         </button>
@@ -905,7 +815,7 @@ function JobLog() {
                                                 ? 'bg-emerald-600 text-white'
                                                 : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                 }`}
-                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
+                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint Complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
                                         >
                                             Paint+Fab
                                         </button>
@@ -961,7 +871,7 @@ function JobLog() {
                                                 onChange={(e) => setSearch(e.target.value)}
                                                 placeholder="Job #, release, name, description..."
                                                 title="Live-filter the visible rows by Job #, Release #, project name, or description. Case-insensitive substring match."
-                                                className="w-64 px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                                className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
                                             />
                                         </div>
                                         <button
@@ -1013,29 +923,76 @@ function JobLog() {
                                 </div>
                             )}
 
-                            {!loading && !fetchError && (
+                            {!loading && !fetchError && effectiveView === 'cards' && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <div ref={tableScrollRef} className="job-log-table-scroll-hide-scrollbar overflow-auto flex-1">
+                                    <JobLogRowList
+                                        jobs={reviewDisplayJobs}
+                                        secondaryResults={secondarySearchResults}
+                                        search={search}
+                                        jumpToTarget={jumpToTarget}
+                                        columns={columnHeaders}
+                                        formatCellValue={formatCellValue}
+                                        formatDate={formatDateShort}
+                                        onUpdate={() => refetch(true)}
+                                        onCascadeRecalculating={handleCascadeRecalculating}
+                                        stageToGroup={stageToGroup}
+                                        stageGroupColors={stageGroupColors}
+                                        stageGroupDupColors={stageGroupDupColors}
+                                        isAdmin={isAdmin}
+                                        isDrafter={isDrafter}
+                                        onDelete={handleDeleteJob}
+                                        duplicateFabOrders={duplicateFabOrders}
+                                        hasJobsData={hasJobsData}
+                                    />
+                                </div>
+                            )}
+
+                            {!loading && !fetchError && effectiveView === 'table' && (
+                                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                                    <div
+                                        ref={tableScrollRef}
+                                        className={`${showScrollbars ? '' : 'job-log-table-scroll-hide-scrollbar'} overflow-auto flex-1`.trim()}
+                                    >
                                         <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                                             <thead className="sticky top-0 z-10">
                                                 <tr>
                                                     {columnHeaders.map((column) => {
                                                         const isReleaseNumber = column === 'Release #';
-                                                        // Display "rel. #" for Release # column header
-                                                        const displayHeader = column === 'Release #' ? 'rel. #' : column === 'Job Comp' ? 'Install Prog' : column;
+                                                        const displayHeader = HEADER_OVERRIDES[column] ?? column;
                                                         const colWidthPct = columnWidthPercents[column];
+                                                        const isFilterable = FILTERABLE_COLUMNS.has(column);
+                                                        const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
+                                                        const colSelected = columnFilters[column] ?? [];
+                                                        const isUrgency = column === 'Urgency';
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} py-0.5 text-center text-[10px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm`}
+                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
-                                                                {displayHeader}
+                                                                {isUrgency ? (
+                                                                    <BananaCodeHeader />
+                                                                ) : isFilterable ? (
+                                                                    <ColumnHeaderFilter
+                                                                        column={column}
+                                                                        values={colInfo?.values ?? []}
+                                                                        hasBlanks={colInfo?.hasBlanks ?? false}
+                                                                        selected={new Set(colSelected)}
+                                                                        onChange={(next) => setColumnFilter(column, [...next])}
+                                                                        sort={columnSort}
+                                                                        onSort={(dir) => setColumnSort(column, dir)}
+                                                                        isActive={colSelected.length > 0}
+                                                                    >
+                                                                        {displayHeader}
+                                                                    </ColumnHeaderFilter>
+                                                                ) : (
+                                                                    displayHeader
+                                                                )}
                                                             </th>
                                                         );
                                                     })}
                                                     {isAdmin && (
-                                                        <th className="px-2 py-0.5 text-center text-xl font-bold text-gray-900 dark:text-slate-100 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-gray-300 dark:border-slate-600 shadow-sm w-12">
+                                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600 w-8">
                                                             ⚙
                                                         </th>
                                                     )}
@@ -1060,8 +1017,8 @@ function JobLog() {
                                                                     row={row}
                                                                     columns={columnHeaders}
                                                                     isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                                    formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
-                                                                    formatDate={formatDate}
+                                                                    formatCellValue={formatCellValue}
+                                                                    formatDate={formatDateShort}
                                                                     rowIndex={index}
                                                                     onDragStart={handleDragStart}
                                                                     onDragOver={handleDragOver}
@@ -1073,7 +1030,9 @@ function JobLog() {
                                                                     onCascadeRecalculating={handleCascadeRecalculating}
                                                                     stageToGroup={stageToGroup}
                                                                     stageGroupColors={stageGroupColors}
+                                                                    stageGroupDupColors={stageGroupDupColors}
                                                                     isAdmin={isAdmin}
+                                                                    isDrafter={isDrafter}
                                                                     onDelete={handleDeleteJob}
                                                                     tableScrollRef={tableScrollRef}
                                                                     duplicateFabOrders={duplicateFabOrders}
@@ -1100,8 +1059,8 @@ function JobLog() {
                                                             row={row}
                                                             columns={columnHeaders}
                                                             isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                            formatCellValue={(value, columnName) => formatCellValue(value, columnName)}
-                                                            formatDate={formatDate}
+                                                            formatCellValue={formatCellValue}
+                                                            formatDate={formatDateShort}
                                                             rowIndex={index}
                                                             onDragStart={handleDragStart}
                                                             onDragOver={handleDragOver}
@@ -1113,7 +1072,9 @@ function JobLog() {
                                                             onCascadeRecalculating={handleCascadeRecalculating}
                                                             stageToGroup={stageToGroup}
                                                             stageGroupColors={stageGroupColors}
+                                                            stageGroupDupColors={stageGroupDupColors}
                                                             isAdmin={isAdmin}
+                                                            isDrafter={isDrafter}
                                                             onDelete={handleDeleteJob}
                                                             tableScrollRef={tableScrollRef}
                                                             duplicateFabOrders={duplicateFabOrders}
@@ -1219,6 +1180,108 @@ function JobLog() {
                     </div>
                 )}
 
+                {/* Renumber Fab Order Modal */}
+                {showRenumberModal && renumberPreview && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+                            <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 rounded-t-xl">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-bold text-white">Renumber Fab Order</h2>
+                                    <button
+                                        onClick={() => setShowRenumberModal(false)}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                        disabled={renumbering}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="p-6 overflow-y-auto flex-1">
+                                <p className="mb-3 text-sm text-gray-700 dark:text-slate-300">
+                                    Compresses FABRICATION group <code>fab_order</code> values to a contiguous block starting at <strong>3</strong>, preserving the current relative order. Welded QC, Paint Start, and later stages are untouched.
+                                </p>
+                                <div className="mb-4 grid grid-cols-4 gap-3 text-sm">
+                                    <div className="bg-gray-50 dark:bg-slate-700 rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">FAB total</div>
+                                        <div className="text-lg font-bold">{renumberPreview.total_fabrication}</div>
+                                    </div>
+                                    <div className="bg-amber-50 dark:bg-amber-900/30 rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">Will change</div>
+                                        <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{renumberPreview.changed}</div>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-slate-700 rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">Unchanged</div>
+                                        <div className="text-lg font-bold">{renumberPreview.unchanged}</div>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-slate-700 rounded p-2" title="Releases at the 80.555 placeholder are preserved as-is.">
+                                        <div className="text-xs text-gray-500 dark:text-slate-400">Placeholder (80.555)</div>
+                                        <div className="text-lg font-bold">{renumberPreview.placeholder_preserved ?? 0}</div>
+                                    </div>
+                                </div>
+                                {renumberPreview.changed === 0 ? (
+                                    <p className="text-gray-600 dark:text-slate-300">Nothing to do — fab_orders are already compressed.</p>
+                                ) : (
+                                    <div className="max-h-64 overflow-y-auto border border-gray-200 dark:border-slate-600 rounded">
+                                        <table className="w-full text-xs">
+                                            <thead className="bg-gray-100 dark:bg-slate-700 sticky top-0">
+                                                <tr>
+                                                    <th className="px-2 py-1 text-left">Job-Release</th>
+                                                    <th className="px-2 py-1 text-left">Stage</th>
+                                                    <th className="px-2 py-1 text-right">From</th>
+                                                    <th className="px-2 py-1 text-right">→</th>
+                                                    <th className="px-2 py-1 text-right">To</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {renumberPreview.changes.map((c, i) => (
+                                                    <tr key={`${c.job}-${c.release}`} className={`${c.changed === false ? 'opacity-60' : ''} ${i % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-gray-50 dark:bg-slate-750'}`}>
+                                                        <td className="px-2 py-1 font-mono">{c.job}-{c.release}</td>
+                                                        <td className="px-2 py-1">{c.stage}</td>
+                                                        <td className="px-2 py-1 text-right text-gray-500">{c.from ?? '—'}</td>
+                                                        <td className="px-2 py-1 text-right text-gray-400">→</td>
+                                                        <td className={`px-2 py-1 text-right ${c.changed === false ? 'text-gray-500' : 'font-bold'}`}>{c.to}{c.changed === false ? ' (no change)' : ''}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-600 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowRenumberModal(false)}
+                                    className="px-4 py-2 rounded text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-600"
+                                    disabled={renumbering}
+                                >
+                                    Cancel
+                                </button>
+                                {renumberPreview.changed > 0 && (
+                                    <button
+                                        onClick={async () => {
+                                            setRenumbering(true);
+                                            try {
+                                                const result = await jobsApi.renumberFabricationFabOrders({ dryRun: false });
+                                                setShowRenumberModal(false);
+                                                setRenumberPreview(null);
+                                                await refetch(true);
+                                                alert(`Renumbered ${result.changed} release${result.changed !== 1 ? 's' : ''}.`);
+                                            } catch (err) {
+                                                alert(`Failed to renumber: ${err.message}`);
+                                            } finally {
+                                                setRenumbering(false);
+                                            }
+                                        }}
+                                        disabled={renumbering}
+                                        className="px-4 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {renumbering ? 'Renumbering...' : `Apply (${renumberPreview.changed})`}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Release Modal */}
                 {showReleaseModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1259,7 +1322,7 @@ function JobLog() {
                                         <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
                                             Preview ({parsedPreview.length} row{parsedPreview.length !== 1 ? 's' : ''})
                                         </h3>
-                                        <div className="border border-gray-300 dark:border-slate-600 rounded-lg overflow-hidden">
+                                        <div className="border border-gray-400 dark:border-slate-700 rounded-lg overflow-hidden">
                                             <div className="overflow-x-auto max-h-96">
                                                 <table className="w-full text-xs border-collapse">
                                                     <thead className="bg-gray-100 dark:bg-slate-700 sticky top-0">
@@ -1267,7 +1330,7 @@ function JobLog() {
                                                             {['Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'].map((col) => (
                                                                 <th
                                                                     key={col}
-                                                                    className="px-2 py-1.5 text-left font-semibold text-gray-700 dark:text-slate-200 border-b border-gray-300 dark:border-slate-600 whitespace-nowrap"
+                                                                    className="px-2 py-1.5 text-left font-semibold text-gray-700 dark:text-slate-200 border-b border-gray-400 dark:border-slate-700 whitespace-nowrap"
                                                                 >
                                                                     {col}
                                                                 </th>
@@ -1380,6 +1443,7 @@ function JobLog() {
                 )}
 
             </div>
+
         </>
     );
 }

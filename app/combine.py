@@ -103,19 +103,3 @@ def combine_trello_excel_data():
     return combined
 
 
-# Example usage:
-# identifiers, dups = list_duplicate_trello_identifiers()
-# print(f"Found {len(identifiers)} identifiers in Trello.")
-# print(f"Found {len(dups)} duplicate identifiers in Trello.")
-# print(identifiers)
-
-# combined_data = combine_trello_excel_data()
-# for item in combined_data:
-#     print(item)
-
-# count = sum(
-#     1
-#     for item in combined_data
-#     if item["identifier"] and item["excel"] is not None and item["trello"] is not None
-# )
-# print(f"Count of sources with identifier, excel, and trello not None: {count}")

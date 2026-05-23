@@ -1,7 +1,16 @@
 venv
+.venv
 .env
 instance/
 .vscode/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+test-results.xml
 
 # Log files
 logs/
@@ -29,6 +38,9 @@ Thumbs.db
 
 # Snapshot files
 excel_snapshots/
+
+# PDF markup uploads (per-release drawing versions; ephemeral on Render)
+app/storage/
 
 # Refresh staging db script
 refresh_staging_db.sh

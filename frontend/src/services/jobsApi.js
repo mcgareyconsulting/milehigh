@@ -104,6 +104,19 @@ class JobsApi {
         }
     }
 
+    async renumberFabricationFabOrders({ dryRun = false } = {}) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/renumber-fabrication-fab-orders`,
+                null,
+                { params: { dry_run: dryRun } }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to renumber fabrication fab orders');
+        }
+    }
+
     async updateNotes(job, release, notes) {
         try {
             const response = await axios.patch(
@@ -113,6 +126,18 @@ class JobsApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to update notes');
+        }
+    }
+
+    async getNotesHistory(job, release, limit = 200) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/events`,
+                { params: { job, release, limit } }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch notes history');
         }
     }
 
@@ -164,6 +189,18 @@ class JobsApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to clear hard date');
+        }
+    }
+
+    async setStartInstallAsap(job, release, asap) {
+        try {
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
+                { asap }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, asap ? 'Failed to set ASAP' : 'Failed to clear ASAP');
         }
     }
 

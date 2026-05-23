@@ -57,7 +57,7 @@ def get_current_user():
         if not user_id:
             return None
         
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if user and user.is_active:
             return user
         return None
@@ -151,5 +151,29 @@ def drafter_or_admin_required(f):
             logger.warning(f"User {user.username} attempted to access drafter/admin route without privileges")
             return jsonify({'error': 'Drafter or admin privileges required'}), 403
         return f(*args, **kwargs)
+    return decorated_function
+
+
+# Email allowed to view the monthly invoicing report (in addition to any admin).
+# Usernames are stored lowercased server-side; compare lowercased.
+INVOICING_REPORT_USER = "khearn@mhmw.com"
+
+
+def invoicing_report_access_required(f):
+    """
+    Decorator restricting a route to the invoicing report user or any admin.
+
+    Returns 401 Unauthorized if user is not logged in.
+    Returns 403 Forbidden if user is neither an admin nor the invoicing report user.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        if user.is_admin or (user.username or '').lower() == INVOICING_REPORT_USER:
+            return f(*args, **kwargs)
+        logger.warning(f"User {user.username} attempted to access the invoicing report without privileges")
+        return jsonify({'error': 'Access denied'}), 403
     return decorated_function
 

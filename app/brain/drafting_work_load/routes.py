@@ -167,11 +167,16 @@ def update_submittal_notes():
 
     db.session.commit()
 
+    # Record the value actually stored, not the raw request value. The service
+    # strips whitespace; using the raw value here causes the event's `new` to
+    # disagree with `submittal.notes`, which breaks Undo's staleness check.
+    persisted_notes = submittal.notes
+
     user = get_current_user()
     try:
         create_submittal_event(
             submittal_id, "updated",
-            {"notes": {"old": old_notes, "new": notes}},
+            {"notes": {"old": old_notes, "new": persisted_notes}},
             webhook_payload=None, source="Brain",
             internal_user_id=user.id if user else None,
         )

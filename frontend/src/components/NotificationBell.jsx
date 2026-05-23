@@ -1,13 +1,13 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: In-app notification bell with 12s polling, toast popups on new mentions, and click-through to board items.
+ * purpose: In-app notification bell with 30s polling, toast popups on new mentions, and click-through to board items.
  * exports:
  *   NotificationBell: Default export — renders bell icon with unread badge, dropdown list, and toast stack
  * imports_from: [react, react-router-dom, ../services/notificationApi]
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
- *   - Polls /brain/notifications/unread-count every 12 seconds; pauses are NOT visibility-gated (runs even in background tabs).
+ *   - Polls /brain/notifications/unread-count every 30 seconds; pauses are NOT visibility-gated (runs even in background tabs).
  *   - Toast auto-dismisses after 5s with a 300ms exit animation — changing timing requires matching CSS animation duration.
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
@@ -75,7 +75,7 @@ export default function NotificationBell() {
             } catch { /* ignore auth errors */ }
         };
         poll();
-        const interval = setInterval(poll, 12000);
+        const interval = setInterval(poll, 30000);
         return () => { mounted = false; clearInterval(interval); };
     }, []);
 

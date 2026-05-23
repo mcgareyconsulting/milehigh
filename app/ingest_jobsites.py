@@ -36,7 +36,6 @@ with app.app_context():
         project = Projects(
             name=site["name"],
             job_number=site["job_number"],
-            geometry=site["geometry"],
             address=site.get("address"),
             latitude=site.get("latitude"),
             longitude=site.get("longitude"),
@@ -45,7 +44,7 @@ with app.app_context():
             ),  # Default to 2 miles if not provided
             pm_id=site.get("pm_id"),
             is_active=site.get("is_active", True),
-            geofence_geojson=site.get("geofence_geojson"),
+            geofence_geojson=site.get("geofence_geojson") or site.get("geometry"),
         )
 
         db.session.add(project)
