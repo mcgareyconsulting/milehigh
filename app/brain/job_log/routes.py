@@ -1238,10 +1238,12 @@ def update_job_comp(job, release):
     """
     raw = request.json.get("job_comp")
     job_comp_str = _normalize_short_field(raw)
+    new_is_pct = False  # True only for an actual numeric install-progress value
     if job_comp_str and job_comp_str.upper() != 'X':
         try:
             num = float(job_comp_str.rstrip('%'))
             job_comp_str = f"{num:g}%"
+            new_is_pct = True
         except ValueError:
             pass
 
@@ -1262,46 +1264,40 @@ def update_job_comp(job, release):
         payload={'field': 'job_comp', 'old_value': old_job_comp, 'new_value': job_comp_str},
     )
 
-    # If job_comp cleared from 'X', revert stage to what it was before Complete
+    # Install Prog drives the install stages. Clearing the cell leaves the
+    # stage untouched (the user manages stage separately from there).
     response_extras = {}
     old_was_x = old_job_comp and old_job_comp.strip().upper() == 'X'
     new_is_x = job_comp_str and job_comp_str.upper() == 'X'
-    if old_was_x and not new_is_x:
+
+    if new_is_pct:
+        # Entering a percentage moves the release to 'Install Start'. Does NOT
+        # clear the hard start-install date or fab_order — install has begun,
+        # not finished.
         current_stage = job_record.stage or 'Released'
-        if current_stage == 'Complete':
-            from app.models import ReleaseEvents
-            recent_stage_events = ReleaseEvents.query.filter_by(
-                job=job, release=release, action='update_stage'
-            ).order_by(ReleaseEvents.created_at.desc()).limit(20).all()
-
-            revert_stage = 'Released'
-            for evt in recent_stage_events:
-                if evt.payload.get('to') == 'Complete' and evt.payload.get('from'):
-                    revert_stage = evt.payload['from']
-                    break
-
-            update_job_stage_fields(job_record, revert_stage)
+        if current_stage != 'Install Start':
+            update_job_stage_fields(job_record, 'Install Start')
             JobEventService.create_and_close(
                 job=job, release=release,
                 action='update_stage', source='Brain',
-                payload={'from': 'Complete', 'to': revert_stage, 'reason': 'job_comp_cleared'},
+                payload={'from': current_stage, 'to': 'Install Start', 'reason': 'job_comp_pct_set'},
             )
-            response_extras['stage'] = revert_stage
+            response_extras['stage'] = 'Install Start'
             from app.api.helpers import get_stage_group_from_stage
-            response_extras['stage_group'] = get_stage_group_from_stage(revert_stage)
+            response_extras['stage_group'] = get_stage_group_from_stage('Install Start')
 
     if new_is_x:
         current_stage = job_record.stage or 'Released'
-        if current_stage != 'Complete':
-            update_job_stage_fields(job_record, 'Complete')
+        if current_stage != 'Install Complete':
+            update_job_stage_fields(job_record, 'Install Complete')
             JobEventService.create_and_close(
                 job=job, release=release,
                 action='update_stage', source='Brain',
-                payload={'from': current_stage, 'to': 'Complete', 'reason': 'job_comp_set_to_x'},
+                payload={'from': current_stage, 'to': 'Install Complete', 'reason': 'job_comp_set_to_x'},
             )
-            response_extras['stage'] = 'Complete'
+            response_extras['stage'] = 'Install Complete'
             from app.api.helpers import get_stage_group_from_stage
-            response_extras['stage_group'] = get_stage_group_from_stage('Complete')
+            response_extras['stage_group'] = get_stage_group_from_stage('Install Complete')
 
         if job_record.fab_order is not None:
             old_fab = job_record.fab_order
