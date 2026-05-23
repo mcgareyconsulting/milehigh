@@ -1158,9 +1158,21 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         // IMPORTANT: avoid conflicting bg-* utilities (Tailwind utility order, not class string order,
                         // determines the winner). If we include both rowBgClass and bg-red-500, the row bg can win,
                         // leaving white text on a light background (looks blank until hover).
-                        const startInstallBgClass = (isAsap || isHardDate)
-                            ? 'bg-red-500 text-white hover:bg-red-600 font-semibold'
-                            : `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+                        // Hard dates compare to today's LOCAL date (toISOString would shift to UTC).
+                        const now = new Date();
+                        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                        const installDay = String(localStartInstall ?? '').split('T')[0];
+                        const isHardDatePast = isHardDate && installDay < todayStr;
+                        let startInstallBgClass;
+                        if (isAsap) {
+                            startInstallBgClass = 'bg-red-500 text-white hover:bg-red-600 font-semibold';
+                        } else if (isHardDatePast) {
+                            startInstallBgClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold';
+                        } else if (isHardDate) {
+                            startInstallBgClass = 'bg-green-500 text-white hover:bg-green-600 font-semibold';
+                        } else {
+                            startInstallBgClass = `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+                        }
 
                         const titleText = isAsap
                             ? 'ASAP — release will jump from Paint Complete to Shipping Planning. Click to edit.'
