@@ -143,8 +143,9 @@ def test_bounds_self_excluded(app):
 # ---------------------------------------------------------------------------
 
 def test_stage_change_to_complete_clears_fab_order(client, app):
-    """Moving to Complete clears fab_order to NULL. Complete no longer touches
-    job_comp — that cascade now belongs to Install Complete."""
+    """Moving to Complete clears fab_order to NULL and sets job_comp='X' —
+    'Complete' is part of the install-prog complete zone alongside
+    'Install Complete'."""
     with app.app_context():
         make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
@@ -161,7 +162,7 @@ def test_stage_change_to_complete_clears_fab_order(client, app):
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
         assert job.fab_order is None
-        assert job.job_comp is None
+        assert job.job_comp == "X"
 
 
 def test_stage_change_to_paint_complete_sets_tier_2(client, app):
