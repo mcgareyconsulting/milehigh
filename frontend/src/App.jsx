@@ -26,6 +26,7 @@ import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
 import FcCollection from './pages/FcCollection';
+import InvoicingReport from './pages/InvoicingReport';
 import { checkAuth } from './utils/auth';
 import './App.css';
 
@@ -68,6 +69,7 @@ function AppContent() {
               <Route path="pm-board" element={<PMBoard />} />
               <Route path="jobsite-map" element={<JobsiteMap />} />
               <Route path="board" element={<Board />} />
+              <Route path="invoicing-report" element={<InvoicingReport />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
               <Route path="*" element={<Navigate to="/job-log" replace />} />
             </>
