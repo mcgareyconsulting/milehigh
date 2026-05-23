@@ -29,8 +29,8 @@ from app.route_utils import handle_errors, require_json, get_or_404
 from app.procore.client import get_procore_client
 from app.procore.procore import get_project_info
 from app.admin.photo_scan import (
-    scan_with_anthropic, scan_with_openai,
-    locate_with_anthropic, locate_with_openai,
+    scan_with_anthropic, scan_with_openai, scan_with_ocr, scan_smart,
+    locate_with_anthropic, locate_with_openai, locate_with_ocr, locate_smart,
     is_heic,
 )
 
@@ -291,6 +291,11 @@ def scan_photo():
     if not file:
         return jsonify({'error': "Missing 'file' part"}), 400
 
+    provider = (request.form.get('provider') or 'smart').lower()
+    valid = ('smart', 'anthropic', 'openai', 'google', 'both', 'all')
+    if provider not in valid:
+        return jsonify({'error': f"provider must be one of {', '.join(valid)}"}), 400
+
     media_type = (file.mimetype or '').lower()
     if not media_type.startswith('image/'):
         return jsonify({'error': 'File must be an image'}), 400
@@ -305,24 +310,33 @@ def scan_photo():
 
     image_b64 = base64.b64encode(image_bytes).decode()
 
-    # Run both providers concurrently. Worker threads need the app context to
-    # read API keys from current_app.config, so push it inside each task.
+    fns = []
+    if provider == 'smart':
+        fns = [scan_smart]
+    else:
+        if provider in ('anthropic', 'both', 'all'):
+            fns.append(scan_with_anthropic)
+        if provider in ('openai', 'both', 'all'):
+            fns.append(scan_with_openai)
+        if provider in ('google', 'all'):
+            fns.append(scan_with_ocr)
+
+    # Run providers concurrently; worker threads need the app context to read keys.
     app = current_app._get_current_object()
 
     def run(fn):
         with app.app_context():
             return fn(image_b64, media_type)
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(run, scan_with_anthropic),
-                   executor.submit(run, scan_with_openai)]
-        results = [f.result() for f in futures]
+    with ThreadPoolExecutor(max_workers=len(fns)) as executor:
+        results = [f.result() for f in [executor.submit(run, fn) for fn in fns]]
 
     logger.info(
         "photo_scan complete",
-        file_size=len(image_bytes),
+        file_size=len(image_bytes), provider=provider,
         results=[{r['provider']: r['code'], 'ms': r['elapsed_ms'],
-                  'usd': r['cost_usd'], 'error': r['error']} for r in results],
+                  'usd': r['cost_usd'], 'fallback': r.get('fallback'),
+                  'error': r['error']} for r in results],
     )
     return jsonify({"results": results}), 200
 
@@ -343,12 +357,13 @@ def locate_photo_code():
         return jsonify({'error': "Missing 'file' part"}), 400
 
     code = (request.form.get('code') or '').strip()
-    if not re.fullmatch(r'\d{3}-\d{3}', code):
-        return jsonify({'error': 'code must be in XXX-YYY format (e.g. 482-913)'}), 400
+    if not re.fullmatch(r'\d{3}(-\d{3})?', code):
+        return jsonify({'error': 'code must be XXX-YYY (e.g. 482-913) or a 3-digit stamp (e.g. 530)'}), 400
 
-    provider = (request.form.get('provider') or 'anthropic').lower()
-    if provider not in ('anthropic', 'openai', 'both'):
-        return jsonify({'error': "provider must be 'anthropic', 'openai', or 'both'"}), 400
+    provider = (request.form.get('provider') or 'smart').lower()
+    valid = ('smart', 'anthropic', 'openai', 'google', 'both', 'all')
+    if provider not in valid:
+        return jsonify({'error': f"provider must be one of {', '.join(valid)}"}), 400
 
     media_type = (file.mimetype or '').lower()
     if not media_type.startswith('image/'):
@@ -365,10 +380,15 @@ def locate_photo_code():
     image_b64 = base64.b64encode(image_bytes).decode()
 
     fns = []
-    if provider in ('anthropic', 'both'):
-        fns.append(locate_with_anthropic)
-    if provider in ('openai', 'both'):
-        fns.append(locate_with_openai)
+    if provider == 'smart':
+        fns = [locate_smart]
+    else:
+        if provider in ('anthropic', 'both', 'all'):
+            fns.append(locate_with_anthropic)
+        if provider in ('openai', 'both', 'all'):
+            fns.append(locate_with_openai)
+        if provider in ('google', 'all'):
+            fns.append(locate_with_ocr)
 
     # Run providers concurrently; worker threads need the app context to read keys.
     app = current_app._get_current_object()

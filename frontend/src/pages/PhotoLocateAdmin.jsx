@@ -7,6 +7,7 @@ import { AlertMessage } from '../components/AlertMessage';
 const PROVIDER_COLOR = {
     anthropic: '#d97706', // amber-600
     openai: '#2563eb',    // blue-600
+    google: '#16a34a',    // green-600
 };
 
 function formatCost(usd) {
@@ -23,9 +24,13 @@ function formatMs(ms) {
 function LocateCircle({ box, color }) {
     const cx = ((box.x_min + box.x_max) / 2) * 100;
     const cy = ((box.y_min + box.y_max) / 2) * 100;
-    // Pad the radius ~25% beyond the box so the circle clearly encloses the digits.
-    const rx = ((box.x_max - box.x_min) / 2) * 100 * 1.25;
-    const ry = ((box.y_max - box.y_min) / 2) * 100 * 1.25;
+    // Pad generously beyond the box and enforce a minimum radius (units are % of
+    // the image) so tight OCR boxes still get a clearly visible circle around the
+    // matched code.
+    const halfW = ((box.x_max - box.x_min) / 2) * 100;
+    const halfH = ((box.y_max - box.y_min) / 2) * 100;
+    const rx = Math.max(halfW * 1.4 + 3, 7);
+    const ry = Math.max(halfH * 1.4 + 3, 5);
     return (
         <ellipse
             cx={cx} cy={cy} rx={rx} ry={ry}
@@ -40,7 +45,7 @@ export default function PhotoLocateAdmin() {
     const [file, setFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [code, setCode] = useState('');
-    const [provider, setProvider] = useState('anthropic');
+    const [provider, setProvider] = useState('smart');
     const [locating, setLocating] = useState(false);
     const [results, setResults] = useState(null);
     const [error, setError] = useState(null);
@@ -67,7 +72,7 @@ export default function PhotoLocateAdmin() {
         setPreviewUrl(URL.createObjectURL(f));
     };
 
-    const codeValid = /^\d{3}-\d{3}$/.test(code);
+    const codeValid = /^\d{3}(-\d{3})?$/.test(code);
 
     // Accept digits only and auto-insert the hyphen after the 3rd digit (XXX-YYY).
     const handleCodeChange = (e) => {
@@ -125,8 +130,9 @@ export default function PhotoLocateAdmin() {
         <div className="max-w-4xl mx-auto px-6 py-8">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Photo Locate Code</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-6">
-                Upload a photo and enter the job code (XXX-YYY) you expect in it. The AI
-                model finds the code and circles it on the image.
+                Upload a photo and enter the job code (XXX-YYY) or 3-digit stamp you
+                expect in it. Smart mode locates it with Google OCR first and falls back
+                to Sonnet 4.6 when OCR can't read it. The match is circled on the image.
             </p>
 
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6">
@@ -152,14 +158,14 @@ export default function PhotoLocateAdmin() {
 
                 <div className="flex flex-wrap items-end gap-3 mt-4">
                     <div>
-                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Code (XXX-YYY)</label>
+                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Code (XXX-YYY or XXX)</label>
                         <input
                             type="text"
                             inputMode="numeric"
                             maxLength={7}
                             value={code}
                             onChange={handleCodeChange}
-                            placeholder="482-913"
+                            placeholder="482-913 / 530"
                             className="w-32 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-accent-500"
                         />
                     </div>
@@ -170,9 +176,12 @@ export default function PhotoLocateAdmin() {
                             onChange={(e) => setProvider(e.target.value)}
                             className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500"
                         >
+                            <option value="smart">Smart (OCR → Sonnet)</option>
                             <option value="anthropic">Anthropic (Sonnet 4.6)</option>
                             <option value="openai">OpenAI (gpt-4o)</option>
-                            <option value="both">Both (compare)</option>
+                            <option value="google">Google OCR</option>
+                            <option value="both">LLMs (Sonnet + gpt-4o)</option>
+                            <option value="all">All three (compare)</option>
                         </select>
                     </div>
                     <button
@@ -232,6 +241,7 @@ export default function PhotoLocateAdmin() {
                                         <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
                                               style={{ backgroundColor: PROVIDER_COLOR[r.provider] || '#dc2626' }} />
                                         {r.provider}
+                                        {r.fallback && <span className="ml-1 text-xs font-normal text-amber-600 dark:text-amber-400">(LLM fallback)</span>}
                                     </td>
                                     <td className="px-3 py-2">
                                         {r.error ? (

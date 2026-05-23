@@ -17,7 +17,10 @@ function formatMs(ms) {
 function ResultRow({ r }) {
     return (
         <tr className="border-t border-slate-200 dark:border-slate-700">
-            <td className="px-3 py-2 font-medium capitalize text-slate-700 dark:text-slate-200">{r.provider}</td>
+            <td className="px-3 py-2 font-medium capitalize text-slate-700 dark:text-slate-200">
+                {r.provider}
+                {r.fallback && <span className="ml-1 text-xs font-normal text-amber-600 dark:text-amber-400">(LLM fallback)</span>}
+            </td>
             <td className="px-3 py-2">
                 {r.error ? (
                     <span className="text-red-600 dark:text-red-400 text-sm">⚠️ {r.error}</span>
@@ -44,6 +47,7 @@ export default function PhotoScanAdmin() {
     const [scanning, setScanning] = useState(false);
     const [results, setResults] = useState(null);
     const [error, setError] = useState(null);
+    const [provider, setProvider] = useState('smart');
     const fileInputRef = useRef(null);
 
     useEffect(() => {
@@ -76,6 +80,7 @@ export default function PhotoScanAdmin() {
         try {
             const fd = new FormData();
             fd.append('file', file);
+            fd.append('provider', provider);
             const resp = await fetch(`${API_BASE_URL}/admin/photo-scan`, {
                 method: 'POST',
                 body: fd,
@@ -118,8 +123,9 @@ export default function PhotoScanAdmin() {
         <div className="max-w-4xl mx-auto px-6 py-8">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Photo Code Scan</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-6">
-                Upload a photo containing a 3- or 6-digit job code. Both AI providers
-                (Anthropic Claude &amp; OpenAI) scan it and report the code, latency, and cost.
+                Upload a photo containing a job code (XXX-YYY label or a 3-digit stamp).
+                Smart mode reads it with Google OCR first and falls back to Sonnet 4.6 when
+                OCR can't (e.g. stamped metal). Other modes report code, latency, and cost.
             </p>
 
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6">
@@ -141,11 +147,23 @@ export default function PhotoScanAdmin() {
                     <span className="text-sm text-slate-500 dark:text-slate-400">
                         {file ? file.name : 'No file selected'}
                     </span>
+                    <select
+                        value={provider}
+                        onChange={(e) => setProvider(e.target.value)}
+                        className="ml-auto px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-500"
+                    >
+                        <option value="smart">Smart (OCR → Sonnet)</option>
+                        <option value="anthropic">Anthropic (Sonnet 4.6)</option>
+                        <option value="openai">OpenAI (gpt-4o)</option>
+                        <option value="google">Google OCR</option>
+                        <option value="both">LLMs (Sonnet + gpt-4o)</option>
+                        <option value="all">All three (compare)</option>
+                    </select>
                     <button
                         type="button"
                         onClick={handleScan}
                         disabled={!file || scanning}
-                        className="ml-auto px-4 py-2 rounded-lg font-medium bg-accent-500 text-white hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 rounded-lg font-medium bg-accent-500 text-white hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         {scanning ? 'Scanning…' : 'Scan'}
                     </button>
