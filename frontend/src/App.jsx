@@ -20,8 +20,6 @@ import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import Events from './pages/Events';
 import JobLog from './pages/JobLog';
-import JobLogV2 from './pages/JobLogV2';
-import DwlV2 from './pages/DwlV2';
 import Archive from './pages/Archive';
 import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
@@ -59,9 +57,6 @@ function AppContent() {
       <UpdateAvailableBanner />
       <Routes>
         <Route path="/login" element={<Login onLogin={verifyAuth} />} />
-        {/* D6 design preview — standalone shell, outside AppShell. Production pages untouched. */}
-        <Route path="/job-log-v2" element={isAuthenticated ? <JobLogV2 /> : <Navigate to="/login" replace />} />
-        <Route path="/dwl-v2" element={isAuthenticated ? <DwlV2 /> : <Navigate to="/login" replace />} />
         <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} />}>
           {isAuthenticated ? (
             <>

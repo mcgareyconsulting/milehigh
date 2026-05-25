@@ -57,6 +57,21 @@ const installProgRank = (val) => {
 };
 
 // PM (alphabetical) → Job # (asc) → compareSameJob tie-break. Returns a new sorted array.
+// Friendly labels + display order for the active-filter chips (keys match the column-filter keys).
+const JL_FILTER_LABELS = {
+    'Job #': 'Job',
+    'Release #': 'Release',
+    'Job': 'Job Name',
+    'PM': 'PM',
+    'BY': 'By',
+    'Stage': 'Stage',
+    'Fab Order': 'Fab Order',
+    'Paint color': 'Paint Color',
+    'Job Comp': 'Install Prog',
+    'Invoiced': 'Invoiced',
+};
+const JL_FILTER_CHIP_ORDER = ['Job #', 'Release #', 'Job', 'PM', 'BY', 'Stage', 'Fab Order', 'Paint color', 'Job Comp', 'Invoiced'];
+
 const reviewSort = (jobs) => {
     const sorted = [...jobs];
     sorted.sort((a, b) => {
@@ -124,9 +139,11 @@ function JobLog() {
     );
     const [isAdmin, setIsAdmin] = useState(false);
     const [isDrafter, setIsDrafter] = useState(false);
-    const [isFilterMinimized, setIsFilterMinimized] = useState(
-        () => localStorage.getItem('jl_minimized') === 'true'
-    );
+    const [isFilterMinimized, setIsFilterMinimized] = useState(() => {
+        // Default minimal: collapse the big project-filter buttons on first load. Returning users keep their choice.
+        const stored = localStorage.getItem('jl_minimized');
+        return stored === null ? true : stored === 'true';
+    });
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [archivePreview, setArchivePreview] = useState(null);
     const [archiving, setArchiving] = useState(false);
@@ -171,6 +188,18 @@ function JobLog() {
         matchesFilters,
         matchesSearch,
     } = useJobsFilters(jobs);
+
+    // Active column-filter chips (mirrors Drafting WL) — one removable chip per selected value.
+    const activeFilterChips = useMemo(
+        () => JL_FILTER_CHIP_ORDER
+            .filter((col) => (columnFilters[col]?.length ?? 0) > 0)
+            .flatMap((col) => columnFilters[col].map((value) => ({
+                column: col,
+                value,
+                label: JL_FILTER_LABELS[col] ?? col,
+            }))),
+        [columnFilters]
+    );
 
     // Fetch user auth info to check admin status
     useEffect(() => {
@@ -650,6 +679,37 @@ function JobLog() {
                                     </div>
                                 )}
 
+                                {/* Expanded: old-mode view filter buttons (Job Order … Review) */}
+                                {!isFilterMinimized && (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                        {[
+                                            { id: 'job_order', label: 'Job Order', activeCls: 'bg-blue-700 text-white' },
+                                            { id: 'ready_to_ship', label: 'Ready to Ship', activeCls: 'bg-emerald-600 text-white' },
+                                            { id: 'paint', label: 'Paint', activeCls: 'bg-emerald-600 text-white' },
+                                            { id: 'paint_fab', label: 'Paint+Fab', activeCls: 'bg-emerald-600 text-white' },
+                                            { id: 'fab', label: 'Fab', activeCls: 'bg-blue-700 text-white' },
+                                        ].map((v) => (
+                                            <button
+                                                key={v.id}
+                                                onClick={() => { setReviewMode(false); setSelectedSubset(selectedSubset === v.id ? null : v.id); }}
+                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === v.id
+                                                    ? v.activeCls
+                                                    : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'}`}
+                                            >
+                                                {v.label}
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={() => { const next = !reviewMode; if (next) setSelectedSubset(null); setReviewMode(next); }}
+                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
+                                                ? 'bg-blue-700 text-white'
+                                                : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'}`}
+                                        >
+                                            Review
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* Row 1: Project name buttons — only visible when expanded */}
                                 {!isFilterMinimized && (
                                     <div
@@ -768,11 +828,11 @@ function JobLog() {
 
                                     <div className="flex-1" />
 
-                                    {/* Chevron toggle button — projects expand/collapse */}
+                                    {/* Project filter buttons — discreet chevron toggle, collapsed by default */}
                                     <button
                                         onClick={() => setIsFilterMinimized(!isFilterMinimized)}
                                         className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex-shrink-0"
-                                        title={isFilterMinimized ? "Expand projects" : "Collapse projects"}
+                                        title={isFilterMinimized ? "Show project filter buttons" : "Hide project filter buttons"}
                                     >
                                         <span className="text-xl leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
                                     </button>
@@ -820,6 +880,30 @@ function JobLog() {
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Active filter chips */}
+                                {activeFilterChips.length > 0 && (
+                                    <div className="flex items-center gap-1.5 flex-wrap border-t border-gray-200 dark:border-slate-600 pt-2">
+                                        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap">Active filters:</span>
+                                        {activeFilterChips.map((chip) => (
+                                            <span
+                                                key={`${chip.column}:${chip.value}`}
+                                                className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-xs font-medium"
+                                            >
+                                                <span className="whitespace-nowrap">{chip.label}: {chip.value}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setColumnFilter(chip.column, (columnFilters[chip.column] ?? []).filter((v) => v !== chip.value))}
+                                                    className="flex items-center justify-center w-4 h-4 rounded-full leading-none text-blue-500 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 hover:text-blue-800 dark:hover:text-blue-100 transition-colors"
+                                                    aria-label={`Remove ${chip.label} filter ${chip.value}`}
+                                                    title={`Remove ${chip.label}: ${chip.value}`}
+                                                >
+                                                    ×
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
 
