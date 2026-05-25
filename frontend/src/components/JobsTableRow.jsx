@@ -606,7 +606,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     };
 
     // Handle start install change from modal
-    const handleStartInstallSave = async (dateValue) => {
+    const handleStartInstallSave = async (dateValue, installer) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
@@ -614,15 +614,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
         // Optimistic update — close the modal right away; the row's cascade
         // spinner provides the in-flight feedback. Mirrors handleClearHardDate.
-        setLocalStartInstall(dateValue);
+        // Only touch the date optimistically when one was actually provided
+        // (an installer-only save passes a null date and must not clear it).
+        if (dateValue) setLocalStartInstall(dateValue);
         setUpdatingStartInstall(true);
         setIsStartInstallModalOpen(false);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
         try {
-            console.log(`[START_INSTALL] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${dateValue}`);
+            console.log(`[START_INSTALL] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${dateValue} (installer=${installer})`);
 
-            await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue);
+            await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue, installer);
 
             console.log(`[START_INSTALL] Successfully updated job ${jobNumber}-${releaseNumber} to ${dateValue}`);
 
@@ -1186,7 +1188,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={titleText}
                             >
-                                <span>{displayValue}</span>
+                                <div className="leading-tight">{displayValue}</div>
+                                <div className={`text-[10px] leading-tight ${isAsap || isHardDate || isHardDatePast ? 'opacity-80' : 'text-gray-500 dark:text-slate-400'}`}>
+                                    {row['installer'] || '—'}
+                                </div>
                             </td>
                         );
                     }
@@ -1399,6 +1404,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 isOpen={isStartInstallModalOpen}
                 onClose={() => setIsStartInstallModalOpen(false)}
                 currentDate={localStartInstall}
+                currentInstaller={row['installer']}
                 onSave={handleStartInstallSave}
                 onClearHardDate={handleClearHardDate}
                 onSetAsap={handleSetAsap}

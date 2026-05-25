@@ -52,10 +52,10 @@ export default function StartInstallEditor({
     const readOnly = !onUpdate;
     const refresh = () => { if (onUpdate) onUpdate(); };
 
-    const handleSave = async (dateValue) => {
+    const handleSave = async (dateValue, installer) => {
         setOpen(false);
         try {
-            await jobsApi.updateStartInstall(job, release, dateValue);
+            await jobsApi.updateStartInstall(job, release, dateValue, installer);
             refresh();
         } catch (e) {
             alert(`Failed to update start install: ${e.message}`);
@@ -113,6 +113,9 @@ export default function StartInstallEditor({
                     Start Install
                 </div>
                 <div className="font-semibold">{displayValue}</div>
+                <div className={`text-[10px] ${colored ? 'opacity-80' : 'text-gray-500 dark:text-slate-400'}`}>
+                    {row['installer'] || '—'}
+                </div>
             </>
         );
         trigger = readOnly
@@ -128,6 +131,7 @@ export default function StartInstallEditor({
                     isOpen={open}
                     onClose={() => setOpen(false)}
                     currentDate={value}
+                    currentInstaller={row['installer']}
                     onSave={handleSave}
                     onClearHardDate={handleClearHardDate}
                     onSetAsap={handleSetAsap}
