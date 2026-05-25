@@ -28,6 +28,7 @@ import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
+import Dropdown, { DropdownItem } from '../components/Dropdown';
 import JobLogCardGrid from '../components/JobLogCardGrid';
 import JobLogRowList from '../components/JobLogRowList';
 import { useBreakpoint } from '../hooks/useBreakpoint';
@@ -137,14 +138,9 @@ function JobLog() {
     // View mode. Device default: phone → big single card, tablet → expandable cards, desktop → table.
     // The toggle is admin-only; non-admins always follow the device.
     const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
-    const { isMobile, isTablet, isDesktop } = useBreakpoint();
+    const { isMobile, isTablet } = useBreakpoint();
     const deviceView = isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table';
     const effectiveView = (isAdmin && viewMode !== 'auto') ? viewMode : deviceView;
-
-    // On tablet and smaller the action/stage-filter toolbar wraps into many rows; collapse it behind
-    // a toggle there (search stays visible). On desktop it is always shown.
-    const collapseActions = !isDesktop;
-    const [actionsOpen, setActionsOpen] = useState(false);
 
     // Use the filters hook
     const {
@@ -692,167 +688,87 @@ function JobLog() {
                                     </div>
                                 )}
 
-                                {/* Row 2: Actions + Stage filters + Chevron. Collapsed behind the ☰ Actions toggle on tablet/mobile. */}
-                                {(!collapseActions || actionsOpen) && (
+                                {/* Row 2: view mode + primary CTA + Actions/Views dropdowns + project chevron */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                    {/* Action buttons inline */}
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                        {isAdmin && <ViewToggle value={viewMode} onChange={setViewMode} />}
-                                        <button
-                                            onClick={handlePrint}
-                                            disabled={!hasData || loading || !reviewMode || printing}
-                                            title={!reviewMode ? 'Enable Review mode to export the PDF' : 'Build a per-PM tabloid-landscape PDF and download it'}
-                                            className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                                        >
+                                    {isAdmin && <ViewToggle value={viewMode} onChange={setViewMode} />}
+
+                                    <button
+                                        onClick={handleReleaseClick}
+                                        className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
+                                        title="Create new releases from a CSV paste"
+                                    >
+                                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>New Release
+                                    </button>
+
+                                    <Dropdown label="Actions">
+                                        <DropdownItem onClick={handlePrint} disabled={!hasData || loading || !reviewMode || printing}>
                                             {printing ? '⏳ Building…' : '🖨️ Print'}
-                                        </button>
-                                        <button
-                                            onClick={() => navigate('/pm-board')}
-                                            className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
-                                        >
-                                            📋 PM Board
-                                        </button>
-                                        <button
-                                            onClick={() => navigate('/archive')}
-                                            className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
-                                        >
-                                            🗄️ Archive
-                                        </button>
+                                        </DropdownItem>
+                                        <DropdownItem onClick={() => navigate('/pm-board')}>📋 PM Board</DropdownItem>
+                                        <DropdownItem onClick={() => navigate('/archive')}>🗄️ Archive</DropdownItem>
                                         {isAdmin && (
-                                            <button
-                                                onClick={handleExportCSV}
-                                                disabled={!hasData || loading}
-                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                title="Admin only — download the currently filtered job log rows as a CSV file. Respects the active project, stage subset, search, and Review-mode filters/sort."
-                                            >
-                                                ⬇️ Export CSV
-                                            </button>
+                                            <DropdownItem onClick={handleExportCSV} disabled={!hasData || loading}>⬇️ Export CSV</DropdownItem>
                                         )}
                                         {isAdmin && (
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const data = await jobsApi.getArchivePreview();
-                                                        setArchivePreview(data);
-                                                        setShowArchiveModal(true);
-                                                    } catch (err) {
-                                                        alert(`Failed to load archive preview: ${err.message}`);
-                                                    }
-                                                }}
-                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-                                            >
-                                                Send to Archive
-                                            </button>
+                                            <DropdownItem onClick={async () => {
+                                                try {
+                                                    const data = await jobsApi.getArchivePreview();
+                                                    setArchivePreview(data);
+                                                    setShowArchiveModal(true);
+                                                } catch (err) {
+                                                    alert(`Failed to load archive preview: ${err.message}`);
+                                                }
+                                            }}>📦 Send to Archive</DropdownItem>
                                         )}
                                         {isAdmin && (
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const data = await jobsApi.renumberFabricationFabOrders({ dryRun: true });
-                                                        setRenumberPreview(data);
-                                                        setShowRenumberModal(true);
-                                                    } catch (err) {
-                                                        alert(`Failed to load renumber preview: ${err.message}`);
-                                                    }
-                                                }}
-                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-                                                title="Admin only — compress FABRICATION group fab_order values to a contiguous block starting at 3, preserving relative order. Welded QC and later stages are untouched."
-                                            >
-                                                🔢 Renumber Fab Order
-                                            </button>
+                                            <DropdownItem onClick={async () => {
+                                                try {
+                                                    const data = await jobsApi.renumberFabricationFabOrders({ dryRun: true });
+                                                    setRenumberPreview(data);
+                                                    setShowRenumberModal(true);
+                                                } catch (err) {
+                                                    alert(`Failed to load renumber preview: ${err.message}`);
+                                                }
+                                            }}>🔢 Renumber Fab Order</DropdownItem>
                                         )}
-                                        <button
-                                            onClick={handleReleaseClick}
-                                            className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
-                                        >
-                                            📋 Release
-                                        </button>
-                                    </div>
+                                    </Dropdown>
 
-                                    {/* Stage filter buttons */}
-                                    <div className="flex items-center gap-1.5 flex-wrap flex-1 justify-center">
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show all active releases sorted by the unified Fab Order sequence. Useful for seeing the full production queue in order."
-                                        >
-                                            Job Order
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show only releases in Ship Planning, Store at MHMW, or Paint Complete — i.e., work that's finished production and ready to leave."
-                                        >
-                                            Ready to Ship
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'paint' ? null : 'paint');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show only releases in Welded QC or Paint Start stages, sorted by Fab Order. Use to focus on jobs currently in paint."
-                                        >
-                                            Paint
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'paint_fab' ? null : 'paint_fab');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint_fab'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint Complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
-                                        >
-                                            Paint+Fab
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'fab' ? null : 'fab');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show only releases in the Fabrication stage group, sorted by Fab Order. Use to focus on shop floor work."
-                                        >
-                                            Fab
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                const next = !reviewMode;
-                                                if (next) setSelectedSubset(null);
-                                                setReviewMode(next);
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Group releases by PM (alphabetical), then by Project # ascending, with the most-complete stage first within each project. Intended for PM review meetings."
-                                        >
-                                            Review
-                                        </button>
-                                    </div>
+                                    {(() => {
+                                        const subsetViews = [
+                                            { id: 'job_order', label: 'Job Order' },
+                                            { id: 'ready_to_ship', label: 'Ready to Ship' },
+                                            { id: 'paint', label: 'Paint' },
+                                            { id: 'paint_fab', label: 'Paint+Fab' },
+                                            { id: 'fab', label: 'Fab' },
+                                        ];
+                                        const activeLabel = reviewMode
+                                            ? 'Review'
+                                            : (subsetViews.find((v) => v.id === selectedSubset)?.label || 'Views');
+                                        return (
+                                            <Dropdown label={activeLabel} active={reviewMode || !!selectedSubset} menuWidth={180}>
+                                                {subsetViews.map((v) => (
+                                                    <DropdownItem
+                                                        key={v.id}
+                                                        active={selectedSubset === v.id}
+                                                        onClick={() => { setReviewMode(false); setSelectedSubset(selectedSubset === v.id ? null : v.id); }}
+                                                    >
+                                                        {v.label}
+                                                    </DropdownItem>
+                                                ))}
+                                                <div className="my-1 border-t border-gray-200 dark:border-slate-600" />
+                                                <DropdownItem
+                                                    active={reviewMode}
+                                                    onClick={() => { const next = !reviewMode; if (next) setSelectedSubset(null); setReviewMode(next); }}
+                                                >
+                                                    Review
+                                                </DropdownItem>
+                                            </Dropdown>
+                                        );
+                                    })()}
 
-                                    {/* Chevron toggle button */}
+                                    <div className="flex-1" />
+
+                                    {/* Chevron toggle button — projects expand/collapse */}
                                     <button
                                         onClick={() => setIsFilterMinimized(!isFilterMinimized)}
                                         className="p-1.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex-shrink-0"
@@ -861,21 +777,10 @@ function JobLog() {
                                         <span className="text-xl leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
                                     </button>
                                 </div>
-                                )}
 
                                 {/* Row 3: Search + stats — always visible */}
                                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        {collapseActions && (
-                                            <button
-                                                onClick={() => setActionsOpen(v => !v)}
-                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
-                                                title={actionsOpen ? 'Hide actions and stage filters' : 'Show actions and stage filters'}
-                                                aria-expanded={actionsOpen}
-                                            >
-                                                {actionsOpen ? '✕ Actions' : '☰ Actions'}
-                                            </button>
-                                        )}
                                         <div className="flex items-center gap-1.5">
                                             <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
                                                 Search:

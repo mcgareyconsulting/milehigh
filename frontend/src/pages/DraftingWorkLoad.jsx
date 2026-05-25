@@ -30,6 +30,7 @@ import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 import { fetchMentionableUsers } from '../services/notificationApi';
 import { useLocationContext } from '../context/LocationContext';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
+import Dropdown, { DropdownItem } from '../components/Dropdown';
 import SubmittalRowList from '../components/SubmittalRowList';
 import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
 
@@ -241,41 +242,36 @@ function DraftingWorkLoad() {
                                     <ViewToggle value={viewMode} onChange={setViewMode} />
                                     {isAdmin && <span className="hidden sm:block h-5 w-px bg-gray-300 dark:bg-slate-500" aria-hidden="true" />}
                                     {isAdmin && (
-                                    <button
-                                        onClick={() => setAddProjectOpen(true)}
-                                        className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer"
-                                        title="Add a new Procore project to the system"
-                                    >
-                                        + Add Project
-                                    </button>
+                                        <button
+                                            onClick={() => setAddProjectOpen(true)}
+                                            className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800 cursor-pointer"
+                                            title="Add a new Procore project to the system"
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>New Project
+                                        </button>
                                     )}
-                                    {isAdmin && (
-                                    <button
-                                        onClick={handleResort}
-                                        disabled={!singleSelectedBallInCourt || resorting}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
-                                            !singleSelectedBallInCourt || resorting
-                                                ? 'bg-gray-200 dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-400 dark:text-slate-400 cursor-not-allowed'
-                                                : 'bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer'
-                                        }`}
-                                        title={!singleSelectedBallInCourt
-                                            ? 'Filter the BIC column to a single drafter to enable resort'
-                                            : `Compress ${singleSelectedBallInCourt}'s ordered submittals to sequential numbers`}
-                                    >
-                                        {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
-                                    </button>
-                                    )}
-                                    <button
-                                        onClick={handleGeneratePDF}
-                                        disabled={!hasData || loading}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${!hasData || loading
-                                            ? 'bg-gray-200 dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-400 dark:text-slate-400 cursor-not-allowed'
-                                            : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 cursor-pointer'
-                                            }`}
-                                        title="Generate PDF"
-                                    >
+                                    <Dropdown label="Actions" buttonClassName="px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1.5 bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500">
+                                        {isAdmin && (
+                                            <DropdownItem
+                                                onClick={handleResort}
+                                                disabled={!singleSelectedBallInCourt || resorting}
+                                                title={!singleSelectedBallInCourt
+                                                    ? 'Filter the BIC column to a single drafter to enable resort'
+                                                    : `Compress ${singleSelectedBallInCourt}'s ordered submittals to sequential numbers`}
+                                            >
+                                                {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
+                                            </DropdownItem>
+                                        )}
+                                        <DropdownItem onClick={handleGeneratePDF} disabled={!hasData || loading} title="Generate PDF">
                                         🖨️ Print/PDF
-                                    </button>
+                                        </DropdownItem>
+                                    </Dropdown>
+                                    {resorting && (
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300" role="status" aria-live="polite">
+                                            <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-blue-300 border-t-blue-700 dark:border-slate-600 dark:border-t-blue-300 animate-spin" />
+                                            Resorting…
+                                        </span>
+                                    )}
                                     <div className="ml-auto text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap">
                                         Last updated <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
                                     </div>
