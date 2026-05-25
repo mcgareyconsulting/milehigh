@@ -30,7 +30,7 @@ import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
 import JobLogCardGrid from '../components/JobLogCardGrid';
 import JobLogRowList from '../components/JobLogRowList';
-import { useBreakpoint, useIsTabletOrSmaller } from '../hooks/useBreakpoint';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 // Stage completeness order (index 0 = least complete, higher = more complete).
 // Canonical names — see app/api/helpers.py STAGE_PROGRESSION_RANK.
@@ -134,11 +134,17 @@ function JobLog() {
     const [renumbering, setRenumbering] = useState(false);
     const tableScrollRef = useRef(null);
 
-    // View mode (auto/table/cards). Auto picks cards on iPad-sized screens.
+    // View mode. Device default: phone → big single card, tablet → expandable cards, desktop → table.
+    // The toggle is admin-only; non-admins always follow the device.
     const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
-    const isTabletOrSmaller = useIsTabletOrSmaller();
-    const { isMobile } = useBreakpoint();
-    const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
+    const { isMobile, isTablet, isDesktop } = useBreakpoint();
+    const deviceView = isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table';
+    const effectiveView = (isAdmin && viewMode !== 'auto') ? viewMode : deviceView;
+
+    // On tablet and smaller the action/stage-filter toolbar wraps into many rows; collapse it behind
+    // a toggle there (search stays visible). On desktop it is always shown.
+    const collapseActions = !isDesktop;
+    const [actionsOpen, setActionsOpen] = useState(false);
 
     // Use the filters hook
     const {
@@ -686,11 +692,12 @@ function JobLog() {
                                     </div>
                                 )}
 
-                                {/* Row 2: Actions (left) + Stage filters (center-right) + Chevron (far right) — always visible */}
+                                {/* Row 2: Actions + Stage filters + Chevron. Collapsed behind the ☰ Actions toggle on tablet/mobile. */}
+                                {(!collapseActions || actionsOpen) && (
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                     {/* Action buttons inline */}
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        <ViewToggle value={viewMode} onChange={setViewMode} />
+                                        {isAdmin && <ViewToggle value={viewMode} onChange={setViewMode} />}
                                         <button
                                             onClick={handlePrint}
                                             disabled={!hasData || loading || !reviewMode || printing}
@@ -854,10 +861,21 @@ function JobLog() {
                                         <span className="text-xl leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
                                     </button>
                                 </div>
+                                )}
 
                                 {/* Row 3: Search + stats — always visible */}
                                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
                                     <div className="flex items-center gap-1.5 flex-wrap">
+                                        {collapseActions && (
+                                            <button
+                                                onClick={() => setActionsOpen(v => !v)}
+                                                className="px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500"
+                                                title={actionsOpen ? 'Hide actions and stage filters' : 'Show actions and stage filters'}
+                                                aria-expanded={actionsOpen}
+                                            >
+                                                {actionsOpen ? '✕ Actions' : '☰ Actions'}
+                                            </button>
+                                        )}
                                         <div className="flex items-center gap-1.5">
                                             <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
                                                 Search:
@@ -920,6 +938,21 @@ function JobLog() {
                                 </div>
                             )}
 
+                            {!loading && !fetchError && effectiveView === 'mobilecard' && (
+                                <JobLogCardGrid
+                                    jobs={reviewDisplayJobs}
+                                    secondaryResults={secondarySearchResults}
+                                    search={search}
+                                    jumpToTarget={jumpToTarget}
+                                    stageToGroup={stageToGroup}
+                                    stageGroupColors={stageGroupColors}
+                                    stageGroupDupColors={stageGroupDupColors}
+                                    duplicateFabOrders={duplicateFabOrders}
+                                    hasJobsData={hasJobsData}
+                                    onUpdate={() => refetch(true)}
+                                />
+                            )}
+
                             {!loading && !fetchError && effectiveView === 'cards' && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
                                     <JobLogRowList
@@ -964,7 +997,7 @@ function JobLog() {
                                                         return (
                                                             <th
                                                                 key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600`}
+                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-400 dark:border-slate-500`}
                                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                                             >
                                                                 {isUrgency ? (
@@ -989,7 +1022,7 @@ function JobLog() {
                                                         );
                                                     })}
                                                     {isAdmin && (
-                                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-300 dark:border-slate-600 w-8">
+                                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-400 dark:border-slate-500 w-8">
                                                             ⚙
                                                         </th>
                                                     )}

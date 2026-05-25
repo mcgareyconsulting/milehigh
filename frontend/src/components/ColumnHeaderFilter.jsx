@@ -44,6 +44,7 @@ export default function ColumnHeaderFilter({
     onSort,
     isActive,
     children,
+    triggerClassName = '',
     autoWidth = false,
 }) {
     const [open, setOpen] = useState(false);
@@ -191,7 +192,7 @@ export default function ColumnHeaderFilter({
                     e.stopPropagation();
                     setOpen((v) => !v);
                 }}
-                className={`inline-flex items-center justify-center gap-1 cursor-pointer px-1 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-inherit'}`}
+                className={`inline-flex items-center justify-center gap-1 cursor-pointer px-1 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-slate-600 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-inherit'} ${triggerClassName}`}
                 aria-haspopup="true"
                 aria-expanded={open}
             >

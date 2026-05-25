@@ -117,6 +117,103 @@ class TestSetClearAsapRoute:
 
 
 # ---------------------------------------------------------------------------
+# Route: ASAP soft cap of 3 per PM
+# ---------------------------------------------------------------------------
+
+class TestAsapPmLimit:
+    def _seed_three_asaps(self, pm):
+        _make_release(1, "A", pm=pm, start_install_asap=True)
+        _make_release(2, "A", pm=pm, start_install_asap=True)
+        _make_release(3, "A", pm=pm, start_install_asap=True)
+
+    def test_fourth_asap_for_same_pm_is_blocked(self, app, admin_client):
+        with app.app_context():
+            self._seed_three_asaps("Jane")
+            _make_release(4, "A", pm="Jane")  # currently not ASAP
+            db.session.commit()
+
+            resp = admin_client.patch(
+                "/brain/update-start-install/4/A",
+                json={"asap": True},
+            )
+            assert resp.status_code == 409
+            body = resp.get_json()
+            assert body["error"] == "asap_limit"
+            assert body["pm"] == "Jane"
+            assert body["count"] == 3
+            assert body["limit"] == 3
+
+            # Nothing written: flag stays False, no set_asap event emitted
+            db.session.expire_all()
+            r4 = Releases.query.filter_by(job=4, release="A").first()
+            assert r4.start_install_asap is False
+            assert ReleaseEvents.query.filter_by(action="set_asap").count() == 0
+
+    def test_fourth_asap_succeeds_with_force(self, app, admin_client):
+        with app.app_context():
+            self._seed_three_asaps("Jane")
+            _make_release(4, "A", pm="Jane")
+            db.session.commit()
+
+            resp = admin_client.patch(
+                "/brain/update-start-install/4/A",
+                json={"asap": True, "asap_force": True},
+            )
+            assert resp.status_code == 200
+
+            db.session.expire_all()
+            r4 = Releases.query.filter_by(job=4, release="A").first()
+            assert r4.start_install_asap is True
+
+    def test_different_pm_at_three_is_unaffected(self, app, admin_client):
+        with app.app_context():
+            self._seed_three_asaps("Jane")
+            _make_release(4, "A", pm="Bob")
+            db.session.commit()
+
+            resp = admin_client.patch(
+                "/brain/update-start-install/4/A",
+                json={"asap": True},
+            )
+            assert resp.status_code == 200
+
+            db.session.expire_all()
+            r4 = Releases.query.filter_by(job=4, release="A").first()
+            assert r4.start_install_asap is True
+
+    def test_blank_pm_is_not_capped(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", pm=None, start_install_asap=True)
+            _make_release(2, "A", pm=None, start_install_asap=True)
+            _make_release(3, "A", pm=None, start_install_asap=True)
+            _make_release(4, "A", pm=None)
+            db.session.commit()
+
+            resp = admin_client.patch(
+                "/brain/update-start-install/4/A",
+                json={"asap": True},
+            )
+            assert resp.status_code == 200
+
+            db.session.expire_all()
+            r4 = Releases.query.filter_by(job=4, release="A").first()
+            assert r4.start_install_asap is True
+
+    def test_resaving_existing_asap_is_not_blocked(self, app, admin_client):
+        """A release already ASAP can be re-saved even when the PM is at the cap —
+        the count guard only fires on the False→True transition."""
+        with app.app_context():
+            self._seed_three_asaps("Jane")  # jobs 1-3 already ASAP for Jane
+            db.session.commit()
+
+            resp = admin_client.patch(
+                "/brain/update-start-install/1/A",
+                json={"asap": True},
+            )
+            assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # UpdateStageCommand: Paint Complete + ASAP → Ship Planning
 # ---------------------------------------------------------------------------
 

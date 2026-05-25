@@ -1424,6 +1424,21 @@ def update_start_install(job, release):
             new_asap = bool(asap)
             action = 'set_asap' if new_asap else 'clear_asap'
 
+            # Soft cap: at most 3 ASAPs per PM. Setting a 4th requires asap_force=true.
+            force = bool(request.json.get('asap_force', False))
+            if new_asap and not old_asap and job_record.pm and not force:
+                asap_count = Releases.query.filter(
+                    Releases.pm == job_record.pm,
+                    Releases.start_install_asap.is_(True),
+                ).count()
+                if asap_count >= 3:
+                    return jsonify({
+                        'error': 'asap_limit',
+                        'pm': job_record.pm,
+                        'count': asap_count,
+                        'limit': 3,
+                    }), 409
+
             event = JobEventService.create(
                 job=job,
                 release=release,
