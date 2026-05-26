@@ -13,6 +13,7 @@
  */
 import React, { useState } from 'react';
 import { JobsTableRow } from './JobsTableRow';
+import StartInstallEditor from './StartInstallEditor';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort } from '../utils/formatters';
 
@@ -62,7 +63,6 @@ export default function JobLogRow({
     const jobName = fmt(job['Job']);
     const description = (job['Description'] || '').toString().trim();
     const stage = job['Stage'] || 'Released';
-    const startInstall = formatDate(job['Start install']);
     const complete = isCompleteStage(stage);
 
     const expandedColumns = (columns || []).filter((c) => !CRITICAL_COLUMNS.has(c));
@@ -141,8 +141,8 @@ export default function JobLogRow({
                     <JobsTableRow {...sharedRowProps} columns={['Fab Order']} compact />
                 </InlineCell>
 
-                <span className="shrink-0 tabular-nums text-xs text-gray-700 dark:text-slate-300 w-16 text-right">
-                    {startInstall || '—'}
+                <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <StartInstallEditor row={job} onUpdate={onUpdate} formatDate={formatDate} variant="pill" />
                 </span>
 
                 <span

@@ -3,7 +3,7 @@
  * schema_version: 1
  * purpose: Responsive card grid for Job Log and Archive — renders JobLogCard tiles, the secondary-search amber banner, and an empty state.
  * exports:
- *   default JobLogCardGrid: Props — jobs, secondaryResults (optional), search, jumpToTarget, stageToGroup, stageGroupColors, isHighlightedRow, hasJobsData, iconSize.
+ *   default JobLogCardGrid: Props — jobs, secondaryResults (optional), search, jumpToTarget, stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders, isHighlightedRow, hasJobsData, iconSize, onUpdate (refetch after a card edit).
  * imports_from: [react, ./JobLogCard, ./JobDetailsModal]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
@@ -21,8 +21,11 @@ export default function JobLogCardGrid({
     jumpToTarget = null,
     stageToGroup,
     stageGroupColors,
+    stageGroupDupColors = null,
+    duplicateFabOrders = null,
     hasJobsData = false,
     iconSize = 20,
+    onUpdate = null,
 }) {
     const [selectedJob, setSelectedJob] = useState(null);
 
@@ -52,8 +55,11 @@ export default function JobLogCardGrid({
                             key={row.id}
                             job={row}
                             onOpen={setSelectedJob}
+                            onUpdate={onUpdate}
                             stageToGroup={stageToGroup}
                             stageGroupColors={stageGroupColors}
+                            stageGroupDupColors={stageGroupDupColors}
+                            duplicateFabOrders={duplicateFabOrders}
                             isHighlighted={isHighlightedRow(row)}
                             iconSize={iconSize}
                         />
