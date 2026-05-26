@@ -22,7 +22,6 @@ import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
-import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
@@ -44,43 +43,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     useEffect(() => { setHasDrawingLocal(Boolean(row.has_drawing)); }, [row.has_drawing]);
 
     const canMarkup = isAdmin || isDrafter;
-    const drawingFileInputRef = useRef(null);
-
-    const openLatestMarkup = async (mode = 'edit') => {
-        try {
-            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing/versions`, { credentials: 'include' });
-            if (!resp.ok) return;
-            const data = await resp.json();
-            const latest = (data?.versions || [])[0];
-            if (!latest) return;
-            setPdfMarkupVersionId(latest.id);
-            setPdfMarkupMode(mode);
-            setPdfMarkupOpen(true);
-        } catch (e) {
-            console.error('open markup failed', e);
-        }
-    };
-
-    const handleDrawingUpload = async (event) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        try {
-            const fd = new FormData();
-            fd.append('file', file);
-            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing`, {
-                method: 'POST',
-                body: fd,
-                credentials: 'include',
-            });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            setHasDrawingLocal(true);
-        } catch (e) {
-            console.error('drawing upload failed', e);
-            alert(`Upload failed: ${e.message || e}`);
-        } finally {
-            if (drawingFileInputRef.current) drawingFileInputRef.current.value = '';
-        }
-    };
 
     // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X).
     // Tolerates whitespace + case drift on the stage value.
@@ -1226,28 +1188,26 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
-                    // Handle Release # column — smart fallback:
-                    //   has_drawing → click opens in-app markup; show small history icon
-                    //   else viewer_url → click opens Procore (preserves prior behavior)
-                    //   plus an upload icon (drafter/admin) when no drawing yet
+                    // Handle Release # column — the number opens the version-history
+                    // hub (pick a version to view/edit, upload a new one, or jump to
+                    // Procore from the top). Drafters/admins and any release with an
+                    // uploaded drawing route there; a Procore-only release links
+                    // straight to Procore.
                     if (column === 'Release #') {
                         const viewerUrl = row.viewer_url;
-                        const hasDrawing = hasDrawingLocal;
+                        const opensHub = canMarkup || hasDrawingLocal;
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
                             >
-                                <div className="flex items-center justify-center gap-1">
-                                    {hasDrawing ? (
+                                <div className="flex items-center justify-center">
+                                    {opensHub ? (
                                         <button
                                             type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openLatestMarkup(canMarkup ? 'edit' : 'view');
-                                            }}
+                                            onClick={(e) => { e.stopPropagation(); setPdfHistoryOpen(true); }}
                                             className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium"
-                                            title="Open in-app markup viewer"
+                                            title="Drawing versions — view, edit, upload, or open in Procore"
                                         >
                                             {rawValue}
                                         </button>
@@ -1264,38 +1224,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                         </a>
                                     ) : (
                                         <span>{rawValue}</span>
-                                    )}
-
-                                    {hasDrawing && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setPdfHistoryOpen(true); }}
-                                            className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
-                                            title="Drawing version history"
-                                            aria-label="Drawing version history"
-                                        >
-                                            🕒
-                                        </button>
-                                    )}
-                                    {!hasDrawing && canMarkup && (
-                                        <>
-                                            <input
-                                                ref={drawingFileInputRef}
-                                                type="file"
-                                                accept="application/pdf,.pdf"
-                                                onChange={handleDrawingUpload}
-                                                style={{ display: 'none' }}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); drawingFileInputRef.current?.click(); }}
-                                                className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
-                                                title="Upload FC drawing PDF"
-                                                aria-label="Upload FC drawing PDF"
-                                            >
-                                                ⬆
-                                            </button>
-                                        </>
                                     )}
                                 </div>
                             </td>
@@ -1419,6 +1347,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             <PdfVersionHistoryModal
                 isOpen={pdfHistoryOpen}
                 releaseId={row.id}
+                viewerUrl={row.viewer_url}
                 onClose={() => setPdfHistoryOpen(false)}
                 onOpenVersion={(vid, mode) => {
                     setPdfHistoryOpen(false);
