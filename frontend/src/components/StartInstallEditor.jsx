@@ -101,7 +101,7 @@ export default function StartInstallEditor({
 
     let trigger;
     if (variant === 'pill') {
-        const cls = `rounded px-2 py-0.5 text-xs font-semibold tabular-nums transition-colors ${colorClass} ${className}`;
+        const cls = `inline-flex items-center justify-center min-w-[72px] rounded px-2 py-0.5 text-xs font-semibold tabular-nums leading-none transition-colors ${colorClass} ${className}`;
         trigger = readOnly
             ? <span className={cls} title={title}>{displayValue}</span>
             : <button type="button" onClick={openModal} title={title} className={cls}>{displayValue}</button>;
