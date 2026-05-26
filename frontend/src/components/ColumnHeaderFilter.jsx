@@ -10,6 +10,10 @@
  *   - selected is treated as a Set; '(Blanks)' is the sentinel for null/empty values.
  *   - Empty selection means "no filter on this column".
  *   - Closes on outside click or Escape; commits via Apply, never on individual checkbox toggles.
+ *   - singleSelect (opt-in) keeps a single list but changes click semantics: a plain click
+ *     selects only that value (replacing the prior pick); Ctrl/Cmd+click adds/removes a value
+ *     (multi-select). Still committed via Apply. There is no (Select All) row in this mode.
+ *     Default (singleSelect=false) is the standard checkbox multi-select and is unchanged.
  *   - Popover is rendered via portal at document.body and positioned with fixed coords so it
  *     escapes the table's overflow:auto clip and stays inside the viewport.
  */
@@ -45,6 +49,7 @@ export default function ColumnHeaderFilter({
     isActive,
     children,
     autoWidth = false,
+    singleSelect = false,
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -172,6 +177,13 @@ export default function ColumnHeaderFilter({
         setSearch('');
     };
 
+    // Single-select list: a plain click stages just this value (replacing the prior pick);
+    // Ctrl/Cmd+click adds/removes it (multi-select). Committed on Apply.
+    const handleSingleClick = (v, e) => {
+        if (e.ctrlKey || e.metaKey) toggleValue(v);
+        else setDraft(new Set([v]));
+    };
+
     const clear = () => {
         setDraft(new Set());
         onChange(new Set());
@@ -242,6 +254,41 @@ export default function ColumnHeaderFilter({
                     <div className="max-h-72 overflow-y-auto px-2 pb-2 text-sm">
                         {optionCount === 0 ? (
                             <div className="px-1 py-2 text-gray-500 dark:text-slate-400 italic">No values</div>
+                        ) : singleSelect ? (
+                            // Single list: plain click selects one; Ctrl+click adds/removes (multi).
+                            <>
+                                {showBlanks && (
+                                    <div
+                                        onClick={(e) => handleSingleClick(BLANKS, e)}
+                                        className="flex items-center gap-2 px-1.5 py-1.5 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 italic text-gray-600 dark:text-slate-300"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={draft.has(BLANKS)}
+                                            readOnly
+                                            tabIndex={-1}
+                                            className="accent-blue-600 pointer-events-none"
+                                        />
+                                        <span>{BLANKS}</span>
+                                    </div>
+                                )}
+                                {filteredValues.map((v) => (
+                                    <div
+                                        key={v}
+                                        onClick={(e) => handleSingleClick(v, e)}
+                                        className="flex items-center gap-2 px-1.5 py-1.5 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={draft.has(v)}
+                                            readOnly
+                                            tabIndex={-1}
+                                            className="accent-blue-600 pointer-events-none"
+                                        />
+                                        <span className={autoWidth ? 'whitespace-nowrap' : 'truncate'} title={v}>{v}</span>
+                                    </div>
+                                ))}
+                            </>
                         ) : (
                             <>
                                 <label className="flex items-center gap-2 px-1.5 py-1.5 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 font-medium">
@@ -281,6 +328,12 @@ export default function ColumnHeaderFilter({
                             </>
                         )}
                     </div>
+
+                    {singleSelect && optionCount > 0 && (
+                        <div className="px-2 pb-1.5 text-xs text-gray-500 dark:text-slate-400">
+                            Click a name to filter to one · Ctrl+click to add more
+                        </div>
+                    )}
 
                     <div className="flex border-t border-gray-200 dark:border-slate-600">
                         <button
