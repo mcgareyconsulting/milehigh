@@ -496,6 +496,7 @@ function DraftingWorkLoad() {
                                                                     onSort={(dir) => setColumnSortDirect(column, dir)}
                                                                     isActive={colSelected.length > 0}
                                                                     autoWidth
+                                                                    singleSelect={isBallInCourt}
                                                                 >
                                                                     {column}
                                                                 </ColumnHeaderFilter>

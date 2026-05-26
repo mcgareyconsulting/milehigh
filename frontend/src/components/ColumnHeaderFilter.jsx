@@ -10,6 +10,9 @@
  *   - selected is treated as a Set; '(Blanks)' is the sentinel for null/empty values.
  *   - Empty selection means "no filter on this column".
  *   - Closes on outside click or Escape; commits via Apply, never on individual checkbox toggles.
+ *   - singleSelect (opt-in) adds a Single/Many toggle. Single mode renders radio rows that
+ *     stage one value (committed via Apply, like Many mode); switching Many->Single collapses
+ *     the selection to a single value. Default (singleSelect=false) is unchanged.
  *   - Popover is rendered via portal at document.body and positioned with fixed coords so it
  *     escapes the table's overflow:auto clip and stays inside the viewport.
  */
@@ -45,17 +48,25 @@ export default function ColumnHeaderFilter({
     isActive,
     children,
     autoWidth = false,
+    singleSelect = false,
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [draft, setDraft] = useState(selected);
+    // Only meaningful when singleSelect is on: 'single' = radio rows that apply instantly,
+    // 'many' = the standard checkbox + Apply behavior.
+    const [mode, setMode] = useState('single');
     const [coords, setCoords] = useState({ top: 0, left: 0, width: POPOVER_WIDTH });
     const triggerRef = useRef(null);
     const popoverRef = useRef(null);
 
-    // Sync draft from props when popover opens (so closing without Apply discards edits)
+    // Sync draft from props when popover opens (so closing without Apply discards edits).
+    // Also pick the initial mode: open in 'many' when more than one value is already selected.
     useEffect(() => {
-        if (open) setDraft(new Set(selected));
+        if (open) {
+            setDraft(new Set(selected));
+            setMode(selected.size > 1 ? 'many' : 'single');
+        }
     }, [open, selected]);
 
     // When autoWidth is on, the popover grows to fit the longest value label
@@ -172,6 +183,18 @@ export default function ColumnHeaderFilter({
         setSearch('');
     };
 
+    // Single mode: clicking a value stages just that value (committed on Apply).
+    const pickSingle = (v) => setDraft(new Set([v]));
+
+    // Switching to single collapses any multi-selection down to a single staged value
+    // (the first), so exactly one radio is checked and the user confirms it via Apply.
+    const switchMode = (next) => {
+        if (next === 'single') {
+            setDraft((prev) => (prev.size <= 1 ? prev : new Set([[...prev][0]])));
+        }
+        setMode(next);
+    };
+
     const clear = () => {
         setDraft(new Set());
         onChange(new Set());
@@ -181,6 +204,7 @@ export default function ColumnHeaderFilter({
     };
 
     const sortDir = sort?.column === column ? sort.direction : null;
+    const singleMode = singleSelect && mode === 'single';
 
     return (
         <>
@@ -211,6 +235,25 @@ export default function ColumnHeaderFilter({
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                 >
+                    {singleSelect && (
+                        <div className="flex border-b border-gray-200 dark:border-slate-600">
+                            <button
+                                type="button"
+                                onClick={() => switchMode('single')}
+                                className={`flex-1 px-2 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tl-md ${mode === 'single' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                            >
+                                Single
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => switchMode('many')}
+                                className={`flex-1 px-2 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tr-md ${mode === 'many' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                            >
+                                Many
+                            </button>
+                        </div>
+                    )}
+
                     <div className="flex border-b border-gray-200 dark:border-slate-600">
                         <button
                             type="button"
@@ -244,21 +287,24 @@ export default function ColumnHeaderFilter({
                             <div className="px-1 py-2 text-gray-500 dark:text-slate-400 italic">No values</div>
                         ) : (
                             <>
-                                <label className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 font-medium">
-                                    <input
-                                        type="checkbox"
-                                        checked={allChecked}
-                                        onChange={toggleAllVisible}
-                                        className="accent-blue-600"
-                                    />
-                                    <span>(Select All)</span>
-                                </label>
+                                {!singleMode && (
+                                    <label className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 font-medium">
+                                        <input
+                                            type="checkbox"
+                                            checked={allChecked}
+                                            onChange={toggleAllVisible}
+                                            className="accent-blue-600"
+                                        />
+                                        <span>(Select All)</span>
+                                    </label>
+                                )}
                                 {showBlanks && (
                                     <label className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 italic text-gray-600 dark:text-slate-300">
                                         <input
-                                            type="checkbox"
+                                            type={singleMode ? 'radio' : 'checkbox'}
+                                            name={singleMode ? `${column}-single` : undefined}
                                             checked={draft.has(BLANKS)}
-                                            onChange={() => toggleValue(BLANKS)}
+                                            onChange={() => (singleMode ? pickSingle(BLANKS) : toggleValue(BLANKS))}
                                             className="accent-blue-600"
                                         />
                                         <span>{BLANKS}</span>
@@ -270,9 +316,10 @@ export default function ColumnHeaderFilter({
                                         className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700"
                                     >
                                         <input
-                                            type="checkbox"
+                                            type={singleMode ? 'radio' : 'checkbox'}
+                                            name={singleMode ? `${column}-single` : undefined}
                                             checked={draft.has(v)}
-                                            onChange={() => toggleValue(v)}
+                                            onChange={() => (singleMode ? pickSingle(v) : toggleValue(v))}
                                             className="accent-blue-600"
                                         />
                                         <span className={autoWidth ? 'whitespace-nowrap' : 'truncate'} title={v}>{v}</span>
