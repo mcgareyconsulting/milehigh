@@ -20,11 +20,11 @@ import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } fr
 import { createPortal } from 'react-dom';
 
 const BLANKS = '(Blanks)';
-const POPOVER_WIDTH = 224;        // matches w-56; also the minimum when autoWidth is on
-const POPOVER_MAX_HEIGHT = 360;   // approximate; just used for vertical clamp
+const POPOVER_WIDTH = 280;        // also the minimum when autoWidth is on
+const POPOVER_MAX_HEIGHT = 440;   // approximate; just used for vertical clamp
 const VIEWPORT_PAD = 8;
 // Chrome around a value label: checkbox + gap + label padding + list padding + scrollbar slack.
-const AUTOWIDTH_CHROME = 64;
+const AUTOWIDTH_CHROME = 76;
 const AUTOWIDTH_FONT = '12px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
 
 // Lazily reused canvas for measuring label widths (only used when autoWidth is on).
@@ -53,8 +53,8 @@ export default function ColumnHeaderFilter({
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [draft, setDraft] = useState(selected);
-    // Only meaningful when singleSelect is on: 'single' = radio rows that apply instantly,
-    // 'many' = the standard checkbox + Apply behavior.
+    // Only meaningful when singleSelect is on: 'single' = radio rows (one value, committed via
+    // Apply), 'many' = the standard checkbox + Apply behavior.
     const [mode, setMode] = useState('single');
     const [coords, setCoords] = useState({ top: 0, left: 0, width: POPOVER_WIDTH });
     const triggerRef = useRef(null);
@@ -240,14 +240,14 @@ export default function ColumnHeaderFilter({
                             <button
                                 type="button"
                                 onClick={() => switchMode('single')}
-                                className={`flex-1 px-2 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tl-md ${mode === 'single' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                                className={`flex-1 px-2 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tl-md ${mode === 'single' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                             >
                                 Single
                             </button>
                             <button
                                 type="button"
                                 onClick={() => switchMode('many')}
-                                className={`flex-1 px-2 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tr-md ${mode === 'many' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                                className={`flex-1 px-2 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tr-md ${mode === 'many' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                             >
                                 Many
                             </button>
@@ -258,14 +258,14 @@ export default function ColumnHeaderFilter({
                         <button
                             type="button"
                             onClick={() => onSort('asc')}
-                            className={`flex-1 px-2 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tl-md ${sortDir === 'asc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                            className={`flex-1 px-2 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tl-md ${sortDir === 'asc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                         >
                             Sort A→Z
                         </button>
                         <button
                             type="button"
                             onClick={() => onSort('desc')}
-                            className={`flex-1 px-2 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tr-md ${sortDir === 'desc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
+                            className={`flex-1 px-2 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tr-md ${sortDir === 'desc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                         >
                             Sort Z→A
                         </button>
@@ -277,18 +277,18 @@ export default function ColumnHeaderFilter({
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search…"
-                            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                             autoFocus
                         />
                     </div>
 
-                    <div className="max-h-56 overflow-y-auto px-2 pb-2 text-xs">
+                    <div className="max-h-72 overflow-y-auto px-2 pb-2 text-sm">
                         {optionCount === 0 ? (
                             <div className="px-1 py-2 text-gray-500 dark:text-slate-400 italic">No values</div>
                         ) : (
                             <>
                                 {!singleMode && (
-                                    <label className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 font-medium">
+                                    <label className="flex items-center gap-2 px-1.5 py-1.5 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 font-medium">
                                         <input
                                             type="checkbox"
                                             checked={allChecked}
@@ -299,7 +299,7 @@ export default function ColumnHeaderFilter({
                                     </label>
                                 )}
                                 {showBlanks && (
-                                    <label className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 italic text-gray-600 dark:text-slate-300">
+                                    <label className="flex items-center gap-2 px-1.5 py-1.5 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 italic text-gray-600 dark:text-slate-300">
                                         <input
                                             type={singleMode ? 'radio' : 'checkbox'}
                                             name={singleMode ? `${column}-single` : undefined}
@@ -313,7 +313,7 @@ export default function ColumnHeaderFilter({
                                 {filteredValues.map((v) => (
                                     <label
                                         key={v}
-                                        className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                                        className="flex items-center gap-2 px-1.5 py-1.5 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700"
                                     >
                                         <input
                                             type={singleMode ? 'radio' : 'checkbox'}
@@ -333,14 +333,14 @@ export default function ColumnHeaderFilter({
                         <button
                             type="button"
                             onClick={clear}
-                            className="flex-1 px-2 py-1.5 text-xs font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-bl-md"
+                            className="flex-1 px-2 py-1.5 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-bl-md"
                         >
                             Clear
                         </button>
                         <button
                             type="button"
                             onClick={apply}
-                            className="flex-1 px-2 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 border-l border-gray-200 dark:border-slate-600 rounded-br-md"
+                            className="flex-1 px-2 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 border-l border-gray-200 dark:border-slate-600 rounded-br-md"
                         >
                             Apply
                         </button>

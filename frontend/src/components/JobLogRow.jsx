@@ -1,18 +1,22 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Dense, table-like row rendering a single job release for the iPad/touch view of Job Log. Critical fields visible by default (with inline Stage and Fab Order editors); chevron expands to embed the desktop JobsTableRow for full editing parity on the remaining columns.
+ * purpose: Dense row rendering a single job release for the iPad/touch view of Job Log. Critical fields are visible by default using clean, table-free editors (Release # link, Stage pill, Fab Order input, Start install pill); the chevron expands to embed the desktop JobsTableRow for full editing parity on the remaining columns.
  * exports:
  *   default JobLogRow: Props — job, columns, formatCellValue, formatDate, rowIndex, onUpdate, onCascadeRecalculating, stageToGroup, stageGroupColors, stageGroupDupColors, isJumpToHighlight, isAdmin, isDrafter, onDelete, tableScrollRef, duplicateFabOrders.
- * imports_from: [react, ./JobsTableRow, ../utils/stageProgress, ../utils/formatters]
+ * imports_from: [react, ./JobsTableRow, ./ReleaseNumberLink, ./StageEditor, ./FabOrderEditor, ./StartInstallEditor, ../utils/stageProgress, ../utils/formatters]
  * imported_by: [frontend/src/components/JobLogRowList.jsx]
  * invariants:
- *   - Critical (collapsed) fields: Job # / Release #, Job name + Description subtext, Stage (editable), Fab Order (editable), Start install.
- *   - Stage + Fab Order editors are rendered by embedding JobsTableRow with a single-column subset so cascade logic (Complete → clear job_comp/fab_order, etc.) remains intact.
- *   - Expanded section embeds JobsTableRow restricted to the remaining columns. All edit handlers route through the same JobsTableRow APIs as the desktop table.
+ *   - Critical (collapsed) fields: Job # / Release #, Job name + Description subtext, Stage (editable), Fab Order (editable), Start install. None embed JobsTableRow — each is a self-contained editor that writes via jobsApi and refetches through onUpdate (so the backend Complete-zone cascade is reflected).
+ *   - Release # opens the FC drawing: version-history hub for drafters/admins, latest markup (view) or Procore link otherwise.
+ *   - Expanded section embeds JobsTableRow restricted to the remaining columns (showActions={false}); those edit handlers route through the same JobsTableRow APIs as the desktop table.
  */
 import React, { useState } from 'react';
 import { JobsTableRow } from './JobsTableRow';
+import StartInstallEditor from './StartInstallEditor';
+import ReleaseNumberLink from './ReleaseNumberLink';
+import StageEditor from './StageEditor';
+import FabOrderEditor from './FabOrderEditor';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort } from '../utils/formatters';
 
@@ -27,16 +31,6 @@ const CRITICAL_COLUMNS = new Set([
     'Fab Order',
     'Start install',
 ]);
-
-function InlineCell({ children }) {
-    return (
-        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-            <table className="inline-table" style={{ borderCollapse: 'collapse' }}>
-                <tbody>{children}</tbody>
-            </table>
-        </div>
-    );
-}
 
 export default function JobLogRow({
     job,
@@ -59,11 +53,9 @@ export default function JobLogRow({
     const [expanded, setExpanded] = useState(false);
 
     const jobNum = fmt(job['Job #']);
-    const release = fmt(job['Release #']);
     const jobName = fmt(job['Job']);
     const description = (job['Description'] || '').toString().trim();
     const stage = job['Stage'] || 'Released';
-    const startInstall = formatDate(job['Start install']);
     const complete = isCompleteStage(stage);
 
     const expandedColumns = (columns || []).filter((c) => !CRITICAL_COLUMNS.has(c));
@@ -115,8 +107,18 @@ export default function JobLogRow({
                 onKeyDown={handleKey}
                 className="w-full flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-inset"
             >
-                <span className="shrink-0 font-mono text-sm font-semibold text-gray-900 dark:text-slate-100">
-                    {jobNum}<span className="text-gray-400 dark:text-slate-500">·</span>{release}
+                {/* Job # · Release # — single inline group so both share one baseline.
+                    Release # opens the FC drawing / version hub; the rest toggles the row. */}
+                <span className="shrink-0 font-mono text-sm font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap">
+                    {jobNum}
+                    <span className="text-gray-400 dark:text-slate-500"> · </span>
+                    <ReleaseNumberLink
+                        value={fmt(job['Release #'])}
+                        releaseId={job.id}
+                        hasDrawing={job.has_drawing}
+                        viewerUrl={job.viewer_url}
+                        canMarkup={isAdmin || isDrafter}
+                    />
                 </span>
 
                 <span className="flex-1 min-w-0 truncate text-sm text-gray-900 dark:text-slate-100">
@@ -126,19 +128,31 @@ export default function JobLogRow({
                     ) : null}
                 </span>
 
-                {/* Inline Stage editor */}
-                <InlineCell>
-                    <JobsTableRow {...sharedRowProps} columns={['Stage']} compact />
-                </InlineCell>
+                {/* Fab Order — left of Stage, matching the desktop table column order */}
+                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <FabOrderEditor
+                        row={job}
+                        onUpdate={onUpdate}
+                        stageToGroup={stageToGroup}
+                        duplicateFabOrders={duplicateFabOrders}
+                        stageGroupDupColors={stageGroupDupColors}
+                    />
+                </div>
 
-                {/* Inline Fab Order editor */}
-                <InlineCell>
-                    <JobsTableRow {...sharedRowProps} columns={['Fab Order']} compact />
-                </InlineCell>
+                {/* Stage — colored pill backed by a native select (clean, never clipped) */}
+                <div className="shrink-0">
+                    <StageEditor
+                        row={job}
+                        onUpdate={onUpdate}
+                        stageToGroup={stageToGroup}
+                        stageGroupColors={stageGroupColors}
+                    />
+                </div>
 
-                <span className="shrink-0 tabular-nums text-xs text-gray-700 dark:text-slate-300 w-16 text-right">
-                    {startInstall || '—'}
-                </span>
+                {/* Start install — colored ASAP / hard-date / formula pill */}
+                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <StartInstallEditor row={job} onUpdate={onUpdate} formatDate={formatDate} variant="pill" />
+                </div>
 
                 <span
                     className={`shrink-0 inline-block transition-transform text-gray-500 dark:text-slate-400 ${expanded ? 'rotate-90' : ''}`}
@@ -170,6 +184,7 @@ export default function JobLogRow({
                                 columns={expandedColumns}
                                 isAdmin={isAdmin}
                                 onDelete={onDelete}
+                                showActions={false}
                             />
                         </tbody>
                     </table>

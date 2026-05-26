@@ -39,6 +39,14 @@ class Config:
     FIT_UP_COMPLETE_LIST_ID = os.environ.get("FIT_UP_COMPLETE_LIST_ID")
     UNASSIGNED_CARDS_LIST_ID = os.environ.get("UNASSIGNED_CARDS_LIST_ID")
     FAB_ORDER_FIELD_ID = os.environ.get("FAB_ORDER_FIELD_ID")
+    # Installer team list names. MUST match the per-installer Trello list names
+    # exactly (e.g. "Saul 2"), since assigning an installer moves the mirror card
+    # into the list resolved by name.
+    INSTALLER_TEAMS = [
+        s.strip()
+        for s in os.environ.get("INSTALLER_TEAMS", "Octavio,Saul 2,Oscar").split(",")
+        if s.strip()
+    ]
     TRELLO_WEBHOOK_URL = os.environ.get("TRELLO_WEBHOOK_URL")
 
     # Mock Trello mode: when '1', outbound `move_card` outbox items are simulated

@@ -14,6 +14,7 @@
  */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
+import { setAsapWithCapConfirm } from '../utils/asap';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
 import { NotesHistoryModal } from './NotesHistoryModal';
@@ -21,10 +22,9 @@ import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
-import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 
-export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false }) {
+export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
@@ -43,43 +43,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     useEffect(() => { setHasDrawingLocal(Boolean(row.has_drawing)); }, [row.has_drawing]);
 
     const canMarkup = isAdmin || isDrafter;
-    const drawingFileInputRef = useRef(null);
-
-    const openLatestMarkup = async (mode = 'edit') => {
-        try {
-            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing/versions`, { credentials: 'include' });
-            if (!resp.ok) return;
-            const data = await resp.json();
-            const latest = (data?.versions || [])[0];
-            if (!latest) return;
-            setPdfMarkupVersionId(latest.id);
-            setPdfMarkupMode(mode);
-            setPdfMarkupOpen(true);
-        } catch (e) {
-            console.error('open markup failed', e);
-        }
-    };
-
-    const handleDrawingUpload = async (event) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        try {
-            const fd = new FormData();
-            fd.append('file', file);
-            const resp = await fetch(`${API_BASE_URL}/brain/releases/${row.id}/drawing`, {
-                method: 'POST',
-                body: fd,
-                credentials: 'include',
-            });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            setHasDrawingLocal(true);
-        } catch (e) {
-            console.error('drawing upload failed', e);
-            alert(`Upload failed: ${e.message || e}`);
-        } finally {
-            if (drawingFileInputRef.current) drawingFileInputRef.current.value = '';
-        }
-    };
 
     // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X).
     // Tolerates whitespace + case drift on the stage value.
@@ -427,7 +390,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const jobCompIsX = (localJobComp || '').toString().trim().toUpperCase() === 'X';
     const invoicedIsX = (localInvoiced || '').toString().trim().toUpperCase() === 'X';
     const isGrayed = isComplete || jobCompIsX;
-    const rowBgClass = isGrayed ? 'bg-gray-300 dark:bg-slate-600' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-100 dark:bg-slate-700/80');
+    const rowBgClass = isGrayed ? 'bg-gray-300 dark:bg-slate-600' : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-200 dark:bg-slate-700');
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
     const cellText = isOldMan ? 'text-[13px]' : 'text-[11px]';
 
@@ -440,15 +403,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const oldJobComp = localJobComp;
         const oldFabOrder = localFabOrder;
         setLocalStage(newStage); // Optimistic update
-        // If setting to Install Complete, optimistically update job_comp and fab_order
-        if (newStage === 'Install Complete') {
+        // 'Install Complete' and 'Complete' form one "complete zone" for the
+        // Install Prog marker: entering it sets job_comp='X', leaving it clears
+        // the 'X' (mirrors the backend cascade in stage/command.py).
+        const COMPLETE_ZONE = ['Install Complete', 'Complete'];
+        if (COMPLETE_ZONE.includes(newStage)) {
             setLocalJobComp('X');
             setJobCompInputValue('X');
             setLocalFabOrder(null);
             setFabOrderInputValue('');
         }
-        // If changing away from Install Complete, clear job_comp 'X'
-        if (oldStage === 'Install Complete' && newStage !== 'Install Complete') {
+        if (COMPLETE_ZONE.includes(oldStage) && !COMPLETE_ZONE.includes(newStage)) {
             if ((localJobComp || '').trim().toUpperCase() === 'X') {
                 setLocalJobComp('');
                 setJobCompInputValue('');
@@ -603,7 +568,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     };
 
     // Handle start install change from modal
-    const handleStartInstallSave = async (dateValue) => {
+    const handleStartInstallSave = async (dateValue, installer) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
@@ -611,15 +576,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
         // Optimistic update — close the modal right away; the row's cascade
         // spinner provides the in-flight feedback. Mirrors handleClearHardDate.
-        setLocalStartInstall(dateValue);
+        // Only touch the date optimistically when one was actually provided
+        // (an installer-only save passes a null date and must not clear it).
+        if (dateValue) setLocalStartInstall(dateValue);
         setUpdatingStartInstall(true);
         setIsStartInstallModalOpen(false);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
         try {
-            console.log(`[START_INSTALL] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${dateValue}`);
+            console.log(`[START_INSTALL] Updating job ${jobNumber}-${releaseNumber} from ${oldValue} to ${dateValue} (installer=${installer})`);
 
-            await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue);
+            await jobsApi.updateStartInstall(jobNumber, releaseNumber, dateValue, installer);
 
             console.log(`[START_INSTALL] Successfully updated job ${jobNumber}-${releaseNumber} to ${dateValue}`);
 
@@ -644,8 +611,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
         setIsStartInstallModalOpen(false);
         try {
-            await jobsApi.setStartInstallAsap(jobNumber, releaseNumber, true);
-            if (onUpdate) onUpdate();
+            const ok = await setAsapWithCapConfirm(jobNumber, releaseNumber);
+            if (ok && onUpdate) onUpdate();
         } catch (error) {
             console.error(`[START_INSTALL] Failed to set ASAP for job ${jobNumber}-${releaseNumber}:`, error);
             alert(`Failed to set ASAP: ${error.message}`);
@@ -819,7 +786,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 </tr>
             )}
             <tr
-                className={`group ${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b-2 border-white dark:border-slate-600 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
+                className={`group ${rowBgClass} hover:bg-gray-100 dark:hover:bg-slate-600 transition-all duration-200 border-b border-gray-400 dark:border-slate-500 ${isDragOver ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${isBeingDragged ? 'opacity-40 scale-[0.98] shadow-lg' : ''} ${isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isJumpToHighlight ? JUMP_TO_HIGHLIGHT_CLASS : ''}`}
                 draggable={isDraggable}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -856,7 +823,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center relative`}
                                 style={{ minWidth: '230px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -889,7 +856,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center relative`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center relative`}
                                 style={compact ? { width: '92px', minWidth: '92px', maxWidth: '92px' } : { minWidth: '115px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -959,7 +926,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${isDuplicateFabOrder ? '' : rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
                                 style={isDuplicateFabOrder ? { backgroundColor: dupColor } : undefined}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
@@ -1020,7 +987,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center whitespace-normal`}
+                                className={`relative ${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center whitespace-normal`}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
@@ -1075,7 +1042,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1112,7 +1079,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                             <td
                                 key={`${row.id}-${column}`}
                                 data-editable-x="true"
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
                                 onMouseDown={handleProtectedCellMouseDown}
                             >
                                 <input
@@ -1179,11 +1146,14 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${startInstallBgClass} border-r border-gray-400 dark:border-slate-500 text-center cursor-pointer transition-colors ${updatingStartInstall ? 'opacity-50' : ''}`}
                                 onClick={() => !updatingStartInstall && setIsStartInstallModalOpen(true)}
                                 title={titleText}
                             >
-                                <span>{displayValue}</span>
+                                <div className="leading-tight">{displayValue}</div>
+                                <div className={`text-[10px] leading-tight ${isAsap || isHardDate || isHardDatePast ? 'opacity-80' : 'text-gray-500 dark:text-slate-400'}`}>
+                                    {row['installer'] || '—'}
+                                </div>
                             </td>
                         );
                     }
@@ -1196,7 +1166,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
+                                className={`px-1 ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors`}
                                 title={`${tooltipValue} - Click to view details`}
                                 onClick={() => setIsModalOpen(true)}
                                 style={{
@@ -1223,28 +1193,26 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
-                    // Handle Release # column — smart fallback:
-                    //   has_drawing → click opens in-app markup; show small history icon
-                    //   else viewer_url → click opens Procore (preserves prior behavior)
-                    //   plus an upload icon (drafter/admin) when no drawing yet
+                    // Handle Release # column — the number opens the version-history
+                    // hub (pick a version to view/edit, upload a new one, or jump to
+                    // Procore from the top). Drafters/admins and any release with an
+                    // uploaded drawing route there; a Procore-only release links
+                    // straight to Procore.
                     if (column === 'Release #') {
                         const viewerUrl = row.viewer_url;
-                        const hasDrawing = hasDrawingLocal;
+                        const opensHub = canMarkup || hasDrawingLocal;
                         return (
                             <td
                                 key={`${row.id}-${column}`}
-                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-center`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-center`}
                             >
-                                <div className="flex items-center justify-center gap-1">
-                                    {hasDrawing ? (
+                                <div className="flex items-center justify-center">
+                                    {opensHub ? (
                                         <button
                                             type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openLatestMarkup(canMarkup ? 'edit' : 'view');
-                                            }}
+                                            onClick={(e) => { e.stopPropagation(); setPdfHistoryOpen(true); }}
                                             className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium"
-                                            title="Open in-app markup viewer"
+                                            title="Drawing versions — view, edit, upload, or open in Procore"
                                         >
                                             {rawValue}
                                         </button>
@@ -1262,38 +1230,6 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     ) : (
                                         <span>{rawValue}</span>
                                     )}
-
-                                    {hasDrawing && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setPdfHistoryOpen(true); }}
-                                            className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
-                                            title="Drawing version history"
-                                            aria-label="Drawing version history"
-                                        >
-                                            🕒
-                                        </button>
-                                    )}
-                                    {!hasDrawing && canMarkup && (
-                                        <>
-                                            <input
-                                                ref={drawingFileInputRef}
-                                                type="file"
-                                                accept="application/pdf,.pdf"
-                                                onChange={handleDrawingUpload}
-                                                style={{ display: 'none' }}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); drawingFileInputRef.current?.click(); }}
-                                                className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 text-xs"
-                                                title="Upload FC drawing PDF"
-                                                aria-label="Upload FC drawing PDF"
-                                            >
-                                                ⬆
-                                            </button>
-                                        </>
-                                    )}
                                 </div>
                             </td>
                         );
@@ -1302,7 +1238,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     return (
                         <td
                             key={`${row.id}-${column}`}
-                            className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 text-center ${shouldWrapAndTruncate
+                            className={`${paddingClass} ${cellPy} ${cellText} align-middle font-medium ${rowBgClass} border-r border-gray-400 dark:border-slate-500 text-gray-900 dark:text-slate-100 text-center ${shouldWrapAndTruncate
                                 ? ''
                                 : whitespaceClass
                                 }`}
@@ -1332,9 +1268,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         </td>
                     );
                 })}
-                {isAdmin && (
+                {isAdmin && showActions && (
                     <td
-                        className={`px-1 ${cellPy} text-center align-middle border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 w-8 relative`}
+                        className={`px-1 ${cellPy} text-center align-middle border-r border-gray-400 dark:border-slate-500 bg-white dark:bg-slate-800 w-8 relative`}
                         style={{ width: '32px' }}
                     >
                         <button
@@ -1396,6 +1332,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 isOpen={isStartInstallModalOpen}
                 onClose={() => setIsStartInstallModalOpen(false)}
                 currentDate={localStartInstall}
+                currentInstaller={row['installer']}
                 onSave={handleStartInstallSave}
                 onClearHardDate={handleClearHardDate}
                 onSetAsap={handleSetAsap}
@@ -1416,6 +1353,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             <PdfVersionHistoryModal
                 isOpen={pdfHistoryOpen}
                 releaseId={row.id}
+                viewerUrl={row.viewer_url}
                 onClose={() => setPdfHistoryOpen(false)}
                 onOpenVersion={(vid, mode) => {
                     setPdfHistoryOpen(false);
