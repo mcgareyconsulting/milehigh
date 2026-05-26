@@ -73,6 +73,23 @@ const fmtShortDate = (iso) => {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+// Local YYYY-MM-DD — matches the Job Log Start install comparison (toISOString
+// would shift to UTC and flip the day near midnight).
+const localTodayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Pill color for the installer-card date range, mirroring the Job Log Start install
+// cell: red = ASAP, yellow = overdue (start install in the past), green = good.
+// (ASAP isn't wired up yet, but the branch is here so it lights up when it is.)
+const dateRangePillClass = (job) => {
+    if (job['start_install_asap'] === true) return 'bg-red-500 text-white';
+    const installDay = String(job['Start install'] ?? '').split('T')[0];
+    if (installDay && installDay < localTodayStr()) return 'bg-yellow-400 text-gray-900';
+    return 'bg-green-500 text-white';
+};
+
 // Stable-ish color per assignee initials so the same person keeps a color across cards.
 const CHIP_PALETTE = [
     'rgb(59 130 246)', 'rgb(16 185 129)', 'rgb(245 158 11)',
@@ -136,9 +153,14 @@ function ReleaseCard({ job, colorBase, draggable, isUpdating, isDragging, showDa
                     </div>
                 )}
                 {showDateRange && job['Start install'] && (
-                    <div className="text-[10px] font-medium text-gray-600 dark:text-slate-300 mt-1" title="Start install → Comp. ETA">
-                        🗓 {fmtShortDate(job['Start install'])}
-                        {job['Comp. ETA'] ? ` → ${fmtShortDate(job['Comp. ETA'])}` : ''}
+                    <div className="mt-1.5">
+                        <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${dateRangePillClass(job)}`}
+                            title={job['start_install_asap'] === true ? 'ASAP' : 'Start install → Comp. ETA'}
+                        >
+                            🗓 {fmtShortDate(job['Start install'])}
+                            {job['Comp. ETA'] ? ` → ${fmtShortDate(job['Comp. ETA'])}` : ''}
+                        </span>
                     </div>
                 )}
             </div>
