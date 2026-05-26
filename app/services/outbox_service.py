@@ -421,6 +421,106 @@ class OutboxService:
                     db.session.commit()
                     return False
 
+            elif outbox_item.destination == 'trello' and outbox_item.action == 'create_pickup_card':
+                # Create the "PU <vendor>: <subject>" card for a vendor pick-up.
+                from datetime import date as _date
+                from app.models import PickupOrder
+                from app.trello.card_creation import create_trello_card_core
+                from app.trello.api import get_list_by_name
+                from app.trello.utils import mountain_eod_datetime
+
+                pickup_id = (event.payload or {}).get('pickup_order_id')
+                pickup = db.session.get(PickupOrder, pickup_id) if pickup_id else None
+                if not pickup:
+                    logger.error(f"Outbox {outbox_item.id}: pickup_order {pickup_id} not found")
+                    outbox_item.status = 'failed'
+                    outbox_item.error_message = f"PickupOrder {pickup_id} not found"
+                    db.session.commit()
+                    return False
+
+                from app.brain.job_log.features.pickup.members import resolve_member_ids
+
+                vendor = pickup.vendor or cfg.PICKUP_VENDOR_LABEL
+                card_name = f"PU {vendor}: {pickup.email_subject or ''}".strip()
+                card_desc = pickup.email_body or ""
+                due = mountain_eod_datetime(pickup.email_received_at or _date.today())
+                # Always-on members + the release's PM (mapped from Releases.pm).
+                release_pm = pickup.release_rec.pm if pickup.release_rec else None
+                id_members = resolve_member_ids(release_pm) or None
+                list_name = cfg.PICKUP_TRELLO_LIST_NAME
+
+                # TRELLO_MOCK: simulate creation locally so the outbox plumbing can
+                # be exercised without touching the real board.
+                from flask import current_app
+                if current_app.config.get("TRELLO_MOCK"):
+                    pickup.trello_card_id = f"MOCK_PU_{pickup.id}"
+                    pickup.trello_list_name = list_name
+                    pickup.status = 'card_created'
+                    outbox_item.status = 'completed'
+                    outbox_item.completed_at = datetime.utcnow()
+                    outbox_item.error_message = None
+                    db.session.commit()
+                    JobEventService.close(event.id)
+                    db.session.commit()
+                    logger.info(f"[TRELLO_MOCK] create_pickup_card: pickup {pickup.id} → '{list_name}'")
+                    return True
+
+                is_retry = (outbox_item.retry_count or 0) > 0
+                try:
+                    list_info = get_list_by_name(list_name)
+                    if not list_info or not list_info.get("id"):
+                        raise Exception(f"Trello list '{list_name}' not found")
+
+                    result = create_trello_card_core(
+                        card_title=card_name,
+                        card_description=card_desc,
+                        list_id=list_info["id"],
+                        position="bottom",
+                        idempotency_check=is_retry,
+                        due=due,
+                        id_members=id_members,
+                    )
+                    if not result or not result.get("success"):
+                        raise Exception(result.get("error", "card creation failed") if result else "no result")
+
+                    pickup.trello_card_id = result["card_id"]
+                    pickup.trello_list_name = list_name
+                    pickup.status = 'card_created'
+                    outbox_item.status = 'completed'
+                    outbox_item.completed_at = datetime.utcnow()
+                    outbox_item.error_message = None
+                    db.session.commit()
+
+                    JobEventService.close(event.id)
+                    db.session.commit()
+
+                    adopted = " (adopted existing card)" if result.get("adopted") else ""
+                    logger.info(
+                        f"Outbox {outbox_item.id} completed (create_pickup_card "
+                        f"{pickup.job}-{pickup.release}){adopted}"
+                    )
+                    return True
+
+                except Exception as api_error:
+                    outbox_item.retry_count += 1
+                    outbox_item.error_message = str(api_error)
+                    if outbox_item.retry_count < outbox_item.max_retries:
+                        delay_seconds = 2 ** outbox_item.retry_count
+                        outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+                        outbox_item.status = 'pending'
+                        logger.warning(
+                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        )
+                    else:
+                        outbox_item.status = 'failed'
+                        pickup.status = 'card_failed'
+                        logger.error(
+                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
+                            exc_info=True
+                        )
+                    db.session.commit()
+                    return False
+
             else:
                 # Unsupported destination/action combination
                 logger.error(f"Outbox {outbox_item.id}: Unsupported {outbox_item.destination}/{outbox_item.action}")

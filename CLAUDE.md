@@ -80,6 +80,7 @@ Comment creation auto-parses `@FirstName` mentions and creates `Notification` re
 - `TrelloOutbox` / `ProcoreOutbox` — reliable outbound delivery queue
 - `BoardItem` / `BoardActivity` / `Notification` — bug tracker and notifications
 - `WebhookReceipt` — idempotency for incoming webhooks
+- `PickupOrder` (table `pickup_orders`) — vendor part pick-up notifications, FK-linked to `releases.id`. Created from forwarded vendor emails ingested by `app/pickup_email/` (Gmail polling). Holds the email audit + a Trello card that is SEPARATE from `Releases.trello_card_id`. Idempotent on `email_message_id`.
 - `User`, `SyncOperation`, `SyncLog`, `JobChangeLog`, `ProcoreToken`
 
 ### Naming conflicts to keep in mind
@@ -90,7 +91,9 @@ Comment creation auto-parses `@FirstName` mentions and creates `Notification` re
 - The Projects geofence is stored in a single column, `geofence_geojson` (the previous split with a `geometry` column was consolidated; both the on-site filter and the map renderer read from `geofence_geojson`).
 
 ### Migration order
-M1 (users) → M2 (rename submittals table) → M3 (release_events) → M4 (submittal_events) → M5 (procore_outbox) → M6 (webhook_receipts)
+M1 (users) → M2 (rename submittals table) → M3 (release_events) → M4 (submittal_events) → M5 (procore_outbox) → M6 (webhook_receipts) → M7 (pickup_orders: `migrations/add_pickup_orders_table.py`)
+
+Migrations are standalone idempotent scripts in `migrations/` (not Alembic versions), run directly: `ENVIRONMENT=sandbox python migrations/<name>.py [--yes]`.
 
 ### Brain / services layer
 - `app/brain/` — query and transformation logic for job log, drafting work load (DWL), map views, and the board/bug tracker

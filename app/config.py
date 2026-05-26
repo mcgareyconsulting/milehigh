@@ -83,6 +83,31 @@ class Config:
     # 60s comfortably clears the 15s burst window plus Procore read-after-write lag.
     PROCORE_RECONCILE_DELAY_SECONDS = int(os.environ.get("PROCORE_RECONCILE_DELAY_SECONDS", "60"))
     
+    # Pick-up (PU) tracking — inbound email webhook. The user forwards vendor
+    # pick-up emails to an address handled by an inbound-email provider
+    # (CloudMailin), which POSTs the parsed message to /brain/pickup/inbound-email.
+    # That route is guarded by this shared secret (constant-time compared, accepted
+    # via HTTP basic-auth password, X-Pickup-Token header, or a ?secret= query
+    # param). When unset the webhook fails closed (503) so prod/sandbox can't be
+    # spoofed before the secret is configured.
+    PICKUP_INBOUND_SECRET = os.environ.get("PICKUP_INBOUND_SECRET")
+
+    # Pick-up Trello card: which list it lands in, members to add, and the vendor
+    # label used in the card name "PU <vendor>: ...".
+    PICKUP_TRELLO_LIST_NAME = os.environ.get("PICKUP_TRELLO_LIST_NAME", "Shipping planning")
+    # Always-on members added to every pick-up card (comma-separated Trello member IDs).
+    PICKUP_TRELLO_MEMBER_IDS = os.environ.get("PICKUP_TRELLO_MEMBER_IDS", "")
+    # PM initials → Trello member ID, so the release's PM is added on top of the
+    # always-on members. Format: "RL:<id>,GA:<id>,DR:<id>,WO:<id>". Keyed on
+    # Releases.pm (case-insensitive).
+    PICKUP_PM_TRELLO_IDS = os.environ.get("PICKUP_PM_TRELLO_IDS", "")
+    PICKUP_VENDOR_LABEL = os.environ.get("PICKUP_VENDOR_LABEL", "Dencol")
+
+    # Shared secret for machine-to-machine calls into Brain (e.g. the Banana Boy
+    # pickup skill posting email content it fetched). Compared in constant time;
+    # when unset, token auth is disabled and only admin sessions can reach those routes.
+    BRAIN_SERVICE_TOKEN = os.environ.get("BRAIN_SERVICE_TOKEN")
+
     # CORS configuration
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
     

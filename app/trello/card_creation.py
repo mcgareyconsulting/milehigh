@@ -110,6 +110,8 @@ def create_trello_card_core(
     list_id: str,
     position: str = "top",
     idempotency_check: bool = False,
+    due: Optional[str] = None,
+    id_members: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Core function to create a Trello card.
@@ -125,6 +127,8 @@ def create_trello_card_core(
         idempotency_check: When True, GET the target list first and adopt
             an existing card with the same title instead of POSTing. Use on
             retries to avoid duplicates from Trello 5xx false-negatives.
+        due: Optional ISO8601 due date (e.g. from mountain_eod_datetime).
+        id_members: Optional comma-separated Trello member IDs to add at create.
 
     Returns:
         Dictionary with:
@@ -164,6 +168,10 @@ def create_trello_card_core(
             "idList": list_id,
             "pos": position
         }
+        if due:
+            payload["due"] = due
+        if id_members:
+            payload["idMembers"] = id_members
 
         logger.info(f"Creating Trello card in list {list_id}")
         response = requests.post(url, params=payload)

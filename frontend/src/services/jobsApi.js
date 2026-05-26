@@ -80,6 +80,17 @@ class JobsApi {
         }
     }
 
+    async fetchPickupBoard() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/pickup/board`);
+            let data = response.data;
+            if (typeof data === 'string') data = JSON.parse(data);
+            return data.pickups || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch pickup board');
+        }
+    }
+
     async updateStage(job, release, stage) {
         try {
             const response = await axios.patch(

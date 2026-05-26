@@ -6,6 +6,7 @@ exports:
   login_required: Decorator returning 401 if no authenticated session
   admin_required: Decorator returning 403 if user is not admin
   drafter_or_admin_required: Decorator returning 403 if user lacks drafter or admin role
+  inbound_webhook_secret_required: Decorator guarding a public webhook with a shared secret (fails closed)
   get_current_user: Resolve session user_id to a User object (None outside request context)
   format_source_with_user: Append current username to audit source strings
 imports_from: [functools, werkzeug.security, flask, app.models, app.logging_config]
@@ -150,6 +151,77 @@ def drafter_or_admin_required(f):
         if not user.is_admin and not user.is_drafter:
             logger.warning(f"User {user.username} attempted to access drafter/admin route without privileges")
             return jsonify({'error': 'Drafter or admin privileges required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def service_token_or_admin_required(f):
+    """Allow machine callers with a valid service token, or fall back to an admin session.
+
+    Token is read from `Authorization: Bearer <token>` or the `X-Brain-Token` header
+    and compared in constant time against Config.BRAIN_SERVICE_TOKEN. When the token
+    is unset/empty, only admin sessions are accepted. Used by agent-facing routes
+    (e.g. the Banana Boy pickup ingest) that run outside a browser session.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        from flask import request, current_app
+        import hmac
+
+        token = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[len("Bearer "):].strip()
+        if not token:
+            token = request.headers.get("X-Brain-Token")
+
+        expected = current_app.config.get("BRAIN_SERVICE_TOKEN")
+        if expected and token and hmac.compare_digest(token, expected):
+            return f(*args, **kwargs)
+
+        # Fall back to an admin session.
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        if not user.is_admin:
+            logger.warning("Non-admin/invalid-token attempt on service route")
+            return jsonify({'error': 'Admin privileges or service token required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def inbound_webhook_secret_required(f):
+    """Guard an unauthenticated inbound webhook (e.g. the CloudMailin pick-up email
+    POST) with a shared secret.
+
+    There is no browser session behind an inbound-email provider, so this fails
+    CLOSED: when Config.PICKUP_INBOUND_SECRET is unset every call is rejected (503),
+    and there is no admin fallback. The secret is read from (in order) the HTTP
+    basic-auth password, the `X-Pickup-Token` header, or a `secret` query param —
+    so it works whether the provider supports basic-auth URLs, custom headers, or
+    only a plain target URL. Compared in constant time.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        from flask import request, current_app
+        import hmac
+
+        expected = current_app.config.get("PICKUP_INBOUND_SECRET")
+        if not expected:
+            logger.error("Inbound webhook rejected: PICKUP_INBOUND_SECRET not configured")
+            return jsonify({'error': 'Webhook not configured'}), 503
+
+        provided = None
+        if request.authorization and request.authorization.password:
+            provided = request.authorization.password
+        if not provided:
+            provided = request.headers.get("X-Pickup-Token")
+        if not provided:
+            provided = request.args.get("secret")
+
+        if not provided or not hmac.compare_digest(provided, expected):
+            logger.warning("Inbound webhook rejected: missing or invalid secret")
+            return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
 

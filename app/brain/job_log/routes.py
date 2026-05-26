@@ -26,8 +26,8 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User
-from app.auth.utils import login_required, get_current_user, admin_required
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User, PickupOrder
+from app.auth.utils import login_required, get_current_user, admin_required, service_token_or_admin_required, inbound_webhook_secret_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
@@ -362,6 +362,32 @@ def _procore_submittal_refs_for_releases(releases):
 
     return refs
 
+
+def _pickup_refs_for_releases(release_ids):
+    """One-shot batched lookup of pick-up status per release id.
+
+    Returns {release_id: {pickup_received, pickup_trello_card_id, pickup_received_at}}.
+    A release may have multiple pickups; we surface the most recent one.
+    """
+    refs = {}
+    if not release_ids:
+        return refs
+
+    rows = (
+        PickupOrder.query
+        .filter(PickupOrder.release_id.in_(release_ids))
+        .order_by(PickupOrder.release_id, PickupOrder.created_at.asc())
+        .all()
+    )
+    for p in rows:
+        # Later rows (newer created_at) overwrite, leaving the latest per release.
+        refs[p.release_id] = {
+            "pickup_received": True,
+            "pickup_trello_card_id": p.trello_card_id,
+            "pickup_received_at": p.email_received_at.isoformat() if p.email_received_at else None,
+        }
+    return refs
+
 # ==============================================================================
 # Job Data Routes
 # ==============================================================================
@@ -517,6 +543,26 @@ def get_jobs():
                 f"Error batching procore submittal refs: {procore_ref_error}",
                 exc_info=True,
             )
+
+        # Patch pick-up status (checkmark + PU card link in the Job Log modal)
+        try:
+            pickup_refs = _pickup_refs_for_releases([j['id'] for j in job_list])
+            for j in job_list:
+                ref = pickup_refs.get(j['id'])
+                j['pickup_received'] = bool(ref)
+                j['pickup_trello_card_id'] = ref['pickup_trello_card_id'] if ref else None
+                j['pickup_received_at'] = ref['pickup_received_at'] if ref else None
+        except Exception as pickup_ref_error:
+            logger.warning(
+                f"Error batching pickup refs: {pickup_ref_error}",
+                exc_info=True,
+            )
+
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
 
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
@@ -803,6 +849,26 @@ def get_all_jobs():
                 f"Error batching procore submittal refs: {procore_ref_error}",
                 exc_info=True,
             )
+
+        # Patch pick-up status (checkmark + PU card link in the Job Log modal)
+        try:
+            pickup_refs = _pickup_refs_for_releases([j['id'] for j in job_list])
+            for j in job_list:
+                ref = pickup_refs.get(j['id'])
+                j['pickup_received'] = bool(ref)
+                j['pickup_trello_card_id'] = ref['pickup_trello_card_id'] if ref else None
+                j['pickup_received_at'] = ref['pickup_received_at'] if ref else None
+        except Exception as pickup_ref_error:
+            logger.warning(
+                f"Error batching pickup refs: {pickup_ref_error}",
+                exc_info=True,
+            )
+
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
 
         # Add scheduling fields to all jobs
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
@@ -3237,3 +3303,259 @@ def sync_health():
     except Exception as e:
         logger.error("sync_health failed", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@brain_bp.route("/pickup/simulate", methods=["POST"])
+@admin_required
+def simulate_pickup():
+    """Admin-only: inject a fake forwarded pick-up email to test the pipeline end-to-end.
+
+    Mirrors exactly what the Gmail poller does per message — parses the subject for a
+    job-release, matches an existing release, records a PickupOrder + audit event, and
+    queues the Trello card via the outbox — but without any Gmail dependency.
+
+    Body (JSON):
+        { "subject": "123-V4 parts ready",   # required; must contain a job-release
+          "from": "vendor@dencol.com",        # optional
+          "to": "pu@mhmw.com",                # optional
+          "body": "full email traceback",    # optional → card description
+          "message_id": "..." }              # optional; defaults to a unique "manual-<uuid>"
+
+    Tip: set TRELLO_MOCK=1 to simulate the card (no real board write); unset to create a
+    live card with members + 11:59 PM MT due date.
+    """
+    from uuid import uuid4
+    from app.pickup_email.ingest import ingest_pickup_email
+
+    data = request.get_json(silent=True) or {}
+    subject = data.get("subject")
+    if not subject:
+        return jsonify({"error": "subject is required"}), 400
+
+    try:
+        result = ingest_pickup_email(
+            subject=subject,
+            sender=data.get("from"),
+            to=data.get("to"),
+            body=data.get("body"),
+            message_id=data.get("message_id") or f"manual-{uuid4()}",
+            received_at=datetime.utcnow(),
+        )
+    except Exception as e:
+        logger.error("simulate_pickup failed", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    # recorded/duplicate are success; unmatched/unparseable are 422 (nothing recorded).
+    code = 200 if result["status"] in ("recorded", "duplicate") else 422
+    return jsonify(result), code
+
+
+@brain_bp.route("/release/<int:job>/<release>/rundown", methods=["GET"])
+@service_token_or_admin_required
+def release_rundown(job, release):
+    """Consolidated read for the agent: release + changelog + pick-ups, in one call.
+
+    Zips together the three tables an agent (or copilot) needs to answer
+    "what's the deal with <job>-<release>?":
+      - release   : the Releases row (all fields)
+      - events    : ReleaseEvents changelog (newest first; system echoes hidden by default)
+      - pickups   : PickupOrder rows for this release (vendor pick-ups + their email audit)
+
+    Auth: service token or admin session. Read-only.
+    Query params:
+      - events_limit (int, default 50)
+      - include_echoes (bool, default false) — include is_system_echo events
+    """
+    release_rec = Releases.query.filter_by(job=job, release=release).first()
+    if not release_rec:
+        return jsonify({"error": f"Release {job}-{release} not found"}), 404
+
+    events_limit = request.args.get("events_limit", 50, type=int)
+    include_echoes = request.args.get("include_echoes", "false").lower() == "true"
+
+    event_q = ReleaseEvents.query.filter_by(job=job, release=release)
+    if not include_echoes:
+        event_q = event_q.filter(ReleaseEvents.is_system_echo.is_(False))
+    events = event_q.order_by(ReleaseEvents.created_at.desc()).limit(events_limit).all()
+
+    names = _resolve_event_user_names(events)
+    events_out = [{
+        "id": e.id,
+        "action": e.action,
+        "payload": e.payload,
+        "source": e.source,
+        "user": names.get((e.id, "job")),
+        "external_user_id": e.external_user_id,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+        "applied_at": e.applied_at.isoformat() if e.applied_at else None,
+    } for e in events]
+
+    pickups = (
+        PickupOrder.query.filter_by(release_id=release_rec.id)
+        .order_by(PickupOrder.created_at.desc())
+        .all()
+    )
+
+    return jsonify({
+        "release": release_rec.to_dict(),
+        "events": events_out,
+        "pickups": [p.to_dict() for p in pickups],
+        "counts": {"events": len(events_out), "pickups": len(pickups)},
+    }), 200
+
+
+@brain_bp.route("/pickup/ingest", methods=["POST"])
+@service_token_or_admin_required
+def ingest_pickup():
+    """Machine-facing pick-up ingest for the Banana Boy skill (service token or admin).
+
+    Provider-agnostic: the caller (agent) fetches the email from wherever — Gmail
+    today, Microsoft Graph later — and posts its content here. Brain records the
+    PickupOrder + audit event and queues the Trello card via the outbox.
+
+    Auth: `Authorization: Bearer <BRAIN_SERVICE_TOKEN>` or `X-Brain-Token`, or an admin session.
+
+    Body (JSON):
+        { "job": 380, "release": "456",     # preferred: the release the user named
+          "subject": "...", "from": "...",   # email metadata (subject → card name)
+          "to": "...", "body": "...",        # body → card description + audit
+          "message_id": "...",               # optional; idempotency key
+          "received_at": "2026-05-26T15:00:00Z" }  # optional ISO; defaults to now
+    Either job+release or a parseable subject is required.
+    """
+    from uuid import uuid4
+    from app.pickup_email.ingest import ingest_pickup_email
+
+    data = request.get_json(silent=True) or {}
+    has_release = data.get("job") is not None and data.get("release")
+    if not data.get("subject") and not has_release:
+        return jsonify({"error": "provide job+release or subject"}), 400
+
+    received_at = datetime.utcnow()
+    if data.get("received_at"):
+        try:
+            received_at = datetime.fromisoformat(str(data["received_at"]).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass  # fall back to now on a malformed timestamp
+
+    try:
+        result = ingest_pickup_email(
+            subject=data.get("subject"),
+            sender=data.get("from"),
+            to=data.get("to"),
+            body=data.get("body"),
+            message_id=data.get("message_id") or f"agent-{uuid4()}",
+            received_at=received_at,
+            job=data.get("job"),
+            release=data.get("release"),
+        )
+    except Exception as e:
+        logger.error("ingest_pickup failed", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    code = 200 if result["status"] in ("recorded", "duplicate") else 422
+    return jsonify(result), code
+
+
+@brain_bp.route("/pickup/inbound-email", methods=["POST"])
+@inbound_webhook_secret_required
+def inbound_pickup_email():
+    """Inbound vendor pick-up email, delivered by CloudMailin as an HTTP POST.
+
+    The user forwards a vendor (Dencol) pick-up email to the address handled by the
+    inbound-email provider; the provider POSTs the parsed message here. We normalize
+    the provider payload (app.pickup_email.cloudmailin.parse_inbound), then run the
+    exact same provider-agnostic core as the agent-ingest and admin-simulate paths:
+    parse the job-release from the subject, match the release, record a PickupOrder +
+    audit event, and queue the Trello card via the outbox.
+
+    Auth: shared secret (see inbound_webhook_secret_required).
+
+    Status semantics differ from the agent endpoints on purpose: a webhook must return
+    2xx for any FINAL outcome (recorded/duplicate/unmatched/unparseable) so the provider
+    marks the message delivered and stops re-POSTing it. Only an unexpected/transient
+    error returns 500, which is what should trigger the provider's retry.
+    """
+    from app.pickup_email.ingest import ingest_pickup_email
+    from app.pickup_email.cloudmailin import parse_inbound
+
+    fields = parse_inbound(request.get_json(silent=True) or {})
+
+    # Console visibility: log exactly what we parsed off the inbound email. Body is
+    # truncated since forwarded vendor threads can be large.
+    body = fields.get("body") or ""
+    received_at = fields.get("received_at")
+    logger.info(
+        "pickup inbound received",
+        subject=fields.get("subject"),
+        sender=fields.get("sender"),
+        to=fields.get("to"),
+        message_id=fields.get("message_id"),
+        received_at=received_at.isoformat() if received_at else None,
+        body_chars=len(body),
+        body_preview=body[:500],
+    )
+
+    if not fields.get("subject"):
+        # No subject → no job-release to match. Final outcome; don't make the provider retry.
+        logger.info("pickup inbound handled", status="unparseable", reason="no subject")
+        return jsonify({"status": "unparseable", "reason": "no subject"}), 200
+
+    try:
+        result = ingest_pickup_email(
+            subject=fields["subject"],
+            sender=fields["sender"],
+            to=fields["to"],
+            body=fields["body"],
+            message_id=fields["message_id"],
+            received_at=fields["received_at"] or datetime.utcnow(),
+        )
+    except Exception as e:
+        logger.error("inbound_pickup_email failed", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500  # transient → let the provider retry
+
+    logger.info("pickup inbound handled", **result)
+    return jsonify(result), 200
+
+
+@brain_bp.route("/pickup/board", methods=["GET"])
+@login_required
+def pickup_board():
+    """Open vendor pick-ups for the PM Board, rendered as cards in the Shipping
+    planning column (replacing the simulated Trello card with an on-board card).
+
+    Each entry carries the pick-up identity (PU <vendor>: <job>-<release>), the source
+    email subject + received timestamp, and the assigned members resolved from our own
+    users table (resolve_member_users) — the same membership the Trello card would get
+    (always-on members + the release PM) — shown as initial chips on the board.
+    """
+    from app.config import Config as cfg
+    from app.brain.job_log.features.pickup.members import resolve_member_users
+
+    pickups = PickupOrder.query.order_by(PickupOrder.created_at.desc()).all()
+
+    cards = []
+    for p in pickups:
+        pm = p.release_rec.pm if p.release_rec else None
+        cards.append({
+            "id": p.id,
+            "job": p.job,
+            "release": p.release,
+            "vendor": p.vendor,
+            "name": f"PU {p.vendor}: {p.job}-{p.release}",
+            "job_name": p.release_rec.job_name if p.release_rec else None,
+            "trello_list": cfg.PICKUP_TRELLO_LIST_NAME,
+            "email_subject": p.email_subject,
+            "email_from": p.email_from,
+            "email_to": p.email_to,
+            "email_received_at": p.email_received_at.isoformat() if p.email_received_at else None,
+            # The forwarded vendor email chain — shown as the card's description.
+            "email_body": p.email_body,
+            "status": p.status,
+            "assignees": resolve_member_users(pm),
+        })
+
+    return jsonify({"pickups": cards, "count": len(cards)}), 200

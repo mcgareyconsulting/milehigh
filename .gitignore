@@ -4,6 +4,12 @@ venv
 instance/
 .vscode/
 
+# Google OAuth secrets — never commit
+credentials.json
+client_secret*.json
+*token*.json
+gmail_token.json
+
 # Test / coverage artifacts
 .pytest_cache/
 .coverage

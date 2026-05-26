@@ -188,6 +188,23 @@ def mountain_due_datetime(local_date):
     return dt_utc.isoformat().replace("+00:00", "Z")
 
 
+def mountain_eod_datetime(local_date):
+    """
+    Given a date or datetime, return ISO8601 string for 11:59 PM Mountain time,
+    converted to UTC. Used for pick-up card due dates (end of the forward day).
+    """
+    if isinstance(local_date, datetime):
+        d = local_date.date()
+    else:
+        d = local_date
+
+    dt_mountain = datetime.combine(d, time(23, 59))
+    dt_mountain = dt_mountain.replace(tzinfo=ZoneInfo("America/Denver"))
+
+    dt_utc = dt_mountain.astimezone(ZoneInfo("UTC"))
+    return dt_utc.isoformat().replace("+00:00", "Z")
+
+
 def mountain_start_datetime(local_date):
     """
     Given a date or datetime, return ISO8601 string for 9am Mountain time, converted to UTC.

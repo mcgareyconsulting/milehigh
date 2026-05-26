@@ -117,6 +117,10 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # Vendor pick-up emails are no longer polled — an inbound-email provider
+    # (CloudMailin) POSTs each forwarded message to /brain/pickup/inbound-email,
+    # which matches the release and queues its Trello card synchronously.
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 

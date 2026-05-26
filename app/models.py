@@ -528,6 +528,70 @@ class ReleaseEvents(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     applied_at = db.Column(db.DateTime, nullable=True)
 
+
+class PickupOrder(db.Model):
+    """A vendor part pick-up notification tied to a job release.
+
+    Created when a forwarded vendor email (e.g. Dencol) is matched to an existing
+    release. Holds the full email audit (subject/from/body/received_at) plus the
+    Trello card we spin up for the pick-up. This is the source of truth for the
+    pick-up workflow, independent of Trello — the Trello card here is a SEPARATE
+    card from Releases.trello_card_id (which tracks the main release card).
+    """
+    __tablename__ = "pickup_orders"
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Link to the matched release. job/release are denormalized for convenient
+    # querying and to mirror ReleaseEvents, which keys on job + release.
+    release_id = db.Column(db.Integer, db.ForeignKey("releases.id"), nullable=False, index=True)
+    job = db.Column(db.Integer, nullable=False)
+    release = db.Column(db.String(16), nullable=False)
+    vendor = db.Column(db.String(64), nullable=False, default="Dencol")
+
+    # Email audit — the full forwarded traceback lives here, not just on Trello.
+    email_message_id = db.Column(db.String(255), unique=True, nullable=True)  # Gmail id → idempotency
+    email_subject = db.Column(db.String(512), nullable=True)
+    email_from = db.Column(db.String(256), nullable=True)
+    email_to = db.Column(db.String(256), nullable=True)
+    email_received_at = db.Column(db.DateTime, nullable=True)
+    email_body = db.Column(db.Text, nullable=True)
+
+    # Trello card created for this pick-up (separate from the main release card).
+    trello_card_id = db.Column(db.String(64), nullable=True)
+    trello_list_name = db.Column(db.String(128), nullable=True)
+
+    status = db.Column(db.String(32), nullable=False, default="received")  # received | card_created | card_failed
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=True, onupdate=datetime.utcnow)
+
+    release_rec = db.relationship(
+        "Releases", backref=db.backref("pickups", lazy="dynamic")
+    )
+
+    def __repr__(self):
+        return f"<PickupOrder {self.vendor} {self.job}-{self.release} card={self.trello_card_id}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "release_id": self.release_id,
+            "job": self.job,
+            "release": self.release,
+            "vendor": self.vendor,
+            "email_message_id": self.email_message_id,
+            "email_subject": self.email_subject,
+            "email_from": self.email_from,
+            "email_to": self.email_to,
+            "email_received_at": _dt(self.email_received_at),
+            "email_body": self.email_body,
+            "trello_card_id": self.trello_card_id,
+            "trello_list_name": self.trello_list_name,
+            "status": self.status,
+            "created_at": _dt(self.created_at),
+            "updated_at": _dt(self.updated_at),
+        }
+
+
 class SubmittalEvents(db.Model):
     '''Table to track events for submittals.'''
     __tablename__ = 'submittal_events'
