@@ -97,7 +97,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
 
     if (!isOpen) return null;
 
-    const confirmLabel = asapToggle ? 'Set ASAP' : 'Save Date';
+    const confirmLabel = asapToggle ? 'Set ASAP' : 'Set Install';
     const confirmEnabled = asapToggle || !!dateInput || installerChanged;
 
     return (
