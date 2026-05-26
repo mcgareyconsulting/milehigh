@@ -31,6 +31,7 @@ from app.auth.utils import login_required, get_current_user, admin_required, ser
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
+from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
 from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
 from datetime import datetime, timedelta
 from sqlalchemy import or_
@@ -491,6 +492,7 @@ def get_jobs():
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'start_install_asap': serialize_value(job.start_install_asap),
+                    'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -798,6 +800,7 @@ def get_all_jobs():
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'start_install_asap': serialize_value(job.start_install_asap),
+                    'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
@@ -1443,6 +1446,14 @@ def update_invoiced(job, release):
     return jsonify({"status": "success", **response_extras}), 200
 
 
+@brain_bp.route("/installer-teams", methods=["GET"])
+@login_required
+def get_installer_teams():
+    """Return the configured installer team names (match Trello list names)."""
+    from app.config import Config
+    return jsonify({'installer_teams': Config.INSTALLER_TEAMS}), 200
+
+
 @brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
 @login_required
 def update_start_install(job, release):
@@ -1477,6 +1488,8 @@ def update_start_install(job, release):
         is_hard_date = request.json.get('is_hard_date', True)  # Default to True for backward compatibility
         clear_hard_date = request.json.get('clear_hard_date', False)
         asap = request.json.get('asap')  # tri-state: True sets ASAP, False clears, absent = ignore
+        installer_in_req = 'installer' in (request.json or {})
+        installer_val = request.json.get('installer')
         start_install_date = None
 
         # ASAP set/clear — visual flag only; does not write start_install or formula fields,
@@ -1489,6 +1502,21 @@ def update_start_install(job, release):
             old_asap = bool(job_record.start_install_asap)
             new_asap = bool(asap)
             action = 'set_asap' if new_asap else 'clear_asap'
+
+            # Soft cap: at most 3 ASAPs per PM. Setting a 4th requires asap_force=true.
+            force = bool(request.json.get('asap_force', False))
+            if new_asap and not old_asap and job_record.pm and not force:
+                asap_count = Releases.query.filter(
+                    Releases.pm == job_record.pm,
+                    Releases.start_install_asap.is_(True),
+                ).count()
+                if asap_count >= 3:
+                    return jsonify({
+                        'error': 'asap_limit',
+                        'pm': job_record.pm,
+                        'count': asap_count,
+                        'limit': 3,
+                    }), 409
 
             event = JobEventService.create(
                 job=job,
@@ -1594,6 +1622,26 @@ def update_start_install(job, release):
             logger.warning(f"Job not found: {job}-{release}")
             return jsonify({'error': 'Job not found'}), 404
 
+        has_date = bool(start_install_str and start_install_str.strip())
+
+        # Installer-only update: no date provided but an installer was sent.
+        # Do NOT run the date command, which would clear start_install.
+        if not has_date and installer_in_req:
+            try:
+                result = AssignInstallerCommand(
+                    job_id=job,
+                    release=release,
+                    installer=installer_val,
+                ).execute()
+            except ValueError as ve:
+                if str(ve) == "Event already exists":
+                    return jsonify({'error': 'Event already exists'}), 400
+                raise
+            return jsonify({
+                'status': 'success',
+                'event_id': result.event_id,
+            }), 200
+
         try:
             result = UpdateStartInstallCommand(
                 job_id=job,
@@ -1605,6 +1653,20 @@ def update_start_install(job, release):
             if str(ve) == "Event already exists":
                 return jsonify({'error': 'Event already exists'}), 400
             raise
+
+        # Apply the installer change alongside the date, if one was sent.
+        if installer_in_req:
+            try:
+                AssignInstallerCommand(
+                    job_id=job,
+                    release=release,
+                    installer=installer_val,
+                ).execute()
+            except ValueError as ve:
+                # Installer unchanged within the dedup window — the date update
+                # already applied, so don't fail the request.
+                if str(ve) != "Event already exists":
+                    raise
 
         return jsonify({
             'status': 'success',

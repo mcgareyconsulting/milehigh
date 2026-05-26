@@ -409,6 +409,7 @@ class Releases(db.Model):
     start_install_formula = db.Column(db.String(256))  # New field for formula
     start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
     start_install_asap = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    installer = db.Column(db.String(64), nullable=True)  # Installer team; matches Trello list name
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))

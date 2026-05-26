@@ -1898,6 +1898,49 @@ def card_has_link_to(card_id):
     return any(att.get("name") == "Linked card" for att in resp.json())
 
 
+def _mirror_short_link_from_attachments(attachments):
+    """Return the mirror card's shortLink from a card's attachments.
+
+    The mirror is the attachment named "Linked card" (other attachments such as
+    FC Drawing links may also be present, so we must not assume attachments[0]).
+    Prefer fileName; fall back to parsing the trello.com/c/<shortLink> url.
+    """
+    for att in attachments or []:
+        if att.get("name") != "Linked card":
+            continue
+        file_name = att.get("fileName")
+        if file_name:
+            return file_name
+        url = att.get("url") or ""
+        if "/c/" in url:
+            return url.split("/c/", 1)[1].split("/")[0]
+    return None
+
+
+def move_mirror_card(primary_card_id, target_list_id):
+    """Move a release's mirror card into the given list.
+
+    Looks up the "Linked card" mirror via the primary card's attachments and
+    moves it to target_list_id. No-ops (logs a warning) when the primary has no
+    linked mirror or no target list is available.
+    """
+    if not primary_card_id or not target_list_id:
+        print(f"[TRELLO API] move_mirror_card skipped: card={primary_card_id} list={target_list_id}")
+        return None
+
+    result = get_card_attachments_by_card_id(primary_card_id)
+    if not result.get("success"):
+        print(f"[TRELLO API] move_mirror_card: failed to read attachments for {primary_card_id}")
+        return None
+
+    mirror_short_link = _mirror_short_link_from_attachments(result.get("attachments"))
+    if not mirror_short_link:
+        print(f"[TRELLO API] move_mirror_card: no linked mirror card for {primary_card_id}")
+        return None
+
+    return update_trello_card(card_id=mirror_short_link, new_list_id=target_list_id)
+
+
 def link_cards(primary_id, secondary_id):
     base = "https://trello.com/c/"
     for src, dst in ((primary_id, secondary_id), (secondary_id, primary_id)):

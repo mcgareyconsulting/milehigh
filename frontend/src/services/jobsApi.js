@@ -176,18 +176,33 @@ class JobsApi {
         }
     }
 
-    async updateStartInstall(job, release, startInstall, isHardDate = true) {
+    async updateStartInstall(job, release, startInstall, installer = undefined, isHardDate = true) {
         try {
+            const payload = { is_hard_date: isHardDate };
+            // Only send a date when one is provided, so an installer-only change
+            // never clears an existing hard date.
+            if (startInstall) {
+                payload.start_install = startInstall;
+            }
+            if (installer !== undefined) {
+                payload.installer = installer;
+            }
             const response = await axios.patch(
                 `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
-                {
-                    start_install: startInstall,
-                    is_hard_date: isHardDate
-                }
+                payload
             );
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to update start install');
+        }
+    }
+
+    async getInstallerTeams() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/installer-teams`);
+            return response.data.installer_teams || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load installer teams');
         }
     }
 
@@ -203,11 +218,11 @@ class JobsApi {
         }
     }
 
-    async setStartInstallAsap(job, release, asap) {
+    async setStartInstallAsap(job, release, asap, force = false) {
         try {
             const response = await axios.patch(
                 `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
-                { asap }
+                { asap, asap_force: force }
             );
             return response.data;
         } catch (error) {

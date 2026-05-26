@@ -12,6 +12,7 @@ export function PdfVersionHistoryModal({
     releaseId,
     onClose,
     onOpenVersion,
+    viewerUrl = '',
 }) {
     const [versions, setVersions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -105,15 +106,36 @@ export function PdfVersionHistoryModal({
                 className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl flex items-center justify-between">
+                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl flex items-center justify-between gap-3">
                     <h2 className="text-xl font-bold text-white">Drawing version history</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
-                        aria-label="Close"
-                    >
-                        ×
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {viewerUrl && viewerUrl.trim() !== '' ? (
+                            <a
+                                href={viewerUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/90 text-accent-700 hover:bg-white whitespace-nowrap"
+                                title="Open this drawing in Procore"
+                            >
+                                ↗ View in Procore
+                            </a>
+                        ) : (
+                            <span
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/30 text-white/60 cursor-help select-none whitespace-nowrap"
+                                title="No FC link found"
+                                aria-disabled="true"
+                            >
+                                ↗ View in Procore
+                            </span>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
+                            aria-label="Close"
+                        >
+                            ×
+                        </button>
+                    </div>
                 </div>
 
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
