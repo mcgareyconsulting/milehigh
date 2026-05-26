@@ -59,7 +59,6 @@ export default function JobLogRow({
     const [expanded, setExpanded] = useState(false);
 
     const jobNum = fmt(job['Job #']);
-    const release = fmt(job['Release #']);
     const jobName = fmt(job['Job']);
     const description = (job['Description'] || '').toString().trim();
     const stage = job['Stage'] || 'Released';
@@ -116,8 +115,14 @@ export default function JobLogRow({
                 className="w-full flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-inset"
             >
                 <span className="shrink-0 font-mono text-sm font-semibold text-gray-900 dark:text-slate-100">
-                    {jobNum}<span className="text-gray-400 dark:text-slate-500">·</span>{release}
+                    {jobNum}<span className="text-gray-400 dark:text-slate-500">·</span>
                 </span>
+
+                {/* Release # — embeds JobsTableRow so the FC link / PDF markup modal,
+                    version history, and upload controls match the desktop table view. */}
+                <InlineCell>
+                    <JobsTableRow {...sharedRowProps} columns={['Release #']} isAdmin={isAdmin} compact showActions={false} />
+                </InlineCell>
 
                 <span className="flex-1 min-w-0 truncate text-sm text-gray-900 dark:text-slate-100">
                     <span className="font-semibold">{jobName}</span>
@@ -170,6 +175,7 @@ export default function JobLogRow({
                                 columns={expandedColumns}
                                 isAdmin={isAdmin}
                                 onDelete={onDelete}
+                                showActions={false}
                             />
                         </tbody>
                     </table>
