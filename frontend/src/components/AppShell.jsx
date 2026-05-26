@@ -120,6 +120,7 @@ function AppShellInner({ isAuthenticated }) {
           <div className="hidden min-[1440px]:flex items-center gap-2">
             {navBtn('/job-log', 'Job Log')}
             {navBtn('/drafting-work-load', 'Drafting WL')}
+            {navBtn('/pm-board', 'PM Board')}
             {navBtn('/events', 'Events')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
             {isAdmin && navBtn('/board', 'Bug Tracker')}

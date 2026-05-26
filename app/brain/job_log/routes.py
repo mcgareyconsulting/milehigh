@@ -1637,11 +1637,30 @@ def update_start_install(job, release):
             if not comp_eta_in_req:
                 return
             rec = Releases.query.filter_by(job=job, release=release).first()
-            if rec:
-                rec.comp_eta = comp_eta_date
-                rec.last_updated_at = datetime.utcnow()
-                rec.source_of_update = 'Brain'
-                db.session.commit()
+            if not rec:
+                return
+            old_comp_eta = rec.comp_eta
+            if old_comp_eta == comp_eta_date:
+                return  # no change — don't emit a noise event
+
+            # Audit the change in the unified ReleaseEvents stream. Dedup is value-aware
+            # (hash includes the payload), so successive drags to new dates each record.
+            event = JobEventService.create(
+                job=job,
+                release=release,
+                action='update_comp_eta',
+                source='Brain',
+                payload={
+                    'from': old_comp_eta.isoformat() if old_comp_eta else None,
+                    'to': comp_eta_date.isoformat() if comp_eta_date else None,
+                },
+            )
+            rec.comp_eta = comp_eta_date
+            rec.last_updated_at = datetime.utcnow()
+            rec.source_of_update = 'Brain'
+            if event is not None:
+                JobEventService.close(event.id)
+            db.session.commit()
 
         # No start_install change: apply installer and/or comp_eta only.
         # Do NOT run the date command, which would clear start_install.

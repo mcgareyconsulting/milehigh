@@ -764,7 +764,6 @@ function JobLog() {
                                         <DropdownItem onClick={handlePrint} disabled={!hasData || loading || !reviewMode || printing}>
                                             {printing ? '⏳ Building…' : '🖨️ Print'}
                                         </DropdownItem>
-                                        <DropdownItem onClick={() => navigate('/pm-board')}>📋 PM Board</DropdownItem>
                                         <DropdownItem onClick={() => navigate('/archive')}>🗄️ Archive</DropdownItem>
                                         {isAdmin && (
                                             <DropdownItem onClick={handleExportCSV} disabled={!hasData || loading}>⬇️ Export CSV</DropdownItem>

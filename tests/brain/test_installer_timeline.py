@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.models import Releases, db
+from app.models import Releases, ReleaseEvents, db
 
 
 @pytest.fixture(autouse=True)
@@ -132,6 +132,35 @@ class TestCompEtaPersistence:
             r2 = Releases.query.filter_by(job=1, release="A").first()
             assert r2.start_install == date(2026, 7, 1)
             assert r2.comp_eta == date(2026, 7, 5)
+
+    def test_comp_eta_change_records_event(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", comp_eta=date(2026, 6, 5))
+            db.session.commit()
+
+            resp = admin_client.patch(
+                "/brain/update-start-install/1/A",
+                json={"comp_eta": "2026-06-12"},
+            )
+            assert resp.status_code == 200
+
+            evs = ReleaseEvents.query.filter_by(action="update_comp_eta").all()
+            assert len(evs) == 1
+            assert evs[0].payload["from"] == "2026-06-05"
+            assert evs[0].payload["to"] == "2026-06-12"
+
+    def test_comp_eta_unchanged_emits_no_event(self, app, admin_client):
+        with app.app_context():
+            _make_release(1, "A", comp_eta=date(2026, 6, 5))
+            db.session.commit()
+
+            resp = admin_client.patch(
+                "/brain/update-start-install/1/A",
+                json={"comp_eta": "2026-06-05"},
+            )
+            assert resp.status_code == 200
+
+            assert ReleaseEvents.query.filter_by(action="update_comp_eta").count() == 0
 
     def test_comp_eta_with_installer_change(self, app, admin_client):
         with app.app_context():
