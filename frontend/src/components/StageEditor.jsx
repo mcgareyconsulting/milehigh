@@ -15,7 +15,7 @@
  *   - stopPropagation so changing the stage never toggles the parent card row.
  *   - Read-only (no onUpdate) renders a static pill.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { STAGE_OPTIONS } from '../constants/stages';
 
@@ -33,22 +33,29 @@ export default function StageEditor({
     const stage = row['Stage'] || 'Released';
     const readOnly = !onUpdate;
 
-    const group = stageToGroup?.[stage];
+    // Optimistic local stage so the native select reflects the pick immediately
+    // instead of snapping back to the old value during the async save + refetch.
+    const [localStage, setLocalStage] = useState(stage);
+    useEffect(() => { setLocalStage(stage); }, [stage]);
+
+    const group = stageToGroup?.[localStage];
     const colors = stageGroupColors?.[group];
     const pillStyle = colors
         ? { backgroundColor: colors.light, color: colors.text, borderColor: colors.border }
         : undefined;
 
-    const label = STAGE_OPTIONS.find((o) => o.value === stage)?.label || stage;
+    const label = STAGE_OPTIONS.find((o) => o.value === localStage)?.label || localStage;
 
     const handleChange = async (e) => {
         const next = e.target.value;
-        if (next === stage) return;
+        if (next === localStage) return;
+        setLocalStage(next);            // optimistic
         setSaving(true);
         try {
             await jobsApi.updateStage(job, release, next);
             if (onUpdate) onUpdate();
         } catch (err) {
+            setLocalStage(stage);       // revert on failure
             alert(`Failed to update stage: ${err.message}`);
         } finally {
             setSaving(false);
@@ -64,7 +71,7 @@ export default function StageEditor({
             <span
                 className="inline-block rounded border text-xs font-semibold px-2 py-0.5 whitespace-nowrap"
                 style={pillStyle}
-                title={`Stage: ${stage}`}
+                title={`Stage: ${localStage}`}
             >
                 {label}
             </span>
@@ -74,12 +81,12 @@ export default function StageEditor({
     return (
         <div className="relative inline-block shrink-0" onClick={(e) => e.stopPropagation()}>
             <select
-                value={stage}
+                value={localStage}
                 disabled={saving}
                 onChange={handleChange}
                 className={pillCls}
                 style={pillStyle}
-                title={`Stage: ${stage} — tap to change`}
+                title={`Stage: ${localStage} — tap to change`}
                 aria-label="Stage"
             >
                 {STAGE_OPTIONS.map((o) => (

@@ -45,11 +45,11 @@ export default function FabOrderEditor({
     const isDuplicate = !!groupDupes && fabOrder != null && fabOrder >= 3 && groupDupes.has(fabOrder);
     const dupColor = isDuplicate ? (stageGroupDupColors?.[group] || '#f97316') : null;
 
-    const commit = async (raw) => {
+    const commit = (raw) => {
         const trimmed = raw.trim();
         if (trimmed === '') {
             if (fabOrder === null || fabOrder === undefined) return;        // already empty
-            return save('');
+            return save(null);                                              // clear → null (route rejects '')
         }
         const parsed = parseFloat(trimmed);
         if (isNaN(parsed) || !isFinite(parsed)) {
@@ -57,13 +57,14 @@ export default function FabOrderEditor({
             return;
         }
         if (parsed === (fabOrder ?? null)) return;                           // unchanged
-        return save(trimmed);
+        return save(parsed);
     };
 
+    // next is a finite number to set, or null to clear.
     const save = async (next) => {
         setSaving(true);
         try {
-            await jobsApi.updateFabOrder(job, release, next === '' ? '' : parseFloat(next));
+            await jobsApi.updateFabOrder(job, release, next);
             if (onUpdate) onUpdate();
         } catch (err) {
             alert(`Failed to update fab order: ${err.message}`);
