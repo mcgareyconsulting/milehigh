@@ -80,7 +80,6 @@ function GanttChart({ filterComplete = false }) {
     const [datePickerValue, setDatePickerValue] = useState('');
     const scrollContainerRef = useRef(null);
     const bodyRef = useRef(null);
-    const bandsRef = useRef([]);
     // Set by nav handlers (and once after data loads) to request a scroll on the next render.
     // Drag-driven re-renders don't set this, so the chart never auto-scrolls mid-drag.
     const scrollIntentRef = useRef(null);
@@ -196,10 +195,6 @@ function GanttChart({ filterComplete = false }) {
         return result;
     }, [teamsMeta, releases, effective]);
 
-    // Keep a live reference for vertical hit-testing during a drag (closures captured at
-    // drag-start would otherwise read stale band heights as packing shifts mid-drag).
-    bandsRef.current = bands;
-
     const dayHeaders = useMemo(() => {
         const todayStr = todayIso();
         const headers = [];
@@ -250,17 +245,20 @@ function GanttChart({ filterComplete = false }) {
         setHoveredItem(null);
     };
 
-    // Map a viewport Y coordinate to the team lane it falls within.
+    // Map a viewport Y coordinate to the team lane it falls within. Measures live
+    // lane DOM rects so it stays correct as lanes flex-grow to fill or repack mid-drag.
     const teamAtY = (clientY) => {
         const el = bodyRef.current;
-        const layout = bandsRef.current;
-        if (!el || !layout || layout.length === 0) return null;
-        const relY = clientY - el.getBoundingClientRect().top;
-        for (const b of layout) {
-            if (relY >= b.top && relY < b.top + b.height) return b.team;
+        if (!el) return null;
+        const lanes = el.querySelectorAll('[data-lane-team]');
+        if (lanes.length === 0) return null;
+        for (const lane of lanes) {
+            const r = lane.getBoundingClientRect();
+            if (clientY >= r.top && clientY < r.bottom) return lane.getAttribute('data-lane-team');
         }
-        if (relY < 0) return layout[0].team;
-        return layout[layout.length - 1].team;
+        const firstR = lanes[0].getBoundingClientRect();
+        if (clientY < firstR.top) return lanes[0].getAttribute('data-lane-team');
+        return lanes[lanes.length - 1].getAttribute('data-lane-team');
     };
 
     const persistChange = async (release, prevEffective, next) => {
@@ -431,7 +429,7 @@ function GanttChart({ filterComplete = false }) {
                 )}
 
                 {!initialLoad && !error && teamsMeta.length > 0 && (
-                    <div style={{ width: SIDEBAR_PX + chartRange.totalPx }}>
+                    <div className="flex flex-col" style={{ width: SIDEBAR_PX + chartRange.totalPx, minHeight: '100%' }}>
                         {/* Sticky header */}
                         <div className="sticky top-0 z-30 bg-gray-100 border-b-2 border-gray-300 flex" style={{ minHeight: '60px' }}>
                             <div
@@ -485,15 +483,22 @@ function GanttChart({ filterComplete = false }) {
                             </div>
                         </div>
 
-                        {/* Lanes (one per installer team) */}
-                        <div ref={bodyRef}>
+                        {/* Lanes (one per installer team). Lanes flex-grow to fill the
+                            viewport so the grid never leaves dead white space below; they
+                            never shrink below their packed-row height (minHeight). */}
+                        <div ref={bodyRef} className="flex-1 flex flex-col">
                             {bands.map((band) => {
                                 const isDropTarget = dragging && dropTeam === band.team;
                                 return (
-                                    <div key={band.team} className="flex border-b border-gray-200" style={{ minHeight: band.height }}>
+                                    <div
+                                        key={band.team}
+                                        data-lane-team={band.team}
+                                        className="flex border-b border-gray-200"
+                                        style={{ minHeight: band.height, flex: `1 1 ${band.height}px` }}
+                                    >
                                         <div
                                             className={`sticky left-0 z-20 flex-shrink-0 border-r-2 border-gray-300 px-2 py-1 flex items-center gap-2 ${isDropTarget ? 'bg-accent-100' : 'bg-gray-50'}`}
-                                            style={{ width: SIDEBAR_PX, height: band.height }}
+                                            style={{ width: SIDEBAR_PX, height: '100%' }}
                                         >
                                             <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: band.color }} />
                                             <span className="text-sm font-bold text-gray-800 truncate">{band.team}</span>
@@ -503,7 +508,7 @@ function GanttChart({ filterComplete = false }) {
                                         </div>
                                         <div
                                             className={`relative flex-shrink-0 ${isDropTarget ? 'bg-accent-50/60' : 'bg-white'}`}
-                                            style={{ width: chartRange.totalPx, height: band.height, ...DAY_GRID_STYLE }}
+                                            style={{ width: chartRange.totalPx, height: '100%', ...DAY_GRID_STYLE }}
                                         >
                                             {/* Snapped-week tint */}
                                             <div
