@@ -929,28 +929,31 @@ def get_all_jobs():
 @login_required
 def get_gantt_data():
     """
-    Get Gantt chart data grouped by project (job number).
-    
+    Get installer-timeline data grouped by installer team.
+
     Returns:
-        JSON object with projects array, each containing:
-        - project: job number
-        - projectName: job name (from first release)
-        - startDate: earliest start_install across all releases
-        - endDate: latest comp_eta across all releases (or calculated)
+        JSON object with a teams array, each containing:
+        - team: installer team name (matches Trello list / Releases.installer)
+        - color: assigned lane color
         - releases: array of release bars with start/end dates
-        - color: assigned color for this project
-        
+
+    Every configured installer team gets a lane (even when empty) so the
+    frontend can render it as a drop target; any installer value present in
+    the data but not in config is appended as an extra lane.
+
     Status Codes:
         - 200: Success
         - 500: Server error
     """
     from app.models import Releases
+    from app.config import Config
     from collections import defaultdict
 
     try:
         # Eligibility for the installer timeline:
         #  - start_install must be a hard date (formulaTF != True). NULL formulaTF is treated as hard.
-        #  - install_hrs must be present and > 0 so we can derive a comp_eta window.
+        #  - installer must be assigned — the team is the timeline's y-axis.
+        #  - install_hrs must be present and > 0 so we can derive a default comp_eta window.
         #  - stage_group in FABRICATION, READY_TO_SHIP, or COMPLETE — "Shipping Complete"
         #    rows are shipped-but-not-installed and belong on the timeline. The frontend's
         #    filterComplete path drops only stage == 'Complete' rows.
@@ -958,50 +961,48 @@ def get_gantt_data():
             Releases.start_install.isnot(None),
             or_(Releases.start_install_formulaTF.is_(False),
                 Releases.start_install_formulaTF.is_(None)),
+            Releases.installer.isnot(None),
+            Releases.installer != '',
             Releases.install_hrs.isnot(None),
             Releases.install_hrs > 0,
             Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE'])
         ).all()
 
-        # Group jobs by project (job number)
-        projects_dict = defaultdict(lambda: {
-            'releases': [],
-            'start_dates': [],
-            'end_dates': []
-        })
+        teams_dict = defaultdict(list)
 
         for job in jobs:
-            project_key = job.job
             start_install = job.start_install
 
             # SQL `> 0` does not reliably exclude NaN across DB backends — guard here.
             if job.install_hrs is None or math.isnan(job.install_hrs) or job.install_hrs <= 0:
                 continue
 
-            # comp_eta = start_install + ceil(install_hrs / 24) calendar days.
-            # 24 = 3 installers * 8 hrs/day. Floor at 1 day so every release has a visible bar.
-            days_to_complete = max(1, math.ceil(job.install_hrs / 24))
-            comp_eta = start_install + timedelta(days=days_to_complete)
-            
-            # Store release data
+            # Prefer a manually-set comp_eta (dragged on the timeline). Fall back to the
+            # default window: start_install + ceil(install_hrs / 24) calendar days
+            # (24 = 3 installers * 8 hrs/day). Floor at 1 day so every release has a bar.
+            if job.comp_eta:
+                comp_eta = job.comp_eta
+            else:
+                days_to_complete = max(1, math.ceil(job.install_hrs / 24))
+                comp_eta = start_install + timedelta(days=days_to_complete)
+
+            team = (job.installer or '').strip()
+
             release_data = {
                 'job': job.job,
                 'release': job.release,
                 'jobName': job.job_name,
                 'description': job.description or '',
+                'team': team,
                 'startDate': start_install.isoformat() if start_install else None,
                 'endDate': comp_eta.isoformat() if comp_eta else None,
                 'pm': job.pm or '',
                 'by': job.by or ''
             }
-            
-            projects_dict[project_key]['releases'].append(release_data)
-            projects_dict[project_key]['start_dates'].append(start_install)
-            projects_dict[project_key]['end_dates'].append(comp_eta)
-        
-        # Convert to list format and calculate project-level dates
-        projects = []
-        # Color palette for projects (distinct colors)
+
+            teams_dict[team].append(release_data)
+
+        # Color palette for team lanes (distinct colors)
         colors = [
             '#3B82F6',  # blue
             '#10B981',  # green
@@ -1016,36 +1017,30 @@ def get_gantt_data():
             '#14B8A6',  # teal
             '#F43F5E',  # rose
         ]
-        
-        for idx, (project_key, project_data) in enumerate(sorted(projects_dict.items())):
-            # Get project name from first release
-            first_release = project_data['releases'][0]
-            project_name = first_release['jobName']
-            
-            # Calculate project-level dates
-            project_start = min(project_data['start_dates'])
-            project_end = max(project_data['end_dates'])
-            
-            # Sort releases by start date
-            sorted_releases = sorted(project_data['releases'], 
-                                   key=lambda r: r['startDate'] or '')
-            
-            projects.append({
-                'project': project_key,
-                'projectName': project_name,
-                'startDate': project_start.isoformat() if project_start else None,
-                'endDate': project_end.isoformat() if project_end else None,
-                'releases': sorted_releases,
-                'color': colors[idx % len(colors)]  # Cycle through colors
+
+        # Configured teams first (always shown as lanes), then any extra installer
+        # values present in the data but not in config.
+        ordered_team_names = list(Config.INSTALLER_TEAMS)
+        for name in teams_dict:
+            if name not in ordered_team_names:
+                ordered_team_names.append(name)
+
+        teams = []
+        for idx, name in enumerate(ordered_team_names):
+            sorted_releases = sorted(
+                teams_dict.get(name, []),
+                key=lambda r: r['startDate'] or ''
+            )
+            teams.append({
+                'team': name,
+                'color': colors[idx % len(colors)],
+                'releases': sorted_releases
             })
-        
-        # Sort projects by start date
-        projects.sort(key=lambda p: p['startDate'] or '')
-        
+
         return jsonify({
-            'projects': projects
+            'teams': teams
         }), 200
-        
+
     except Exception as e:
         logger.error("Error in /gantt-data endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
@@ -1624,22 +1619,53 @@ def update_start_install(job, release):
 
         has_date = bool(start_install_str and start_install_str.strip())
 
-        # Installer-only update: no date provided but an installer was sent.
+        # comp_eta is an explicit override written directly to the column, used by the
+        # installer timeline's end-edge resize. The scheduling cascade skips hard-date
+        # jobs (service.update_job_scheduling_fields returns early when
+        # start_install_formulaTF is False), so this value is not recomputed away.
+        comp_eta_in_req = 'comp_eta' in (request.json or {})
+        comp_eta_date = None
+        if comp_eta_in_req:
+            comp_eta_str = request.json.get('comp_eta')
+            if comp_eta_str and str(comp_eta_str).strip():
+                try:
+                    comp_eta_date = datetime.strptime(str(comp_eta_str).strip(), '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({'error': 'Invalid comp_eta format. Expected YYYY-MM-DD'}), 400
+
+        def _apply_comp_eta():
+            if not comp_eta_in_req:
+                return
+            rec = Releases.query.filter_by(job=job, release=release).first()
+            if rec:
+                rec.comp_eta = comp_eta_date
+                rec.last_updated_at = datetime.utcnow()
+                rec.source_of_update = 'Brain'
+                db.session.commit()
+
+        # No start_install change: apply installer and/or comp_eta only.
         # Do NOT run the date command, which would clear start_install.
-        if not has_date and installer_in_req:
-            try:
-                result = AssignInstallerCommand(
-                    job_id=job,
-                    release=release,
-                    installer=installer_val,
-                ).execute()
-            except ValueError as ve:
-                if str(ve) == "Event already exists":
-                    return jsonify({'error': 'Event already exists'}), 400
-                raise
+        if not has_date and (installer_in_req or comp_eta_in_req):
+            event_id = None
+            if installer_in_req:
+                try:
+                    res = AssignInstallerCommand(
+                        job_id=job,
+                        release=release,
+                        installer=installer_val,
+                    ).execute()
+                    event_id = res.event_id
+                except ValueError as ve:
+                    if str(ve) != "Event already exists":
+                        raise
+                    # Installer unchanged within the dedup window. Fail only if there's
+                    # nothing else (comp_eta) to apply.
+                    if not comp_eta_in_req:
+                        return jsonify({'error': 'Event already exists'}), 400
+            _apply_comp_eta()
             return jsonify({
                 'status': 'success',
-                'event_id': result.event_id,
+                'event_id': event_id,
             }), 200
 
         try:
@@ -1667,6 +1693,8 @@ def update_start_install(job, release):
                 # already applied, so don't fail the request.
                 if str(ve) != "Event already exists":
                     raise
+
+        _apply_comp_eta()
 
         return jsonify({
             'status': 'success',

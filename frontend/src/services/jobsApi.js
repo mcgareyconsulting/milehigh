@@ -197,6 +197,25 @@ class JobsApi {
         }
     }
 
+    // Persist a timeline drag/resize: any subset of start_install, comp_eta, installer.
+    // start_install (left edge / move) and comp_eta (right edge / move) are hard dates;
+    // installer (vertical drag) reassigns the team. Only the changed fields are sent.
+    async updateTimelineBar(job, release, { startInstall, compEta, installer } = {}) {
+        try {
+            const payload = { is_hard_date: true };
+            if (startInstall) payload.start_install = startInstall;
+            if (compEta) payload.comp_eta = compEta;
+            if (installer !== undefined) payload.installer = installer;
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
+                payload
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update timeline');
+        }
+    }
+
     async getInstallerTeams() {
         try {
             const response = await axios.get(`${API_BASE_URL}/brain/installer-teams`);
