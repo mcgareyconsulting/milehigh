@@ -77,6 +77,7 @@ function GanttChart({ filterComplete = false }) {
     const [dragKey, setDragKey] = useState(null);     // releaseKey of the bar being dragged
     const [dropTeam, setDropTeam] = useState(null);   // lane highlighted as the move target
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
+    const [navNonce, setNavNonce] = useState(0);   // bumps each nav so the scroll fires even when viewStart is unchanged
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerValue, setDatePickerValue] = useState('');
     const scrollContainerRef = useRef(null);
@@ -85,6 +86,7 @@ function GanttChart({ filterComplete = false }) {
     const snapTimerRef = useRef(null);      // debounce for week-snapping free horizontal scroll
     const firstDayRef = useRef(null);       // live chart origin, read inside drag handlers
     const dragBoundsRef = useRef(null);     // wide date window pinned for the duration of a drag
+    const didInitialScrollRef = useRef(false); // initial scroll-to-this-Monday done once per mount
     const snapSuppressUntilRef = useRef(0); // timestamp; skip scroll-snap until then (post-drop)
     const revealReleaseRef = useRef(null);  // {startDate,endDate} to scroll into view after a drop
     const scrollAnchorRef = useRef(null);   // {firstDay,scrollLeft} captured before a reflow, for exact restore
@@ -523,6 +525,7 @@ function GanttChart({ filterComplete = false }) {
     const navigateTo = (next, behavior = 'smooth') => {
         scrollIntentRef.current = { targetWeek: next, behavior };
         setViewStart(next);
+        setNavNonce(n => n + 1);   // ensures the consume effect re-runs even if next === viewStart (e.g. Today)
     };
     const goPrevWeek = () => navigateTo(addDays(viewStart, -7));
     const goNextWeek = () => navigateTo(addDays(viewStart, 7));
@@ -539,12 +542,18 @@ function GanttChart({ filterComplete = false }) {
         setDatePickerOpen(false);
     };
 
-    // Set initial-scroll intent once the chart first renders with real data.
-    useEffect(() => {
-        if (!initialLoad && !scrollIntentRef.current) {
-            scrollIntentRef.current = { targetWeek: viewStart, behavior: 'auto' };
-        }
-    }, [initialLoad, viewStart]);
+    // On first render with real data, snap the view so the current week's Monday sits
+    // at the left edge. Done directly (not via the nav scroll-intent) because that path
+    // only fires when firstDay changes — which it doesn't when every release is in the
+    // future, leaving the view stuck ~2 weeks before today. Runs after the anchor effect
+    // so it wins. Once per mount.
+    useLayoutEffect(() => {
+        if (initialLoad || didInitialScrollRef.current) return;
+        if (teamsMeta.length === 0 || !scrollContainerRef.current) return;
+        didInitialScrollRef.current = true;
+        const targetX = daysBetween(chartRange.firstDay, mondayOf(todayIso())) * DAY_PX;
+        scrollContainerRef.current.scrollLeft = Math.max(0, targetX);
+    }, [initialLoad, teamsMeta.length, chartRange.firstDay]);
 
     // Consume the scroll intent — runs after every render that might have made the intent's
     // target date land at a stable position. Drag re-renders never set an intent.
@@ -553,9 +562,9 @@ function GanttChart({ filterComplete = false }) {
         if (!intent || !scrollContainerRef.current) return;
         if (intent.targetWeek !== viewStart) return;
         const targetX = daysBetween(chartRange.firstDay, intent.targetWeek) * DAY_PX;
-        scrollContainerRef.current.scrollTo({ left: targetX, behavior: intent.behavior });
+        scrollContainerRef.current.scrollTo({ left: Math.max(0, targetX), behavior: intent.behavior });
         scrollIntentRef.current = null;
-    }, [viewStart, chartRange.firstDay]);
+    }, [viewStart, chartRange.firstDay, navNonce]);
 
     // Day-snap free horizontal scrolling: when the user stops scrolling, glide to the
     // nearest day boundary so the left edge never sits mid-day. Skipped mid-drag, while
