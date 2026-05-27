@@ -171,11 +171,16 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
-        # job_comp cascade. 'Install Complete' is the install-progress completion
-        # marker (job_comp='X'); 'Complete' is inert toward Install Prog. Linked
-        # events get `parent_event_id` so the undo endpoint can find them and
-        # bundle their reverts with the parent's.
-        if self.stage == 'Install Complete':
+        # job_comp cascade. 'Install Complete' and 'Complete' form a single
+        # "complete zone" for the Install Prog marker (job_comp='X'): entering
+        # the zone sets 'X', moving within it (Install Complete <-> Complete)
+        # keeps 'X', and leaving it clears 'X'. Note the asymmetry on the reverse
+        # path: 'X' in Install Prog only ever implies 'Install Complete' (see the
+        # update_job_comp route) — it never pushes a release to 'Complete'.
+        # Linked events get `parent_event_id` so the undo endpoint can find them
+        # and bundle their reverts with the parent's.
+        COMPLETE_ZONE = ('Install Complete', 'Complete')
+        if self.stage in COMPLETE_ZONE:
             current_job_comp = (job_record.job_comp or '').strip().upper()
             if current_job_comp != 'X':
                 old_jc = job_record.job_comp
@@ -187,12 +192,16 @@ class UpdateStageCommand:
                         'field': 'job_comp',
                         'old_value': old_jc,
                         'new_value': 'X',
-                        'reason': 'stage_set_to_install_complete',
+                        'reason': (
+                            'stage_set_to_install_complete'
+                            if self.stage == 'Install Complete'
+                            else 'stage_set_to_complete'
+                        ),
                         'parent_event_id': event.id,
                     },
                 )
                 extras['job_comp'] = 'X'
-        elif old_stage == 'Install Complete' and self.stage != 'Install Complete':
+        elif old_stage in COMPLETE_ZONE and self.stage not in COMPLETE_ZONE:
             current_job_comp = (job_record.job_comp or '').strip().upper()
             if current_job_comp == 'X':
                 old_jc = job_record.job_comp
@@ -204,7 +213,11 @@ class UpdateStageCommand:
                         'field': 'job_comp',
                         'old_value': old_jc,
                         'new_value': None,
-                        'reason': 'stage_changed_from_install_complete',
+                        'reason': (
+                            'stage_changed_from_install_complete'
+                            if old_stage == 'Install Complete'
+                            else 'stage_changed_from_complete'
+                        ),
                         'parent_event_id': event.id,
                     },
                 )
