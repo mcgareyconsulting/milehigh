@@ -25,6 +25,7 @@ from app.brain.job_log.scheduling.installer_availability import (
     team_availability,
 )
 from app.config import Config
+from app.datetime_utils import format_datetime_mountain
 from app.history import _extract_new_value_from_payload
 from app.logging_config import get_logger
 from app.models import (
@@ -583,8 +584,9 @@ def get_release_history(job: int, release: str, max_events: int = 50,
 
         events.append({
             "id": ev.id,
-            "when": ev.created_at.isoformat() if ev.created_at else None,
-            "applied_at": ev.applied_at.isoformat() if ev.applied_at else None,
+            # Mountain Time so the model reports local time, not raw UTC.
+            "when": format_datetime_mountain(ev.created_at),
+            "applied_at": format_datetime_mountain(ev.applied_at),
             "action": ev.action,
             "summary": _extract_new_value_from_payload(ev.action, payload),
             "from": from_value,
@@ -603,6 +605,7 @@ def get_release_history(job: int, release: str, max_events: int = 50,
             "release": release_str,
             "include_system_echoes": include_system_echoes,
         },
+        "timezone": "America/Denver (Mountain) — all timestamps are local",
         "total_event_count": total,
         "returned_event_count": len(events),
         "events": events,
@@ -660,17 +663,18 @@ def get_release_pickup(job, release) -> dict[str, Any]:
             "email_subject": p.email_subject,
             "email_from": p.email_from,
             "email_to": p.email_to,
-            "email_received_at": p.email_received_at.isoformat() if p.email_received_at else None,
+            "email_received_at": format_datetime_mountain(p.email_received_at),
             "email_body": body,
             "body_truncated": truncated,
             "trello_list_name": p.trello_list_name,
             "status": p.status,
-            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "created_at": format_datetime_mountain(p.created_at),
         })
 
     return {
         "identifier": f"{job_int}-{release_str}",
         "project_name": rec.job_name,
+        "timezone": "America/Denver (Mountain) — all timestamps are local",
         "pickup_count": len(pickups),
         "pickups": pickups,
     }

@@ -1,8 +1,10 @@
 """Banana Boy chat endpoints."""
 import base64
-from datetime import date
+from datetime import datetime
 
 from flask import jsonify, request
+
+from app.datetime_utils import get_mountain_timezone
 
 from app.auth.utils import get_current_user, login_required
 from app.banana_boy import banana_boy_bp
@@ -125,9 +127,10 @@ def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None,
     if user.last_name:
         identity_lines.append(f"last_name: {user.last_name}")
     identity_lines.append(f"username: {user.username}")
-    # today's date lets the model resolve relative phrases ('next week') for
-    # reschedule proposals.
-    identity_lines.append(f"today: {date.today().isoformat()}")
+    # today's date (Mountain Time) lets the model resolve relative phrases
+    # ('next week') for reschedule proposals without UTC midnight drift.
+    today_mt = datetime.now(get_mountain_timezone()).date()
+    identity_lines.append(f"today: {today_mt.isoformat()} (America/Denver)")
     identity_block = "\n".join(identity_lines)
     extra_context = identity_block
     if gmail_block:
