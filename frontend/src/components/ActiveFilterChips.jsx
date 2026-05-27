@@ -53,7 +53,6 @@ export default function ActiveFilterChips({
     onRemoveProject,
     onClearColumnFilter,
     onClearSort,
-    onClearAll,
 }) {
     const hasSearch = !!(search && search.trim());
     const columnFilterKeys = Object.keys(columnFilters).filter((k) => (columnFilters[k] || []).length > 0);
@@ -109,15 +108,6 @@ export default function ActiveFilterChips({
                     onRemove={onClearSort}
                 />
             )}
-
-            <button
-                type="button"
-                onClick={onClearAll}
-                className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap ml-1"
-                title="Remove every active filter and sort."
-            >
-                Clear all
-            </button>
         </div>
     );
 }

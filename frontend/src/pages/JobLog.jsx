@@ -677,18 +677,6 @@ function JobLog() {
                         <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
                             <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
 
-                                {/* Minimized project pills — show selected projects when collapsed */}
-                                {isFilterMinimized && selectedProjectNames.length > 0 && (
-                                    <div className="flex items-center gap-1 flex-wrap text-xs">
-                                        <span className="font-semibold text-gray-500 dark:text-slate-400">Projects:</span>
-                                        {selectedProjectNames.map(name => (
-                                            <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                {name}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-
                                 {/* Row 1: Project name buttons — only visible when expanded */}
                                 {!isFilterMinimized && (
                                     <div
@@ -814,7 +802,6 @@ function JobLog() {
                                     onRemoveProject={(name) => setSelectedProjectNames(prev => prev.filter(n => n !== name))}
                                     onClearColumnFilter={(col) => setColumnFilter(col, [])}
                                     onClearSort={() => setColumnSort(null)}
-                                    onClearAll={() => { resetFilters(); setReviewMode(false); }}
                                 />
 
                                 {/* Row 3: Search + stats — always visible */}
