@@ -18,6 +18,9 @@ import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
+import JobLogQuickFilters from '../components/JobLogQuickFilters';
+import ProjectFilterDropdown from '../components/ProjectFilterDropdown';
+import ActiveFilterChips from '../components/ActiveFilterChips';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { BananaCodeHeader } from '../components/StageIconRow';
@@ -149,6 +152,7 @@ function JobLog() {
         setSelectedStages,
         setSearch,
         projectNameOptions,
+        projectOptions,
         stageOptions,
         stageColors,
         stageToGroup,
@@ -363,11 +367,17 @@ function JobLog() {
         return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
     }, [columns]);
 
-    // Phase 1 columns that get an Excel-style header dropdown filter.
+    // Columns that get an Excel-style header dropdown filter. Spreadsheet-style:
+    // every column except Urgency (composite Banana Code icons) and Notes (free text).
     const FILTERABLE_COLUMNS = useMemo(() => new Set([
-        'Job #', 'Release #', 'Job', 'Stage', 'Fab Order',
-        'Paint color', 'Job Comp', 'Invoiced', 'PM', 'BY',
+        'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS',
+        'Paint color', 'PM', 'BY', 'Released', 'Fab Order', 'Stage',
+        'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced',
     ]), []);
+
+    // Date-valued columns: their header dropdown sorts chronologically and shows
+    // "Newest → Oldest" / "Oldest → Newest" labels instead of A→Z / Z→A.
+    const DATE_COLUMNS = useMemo(() => new Set(['Released', 'Start install', 'Comp. ETA']), []);
 
     /**
      * Per-column reachable values: for each filterable column C, the set of unique
@@ -760,90 +770,21 @@ function JobLog() {
                                         >
                                             📋 Release
                                         </button>
+                                        <ProjectFilterDropdown
+                                            options={projectOptions}
+                                            selected={selectedProjectNames}
+                                            onChange={setSelectedProjectNames}
+                                        />
                                     </div>
 
-                                    {/* Stage filter buttons */}
-                                    <div className="flex items-center gap-1.5 flex-wrap flex-1 justify-center">
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'job_order' ? null : 'job_order');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'job_order'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show all active releases sorted by the unified Fab Order sequence. Useful for seeing the full production queue in order."
-                                        >
-                                            Job Order
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'ready_to_ship' ? null : 'ready_to_ship');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'ready_to_ship'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show only releases in Ship Planning, Store at MHMW, or Paint Complete — i.e., work that's finished production and ready to leave."
-                                        >
-                                            Ready to Ship
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'paint' ? null : 'paint');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show only releases in Welded QC or Paint Start stages, sorted by Fab Order. Use to focus on jobs currently in paint."
-                                        >
-                                            Paint
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'paint_fab' ? null : 'paint_fab');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'paint_fab'
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Combined view of Paint stages (Welded QC, Paint Start, Paint Complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker."
-                                        >
-                                            Paint+Fab
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setReviewMode(false);
-                                                setSelectedSubset(selectedSubset === 'fab' ? null : 'fab');
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === 'fab'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Show only releases in the Fabrication stage group, sorted by Fab Order. Use to focus on shop floor work."
-                                        >
-                                            Fab
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                const next = !reviewMode;
-                                                if (next) setSelectedSubset(null);
-                                                setReviewMode(next);
-                                            }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                            title="Group releases by PM (alphabetical), then by Project # ascending, with the most-complete stage first within each project. Intended for PM review meetings."
-                                        >
-                                            Review
-                                        </button>
-                                    </div>
+                                    {/* Stage quick filters — linear buttons on desktop, single dropdown on tablet/mobile */}
+                                    <JobLogQuickFilters
+                                        selectedSubset={selectedSubset}
+                                        setSelectedSubset={setSelectedSubset}
+                                        reviewMode={reviewMode}
+                                        setReviewMode={setReviewMode}
+                                        compact={isTabletOrSmaller}
+                                    />
 
                                     {/* Chevron toggle button */}
                                     <button
@@ -854,6 +795,23 @@ function JobLog() {
                                         <span className="text-xl leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
                                     </button>
                                 </div>
+
+                                {/* Active-filter chips — only renders when at least one filter is active */}
+                                <ActiveFilterChips
+                                    search={search}
+                                    selectedSubset={selectedSubset}
+                                    reviewMode={reviewMode}
+                                    selectedProjectNames={selectedProjectNames}
+                                    columnFilters={columnFilters}
+                                    columnSort={columnSort}
+                                    onClearSearch={() => setSearch('')}
+                                    onClearSubset={() => setSelectedSubset(null)}
+                                    onClearReview={() => setReviewMode(false)}
+                                    onRemoveProject={(name) => setSelectedProjectNames(prev => prev.filter(n => n !== name))}
+                                    onClearColumnFilter={(col) => setColumnFilter(col, [])}
+                                    onClearSort={() => setColumnSort(null)}
+                                    onClearAll={() => { resetFilters(); setReviewMode(false); }}
+                                />
 
                                 {/* Row 3: Search + stats — always visible */}
                                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
@@ -979,6 +937,9 @@ function JobLog() {
                                                                         sort={columnSort}
                                                                         onSort={(dir) => setColumnSort(column, dir)}
                                                                         isActive={colSelected.length > 0}
+                                                                        sortLabels={DATE_COLUMNS.has(column)
+                                                                            ? { asc: 'Oldest → Newest', desc: 'Newest → Oldest' }
+                                                                            : undefined}
                                                                     >
                                                                         {displayHeader}
                                                                     </ColumnHeaderFilter>

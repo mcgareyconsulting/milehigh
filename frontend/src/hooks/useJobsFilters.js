@@ -381,6 +381,9 @@ export function useJobsFilters(jobs = []) {
      */
     const NUMERIC_COLUMNS = useMemo(() => new Set(['Job #', 'Fab Order', 'Fab Hrs', 'Install HRS']), []);
 
+    // Date-valued columns compare chronologically (asc = oldest first).
+    const DATE_COLUMNS = useMemo(() => new Set(['Released', 'Start install', 'Comp. ETA']), []);
+
     const compareByColumn = useCallback((a, b, column, direction) => {
         const va = a?.[column];
         const vb = b?.[column];
@@ -391,7 +394,17 @@ export function useJobsFilters(jobs = []) {
         if (aBlank) return 1;
         if (bBlank) return -1;
         let cmp;
-        if (NUMERIC_COLUMNS.has(column)) {
+        if (DATE_COLUMNS.has(column)) {
+            const ta = new Date(va).getTime();
+            const tb = new Date(vb).getTime();
+            const validA = !isNaN(ta);
+            const validB = !isNaN(tb);
+            // Unparseable dates sink to the end like blanks
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            cmp = ta - tb;
+        } else if (NUMERIC_COLUMNS.has(column)) {
             const na = Number(va);
             const nb = Number(vb);
             if (!isNaN(na) && !isNaN(nb)) {
@@ -403,7 +416,7 @@ export function useJobsFilters(jobs = []) {
             cmp = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
         }
         return direction === 'desc' ? -cmp : cmp;
-    }, [NUMERIC_COLUMNS]);
+    }, [NUMERIC_COLUMNS, DATE_COLUMNS]);
 
     /**
      * Filtered and sorted jobs for display based on selected subset
@@ -469,6 +482,34 @@ export function useJobsFilters(jobs = []) {
             }
         });
         return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }, [jobs]);
+
+    /**
+     * Project options for the standalone Projects dropdown: { number, name } pairs,
+     * one per unique project name (a name that spans multiple job numbers keeps the
+     * lowest number as its representative — rare). Sorted by job number ascending.
+     * The committed filter value remains the name, so it plugs into matchesFilters /
+     * selectedProjectNames unchanged.
+     */
+    const projectOptions = useMemo(() => {
+        const byName = new Map();
+        jobs.forEach((job) => {
+            const name = job['Job'];
+            if (name === null || name === undefined || String(name).trim() === '') return;
+            const trimmedName = String(name).trim();
+            const num = Number(job['Job #']);
+            const existing = byName.get(trimmedName);
+            if (!existing || (!isNaN(num) && num < existing.numberValue)) {
+                byName.set(trimmedName, {
+                    name: trimmedName,
+                    number: job['Job #'] ?? '',
+                    numberValue: isNaN(num) ? Infinity : num,
+                });
+            }
+        });
+        return Array.from(byName.values())
+            .sort((a, b) => a.numberValue - b.numberValue)
+            .map(({ name, number }) => ({ name, number }));
     }, [jobs]);
 
     /**
@@ -644,6 +685,7 @@ export function useJobsFilters(jobs = []) {
 
         // Filter options
         projectNameOptions,
+        projectOptions,
         stageOptions,
         stageColors,
         stageToGroup,

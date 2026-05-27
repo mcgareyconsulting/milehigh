@@ -45,7 +45,10 @@ export default function ColumnHeaderFilter({
     isActive,
     children,
     autoWidth = false,
+    sortLabels,
 }) {
+    const ascLabel = sortLabels?.asc ?? 'Sort A→Z';
+    const descLabel = sortLabels?.desc ?? 'Sort Z→A';
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [draft, setDraft] = useState(selected);
@@ -217,14 +220,14 @@ export default function ColumnHeaderFilter({
                             onClick={() => onSort('asc')}
                             className={`flex-1 px-2 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tl-md ${sortDir === 'asc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                         >
-                            Sort A→Z
+                            {ascLabel}
                         </button>
                         <button
                             type="button"
                             onClick={() => onSort('desc')}
                             className={`flex-1 px-2 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-tr-md ${sortDir === 'desc' ? 'bg-blue-50 dark:bg-slate-700 text-blue-700 dark:text-blue-300' : ''}`}
                         >
-                            Sort Z→A
+                            {descLabel}
                         </button>
                     </div>
 
