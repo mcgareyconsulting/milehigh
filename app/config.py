@@ -122,6 +122,58 @@ class Config:
     # Admin PIN for health scan admin page
     ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
 
+    # Anthropic (Banana Boy assistant)
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+    # Banana Boy compliance scan: directory holding fab-package PDFs.
+    # Convention: {job}-{release}-fc.pdf (e.g. 480-299-fc.pdf).
+    # Defaults to <repo>/drawings.
+    BANANA_BOY_DRAWINGS_DIR = os.environ.get(
+        "BANANA_BOY_DRAWINGS_DIR",
+        str(Path(__file__).parent.parent / "drawings"),
+    )
+
+    # OpenAI (Banana Boy voice: Whisper ASR + TTS)
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+    # Google OAuth (Sign in with Google + Gmail readonly for Banana Boy)
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+    GOOGLE_REDIRECT_URI = os.environ.get(
+        "GOOGLE_REDIRECT_URI",
+        "http://localhost:8000/api/auth/google/callback",
+    )
+    GOOGLE_OAUTH_SCOPES = [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        # gmail.compose lets Banana Boy create drafts and send from a draft.
+        # Sending only happens after explicit user confirmation per send.
+        "https://www.googleapis.com/auth/gmail.compose",
+    ]
+
+    # Microsoft (Entra ID) OAuth — per-user Outlook Mail.Read for Banana Boy.
+    # Distinct from AZURE_CLIENT_ID/SECRET, which is the app-level
+    # client-credentials registration used by OneDrive/Excel polling.
+    MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID")
+    MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET")
+    # Use 'common' for multi-tenant + personal, 'organizations' for any
+    # work/school tenant, or a specific tenant GUID for single-tenant.
+    MS_TENANT = os.environ.get("MS_TENANT", "common")
+    MS_REDIRECT_URI = os.environ.get(
+        "MS_REDIRECT_URI",
+        "http://localhost:8000/api/auth/microsoft/callback",
+    )
+    MS_OAUTH_SCOPES = [
+        "openid",
+        "email",
+        "profile",
+        "offline_access",
+        "User.Read",
+        "Mail.Read",
+    ]
+
 
 class LocalConfig(Config):
     """Configuration for local development."""

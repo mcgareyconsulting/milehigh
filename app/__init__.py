@@ -28,9 +28,18 @@ from app.trello import trello_bp
 from app.procore import procore_bp
 from app.brain import brain_bp
 from app.auth.routes import auth_bp
+from app.auth import google as _google_oauth_routes  # noqa: F401  attaches /google/* to auth_bp
+from app.auth import microsoft as _microsoft_oauth_routes  # noqa: F401  attaches /microsoft/* to auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
 from app.api import api_bp
+from app.banana_boy import banana_boy_bp
+from app.banana_boy.drawings import (
+    CompositeDrawingLoader,
+    LocalDrawingLoader,
+    ReleaseDrawingVersionLoader,
+)
+from app.banana_boy.tools import DRAWING_LOADER_KEY
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -45,6 +54,9 @@ logger = configure_logging(log_level="INFO", log_file="logs/app.log")
 
 def init_scheduler(app):
     """Initialize the background scheduler for Trello queue draining and heartbeat."""
+    from apscheduler.triggers.cron import CronTrigger
+
+    from app.banana_boy.daily_brief import send_daily_briefs
     from app.trello import drain_trello_queue
 
     # --- Prevent scheduler duplication in multi-worker environments ---
@@ -92,6 +104,15 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # --- Banana Boy daily brief (6:30 AM Mountain Time, opted-in users only) ---
+    scheduler.add_job(
+        func=lambda: send_daily_briefs(app),
+        trigger=CronTrigger(hour=6, minute=30, timezone="America/Denver"),
+        id="banana_boy_daily_brief",
+        name="Banana Boy Daily Brief",
+        replace_existing=True,
+    )
+
     # --- Nightly FC PDF Pack retry worker (2:00 AM Mountain Time) ---
     # Procore's Final PDF Pack can land up to ~24h after a release hits the
     # job log; this catches the misses by retrying releases with NULL
@@ -136,6 +157,12 @@ def init_scheduler(app):
             "name": "Scheduler Heartbeat",
             "schedule": "Every 30 minutes",
             "description": "Confirms scheduler is alive",
+        },
+        {
+            "id": "banana_boy_daily_brief",
+            "name": "Banana Boy Daily Brief",
+            "schedule": "Daily at 6:30 AM America/Denver",
+            "description": "Posts a morning summary to opted-in users' Banana Boy threads",
         },
         {
             "id": "fc_pdf_retry",
@@ -481,6 +508,15 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(banana_boy_bp, url_prefix="/banana-boy")
+
+    # Banana Boy compliance scan: prefer the latest marked-up version from the
+    # PDF markup feature; fall back to the on-disk {job}-{release}-fc.pdf if a
+    # release has no markup history yet.
+    app.extensions[DRAWING_LOADER_KEY] = CompositeDrawingLoader(
+        ReleaseDrawingVersionLoader(),
+        LocalDrawingLoader(app.config["BANANA_BOY_DRAWINGS_DIR"]),
+    )
 
     # Catch-all route for React Router (must be last, after all API routes)
     # This handles direct URL access to React routes like /history, /operations, etc.

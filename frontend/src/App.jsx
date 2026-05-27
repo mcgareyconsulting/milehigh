@@ -25,6 +25,7 @@ import PMBoard from './pages/PMBoard';
 import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
+import AdminMicrosoft from './pages/AdminMicrosoft';
 import FcCollection from './pages/FcCollection';
 import InvoicingReport from './pages/InvoicingReport';
 import { checkAuth } from './utils/auth';
@@ -70,6 +71,7 @@ function AppContent() {
               <Route path="jobsite-map" element={<JobsiteMap />} />
               <Route path="board" element={<Board />} />
               <Route path="invoicing-report" element={<InvoicingReport />} />
+              <Route path="admin/microsoft" element={<AdminMicrosoft />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
               <Route path="*" element={<Navigate to="/job-log" replace />} />
             </>
