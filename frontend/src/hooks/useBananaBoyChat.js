@@ -46,6 +46,8 @@ export function useBananaBoyChat(enabled) {
         setMessages((prev) => [...prev, optimistic]);
         setSending(true);
         setError(null);
+        // Drop any prior proposal card; this turn may produce a fresh one.
+        setPendingAction(null);
 
         try {
             const reply = await sendMessageApi(trimmed);
@@ -79,6 +81,7 @@ export function useBananaBoyChat(enabled) {
         setMessages((prev) => [...prev, optimistic]);
         setSending(true);
         setError(null);
+        setPendingAction(null);
 
         try {
             const data = await sendVoiceMessageApi(audioBlob, filename);

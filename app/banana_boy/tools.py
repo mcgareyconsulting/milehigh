@@ -728,23 +728,26 @@ def propose_reschedule_install(job, release, new_start_install,
     current_team = (rec.installer or "").strip() or None
     requested = (requested_installer or "").strip() or current_team
 
-    # Conflicts for the requested team in the proposed window (excluding self).
-    conflicts = []
-    if requested:
-        conflicts = [
-            _conflict_to_compact(r)
-            for r in find_conflicts(
-                requested, new_start, new_end,
-                exclude_job=job_int, exclude_release=release_str,
-            )
-        ]
-
-    # Availability across all configured teams.
+    # One sweep covers every configured team's availability in the window.
     availability = team_availability(
         new_start, new_end,
         exclude_job=job_int, exclude_release=release_str,
     )
     free = [t for t, c in availability.items() if not c]
+
+    # Conflicts for the requested team. Pull from the sweep when it's a
+    # configured team; otherwise fall back to a direct check (e.g. an off-roster
+    # name the user typed).
+    if requested in availability:
+        conflict_rows = availability[requested]
+    elif requested:
+        conflict_rows = find_conflicts(
+            requested, new_start, new_end,
+            exclude_job=job_int, exclude_release=release_str,
+        )
+    else:
+        conflict_rows = []
+    conflicts = [_conflict_to_compact(r) for r in conflict_rows]
     busy = {
         t: [_conflict_to_compact(r) for r in c]
         for t, c in availability.items() if c

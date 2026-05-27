@@ -85,11 +85,25 @@ def find_conflicts(installer, start, end, exclude_job=None, exclude_release=None
     ``exclude_job`` / ``exclude_release`` drop the release being rescheduled so
     it never conflicts with itself. Returns a list of ``Releases`` rows.
     """
-    if not installer or not start or not end:
+    if not installer:
         return []
-    rows = _eligible_query().filter(Releases.installer == installer).all()
-    conflicts = []
-    for r in rows:
+    target = installer.strip()
+    return [
+        r for r in _overlapping_eligible(start, end, exclude_job, exclude_release)
+        if (r.installer or "").strip() == target
+    ]
+
+
+def _overlapping_eligible(start, end, exclude_job=None, exclude_release=None):
+    """All eligible releases whose window overlaps ``[start, end]`` — one query.
+
+    Shared by ``find_conflicts`` and ``team_availability`` so a full
+    availability sweep is a single DB round trip, not one query per team.
+    """
+    if not start or not end:
+        return []
+    hits = []
+    for r in _eligible_query().all():
         if (
             exclude_job is not None
             and r.job == exclude_job
@@ -102,21 +116,22 @@ def find_conflicts(installer, start, end, exclude_job=None, exclude_release=None
         if r_start is None:
             continue
         if windows_overlap(start, end, r_start, r_end):
-            conflicts.append(r)
-    return conflicts
+            hits.append(r)
+    return hits
 
 
 def team_availability(start, end, teams=None, exclude_job=None, exclude_release=None):
     """Map every team to the conflicting releases (if any) in ``[start, end]``.
 
     Returns ``{team_name: [Releases, ...]}``; an empty list means the team is
-    free. Defaults to the configured ``INSTALLER_TEAMS`` roster.
+    free. Defaults to the configured ``INSTALLER_TEAMS`` roster. One query
+    total: the overlapping releases are fetched once and grouped by installer.
     """
     teams = list(teams if teams is not None else Config.INSTALLER_TEAMS)
-    return {
-        t: find_conflicts(t, start, end, exclude_job, exclude_release)
-        for t in teams
-    }
+    by_team = {}
+    for r in _overlapping_eligible(start, end, exclude_job, exclude_release):
+        by_team.setdefault((r.installer or "").strip(), []).append(r)
+    return {t: by_team.get(t, []) for t in teams}
 
 
 def free_teams(start, end, teams=None, exclude_job=None, exclude_release=None):
