@@ -37,6 +37,54 @@ import pandas as pd
 import math
 
 
+# ---------------------------------------------------------------------------
+# Outbound pause gate. When TRELLO_MOCK or TRELLO_SYNC_PAUSED is set, every
+# mutating Trello call (PUT/POST) is short-circuited so nothing is written to
+# the board. Reads (GET) are untouched. All mutating call sites below go
+# through _trello_put / _trello_post instead of requests.put / requests.post.
+# ---------------------------------------------------------------------------
+_real_put = requests.put
+_real_post = requests.post
+
+
+def _trello_sync_paused() -> bool:
+    try:
+        if current_app and (
+            current_app.config.get("TRELLO_SYNC_PAUSED")
+            or current_app.config.get("TRELLO_MOCK")
+        ):
+            return True
+    except Exception:
+        pass
+    return bool(getattr(cfg, "TRELLO_SYNC_PAUSED", False) or getattr(cfg, "TRELLO_MOCK", False))
+
+
+class _PausedTrelloResponse:
+    """Stand-in for a requests.Response when outbound Trello is paused."""
+    status_code = 200
+    text = '{"paused": true}'
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {}
+
+
+def _trello_put(*args, **kwargs):
+    if _trello_sync_paused():
+        print(f"[TRELLO_PAUSED] PUT {args[0] if args else ''} — skipped (sync paused)")
+        return _PausedTrelloResponse()
+    return _real_put(*args, **kwargs)
+
+
+def _trello_post(*args, **kwargs):
+    if _trello_sync_paused():
+        print(f"[TRELLO_PAUSED] POST {args[0] if args else ''} — skipped (sync paused)")
+        return _PausedTrelloResponse()
+    return _real_post(*args, **kwargs)
+
+
 # Main function for updating trello card information
 def update_trello_card(
     card_id, new_list_id=None, new_due_date=None, clear_due_date=False
@@ -80,10 +128,10 @@ def update_trello_card(
             json_payload = {"due": None}
             if new_list_id:
                 json_payload["idList"] = new_list_id
-            response = requests.put(url, params=auth_params, json=json_payload)
+            response = _trello_put(url, params=auth_params, json=json_payload)
         else:
             # Use URL params for normal updates
-            response = requests.put(url, params=payload)
+            response = _trello_put(url, params=payload)
 
         response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
 
@@ -710,7 +758,7 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
 
         print(f"[TRELLO API] Creating card with payload: {payload}")
 
-        response = requests.post(url, params=payload)
+        response = _trello_post(url, params=payload)
         response.raise_for_status()
 
         card_data = response.json()
@@ -886,7 +934,7 @@ def update_card_custom_field(card_id, custom_field_id, text_value):
         print(
             f"[TRELLO API] Updating custom field {custom_field_id} on card {card_id} with value: {text_value[:100]}..."
         )
-        response = requests.put(url, params=params, json=data)
+        response = _trello_put(url, params=params, json=data)
         response.raise_for_status()
         print(f"[TRELLO API] Custom field updated successfully")
         return True
@@ -967,7 +1015,7 @@ def update_card_custom_field_number(card_id, custom_field_id, number_value):
         print(
             f"[TRELLO API] Updating custom field {custom_field_id} on card {card_id} with value: {number_value}"
         )
-        response = requests.put(url, params=params, json=data)
+        response = _trello_put(url, params=params, json=data)
         response.raise_for_status()
         print(f"[TRELLO API] Custom field updated successfully")
         return True
@@ -1092,7 +1140,7 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
             }
 
             try:
-                update_response = requests.put(update_url, params=update_params)
+                update_response = _trello_put(update_url, params=update_params)
                 update_response.raise_for_status()
                 updated_count += 1
             except requests.exceptions.HTTPError as http_err:
@@ -1179,7 +1227,7 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None, sender_
         print(
             f"[TRELLO API] Adding comment to card {card_id}: {formatted_comment[:100]}..."
         )
-        response = requests.post(url, params=params)
+        response = _trello_post(url, params=params)
         response.raise_for_status()
         print(f"[TRELLO API] Comment added successfully")
         if operation_id:
@@ -1655,7 +1703,7 @@ def update_trello_card_description(card_id, new_description):
 
     try:
         print(f"[TRELLO API] Updating description for card {card_id}")
-        response = requests.put(url, params=params)
+        response = _trello_put(url, params=params)
         response.raise_for_status()
 
         print(f"[TRELLO API] Card {card_id} description updated successfully")
@@ -1690,7 +1738,7 @@ def update_trello_card_name(card_id, new_name):
 
     try:
         print(f"[TRELLO API] Updating name for card {card_id}")
-        response = requests.put(url, params=params)
+        response = _trello_put(url, params=params)
         response.raise_for_status()
 
         print(f"[TRELLO API] Card {card_id} name updated successfully")
@@ -1782,7 +1830,7 @@ def update_card_date_range(card_short_link, start_date, due_date):
             f"[TRELLO API] Updating mirror card {card_short_link} with start: {start_date_str}, due: {due_date_str}"
         )
 
-        response = requests.put(url, params=payload)
+        response = _trello_put(url, params=payload)
 
         if response.status_code == 200:
             print(f"[TRELLO API] Successfully updated mirror card {card_short_link}")
@@ -1840,7 +1888,7 @@ def add_procore_link(card_id, procore_url, link_name=None):
         print(
             f"[TRELLO API] Adding Procore link to card {card_id}: {procore_url[:100]}..."
         )
-        response = requests.post(url, params=params)
+        response = _trello_post(url, params=params)
         response.raise_for_status()
 
         attachment_data = response.json()
@@ -1885,7 +1933,7 @@ def copy_trello_card(card_id, target_list_id, pos="bottom"):
         "keepFromSource": "all",
         "pos": pos,
     }
-    resp = requests.post(url, params=params)
+    resp = _trello_post(url, params=params)
     resp.raise_for_status()
     return resp.json()
 
@@ -1951,7 +1999,7 @@ def link_cards(primary_id, secondary_id):
             "url": f"{base}{dst}",
             "name": "Linked card",
         }
-        resp = requests.post(url, params=params)
+        resp = _trello_post(url, params=params)
         resp.raise_for_status()
 
 

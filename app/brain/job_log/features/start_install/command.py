@@ -14,8 +14,9 @@ invariants:
   - This command does NOT cover the `clear_hard_date` flow — that remains in the route as it
     writes a different action ('clear_hard_date') and is not undoable.
 """
+import math
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from app.models import Releases, db
@@ -103,6 +104,24 @@ class UpdateStartInstallCommand:
         job_record.start_install_formulaTF = False
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
+
+        # Keep the install window with the date: when the start moves, shift
+        # comp_eta by the same delta so completion never ends up before the new
+        # start. The scheduling cascade skips hard-date jobs, so without this a
+        # forward move would strand a stale (earlier) comp_eta. An explicit
+        # comp_eta sent in the same request still wins (route applies it after).
+        old_comp_eta = job_record.comp_eta
+        if old_comp_eta is not None and self.start_install is not None:
+            new_comp_eta = old_comp_eta
+            if old_start_install is not None:
+                new_comp_eta = old_comp_eta + (self.start_install - old_start_install)
+            if new_comp_eta < self.start_install:
+                # No usable delta, or it still lands early — fall back to a sane
+                # window (start + ceil(install_hrs / 24) days, floored at 1).
+                hrs = job_record.install_hrs
+                days = max(1, math.ceil(hrs / 24)) if hrs and hrs > 0 else 1
+                new_comp_eta = self.start_install + timedelta(days=days)
+            job_record.comp_eta = new_comp_eta
 
         if not self.push_trello:
             logger.info(

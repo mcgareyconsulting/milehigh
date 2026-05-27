@@ -54,7 +54,13 @@ class Config:
     # inbound /trello/webhook POSTs are dropped. Lets dev exercise the outbox
     # plumbing for the ASAP cascade without touching the real Trello board.
     TRELLO_MOCK = os.environ.get("TRELLO_MOCK", "0") == "1"
-    
+
+    # Hard pause for ALL outbound Trello mutations (card moves, due dates,
+    # custom fields, comments, card creation). Unlike TRELLO_MOCK it carries no
+    # dev-simulation semantics — it just stops outbound writes. Set on a deploy
+    # where Trello sync should stay quiet. Either flag pauses outbound calls.
+    TRELLO_SYNC_PAUSED = os.environ.get("TRELLO_SYNC_PAUSED", "0") == "1"
+
     # Azure configuration
     AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")

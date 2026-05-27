@@ -131,7 +131,7 @@ class OutboxService:
                 # Releases (mirroring what the inbound webhook would have done) and
                 # close the event as if Trello accepted the call.
                 from flask import current_app
-                if current_app.config.get("TRELLO_MOCK"):
+                if current_app.config.get("TRELLO_MOCK") or current_app.config.get("TRELLO_SYNC_PAUSED"):
                     from app.trello.list_mapper import TrelloListMapper
                     target_list_name = TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.get(stage)
                     job_record.trello_list_id = list_id
@@ -452,7 +452,7 @@ class OutboxService:
                 # TRELLO_MOCK: simulate creation locally so the outbox plumbing can
                 # be exercised without touching the real board.
                 from flask import current_app
-                if current_app.config.get("TRELLO_MOCK"):
+                if current_app.config.get("TRELLO_MOCK") or current_app.config.get("TRELLO_SYNC_PAUSED"):
                     pickup.trello_card_id = f"MOCK_PU_{pickup.id}"
                     pickup.trello_list_name = list_name
                     pickup.status = 'card_created'
