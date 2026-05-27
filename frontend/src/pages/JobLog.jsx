@@ -785,7 +785,7 @@ function JobLog() {
                                         setSelectedSubset={setSelectedSubset}
                                         reviewMode={reviewMode}
                                         setReviewMode={setReviewMode}
-                                        compact={isTabletOrSmaller}
+                                        compact={isMobile || isTablet}
                                     />
 
                                     <div className="flex-1" />
