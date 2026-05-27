@@ -197,6 +197,25 @@ class JobsApi {
         }
     }
 
+    // Commit a Banana Boy reschedule proposal: new start_install, installer team,
+    // and comp_eta together. Unlike a timeline drag this syncs to Trello (due-date
+    // + mirror-card move), matching a normal Job Log start-install edit.
+    async commitReschedule(job, release, { startInstall, installer, compEta } = {}) {
+        try {
+            const payload = { is_hard_date: true };
+            if (startInstall) payload.start_install = startInstall;
+            if (installer !== undefined) payload.installer = installer;
+            if (compEta) payload.comp_eta = compEta;
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
+                payload
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to reschedule install');
+        }
+    }
+
     // Persist a timeline drag/resize: any subset of start_install, comp_eta, installer.
     // start_install (left edge / move) and comp_eta (right edge / move) are hard dates;
     // installer (vertical drag) reassigns the team. Only the changed fields are sent.

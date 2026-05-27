@@ -8,9 +8,13 @@ import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import BananaBoyAnimation from './BananaBoyAnimation';
 import { buildGoogleLinkUrl, messageForGoogleError } from '../../services/googleAuthApi';
 import { setBananaBoyPreferences } from '../../services/bananaBoyApi';
+import { jobsApi } from '../../services/jobsApi';
 
 export default function ChatModal({ user, onClose, onUserChange }) {
-    const { messages, loading, sending, error, send, sendVoice, clear } = useBananaBoyChat(true);
+    const {
+        messages, loading, sending, error, send, sendVoice, clear,
+        pendingAction, dismissAction, appendNote,
+    } = useBananaBoyChat(true);
     const { isRecording, error: recorderError, start: startRecording, stop: stopRecording } = useVoiceRecorder();
     const audioRef = useRef(null);
     const [draft, setDraft] = useState('');
@@ -209,6 +213,20 @@ export default function ChatModal({ user, onClose, onUserChange }) {
                 )}
             </div>
 
+            {pendingAction?.type === 'reschedule_install' && (
+                <RescheduleConfirmCard
+                    action={pendingAction}
+                    onCancel={dismissAction}
+                    onCommitted={(note) => {
+                        appendNote(note);
+                        dismissAction();
+                        // Nudge Job Log, PM Board, and Timeline to refetch now
+                        // instead of waiting for the 30s poll.
+                        window.dispatchEvent(new CustomEvent('mhmw:jobs-changed'));
+                    }}
+                />
+            )}
+
             <form onSubmit={handleSubmit} className="border-t border-gray-200 dark:border-slate-700 p-3 flex items-end gap-2">
                 <textarea
                     ref={textareaRef}
@@ -309,6 +327,127 @@ function formatUsage(usage) {
     const ops = usage.calls.map((c) => c.operation).filter(Boolean);
     const opStr = ops.length > 1 ? ` · ${ops.join(' + ')}` : '';
     return `${seconds.toFixed(1)}s · ${totalIn.toLocaleString()} in / ${totalOut.toLocaleString()} out · $${cost.toFixed(4)}${opStr}`;
+}
+
+// Confirmation card for a reschedule the agent proposed. The agent itself
+// never writes — this card is the only path that commits, via jobsApi. The
+// user picks the installer team (free teams enabled, busy ones disabled) and
+// confirms. Mounted fresh per proposal so its team selection initializes
+// correctly each time.
+function RescheduleConfirmCard({ action, onCancel, onCommitted }) {
+    const d = action.data || {};
+    const free = d.free_teams || [];
+    const allTeams = d.all_teams || [];
+    const requested = d.requested_installer || d.proposed?.installer || null;
+    const initialTeam =
+        requested && free.includes(requested) ? requested : (free[0] || requested || '');
+
+    const [team, setTeam] = useState(initialTeam);
+    const [committing, setCommitting] = useState(false);
+    const [commitError, setCommitError] = useState(null);
+
+    const selectedBusy = team && !free.includes(team);
+    const fmt = (v) => v || '—';
+
+    const handleConfirm = async () => {
+        if (committing || !team) return;
+        setCommitting(true);
+        setCommitError(null);
+        try {
+            await jobsApi.commitReschedule(d.job, d.release, {
+                startInstall: d.proposed?.start_install,
+                installer: team,
+                compEta: d.proposed?.comp_eta,
+            });
+            onCommitted(
+                `Done — moved ${d.identifier} to ${d.proposed?.start_install} on ${team}.`
+            );
+        } catch (err) {
+            setCommitError(err.message || 'Could not save the change.');
+            setCommitting(false);
+        }
+    };
+
+    return (
+        <div className="border-t border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 text-sm">
+            <div className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                Confirm install change — {d.identifier}
+                {d.project_name ? ` · ${d.project_name}` : ''}
+            </div>
+
+            <div className="text-gray-800 dark:text-slate-200 space-y-0.5 mb-2">
+                <div>
+                    <span className="text-gray-500 dark:text-slate-400">Start install:</span>{' '}
+                    {fmt(d.current?.start_install)} → <strong>{fmt(d.proposed?.start_install)}</strong>
+                </div>
+                <div>
+                    <span className="text-gray-500 dark:text-slate-400">Completion:</span>{' '}
+                    {fmt(d.current?.comp_eta)} → <strong>{fmt(d.proposed?.comp_eta)}</strong>
+                </div>
+                <div>
+                    <span className="text-gray-500 dark:text-slate-400">Was on:</span>{' '}
+                    {fmt(d.current?.installer)}
+                </div>
+            </div>
+
+            {d.has_conflict && (
+                <div className="text-xs rounded-md bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 px-2 py-1 mb-2">
+                    {requested} is booked that week
+                    {d.conflicts?.length
+                        ? ` (${d.conflicts.map((c) => c.identifier).join(', ')})`
+                        : ''}
+                    . Pick an open team below.
+                </div>
+            )}
+
+            <label className="block text-xs text-gray-600 dark:text-slate-300 mb-1">
+                Installer team
+            </label>
+            <select
+                value={team}
+                onChange={(e) => setTeam(e.target.value)}
+                disabled={committing}
+                className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 px-2 py-1.5 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-accent-500"
+            >
+                {allTeams.map((t) => {
+                    const isFree = free.includes(t);
+                    return (
+                        <option key={t} value={t} disabled={!isFree}>
+                            {t}{isFree ? '' : ' — booked'}
+                        </option>
+                    );
+                })}
+            </select>
+
+            {selectedBusy && (
+                <div className="text-xs text-red-700 dark:text-red-300 mb-2">
+                    {team} has a conflict in that window — pick a different team.
+                </div>
+            )}
+            {commitError && (
+                <div className="text-xs text-red-700 dark:text-red-300 mb-2">{commitError}</div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    disabled={committing}
+                    className="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={committing || !team || selectedBusy}
+                    className="px-4 py-1.5 rounded-lg text-sm font-medium bg-accent-500 hover:bg-accent-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {committing ? 'Saving…' : 'Confirm'}
+                </button>
+            </div>
+        </div>
+    );
 }
 
 function MessageBubble({ message }) {

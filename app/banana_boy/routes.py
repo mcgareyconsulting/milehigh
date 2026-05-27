@@ -1,5 +1,6 @@
 """Banana Boy chat endpoints."""
 import base64
+from datetime import date
 
 from flask import jsonify, request
 
@@ -92,7 +93,7 @@ def list_messages():
 
 
 def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None,
-                   voice_mode: bool = False) -> ChatMessage:
+                   voice_mode: bool = False, action_sink: list | None = None) -> ChatMessage:
     """Persist a user turn, run the agent, persist the reply, return the assistant row.
 
     Raises BananaBoyConfigError / BananaBoyAPIError; the user row is committed before
@@ -124,6 +125,9 @@ def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None,
     if user.last_name:
         identity_lines.append(f"last_name: {user.last_name}")
     identity_lines.append(f"username: {user.username}")
+    # today's date lets the model resolve relative phrases ('next week') for
+    # reschedule proposals.
+    identity_lines.append(f"today: {date.today().isoformat()}")
     identity_block = "\n".join(identity_lines)
     extra_context = identity_block
     if gmail_block:
@@ -135,6 +139,7 @@ def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None,
         tool_context={"user_id": user.id},
         usage_sink=usage_sink,
         voice_mode=voice_mode,
+        action_sink=action_sink,
     )
 
     spoken_text = None
@@ -145,6 +150,8 @@ def _run_chat_turn(user, user_text: str, *, usage_sink: list | None = None,
     db.session.add(assistant_turn)
     db.session.commit()
     assistant_turn._spoken_text = spoken_text  # transient; voice_chat reads this
+    # transient; chat/voice routes read this to surface a confirmation card.
+    assistant_turn._proposed_action = action_sink[-1] if action_sink else None
 
     logger.info(
         "banana_boy_chat",
@@ -170,8 +177,10 @@ def chat():
         return jsonify({"error": f"message exceeds {MAX_MESSAGE_LENGTH} characters"}), 400
 
     usage_sink: list = []
+    action_sink: list = []
     try:
-        assistant_turn = _run_chat_turn(user, message, usage_sink=usage_sink)
+        assistant_turn = _run_chat_turn(user, message, usage_sink=usage_sink,
+                                        action_sink=action_sink)
     except BananaBoyConfigError as exc:
         logger.error("Banana Boy not configured", error=str(exc))
         persist_usage(usage_sink, user_id=user.id, chat_message_id=None)
@@ -182,8 +191,10 @@ def chat():
         return jsonify({"error": "assistant is unavailable"}), 502
 
     persist_usage(usage_sink, user_id=user.id, chat_message_id=assistant_turn.id)
+    message_dict = assistant_turn.to_dict()
+    message_dict["proposed_action"] = getattr(assistant_turn, "_proposed_action", None)
     return jsonify({
-        "message": assistant_turn.to_dict(),
+        "message": message_dict,
         "usage": _summarize_usage(usage_sink),
     })
 
@@ -225,9 +236,10 @@ def voice_chat():
     if len(transcript) > MAX_MESSAGE_LENGTH:
         transcript = transcript[:MAX_MESSAGE_LENGTH]
 
+    action_sink: list = []
     try:
         assistant_turn = _run_chat_turn(user, transcript, usage_sink=usage_sink,
-                                        voice_mode=True)
+                                        voice_mode=True, action_sink=action_sink)
     except BananaBoyConfigError as exc:
         logger.error("Banana Boy not configured", error=str(exc))
         persist_usage(usage_sink, user_id=user.id, chat_message_id=None)
@@ -256,9 +268,11 @@ def voice_chat():
         audio_mime = None
 
     persist_usage(usage_sink, user_id=user.id, chat_message_id=assistant_turn.id)
+    message_dict = assistant_turn.to_dict()
+    message_dict["proposed_action"] = getattr(assistant_turn, "_proposed_action", None)
     return jsonify({
         "transcript": transcript,
-        "message": assistant_turn.to_dict(),
+        "message": message_dict,
         "usage": _summarize_usage(usage_sink),
         "audio_b64": audio_b64,
         "audio_mime": audio_mime,

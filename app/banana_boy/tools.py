@@ -8,7 +8,7 @@ User-scoped tools read `context["user_id"]` rather than trusting any
 user-supplied identifier — never let the LLM pretend to be a different user.
 """
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from flask import current_app
@@ -18,10 +18,18 @@ from app.auth.google_tokens import GoogleAuthError
 from app.banana_boy.compliance import scan_pdf
 from app.banana_boy.gmail_client import GmailScopeError, create_draft, send_draft
 from app.banana_boy.markup_diff import scan_markup_diff_pdfs
+from app.brain.job_log.scheduling.installer_availability import (
+    default_window_days,
+    find_conflicts,
+    release_window,
+    team_availability,
+)
+from app.config import Config
 from app.history import _extract_new_value_from_payload
 from app.logging_config import get_logger
 from app.models import (
     Notification,
+    PickupOrder,
     ReleaseDrawingVersion,
     ReleaseEvents,
     Releases,
@@ -41,6 +49,15 @@ TOOL_NOTIFICATIONS = "get_my_notifications"
 TOOL_SCAN_COMPLIANCE = "scan_drawing_compliance"
 TOOL_LIST_DRAWING_VERSIONS = "list_drawing_versions"
 TOOL_SCAN_MARKUP_DIFF = "scan_markup_diff"
+TOOL_GET_PICKUP = "get_release_pickup"
+TOOL_PROPOSE_RESCHEDULE = "propose_reschedule_install"
+
+# Tools whose structured result is surfaced to the frontend (e.g. for a
+# confirmation card) in addition to the model's text reply. See client.py.
+SURFACEABLE_ACTION_TOOLS = {TOOL_PROPOSE_RESCHEDULE}
+
+# Max characters of pickup email body to feed the model (keeps token use sane).
+PICKUP_BODY_MAX_CHARS = 4000
 
 DRAWING_LOADER_KEY = "banana_boy_drawings"
 
@@ -123,6 +140,75 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["job", "release"],
+        },
+    },
+    {
+        "name": TOOL_GET_PICKUP,
+        "description": (
+            "Fetch the vendor part pick-up order(s) for a release — the "
+            "forwarded Dencol 'PU' / parts-pickup email. Call this when the "
+            "user asks about a pickup, a Dencol order, a 'PU' email, or 'what "
+            "parts are we picking up' for a release. When the user wants the "
+            "full rundown on a release, call search_jobs_by_identifier, "
+            "get_release_history, AND get_release_pickup together. Returns the "
+            "email subject/sender/received date and body, newest pickup first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {"type": "integer", "description": "Job number, e.g. 380."},
+                "release": {"type": "string", "description": "Release number, e.g. '456'."},
+            },
+            "required": ["job", "release"],
+        },
+    },
+    {
+        "name": TOOL_PROPOSE_RESCHEDULE,
+        "description": (
+            "Propose moving a release's install — a new start_install date "
+            "and/or a different installer team — and CHECK FOR CONFLICTS. This "
+            "tool is READ-ONLY: it never changes anything. It returns whether "
+            "the requested installer team is free in the new window, which "
+            "teams ARE free, and any conflicting releases. The app shows the "
+            "user a confirmation card to actually commit the change. "
+            "Call this when the user wants to move/push/reschedule a start "
+            "install date ('move start install to next week', 'push 380-456 "
+            "to June 9') or reassign the installer ('put it on Saul 2'). "
+            "Resolve relative dates ('next week', 'tomorrow') to a concrete "
+            "YYYY-MM-DD using 'today' from the Current user block. After "
+            "calling, tell the user whether the team is free or conflicts, and "
+            "list the open teams — but NEVER say the change is done; the user "
+            "confirms it in the card."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job": {"type": "integer", "description": "Job number, e.g. 380."},
+                "release": {"type": "string", "description": "Release number, e.g. '456'."},
+                "new_start_install": {
+                    "type": "string",
+                    "description": (
+                        "New install start date as YYYY-MM-DD. Resolve relative "
+                        "phrases to a concrete date using today's date."
+                    ),
+                },
+                "requested_installer": {
+                    "type": "string",
+                    "description": (
+                        "Installer team the user asked for (e.g. 'Saul 2'). "
+                        "Omit to keep the current team."
+                    ),
+                },
+                "new_comp_eta": {
+                    "type": "string",
+                    "description": (
+                        "Optional explicit completion date YYYY-MM-DD. If "
+                        "omitted, the install duration is preserved (or derived "
+                        "from install hours)."
+                    ),
+                },
+            },
+            "required": ["job", "release", "new_start_install"],
         },
     },
     {
@@ -381,6 +467,7 @@ def _release_to_compact(r: Releases) -> dict:
         "released_on": r.released.isoformat() if r.released else None,
         "start_install": r.start_install.isoformat() if r.start_install else None,
         "comp_eta": r.comp_eta.isoformat() if r.comp_eta else None,
+        "installer": r.installer,
         "fab_order": r.fab_order,
         "is_active": r.is_active,
         "is_archived": r.is_archived,
@@ -519,6 +606,171 @@ def get_release_history(job: int, release: str, max_events: int = 50,
         "total_event_count": total,
         "returned_event_count": len(events),
         "events": events,
+    }
+
+
+def _coerce_job_release(job, release):
+    """Return (job_int, release_str) or (None, None, error_dict)."""
+    if job is None or release is None or str(release).strip() == "":
+        return None, None, {"error": "both job and release are required"}
+    try:
+        job_int = int(job)
+    except (TypeError, ValueError):
+        return None, None, {"error": f"invalid job number: {job!r}"}
+    return job_int, str(release).strip(), None
+
+
+def _parse_iso_date(value, field: str):
+    """Return (date, None) or (None, error_dict) for a YYYY-MM-DD string."""
+    if not value or not str(value).strip():
+        return None, {"error": f"{field} is required (YYYY-MM-DD)"}
+    try:
+        return datetime.strptime(str(value).strip(), "%Y-%m-%d").date(), None
+    except ValueError:
+        return None, {"error": f"invalid {field} {value!r}; expected YYYY-MM-DD"}
+
+
+def get_release_pickup(job, release) -> dict[str, Any]:
+    """Vendor pick-up order(s) (Dencol 'PU' email) for a release, newest first."""
+    job_int, release_str, err = _coerce_job_release(job, release)
+    if err:
+        return {**err, "pickups": []}
+
+    rec = Releases.query.filter_by(job=job_int, release=release_str).first()
+    if rec is None:
+        return {
+            "error": f"no release {job_int}-{release_str} found",
+            "pickups": [],
+        }
+
+    rows = (
+        PickupOrder.query.filter_by(release_id=rec.id)
+        .order_by(PickupOrder.created_at.desc())
+        .all()
+    )
+
+    pickups = []
+    for p in rows:
+        body = p.email_body or ""
+        truncated = len(body) > PICKUP_BODY_MAX_CHARS
+        if truncated:
+            body = body[:PICKUP_BODY_MAX_CHARS].rstrip() + "\n… (truncated)"
+        pickups.append({
+            "vendor": p.vendor,
+            "email_subject": p.email_subject,
+            "email_from": p.email_from,
+            "email_to": p.email_to,
+            "email_received_at": p.email_received_at.isoformat() if p.email_received_at else None,
+            "email_body": body,
+            "body_truncated": truncated,
+            "trello_list_name": p.trello_list_name,
+            "status": p.status,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        })
+
+    return {
+        "identifier": f"{job_int}-{release_str}",
+        "project_name": rec.job_name,
+        "pickup_count": len(pickups),
+        "pickups": pickups,
+    }
+
+
+def _conflict_to_compact(r: Releases) -> dict:
+    start, end = release_window(r)
+    return {
+        "identifier": f"{r.job}-{r.release}",
+        "project_name": r.job_name,
+        "installer": r.installer,
+        "start_install": start.isoformat() if start else None,
+        "comp_eta": end.isoformat() if end else None,
+    }
+
+
+def propose_reschedule_install(job, release, new_start_install,
+                               requested_installer=None,
+                               new_comp_eta=None) -> dict[str, Any]:
+    """READ-ONLY: validate a reschedule and report installer-team conflicts.
+
+    Computes the proposed install window, checks the requested (or current)
+    installer team for overlaps, and lists which teams are free. Makes no
+    changes — the frontend confirmation card commits via /update-start-install.
+    """
+    job_int, release_str, err = _coerce_job_release(job, release)
+    if err:
+        return err
+
+    rec = Releases.query.filter_by(job=job_int, release=release_str).first()
+    if rec is None:
+        return {"error": f"no release {job_int}-{release_str} found"}
+
+    new_start, err = _parse_iso_date(new_start_install, "new_start_install")
+    if err:
+        return err
+
+    cur_start = rec.start_install
+    cur_end = rec.comp_eta
+
+    # Proposed end date: explicit comp_eta wins; else preserve the current
+    # install duration; else derive from install hours.
+    if new_comp_eta:
+        new_end, err = _parse_iso_date(new_comp_eta, "new_comp_eta")
+        if err:
+            return err
+    elif cur_start and cur_end and cur_end >= cur_start:
+        new_end = new_start + timedelta(days=(cur_end - cur_start).days)
+    else:
+        new_end = new_start + timedelta(days=default_window_days(rec.install_hrs))
+
+    if new_end < new_start:
+        return {"error": "completion date is before the start date"}
+
+    current_team = (rec.installer or "").strip() or None
+    requested = (requested_installer or "").strip() or current_team
+
+    # Conflicts for the requested team in the proposed window (excluding self).
+    conflicts = []
+    if requested:
+        conflicts = [
+            _conflict_to_compact(r)
+            for r in find_conflicts(
+                requested, new_start, new_end,
+                exclude_job=job_int, exclude_release=release_str,
+            )
+        ]
+
+    # Availability across all configured teams.
+    availability = team_availability(
+        new_start, new_end,
+        exclude_job=job_int, exclude_release=release_str,
+    )
+    free = [t for t, c in availability.items() if not c]
+    busy = {
+        t: [_conflict_to_compact(r) for r in c]
+        for t, c in availability.items() if c
+    }
+
+    return {
+        "job": job_int,
+        "release": release_str,
+        "identifier": f"{job_int}-{release_str}",
+        "project_name": rec.job_name,
+        "current": {
+            "start_install": cur_start.isoformat() if cur_start else None,
+            "comp_eta": cur_end.isoformat() if cur_end else None,
+            "installer": current_team,
+        },
+        "proposed": {
+            "start_install": new_start.isoformat(),
+            "comp_eta": new_end.isoformat(),
+            "installer": requested,
+        },
+        "requested_installer": requested,
+        "has_conflict": bool(conflicts),
+        "conflicts": conflicts,
+        "free_teams": free,
+        "busy_teams": busy,
+        "all_teams": list(Config.INSTALLER_TEAMS),
     }
 
 
@@ -924,6 +1176,8 @@ TOOL_EXECUTORS = {
     TOOL_SCAN_COMPLIANCE: scan_drawing_compliance,
     TOOL_LIST_DRAWING_VERSIONS: list_drawing_versions,
     TOOL_SCAN_MARKUP_DIFF: scan_markup_diff,
+    TOOL_GET_PICKUP: get_release_pickup,
+    TOOL_PROPOSE_RESCHEDULE: propose_reschedule_install,
 }
 
 

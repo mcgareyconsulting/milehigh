@@ -62,7 +62,7 @@ def test_chat_response_includes_usage_summary(app, client, logged_in_user, mock_
     from app.banana_boy import routes as bb_routes
 
     def fake_reply(history, *, extra_system_context="", tool_context=None,
-                   usage_sink=None, voice_mode=False):
+                   usage_sink=None, voice_mode=False, action_sink=None):
         if usage_sink is not None:
             usage_sink.append({
                 "provider": "anthropic", "operation": "chat",
@@ -96,7 +96,7 @@ def test_chat_response_aggregates_compliance_scan_usage(app, client, logged_in_u
     """When a compliance scan runs as a tool call, its Sonnet usage shows up
     alongside the Haiku chat usage in the same response."""
     def fake_reply(history, *, extra_system_context="", tool_context=None,
-                   usage_sink=None, voice_mode=False):
+                   usage_sink=None, voice_mode=False, action_sink=None):
         if usage_sink is not None:
             usage_sink.append({
                 "provider": "anthropic", "operation": "chat",

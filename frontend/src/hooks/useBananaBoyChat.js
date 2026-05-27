@@ -11,6 +11,9 @@ export function useBananaBoyChat(enabled) {
     const [loading, setLoading] = useState(false);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState(null);
+    // A structured action the agent proposed (e.g. a reschedule) that the user
+    // must confirm in a card before anything is written. Null when none pending.
+    const [pendingAction, setPendingAction] = useState(null);
 
     useEffect(() => {
         if (!enabled) return undefined;
@@ -50,6 +53,7 @@ export function useBananaBoyChat(enabled) {
                 ...prev.map((m) => (m.id === optimistic.id ? { ...m, pending: false } : m)),
                 reply,
             ]);
+            if (reply.proposed_action) setPendingAction(reply.proposed_action);
         } catch (err) {
             const msg = err.response?.data?.error || err.message;
             setError(msg);
@@ -90,6 +94,7 @@ export function useBananaBoyChat(enabled) {
                 userTurn,
                 assistantWithUsage,
             ]);
+            if (data.message.proposed_action) setPendingAction(data.message.proposed_action);
             return data;
         } catch (err) {
             const msg = err.response?.data?.error || err.message;
@@ -108,10 +113,30 @@ export function useBananaBoyChat(enabled) {
             await clearMessagesApi();
             setMessages([]);
             setError(null);
+            setPendingAction(null);
         } catch (err) {
             setError(err.response?.data?.error || err.message);
         }
     }, []);
 
-    return { messages, loading, sending, error, send, sendVoice, clear };
+    const dismissAction = useCallback(() => setPendingAction(null), []);
+
+    // Push a local assistant note (not persisted) — used to confirm a write
+    // committed from the confirmation card.
+    const appendNote = useCallback((content) => {
+        setMessages((prev) => [
+            ...prev,
+            {
+                id: `note-${Date.now()}`,
+                role: 'assistant',
+                content,
+                created_at: new Date().toISOString(),
+            },
+        ]);
+    }, []);
+
+    return {
+        messages, loading, sending, error, send, sendVoice, clear,
+        pendingAction, dismissAction, appendNote,
+    };
 }

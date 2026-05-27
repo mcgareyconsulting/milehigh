@@ -147,6 +147,14 @@ function GanttChart({ filterComplete = false }) {
         fetchData();
     }, [fetchData]);
 
+    // Refetch when another part of the app commits a job change (e.g. Banana
+    // Boy's reschedule card) so the timeline reflects it without a manual reload.
+    useEffect(() => {
+        const handler = () => fetchData();
+        window.addEventListener('mhmw:jobs-changed', handler);
+        return () => window.removeEventListener('mhmw:jobs-changed', handler);
+    }, [fetchData]);
+
     const releaseKey = (release) => `${release.job}-${release.release}`;
 
     const effective = useCallback((release) => {

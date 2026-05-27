@@ -255,6 +255,14 @@ export function useJobsDataFetching() {
         };
     }, [fetchData]);
 
+    // Refetch immediately when another part of the app commits a job change
+    // (e.g. Banana Boy's reschedule card) instead of waiting for the 30s poll.
+    useEffect(() => {
+        const handler = () => fetchData(true);
+        window.addEventListener('mhmw:jobs-changed', handler);
+        return () => window.removeEventListener('mhmw:jobs-changed', handler);
+    }, [fetchData]);
+
     return {
         jobs,
         columns,

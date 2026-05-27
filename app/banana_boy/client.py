@@ -6,7 +6,12 @@ from flask import current_app
 
 from app.banana_boy.knowledge_base import get_knowledge_base
 from app.banana_boy.pricing import anthropic_cost
-from app.banana_boy.tools import TOOL_DEFINITIONS, execute_tool
+from app.banana_boy.tools import (
+    SURFACEABLE_ACTION_TOOLS,
+    TOOL_DEFINITIONS,
+    TOOL_PROPOSE_RESCHEDULE,
+    execute_tool,
+)
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -101,7 +106,25 @@ SYSTEM_PROMPT = (
     "we have for X' or 'who marked it up'. Use scan_markup_diff when the "
     "user asks 'what changed in the latest markup', 'show me the redlines', "
     "or 'what did <person> add'. Quote text annotations verbatim from the "
-    "tool's output; cite page numbers."
+    "tool's output; cite page numbers. "
+    "PICKUPS: For vendor part pick-ups — Dencol orders, 'PU' emails, 'what "
+    "are we picking up' — call get_release_pickup(job, release). When the "
+    "user wants the full rundown on a release, call search_jobs_by_identifier, "
+    "get_release_history, AND get_release_pickup in the same turn, then give "
+    "them the install date and team, a short changelog summary, and the "
+    "pickup email gist. "
+    "RESCHEDULE INSTALL: When the user wants to move a start install date or "
+    "reassign the installer team ('move start install to next week', 'push "
+    "380-456 to June 9', 'put it on Saul 2'), call propose_reschedule_install "
+    "with job, release, new_start_install, and requested_installer if they "
+    "named a team. Resolve relative dates ('next week' = the Monday of the "
+    "following week, 'tomorrow', etc.) to a concrete YYYY-MM-DD using 'today' "
+    "from the Current user block. This tool is READ-ONLY — it only checks for "
+    "conflicts; it does NOT make the change. After it returns, tell the user "
+    "plainly whether the requested team is free or has a conflict (name the "
+    "conflicting job), and list which teams ARE open in that window so they "
+    "can pick. NEVER say the move is done or confirmed — the app pops a "
+    "confirmation card and the user commits it there."
 )
 
 VOICE_ADDENDUM = (
@@ -205,7 +228,8 @@ def _record_anthropic_usage(usage_sink, *, iteration, duration_ms, system_prompt
 
 
 def generate_reply(history, extra_system_context: str = "", tool_context: dict | None = None,
-                   usage_sink: list | None = None, voice_mode: bool = False):
+                   usage_sink: list | None = None, voice_mode: bool = False,
+                   action_sink: list | None = None):
     """Run the chat turn, including any tool-use round trips.
 
     `history` is a list of {role, content} the chat route built. `extra_system_context`
@@ -215,6 +239,9 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
     describing tokens, duration, prompt sent and response.
     `voice_mode=True` appends VOICE_ADDENDUM so the model emits a trailing
     <spoken>...</spoken> block for the TTS layer.
+    If `action_sink` is provided, the structured result of any surfaceable
+    tool (e.g. propose_reschedule_install) is appended so the chat route can
+    hand the frontend a confirmation card alongside the text reply.
     Returns the final assistant text. Raises BananaBoyAPIError on upstream failure.
     """
     tool_context = dict(tool_context or {})
@@ -284,6 +311,20 @@ def generate_reply(history, extra_system_context: str = "", tool_context: dict |
                 input=block.input,
             )
             result = execute_tool(block.name, block.input or {}, context=tool_context)
+            # Surface structured proposals (e.g. a reschedule) to the frontend
+            # so it can render a confirmation card. Errors are not surfaced.
+            if (
+                action_sink is not None
+                and block.name in SURFACEABLE_ACTION_TOOLS
+                and isinstance(result, dict)
+                and not result.get("error")
+            ):
+                kind = (
+                    "reschedule_install"
+                    if block.name == TOOL_PROPOSE_RESCHEDULE
+                    else block.name
+                )
+                action_sink.append({"type": kind, "data": result})
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
