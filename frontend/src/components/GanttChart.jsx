@@ -17,7 +17,7 @@
  *   - When filterComplete is true, releases whose stage === 'Complete' are excluded.
  *   - Week-snap nav buttons always anchor viewStart to a Monday; horizontal scroll is free-form.
  */
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { jobsApi } from '../services/jobsApi';
 
 const addDays = (isoDate, days) => {
@@ -74,12 +74,20 @@ function GanttChart({ filterComplete = false }) {
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const [overrides, setOverrides] = useState({});   // key -> { startDate, endDate, team }
     const [dragging, setDragging] = useState(false);
+    const [dragKey, setDragKey] = useState(null);     // releaseKey of the bar being dragged
     const [dropTeam, setDropTeam] = useState(null);   // lane highlighted as the move target
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerValue, setDatePickerValue] = useState('');
     const scrollContainerRef = useRef(null);
     const bodyRef = useRef(null);
+    const prevFirstDayRef = useRef(null);   // last chart origin, for scroll-anchoring on reflow
+    const snapTimerRef = useRef(null);      // debounce for week-snapping free horizontal scroll
+    const firstDayRef = useRef(null);       // live chart origin, read inside drag handlers
+    const dragBoundsRef = useRef(null);     // wide date window pinned for the duration of a drag
+    const snapSuppressUntilRef = useRef(0); // timestamp; skip scroll-snap until then (post-drop)
+    const revealReleaseRef = useRef(null);  // {startDate,endDate} to scroll into view after a drop
+    const scrollAnchorRef = useRef(null);   // {firstDay,scrollLeft} captured before a reflow, for exact restore
     // Set by nav handlers (and once after data loads) to request a scroll on the next render.
     // Drag-driven re-renders don't set this, so the chart never auto-scrolls mid-drag.
     const scrollIntentRef = useRef(null);
@@ -159,11 +167,80 @@ function GanttChart({ filterComplete = false }) {
             if (dates.startDate) minDate = minIso(minDate, dates.startDate);
             if (dates.endDate) maxDate = maxIso(maxDate, dates.endDate);
         });
+        // While dragging, fold in a wide pinned window so the origin stays fixed
+        // (no mid-drag reflow) and there's room to auto-scroll past the screen.
+        if (dragging && dragBoundsRef.current) {
+            minDate = minIso(minDate, dragBoundsRef.current.min);
+            maxDate = maxIso(maxDate, dragBoundsRef.current.max);
+        }
         const firstDay = mondayOf(addDays(minDate, -PAD_DAYS));
         const lastDay = addDays(maxDate, PAD_DAYS);
         const totalDays = daysBetween(firstDay, lastDay) + 1;
         return { firstDay, totalDays, totalPx: totalDays * DAY_PX };
-    }, [releases, effective, viewStart]);
+    }, [releases, effective, viewStart, dragging]);
+
+    // Keep the live origin available to imperative drag handlers (the closures
+    // captured at drag-start would otherwise read a stale firstDay).
+    firstDayRef.current = chartRange.firstDay;
+
+    // When the chart origin (firstDay) shifts — e.g. dragging a bar into an earlier
+    // week grows the chart on the left, or the pinned drag window collapses on drop —
+    // every bar's pixel position moves with it. Restore the same content under the
+    // viewport so it stays visually anchored instead of leaping sideways. Skipped when
+    // a nav scroll intent is pending. Runs before paint.
+    //
+    // When the content SHRINKS the browser clamps scrollLeft before this runs, so a
+    // relative `+= delta` would compound the clamp and slam the view to an edge. The
+    // captured anchor (taken before the reflow) lets us set an ABSOLUTE target instead,
+    // which is immune to that clamp. Falls back to the delta for uncaptured changes.
+    useLayoutEffect(() => {
+        const curr = chartRange.firstDay;
+        const prev = prevFirstDayRef.current;
+        prevFirstDayRef.current = curr;
+        if (prev === null || prev === curr || scrollIntentRef.current) return;
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        const anchor = scrollAnchorRef.current;
+        if (anchor) {
+            scrollAnchorRef.current = null;
+            el.scrollLeft = anchor.scrollLeft + daysBetween(curr, anchor.firstDay) * DAY_PX;
+        } else {
+            el.scrollLeft += daysBetween(curr, prev) * DAY_PX;
+        }
+    }, [chartRange.firstDay]);
+
+    // After a drop, if the released bar ended up outside (or hard against) the
+    // viewport — e.g. it was dragged out via edge auto-scroll — glide it back into
+    // view, day-aligned. Runs after the anchor effect above so it reads the settled
+    // scroll position. No-op when the bar is already comfortably visible.
+    useLayoutEffect(() => {
+        if (dragging) return;
+        const target = revealReleaseRef.current;
+        if (!target) return;
+        revealReleaseRef.current = null;
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        const firstDay = chartRange.firstDay;
+        const barLeftC = SIDEBAR_PX + daysBetween(firstDay, target.startDate) * DAY_PX;
+        const barRightC = SIDEBAR_PX + (daysBetween(firstDay, target.endDate) + 1) * DAY_PX;
+        const M = DAY_PX;   // breathing room added only when we actually scroll
+        // Move ONLY when the bar is genuinely clipped by an edge. An in-view drop or
+        // resize must not shift the viewport at all — so when nothing is clipped we
+        // leave scrollLeft exactly as-is (no day-align, no scroll). Left check is last
+        // so a bar wider than the viewport shows its start.
+        let targetScroll = null;
+        if (barRightC > el.scrollLeft + el.clientWidth) {
+            targetScroll = barRightC - el.clientWidth + M;
+        }
+        if (barLeftC < (targetScroll ?? el.scrollLeft) + SIDEBAR_PX) {
+            targetScroll = barLeftC - SIDEBAR_PX - M;
+        }
+        if (targetScroll === null) return;
+        targetScroll = Math.max(0, Math.round(targetScroll / DAY_PX) * DAY_PX);
+        if (Math.abs(targetScroll - el.scrollLeft) > 1) {
+            el.scrollTo({ left: targetScroll, behavior: 'smooth' });
+        }
+    }, [dragging, chartRange.firstDay]);
 
     // Build lanes: one per configured team, with overlapping releases packed into sub-rows.
     const bands = useMemo(() => {
@@ -172,7 +249,16 @@ function GanttChart({ filterComplete = false }) {
             const laneReleases = releases
                 .filter(r => effective(r).team === team)
                 .map(r => ({ release: r, dates: effective(r) }))
-                .sort((a, b) => (a.dates.startDate || '').localeCompare(b.dates.startDate || ''));
+                .sort((a, b) => {
+                    // While dragging, pack the dragged release LAST so the rest keep
+                    // their sub-rows fixed and don't shuffle under the cursor.
+                    if (dragKey) {
+                        const aDrag = releaseKey(a.release) === dragKey;
+                        const bDrag = releaseKey(b.release) === dragKey;
+                        if (aDrag !== bDrag) return aDrag ? 1 : -1;
+                    }
+                    return (a.dates.startDate || '').localeCompare(b.dates.startDate || '');
+                });
 
             const rowEnds = []; // last endDate ISO per sub-row
             const items = laneReleases.map(({ release, dates }) => {
@@ -193,7 +279,7 @@ function GanttChart({ filterComplete = false }) {
             return band;
         });
         return result;
-    }, [teamsMeta, releases, effective]);
+    }, [teamsMeta, releases, effective, dragKey]);
 
     const dayHeaders = useMemo(() => {
         const todayStr = todayIso();
@@ -245,6 +331,15 @@ function GanttChart({ filterComplete = false }) {
         setHoveredItem(null);
     };
 
+    // Map a viewport X coordinate to a fractional day-index from the chart origin
+    // (firstDay), accounting for the sticky sidebar and current horizontal scroll.
+    const clientXToDayIndex = (clientX) => {
+        const el = scrollContainerRef.current;
+        if (!el) return 0;
+        const rect = el.getBoundingClientRect();
+        return (clientX - rect.left + el.scrollLeft - SIDEBAR_PX) / DAY_PX;
+    };
+
     // Map a viewport Y coordinate to the team lane it falls within. Measures live
     // lane DOM rects so it stays correct as lanes flex-grow to fill or repack mid-drag.
     const teamAtY = (clientY) => {
@@ -291,52 +386,120 @@ function GanttChart({ filterComplete = false }) {
         e.preventDefault();
         e.stopPropagation();
 
-        const dragStartX = e.clientX;
         const key = releaseKey(release);
         const initial = effective(release);
-        const initialDuration = daysBetween(initial.startDate, initial.endDate);
-        let lastDaysDelta = null;
+
+        // Offset (in days) between the cursor and the edge being moved, captured at
+        // grab time. It's a pixel difference / DAY_PX, so it's origin-independent and
+        // stays valid even as the chart origin shifts.
+        const initialStartIdx = daysBetween(firstDayRef.current, initial.startDate);
+        const initialEndIdx = daysBetween(firstDayRef.current, initial.endDate);
+        const grabOffset = clientXToDayIndex(e.clientX)
+            - (mode === 'resize-end' ? initialEndIdx : initialStartIdx);
+
+        // Pin a wide window around the current data extent for the whole drag, so the
+        // origin doesn't reflow mid-drag and the view can auto-scroll well past the
+        // screen in either direction.
+        let extMin = initial.startDate, extMax = initial.endDate;
+        releases.forEach(r => {
+            const d = effective(r);
+            if (d.startDate && d.startDate < extMin) extMin = d.startDate;
+            if (d.endDate && d.endDate > extMax) extMax = d.endDate;
+        });
+        dragBoundsRef.current = { min: addDays(extMin, -90), max: addDays(extMax, 90) };
+
+        // Capture the exact view before the drag-start reflow widens the range, so the
+        // anchor effect can restore it precisely (the content grows, so no clamp here,
+        // but we keep both reflows symmetric).
+        const sc = scrollContainerRef.current;
+        scrollAnchorRef.current = sc ? { firstDay: firstDayRef.current, scrollLeft: sc.scrollLeft } : null;
+
+        let lastClientX = e.clientX;
+        let lastClientY = e.clientY;
+        let lastKey = '';
         let current = { ...initial };
+        let rafId = null;
 
         setDragging(true);
+        setDragKey(key);
         setHoveredItem(null);
         if (mode === 'move') setDropTeam(initial.team);
 
-        const onMove = (moveEvent) => {
-            // Vertical lane targeting (move only) — independent of the day-snap throttle.
-            let targetTeam = initial.team;
-            if (mode === 'move') {
-                targetTeam = teamAtY(moveEvent.clientY) || initial.team;
-                setDropTeam(targetTeam);
-            }
+        // Recompute the bar from the latest cursor position + live scroll/origin, and
+        // snap to whole days. No-ops when nothing changed at day granularity.
+        const apply = () => {
+            const firstDay = firstDayRef.current;
+            const targetIdx = Math.round(clientXToDayIndex(lastClientX) - grabOffset);
 
-            const daysDelta = Math.round((moveEvent.clientX - dragStartX) / DAY_PX);
-            const teamChanged = targetTeam !== current.team;
-            if (daysDelta === lastDaysDelta && !teamChanged) return;
-            lastDaysDelta = daysDelta;
+            let targetTeam = current.team;
+            if (mode === 'move') targetTeam = teamAtY(lastClientY) || initial.team;
 
             let newStart = initial.startDate;
             let newEnd = initial.endDate;
-
             if (mode === 'move') {
-                newStart = addDays(initial.startDate, daysDelta);
-                newEnd = addDays(initial.endDate, daysDelta);
+                newStart = addDays(firstDay, targetIdx);
+                newEnd = addDays(initial.endDate, daysBetween(initial.startDate, newStart));
             } else if (mode === 'resize-start') {
-                const clamped = Math.min(daysDelta, initialDuration);
-                newStart = addDays(initial.startDate, clamped);
+                newStart = addDays(firstDay, targetIdx);
+                if (newStart > initial.endDate) newStart = initial.endDate;
             } else if (mode === 'resize-end') {
-                const clamped = Math.max(daysDelta, -initialDuration);
-                newEnd = addDays(initial.endDate, clamped);
+                newEnd = addDays(firstDay, targetIdx);
+                if (newEnd < initial.startDate) newEnd = initial.startDate;
             }
 
+            const sig = `${newStart}|${newEnd}|${targetTeam}`;
+            if (sig === lastKey) return;
+            lastKey = sig;
             current = { startDate: newStart, endDate: newEnd, team: targetTeam };
+            if (mode === 'move') setDropTeam(targetTeam);
             setOverrides(prev => ({ ...prev, [key]: { ...current } }));
+        };
+
+        // Edge auto-scroll: while the cursor rests near a horizontal edge, pan the
+        // chart so dragging past the screen keeps revealing further weeks. Runs every
+        // frame; only scrolls (and recomputes) when in an edge zone.
+        const EDGE = 56;   // px from edge that triggers panning
+        const STEP = 16;   // px per frame
+        const tick = () => {
+            const el = scrollContainerRef.current;
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                let dir = 0;
+                if (lastClientX > rect.right - EDGE) dir = 1;
+                else if (lastClientX < rect.left + SIDEBAR_PX + EDGE) dir = -1;
+                if (dir !== 0) {
+                    const before = el.scrollLeft;
+                    el.scrollLeft = before + dir * STEP;
+                    if (el.scrollLeft !== before) apply();
+                }
+            }
+            rafId = requestAnimationFrame(tick);
+        };
+        rafId = requestAnimationFrame(tick);
+
+        const onMove = (moveEvent) => {
+            lastClientX = moveEvent.clientX;
+            lastClientY = moveEvent.clientY;
+            apply();
         };
 
         const onUp = () => {
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
+            if (rafId) cancelAnimationFrame(rafId);
+            dragBoundsRef.current = null;
+            // Capture the exact view BEFORE the drop reflow collapses the pinned window
+            // and shrinks the content — the browser clamps scrollLeft on shrink, so the
+            // anchor effect needs this to restore an absolute (clamp-proof) position.
+            const sc = scrollContainerRef.current;
+            scrollAnchorRef.current = sc ? { firstDay: firstDayRef.current, scrollLeft: sc.scrollLeft } : null;
+            // The drop already positioned the view; don't let the post-drop reflow's
+            // scroll-anchor adjustment trigger a snap that shifts it. The reveal effect
+            // handles the one case we DO want to move: a release dropped out of view.
+            snapSuppressUntilRef.current = Date.now() + 400;
+            revealReleaseRef.current = { startDate: current.startDate, endDate: current.endDate };
             setDragging(false);
+            setDragKey(null);
             setDropTeam(null);
             persistChange(release, initial, current);
         };
@@ -394,6 +557,25 @@ function GanttChart({ filterComplete = false }) {
         scrollIntentRef.current = null;
     }, [viewStart, chartRange.firstDay]);
 
+    // Day-snap free horizontal scrolling: when the user stops scrolling, glide to the
+    // nearest day boundary so the left edge never sits mid-day. Skipped mid-drag, while
+    // a nav scroll intent settles, and for a short window after a drop — so dropping a
+    // release doesn't yank the viewport; the drag-anchor leaves it where the user left it.
+    const handleScrollSnap = () => {
+        if (dragging) return;
+        if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+        snapTimerRef.current = setTimeout(() => {
+            const el = scrollContainerRef.current;
+            if (!el || dragging || scrollIntentRef.current || Date.now() < snapSuppressUntilRef.current) return;
+            const snapped = Math.round(el.scrollLeft / DAY_PX) * DAY_PX;
+            if (Math.abs(snapped - el.scrollLeft) > 1) {
+                el.scrollTo({ left: snapped, behavior: 'smooth' });
+            }
+        }, 140);
+    };
+
+    useEffect(() => () => clearTimeout(snapTimerRef.current), []);
+
     const viewStartLeftPx = daysBetween(chartRange.firstDay, viewStart) * DAY_PX;
     const viewWindowWidthPx = VIEW_DAYS * DAY_PX;
 
@@ -408,7 +590,7 @@ function GanttChart({ filterComplete = false }) {
                     >✕</button>
                 </div>
             )}
-            <div ref={scrollContainerRef} className="flex-1 overflow-auto h-full">
+            <div ref={scrollContainerRef} className="flex-1 overflow-auto h-full" onScroll={handleScrollSnap}>
                 {loading && initialLoad && (
                     <div className="text-center py-12">
                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>

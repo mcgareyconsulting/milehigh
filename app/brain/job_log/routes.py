@@ -1485,6 +1485,10 @@ def update_start_install(job, release):
         asap = request.json.get('asap')  # tri-state: True sets ASAP, False clears, absent = ignore
         installer_in_req = 'installer' in (request.json or {})
         installer_val = request.json.get('installer')
+        # Timeline drags set skip_trello=true so date/installer changes don't push
+        # outbound to Trello (due-date update, mirror-card move). Job Log edits omit
+        # it and keep the normal Trello sync. push_trello threads into the commands.
+        push_trello = not bool(request.json.get('skip_trello', False))
         start_install_date = None
 
         # ASAP set/clear — visual flag only; does not write start_install or formula fields,
@@ -1672,6 +1676,7 @@ def update_start_install(job, release):
                         job_id=job,
                         release=release,
                         installer=installer_val,
+                        push_trello=push_trello,
                     ).execute()
                     event_id = res.event_id
                 except ValueError as ve:
@@ -1693,6 +1698,7 @@ def update_start_install(job, release):
                 release=release,
                 start_install=start_install_date,
                 is_hard_date=is_hard_date,
+                push_trello=push_trello,
             ).execute()
         except ValueError as ve:
             if str(ve) == "Event already exists":
@@ -1706,6 +1712,7 @@ def update_start_install(job, release):
                     job_id=job,
                     release=release,
                     installer=installer_val,
+                    push_trello=push_trello,
                 ).execute()
             except ValueError as ve:
                 # Installer unchanged within the dedup window — the date update

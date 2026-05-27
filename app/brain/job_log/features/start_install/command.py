@@ -65,6 +65,7 @@ class UpdateStartInstallCommand:
     source: str = "Brain"
     source_of_update: str = "Brain"
     undone_event_id: Optional[int] = None
+    push_trello: bool = True   # False (timeline drags) skips the outbound due-date push
 
     def execute(self) -> StartInstallUpdateResult:
         job_record: Releases = Releases.query.filter_by(
@@ -103,7 +104,11 @@ class UpdateStartInstallCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 
-        if job_record.trello_card_id:
+        if not self.push_trello:
+            logger.info(
+                f"Skipping Trello due-date push for job {self.job_id}-{self.release} (push_trello=False)"
+            )
+        elif job_record.trello_card_id:
             try:
                 update_trello_card(
                     card_id=job_record.trello_card_id,

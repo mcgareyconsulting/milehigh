@@ -52,6 +52,7 @@ class AssignInstallerCommand:
     installer: Optional[str]
     source: str = "Brain"
     undone_event_id: Optional[int] = None
+    push_trello: bool = True   # False (timeline drags) skips the Trello list lookup + mirror move
 
     def execute(self) -> AssignInstallerResult:
         job_record: Releases = Releases.query.filter_by(
@@ -85,35 +86,43 @@ class AssignInstallerCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source
 
-        # Resolve the target list: the installer list by name, or Unassigned when cleared.
-        if new_installer:
-            entry = get_list_by_name(new_installer)
-            target_list_id = entry["id"] if entry else None
-            if not target_list_id:
-                logger.warning(
-                    f"No Trello list found matching installer '{new_installer}'; "
-                    f"skipping mirror move for job {self.job_id}-{self.release}"
-                )
-        else:
-            target_list_id = Config.UNASSIGNED_CARDS_LIST_ID
-
-        if job_record.trello_card_id and target_list_id:
-            try:
-                move_mirror_card(job_record.trello_card_id, target_list_id)
-                logger.info(
-                    f"Mirror card moved for job {self.job_id}-{self.release} "
-                    f"(installer={new_installer or 'Unassigned'})"
-                )
-            except Exception as trello_error:
-                logger.error(
-                    f"Failed to move mirror card for job {self.job_id}-{self.release}: {trello_error}",
-                    exc_info=True,
-                )
-        elif not job_record.trello_card_id:
-            logger.warning(
-                f"Job {self.job_id}-{self.release} has no trello_card_id, skipping mirror move",
-                extra={'job': self.job_id, 'release': self.release},
+        # Resolve the target list and move the mirror card. Skipped entirely when
+        # push_trello is False (timeline drags) — get_list_by_name is itself a Trello
+        # API call, so we must not even resolve the list.
+        if not self.push_trello:
+            logger.info(
+                f"Skipping Trello mirror move for job {self.job_id}-{self.release} (push_trello=False)"
             )
+        else:
+            # Resolve the target list: the installer list by name, or Unassigned when cleared.
+            if new_installer:
+                entry = get_list_by_name(new_installer)
+                target_list_id = entry["id"] if entry else None
+                if not target_list_id:
+                    logger.warning(
+                        f"No Trello list found matching installer '{new_installer}'; "
+                        f"skipping mirror move for job {self.job_id}-{self.release}"
+                    )
+            else:
+                target_list_id = Config.UNASSIGNED_CARDS_LIST_ID
+
+            if job_record.trello_card_id and target_list_id:
+                try:
+                    move_mirror_card(job_record.trello_card_id, target_list_id)
+                    logger.info(
+                        f"Mirror card moved for job {self.job_id}-{self.release} "
+                        f"(installer={new_installer or 'Unassigned'})"
+                    )
+                except Exception as trello_error:
+                    logger.error(
+                        f"Failed to move mirror card for job {self.job_id}-{self.release}: {trello_error}",
+                        exc_info=True,
+                    )
+            elif not job_record.trello_card_id:
+                logger.warning(
+                    f"Job {self.job_id}-{self.release} has no trello_card_id, skipping mirror move",
+                    extra={'job': self.job_id, 'release': self.release},
+                )
 
         JobEventService.close(event.id)
         db.session.commit()

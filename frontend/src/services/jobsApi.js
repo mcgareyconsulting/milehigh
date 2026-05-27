@@ -202,7 +202,9 @@ class JobsApi {
     // installer (vertical drag) reassigns the team. Only the changed fields are sent.
     async updateTimelineBar(job, release, { startInstall, compEta, installer } = {}) {
         try {
-            const payload = { is_hard_date: true };
+            // skip_trello: timeline scheduling changes must not push outbound to Trello
+            // (due-date update, mirror-card move). Job Log edits omit this and sync normally.
+            const payload = { is_hard_date: true, skip_trello: true };
             if (startInstall) payload.start_install = startInstall;
             if (compEta) payload.comp_eta = compEta;
             if (installer !== undefined) payload.installer = installer;
