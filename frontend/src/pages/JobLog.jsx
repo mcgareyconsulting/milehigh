@@ -18,6 +18,9 @@ import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
+import JobLogQuickFilters from '../components/JobLogQuickFilters';
+import ProjectFilterDropdown from '../components/ProjectFilterDropdown';
+import ActiveFilterChips from '../components/ActiveFilterChips';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { BananaCodeHeader } from '../components/StageIconRow';
@@ -168,6 +171,7 @@ function JobLog() {
         setSelectedStages,
         setSearch,
         projectNameOptions,
+        projectOptions,
         stageOptions,
         stageColors,
         stageToGroup,
@@ -394,11 +398,17 @@ function JobLog() {
         return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
     }, [columns]);
 
-    // Phase 1 columns that get an Excel-style header dropdown filter.
+    // Columns that get an Excel-style header dropdown filter. Spreadsheet-style:
+    // every column except Urgency (composite Banana Code icons) and Notes (free text).
     const FILTERABLE_COLUMNS = useMemo(() => new Set([
-        'Job #', 'Release #', 'Job', 'Stage', 'Fab Order',
-        'Paint color', 'Job Comp', 'Invoiced', 'PM', 'BY',
+        'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS',
+        'Paint color', 'PM', 'BY', 'Released', 'Fab Order', 'Stage',
+        'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced',
     ]), []);
+
+    // Date-valued columns: their header dropdown sorts chronologically and shows
+    // "Newest → Oldest" / "Oldest → Newest" labels instead of A→Z / Z→A.
+    const DATE_COLUMNS = useMemo(() => new Set(['Released', 'Start install', 'Comp. ETA']), []);
 
     /**
      * Per-column reachable values: for each filterable column C, the set of unique
@@ -667,49 +677,6 @@ function JobLog() {
                         <div className="p-2 flex flex-col flex-1 min-h-0 space-y-1.5">
                             <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
 
-                                {/* Minimized project pills — show selected projects when collapsed */}
-                                {isFilterMinimized && selectedProjectNames.length > 0 && (
-                                    <div className="flex items-center gap-1 flex-wrap text-xs">
-                                        <span className="font-semibold text-gray-500 dark:text-slate-400">Projects:</span>
-                                        {selectedProjectNames.map(name => (
-                                            <span key={name} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                {name}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Expanded: old-mode view filter buttons (Job Order … Review) */}
-                                {!isFilterMinimized && (
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                        {[
-                                            { id: 'job_order', label: 'Job Order', activeCls: 'bg-blue-700 text-white' },
-                                            { id: 'ready_to_ship', label: 'Ready to Ship', activeCls: 'bg-emerald-600 text-white' },
-                                            { id: 'paint', label: 'Paint', activeCls: 'bg-emerald-600 text-white' },
-                                            { id: 'paint_fab', label: 'Paint+Fab', activeCls: 'bg-emerald-600 text-white' },
-                                            { id: 'fab', label: 'Fab', activeCls: 'bg-blue-700 text-white' },
-                                        ].map((v) => (
-                                            <button
-                                                key={v.id}
-                                                onClick={() => { setReviewMode(false); setSelectedSubset(selectedSubset === v.id ? null : v.id); }}
-                                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${selectedSubset === v.id
-                                                    ? v.activeCls
-                                                    : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'}`}
-                                            >
-                                                {v.label}
-                                            </button>
-                                        ))}
-                                        <button
-                                            onClick={() => { const next = !reviewMode; if (next) setSelectedSubset(null); setReviewMode(next); }}
-                                            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${reviewMode
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-500'}`}
-                                        >
-                                            Review
-                                        </button>
-                                    </div>
-                                )}
-
                                 {/* Row 1: Project name buttons — only visible when expanded */}
                                 {!isFilterMinimized && (
                                     <div
@@ -793,38 +760,21 @@ function JobLog() {
                                         )}
                                     </Dropdown>
 
-                                    {(() => {
-                                        const subsetViews = [
-                                            { id: 'job_order', label: 'Job Order' },
-                                            { id: 'ready_to_ship', label: 'Ready to Ship' },
-                                            { id: 'paint', label: 'Paint' },
-                                            { id: 'paint_fab', label: 'Paint+Fab' },
-                                            { id: 'fab', label: 'Fab' },
-                                        ];
-                                        const activeLabel = reviewMode
-                                            ? 'Review'
-                                            : (subsetViews.find((v) => v.id === selectedSubset)?.label || 'Views');
-                                        return (
-                                            <Dropdown label={activeLabel} active={reviewMode || !!selectedSubset} menuWidth={180}>
-                                                {subsetViews.map((v) => (
-                                                    <DropdownItem
-                                                        key={v.id}
-                                                        active={selectedSubset === v.id}
-                                                        onClick={() => { setReviewMode(false); setSelectedSubset(selectedSubset === v.id ? null : v.id); }}
-                                                    >
-                                                        {v.label}
-                                                    </DropdownItem>
-                                                ))}
-                                                <div className="my-1 border-t border-gray-200 dark:border-slate-600" />
-                                                <DropdownItem
-                                                    active={reviewMode}
-                                                    onClick={() => { const next = !reviewMode; if (next) setSelectedSubset(null); setReviewMode(next); }}
-                                                >
-                                                    Review
-                                                </DropdownItem>
-                                            </Dropdown>
-                                        );
-                                    })()}
+                                    {/* Projects filter (number + name) — separate from the column-header dropdowns */}
+                                    <ProjectFilterDropdown
+                                        options={projectOptions}
+                                        selected={selectedProjectNames}
+                                        onChange={setSelectedProjectNames}
+                                    />
+
+                                    {/* Stage quick filters — linear buttons on desktop, single dropdown on tablet/mobile */}
+                                    <JobLogQuickFilters
+                                        selectedSubset={selectedSubset}
+                                        setSelectedSubset={setSelectedSubset}
+                                        reviewMode={reviewMode}
+                                        setReviewMode={setReviewMode}
+                                        compact={isMobile || isTablet}
+                                    />
 
                                     <div className="flex-1" />
 
@@ -837,6 +787,22 @@ function JobLog() {
                                         <span className="text-xl leading-none text-gray-600 dark:text-slate-300">{isFilterMinimized ? '▾' : '▴'}</span>
                                     </button>
                                 </div>
+
+                                {/* Active-filter chips — only renders when at least one filter is active */}
+                                <ActiveFilterChips
+                                    search={search}
+                                    selectedSubset={selectedSubset}
+                                    reviewMode={reviewMode}
+                                    selectedProjectNames={selectedProjectNames}
+                                    columnFilters={columnFilters}
+                                    columnSort={columnSort}
+                                    onClearSearch={() => setSearch('')}
+                                    onClearSubset={() => setSelectedSubset(null)}
+                                    onClearReview={() => setReviewMode(false)}
+                                    onRemoveProject={(name) => setSelectedProjectNames(prev => prev.filter(n => n !== name))}
+                                    onClearColumnFilter={(col) => setColumnFilter(col, [])}
+                                    onClearSort={() => setColumnSort(null)}
+                                />
 
                                 {/* Row 3: Search + stats — always visible */}
                                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
@@ -1001,6 +967,9 @@ function JobLog() {
                                                                         sort={columnSort}
                                                                         onSort={(dir) => setColumnSort(column, dir)}
                                                                         isActive={colSelected.length > 0}
+                                                                        sortLabels={DATE_COLUMNS.has(column)
+                                                                            ? { asc: 'Oldest → Newest', desc: 'Newest → Oldest' }
+                                                                            : undefined}
                                                                     >
                                                                         {displayHeader}
                                                                     </ColumnHeaderFilter>
