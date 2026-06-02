@@ -706,6 +706,7 @@ class Notification(db.Model):
     board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'), nullable=True)
     board_activity_id = db.Column(db.Integer, db.ForeignKey('board_activity.id', ondelete='CASCADE'), nullable=True)
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id', ondelete='CASCADE'), nullable=True, index=True)
+    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id', ondelete='CASCADE'), nullable=True, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -713,6 +714,7 @@ class Notification(db.Model):
     board_item = db.relationship('BoardItem', lazy='select')
     board_activity = db.relationship('BoardActivity', lazy='select')
     submittal = db.relationship('Submittals', lazy='select')
+    checklist_item = db.relationship('ChecklistItem', lazy='select')
 
     def to_dict(self):
         return {
@@ -723,6 +725,7 @@ class Notification(db.Model):
             'board_item_id': self.board_item_id,
             'board_activity_id': self.board_activity_id,
             'submittal_id': self.submittal_id,
+            'checklist_item_id': self.checklist_item_id,
             'is_read': self.is_read,
             'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
@@ -883,3 +886,124 @@ class FcCollectionRun(db.Model):
         d = self.to_summary_dict()
         d['details'] = self.details or {}
         return d
+
+
+class Meeting(db.Model):
+    """A captured meeting whose transcript is mined for checklist items.
+
+    MVP: ingestion is stubbed — a transcript is pasted/uploaded via the API rather
+    than pulled from Recall.ai/Teams. Maps to the future data-lake
+    `core_communication(kind='meeting')`; the Recall/Graph adapters land here later.
+    """
+    __tablename__ = "meetings"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    # internal_draft | internal_shop | gc_pm | other
+    meeting_type = db.Column(db.String(40), nullable=False, default='other')
+    source = db.Column(db.String(30), nullable=False, default='stub')  # stub | recall | graph
+    project_number = db.Column(db.String(100), nullable=True, index=True)
+    occurred_at = db.Column(db.DateTime, nullable=True)
+    transcript = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    extracted_at = db.Column(db.DateTime, nullable=True)  # when checklist items were generated
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    items = db.relationship(
+        'ChecklistItem', backref='meeting', lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+    created_by_user = db.relationship('User', foreign_keys=[created_by])
+
+    def to_dict(self, include_items=False):
+        d = {
+            'id': self.id,
+            'title': self.title,
+            'meeting_type': self.meeting_type,
+            'source': self.source,
+            'project_number': self.project_number,
+            'occurred_at': _dt(self.occurred_at),
+            'extracted_at': _dt(self.extracted_at),
+            'created_at': _dt(self.created_at),
+        }
+        if include_items:
+            items = self.items.order_by(ChecklistItem.id).all()
+            d['items'] = [i.to_dict() for i in items]
+            d['item_count'] = len(items)
+        else:
+            d['item_count'] = self.items.count()
+        return d
+
+
+class ChecklistItem(db.Model):
+    """An agent-proposed to-do surfaced from a meeting transcript.
+
+    Lifecycle: the extractor creates rows as `status='proposed'` with an inferred
+    owner + due date. The reviewer (MVP: Bill) curates each via yes/no/edit — accept
+    sets the final owner_user_id + due_date and flips status to 'accepted'; the
+    notification worker then pings the owner as the due date approaches.
+    """
+    __tablename__ = "checklist_items"
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(
+        db.Integer, db.ForeignKey('meetings.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    title = db.Column(db.Text, nullable=False)
+    detail = db.Column(db.Text, nullable=True)
+    # action | needs_gc_update | decision | risk | fyi
+    item_type = db.Column(db.String(30), nullable=False, default='action')
+    gc_facing = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Agent inference — immutable record of what was proposed
+    proposed_owner_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    proposed_due_date = db.Column(db.Date, nullable=True)
+    confidence = db.Column(db.Float, nullable=True)
+
+    # Final, human-curated values (set on accept/edit; owner + date editable)
+    owner_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+
+    # Optional links to internal records (expands to the lake reference spine later)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True)
+    submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id'), nullable=True)
+
+    # proposed | accepted | rejected | done
+    status = db.Column(db.String(20), nullable=False, default='proposed', index=True)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    last_notified_at = db.Column(db.DateTime, nullable=True)  # dedup deadline pings
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    # joined eager-load avoids an N+1 on owner-name lookups when serializing item lists
+    owner = db.relationship('User', foreign_keys=[owner_user_id], lazy='joined')
+    proposed_owner = db.relationship('User', foreign_keys=[proposed_owner_user_id], lazy='joined')
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by])
+
+    @staticmethod
+    def _name(u):
+        if not u:
+            return None
+        full = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
+        return full or u.username
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'meeting_id': self.meeting_id,
+            'title': self.title,
+            'detail': self.detail,
+            'item_type': self.item_type,
+            'gc_facing': self.gc_facing,
+            'proposed_owner_user_id': self.proposed_owner_user_id,
+            'proposed_owner_name': self._name(self.proposed_owner),
+            'proposed_due_date': _dt(self.proposed_due_date),
+            'owner_user_id': self.owner_user_id,
+            'owner_name': self._name(self.owner),
+            'due_date': _dt(self.due_date),
+            'release_id': self.release_id,
+            'submittal_id': self.submittal_id,
+            'status': self.status,
+            'confidence': self.confidence,
+            'reviewed_at': _dt(self.reviewed_at),
+            'created_at': _dt(self.created_at),
+        }

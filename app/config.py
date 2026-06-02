@@ -89,6 +89,23 @@ class Config:
     # Admin PIN for health scan admin page
     ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
 
+    # Anthropic — used to extract checklist items from meeting transcripts.
+    # Falls back to a deterministic stub extractor when unset (tests / no key).
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+    # Meeting → checklist reviewer. MVP: every post-meeting checklist surfaces to
+    # this user (resolved by username, which is the user's email here).
+    # Future distribution order on the admin side: Bill > David > Katie > Luis;
+    # for a project meeting the assigned PM takes precedence. The dev admin
+    # (mcgareyconsulting@gmail.com) is excluded from ranking.
+    CHECKLIST_REVIEWER_USERNAME = os.environ.get("CHECKLIST_REVIEWER_USERNAME", "boneill@mhmw.com")
+    CHECKLIST_ADMIN_RANKING = [
+        "boneill@mhmw.com",   # Bill
+        "dservold@mhmw.com",  # David
+        "khearn@mhmw.com",    # Katie
+        "lsolano@mhmw.com",   # Luis
+    ]
+
 
 class LocalConfig(Config):
     """Configuration for local development."""
