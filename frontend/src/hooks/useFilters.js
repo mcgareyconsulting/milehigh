@@ -3,18 +3,23 @@
  * schema_version: 1
  * purpose: Centralizes all DWL filter, search, and column-sort logic so DraftingWorkLoad only handles rendering.
  * exports:
- *   useFilters: Hook returning filter state, dropdown options, displayRows, and sort/reset handlers for DWL
+ *   useFilters: Hook returning column-filter state, reachable values, displayRows, and sort/reset handlers for DWL
  * imports_from: [react]
  * imported_by: [../pages/DraftingWorkLoad.jsx]
  * invariants:
  *   - Rows with type 'For Construction' are always excluded before any user filter is applied
+ *   - Filtering is per-column (Excel-style): columnFilters maps a display column name to an allowed-value list
+ *   - '(Blanks)' is the sentinel for null/empty values; an empty/absent list means "no filter on that column"
+ *   - BIC is comma-split: a row matches if ANY of its individual ball-in-court names is allowed
  *   - Default sort groups by BIC then order_number; column sort overrides but preserves multi-assignee-last rule for NAME
- *   - Ball-in-court filter splits comma-separated values so individual names are matchable
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 
 const ALL_OPTION_VALUE = '__ALL__';
+const BLANKS = '(Blanks)';
+
+// Display columns that get an Excel-style header dropdown filter.
+const FILTER_COLUMNS = ['PROJ. #', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
 
 /**
  * Get value from row by column name (handles both database field names and display names)
@@ -38,9 +43,28 @@ const getColumnValue = (row, column) => {
     };
 
     const fieldName = columnMap[column] || column.toLowerCase().replace(/\s+/g, '_');
-    
+
     // Try both the mapped field name and the display column name
     return row[fieldName] ?? row[column] ?? null;
+};
+
+/**
+ * Does a row pass the allowed-value list for one column?
+ * - Empty/missing allowed list means no constraint (true).
+ * - BIC splits comma-separated names and matches if ANY name is allowed.
+ * - '(Blanks)' matches null/empty values.
+ */
+const rowPassesColumn = (row, col, allowed) => {
+    if (!allowed || allowed.length === 0) return true;
+    if (col === 'BIC') {
+        const raw = (row.ball_in_court ?? row['BIC'] ?? '').toString().trim();
+        if (raw === '') return allowed.includes(BLANKS);
+        const names = raw.split(',').map((n) => n.trim()).filter(Boolean);
+        return names.some((n) => allowed.includes(n));
+    }
+    const v = getColumnValue(row, col);
+    const blank = v === null || v === undefined || String(v).trim() === '';
+    return blank ? allowed.includes(BLANKS) : allowed.includes(String(v).trim());
 };
 
 /**
@@ -55,7 +79,7 @@ const compareValues = (a, b, direction = 'asc') => {
     // Try to parse as number
     const numA = typeof a === 'number' ? a : parseFloat(a);
     const numB = typeof b === 'number' ? b : parseFloat(b);
-    
+
     if (!isNaN(numA) && !isNaN(numB)) {
         // Both are numbers
         const result = numA - numB;
@@ -84,72 +108,75 @@ const compareValues = (a, b, direction = 'asc') => {
  * @returns {Object} Filter state, options, handlers, and filtered/sorted rows
  */
 export function useFilters(rows = []) {
-    // Filter state
-    const [selectedBallInCourt, setSelectedBallInCourt] = useState(ALL_OPTION_VALUE);
-    const [selectedSubmittalManager, setSelectedSubmittalManager] = useState(ALL_OPTION_VALUE);
-    const [selectedProjectName, setSelectedProjectName] = useState(ALL_OPTION_VALUE);
-    const [selectedProcoreStatus, setSelectedProcoreStatus] = useState(ALL_OPTION_VALUE);
-    
+    // Per-column dropdown filters: { [displayCol]: string[] of allowed values; '(Blanks)' represents null/empty }
+    const [columnFilters, setColumnFiltersState] = useState(() => {
+        try {
+            const raw = localStorage.getItem('dwl_column_filters');
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    });
+
     // Text search state
     const [search, setSearch] = useState('');
 
-    // General column sorting: { column: 'Project Name', direction: 'asc' | 'desc' | null }
-    // For Project Name, we maintain backward compatibility with the existing 'normal' mode
+    // General column sorting: { column: 'TITLE', direction: 'asc' | 'desc' | null }
     const [columnSort, setColumnSort] = useState({ column: null, direction: null });
 
+    // Persist column filters across reloads (drop the key entirely when empty)
+    useEffect(() => {
+        if (Object.keys(columnFilters).length === 0) {
+            localStorage.removeItem('dwl_column_filters');
+        } else {
+            localStorage.setItem('dwl_column_filters', JSON.stringify(columnFilters));
+        }
+    }, [columnFilters]);
+
+    const setColumnFilter = useCallback((column, values) => {
+        setColumnFiltersState((prev) => {
+            const next = { ...prev };
+            if (!values || values.length === 0) {
+                delete next[column];
+            } else {
+                next[column] = [...values];
+            }
+            return next;
+        });
+    }, []);
+
     /**
-     * Check if a row matches all selected filters
+     * Text search across all six filterable columns: project #, project name,
+     * title, ball in court, submittal manager, and Procore status.
      */
-    const matchesSelectedFilter = useCallback((row) => {
-        // Check Ball In Court filter (handles comma-separated values for multiple assignees)
-        if (selectedBallInCourt !== ALL_OPTION_VALUE) {
-            const ballInCourtValue = (row.ball_in_court ?? '').toString().trim();
-            // Check if selected value matches exactly OR appears in comma-separated list
-            const ballInCourtNames = ballInCourtValue.split(',').map(name => name.trim());
-            if (!ballInCourtNames.includes(selectedBallInCourt)) {
-                return false;
-            }
-        }
+    const matchesSearch = useCallback((row) => {
+        if (search.trim() === '') return true;
+        const keywords = search.trim().toLowerCase().split(/\s+/);
+        const haystack = [
+            String(row.project_number ?? row['PROJ. #'] ?? ''),
+            String(row.project_name ?? row['NAME'] ?? ''),
+            String(row.title ?? row['TITLE'] ?? ''),
+            String(row.ball_in_court ?? row['BIC'] ?? ''),
+            String(row.submittal_manager ?? row['SUB MANAGER'] ?? ''),
+            String(row.status ?? row['PROCORE STATUS'] ?? ''),
+        ].join(' ').toLowerCase();
+        return keywords.every((kw) => haystack.includes(kw));
+    }, [search]);
 
-        // Check Submittal Manager filter
-        if (selectedSubmittalManager !== ALL_OPTION_VALUE) {
-            const managerValue = row.submittal_manager ?? row['SUB MANAGER'];
-            if ((managerValue ?? '').toString().trim() !== selectedSubmittalManager) {
-                return false;
-            }
+    /**
+     * Check if a row passes every active per-column dropdown filter.
+     */
+    const matchesColumnFilters = useCallback((row) => {
+        for (const col in columnFilters) {
+            if (!rowPassesColumn(row, col, columnFilters[col])) return false;
         }
-
-        // Check Project Name filter
-        if (selectedProjectName !== ALL_OPTION_VALUE) {
-            const projectNameValue = row.project_name ?? row['NAME'];
-            if ((projectNameValue ?? '').toString().trim() !== selectedProjectName) {
-                return false;
-            }
-        }
-
-        // Check Procore Status filter
-        if (selectedProcoreStatus !== ALL_OPTION_VALUE) {
-            const statusValue = row.status ?? row['PROCORE STATUS'] ?? '';
-            if ((statusValue ?? '').toString().trim() !== selectedProcoreStatus) {
-                return false;
-            }
-        }
-
-        // Text search across project name, title, and ball in court
-        if (search.trim() !== '') {
-            const keywords = search.trim().toLowerCase().split(/\s+/);
-            const haystack = [
-                String(row.project_name ?? row['NAME'] ?? ''),
-                String(row.title ?? row['TITLE'] ?? ''),
-                String(row.ball_in_court ?? row['BIC'] ?? ''),
-            ].join(' ').toLowerCase();
-            if (!keywords.every(kw => haystack.includes(kw))) {
-                return false;
-            }
-        }
-
         return true;
-    }, [selectedBallInCourt, selectedSubmittalManager, selectedProjectName, selectedProcoreStatus, search]);
+    }, [columnFilters]);
+
+    const matchesSelectedFilter = useCallback(
+        (row) => matchesColumnFilters(row) && matchesSearch(row),
+        [matchesColumnFilters, matchesSearch]
+    );
 
     /**
      * Sort rows based on columnSort state
@@ -261,169 +288,125 @@ export function useFilters(rows = []) {
     }, [columnSort]);
 
     /**
+     * Rows after the always-on 'For Construction' exclusion (the base set every
+     * filter and reachable-value calculation starts from).
+     */
+    const baseRows = useMemo(
+        () => rows.filter((row) => (row.type ?? row['Type'] ?? '') !== 'For Construction'),
+        [rows]
+    );
+
+    /**
      * Filtered and sorted rows for display
      */
     const displayRows = useMemo(() => {
-        // First, filter out rows where type is 'For Construction'
-        const withoutForConstruction = rows.filter((row) => {
-            const type = row.type ?? row['Type'] ?? '';
-            return type !== 'For Construction';
-        });
-        // Then apply user-selected filters
-        const filtered = withoutForConstruction.filter(matchesSelectedFilter);
-        return sortRows([...filtered]); // Create a copy to avoid mutating the filtered array
-    }, [rows, matchesSelectedFilter, sortRows]);
+        const filtered = baseRows.filter(matchesSelectedFilter);
+        return sortRows([...filtered]); // copy to avoid mutating the filtered array
+    }, [baseRows, matchesSelectedFilter, sortRows]);
 
     /**
-     * Extract unique ball in court options from rows
-     * Handles comma-separated values by extracting individual names
-     * Excludes rows where type is 'For Construction'
+     * Per-column reachable values: for each filterable column C, the distinct non-blank
+     * values present in rows that pass search + every active column filter EXCEPT C's own
+     * (Excel-style narrowing). BIC is exploded into individual comma-split names.
      */
-    const ballInCourtOptions = useMemo(() => {
-        const values = new Set();
-        rows.forEach((row) => {
-            const type = row.type ?? row['Type'] ?? '';
-            if (type === 'For Construction') return;
+    const uniqueValuesByColumn = useMemo(() => {
+        const out = {};
+        FILTER_COLUMNS.forEach((col) => {
+            const set = new Set();
+            let hasBlanks = false;
+            for (const row of baseRows) {
+                if (!matchesSearch(row)) continue;
+                let ok = true;
+                for (const k in columnFilters) {
+                    if (k === col) continue;
+                    if (!rowPassesColumn(row, k, columnFilters[k])) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (!ok) continue;
 
-            const value = row.ball_in_court;
-            if (value !== null && value !== undefined && String(value).trim() !== '') {
-                const names = String(value).split(',').map(name => name.trim()).filter(name => name !== '');
-                names.forEach(name => values.add(name));
+                if (col === 'BIC') {
+                    const raw = (row.ball_in_court ?? row['BIC'] ?? '').toString().trim();
+                    if (raw === '') hasBlanks = true;
+                    else raw.split(',').map((n) => n.trim()).filter(Boolean).forEach((n) => set.add(n));
+                } else {
+                    const v = getColumnValue(row, col);
+                    if (v === null || v === undefined || String(v).trim() === '') hasBlanks = true;
+                    else set.add(String(v).trim());
+                }
             }
+            out[col] = {
+                values: [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
+                hasBlanks,
+            };
         });
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
-    }, [rows]);
+        return out;
+    }, [baseRows, columnFilters, matchesSearch]);
 
     /**
-     * Extract unique submittal manager options from rows
-     * Excludes rows where type is 'For Construction'
+     * The lone selected Ball-In-Court drafter, when exactly one non-blank name is
+     * checked in the BIC column filter — drives the admin Resort button. Null otherwise.
      */
-    const submittalManagerOptions = useMemo(() => {
-        const values = new Set();
-        rows.forEach((row) => {
-            const type = row.type ?? row['Type'] ?? '';
-            if (type === 'For Construction') return;
-
-            const value = row.submittal_manager ?? row['Submittal Manager'];
-            if (value !== null && value !== undefined && String(value).trim() !== '') {
-                values.add(String(value).trim());
-            }
-        });
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
-    }, [rows]);
-
-    /**
-     * Extract unique project name options from rows
-     * Excludes rows where type is 'For Construction'
-     */
-    const projectNameOptions = useMemo(() => {
-        const values = new Set();
-        rows.forEach((row) => {
-            const type = row.type ?? row['Type'] ?? '';
-            if (type === 'For Construction') return;
-
-            const value = row.project_name ?? row['NAME'];
-            if (value !== null && value !== undefined && String(value).trim() !== '') {
-                values.add(String(value).trim());
-            }
-        });
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
-    }, [rows]);
-
-    /**
-     * Extract unique Procore status options from rows (subset of statuses present in current data)
-     * Excludes rows where type is 'For Construction'
-     */
-    const procoreStatusOptions = useMemo(() => {
-        const values = new Set();
-        rows.forEach((row) => {
-            const type = row.type ?? row['Type'] ?? '';
-            if (type === 'For Construction') return;
-
-            const value = row.status ?? row['PROCORE STATUS'];
-            if (value !== null && value !== undefined && String(value).trim() !== '') {
-                values.add(String(value).trim());
-            }
-        });
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
-    }, [rows]);
+    const singleSelectedBallInCourt = useMemo(() => {
+        const sel = (columnFilters['BIC'] || []).filter((v) => v !== BLANKS);
+        return sel.length === 1 ? sel[0] : null;
+    }, [columnFilters]);
 
     /**
      * Reset all filters to default values
      */
     const resetFilters = useCallback(() => {
-        setSelectedBallInCourt(ALL_OPTION_VALUE);
-        setSelectedSubmittalManager(ALL_OPTION_VALUE);
-        setSelectedProjectName(ALL_OPTION_VALUE);
-        setSelectedProcoreStatus(ALL_OPTION_VALUE);
+        setColumnFiltersState({});
         setSearch('');
         setColumnSort({ column: null, direction: null });
     }, []);
 
     /**
-     * Handle column sort toggle: null -> asc -> desc -> null (cycle)
+     * Cycle column sort: null -> asc -> desc -> null. Used by the plain (non-dropdown)
+     * sortable headers (TITLE, LAST BIC, TYPE, DUE DATE, LIFESPAN, PROJ. #).
      */
     const handleColumnSort = useCallback((column) => {
         setColumnSort((current) => {
-            // If clicking the same column, cycle: null -> asc -> desc -> null
             if (current.column === column) {
-                if (current.direction === null) {
-                    return { column, direction: 'asc' };
-                } else if (current.direction === 'asc') {
-                    return { column, direction: 'desc' };
-                } else {
-                    return { column: null, direction: null };
-                }
+                if (current.direction === null) return { column, direction: 'asc' };
+                if (current.direction === 'asc') return { column, direction: 'desc' };
+                return { column: null, direction: null };
             }
-            // If clicking a different column, start with asc
             return { column, direction: 'asc' };
         });
     }, []);
 
-    // handleProjectNameSortToggle for NAME column
-    // Maps 'normal' -> null, 'a-z' -> asc, 'z-a' -> desc
-    const handleProjectNameSortToggle = useCallback(() => {
-        handleColumnSort('NAME');
-    }, [handleColumnSort]);
-
-    // Get current sort state for NAME column
-    const projectNameSortMode = useMemo(() => {
-        if (columnSort.column !== 'NAME') return 'normal';
-        if (columnSort.direction === 'asc') return 'a-z';
-        if (columnSort.direction === 'desc') return 'z-a';
-        return 'normal';
-    }, [columnSort]);
+    /**
+     * Direct sort setter for the column-header dropdowns, which pass an explicit
+     * 'asc' | 'desc' | null rather than cycling.
+     */
+    const setColumnSortDirect = useCallback((column, direction) => {
+        if (!direction) setColumnSort({ column: null, direction: null });
+        else setColumnSort({ column, direction });
+    }, []);
 
     return {
         // Filter state
         search,
-        selectedBallInCourt,
-        selectedSubmittalManager,
-        selectedProjectName,
-        selectedProcoreStatus,
-        columnSort, // New general column sort state
-        projectNameSortMode, // Backward compatibility
+        columnFilters,
+        columnSort,
 
-        // Filter setters
+        // Setters / handlers
         setSearch,
-        setSelectedBallInCourt,
-        setSelectedSubmittalManager,
-        setSelectedProjectName,
-        setSelectedProcoreStatus,
+        setColumnFilter,
+        handleColumnSort,
+        setColumnSortDirect,
+        resetFilters,
 
-        // Filter options
-        ballInCourtOptions,
-        submittalManagerOptions,
-        projectNameOptions,
-        procoreStatusOptions,
+        // Reachable per-column values for the header dropdowns
+        uniqueValuesByColumn,
+
+        // Derived
+        singleSelectedBallInCourt,
 
         // Filtered and sorted rows
         displayRows,
-
-        // Actions
-        resetFilters,
-        handleColumnSort, // New general column sort handler
-        handleProjectNameSortToggle, // Backward compatibility
 
         // Constants
         ALL_OPTION_VALUE,

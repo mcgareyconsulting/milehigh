@@ -171,9 +171,11 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
-        # job_comp cascade. Linked events get `parent_event_id` so the undo
-        # endpoint can find them and bundle their reverts with the parent's.
-        if self.stage == 'Complete':
+        # job_comp cascade. 'Install Complete' is the install-progress completion
+        # marker (job_comp='X'); 'Complete' is inert toward Install Prog. Linked
+        # events get `parent_event_id` so the undo endpoint can find them and
+        # bundle their reverts with the parent's.
+        if self.stage == 'Install Complete':
             current_job_comp = (job_record.job_comp or '').strip().upper()
             if current_job_comp != 'X':
                 old_jc = job_record.job_comp
@@ -185,12 +187,12 @@ class UpdateStageCommand:
                         'field': 'job_comp',
                         'old_value': old_jc,
                         'new_value': 'X',
-                        'reason': 'stage_set_to_complete',
+                        'reason': 'stage_set_to_install_complete',
                         'parent_event_id': event.id,
                     },
                 )
                 extras['job_comp'] = 'X'
-        elif old_stage == 'Complete' and self.stage != 'Complete':
+        elif old_stage == 'Install Complete' and self.stage != 'Install Complete':
             current_job_comp = (job_record.job_comp or '').strip().upper()
             if current_job_comp == 'X':
                 old_jc = job_record.job_comp
@@ -202,19 +204,25 @@ class UpdateStageCommand:
                         'field': 'job_comp',
                         'old_value': old_jc,
                         'new_value': None,
-                        'reason': 'stage_changed_from_complete',
+                        'reason': 'stage_changed_from_install_complete',
                         'parent_event_id': event.id,
                     },
                 )
                 extras['job_comp'] = None
 
         # Red-date auto-clear: a hard start_install date is meaningless once the
-        # release is complete. Helper is a no-op when no hard date is present.
-        if self.stage == 'Complete':
+        # release is installed/complete. Helper is a no-op when no hard date is
+        # present. Fires for both terminal stages (Install Complete is the new
+        # completion marker; Complete stays for safety).
+        if self.stage in ('Complete', 'Install Complete'):
             if clear_hard_date_cascade(
                 job_record,
                 parent_event_id=event.id,
-                reason='stage_set_to_complete',
+                reason=(
+                    'stage_set_to_install_complete'
+                    if self.stage == 'Install Complete'
+                    else 'stage_set_to_complete'
+                ),
                 source=self.source,
             ):
                 extras['hard_date_cleared'] = True

@@ -32,4 +32,5 @@ from app.brain.job_log import pdf_markup_routes  # noqa: F401  (registers /relea
 from app.brain.drafting_work_load import routes as dwl_routes
 from app.brain.map import routes as map_routes
 from app.brain.board import routes as board_routes
+from app.brain.meetings import routes as meetings_routes
 from app.brain import notification_routes

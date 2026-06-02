@@ -17,9 +17,22 @@ import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } fr
 import { createPortal } from 'react-dom';
 
 const BLANKS = '(Blanks)';
-const POPOVER_WIDTH = 224;        // matches w-56
+const POPOVER_WIDTH = 224;        // matches w-56; also the minimum when autoWidth is on
 const POPOVER_MAX_HEIGHT = 360;   // approximate; just used for vertical clamp
 const VIEWPORT_PAD = 8;
+// Chrome around a value label: checkbox + gap + label padding + list padding + scrollbar slack.
+const AUTOWIDTH_CHROME = 64;
+const AUTOWIDTH_FONT = '12px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+
+// Lazily reused canvas for measuring label widths (only used when autoWidth is on).
+let _measureCanvas = null;
+function measureTextWidth(text) {
+    if (typeof document === 'undefined') return String(text).length * 7;
+    if (!_measureCanvas) _measureCanvas = document.createElement('canvas');
+    const ctx = _measureCanvas.getContext('2d');
+    ctx.font = AUTOWIDTH_FONT;
+    return ctx.measureText(String(text)).width;
+}
 
 export default function ColumnHeaderFilter({
     column,
@@ -31,11 +44,12 @@ export default function ColumnHeaderFilter({
     onSort,
     isActive,
     children,
+    autoWidth = false,
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [draft, setDraft] = useState(selected);
-    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const [coords, setCoords] = useState({ top: 0, left: 0, width: POPOVER_WIDTH });
     const triggerRef = useRef(null);
     const popoverRef = useRef(null);
 
@@ -44,17 +58,32 @@ export default function ColumnHeaderFilter({
         if (open) setDraft(new Set(selected));
     }, [open, selected]);
 
+    // When autoWidth is on, the popover grows to fit the longest value label
+    // (clamped to the viewport in updatePosition); otherwise it stays at the fixed width.
+    const contentWidth = useMemo(() => {
+        if (!autoWidth) return POPOVER_WIDTH;
+        let maxText = 0;
+        for (const v of values) {
+            const w = measureTextWidth(v);
+            if (w > maxText) maxText = w;
+        }
+        if (hasBlanks) maxText = Math.max(maxText, measureTextWidth(BLANKS));
+        return Math.max(POPOVER_WIDTH, Math.ceil(maxText + AUTOWIDTH_CHROME));
+    }, [autoWidth, values, hasBlanks]);
+
     const updatePosition = useCallback(() => {
         const el = triggerRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
         const vw = window.innerWidth;
         const vh = window.innerHeight;
+        // Resolve width, clamped so the popover always fits inside the viewport.
+        const width = Math.min(contentWidth, vw - 2 * VIEWPORT_PAD);
         // Prefer right-aligning to the trigger so the dropdown opens "from" the header,
         // but clamp to viewport on both sides.
-        let left = rect.right - POPOVER_WIDTH;
+        let left = rect.right - width;
         if (left < VIEWPORT_PAD) left = VIEWPORT_PAD;
-        if (left + POPOVER_WIDTH > vw - VIEWPORT_PAD) left = vw - VIEWPORT_PAD - POPOVER_WIDTH;
+        if (left + width > vw - VIEWPORT_PAD) left = vw - VIEWPORT_PAD - width;
         // Prefer below; flip above if it would overflow.
         let top = rect.bottom + 4;
         if (top + POPOVER_MAX_HEIGHT > vh - VIEWPORT_PAD) {
@@ -62,8 +91,8 @@ export default function ColumnHeaderFilter({
             if (above >= VIEWPORT_PAD) top = rect.top - 4 - POPOVER_MAX_HEIGHT;
             else top = Math.max(VIEWPORT_PAD, vh - VIEWPORT_PAD - POPOVER_MAX_HEIGHT);
         }
-        setCoords({ top, left });
-    }, []);
+        setCoords({ top, left, width });
+    }, [contentWidth]);
 
     // Position on open + keep in sync with scroll/resize while open
     useLayoutEffect(() => {
@@ -177,7 +206,7 @@ export default function ColumnHeaderFilter({
             {open && createPortal(
                 <div
                     ref={popoverRef}
-                    style={{ position: 'fixed', top: coords.top, left: coords.left, width: POPOVER_WIDTH }}
+                    style={{ position: 'fixed', top: coords.top, left: coords.left, width: coords.width }}
                     className="z-[1000] bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-500 rounded-md shadow-lg text-left normal-case tracking-normal font-normal text-gray-800 dark:text-slate-100"
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
@@ -246,7 +275,7 @@ export default function ColumnHeaderFilter({
                                             onChange={() => toggleValue(v)}
                                             className="accent-blue-600"
                                         />
-                                        <span className="truncate" title={v}>{v}</span>
+                                        <span className={autoWidth ? 'whitespace-nowrap' : 'truncate'} title={v}>{v}</span>
                                     </label>
                                 ))}
                             </>

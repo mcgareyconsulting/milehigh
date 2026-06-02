@@ -440,15 +440,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const oldJobComp = localJobComp;
         const oldFabOrder = localFabOrder;
         setLocalStage(newStage); // Optimistic update
-        // If setting to Complete, optimistically update job_comp and fab_order
-        if (newStage === 'Complete') {
+        // If setting to Install Complete, optimistically update job_comp and fab_order
+        if (newStage === 'Install Complete') {
             setLocalJobComp('X');
             setJobCompInputValue('X');
             setLocalFabOrder(null);
             setFabOrderInputValue('');
         }
-        // If changing away from Complete, clear job_comp 'X'
-        if (oldStage === 'Complete' && newStage !== 'Complete') {
+        // If changing away from Install Complete, clear job_comp 'X'
+        if (oldStage === 'Install Complete' && newStage !== 'Install Complete') {
             if ((localJobComp || '').trim().toUpperCase() === 'X') {
                 setLocalJobComp('');
                 setJobCompInputValue('');
@@ -557,23 +557,19 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const oldStage = localStage;
         const oldFabOrder = localFabOrder;
         setLocalJobComp(newValue);
-        // If setting to 'X', optimistically update stage and fab_order
-        if (newValue.trim().toUpperCase() === 'X') {
-            setLocalStage('Complete');
+        const trimmed = newValue.trim();
+        // 'X' marks install complete; a percentage means install has started.
+        // Clearing the cell leaves the stage unchanged (backend does the same).
+        if (trimmed.toUpperCase() === 'X') {
+            setLocalStage('Install Complete');
             setLocalFabOrder(null);
             setFabOrderInputValue('');
+        } else if (trimmed !== '' && !Number.isNaN(parseFloat(trimmed.replace('%', '')))) {
+            setLocalStage('Install Start');
         }
-        // If clearing 'X', optimistically show stage reverting (actual stage comes from API)
-        const oldWasX = (oldValue || '').trim().toUpperCase() === 'X';
-        const newIsX = newValue.trim().toUpperCase() === 'X';
-        const clearingX = oldWasX && !newIsX && localStage === 'Complete';
         setUpdatingJobComp(true);
         try {
-            const result = await jobsApi.updateJobComp(row['Job #'], row['Release #'], newValue);
-            // Apply the reverted stage from the backend (looked up from release_events)
-            if (clearingX && result?.stage) {
-                setLocalStage(result.stage);
-            }
+            await jobsApi.updateJobComp(row['Job #'], row['Release #'], newValue);
             if (onUpdate) onUpdate();
         } catch (err) {
             setLocalJobComp(oldValue);

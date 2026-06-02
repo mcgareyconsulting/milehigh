@@ -117,6 +117,28 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # --- Checklist deadline notifications (daily 6:00 AM Mountain Time) ---
+    # Pings the owner of each accepted post-meeting to-do whose due date is near
+    # or overdue (deduped via ChecklistItem.last_notified_at).
+    def checklist_due_scan():
+        from app.brain.meetings.service import notify_due_items
+        with app.app_context():
+            try:
+                notify_due_items()
+            except Exception as e:
+                logger.error("Checklist due scan failed", error=str(e), exc_info=True)
+
+    scheduler.add_job(
+        func=checklist_due_scan,
+        trigger="cron",
+        hour=6,
+        minute=0,
+        timezone="America/Denver",
+        id="checklist_due_scan",
+        name="Checklist Deadline Notifications",
+        replace_existing=True,
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -138,6 +160,12 @@ def init_scheduler(app):
             "name": "FC PDF Pack Retry",
             "schedule": "Daily at 02:00 America/Denver",
             "description": "Retry Procore FC viewer_url for releases missing it (last 7 days)",
+        },
+        {
+            "id": "checklist_due_scan",
+            "name": "Checklist Deadline Notifications",
+            "schedule": "Daily at 06:00 America/Denver",
+            "description": "Notify owners of accepted post-meeting to-dos that are due soon/overdue",
         },
     ]
 
