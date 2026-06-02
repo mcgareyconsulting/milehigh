@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 ];
 
 const ADMIN_ITEMS = [
+    { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
 ];
 

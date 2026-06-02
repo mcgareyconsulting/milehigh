@@ -122,6 +122,7 @@ function AppShellInner({ isAuthenticated }) {
             {navBtn('/drafting-work-load', 'Drafting WL')}
             {navBtn('/events', 'Events')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
+            {isAdmin && navBtn('/meetings', 'Meetings')}
             {isAdmin && navBtn('/board', 'Bug Tracker')}
           </div>
 
