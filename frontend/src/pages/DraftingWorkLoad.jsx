@@ -141,6 +141,20 @@ function DraftingWorkLoad() {
     // Backend returns tab-specific data (open = Open status, draft = not Open/Closed), so use submittals as rows
     const rows = submittals;
 
+    // Display labels for the primary "Project" filter only: maps project_name (the underlying
+    // filter value) to "<project #> — <project name>". The committed/matched value stays the
+    // project name, so the column-specific PROJ. # / NAME dropdowns are unaffected.
+    const projectFilterLabels = useMemo(() => {
+        const map = {};
+        for (const row of rows) {
+            const name = (row.project_name ?? row['NAME'] ?? '').toString().trim();
+            if (!name || map[name]) continue;
+            const number = (row.project_number ?? row['PROJ. #'] ?? '').toString().trim();
+            map[name] = number ? `${number} — ${name}` : name;
+        }
+        return map;
+    }, [rows]);
+
     // Use the filters hook
     const {
         search,
@@ -196,7 +210,7 @@ function DraftingWorkLoad() {
     // SAME columnFilters state as the spreadsheet-style column-header filters, so the two surfaces
     // stay mirrored and stack additively with each other and with other columns' filters.
     // Single-select by default; Ctrl/Cmd+click adds more.
-    const renderToolbarFilter = (column, label) => {
+    const renderToolbarFilter = (column, label, labels = null) => {
         const colInfo = uniqueValuesByColumn[column];
         const colSelected = columnFilters[column] ?? [];
         return (
@@ -212,6 +226,7 @@ function DraftingWorkLoad() {
                 autoWidth
                 singleSelect
                 immediate
+                labels={labels}
             >
                 <span
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-semibold whitespace-nowrap ${colSelected.length > 0
@@ -288,7 +303,7 @@ function DraftingWorkLoad() {
                                         Open/Draft is the rightmost element of this centered group. */}
                                     <div className="flex items-center gap-1.5 flex-wrap justify-center">
                                         <span className="text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Filter:</span>
-                                        {renderToolbarFilter('NAME', 'Project')}
+                                        {renderToolbarFilter('NAME', 'Project', projectFilterLabels)}
                                         {renderToolbarFilter('BIC', 'BIC')}
                                         {renderToolbarFilter('SUB MANAGER', 'Sub Mgr')}
                                         {/* Open / Draft segmented — rightmost element of the centered filters */}
