@@ -828,7 +828,7 @@ function JobLog() {
                                             Reset Filters
                                         </button>
                                     </div>
-                                    <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                    <div className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-slate-200">
                                         <span>
                                             Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
                                         </span>
