@@ -3,7 +3,7 @@
  * schema_version: 1
  * purpose: Self-contained, table-free Start Install control for the touch card views (mobile big card,
  *   tablet expandable row). Renders the colored ASAP/hard-date/formula trigger and owns a
- *   StartInstallDateModal so users can set a hard date, flag ASAP (3-per-PM cap enforced), or clear —
+ *   StartInstallDateModal so users can set a hard date, flag ASAP (2-per-PM cap enforced), or clear —
  *   the same actions available from the desktop table cell, without embedding JobsTableRow.
  * exports:
  *   default StartInstallEditor: Props — row, onUpdate, formatDate, variant ('tile' | 'pill'), className.
@@ -34,7 +34,10 @@ export default function StartInstallEditor({
     const value = row['Start install'];
 
     const isAsap = row['start_install_asap'] === true;
-    const isHardDate = !isAsap && row['start_install_formulaTF'] === false && !!value;
+    // A no-color date (auto-recorded when an ASAP release reached Ship Complete+) shows
+    // the date plainly — neither the red ASAP nor the green/yellow hard-date treatment.
+    const isNoColor = row['start_install_no_color'] === true;
+    const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && !!value;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const installDay = String(value ?? '').split('T')[0];

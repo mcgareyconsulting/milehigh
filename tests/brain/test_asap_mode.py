@@ -117,93 +117,91 @@ class TestSetClearAsapRoute:
 
 
 # ---------------------------------------------------------------------------
-# Route: ASAP soft cap of 3 per PM
+# Route: ASAP soft cap of 2 per PM
 # ---------------------------------------------------------------------------
 
 class TestAsapPmLimit:
-    def _seed_three_asaps(self, pm):
+    def _seed_two_asaps(self, pm):
         _make_release(1, "A", pm=pm, start_install_asap=True)
         _make_release(2, "A", pm=pm, start_install_asap=True)
-        _make_release(3, "A", pm=pm, start_install_asap=True)
 
-    def test_fourth_asap_for_same_pm_is_blocked(self, app, admin_client):
+    def test_third_asap_for_same_pm_is_blocked(self, app, admin_client):
         with app.app_context():
-            self._seed_three_asaps("Jane")
-            _make_release(4, "A", pm="Jane")  # currently not ASAP
+            self._seed_two_asaps("Jane")
+            _make_release(3, "A", pm="Jane")  # currently not ASAP
             db.session.commit()
 
             resp = admin_client.patch(
-                "/brain/update-start-install/4/A",
+                "/brain/update-start-install/3/A",
                 json={"asap": True},
             )
             assert resp.status_code == 409
             body = resp.get_json()
             assert body["error"] == "asap_limit"
             assert body["pm"] == "Jane"
-            assert body["count"] == 3
-            assert body["limit"] == 3
+            assert body["count"] == 2
+            assert body["limit"] == 2
 
             # Nothing written: flag stays False, no set_asap event emitted
             db.session.expire_all()
-            r4 = Releases.query.filter_by(job=4, release="A").first()
-            assert r4.start_install_asap is False
+            r3 = Releases.query.filter_by(job=3, release="A").first()
+            assert r3.start_install_asap is False
             assert ReleaseEvents.query.filter_by(action="set_asap").count() == 0
 
-    def test_fourth_asap_succeeds_with_force(self, app, admin_client):
+    def test_third_asap_succeeds_with_force(self, app, admin_client):
         with app.app_context():
-            self._seed_three_asaps("Jane")
-            _make_release(4, "A", pm="Jane")
+            self._seed_two_asaps("Jane")
+            _make_release(3, "A", pm="Jane")
             db.session.commit()
 
             resp = admin_client.patch(
-                "/brain/update-start-install/4/A",
+                "/brain/update-start-install/3/A",
                 json={"asap": True, "asap_force": True},
             )
             assert resp.status_code == 200
 
             db.session.expire_all()
-            r4 = Releases.query.filter_by(job=4, release="A").first()
-            assert r4.start_install_asap is True
+            r3 = Releases.query.filter_by(job=3, release="A").first()
+            assert r3.start_install_asap is True
 
-    def test_different_pm_at_three_is_unaffected(self, app, admin_client):
+    def test_different_pm_at_two_is_unaffected(self, app, admin_client):
         with app.app_context():
-            self._seed_three_asaps("Jane")
-            _make_release(4, "A", pm="Bob")
+            self._seed_two_asaps("Jane")
+            _make_release(3, "A", pm="Bob")
             db.session.commit()
 
             resp = admin_client.patch(
-                "/brain/update-start-install/4/A",
+                "/brain/update-start-install/3/A",
                 json={"asap": True},
             )
             assert resp.status_code == 200
 
             db.session.expire_all()
-            r4 = Releases.query.filter_by(job=4, release="A").first()
-            assert r4.start_install_asap is True
+            r3 = Releases.query.filter_by(job=3, release="A").first()
+            assert r3.start_install_asap is True
 
     def test_blank_pm_is_not_capped(self, app, admin_client):
         with app.app_context():
             _make_release(1, "A", pm=None, start_install_asap=True)
             _make_release(2, "A", pm=None, start_install_asap=True)
-            _make_release(3, "A", pm=None, start_install_asap=True)
-            _make_release(4, "A", pm=None)
+            _make_release(3, "A", pm=None)
             db.session.commit()
 
             resp = admin_client.patch(
-                "/brain/update-start-install/4/A",
+                "/brain/update-start-install/3/A",
                 json={"asap": True},
             )
             assert resp.status_code == 200
 
             db.session.expire_all()
-            r4 = Releases.query.filter_by(job=4, release="A").first()
-            assert r4.start_install_asap is True
+            r3 = Releases.query.filter_by(job=3, release="A").first()
+            assert r3.start_install_asap is True
 
     def test_resaving_existing_asap_is_not_blocked(self, app, admin_client):
         """A release already ASAP can be re-saved even when the PM is at the cap —
         the count guard only fires on the False→True transition."""
         with app.app_context():
-            self._seed_three_asaps("Jane")  # jobs 1-3 already ASAP for Jane
+            self._seed_two_asaps("Jane")  # jobs 1-2 already ASAP for Jane
             db.session.commit()
 
             resp = admin_client.patch(
@@ -306,6 +304,101 @@ class TestAsapAutoAdvance:
             ev = ReleaseEvents.query.filter_by(action="update_stage").one()
             assert ev.payload["to"] == "Paint Complete"
             assert ev.payload.get("asap_intercepted") is None
+
+
+# ---------------------------------------------------------------------------
+# UpdateStageCommand: ASAP drop on Ship Complete or later
+# ---------------------------------------------------------------------------
+
+class TestAsapDropOnCompletion:
+    def test_ship_complete_drops_asap_and_records_no_color_date(self, app):
+        from datetime import datetime
+
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Ship Planning",
+                fab_order=2,
+                start_install_asap=True,
+                start_install_formulaTF=True,
+                trello_card_id="card-123",
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Ship Complete").execute()
+
+            db.session.refresh(r)
+            assert r.stage == "Ship Complete"
+            # ASAP dropped, date stamped as a neutral (no-color) hard date.
+            assert r.start_install_asap is False
+            assert r.start_install_no_color is True
+            assert r.start_install_formulaTF is False
+            assert r.start_install == datetime.utcnow().date()
+
+            # A child event records the drop, linked to the stage event.
+            stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
+            drop = [
+                e for e in ReleaseEvents.query.all()
+                if isinstance(e.payload, dict)
+                and e.payload.get("reason") == "asap_dropped_on_ship_complete"
+            ]
+            assert len(drop) == 1
+            assert drop[0].payload["parent_event_id"] == stage_event.id
+
+    def test_non_asap_reaching_ship_complete_is_untouched(self, app):
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Ship Planning",
+                fab_order=2,
+                start_install_asap=False,
+                start_install_formulaTF=True,
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Ship Complete").execute()
+
+            db.session.refresh(r)
+            assert r.start_install_no_color is False
+            assert r.start_install is None
+            assert not any(
+                isinstance(e.payload, dict)
+                and e.payload.get("reason") == "asap_dropped_on_ship_complete"
+                for e in ReleaseEvents.query.all()
+            )
+
+    def test_recorded_date_survives_complete_marking(self, app):
+        """The no-color date persists when the release later reaches Complete —
+        clear_hard_date_cascade no-ops on no_color rows."""
+        from datetime import datetime
+
+        with app.app_context():
+            r = _make_release(
+                1, "A",
+                stage="Ship Complete",
+                fab_order=2,
+                start_install_asap=False,
+                start_install=datetime.utcnow().date(),
+                start_install_formulaTF=False,
+                start_install_no_color=True,
+            )
+            db.session.commit()
+
+            from app.brain.job_log.features.stage.command import UpdateStageCommand
+            patches = _stage_command_patches()
+            with patches[0], patches[1], patches[2]:
+                UpdateStageCommand(job_id=1, release="A", stage="Complete").execute()
+
+            db.session.refresh(r)
+            assert r.start_install == datetime.utcnow().date()
+            assert r.start_install_formulaTF is False
+            assert r.start_install_no_color is True
 
 
 # ---------------------------------------------------------------------------

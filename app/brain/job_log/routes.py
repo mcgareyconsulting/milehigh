@@ -466,6 +466,7 @@ def get_jobs():
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'start_install_asap': serialize_value(job.start_install_asap),
+                    'start_install_no_color': serialize_value(job.start_install_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
@@ -754,6 +755,7 @@ def get_all_jobs():
                     'start_install_formula': serialize_value(job.start_install_formula),
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'start_install_asap': serialize_value(job.start_install_asap),
+                    'start_install_no_color': serialize_value(job.start_install_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'Job Comp': serialize_value(job.job_comp),
@@ -1437,19 +1439,19 @@ def update_start_install(job, release):
             new_asap = bool(asap)
             action = 'set_asap' if new_asap else 'clear_asap'
 
-            # Soft cap: at most 3 ASAPs per PM. Setting a 4th requires asap_force=true.
+            # Soft cap: at most 2 ASAPs per PM. Setting a 3rd requires asap_force=true.
             force = bool(request.json.get('asap_force', False))
             if new_asap and not old_asap and job_record.pm and not force:
                 asap_count = Releases.query.filter(
                     Releases.pm == job_record.pm,
                     Releases.start_install_asap.is_(True),
                 ).count()
-                if asap_count >= 3:
+                if asap_count >= 2:
                     return jsonify({
                         'error': 'asap_limit',
                         'pm': job_record.pm,
                         'count': asap_count,
-                        'limit': 3,
+                        'limit': 2,
                     }), 409
 
             event = JobEventService.create(
@@ -1463,6 +1465,9 @@ def update_start_install(job, release):
                 return jsonify({'error': 'Event already exists'}), 400
 
             job_record.start_install_asap = new_asap
+            # Re-flagging ASAP clears any prior no-color completion-recorded date marker.
+            if new_asap:
+                job_record.start_install_no_color = False
             job_record.last_updated_at = datetime.utcnow()
             job_record.source_of_update = 'Brain'
 
