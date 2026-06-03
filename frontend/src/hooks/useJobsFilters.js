@@ -18,6 +18,9 @@
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 
+// Stages that make up the Paint department (the `paint` quick-filter set).
+const PAINT_STAGES = ['Welded QC', 'Paint Start'];
+
 const _FAB_MODIFIER = {
     'Released':         1.0,
     'Cut Start':        0.9,
@@ -419,12 +422,15 @@ export function useJobsFilters(jobs = []) {
     }, [NUMERIC_COLUMNS, DATE_COLUMNS]);
 
     /**
+     * Base-filtered jobs (project name, job #, release #, etc.) before any subset
+     * narrowing. Shared by displayJobs and the ASAP-propagation memo.
+     */
+    const baseFiltered = useMemo(() => jobs.filter(matchesSelectedFilter), [jobs, matchesSelectedFilter]);
+
+    /**
      * Filtered and sorted jobs for display based on selected subset
      */
     const displayJobs = useMemo(() => {
-        // First apply base filters (project name, job #, release #, etc.)
-        const baseFiltered = jobs.filter(matchesSelectedFilter);
-
         let result;
         if (!selectedSubset) {
             result = sortJobs([...baseFiltered]);
@@ -435,11 +441,10 @@ export function useJobsFilters(jobs = []) {
             const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByStageThenLastUpdated(rtsOnly);
         } else if (selectedSubset === 'paint') {
-            const paintStages = ['Welded QC', 'Paint Start'];
-            const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
+            const paintOnly = baseFiltered.filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()));
             result = sortByStageThenFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
-            const paintStages = ['Paint Complete', 'Welded QC', 'Paint Start'];
+            const paintStages = ['Paint Complete', ...PAINT_STAGES];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
@@ -457,7 +462,33 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
+    }, [baseFiltered, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
+
+    /**
+     * Out-of-department ASAP releases to surface at the bottom of the Paint and
+     * Ready-to-Ship filters, so a downstream foreman can see hot releases still moving
+     * through an earlier department. Kept separate from displayJobs (the canonical
+     * in-filter list used for counts, CSV, and PDF) so these reference rows never
+     * inflate those. Tagged with _asapPropagated/_asapOrigin for the renderers; their
+     * stages never overlap the in-filter stages, so no de-duplication is needed.
+     */
+    const propagatedAsapJobs = useMemo(() => {
+        if (selectedSubset !== 'paint' && selectedSubset !== 'ready_to_ship') return [];
+
+        // Fab ASAPs surface in both Paint and Ready-to-Ship.
+        const fab = baseFiltered
+            .filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION' && job['start_install_asap'] === true)
+            .map(job => ({ ...job, _asapPropagated: true, _asapOrigin: 'Fab' }));
+
+        // Paint ASAPs additionally surface in Ready-to-Ship.
+        const paint = selectedSubset === 'ready_to_ship'
+            ? baseFiltered
+                .filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()) && job['start_install_asap'] === true)
+                .map(job => ({ ...job, _asapPropagated: true, _asapOrigin: 'Paint' }))
+            : [];
+
+        return sortByFabOrder([...fab, ...paint]);
+    }, [baseFiltered, selectedSubset, sortByFabOrder]);
 
     /**
      * Secondary search: jobs matching the search with all project/stage/subset
@@ -698,6 +729,7 @@ export function useJobsFilters(jobs = []) {
 
         // Filtered and sorted jobs
         displayJobs,
+        propagatedAsapJobs,
         secondarySearchResults,
 
         // Aggregate KPIs (all jobs, not filtered)

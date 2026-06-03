@@ -17,6 +17,7 @@ import React from 'react';
 import { StageIconRow } from './StageIconRow';
 import StartInstallEditor from './StartInstallEditor';
 import { JobsTableRow } from './JobsTableRow';
+import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 
@@ -134,7 +135,7 @@ export default function JobLogCard({
                 isHighlighted
                     ? 'border-amber-400 dark:border-amber-500 shadow-lg ring-2 ring-amber-300/50'
                     : 'border-gray-200 dark:border-slate-600 hover:border-accent-400 dark:hover:border-accent-500 hover:shadow-md'
-            } bg-white dark:bg-slate-800 ${complete ? 'opacity-90' : ''}`}
+            } bg-white dark:bg-slate-800 ${complete ? 'opacity-90' : ''} ${job._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''}`}
             title="Tap for full details"
         >
             {/* Header strip */}

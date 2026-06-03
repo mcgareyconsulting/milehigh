@@ -13,6 +13,7 @@
 import React, { useState } from 'react';
 import JobLogCard from './JobLogCard';
 import { JobDetailsModal } from './JobDetailsModal';
+import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from './AsapPropagationTag';
 
 export default function JobLogCardGrid({
     jobs,
@@ -51,6 +52,14 @@ export default function JobLogCardGrid({
             ) : (
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 3xl:grid-cols-4">
                     {(jobs.length === 0 ? secondaryResults : jobs).map((row) => (
+                        row._asapDivider ? (
+                            <div
+                                key={row.id}
+                                className={`${ASAP_DIVIDER_BOX_CLASS} border rounded-lg col-span-full`}
+                            >
+                                <AsapDividerLabel count={row._asapCount} />
+                            </div>
+                        ) : (
                         <JobLogCard
                             key={row.id}
                             job={row}
@@ -63,6 +72,7 @@ export default function JobLogCardGrid({
                             isHighlighted={isHighlightedRow(row)}
                             iconSize={iconSize}
                         />
+                        )
                     ))}
                 </div>
             )}

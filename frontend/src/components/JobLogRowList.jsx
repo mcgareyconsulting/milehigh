@@ -9,6 +9,7 @@
  */
 import React, { useRef } from 'react';
 import JobLogRow from './JobLogRow';
+import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from './AsapPropagationTag';
 
 export default function JobLogRowList({
     jobs,
@@ -55,6 +56,14 @@ export default function JobLogRowList({
             ) : (
                 <div>
                     {rowsToRender.map((row, index) => (
+                        row._asapDivider ? (
+                            <div
+                                key={row.id}
+                                className={`${ASAP_DIVIDER_BOX_CLASS} border-y`}
+                            >
+                                <AsapDividerLabel count={row._asapCount} />
+                            </div>
+                        ) : (
                         <JobLogRow
                             key={row.id}
                             job={row}
@@ -74,6 +83,7 @@ export default function JobLogRowList({
                             tableScrollRef={scrollRef}
                             duplicateFabOrders={duplicateFabOrders}
                         />
+                        )
                     ))}
                 </div>
             )}
