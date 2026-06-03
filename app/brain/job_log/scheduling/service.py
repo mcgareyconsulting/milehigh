@@ -156,6 +156,19 @@ def recalculate_all_jobs_scheduling(
     if stage_group:
         query = query.filter(Releases.stage_group == stage_group)
     all_jobs = query.all()
+
+    # Cascade tiebreaker: rows with equal fab_order (notably the many DEFAULT_FAB_ORDER
+    # 80.555 placeholders) must cascade chronologically by start_install. The calculator
+    # already breaks fab_order ties by list position, so we encode the desired order here.
+    # fab_order remains the primary key, so distinct-fab_order rows are unaffected.
+    def _cascade_sort_key(j):
+        fab_order = _safe_float(j.fab_order)
+        return (
+            fab_order if fab_order is not None else float('inf'),
+            j.start_install or date.max,
+        )
+
+    all_jobs.sort(key=_cascade_sort_key)
     total_jobs = len(all_jobs)
     
     if total_jobs == 0:

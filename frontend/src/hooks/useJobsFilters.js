@@ -244,7 +244,15 @@ export function useJobsFilters(jobs = []) {
             const numB = Number(fabOrderB);
             if (!isNaN(numA) && !isNaN(numB)) {
                 if (numA !== numB) return numA - numB;
-                // Tiebreak by stage priority within the same fab_order
+                // Within the same fab_order (notably the many 80.555 placeholders),
+                // cascade chronologically by start_install date ascending so the
+                // displayed dates progress in order. Blanks sink to the end.
+                const dateA = a['Start install'] ? new Date(a['Start install']) : null;
+                const dateB = b['Start install'] ? new Date(b['Start install']) : null;
+                if (dateA && dateB && dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+                if (dateA && !dateB) return -1;
+                if (!dateA && dateB) return 1;
+                // Final tiebreak by stage priority within the same fab_order
                 const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
                 const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
                 return prioA - prioB;
@@ -304,33 +312,6 @@ export function useJobsFilters(jobs = []) {
             if (!validA) return 1;
             if (!validB) return -1;
             return dateA.getTime() - dateB.getTime();
-        });
-    }, []);
-
-    /**
-     * Sort jobs by fab order, then start install date as tiebreaker (for Paint+Fab view)
-     */
-    const sortByFabOrderThenStartInstall = useCallback((jobs) => {
-        return [...jobs].sort((a, b) => {
-            const fabOrderA = a['Fab Order'];
-            const fabOrderB = b['Fab Order'];
-            if (fabOrderA == null && fabOrderB == null) return 0;
-            if (fabOrderA == null) return 1;
-            if (fabOrderB == null) return -1;
-            const numA = Number(fabOrderA);
-            const numB = Number(fabOrderB);
-            if (!isNaN(numA) && !isNaN(numB)) {
-                if (numA !== numB) return numA - numB;
-                const dateA = a['Start install'] ? new Date(a['Start install']) : null;
-                const dateB = b['Start install'] ? new Date(b['Start install']) : null;
-                if (dateA && dateB && dateA.getTime() !== dateB.getTime()) return dateA - dateB;
-                if (dateA && !dateB) return -1;
-                if (!dateA && dateB) return 1;
-                const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
-                const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
-                return prioA - prioB;
-            }
-            return String(fabOrderA).localeCompare(String(fabOrderB));
         });
     }, []);
 
@@ -443,7 +424,7 @@ export function useJobsFilters(jobs = []) {
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
-            const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
+            const fabSorted = sortByFabOrder(fabOnly);
             result = [...paintSorted, ...fabSorted];
         } else if (selectedSubset === 'fab') {
             result = getFabSubset(baseFiltered);
@@ -457,7 +438,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
+    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
 
     /**
      * Secondary search: jobs matching the search with all project/stage/subset

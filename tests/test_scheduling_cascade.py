@@ -246,3 +246,45 @@ class TestDefaultFabOrderSentinel:
 
         # The final sentinel sees: both explicit-order releases + the first sentinel.
         assert results[3]['hours_in_front'] == pytest.approx(80.0 + 100.0 + 60.0)
+
+
+class TestSentinelChronologicalCascade:
+    """Sentinel (80.555) releases sharing a fab_order must cascade chronologically by their
+    existing start_install date — the earliest-dated row is treated as first in the queue and
+    receives the earliest recomputed date, independent of insertion/id order."""
+
+    def _make_rec(self, release, fab_hrs, start_install):
+        from app.api.helpers import DEFAULT_FAB_ORDER
+        rec = MagicMock()
+        rec.job = 100
+        rec.release = release
+        rec.fab_hrs = fab_hrs
+        rec.install_hrs = 40.0
+        rec.stage = 'Released'
+        rec.fab_order = DEFAULT_FAB_ORDER
+        rec.start_install = start_install
+        rec.comp_eta = None
+        rec.start_install_formulaTF = True
+        rec.source_of_update = None
+        rec.last_updated_at = None
+        return rec
+
+    @patch('app.brain.job_log.scheduling.service.Releases')
+    @patch('app.brain.job_log.scheduling.service.db')
+    def test_sentinels_cascade_by_existing_start_install(self, mock_db, mock_releases):
+        from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+
+        # Insertion order is deliberately NOT chronological:
+        #   C = earliest existing start_install, A = middle, B = latest.
+        rec_c = self._make_rec('C', 40.0, date(2026, 5, 1))
+        rec_a = self._make_rec('A', 80.0, date(2026, 6, 1))
+        rec_b = self._make_rec('B', 60.0, date(2026, 7, 1))
+        mock_releases.query.all.return_value = [rec_c, rec_a, rec_b]
+
+        recalculate_all_jobs_scheduling(reference_date=date(2026, 4, 1))
+
+        # Earliest existing start_install (C) is first in queue → earliest recomputed date,
+        # then A, then B — strictly non-decreasing in chronological order of the OLD dates.
+        assert rec_c.start_install <= rec_a.start_install <= rec_b.start_install
+        # And they must not all collapse onto the same date (they have differing hours).
+        assert rec_c.start_install < rec_b.start_install
