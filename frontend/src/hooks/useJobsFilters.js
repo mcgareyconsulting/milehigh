@@ -17,21 +17,7 @@
  * updated_by_agent: 2026-04-28T00:00:00Z
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
-
-const _FAB_MODIFIER = {
-    'Released':         1.0,
-    'Cut Start':        0.9,
-    'Fitup Complete':   0.5,
-    'Welded QC':        0.0,
-    'Paint Start':      0.0,
-    'Paint Complete':   0.0,
-    'Store at MHMW':    0.0,
-    'Ship Planning':    0.0,
-    'Ship Complete':    0.0,
-    'Install Start':    0.0,
-    'Install Complete': 0.0,
-    'Complete':         0.0,
-};
+import { computeTotalFabHrs } from '../utils/fabHours';
 
 // Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
 // in app/api/helpers.py — keep in sync. Drives the totalInstallHrs KPI; Job Comp
@@ -57,10 +43,6 @@ const _INSTALL_MODIFIER = {
     'Install Complete': 0.0,
     'Complete':         0.0,
 };
-
-function _getFabModifier(stage) {
-    return stage in _FAB_MODIFIER ? _FAB_MODIFIER[stage] : 1.0;
-}
 
 function _getInstallModifier(stage) {
     // Unknown stages default to 0 (excluded), mirroring the backend.
@@ -614,9 +596,7 @@ export function useJobsFilters(jobs = []) {
         });
     }, []);
 
-    const totalFabHrs = useMemo(() =>
-        jobs.reduce((sum, job) => sum + (job['Fab Hrs'] || 0) * _getFabModifier(job['Stage'] || ''), 0),
-    [jobs]);
+    const totalFabHrs = useMemo(() => computeTotalFabHrs(jobs), [jobs]);
 
     // Stage-driven install hour total. Each stage carries an install %
     // (Install Start = 50%, Install Complete = 0%, etc.) per the matrix in

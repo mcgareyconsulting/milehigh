@@ -94,6 +94,15 @@ function DraftingWorkLoad() {
             .catch((err) => console.error('Failed to fetch submittal statuses:', err));
     }, []);
 
+    // Global Total Fab HRS (same figure shown on the Job Log header), fetched
+    // once from a lightweight aggregation endpoint. Independent of DWL filters.
+    const [totalFabHrs, setTotalFabHrs] = useState(null);
+    useEffect(() => {
+        draftingWorkLoadApi.fetchFabHoursTotal()
+            .then(setTotalFabHrs)
+            .catch((err) => console.error('Failed to fetch total fab hours:', err));
+    }, []);
+
     // Mentionable users for @mention autocomplete in the notes field
     const [mentionableUsers, setMentionableUsers] = useState([]);
     useEffect(() => {
@@ -368,9 +377,13 @@ function DraftingWorkLoad() {
                                             Reset Filters
                                         </button>
                                     </div>
-                                    <div className="flex items-center gap-3 text-xs font-semibold text-gray-700 dark:text-slate-200">
+                                    <div className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-slate-200">
                                         <span>
                                             Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayRows.length}</span> records
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span>
+                                            Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{Number.isFinite(totalFabHrs) ? totalFabHrs.toFixed(2) : '—'}</span>
                                         </span>
                                         <span className="text-gray-300 dark:text-slate-500">|</span>
                                         <span className="text-gray-500 dark:text-slate-400 font-normal">
