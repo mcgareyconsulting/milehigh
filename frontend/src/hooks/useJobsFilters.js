@@ -17,24 +17,10 @@
  * updated_by_agent: 2026-04-28T00:00:00Z
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { computeTotalFabHrs } from '../utils/fabHours';
 
 // Stages that make up the Paint department (the `paint` quick-filter set).
 const PAINT_STAGES = ['Welded QC', 'Paint Start'];
-
-const _FAB_MODIFIER = {
-    'Released':         1.0,
-    'Cut Start':        0.9,
-    'Fitup Complete':   0.5,
-    'Welded QC':        0.0,
-    'Paint Start':      0.0,
-    'Paint Complete':   0.0,
-    'Store at MHMW':    0.0,
-    'Ship Planning':    0.0,
-    'Ship Complete':    0.0,
-    'Install Start':    0.0,
-    'Install Complete': 0.0,
-    'Complete':         0.0,
-};
 
 // Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
 // in app/api/helpers.py — keep in sync. Drives the totalInstallHrs KPI; Job Comp
@@ -60,10 +46,6 @@ const _INSTALL_MODIFIER = {
     'Install Complete': 0.0,
     'Complete':         0.0,
 };
-
-function _getFabModifier(stage) {
-    return stage in _FAB_MODIFIER ? _FAB_MODIFIER[stage] : 1.0;
-}
 
 function _getInstallModifier(stage) {
     // Unknown stages default to 0 (excluded), mirroring the backend.
@@ -247,7 +229,15 @@ export function useJobsFilters(jobs = []) {
             const numB = Number(fabOrderB);
             if (!isNaN(numA) && !isNaN(numB)) {
                 if (numA !== numB) return numA - numB;
-                // Tiebreak by stage priority within the same fab_order
+                // Within the same fab_order (notably the many 80.555 placeholders),
+                // cascade chronologically by start_install date ascending so the
+                // displayed dates progress in order. Blanks sink to the end.
+                const dateA = a['Start install'] ? new Date(a['Start install']) : null;
+                const dateB = b['Start install'] ? new Date(b['Start install']) : null;
+                if (dateA && dateB && dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+                if (dateA && !dateB) return -1;
+                if (!dateA && dateB) return 1;
+                // Final tiebreak by stage priority within the same fab_order
                 const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
                 const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
                 return prioA - prioB;
@@ -307,33 +297,6 @@ export function useJobsFilters(jobs = []) {
             if (!validA) return 1;
             if (!validB) return -1;
             return dateA.getTime() - dateB.getTime();
-        });
-    }, []);
-
-    /**
-     * Sort jobs by fab order, then start install date as tiebreaker (for Paint+Fab view)
-     */
-    const sortByFabOrderThenStartInstall = useCallback((jobs) => {
-        return [...jobs].sort((a, b) => {
-            const fabOrderA = a['Fab Order'];
-            const fabOrderB = b['Fab Order'];
-            if (fabOrderA == null && fabOrderB == null) return 0;
-            if (fabOrderA == null) return 1;
-            if (fabOrderB == null) return -1;
-            const numA = Number(fabOrderA);
-            const numB = Number(fabOrderB);
-            if (!isNaN(numA) && !isNaN(numB)) {
-                if (numA !== numB) return numA - numB;
-                const dateA = a['Start install'] ? new Date(a['Start install']) : null;
-                const dateB = b['Start install'] ? new Date(b['Start install']) : null;
-                if (dateA && dateB && dateA.getTime() !== dateB.getTime()) return dateA - dateB;
-                if (dateA && !dateB) return -1;
-                if (!dateA && dateB) return 1;
-                const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
-                const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
-                return prioA - prioB;
-            }
-            return String(fabOrderA).localeCompare(String(fabOrderB));
         });
     }, []);
 
@@ -448,7 +411,7 @@ export function useJobsFilters(jobs = []) {
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
-            const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
+            const fabSorted = sortByFabOrder(fabOnly);
             result = [...paintSorted, ...fabSorted];
         } else if (selectedSubset === 'fab') {
             result = getFabSubset(baseFiltered);
@@ -462,7 +425,7 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [baseFiltered, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
+    }, [baseFiltered, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
 
     /**
      * Out-of-department ASAP releases to surface at the bottom of the Paint and
@@ -664,9 +627,7 @@ export function useJobsFilters(jobs = []) {
         });
     }, []);
 
-    const totalFabHrs = useMemo(() =>
-        jobs.reduce((sum, job) => sum + (job['Fab Hrs'] || 0) * _getFabModifier(job['Stage'] || ''), 0),
-    [jobs]);
+    const totalFabHrs = useMemo(() => computeTotalFabHrs(jobs), [jobs]);
 
     // Stage-driven install hour total. Each stage carries an install %
     // (Install Start = 50%, Install Complete = 0%, etc.) per the matrix in

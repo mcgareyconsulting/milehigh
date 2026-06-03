@@ -51,6 +51,7 @@ export default function ColumnHeaderFilter({
     autoWidth = false,
     sortLabels,
     singleSelect = false,
+    immediate = false,
 }) {
     const ascLabel = sortLabels?.asc ?? 'Sort A→Z';
     const descLabel = sortLabels?.desc ?? 'Sort Z→A';
@@ -151,27 +152,30 @@ export default function ColumnHeaderFilter({
         && filteredValues.every((v) => draft.has(v))
         && (!showBlanks || draft.has(BLANKS));
 
+    // In immediate mode there is no Apply gate: every change is committed to onChange as it
+    // happens and the popover stays open. Otherwise edits stay in draft until Apply.
+    const commit = (next) => {
+        setDraft(next);
+        if (immediate) onChange(next);
+    };
+
     const toggleValue = (v) => {
-        setDraft((prev) => {
-            const next = new Set(prev);
-            if (next.has(v)) next.delete(v);
-            else next.add(v);
-            return next;
-        });
+        const next = new Set(draft);
+        if (next.has(v)) next.delete(v);
+        else next.add(v);
+        commit(next);
     };
 
     const toggleAllVisible = () => {
-        setDraft((prev) => {
-            const next = new Set(prev);
-            if (allChecked) {
-                filteredValues.forEach((v) => next.delete(v));
-                if (showBlanks) next.delete(BLANKS);
-            } else {
-                filteredValues.forEach((v) => next.add(v));
-                if (showBlanks) next.add(BLANKS);
-            }
-            return next;
-        });
+        const next = new Set(draft);
+        if (allChecked) {
+            filteredValues.forEach((v) => next.delete(v));
+            if (showBlanks) next.delete(BLANKS);
+        } else {
+            filteredValues.forEach((v) => next.add(v));
+            if (showBlanks) next.add(BLANKS);
+        }
+        commit(next);
     };
 
     const apply = () => {
@@ -181,10 +185,10 @@ export default function ColumnHeaderFilter({
     };
 
     // Single-select list: a plain click stages just this value (replacing the prior pick);
-    // Ctrl/Cmd+click adds/removes it (multi-select). Committed on Apply.
+    // Ctrl/Cmd+click adds/removes it (multi-select). Committed on Apply (or live in immediate mode).
     const handleSingleClick = (v, e) => {
         if (e.ctrlKey || e.metaKey) toggleValue(v);
-        else setDraft(new Set([v]));
+        else commit(new Set([v]));
     };
 
     const clear = () => {
@@ -338,22 +342,24 @@ export default function ColumnHeaderFilter({
                         </div>
                     )}
 
-                    <div className="flex border-t border-gray-200 dark:border-slate-600">
-                        <button
-                            type="button"
-                            onClick={clear}
-                            className="flex-1 px-2 py-1.5 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-bl-md"
-                        >
-                            Clear
-                        </button>
-                        <button
-                            type="button"
-                            onClick={apply}
-                            className="flex-1 px-2 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 border-l border-gray-200 dark:border-slate-600 rounded-br-md"
-                        >
-                            Apply
-                        </button>
-                    </div>
+                    {!immediate && (
+                        <div className="flex border-t border-gray-200 dark:border-slate-600">
+                            <button
+                                type="button"
+                                onClick={clear}
+                                className="flex-1 px-2 py-1.5 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-bl-md"
+                            >
+                                Clear
+                            </button>
+                            <button
+                                type="button"
+                                onClick={apply}
+                                className="flex-1 px-2 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 border-l border-gray-200 dark:border-slate-600 rounded-br-md"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                    )}
                 </div>,
                 document.body
             )}

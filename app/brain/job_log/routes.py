@@ -367,6 +367,55 @@ def _procore_submittal_refs_for_releases(releases):
 # Job Data Routes
 # ==============================================================================
 
+@brain_bp.route("/fab-hours-total")
+@login_required
+def get_fab_hours_total():
+    """
+    Return the global Total Fab HRS figure as a single aggregated number.
+
+    Computes SUM(fab_hrs * stage_modifier) over all releases. The stage
+    modifier mirrors FAB_MODIFIER in frontend/src/utils/fabHours.js — keep
+    both in sync when stage modifiers change. Unknown stages default to 1.0.
+
+    Returns:
+        JSON: { "total_fab_hrs": <float> }
+    """
+    from sqlalchemy import case, func, Float, literal
+
+    # Sanitize fab_hrs: NULL and Postgres NaN both count as 0, matching the
+    # frontend's (job['Fab Hrs'] || 0) coercion. The x != x NaN trick does NOT
+    # work in Postgres (NaN = NaN is true there), so compare to a NaN literal.
+    nan_literal = literal('NaN').cast(Float)
+    fab_hrs = case(
+        (Releases.fab_hrs.is_(None), 0.0),
+        (Releases.fab_hrs == nan_literal, 0.0),
+        else_=Releases.fab_hrs,
+    )
+
+    # Stages that zero out fab hours (work complete or past fabrication).
+    zero_stages = [
+        'Welded QC', 'Paint Start', 'Paint Complete', 'Store at MHMW',
+        'Ship Planning', 'Ship Complete', 'Install Start', 'Install Complete',
+        'Complete',
+    ]
+    modifier = case(
+        (Releases.stage == 'Cut Start', 0.9),
+        (Releases.stage == 'Fitup Complete', 0.5),
+        (Releases.stage.in_(zero_stages), 0.0),
+        else_=1.0,
+    )
+    total = db.session.query(
+        func.coalesce(func.sum(fab_hrs * modifier), 0.0)
+    ).filter(
+        # Match the Job Log's dataset (/brain/get-all-jobs): exclude archived
+        # and soft-deleted rows so the two pages show the same figure.
+        db.or_(Releases.is_archived == False, Releases.is_archived == None),
+        db.or_(Releases.is_active == True, Releases.is_active == None),
+    ).scalar()
+
+    return jsonify({"total_fab_hrs": float(total or 0.0)})
+
+
 @brain_bp.route("/jobs")
 @login_required
 def get_jobs():
