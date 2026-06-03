@@ -17,6 +17,7 @@ import StartInstallEditor from './StartInstallEditor';
 import ReleaseNumberLink from './ReleaseNumberLink';
 import StageEditor from './StageEditor';
 import FabOrderEditor from './FabOrderEditor';
+import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort } from '../utils/formatters';
 
@@ -85,8 +86,8 @@ export default function JobLogRow({
     };
 
     const containerCls = `border-b border-gray-200 dark:border-slate-700 ${
-        isJumpToHighlight ? 'bg-amber-50 dark:bg-amber-900/20' : ''
-    } ${complete ? 'opacity-90' : ''}`;
+        job._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''
+    } ${isJumpToHighlight ? 'bg-amber-50 dark:bg-amber-900/20' : ''} ${complete ? 'opacity-90' : ''}`;
 
     const toggle = () => setExpanded((v) => !v);
     const handleKey = (e) => {

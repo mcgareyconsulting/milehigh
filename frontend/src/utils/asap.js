@@ -1,7 +1,7 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Shared ASAP-set logic enforcing the 3-per-PM soft cap. Sets the ASAP flag and, when the
+ * purpose: Shared ASAP-set logic enforcing the 2-per-PM soft cap. Sets the ASAP flag and, when the
  *   backend returns 409 asap_limit, confirms with the user before retrying with force.
  * exports:
  *   setAsapWithCapConfirm(job, release): Promise<boolean> — true if the flag was set, false if the

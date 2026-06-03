@@ -24,6 +24,7 @@ import ActiveFilterChips from '../components/ActiveFilterChips';
 import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { BananaCodeHeader } from '../components/StageIconRow';
+import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth } from '../utils/auth';
 import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
@@ -178,6 +179,7 @@ function JobLog() {
         stageGroupColors,
         stageGroupDupColors,
         displayJobs,
+        propagatedAsapJobs,
         secondarySearchResults,
         totalFabHrs,
         totalInstallHrs,
@@ -283,6 +285,18 @@ function JobLog() {
 
     // Print always uses the review sort regardless of the on-screen toggle.
     const printSortedJobs = useMemo(() => reviewSort(displayJobs), [displayJobs]);
+
+    // On-screen render list: the in-filter jobs followed by the out-of-department ASAP
+    // block (divider sentinel + propagated rows). The divider is assembled here, at the
+    // render layer only, so it never leaks into counts/CSV/PDF that read displayJobs.
+    const renderRows = useMemo(() => {
+        if (propagatedAsapJobs.length === 0) return reviewDisplayJobs;
+        return [
+            ...reviewDisplayJobs,
+            { id: '__asap_propagated_divider__', _asapDivider: true, _asapCount: propagatedAsapJobs.length },
+            ...propagatedAsapJobs,
+        ];
+    }, [reviewDisplayJobs, propagatedAsapJobs]);
 
     // Compute fab_order values that appear on more than one release *within the same
     // stage group*. The client uses Welded QC (READY_TO_SHIP) for paint-sequence
@@ -895,7 +909,7 @@ function JobLog() {
 
                             {!loading && !fetchError && effectiveView === 'mobilecard' && (
                                 <JobLogCardGrid
-                                    jobs={reviewDisplayJobs}
+                                    jobs={renderRows}
                                     secondaryResults={secondarySearchResults}
                                     search={search}
                                     jumpToTarget={jumpToTarget}
@@ -911,7 +925,7 @@ function JobLog() {
                             {!loading && !fetchError && effectiveView === 'cards' && (
                                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
                                     <JobLogRowList
-                                        jobs={reviewDisplayJobs}
+                                        jobs={renderRows}
                                         secondaryResults={secondarySearchResults}
                                         search={search}
                                         jumpToTarget={jumpToTarget}
@@ -987,7 +1001,7 @@ function JobLog() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {!hasData ? (
+                                                {renderRows.length === 0 ? (
                                                     hasJobsData && search.trim() !== '' && secondarySearchResults.length > 0 ? (
                                                         <>
                                                             <tr>
@@ -1041,7 +1055,17 @@ function JobLog() {
                                                         </tr>
                                                     )
                                                 ) : (
-                                                    reviewDisplayJobs.map((row, index) => (
+                                                    renderRows.map((row, index) => (
+                                                        row._asapDivider ? (
+                                                            <tr key={row.id}>
+                                                                <td
+                                                                    colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
+                                                                    className={`${ASAP_DIVIDER_BOX_CLASS} border-y`}
+                                                                >
+                                                                    <AsapDividerLabel count={row._asapCount} />
+                                                                </td>
+                                                            </tr>
+                                                        ) : (
                                                         <JobsTableRow
                                                             key={row.id}
                                                             row={row}
@@ -1067,6 +1091,7 @@ function JobLog() {
                                                             tableScrollRef={tableScrollRef}
                                                             duplicateFabOrders={duplicateFabOrders}
                                                         />
+                                                        )
                                                     ))
                                                 )}
                                             </tbody>

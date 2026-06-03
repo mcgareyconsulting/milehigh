@@ -8,6 +8,7 @@ imports_from: [app.models, app.services.job_event_service]
 imported_by: [app/brain/job_log/features/stage/command.py, app/brain/job_log/routes.py]
 invariants:
   - No-op when start_install_formulaTF is not False (no hard date present)
+  - No-op when start_install_no_color is True (preserve the ASAP-drop completion date)
   - Sets start_install_formulaTF=True and start_install_formula=None; does NOT touch start_install column or push to Trello
   - Emits action='updated', field='start_install_formulaTF' with parent_event_id so audit bundling under the triggering event works
 """
@@ -42,6 +43,11 @@ def clear_hard_date_cascade(
     scheduling cascade (which will recompute start_install from the formula).
     """
     if job_record.start_install_formulaTF is not False:
+        return False
+
+    # Preserve a no-color date recorded by the ASAP-drop on completion — it is a
+    # historical record of when the release shipped/completed, not a planning hard date.
+    if getattr(job_record, 'start_install_no_color', False):
         return False
 
     job_record.start_install_formulaTF = True
