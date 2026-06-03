@@ -52,7 +52,11 @@ export default function ColumnHeaderFilter({
     sortLabels,
     singleSelect = false,
     immediate = false,
+    labels = null,
 }) {
+    // Display-only relabeling: maps a value to the text shown in the list (and matched by
+    // the search box). The committed/filtered value is always the underlying `v`, never the label.
+    const labelFor = useCallback((v) => labels?.[v] ?? v, [labels]);
     const ascLabel = sortLabels?.asc ?? 'Sort A→Z';
     const descLabel = sortLabels?.desc ?? 'Sort Z→A';
     const [open, setOpen] = useState(false);
@@ -73,12 +77,12 @@ export default function ColumnHeaderFilter({
         if (!autoWidth) return POPOVER_WIDTH;
         let maxText = 0;
         for (const v of values) {
-            const w = measureTextWidth(v);
+            const w = measureTextWidth(labelFor(v));
             if (w > maxText) maxText = w;
         }
         if (hasBlanks) maxText = Math.max(maxText, measureTextWidth(BLANKS));
         return Math.max(POPOVER_WIDTH, Math.ceil(maxText + AUTOWIDTH_CHROME));
-    }, [autoWidth, values, hasBlanks]);
+    }, [autoWidth, values, hasBlanks, labelFor]);
 
     const updatePosition = useCallback(() => {
         const el = triggerRef.current;
@@ -143,8 +147,8 @@ export default function ColumnHeaderFilter({
     const filteredValues = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return values;
-        return values.filter((v) => v.toLowerCase().includes(q));
-    }, [values, search]);
+        return values.filter((v) => labelFor(v).toLowerCase().includes(q));
+    }, [values, search, labelFor]);
 
     const showBlanks = hasBlanks && (!search.trim() || BLANKS.toLowerCase().includes(search.trim().toLowerCase()));
     const optionCount = filteredValues.length + (showBlanks ? 1 : 0);
@@ -292,7 +296,7 @@ export default function ColumnHeaderFilter({
                                             tabIndex={-1}
                                             className="accent-blue-600 pointer-events-none"
                                         />
-                                        <span className={autoWidth ? 'whitespace-nowrap' : 'truncate'} title={v}>{v}</span>
+                                        <span className={autoWidth ? 'min-w-0 break-words' : 'truncate'} title={labelFor(v)}>{labelFor(v)}</span>
                                     </div>
                                 ))}
                             </>
@@ -329,7 +333,7 @@ export default function ColumnHeaderFilter({
                                             onChange={() => toggleValue(v)}
                                             className="accent-blue-600"
                                         />
-                                        <span className={autoWidth ? 'whitespace-nowrap' : 'truncate'} title={v}>{v}</span>
+                                        <span className={autoWidth ? 'min-w-0 break-words' : 'truncate'} title={labelFor(v)}>{labelFor(v)}</span>
                                     </label>
                                 ))}
                             </>
