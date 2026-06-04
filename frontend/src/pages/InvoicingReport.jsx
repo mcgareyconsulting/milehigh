@@ -211,7 +211,7 @@ function SubmittalTimeline({ submittals }) {
                     {submittals.map((s) => {
                         const label = `${s.submittal_id}${s.title ? ` — ${s.title}` : ''}`;
                         return (
-                            <tr key={s.submittal_id} className="border-t border-gray-100 dark:border-slate-700/60 hover:bg-gray-50/70 dark:hover:bg-slate-700/30">
+                            <tr key={s.submittal_id} className="border-t border-gray-200 dark:border-slate-700/60 hover:bg-gray-50/70 dark:hover:bg-slate-700/30">
                                 <td className="pl-14 pr-4 py-4 align-top">
                                     <span className="block truncate max-w-xl text-gray-800 dark:text-slate-100" title={label}>{label}</span>
                                     {s.submittal_manager && (
@@ -235,7 +235,7 @@ function ReleaseRow({ release, expanded, onToggle }) {
     const r = release;
     const label = `${r.release}${r.description ? ` — ${r.description}` : ''}`;
     return (
-        <div className="border-t border-gray-100 dark:border-slate-700/60">
+        <div className="border-t border-gray-200 dark:border-slate-700/60">
             <ToggleRow open={expanded} onToggle={onToggle} depthClass="pl-14 pr-4 py-3.5">
                 <Chevron open={expanded} />
                 <span className="flex-1 min-w-0 text-base text-gray-800 dark:text-slate-100 truncate" title={label}>
@@ -259,7 +259,7 @@ function ReleaseRow({ release, expanded, onToggle }) {
                 </span>
             </ToggleRow>
             {expanded && (
-                <div className="pl-16 pr-4 py-4 bg-gray-50/80 dark:bg-slate-900/40 border-t border-gray-100 dark:border-slate-700/60">
+                <div className="pl-16 pr-4 py-4 bg-gray-50/80 dark:bg-slate-900/40 border-t border-gray-200 dark:border-slate-700/60">
                     {r.events.length === 0 ? (
                         <p className="text-sm text-gray-400 dark:text-slate-500 italic">No changes this month.</p>
                     ) : (
@@ -508,7 +508,7 @@ function InvoicingReport() {
             )}
 
             {hasData && (
-                <div className="rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shadow-sm divide-y divide-gray-100 dark:divide-slate-700/70">
+                <div className="rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shadow-sm divide-y divide-gray-200 dark:divide-slate-700/70">
                     {visibleProjects.map((proj) => {
                         const pKey = proj.project_number;
                         const pOpen = expandedProjects.has(pKey);
@@ -534,7 +534,7 @@ function InvoicingReport() {
                                 </ToggleRow>
 
                                 {pOpen && (
-                                    <div className="border-t border-gray-100 dark:border-slate-700/60">
+                                    <div className="border-t border-gray-200 dark:border-slate-700/60">
                                         {/* DRR Submittals — lifecycle timeline */}
                                         <div className="py-3">
                                             <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
@@ -544,7 +544,7 @@ function InvoicingReport() {
                                         </div>
 
                                         {/* Releases — expandable event rows */}
-                                        <div className="py-3 border-t border-gray-100 dark:border-slate-700/60">
+                                        <div className="py-3 border-t border-gray-200 dark:border-slate-700/60">
                                             <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
                                                 Releases
                                             </div>
