@@ -292,8 +292,11 @@ function truncateToTwoLines(doc, text, innerWidth) {
 // uses the LOCAL date (toISOString would shift to UTC).
 function startInstallState(job) {
     if (job['start_install_asap'] === true) return 'asap';
+    // A no-color date (auto-recorded when an ASAP release reached Ship Complete+)
+    // shows the date plainly — mirror JobsTableRow.jsx so print matches the screen.
+    const isNoColor = job['start_install_no_color'] === true;
     const isHardDate =
-        job['start_install_formulaTF'] === false && Boolean(job['Start install']);
+        !isNoColor && job['start_install_formulaTF'] === false && Boolean(job['Start install']);
     if (!isHardDate) return null;
     const now = new Date();
     const todayStr =
