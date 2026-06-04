@@ -64,6 +64,27 @@ const TINT = {
     accent: 'bg-accent-50 text-accent-600 ring-accent-200/70 dark:bg-accent-400/10 dark:text-accent-200 dark:ring-accent-400/30',
 };
 
+// Solid dot color per tint family — used as timeline nodes.
+const DOT = {
+    emerald: 'bg-emerald-500', blue: 'bg-blue-500', violet: 'bg-violet-500',
+    amber: 'bg-amber-500', orange: 'bg-orange-500', purple: 'bg-purple-500',
+    red: 'bg-red-500', slate: 'bg-slate-400 dark:bg-slate-500', accent: 'bg-accent-500',
+};
+
+// Friendly labels for release event actions (Katie shouldn't read raw keys).
+const ACTION_LABEL = {
+    update_stage: 'Stage',
+    updated: 'Updated',
+    list_move: 'Moved',
+    update_installer: 'Installer',
+    pickup_received: 'Pickup',
+    create_card: 'Created',
+    created: 'Created',
+    update_name: 'Renamed',
+    update_description: 'Description',
+};
+const actionLabel = (a) => ACTION_LABEL[a] || (a || '').replace(/_/g, ' ');
+
 // Solid dots used as section/legend markers.
 const KIND_META = {
     create: { label: 'Created', tint: 'emerald', dot: 'bg-emerald-500' },
@@ -238,25 +259,28 @@ function ReleaseRow({ release, expanded, onToggle }) {
                 </span>
             </ToggleRow>
             {expanded && (
-                <ul className="pl-20 pr-4 py-3 space-y-2.5 bg-gray-50/80 dark:bg-slate-900/40 border-t border-gray-100 dark:border-slate-700/60">
-                    {r.events.length === 0 && (
-                        <li className="text-sm text-gray-400 dark:text-slate-500 italic">No changes this month.</li>
+                <div className="pl-16 pr-4 py-4 bg-gray-50/80 dark:bg-slate-900/40 border-t border-gray-100 dark:border-slate-700/60">
+                    {r.events.length === 0 ? (
+                        <p className="text-sm text-gray-400 dark:text-slate-500 italic">No changes this month.</p>
+                    ) : (
+                        <ol className="relative ml-1 border-l-2 border-gray-200 dark:border-slate-700 space-y-4">
+                            {r.events.map((ev) => (
+                                <li key={ev.id} className="relative pl-6">
+                                    <span className={`absolute -left-[7px] top-1.5 w-3 h-3 rounded-full ring-4 ring-gray-50 dark:ring-slate-900 ${DOT[actionTint(ev.action)]}`} />
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                        <Badge tint={actionTint(ev.action)}>{actionLabel(ev.action)}</Badge>
+                                        {ev.new_value && (
+                                            <span className="text-base font-medium text-gray-800 dark:text-slate-100">{ev.new_value}</span>
+                                        )}
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-400 dark:text-slate-500">
+                                        {prettyDate(ev.created_at)} · {prettyTime(ev.created_at)}{ev.source ? ` · ${ev.source}` : ''}
+                                    </div>
+                                </li>
+                            ))}
+                        </ol>
                     )}
-                    {r.events.map((ev) => (
-                        <li key={ev.id} className="flex items-center gap-4 text-sm">
-                            <span className="w-52 shrink-0">
-                                <Badge tint={actionTint(ev.action)}>{ev.action}</Badge>
-                            </span>
-                            <span className="flex-1 min-w-0 truncate text-gray-700 dark:text-slate-200">
-                                {ev.new_value || ''}
-                            </span>
-                            <span className="shrink-0 text-gray-400 dark:text-slate-500 whitespace-nowrap">
-                                {prettyDate(ev.created_at)} · {prettyTime(ev.created_at)}
-                                {ev.source ? ` · ${ev.source}` : ''}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
+                </div>
             )}
         </div>
     );
@@ -264,10 +288,10 @@ function ReleaseRow({ release, expanded, onToggle }) {
 
 function SummaryStat({ value, label, tint }) {
     return (
-        <div className="flex items-center gap-3 px-6">
-            <span className={`w-3.5 h-3.5 rounded-full ${tint}`} />
+        <div className="flex items-center gap-3 px-5">
+            <span className={`w-3 h-3 rounded-full ${tint}`} />
             <div className="flex flex-col leading-none">
-                <span className="text-4xl font-bold text-gray-900 dark:text-slate-50 tabular-nums">{value}</span>
+                <span className="text-3xl font-bold text-gray-900 dark:text-slate-50 tabular-nums">{value}</span>
                 <span className="text-xs uppercase tracking-widest text-gray-400 dark:text-slate-500 mt-1.5">{label}</span>
             </div>
         </div>
@@ -403,7 +427,7 @@ function InvoicingReport() {
             {/* Header: title + month/year picker */}
             <div className="flex flex-wrap items-end gap-3 mb-6">
                 <div>
-                    <h1 className="text-4xl font-bold text-gray-900 dark:text-slate-50">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">
                         Invoicing <span className="text-accent-500 dark:text-accent-300">— {report?.month_label || `${MONTHS[month - 1]} ${year}`}</span>
                     </h1>
                     <p className="text-base text-gray-500 dark:text-slate-400 mt-1">
@@ -491,12 +515,12 @@ function InvoicingReport() {
                         return (
                             <div key={pKey} className={pOpen ? 'bg-gray-50/40 dark:bg-slate-800/60' : ''}>
                                 {/* Level 1 — Project */}
-                                <ToggleRow open={pOpen} onToggle={() => toggleProject(pKey)} depthClass="px-4 py-4">
+                                <ToggleRow open={pOpen} onToggle={() => toggleProject(pKey)} depthClass="px-4 py-3.5">
                                     <Chevron open={pOpen} />
-                                    <span className="px-2.5 py-1 rounded-md text-lg font-bold font-mono bg-accent-50 text-accent-700 dark:bg-accent-400/10 dark:text-accent-200 ring-1 ring-inset ring-accent-200/60 dark:ring-accent-400/20">
+                                    <span className="px-2.5 py-1 rounded-md text-base font-bold font-mono bg-accent-50 text-accent-700 dark:bg-accent-400/10 dark:text-accent-200 ring-1 ring-inset ring-accent-200/60 dark:ring-accent-400/20">
                                         {proj.project_number}
                                     </span>
-                                    <span className="text-lg text-gray-700 dark:text-slate-200 font-medium truncate">
+                                    <span className="text-base text-gray-700 dark:text-slate-200 font-medium truncate">
                                         {proj.project_name || '—'}
                                     </span>
                                     <span className="ml-auto flex items-center gap-3 shrink-0">
