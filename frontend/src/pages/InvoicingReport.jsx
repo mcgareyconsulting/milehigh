@@ -241,18 +241,22 @@ function ReleaseRow({ release, expanded, onToggle }) {
                 <span className="flex-1 min-w-0 text-base text-gray-800 dark:text-slate-100 truncate" title={label}>
                     {label}
                 </span>
-                <span className="hidden md:flex items-center gap-4 shrink-0">
-                    {r.stage && <Badge tint={stageTint(r.stage)}>{r.stage}</Badge>}
-                    {r.install_prog != null && r.install_prog !== '' && (
-                        <span className="text-sm text-gray-400 dark:text-slate-500">
-                            Install <span className="font-semibold text-gray-600 dark:text-slate-300">{r.install_prog}</span>
+                <span className="hidden md:flex items-center gap-4 shrink-0 text-sm">
+                    <span className="w-44 flex items-center">
+                        {r.stage
+                            ? <Badge tint={stageTint(r.stage)}>{r.stage}</Badge>
+                            : <span className="text-gray-300 dark:text-slate-600">—</span>}
+                    </span>
+                    <span className="w-24 text-gray-400 dark:text-slate-500 whitespace-nowrap">
+                        Install <span className="font-semibold text-gray-700 dark:text-slate-200">
+                            {r.install_prog || <span className="text-gray-300 dark:text-slate-600 font-normal">—</span>}
                         </span>
-                    )}
-                    {r.invoiced != null && r.invoiced !== '' && (
-                        <span className="text-sm text-gray-400 dark:text-slate-500">
-                            Inv <span className="font-semibold text-gray-600 dark:text-slate-300">{r.invoiced}</span>
+                    </span>
+                    <span className="w-24 text-gray-400 dark:text-slate-500 whitespace-nowrap">
+                        Inv <span className="font-semibold text-gray-700 dark:text-slate-200">
+                            {r.invoiced || <span className="text-gray-300 dark:text-slate-600 font-normal">—</span>}
                         </span>
-                    )}
+                    </span>
                 </span>
                 <span className="shrink-0 w-28 text-right text-sm font-medium text-gray-400 dark:text-slate-500 whitespace-nowrap">
                     {r.total_changes} {r.total_changes === 1 ? 'change' : 'changes'}
