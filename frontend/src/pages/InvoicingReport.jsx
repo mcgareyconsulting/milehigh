@@ -247,13 +247,13 @@ function ReleaseRow({ release, expanded, onToggle }) {
                             ? <Badge tint={stageTint(r.stage)}>{r.stage}</Badge>
                             : <span className="text-gray-300 dark:text-slate-600">—</span>}
                     </span>
-                    <span className="w-24 text-gray-400 dark:text-slate-500 whitespace-nowrap">
+                    <span className="w-28 text-gray-400 dark:text-slate-500 whitespace-nowrap">
                         Install <span className="font-semibold text-gray-700 dark:text-slate-200">
                             {r.install_prog || <span className="text-gray-300 dark:text-slate-600 font-normal">—</span>}
                         </span>
                     </span>
-                    <span className="w-24 text-gray-400 dark:text-slate-500 whitespace-nowrap">
-                        Inv <span className="font-semibold text-gray-700 dark:text-slate-200">
+                    <span className="w-36 text-gray-400 dark:text-slate-500 whitespace-nowrap">
+                        Invoiced <span className="font-semibold text-gray-700 dark:text-slate-200">
                             {r.invoiced || <span className="text-gray-300 dark:text-slate-600 font-normal">—</span>}
                         </span>
                     </span>
@@ -532,7 +532,7 @@ function InvoicingReport() {
                                             {proj.submittals.length} DRR
                                         </Badge>
                                         <Badge tint={proj.releases.length ? 'blue' : 'slate'} className={proj.releases.length ? '' : 'opacity-60'}>
-                                            {proj.releases.length} rel
+                                            {proj.releases.length} releases
                                         </Badge>
                                     </span>
                                 </ToggleRow>
