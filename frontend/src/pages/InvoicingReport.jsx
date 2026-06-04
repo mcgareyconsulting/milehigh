@@ -292,12 +292,12 @@ function ReleaseRow({ release, expanded, onToggle }) {
 
 function SummaryStat({ value, label, tint }) {
     return (
-        <div className="flex items-center gap-3 px-5">
-            <span className={`w-3 h-3 rounded-full ${tint}`} />
-            <div className="flex flex-col leading-none">
+        <div className="flex flex-col px-5">
+            <div className="flex items-center gap-2 leading-none">
+                <span className={`w-2.5 h-2.5 rounded-full ${tint}`} />
                 <span className="text-3xl font-bold text-gray-900 dark:text-slate-50 tabular-nums">{value}</span>
-                <span className="text-xs uppercase tracking-widest text-gray-400 dark:text-slate-500 mt-1.5">{label}</span>
             </div>
+            <span className="text-xs uppercase tracking-widest text-gray-400 dark:text-slate-500 mt-1.5 pl-[18px]">{label}</span>
         </div>
     );
 }
