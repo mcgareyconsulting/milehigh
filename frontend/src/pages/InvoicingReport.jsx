@@ -97,8 +97,8 @@ function actionTint(action) {
 
 function Badge({ tint = 'slate', dot = false, className = '', children }) {
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ring-1 ring-inset ${TINT[tint]} ${className}`}>
-            {dot && <span className={`w-1.5 h-1.5 rounded-full ${KIND_META[dot]?.dot || 'bg-current'}`} />}
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ring-1 ring-inset ${TINT[tint]} ${className}`}>
+            {dot && <span className={`w-2 h-2 rounded-full ${KIND_META[dot]?.dot || 'bg-current'}`} />}
             {children}
         </span>
     );
@@ -107,7 +107,7 @@ function Badge({ tint = 'slate', dot = false, className = '', children }) {
 function Chevron({ open }) {
     return (
         <span
-            className={`inline-block text-gray-400 dark:text-slate-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+            className={`inline-block text-lg text-gray-400 dark:text-slate-500 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
             aria-hidden="true"
         >
             ▸
@@ -144,19 +144,19 @@ const kindEvent = (events, kind) => events.find((e) => e.kind === kind) || null;
 function TimelineCell({ event, kind }) {
     if (!event) {
         return (
-            <td className="px-3 py-2.5 align-top">
-                <span className="text-gray-300 dark:text-slate-600 select-none">—</span>
+            <td className="px-4 py-4 align-top">
+                <span className="text-xl text-gray-300 dark:text-slate-600 select-none">—</span>
             </td>
         );
     }
     const meta = KIND_META[kind];
     return (
-        <td className="px-3 py-2.5 align-top whitespace-nowrap">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ring-1 ring-inset ${TINT[meta.tint]}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+        <td className="px-4 py-4 align-top whitespace-nowrap">
+            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-base font-medium ring-1 ring-inset ${TINT[meta.tint]}`}>
+                <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
                 {prettyDate(event.created_at)}
             </span>
-            <div className="mt-0.5 pl-1 text-[10px] text-gray-400 dark:text-slate-500">{prettyTime(event.created_at)}</div>
+            <div className="mt-1 pl-1 text-xs text-gray-400 dark:text-slate-500">{prettyTime(event.created_at)}</div>
         </td>
     );
 }
@@ -165,21 +165,21 @@ function TimelineCell({ event, kind }) {
 function SubmittalTimeline({ submittals }) {
     if (submittals.length === 0) {
         return (
-            <div className="px-6 py-3 text-xs text-gray-400 dark:text-slate-500 italic">
+            <div className="px-8 py-4 text-sm text-gray-400 dark:text-slate-500 italic">
                 No DRR submittal activity this month.
             </div>
         );
     }
     return (
         <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-base">
                 <thead>
-                    <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500">
-                        <th className="pl-12 pr-3 py-1.5 font-semibold">DRR Submittal</th>
+                    <tr className="text-left text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">
+                        <th className="pl-14 pr-4 py-2.5 font-semibold">DRR Submittal</th>
                         {['create', 'open', 'close'].map((k) => (
-                            <th key={k} className="px-3 py-1.5 font-semibold w-44">
-                                <span className="inline-flex items-center gap-1.5">
-                                    <span className={`inline-block w-2 h-2 rounded-full ${KIND_META[k].dot}`} />
+                            <th key={k} className="px-4 py-2.5 font-semibold w-52">
+                                <span className="inline-flex items-center gap-2">
+                                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${KIND_META[k].dot}`} />
                                     {KIND_META[k].label}
                                 </span>
                             </th>
@@ -191,10 +191,10 @@ function SubmittalTimeline({ submittals }) {
                         const label = `${s.submittal_id}${s.title ? ` — ${s.title}` : ''}`;
                         return (
                             <tr key={s.submittal_id} className="border-t border-gray-100 dark:border-slate-700/60 hover:bg-gray-50/70 dark:hover:bg-slate-700/30">
-                                <td className="pl-12 pr-3 py-2.5 align-top">
-                                    <span className="block truncate max-w-md text-gray-800 dark:text-slate-100" title={label}>{label}</span>
+                                <td className="pl-14 pr-4 py-4 align-top">
+                                    <span className="block truncate max-w-xl text-gray-800 dark:text-slate-100" title={label}>{label}</span>
                                     {s.submittal_manager && (
-                                        <span className="text-[11px] text-gray-400 dark:text-slate-500">{s.submittal_manager}</span>
+                                        <span className="text-sm text-gray-400 dark:text-slate-500">{s.submittal_manager}</span>
                                     )}
                                 </td>
                                 {['create', 'open', 'close'].map((k) => (
@@ -215,36 +215,36 @@ function ReleaseRow({ release, expanded, onToggle }) {
     const label = `${r.release}${r.description ? ` — ${r.description}` : ''}`;
     return (
         <div className="border-t border-gray-100 dark:border-slate-700/60">
-            <ToggleRow open={expanded} onToggle={onToggle} depthClass="pl-12 pr-3 py-2.5">
+            <ToggleRow open={expanded} onToggle={onToggle} depthClass="pl-14 pr-4 py-3.5">
                 <Chevron open={expanded} />
-                <span className="flex-1 min-w-0 text-sm text-gray-800 dark:text-slate-100 truncate" title={label}>
+                <span className="flex-1 min-w-0 text-base text-gray-800 dark:text-slate-100 truncate" title={label}>
                     {label}
                 </span>
-                <span className="hidden md:flex items-center gap-2 shrink-0">
+                <span className="hidden md:flex items-center gap-4 shrink-0">
                     {r.stage && <Badge tint={stageTint(r.stage)}>{r.stage}</Badge>}
                     {r.install_prog != null && r.install_prog !== '' && (
-                        <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                        <span className="text-sm text-gray-400 dark:text-slate-500">
                             Install <span className="font-semibold text-gray-600 dark:text-slate-300">{r.install_prog}</span>
                         </span>
                     )}
                     {r.invoiced != null && r.invoiced !== '' && (
-                        <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                        <span className="text-sm text-gray-400 dark:text-slate-500">
                             Inv <span className="font-semibold text-gray-600 dark:text-slate-300">{r.invoiced}</span>
                         </span>
                     )}
                 </span>
-                <span className="shrink-0 w-20 text-right text-[11px] font-medium text-gray-400 dark:text-slate-500 whitespace-nowrap">
+                <span className="shrink-0 w-28 text-right text-sm font-medium text-gray-400 dark:text-slate-500 whitespace-nowrap">
                     {r.total_changes} {r.total_changes === 1 ? 'change' : 'changes'}
                 </span>
             </ToggleRow>
             {expanded && (
-                <ul className="pl-16 pr-3 py-2 space-y-1.5 bg-gray-50/80 dark:bg-slate-900/40 border-t border-gray-100 dark:border-slate-700/60">
+                <ul className="pl-20 pr-4 py-3 space-y-2.5 bg-gray-50/80 dark:bg-slate-900/40 border-t border-gray-100 dark:border-slate-700/60">
                     {r.events.length === 0 && (
-                        <li className="text-xs text-gray-400 dark:text-slate-500 italic">No changes this month.</li>
+                        <li className="text-sm text-gray-400 dark:text-slate-500 italic">No changes this month.</li>
                     )}
                     {r.events.map((ev) => (
-                        <li key={ev.id} className="flex items-center gap-3 text-xs">
-                            <span className="w-44 shrink-0">
+                        <li key={ev.id} className="flex items-center gap-4 text-sm">
+                            <span className="w-52 shrink-0">
                                 <Badge tint={actionTint(ev.action)}>{ev.action}</Badge>
                             </span>
                             <span className="flex-1 min-w-0 truncate text-gray-700 dark:text-slate-200">
@@ -264,11 +264,11 @@ function ReleaseRow({ release, expanded, onToggle }) {
 
 function SummaryStat({ value, label, tint }) {
     return (
-        <div className="flex items-center gap-2.5 px-4">
-            <span className={`w-2.5 h-2.5 rounded-full ${tint}`} />
+        <div className="flex items-center gap-3 px-6">
+            <span className={`w-3.5 h-3.5 rounded-full ${tint}`} />
             <div className="flex flex-col leading-none">
-                <span className="text-2xl font-bold text-gray-900 dark:text-slate-50 tabular-nums">{value}</span>
-                <span className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 mt-1">{label}</span>
+                <span className="text-4xl font-bold text-gray-900 dark:text-slate-50 tabular-nums">{value}</span>
+                <span className="text-xs uppercase tracking-widest text-gray-400 dark:text-slate-500 mt-1.5">{label}</span>
             </div>
         </div>
     );
@@ -396,28 +396,28 @@ function InvoicingReport() {
     const years = [];
     for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y -= 1) years.push(y);
     const hasData = !loading && !error && visibleProjects.length > 0;
-    const selectClass = 'mt-1 px-2.5 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400/60';
+    const selectClass = 'mt-1.5 px-3 py-2 text-base rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400/60';
 
     return (
-        <div className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6">
+        <div className="flex-1 w-full max-w-[1600px] mx-auto p-6 sm:p-8">
             {/* Header: title + month/year picker */}
-            <div className="flex flex-wrap items-end gap-3 mb-4">
+            <div className="flex flex-wrap items-end gap-3 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">
+                    <h1 className="text-4xl font-bold text-gray-900 dark:text-slate-50">
                         Invoicing <span className="text-accent-500 dark:text-accent-300">— {report?.month_label || `${MONTHS[month - 1]} ${year}`}</span>
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-slate-400">
+                    <p className="text-base text-gray-500 dark:text-slate-400 mt-1">
                         DRR submittal lifecycle and release progress, grouped by project.
                     </p>
                 </div>
-                <div className="ml-auto flex items-end gap-2">
-                    <label className="flex flex-col text-xs font-medium text-gray-600 dark:text-slate-400">
+                <div className="ml-auto flex items-end gap-3">
+                    <label className="flex flex-col text-sm font-medium text-gray-600 dark:text-slate-400">
                         Month
                         <select value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))} className={selectClass}>
                             {MONTHS.map((m, i) => (<option key={m} value={i + 1}>{m}</option>))}
                         </select>
                     </label>
-                    <label className="flex flex-col text-xs font-medium text-gray-600 dark:text-slate-400">
+                    <label className="flex flex-col text-sm font-medium text-gray-600 dark:text-slate-400">
                         Year
                         <select value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))} className={selectClass}>
                             {years.map((y) => (<option key={y} value={y}>{y}</option>))}
@@ -428,14 +428,14 @@ function InvoicingReport() {
 
             {/* Summary bar: totals + filter + export */}
             {hasData && (
-                <div className="flex flex-wrap items-center gap-3 mb-5 p-3 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+                <div className="flex flex-wrap items-center gap-4 mb-6 p-5 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
                     <div className="flex items-center divide-x divide-gray-200 dark:divide-slate-700">
                         <SummaryStat value={visibleProjects.length} label="Projects" tint="bg-accent-500" />
                         <SummaryStat value={totals.submittals} label="DRR" tint="bg-emerald-500" />
                         <SummaryStat value={totals.releases} label="Releases" tint="bg-blue-500" />
                     </div>
-                    <div className="ml-auto flex items-center gap-2">
-                        <span className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+                    <div className="ml-auto flex items-center gap-3">
+                        <span className="px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-base">
                             <ColumnHeaderFilter
                                 column="project"
                                 values={projectValues}
@@ -453,7 +453,7 @@ function InvoicingReport() {
                         <button
                             type="button"
                             onClick={exportCsv}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg bg-accent-500 text-white shadow-sm hover:bg-accent-600 focus:outline-none focus:ring-2 focus:ring-accent-400/60 transition-colors"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 text-base font-semibold rounded-lg bg-accent-500 text-white shadow-sm hover:bg-accent-600 focus:outline-none focus:ring-2 focus:ring-accent-400/60 transition-colors"
                         >
                             <span aria-hidden="true">↓</span> Export CSV
                         </button>
@@ -462,23 +462,23 @@ function InvoicingReport() {
             )}
 
             {loading && (
-                <div className="py-16 text-center text-gray-500 dark:text-slate-400">Loading report…</div>
+                <div className="py-20 text-center text-lg text-gray-500 dark:text-slate-400">Loading report…</div>
             )}
 
             {error && !loading && (
-                <div className="py-4 px-4 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 text-sm ring-1 ring-red-200/60 dark:ring-red-500/30">
+                <div className="py-4 px-5 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 text-base ring-1 ring-red-200/60 dark:ring-red-500/30">
                     {error}
                 </div>
             )}
 
             {!loading && !error && projects.length === 0 && (
-                <div className="py-16 text-center text-gray-500 dark:text-slate-400">
+                <div className="py-20 text-center text-lg text-gray-500 dark:text-slate-400">
                     No project activity for {report?.month_label || `${MONTHS[month - 1]} ${year}`}.
                 </div>
             )}
 
             {!loading && !error && projects.length > 0 && visibleProjects.length === 0 && (
-                <div className="py-16 text-center text-gray-500 dark:text-slate-400">
+                <div className="py-20 text-center text-lg text-gray-500 dark:text-slate-400">
                     No projects match the current filters.
                 </div>
             )}
@@ -491,15 +491,15 @@ function InvoicingReport() {
                         return (
                             <div key={pKey} className={pOpen ? 'bg-gray-50/40 dark:bg-slate-800/60' : ''}>
                                 {/* Level 1 — Project */}
-                                <ToggleRow open={pOpen} onToggle={() => toggleProject(pKey)} depthClass="px-3 py-3">
+                                <ToggleRow open={pOpen} onToggle={() => toggleProject(pKey)} depthClass="px-4 py-4">
                                     <Chevron open={pOpen} />
-                                    <span className="px-2 py-0.5 rounded-md text-sm font-bold font-mono bg-accent-50 text-accent-700 dark:bg-accent-400/10 dark:text-accent-200 ring-1 ring-inset ring-accent-200/60 dark:ring-accent-400/20">
+                                    <span className="px-2.5 py-1 rounded-md text-lg font-bold font-mono bg-accent-50 text-accent-700 dark:bg-accent-400/10 dark:text-accent-200 ring-1 ring-inset ring-accent-200/60 dark:ring-accent-400/20">
                                         {proj.project_number}
                                     </span>
-                                    <span className="text-gray-700 dark:text-slate-200 font-medium truncate">
+                                    <span className="text-lg text-gray-700 dark:text-slate-200 font-medium truncate">
                                         {proj.project_name || '—'}
                                     </span>
-                                    <span className="ml-auto flex items-center gap-2 shrink-0">
+                                    <span className="ml-auto flex items-center gap-3 shrink-0">
                                         <Badge tint={proj.submittals.length ? 'emerald' : 'slate'} className={proj.submittals.length ? '' : 'opacity-60'}>
                                             {proj.submittals.length} DRR
                                         </Badge>
@@ -512,20 +512,20 @@ function InvoicingReport() {
                                 {pOpen && (
                                     <div className="border-t border-gray-100 dark:border-slate-700/60">
                                         {/* DRR Submittals — lifecycle timeline */}
-                                        <div className="py-2.5">
-                                            <div className="pl-8 pr-3 pb-1 text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
+                                        <div className="py-3">
+                                            <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
                                                 DRR Submittals
                                             </div>
                                             <SubmittalTimeline submittals={proj.submittals} />
                                         </div>
 
                                         {/* Releases — expandable event rows */}
-                                        <div className="py-2.5 border-t border-gray-100 dark:border-slate-700/60">
-                                            <div className="pl-8 pr-3 pb-1 text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
+                                        <div className="py-3 border-t border-gray-100 dark:border-slate-700/60">
+                                            <div className="pl-10 pr-4 pb-1.5 text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
                                                 Releases
                                             </div>
                                             {proj.releases.length === 0 && (
-                                                <div className="px-6 py-2 text-xs text-gray-400 dark:text-slate-500 italic">
+                                                <div className="px-8 py-3 text-sm text-gray-400 dark:text-slate-500 italic">
                                                     No release activity this month.
                                                 </div>
                                             )}
