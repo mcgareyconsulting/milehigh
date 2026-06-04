@@ -133,6 +133,56 @@ def _extract_submittal_new_value_from_payload(action, payload):
     return str(payload) if payload else None
 
 
+# ---------------------------------------------------------------------------
+# Invoicing report filters (Katie Hearn's billing view)
+# ---------------------------------------------------------------------------
+
+# Only "Drafting Release Review" (DRR) submittals are billing milestones.
+DRR_TYPE = "Drafting Release Review"
+
+# Release events the invoicing report hides: fab-order, start-install dates,
+# and due dates carry no billing signal.
+_EXCLUDED_RELEASE_ACTIONS = frozenset({
+    'update_fab_order', 'update_due_date', 'update_start_install', 'clear_hard_date',
+})
+_EXCLUDED_RELEASE_FIELDS = frozenset({
+    'fab_order', 'start_install', 'start_install_formula', 'start_install_formulaTF', 'due_date',
+})
+
+
+def _submittal_event_kind(action, payload):
+    """Classify a submittal event for the invoicing report's lifecycle view.
+
+    Returns 'create', 'open', or 'close' for the three events Katie wants to
+    see, or None for anything else (ball-in-court changes, order bumps, status
+    changes to other values) — those are filtered out.
+    """
+    if action == 'created':
+        return 'create'
+
+    if action == 'updated' and isinstance(payload, dict):
+        status = payload.get('status')
+        new_val = status.get('new') if isinstance(status, dict) else None
+        if new_val:
+            normalized = str(new_val).strip().lower()
+            if normalized == 'open':
+                return 'open'
+            if normalized.startswith('clos'):
+                return 'close'
+
+    return None
+
+
+def _release_event_excluded(action, payload):
+    """True when a release event should be hidden from the invoicing report."""
+    if action in _EXCLUDED_RELEASE_ACTIONS:
+        return True
+    if action == 'updated' and isinstance(payload, dict):
+        if payload.get('field') in _EXCLUDED_RELEASE_FIELDS:
+            return True
+    return False
+
+
 def _month_range_utc(year, month):
     """Return [start, end) naive-UTC datetimes bounding a Mountain-Time month.
 
@@ -451,6 +501,8 @@ def monthly_invoicing_report():
             return bucket
 
         for e in release_events:
+            if _release_event_excluded(e.action, e.payload):
+                continue
             number = str(e.job)
             r = releases_by_key.get((e.job, e.release))
             bucket = _bucket(number, r.job_name if r else None)
@@ -479,31 +531,62 @@ def monthly_invoicing_report():
                 'created_at': format_datetime_mountain(e.created_at),
             })
 
+        # A DRR appears when it has >=1 create/open/close event *in the month*;
+        # create its item shell here. The lifecycle dates themselves are
+        # backfilled below from full history, so a DRR closed this month still
+        # shows when it was created/opened in an earlier month.
+        submittal_items_by_id = {}
         for e in submittal_events:
             s = submittals_by_id.get(e.submittal_id)
-            number = str(s.project_number) if (s and s.project_number) else 'Unknown'
-            bucket = _bucket(number, s.project_name if s else None)
-            item = bucket['_submittals'].get(e.submittal_id)
-            if item is None:
-                item = {
-                    'submittal_id': e.submittal_id,
-                    'title': s.title if s else None,
-                    'status': s.status if s else None,
-                    'ball_in_court': s.ball_in_court if s else None,
-                    'submittal_manager': s.submittal_manager if s else None,
-                    'events': [],
-                }
-                bucket['_submittals'][e.submittal_id] = item
-            item['events'].append({
-                'id': e.id,
-                'action': e.action,
-                'new_value': _extract_submittal_new_value_from_payload(e.action, e.payload),
-                'payload': e.payload,
-                'source': e.source,
-                'internal_user_id': e.internal_user_id,
-                'external_user_id': e.external_user_id,
-                'created_at': format_datetime_mountain(e.created_at),
-            })
+            # Billing view: DRR submittals only (drop non-DRR and orphan events).
+            if not s or s.type != DRR_TYPE:
+                continue
+            # Lifecycle view: only create / open / close events.
+            if _submittal_event_kind(e.action, e.payload) is None:
+                continue
+            if e.submittal_id in submittal_items_by_id:
+                continue
+            number = str(s.project_number) if s.project_number else 'Unknown'
+            bucket = _bucket(number, s.project_name)
+            item = {
+                'submittal_id': e.submittal_id,
+                'title': s.title,
+                'status': s.status,
+                'submittal_manager': s.submittal_manager,
+                'events': [],
+            }
+            bucket['_submittals'][e.submittal_id] = item
+            submittal_items_by_id[e.submittal_id] = item
+
+        # Backfill each included DRR's create/open/close dates from its full
+        # history up to the end of the month (its lifecycle state "as of" then) —
+        # the most recent event of each kind, even if from a prior month.
+        if submittal_items_by_id:
+            lifecycle = {}  # submittal_id -> {kind: (created_at_dt, event_dict)}
+            lifecycle_events = SubmittalEvents.query.filter(
+                SubmittalEvents.submittal_id.in_(submittal_items_by_id.keys()),
+                SubmittalEvents.created_at < end_utc,
+                SubmittalEvents.is_system_echo == False,  # noqa: E712
+            ).order_by(SubmittalEvents.created_at.asc()).all()
+            for e in lifecycle_events:
+                kind = _submittal_event_kind(e.action, e.payload)
+                if kind is None:
+                    continue
+                # Asc order means the last write per kind is the most recent.
+                lifecycle.setdefault(e.submittal_id, {})[kind] = (e.created_at, {
+                    'id': e.id,
+                    'action': e.action,
+                    'kind': kind,
+                    'new_value': _extract_submittal_new_value_from_payload(e.action, e.payload),
+                    'payload': e.payload,
+                    'source': e.source,
+                    'internal_user_id': e.internal_user_id,
+                    'external_user_id': e.external_user_id,
+                    'created_at': format_datetime_mountain(e.created_at),
+                })
+            for sid, item in submittal_items_by_id.items():
+                ordered = sorted(lifecycle.get(sid, {}).values(), key=lambda pair: pair[0])
+                item['events'] = [ev for (_dt, ev) in ordered]
 
         result_projects = []
         for number in sorted(projects.keys(), key=_project_sort_key):
