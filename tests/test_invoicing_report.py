@@ -125,6 +125,25 @@ def seeded(app):
                                      payload_hash="h-5678-fab", source="Brain",
                                      created_at=datetime(2026, 5, 16, 12, 0)))
 
+        # Project 9012 — DRR created + opened in April, closed in May. Viewing
+        # May must still surface the April create/open dates (lifecycle backfill).
+        db.session.add(Projects(name="Lakeside Tower", job_number="9012"))
+        db.session.add(Submittals(submittal_id="S-4", project_number="9012",
+                                  project_name="Lakeside Tower", title="Late close",
+                                  type=DRR_TYPE, status="Closed", submittal_manager="Amy Lee"))
+        db.session.add(SubmittalEvents(submittal_id="S-4", action="created",
+                                       payload={"title": "Late close", "status": "Draft"},
+                                       payload_hash="h-s4-create", source="Procore",
+                                       created_at=datetime(2026, 4, 5, 12, 0)))
+        db.session.add(SubmittalEvents(submittal_id="S-4", action="updated",
+                                       payload={"status": {"old": "Draft", "new": "Open"}},
+                                       payload_hash="h-s4-open", source="Procore",
+                                       created_at=datetime(2026, 4, 10, 12, 0)))
+        db.session.add(SubmittalEvents(submittal_id="S-4", action="updated",
+                                       payload={"status": {"old": "Open", "new": "Closed"}},
+                                       payload_hash="h-s4-close", source="Procore",
+                                       created_at=datetime(2026, 5, 20, 12, 0)))
+
         # --- April 2026 (out of range) ---
         db.session.add(SubmittalEvents(submittal_id="S-1", action="created",
                                        payload={"title": "Glazing schedule"},
@@ -185,7 +204,23 @@ def test_project_pruned_when_all_events_excluded(seeded):
     """5678's only May event is a fab-order change, so the project drops out."""
     data = _get_report(seeded).get_json()
     projects = {p["project_number"] for p in data["projects"]}
-    assert projects == {"1234"}
+    assert projects == {"1234", "9012"}
+    assert "5678" not in projects
+
+
+def test_submittal_lifecycle_backfills_prior_month_dates(seeded):
+    """A DRR closed in May still reports its April create/open dates."""
+    data = _get_report(seeded).get_json()
+    p9012 = next(p for p in data["projects"] if p["project_number"] == "9012")
+    assert [s["submittal_id"] for s in p9012["submittals"]] == ["S-4"]
+    sub = p9012["submittals"][0]
+    assert sub["total_changes"] == 3
+    by_kind = {ev["kind"]: ev["created_at"] for ev in sub["events"]}
+    assert set(by_kind) == {"create", "open", "close"}
+    # Create and open happened in April; close in May — all three are present.
+    assert by_kind["create"].startswith("April")
+    assert by_kind["open"].startswith("April")
+    assert by_kind["close"].startswith("May")
 
 
 def test_releases_drop_fab_install_due_events(seeded):

@@ -531,38 +531,62 @@ def monthly_invoicing_report():
                 'created_at': format_datetime_mountain(e.created_at),
             })
 
+        # A DRR appears when it has >=1 create/open/close event *in the month*;
+        # create its item shell here. The lifecycle dates themselves are
+        # backfilled below from full history, so a DRR closed this month still
+        # shows when it was created/opened in an earlier month.
+        submittal_items_by_id = {}
         for e in submittal_events:
             s = submittals_by_id.get(e.submittal_id)
             # Billing view: DRR submittals only (drop non-DRR and orphan events).
             if not s or s.type != DRR_TYPE:
                 continue
             # Lifecycle view: only create / open / close events.
-            kind = _submittal_event_kind(e.action, e.payload)
-            if kind is None:
+            if _submittal_event_kind(e.action, e.payload) is None:
+                continue
+            if e.submittal_id in submittal_items_by_id:
                 continue
             number = str(s.project_number) if s.project_number else 'Unknown'
             bucket = _bucket(number, s.project_name)
-            item = bucket['_submittals'].get(e.submittal_id)
-            if item is None:
-                item = {
-                    'submittal_id': e.submittal_id,
-                    'title': s.title,
-                    'status': s.status,
-                    'submittal_manager': s.submittal_manager,
-                    'events': [],
-                }
-                bucket['_submittals'][e.submittal_id] = item
-            item['events'].append({
-                'id': e.id,
-                'action': e.action,
-                'kind': kind,
-                'new_value': _extract_submittal_new_value_from_payload(e.action, e.payload),
-                'payload': e.payload,
-                'source': e.source,
-                'internal_user_id': e.internal_user_id,
-                'external_user_id': e.external_user_id,
-                'created_at': format_datetime_mountain(e.created_at),
-            })
+            item = {
+                'submittal_id': e.submittal_id,
+                'title': s.title,
+                'status': s.status,
+                'submittal_manager': s.submittal_manager,
+                'events': [],
+            }
+            bucket['_submittals'][e.submittal_id] = item
+            submittal_items_by_id[e.submittal_id] = item
+
+        # Backfill each included DRR's create/open/close dates from its full
+        # history up to the end of the month (its lifecycle state "as of" then) —
+        # the most recent event of each kind, even if from a prior month.
+        if submittal_items_by_id:
+            lifecycle = {}  # submittal_id -> {kind: (created_at_dt, event_dict)}
+            lifecycle_events = SubmittalEvents.query.filter(
+                SubmittalEvents.submittal_id.in_(submittal_items_by_id.keys()),
+                SubmittalEvents.created_at < end_utc,
+                SubmittalEvents.is_system_echo == False,  # noqa: E712
+            ).order_by(SubmittalEvents.created_at.asc()).all()
+            for e in lifecycle_events:
+                kind = _submittal_event_kind(e.action, e.payload)
+                if kind is None:
+                    continue
+                # Asc order means the last write per kind is the most recent.
+                lifecycle.setdefault(e.submittal_id, {})[kind] = (e.created_at, {
+                    'id': e.id,
+                    'action': e.action,
+                    'kind': kind,
+                    'new_value': _extract_submittal_new_value_from_payload(e.action, e.payload),
+                    'payload': e.payload,
+                    'source': e.source,
+                    'internal_user_id': e.internal_user_id,
+                    'external_user_id': e.external_user_id,
+                    'created_at': format_datetime_mountain(e.created_at),
+                })
+            for sid, item in submittal_items_by_id.items():
+                ordered = sorted(lifecycle.get(sid, {}).values(), key=lambda pair: pair[0])
+                item['events'] = [ev for (_dt, ev) in ordered]
 
         result_projects = []
         for number in sorted(projects.keys(), key=_project_sort_key):
