@@ -244,7 +244,7 @@ function ReleaseRow({ release, expanded, onToggle }) {
                 <span className="hidden md:flex items-center gap-4 shrink-0 text-sm">
                     <span className="w-44 flex items-center">
                         {r.stage
-                            ? <Badge tint={stageTint(r.stage)}>{r.stage}</Badge>
+                            ? <Badge tint={stageTint(r.stage)} className="w-40 justify-center whitespace-nowrap">{r.stage}</Badge>
                             : <span className="text-gray-300 dark:text-slate-600">—</span>}
                     </span>
                     <span className="w-28 text-gray-400 dark:text-slate-500 whitespace-nowrap">
