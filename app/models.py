@@ -409,6 +409,11 @@ class Releases(db.Model):
     start_install_formula = db.Column(db.String(256))  # New field for formula
     start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
     start_install_asap = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # True when start_install holds a date auto-recorded by the ASAP-drop on completion
+    # (release reached Ship Complete or later). Renders neutral/no-color and is preserved
+    # through completion marking (clear_hard_date_cascade no-ops on these rows).
+    start_install_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    installer = db.Column(db.String(64), nullable=True)  # Installer team; matches Trello list name
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -460,6 +465,7 @@ class Releases(db.Model):
             "start_install_formula": self.start_install_formula,
             "start_install_formulaTF": self.start_install_formulaTF,
             "start_install_asap": self.start_install_asap,
+            "start_install_no_color": self.start_install_no_color,
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,

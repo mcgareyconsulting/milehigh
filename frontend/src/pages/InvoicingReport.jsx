@@ -14,12 +14,20 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { invoicingApi } from '../services/invoicingApi';
+import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { checkAuth, userCanAccessInvoicing } from '../utils/auth';
 
 const MONTHS = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+// One combined filter value per project: number and name together, e.g. "1201 — Acme Tower".
+// project_number is unique, so this label uniquely identifies a project.
+const projectLabel = (p) => {
+    const name = (p.project_name ?? '').trim();
+    return name ? `${p.project_number} — ${name}` : String(p.project_number);
+};
 
 function actionColor(action) {
     if (!action) return 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200';
@@ -137,6 +145,10 @@ function InvoicingReport() {
     const [expandedSections, setExpandedSections] = useState(new Set());
     const [expandedItems, setExpandedItems] = useState(new Set());
 
+    // Single combined project filter (Excel-style). Empty Set = no filter.
+    const [projectFilter, setProjectFilter] = useState(new Set());
+    const [columnSort, setColumnSort] = useState({ column: null, direction: null });
+
     useEffect(() => {
         checkAuth().then((user) => setAuthorized(userCanAccessInvoicing(user)));
     }, []);
@@ -197,6 +209,19 @@ function InvoicingReport() {
     const years = [];
     for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y -= 1) years.push(y);
 
+    // Combined project values for the dropdown, sorted by project number.
+    const projectValues = projects
+        .map(projectLabel)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    const visibleProjects = projects
+        .filter((p) => projectFilter.size === 0 || projectFilter.has(projectLabel(p)))
+        .sort((a, b) => {
+            if (!columnSort.column) return 0;
+            const mult = columnSort.direction === 'desc' ? -1 : 1;
+            return mult * projectLabel(a).localeCompare(projectLabel(b), undefined, { numeric: true });
+        });
+
     return (
         <div className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6">
             <div className="flex flex-wrap items-end gap-3 mb-5">
@@ -234,6 +259,27 @@ function InvoicingReport() {
                 </div>
             </div>
 
+            {!loading && !error && projects.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-3 text-sm font-medium text-gray-700 dark:text-slate-200">
+                    <span className="text-xs text-gray-500 dark:text-slate-400">Filter:</span>
+                    <span className="px-2 py-1 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+                        <ColumnHeaderFilter
+                            column="project"
+                            values={projectValues}
+                            hasBlanks={false}
+                            selected={projectFilter}
+                            onChange={(next) => setProjectFilter(new Set(next))}
+                            sort={columnSort}
+                            onSort={(dir) => setColumnSort(dir ? { column: 'project', direction: dir } : { column: null, direction: null })}
+                            isActive={projectFilter.size > 0}
+                            autoWidth
+                        >
+                            Project # / Name
+                        </ColumnHeaderFilter>
+                    </span>
+                </div>
+            )}
+
             {loading && (
                 <div className="py-12 text-center text-gray-500 dark:text-slate-400">Loading report…</div>
             )}
@@ -250,9 +296,15 @@ function InvoicingReport() {
                 </div>
             )}
 
-            {!loading && !error && projects.length > 0 && (
+            {!loading && !error && projects.length > 0 && visibleProjects.length === 0 && (
+                <div className="py-12 text-center text-gray-500 dark:text-slate-400">
+                    No projects match the current filters.
+                </div>
+            )}
+
+            {!loading && !error && visibleProjects.length > 0 && (
                 <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
-                    {projects.map((proj) => {
+                    {visibleProjects.map((proj) => {
                         const pKey = proj.project_number;
                         const pOpen = expandedProjects.has(pKey);
                         const subSectionKey = `${pKey}:submittals`;

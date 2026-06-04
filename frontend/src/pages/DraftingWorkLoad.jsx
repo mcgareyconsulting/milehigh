@@ -94,6 +94,15 @@ function DraftingWorkLoad() {
             .catch((err) => console.error('Failed to fetch submittal statuses:', err));
     }, []);
 
+    // Global Total Fab HRS (same figure shown on the Job Log header), fetched
+    // once from a lightweight aggregation endpoint. Independent of DWL filters.
+    const [totalFabHrs, setTotalFabHrs] = useState(null);
+    useEffect(() => {
+        draftingWorkLoadApi.fetchFabHoursTotal()
+            .then(setTotalFabHrs)
+            .catch((err) => console.error('Failed to fetch total fab hours:', err));
+    }, []);
+
     // Mentionable users for @mention autocomplete in the notes field
     const [mentionableUsers, setMentionableUsers] = useState([]);
     useEffect(() => {
@@ -183,6 +192,39 @@ function DraftingWorkLoad() {
         generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated);
     }, [displayRows, columns, lastUpdated]);
 
+    // Priority filter dropdowns in the toolbar (Project / BIC / Sub Manager). These share the
+    // SAME columnFilters state as the spreadsheet-style column-header filters, so the two surfaces
+    // stay mirrored and stack additively with each other and with other columns' filters.
+    // Single-select by default; Ctrl/Cmd+click adds more.
+    const renderToolbarFilter = (column, label) => {
+        const colInfo = uniqueValuesByColumn[column];
+        const colSelected = columnFilters[column] ?? [];
+        return (
+            <ColumnHeaderFilter
+                column={column}
+                values={colInfo?.values ?? []}
+                hasBlanks={colInfo?.hasBlanks ?? false}
+                selected={new Set(colSelected)}
+                onChange={(next) => setColumnFilter(column, [...next])}
+                sort={columnSort}
+                onSort={(dir) => setColumnSortDirect(column, dir)}
+                isActive={colSelected.length > 0}
+                autoWidth
+                singleSelect
+                immediate
+            >
+                <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-semibold whitespace-nowrap ${colSelected.length > 0
+                        ? 'bg-blue-700 text-white border-blue-700'
+                        : 'bg-white dark:bg-slate-600 border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200'}`}
+                >
+                    {label}{colSelected.length > 0 ? ` (${colSelected.length})` : ''}
+                    <span className="text-[0.65rem] leading-none">▾</span>
+                </span>
+            </ColumnHeaderFilter>
+        );
+    };
+
     const handleBump = useCallback(async (submittalId) => {
         const container = scrollContainerRef.current;
         const scrollTop = container ? container.scrollTop : 0;
@@ -235,102 +277,118 @@ function DraftingWorkLoad() {
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0">
                         {/* Actions + Filters - fixed, do not scroll */}
                         <div className="flex-shrink-0 p-2">
-                            <div className="bg-gray-100 dark:bg-slate-700 rounded-lg px-3 py-2.5 border border-gray-200 dark:border-slate-600 space-y-2.5">
-                                {/* Actions row */}
-                                <div className="flex items-center gap-2.5 flex-wrap">
+                            <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
+                                {/* Row 2: view mode + primary CTA + Actions + Open/Draft + priority filters */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                     <ViewToggle value={viewMode} onChange={setViewMode} />
-                                    {isAdmin && <span className="hidden sm:block h-5 w-px bg-gray-300 dark:bg-slate-500" aria-hidden="true" />}
-                                    {isAdmin && (
-                                    <button
-                                        onClick={() => setAddProjectOpen(true)}
-                                        className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer"
-                                        title="Add a new Procore project to the system"
-                                    >
-                                        + Add Project
-                                    </button>
-                                    )}
-                                    {isAdmin && (
-                                    <button
-                                        onClick={handleResort}
-                                        disabled={!singleSelectedBallInCourt || resorting}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
-                                            !singleSelectedBallInCourt || resorting
-                                                ? 'bg-gray-200 dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-400 dark:text-slate-400 cursor-not-allowed'
-                                                : 'bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer'
-                                        }`}
-                                        title={!singleSelectedBallInCourt
-                                            ? 'Filter the BIC column to a single drafter to enable resort'
-                                            : `Compress ${singleSelectedBallInCourt}'s ordered submittals to sequential numbers`}
-                                    >
-                                        {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
-                                    </button>
-                                    )}
-                                    <button
-                                        onClick={handleGeneratePDF}
-                                        disabled={!hasData || loading}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${!hasData || loading
-                                            ? 'bg-gray-200 dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-400 dark:text-slate-400 cursor-not-allowed'
-                                            : 'bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500 cursor-pointer'
-                                            }`}
-                                        title="Generate PDF"
-                                    >
-                                        🖨️ Print/PDF
-                                    </button>
-                                    <div className="ml-auto text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                                        Last updated <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+
+                                    <div className="flex-1" />
+
+                                    {/* Centered primary filters — share state with the spreadsheet column filters.
+                                        Open/Draft is the rightmost element of this centered group. */}
+                                    <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                                        <span className="text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Filter:</span>
+                                        {renderToolbarFilter('NAME', 'Project')}
+                                        {renderToolbarFilter('BIC', 'BIC')}
+                                        {renderToolbarFilter('SUB MANAGER', 'Sub Mgr')}
+                                        {/* Open / Draft segmented — rightmost element of the centered filters */}
+                                        <div className="inline-flex rounded-md border border-gray-400 dark:border-slate-500 overflow-hidden">
+                                            <button
+                                                onClick={() => setSelectedTab('open')}
+                                                className={`px-3 py-1 text-xs font-semibold transition-all whitespace-nowrap ${selectedTab === 'open'
+                                                    ? 'bg-blue-700 text-white'
+                                                    : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                    }`}
+                                            >
+                                                Open
+                                            </button>
+                                            <button
+                                                onClick={() => setSelectedTab('draft')}
+                                                className={`px-3 py-1 text-xs font-semibold transition-all whitespace-nowrap border-l border-gray-400 dark:border-slate-500 ${selectedTab === 'draft'
+                                                    ? 'bg-blue-700 text-white'
+                                                    : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                                                    }`}
+                                            >
+                                                Draft
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    <div className="flex-1" />
+
+                                    {resorting && (
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300" role="status" aria-live="polite">
+                                            <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-blue-300 border-t-blue-700 dark:border-slate-600 dark:border-t-blue-300 animate-spin" />
+                                            Resorting…
+                                        </span>
+                                    )}
+
+                                    {/* Actions (right): New Project · Resort · Print — admin-only */}
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => setAddProjectOpen(true)}
+                                            className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
+                                            title="Add a new Procore project to the system"
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>New Project
+                                        </button>
+                                    )}
+                                    {isAdmin && (
+                                        <>
+                                            <button
+                                                onClick={handleResort}
+                                                disabled={!singleSelectedBallInCourt || resorting}
+                                                title={!singleSelectedBallInCourt
+                                                    ? 'Filter the BIC column to a single drafter to enable resort'
+                                                    : `Compress ${singleSelectedBallInCourt}'s ordered submittals to sequential numbers`}
+                                                className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {resorting ? 'Resorting\u2026' : '\u2195 Resort'}
+                                            </button>
+                                            <button
+                                                onClick={handleGeneratePDF}
+                                                disabled={!hasData || loading}
+                                                title="Generate PDF"
+                                                className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                🖨️ Print/PDF
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
 
-                                {/* Divider between actions and filters */}
-                                <div className="border-t border-gray-200 dark:border-slate-600" />
-
-                                {/* Filters row */}
-                                <div className="flex items-center gap-2.5 flex-wrap">
-                                    {/* Open / Draft segmented toggle */}
-                                    <div className="inline-flex rounded-md border border-gray-400 dark:border-slate-500 overflow-hidden shadow-sm">
+                                {/* Row 3: Search + meta — always visible */}
+                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-1.5">
+                                            <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">Search:</label>
+                                            <input
+                                                type="text"
+                                                value={search}
+                                                onChange={(e) => setSearch(e.target.value)}
+                                                placeholder="Project, title, BIC, manager…"
+                                                className="w-48 sm:w-64 px-2 py-2 md:py-0.5 text-sm md:text-xs border border-gray-300 dark:border-slate-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
+                                            />
+                                        </div>
                                         <button
-                                            onClick={() => setSelectedTab('open')}
-                                            className={`px-3.5 py-1.5 text-xs font-semibold transition-all whitespace-nowrap ${selectedTab === 'open'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
+                                            onClick={resetFilters}
+                                            className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
                                         >
-                                            Open
-                                        </button>
-                                        <button
-                                            onClick={() => setSelectedTab('draft')}
-                                            className={`px-3.5 py-1.5 text-xs font-semibold transition-all whitespace-nowrap border-l border-gray-400 dark:border-slate-500 ${selectedTab === 'draft'
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
-                                                }`}
-                                        >
-                                            Draft
+                                            Reset Filters
                                         </button>
                                     </div>
-
-                                    <span className="hidden sm:block h-5 w-px bg-gray-300 dark:bg-slate-500" aria-hidden="true" />
-
-                                    {/* Search */}
-                                    <div className="flex items-center gap-2">
-                                        <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">Search</label>
-                                        <input
-                                            type="text"
-                                            value={search}
-                                            onChange={(e) => setSearch(e.target.value)}
-                                            placeholder="Project, title, BIC, manager…"
-                                            className="w-48 sm:w-72 px-3 py-1.5 text-xs border border-gray-300 dark:border-slate-500 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-600 text-gray-900 dark:text-slate-100"
-                                        />
-                                    </div>
-
-                                    <button
-                                        onClick={resetFilters}
-                                        className="px-3 py-1.5 bg-white dark:bg-slate-600 border border-accent-300 dark:border-accent-600 text-accent-700 dark:text-accent-300 rounded-md text-xs font-semibold shadow-sm hover:bg-accent-50 dark:hover:bg-slate-500 transition-all whitespace-nowrap"
-                                    >
-                                        Reset Filters
-                                    </button>
-
-                                    <div className="ml-auto text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                                        Total <span className="font-semibold text-gray-900 dark:text-slate-100">{displayRows.length}</span> records
+                                    <div className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-slate-200">
+                                        <span>
+                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayRows.length}</span> records
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span>
+                                            Fab HRS: <span className="text-gray-900 dark:text-slate-100 font-bold">{Number.isFinite(totalFabHrs) ? totalFabHrs.toFixed(2) : '—'}</span>
+                                        </span>
+                                        <span className="text-gray-300 dark:text-slate-500">|</span>
+                                        <span className="text-gray-500 dark:text-slate-400 font-normal">
+                                            Last updated: <span className="font-semibold text-gray-700 dark:text-slate-200">{formattedLastUpdated}</span>
+                                        </span>
                                     </div>
                                 </div>
 
@@ -496,6 +554,7 @@ function DraftingWorkLoad() {
                                                                     onSort={(dir) => setColumnSortDirect(column, dir)}
                                                                     isActive={colSelected.length > 0}
                                                                     autoWidth
+                                                                    singleSelect={isBallInCourt}
                                                                 >
                                                                     {column}
                                                                 </ColumnHeaderFilter>

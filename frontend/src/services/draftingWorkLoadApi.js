@@ -42,6 +42,19 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Fetch the global Total Fab HRS figure (same number shown on the Job Log).
+     * Computed server-side via a single SQL aggregation; returns a float.
+     */
+    async fetchFabHoursTotal() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/fab-hours-total`);
+            return response.data.total_fab_hrs;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch total fab hours');
+        }
+    }
+
+    /**
      * Update order number for a submittal
      */
     async updateOrderNumber(submittalId, orderNumber) {

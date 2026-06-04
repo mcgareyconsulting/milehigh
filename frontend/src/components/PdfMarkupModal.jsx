@@ -836,6 +836,20 @@ export function PdfMarkupModal({
                 <div
                     ref={containerRef}
                     className="absolute inset-0 overflow-auto"
+                    // pdf.js binds a window-level keyboard handler that maps
+                    // Backspace/Delete to "delete selected annotation". Its
+                    // checker only exempts <input> elements, not the FreeText
+                    // contenteditable box — so while typing in a text annotation,
+                    // Backspace bubbles to that handler, gets preventDefault'd,
+                    // and removes no text. Stop the event before it reaches
+                    // window whenever the target is an editable text box; native
+                    // editing then handles it. Annotation-delete via Backspace
+                    // still works (that target isn't contenteditable).
+                    onKeyDownCapture={(e) => {
+                        if ((e.key === 'Backspace' || e.key === 'Delete') && e.target?.isContentEditable) {
+                            e.stopPropagation();
+                        }
+                    }}
                     // Hand mode allows one-finger pan-scroll; drawing tools
                     // suppress it so finger/stylus drags become strokes.
                     style={{ touchAction: tool === TOOL.HAND ? 'pan-x pan-y' : 'none', position: 'absolute' }}

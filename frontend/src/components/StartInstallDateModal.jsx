@@ -14,15 +14,21 @@
  * updated_by_agent: 2026-05-12T00:00:00Z
  */
 import React, { useState, useEffect } from 'react';
+import { jobsApi } from '../services/jobsApi';
 
-export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap }) {
+export function StartInstallDateModal({ isOpen, onClose, currentDate, currentInstaller, onSave, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap }) {
     const [dateInput, setDateInput] = useState('');
     const [asapToggle, setAsapToggle] = useState(false);
+    const [installer, setInstaller] = useState('');
+    const [installerOptions, setInstallerOptions] = useState([]);
     const [error, setError] = useState('');
+
+    const initialInstaller = currentInstaller || '';
 
     useEffect(() => {
         if (isOpen) {
             setAsapToggle(!!isAsap);
+            setInstaller(initialInstaller);
             if (currentDate && !isAsap) {
                 try {
                     const isoDate = typeof currentDate === 'string'
@@ -44,7 +50,15 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
             }
             setError('');
         }
-    }, [isOpen, currentDate, isAsap]);
+    }, [isOpen, currentDate, isAsap, initialInstaller]);
+
+    useEffect(() => {
+        if (isOpen && installerOptions.length === 0) {
+            jobsApi.getInstallerTeams()
+                .then(setInstallerOptions)
+                .catch(() => { /* leave options empty; selector still shows current value */ });
+        }
+    }, [isOpen, installerOptions.length]);
 
     const handleDateInputChange = (e) => {
         setDateInput(e.target.value);
@@ -58,29 +72,33 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
         if (next) setDateInput('');
     };
 
+    const installerChanged = installer !== initialInstaller;
+
     const handleSave = () => {
         if (asapToggle) {
             onSetAsap();
             return;
         }
-        if (!dateInput) {
-            setError('Please select a date');
+        if (!dateInput && !installerChanged) {
+            setError('Please select a date or installer');
             return;
         }
-        onSave(dateInput);
+        // Pass the installer only when it changed, so a date-only save leaves it untouched.
+        onSave(dateInput || null, installerChanged ? installer : undefined);
     };
 
     const handleCancel = () => {
         setDateInput('');
         setAsapToggle(!!isAsap);
+        setInstaller(initialInstaller);
         setError('');
         onClose();
     };
 
     if (!isOpen) return null;
 
-    const confirmLabel = asapToggle ? 'Set ASAP' : 'Save Date';
-    const confirmEnabled = asapToggle || !!dateInput;
+    const confirmLabel = asapToggle ? 'Set ASAP' : 'Set Install';
+    const confirmEnabled = asapToggle || !!dateInput || installerChanged;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -140,6 +158,32 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, onSave, on
                             {asapToggle
                                 ? 'ASAP releases keep the formula-driven date and display "ASAP" in red.'
                                 : 'Saving a date sets it as a hard date. Start Install dates cascade automatically.'}
+                        </p>
+                    </div>
+
+                    <div className="mb-6">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Installer / Team
+                        </label>
+                        <select
+                            value={installer}
+                            onChange={(e) => { setInstaller(e.target.value); setError(''); }}
+                            disabled={asapToggle}
+                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 ${
+                                asapToggle ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''
+                            }`}
+                        >
+                            <option value="">— Unassigned —</option>
+                            {installerOptions.map((name) => (
+                                <option key={name} value={name}>{name}</option>
+                            ))}
+                            {/* Preserve a current value that is no longer in the configured list. */}
+                            {installer && !installerOptions.includes(installer) && (
+                                <option value={installer}>{installer}</option>
+                            )}
+                        </select>
+                        <p className="text-gray-500 text-xs mt-2">
+                            Assigning an installer moves this release's mirror card to that list on Trello.
                         </p>
                     </div>
 
