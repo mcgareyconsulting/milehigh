@@ -44,8 +44,6 @@ const columnWidthStyles = `
         .dwl-col-sub-manager { max-width: 120px !important; }
         .dwl-col-notes { max-width: 300px !important; }
         .dwl-col-submittal-id { max-width: 128px !important; }
-        .dwl-col-last-bic-update { max-width: 100px !important; }
-        .dwl-col-lifespan { max-width: 75px !important; }
     }
 `;
 
@@ -472,11 +470,9 @@ function DraftingWorkLoad() {
                                                     const isSubmittalId = column === 'Submittals Id';
                                                     const isProjectNumber = column === 'PROJ. #';
                                                     const isSubmittalManager = column === 'SUB MANAGER';
-                                                    const isLastBIC = column === 'LAST BIC';
-                                                    const isLifespan = column === 'LIFESPAN';
                                                     const isDueDate = column === 'DUE DATE';
 
-                                                    // Percentage widths (must total 100%). PROCORE STATUS and LAST BIC get more space.
+                                                    // Percentage widths (must total 100%). PROCORE STATUS gets more space.
                                                     let headerStyle = {};
                                                     let columnClass = '';
                                                     if (isOrderNumber) {
@@ -506,12 +502,6 @@ function DraftingWorkLoad() {
                                                     } else if (isSubmittalManager) {
                                                         headerStyle = { width: '7%' };
                                                         columnClass = 'dwl-col-sub-manager';
-                                                    } else if (isLastBIC) {
-                                                        headerStyle = { width: '6%' };
-                                                        columnClass = 'dwl-col-last-bic-update';
-                                                    } else if (isLifespan) {
-                                                        headerStyle = { width: '7%' };
-                                                        columnClass = 'dwl-col-lifespan';
                                                     } else if (isDueDate) {
                                                         headerStyle = { width: '6%' };
                                                         columnClass = 'dwl-col-due-date';
@@ -521,9 +511,8 @@ function DraftingWorkLoad() {
                                                     }
 
                                                     // Reduce padding for specific columns
-                                                    const isLifespanHeader = column === 'LIFESPAN';
                                                     const isProjectNumberHeader = column === 'PROJ. #';
-                                                    const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isLifespanHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
+                                                    const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
                                                     // Determine if this column is sortable
                                                     // ORDER #, NOTES, PROCORE STATUS, COMP. STATUS are not sortable (interactive); DUE DATE is sortable (asc/desc)

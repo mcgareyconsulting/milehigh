@@ -73,8 +73,8 @@ function prepareTableData(rows, columns) {
                 value = formatTypeValue(value);
             }
 
-            // Format dates (DUE DATE); LIFESPAN is a number, not a date
-            if (column === 'DUE DATE' || (column.includes('Date') && column !== 'LIFESPAN')) {
+            // Format dates (DUE DATE)
+            if (column === 'DUE DATE' || column.includes('Date')) {
                 value = formatDate(value);
             } else {
                 value = formatCellValue(value);
@@ -128,10 +128,10 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
     // Find the index of the TYPE column (for DRR green highlight)
     const typeColumnIndex = columns.findIndex(col => col === 'TYPE');
 
-    // Build column styles by index (ORDER #, PROJ. #, NAME, TITLE, PROCORE STATUS, BIC, LAST BIC, TYPE, COMP. STATUS, SUB MANAGER, DUE DATE, LIFESPAN, NOTES)
+    // Build column styles by index (ORDER #, PROJ. #, NAME, TITLE, PROCORE STATUS, BIC, TYPE, COMP. STATUS, SUB MANAGER, DUE DATE, NOTES)
     const defaultWidth = 80;
     const columnStyles = columns.reduce((acc, _, i) => {
-        const widths = [50, 65, 180, 180, 80, 100, 70, 70, 90, 100, 75, 50, 200]; // match new column order
+        const widths = [50, 65, 180, 180, 80, 100, 70, 90, 100, 75, 200]; // match new column order
         acc[i] = { cellWidth: widths[i] ?? defaultWidth, halign: 'center' };
         return acc;
     }, {});

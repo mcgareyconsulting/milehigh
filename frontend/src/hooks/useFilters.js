@@ -33,12 +33,10 @@ const getColumnValue = (row, column) => {
         'TITLE': 'title',
         'PROCORE STATUS': 'status',
         'BIC': 'ball_in_court',
-        'LAST BIC': 'days_since_ball_in_court_update',
         'TYPE': 'type',
         'COMP. STATUS': 'submittal_drafting_status',
         'SUB MANAGER': 'submittal_manager',
         'DUE DATE': 'due_date',
-        'LIFESPAN': 'lifespan',
         'NOTES': 'notes',
     };
 
@@ -364,7 +362,7 @@ export function useFilters(rows = []) {
 
     /**
      * Cycle column sort: null -> asc -> desc -> null. Used by the plain (non-dropdown)
-     * sortable headers (TITLE, LAST BIC, TYPE, DUE DATE, LIFESPAN, PROJ. #).
+     * sortable headers (TITLE, TYPE, DUE DATE, PROJ. #).
      */
     const handleColumnSort = useCallback((column) => {
         setColumnSort((current) => {

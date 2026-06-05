@@ -25,22 +25,6 @@ function statusColor(status) {
     return 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200';
 }
 
-function lifespanText(row) {
-    const ls = row['LIFESPAN'] ?? row.lifespan_days;
-    if (ls == null || ls === '') return null;
-    const days = parseFloat(ls);
-    if (!Number.isFinite(days)) return String(ls);
-    return `${Math.round(days)}d open`;
-}
-
-function lastBicText(row) {
-    const days = row['LAST BIC'] ?? row.days_since_ball_in_court_update;
-    if (days == null || days === '') return null;
-    const n = parseFloat(days);
-    if (!Number.isFinite(n)) return String(days);
-    return `${Math.round(n)}d in BIC`;
-}
-
 function FieldPair({ label, value }) {
     return (
         <div className="flex flex-col gap-0.5 px-2 py-1 rounded bg-white dark:bg-slate-700/40 border border-gray-100 dark:border-slate-600/60">
@@ -61,8 +45,6 @@ export default function SubmittalRow({ submittal, isHighlighted = false, onOpenD
     const procoreStatus = fmt(submittal['PROCORE STATUS']);
     const dueDate = formatDate(submittal['DUE DATE']);
     const notes = (submittal['NOTES'] || '').toString().trim();
-    const lifespan = lifespanText(submittal);
-    const lastBic = lastBicText(submittal);
 
     const containerCls = `border-b border-gray-200 dark:border-slate-700 ${
         isHighlighted ? 'bg-amber-50 dark:bg-amber-900/20' : ''
@@ -114,8 +96,6 @@ export default function SubmittalRow({ submittal, isHighlighted = false, onOpenD
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         <FieldPair label="Proj #" value={projNum} />
                         <FieldPair label="BIC" value={bic} />
-                        <FieldPair label="Last BIC" value={lastBic || '—'} />
-                        <FieldPair label="Lifespan" value={lifespan || '—'} />
                     </div>
 
                     {notes && (
