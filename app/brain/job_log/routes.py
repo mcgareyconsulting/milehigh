@@ -696,7 +696,6 @@ def job_search():
                 'ball_in_court': d.get('ball_in_court'),
                 'submittal_drafting_status': d.get('submittal_drafting_status') or '',
                 'due_date': d.get('due_date'),
-                'days_since_ball_in_court_update': d.get('days_since_ball_in_court_update'),
             })
 
         return jsonify({

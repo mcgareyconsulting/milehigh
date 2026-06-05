@@ -150,23 +150,6 @@ class Submittals(db.Model):
         return None
 
     def to_dict(self):
-        # Use cached last_bic_update column (populated by backfill migration M7)
-        # Do NOT call get_last_bic_from_events() here—it's expensive and only for audit/backfill
-        last_ball_update = self.last_bic_update
-        time_since_update = (datetime.utcnow() - last_ball_update) if last_ball_update else None
-        
-        # Calculate days since last ball in court update (aging report)
-        days_since_ball_update = None
-        if time_since_update:
-            days_since_ball_update = int(time_since_update.total_seconds() / 86400)  # Convert seconds to days
-
-        # Lifespan: days since creation (how old the submittal is)
-        lifespan = None
-        if self.created_at:
-            today = date.today()
-            created_date = self.created_at.date() if hasattr(self.created_at, 'date') else self.created_at
-            lifespan = (today - created_date).days
-        
         return {
             "id": self.id,
             "submittal_id": self.submittal_id,
@@ -182,13 +165,9 @@ class Submittals(db.Model):
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
             "due_date": _dt(self.due_date),
-            "lifespan": lifespan,
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
             "created_at": _dt(self.created_at),
-            "last_ball_in_court_update": _dt(last_ball_update),
-            "time_since_ball_in_court_update_seconds": time_since_update.total_seconds() if time_since_update else None,
-            "days_since_ball_in_court_update": days_since_ball_update,
         }
 
 class SystemLogs(db.Model):

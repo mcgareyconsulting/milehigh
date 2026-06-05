@@ -287,8 +287,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isStatus = column === 'COMP. STATUS';
                     const isProjectName = column === 'NAME';
                     const isBallInCourt = column === 'BIC';
-                    const isLastBIC = column === 'LAST BIC';
-                    const isLifespan = column === 'LIFESPAN';
                     const isDueDate = column === 'DUE DATE';
 
                     // Skip rendering the Submittals Id column
@@ -328,12 +326,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         columnClass = 'dwl-col-name';
                     } else if (isBallInCourt) {
                         columnClass = 'dwl-col-bic';
-                    } else if (isLastBIC) {
-                        customStyle = { maxWidth: '100px' };
-                        columnClass = 'dwl-col-last-bic-update';
-                    } else if (isLifespan) {
-                        customStyle = { maxWidth: '75px' };
-                        columnClass = 'dwl-col-lifespan';
                     } else if (isDueDate) {
                         customStyle = { maxWidth: '120px' };
                         columnClass = 'dwl-col-due-date';
@@ -677,54 +669,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 title={cellValue}
                             >
                                 {cellValue}
-                            </td>
-                        );
-                    }
-
-                    // Handle Last BIC column - show days since last ball in court update
-                    if (isLastBIC) {
-                        const daysSinceUpdate = row['LAST BIC'] ?? row.days_since_ball_in_court_update;
-                        const displayValue = daysSinceUpdate !== null && daysSinceUpdate !== undefined
-                            ? `${daysSinceUpdate} days`
-                            : '—';
-
-                        // Determine background color based on days
-                        let bgColorClass = '';
-                        if (daysSinceUpdate !== null && daysSinceUpdate !== undefined) {
-                            if (daysSinceUpdate >= 5) {
-                                bgColorClass = 'bg-red-200 dark:bg-red-900/50 text-red-900 dark:text-red-200'; // Red for 5+ days
-                            } else if (daysSinceUpdate >= 3) {
-                                bgColorClass = 'bg-yellow-200 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-200'; // Yellow for 3-4 days
-                            }
-                        }
-
-                        return (
-                            <td
-                                key={`${row.id}-${column}`}
-                                className={`px-1 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${bgColorClass || cellBgClass} ${!bgColorClass ? 'text-gray-900 dark:text-slate-100' : ''} border-r border-gray-300 dark:border-slate-600 text-center dwl-col-last-bic`}
-                                style={{ maxWidth: '100px' }}
-                                title={daysSinceUpdate !== null && daysSinceUpdate !== undefined ? `${daysSinceUpdate} days` : 'No ball in court update recorded'}
-                            >
-                                {displayValue}
-                            </td>
-                        );
-                    }
-
-                    // Handle LIFESPAN column - days since creation (how old the submittal is)
-                    if (isLifespan) {
-                        const lifespanValue = row['LIFESPAN'] ?? row.lifespan;
-                        const displayLifespan = lifespanValue !== null && lifespanValue !== undefined
-                            ? `${lifespanValue} days`
-                            : '—';
-
-                        return (
-                            <td
-                                key={`${row.id}-${column}`}
-                                className={`px-0 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-lifespan`}
-                                style={{ maxWidth: '75px' }}
-                                title={lifespanValue !== null && lifespanValue !== undefined ? `${lifespanValue} days since creation` : 'N/A'}
-                            >
-                                {displayLifespan}
                             </td>
                         );
                     }

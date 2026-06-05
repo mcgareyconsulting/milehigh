@@ -29,16 +29,11 @@ function transformSubmittal(submittal, index) {
         'TITLE': submittal.title,
         'PROCORE STATUS': submittal.status,
         'BIC': submittal.ball_in_court,
-        'LAST BIC': submittal.days_since_ball_in_court_update,
         'TYPE': submittal.type,
         'COMP. STATUS': submittal.submittal_drafting_status,
         'SUB MANAGER': submittal.submittal_manager,
         'DUE DATE': submittal.due_date,
-        'LIFESPAN': submittal.lifespan,
         'NOTES': submittal.notes,
-        // Include ball_in_court tracking fields
-        last_ball_in_court_update: submittal.last_ball_in_court_update,
-        time_since_ball_in_court_update_seconds: submittal.time_since_ball_in_court_update_seconds,
         id: String(rawId)
     };
 }
