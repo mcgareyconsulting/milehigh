@@ -14,7 +14,7 @@
  */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
-import { setAsapWithCapConfirm } from '../utils/asap';
+import { setAsapAndAssign } from '../utils/asap';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
 import { NotesHistoryModal } from './NotesHistoryModal';
@@ -612,12 +612,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
         setIsStartInstallModalOpen(false);
         try {
-            const ok = await setAsapWithCapConfirm(jobNumber, releaseNumber);
-            // ASAP stamps the date; if an installer was picked too, assign it (installer-only,
-            // keeps the ASAP date) so the mirror bar gets seeded in the same action.
-            if (ok && installer !== undefined) {
-                await jobsApi.updateStartInstall(jobNumber, releaseNumber, null, installer);
-            }
+            const ok = await setAsapAndAssign(jobNumber, releaseNumber, installer);
             if (ok && onUpdate) onUpdate();
         } catch (error) {
             console.error(`[START_INSTALL] Failed to set ASAP for job ${jobNumber}-${releaseNumber}:`, error);

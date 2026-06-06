@@ -430,7 +430,7 @@ class TestAsapDropOnCompletion:
 
     def test_recorded_date_survives_complete_marking(self, app):
         """The no-color date persists when the release later reaches Complete —
-        clear_hard_date_cascade no-ops on no_color rows."""
+        neutralize_install_date_cascade no-ops on already-neutral rows."""
         from datetime import datetime
 
         with app.app_context():

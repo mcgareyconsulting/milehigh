@@ -473,7 +473,7 @@ class TestInvoicedCascade:
 
 class TestHelperIdempotency:
     def test_helper_noop_when_already_formula_driven(self, app):
-        from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
+        from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
             neutralize_install_date_cascade,
         )
         with app.app_context():
@@ -496,7 +496,7 @@ class TestHelperIdempotency:
             assert children == []
 
     def test_helper_noop_when_formulaTF_is_none(self, app):
-        from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
+        from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
             neutralize_install_date_cascade,
         )
         with app.app_context():

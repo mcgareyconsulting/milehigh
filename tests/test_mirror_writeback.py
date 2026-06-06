@@ -132,7 +132,7 @@ class TestNumGuysRecompute:
             )
             db.session.commit()
 
-            with patch("app.trello.sync.set_mirror_date_range") as mock_push, \
+            with patch("app.trello.sync.update_card_date_range") as mock_push, \
                  patch("app.trello.sync.sync_num_guys_on_card") as mock_sync:
                 changed = _apply_num_guys_change(r, 4.0, source="Trello")
                 db.session.commit()
@@ -141,8 +141,8 @@ class TestNumGuysRecompute:
             assert r.num_guys == 4.0
             # 4 guys: ceil(32/(4*8)) = 1 install day -> completes the start day, 6/15.
             assert r.comp_eta == date(2026, 6, 15)
-            # The new bar end is pushed to the mirror (start unchanged).
-            mock_push.assert_called_once_with("primary-1", date(2026, 6, 15), date(2026, 6, 15))
+            # The new bar end is pushed straight to the persisted mirror id (start unchanged).
+            mock_push.assert_called_once_with("mirror-1", date(2026, 6, 15), date(2026, 6, 15))
             # Both cards are synced to the canonical value (DB is source of truth).
             synced = {c.args[0] for c in mock_sync.call_args_list}
             assert synced == {"primary-1", "mirror-1"}
@@ -159,7 +159,7 @@ class TestNumGuysRecompute:
 
             card_data = {"desc": "**Number of Guys:** 4"}
             event_info = {"change_types": ["description_change"], "time": "2026-06-12T10:00:00Z"}
-            with patch("app.trello.sync.set_mirror_date_range"), \
+            with patch("app.trello.sync.update_card_date_range"), \
                  patch("app.trello.sync.sync_num_guys_on_card"), \
                  patch("app.trello.sync.safe_log_sync_event"):
                 handled = _handle_mirror_writeback("mirror-1", card_data, event_info, _sync_op())
@@ -177,7 +177,7 @@ class TestNumGuysRecompute:
                 install_hrs=32.0, num_guys=2.0,
             )
             db.session.commit()
-            with patch("app.trello.sync.set_mirror_date_range") as mock_push, \
+            with patch("app.trello.sync.update_card_date_range") as mock_push, \
                  patch("app.trello.sync.sync_num_guys_on_card") as mock_sync:
                 changed = _apply_num_guys_change(r, 2.0, source="Trello")
             assert changed is False

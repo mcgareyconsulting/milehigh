@@ -33,11 +33,9 @@ from app.trello.api import (
     update_trello_card,
     add_comment_to_trello_card,
     parse_num_guys_from_description,
-    update_installation_duration_in_description,
-    update_num_guys_in_description,
     update_trello_card_description,
     update_card_custom_field_number,
-    set_mirror_date_range,
+    update_card_date_range,
     sync_num_guys_on_card,
     set_num_guys_in_description,
 )
@@ -199,11 +197,13 @@ def _apply_num_guys_change(rec, new_num_guys, *, source, trello_user_id=None):
                 },
                 external_user_id=trello_user_id,
             )
-            # Push the new bar end to the mirror card (start unchanged). Best-effort; the
-            # resulting due webhook is a no-op echo (DB already == card).
-            if rec.trello_card_id:
+            # Push the new bar end straight to the already-persisted (board-verified) mirror
+            # card — no attachment walk needed. Best-effort; the due webhook is a no-op echo.
+            if rec.mirror_trello_card_id:
                 try:
-                    set_mirror_date_range(rec.trello_card_id, rec.start_install, new_comp_eta)
+                    update_card_date_range(
+                        rec.mirror_trello_card_id, rec.start_install, new_comp_eta or rec.start_install
+                    )
                 except Exception as e:
                     logger.error(
                         f"num_guys change: failed to update mirror bar for "
@@ -234,10 +234,12 @@ def _handle_mirror_writeback(card_id, card_data, event_info, sync_op):
 
     # 1) Date slides -> verbatim write-back.
     if "start_date_change" in change_types or "due_date_change" in change_types:
-        new_start = parse_trello_datetime(card_data["start"]) if card_data.get("start") else None
-        new_due = parse_trello_datetime(card_data["due"]) if card_data.get("due") else None
-        new_start_date = new_start.date() if isinstance(new_start, datetime) else new_start
-        new_due_date = new_due.date() if isinstance(new_due, datetime) else new_due
+        def _card_date(key):
+            dt = parse_trello_datetime(card_data[key]) if card_data.get(key) else None
+            return dt.date() if dt else None
+
+        new_start_date = _card_date("start")
+        new_due_date = _card_date("due")
 
         cur_start = mirror_rec.start_install
         cur_due = mirror_rec.comp_eta

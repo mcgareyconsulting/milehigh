@@ -32,7 +32,7 @@ from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
-from app.brain.job_log.features.start_install.clear_hard_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
 from datetime import datetime, timedelta
 from sqlalchemy import or_
 import json

@@ -17,7 +17,7 @@
 import React, { useState } from 'react';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { jobsApi } from '../services/jobsApi';
-import { setAsapWithCapConfirm } from '../utils/asap';
+import { setAsapAndAssign } from '../utils/asap';
 import { formatDateShort } from '../utils/formatters';
 
 export default function StartInstallEditor({
@@ -68,12 +68,7 @@ export default function StartInstallEditor({
     const handleSetAsap = async (installer) => {
         setOpen(false);
         try {
-            const ok = await setAsapWithCapConfirm(job, release);
-            // ASAP stamps the date; if an installer was picked too, assign it (installer-only,
-            // keeps the ASAP date) so the mirror bar gets seeded in the same action.
-            if (ok && installer !== undefined) {
-                await jobsApi.updateStartInstall(job, release, null, installer);
-            }
+            const ok = await setAsapAndAssign(job, release, installer);
             if (ok) refresh();
         } catch (e) {
             alert(`Failed to set ASAP: ${e.message}`);

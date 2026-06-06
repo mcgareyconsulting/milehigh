@@ -5,7 +5,7 @@ purpose: Encapsulate the full stage update workflow (DB write, stage_group sync,
 exports:
   UpdateStageCommand: Dataclass command that executes a stage update with all side effects
   StageUpdateResult: Dataclass result with event_id, job_comp/fab_order extras
-imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.clear_hard_date_cascade]
+imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.neutralize_install_date_cascade]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Fixed-tier stages (Ready-to-Ship / Complete groups) auto-assign fab_order via get_fixed_tier
@@ -22,7 +22,7 @@ from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.brain.job_log.features.start_install.clear_hard_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
 
 logger = get_logger(__name__)
 
