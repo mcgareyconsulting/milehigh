@@ -164,7 +164,12 @@ export function PdfVersionHistoryModal({
         }
     };
 
+    // Auto-saved on blur. No-op when the note is unchanged so leaving the
+    // textarea without edits doesn't fire a request.
     const saveNote = async (photoId) => {
+        const draft = noteDrafts[photoId] ?? '';
+        const current = photos.find((p) => p.id === photoId)?.note || '';
+        if (draft === current) return;
         setError(null);
         try {
             const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/photos/${photoId}`, {
@@ -394,19 +399,12 @@ export function PdfVersionHistoryModal({
                                                     onChange={(e) =>
                                                         setNoteDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
                                                     }
+                                                    onBlur={() => saveNote(p.id)}
                                                     placeholder="Optional notes…"
                                                     rows={2}
                                                     className="mt-2 w-full text-sm border border-gray-300 rounded-md px-2 py-1 resize-y focus:outline-none focus:ring-1 focus:ring-accent-500"
                                                 />
                                                 <div className="flex items-center gap-2 mt-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => saveNote(p.id)}
-                                                        disabled={(noteDrafts[p.id] ?? '') === (p.note || '')}
-                                                        className="px-3 py-1 text-xs bg-accent-600 text-white rounded-md font-semibold disabled:opacity-50"
-                                                    >
-                                                        Save note
-                                                    </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => deletePhoto(p.id)}
