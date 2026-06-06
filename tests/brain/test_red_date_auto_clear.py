@@ -1,8 +1,9 @@
-"""Tests for red-date (hard start_install) auto-clear cascade.
+"""Tests for the install-date neutralize cascade.
 
-When a release reaches the "complete" zone — stage='Complete' (equivalently
-job_comp='X') or invoiced='X' — any hard-date `start_install` should clear
-automatically. This file covers all three trigger paths plus negative cases.
+When a release reaches the "complete" zone — stage='Complete'/'Install Complete',
+job_comp='X', or invoiced='X' — a hard-date `start_install` is KEPT but its color is
+stripped (start_install_no_color=True, ASAP cleared) so a finished release doesn't show
+an alarming red/green/yellow date. This file covers all trigger paths plus negative cases.
 """
 from datetime import date
 
@@ -47,7 +48,7 @@ def _stage_command_patches():
 # ---------------------------------------------------------------------------
 
 class TestStageCompleteCascade:
-    def test_stage_to_complete_clears_hard_date(self, app):
+    def test_stage_to_complete_neutralizes_install_date(self, app):
         with app.app_context():
             r = _make_release(
                 1, "A",
@@ -63,8 +64,10 @@ class TestStageCompleteCascade:
                 result = UpdateStageCommand(job_id=1, release="A", stage="Complete").execute()
 
             db.session.refresh(r)
-            assert r.start_install_formulaTF is True
-            assert r.start_install_formula is None
+            # Date kept, color stripped.
+            assert r.start_install == date(2026, 6, 1)
+            assert r.start_install_formulaTF is False
+            assert r.start_install_no_color is True
             assert result.extras.get("hard_date_cleared") is True
 
             # Child event linked to the parent update_stage event.
@@ -73,7 +76,7 @@ class TestStageCompleteCascade:
                 e for e in ReleaseEvents.query.all()
                 if e.action == "updated"
                 and isinstance(e.payload, dict)
-                and e.payload.get("field") == "start_install_formulaTF"
+                and e.payload.get("field") == "start_install_no_color"
             ]
             assert len(children) == 1
             assert children[0].payload.get("parent_event_id") == stage_event.id
@@ -105,7 +108,7 @@ class TestStageCompleteCascade:
             ]
             assert children == []
 
-    def test_stage_to_install_complete_clears_hard_date_and_sets_job_comp(self, app):
+    def test_stage_to_install_complete_neutralizes_and_sets_job_comp(self, app):
         with app.app_context():
             r = _make_release(
                 1, "A",
@@ -123,7 +126,8 @@ class TestStageCompleteCascade:
                 ).execute()
 
             db.session.refresh(r)
-            assert r.start_install_formulaTF is True
+            assert r.start_install == date(2026, 6, 1)  # date kept
+            assert r.start_install_no_color is True       # color stripped
             assert r.job_comp == "X"  # Install Complete sets the Install Prog marker
             assert result.extras.get("hard_date_cleared") is True
 
@@ -132,7 +136,7 @@ class TestStageCompleteCascade:
                 e for e in ReleaseEvents.query.all()
                 if e.action == "updated"
                 and isinstance(e.payload, dict)
-                and e.payload.get("field") == "start_install_formulaTF"
+                and e.payload.get("field") == "start_install_no_color"
             ]
             assert len(hard_date_children) == 1
             assert hard_date_children[0].payload.get("reason") == "stage_set_to_install_complete"
@@ -296,7 +300,8 @@ class TestJobCompCascade:
 
             db.session.expire_all()
             r2 = Releases.query.filter_by(job=1, release="A").first()
-            assert r2.start_install_formulaTF is True
+            assert r2.start_install == date(2026, 6, 1)   # date kept
+            assert r2.start_install_no_color is True        # color stripped
             assert r2.job_comp == "X"
             assert r2.stage == "Install Complete"  # 'X' marks install complete
 
@@ -304,7 +309,7 @@ class TestJobCompCascade:
                 e for e in ReleaseEvents.query.all()
                 if e.action == "updated"
                 and isinstance(e.payload, dict)
-                and e.payload.get("field") == "start_install_formulaTF"
+                and e.payload.get("field") == "start_install_no_color"
                 and e.payload.get("reason") == "job_comp_set_to_x"
             ]
             assert len(children) == 1
@@ -410,14 +415,15 @@ class TestInvoicedCascade:
 
             db.session.expire_all()
             r2 = Releases.query.filter_by(job=1, release="A").first()
-            assert r2.start_install_formulaTF is True
+            assert r2.start_install == date(2026, 6, 1)   # date kept
+            assert r2.start_install_no_color is True        # color stripped
             assert r2.invoiced == "X"
 
             children = [
                 e for e in ReleaseEvents.query.all()
                 if e.action == "updated"
                 and isinstance(e.payload, dict)
-                and e.payload.get("field") == "start_install_formulaTF"
+                and e.payload.get("field") == "start_install_no_color"
                 and e.payload.get("reason") == "invoiced_set_to_x"
             ]
             assert len(children) == 1
@@ -468,13 +474,13 @@ class TestInvoicedCascade:
 class TestHelperIdempotency:
     def test_helper_noop_when_already_formula_driven(self, app):
         from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
-            clear_hard_date_cascade,
+            neutralize_install_date_cascade,
         )
         with app.app_context():
             r = _make_release(1, "A", start_install_formulaTF=True)
             db.session.commit()
 
-            result = clear_hard_date_cascade(
+            result = neutralize_install_date_cascade(
                 r, parent_event_id=999, reason="stage_set_to_complete"
             )
             assert result is False
@@ -491,13 +497,13 @@ class TestHelperIdempotency:
 
     def test_helper_noop_when_formulaTF_is_none(self, app):
         from app.brain.job_log.features.start_install.clear_hard_date_cascade import (
-            clear_hard_date_cascade,
+            neutralize_install_date_cascade,
         )
         with app.app_context():
             r = _make_release(1, "A", start_install_formulaTF=None)
             db.session.commit()
 
-            result = clear_hard_date_cascade(
+            result = neutralize_install_date_cascade(
                 r, parent_event_id=999, reason="stage_set_to_complete"
             )
             assert result is False

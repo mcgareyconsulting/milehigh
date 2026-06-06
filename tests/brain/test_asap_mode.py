@@ -1,10 +1,12 @@
 """Tests for ASAP Mode on Start Install.
 
-ASAP is a visual flag on a release. While set, when the release transitions
-into stage 'Paint Complete', UpdateStageCommand intercepts and rips it
-straight to 'Ship Planning' — one event in DB (action='update_stage',
-payload includes asap_intercepted/via), one Trello move (to Shipping
-planning list).
+Flagging ASAP (a) sets a hard start_install one week (5 business days) out and
+computes comp_eta from num_guys, and (b) marks the release red. While set, when
+the release transitions into stage 'Paint Complete', UpdateStageCommand
+intercepts and rips it straight to 'Ship Planning' — one event in DB
+(action='update_stage', payload includes asap_intercepted/via), one Trello move
+(to Shipping planning list). Reaching Ship Complete clears the flag but LEAVES
+the date intact.
 """
 from unittest.mock import patch
 
@@ -69,7 +71,10 @@ class TestSetClearAsapRoute:
 
             evs = ReleaseEvents.query.filter_by(action="set_asap").all()
             assert len(evs) == 1
-            assert evs[0].payload == {"from": False, "to": True}
+            assert evs[0].payload["from"] is False
+            assert evs[0].payload["to"] is True
+            # set_asap now also records the date-state it set (and the prior one for undo).
+            assert "new_start_install" in evs[0].payload
 
     def test_clear_asap_flips_flag_and_emits_event(self, app, admin_client):
         with app.app_context():
@@ -90,9 +95,12 @@ class TestSetClearAsapRoute:
             assert len(evs) == 1
             assert evs[0].payload == {"from": True, "to": False}
 
-    def test_set_asap_does_not_touch_start_install_fields(self, app, admin_client):
-        """ASAP is a flag only — formula-driven scheduling stays untouched."""
+    def test_set_asap_anchors_hard_start_install_one_week_out(self, app, admin_client):
+        """Flagging ASAP overwrites the formula-driven date with a hard date one week
+        out and computes comp_eta from num_guys."""
         from datetime import date
+        from app.trello.utils import add_business_days
+        from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 
         with app.app_context():
             _make_release(
@@ -100,6 +108,8 @@ class TestSetClearAsapRoute:
                 start_install=date(2026, 6, 1),
                 start_install_formula="=released+30d",
                 start_install_formulaTF=True,
+                install_hrs=32.0,
+                num_guys=2.0,
             )
             db.session.commit()
 
@@ -109,11 +119,50 @@ class TestSetClearAsapRoute:
             )
             assert resp.status_code == 200
 
+            expected_start = add_business_days(date.today(), 5)
+            expected_comp_eta = calculate_install_complete_date(expected_start, 32.0, 2.0)
+
             db.session.expire_all()
             r2 = Releases.query.filter_by(job=1, release="A").first()
-            assert r2.start_install == date(2026, 6, 1)
-            assert r2.start_install_formula == "=released+30d"
-            assert r2.start_install_formulaTF is True
+            assert r2.start_install == expected_start
+            assert r2.start_install_formula is None
+            assert r2.start_install_formulaTF is False
+            assert r2.start_install_no_color is False
+            assert r2.comp_eta == expected_comp_eta
+            # The prior date is preserved in the event payload for undo.
+            ev = ReleaseEvents.query.filter_by(action="set_asap").one()
+            assert ev.payload["prev_start_install"] == "2026-06-01"
+
+    def test_setting_hard_date_clears_asap(self, app, admin_client):
+        """Setting an explicit hard date on an ASAP release clears the ASAP flag —
+        an explicit date supersedes ASAP's auto +1wk date."""
+        from datetime import date
+
+        with app.app_context():
+            _make_release(
+                1, "A",
+                start_install_asap=True,
+                start_install=date(2026, 6, 20),
+                start_install_formulaTF=False,
+            )
+            db.session.commit()
+
+            with patch("app.brain.job_log.features.start_install.command.update_trello_card"), \
+                 patch("app.brain.job_log.scheduling.service.recalculate_all_jobs_scheduling"):
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"start_install": "2026-07-15"},
+                )
+            assert resp.status_code == 200
+
+            db.session.expire_all()
+            r2 = Releases.query.filter_by(job=1, release="A").first()
+            assert r2.start_install == date(2026, 7, 15)
+            assert r2.start_install_formulaTF is False
+            assert r2.start_install_asap is False
+
+            ev = ReleaseEvents.query.filter_by(action="update_start_install").one()
+            assert ev.payload.get("cleared_asap") is True
 
 
 # ---------------------------------------------------------------------------
@@ -311,8 +360,10 @@ class TestAsapAutoAdvance:
 # ---------------------------------------------------------------------------
 
 class TestAsapDropOnCompletion:
-    def test_ship_complete_drops_asap_and_records_no_color_date(self, app):
-        from datetime import datetime
+    def test_ship_complete_clears_flag_and_keeps_date(self, app):
+        """Reaching Ship Complete clears the ASAP flag but leaves the hard
+        start_install / comp_eta set at ASAP-flag time untouched."""
+        from datetime import date
 
         with app.app_context():
             r = _make_release(
@@ -320,7 +371,9 @@ class TestAsapDropOnCompletion:
                 stage="Ship Planning",
                 fab_order=2,
                 start_install_asap=True,
-                start_install_formulaTF=True,
+                start_install=date(2026, 7, 1),
+                comp_eta=date(2026, 7, 3),
+                start_install_formulaTF=False,
                 trello_card_id="card-123",
             )
             db.session.commit()
@@ -332,13 +385,14 @@ class TestAsapDropOnCompletion:
 
             db.session.refresh(r)
             assert r.stage == "Ship Complete"
-            # ASAP dropped, date stamped as a neutral (no-color) hard date.
+            # Flag cleared; the date is the PM's to keep.
             assert r.start_install_asap is False
-            assert r.start_install_no_color is True
+            assert r.start_install == date(2026, 7, 1)
+            assert r.comp_eta == date(2026, 7, 3)
             assert r.start_install_formulaTF is False
-            assert r.start_install == datetime.utcnow().date()
+            assert r.start_install_no_color is False
 
-            # A child event records the drop, linked to the stage event.
+            # A child event records the drop, linked to the stage event, with no date.
             stage_event = ReleaseEvents.query.filter_by(action="update_stage").one()
             drop = [
                 e for e in ReleaseEvents.query.all()
@@ -347,6 +401,7 @@ class TestAsapDropOnCompletion:
             ]
             assert len(drop) == 1
             assert drop[0].payload["parent_event_id"] == stage_event.id
+            assert "start_install" not in drop[0].payload
 
     def test_non_asap_reaching_ship_complete_is_untouched(self, app):
         with app.app_context():
@@ -424,6 +479,9 @@ class TestAsapUndo:
             db.session.expire_all()
             r2 = Releases.query.filter_by(job=1, release="A").first()
             assert r2.start_install_asap is False
+            # Undo also restores the prior date-state set_asap overwrote (here: none).
+            assert r2.start_install is None
+            assert r2.start_install_formulaTF is True
 
             # A new clear_asap event was emitted, linked to the original
             undo_events = [

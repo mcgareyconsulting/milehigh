@@ -65,10 +65,15 @@ export default function StartInstallEditor({
         }
     };
 
-    const handleSetAsap = async () => {
+    const handleSetAsap = async (installer) => {
         setOpen(false);
         try {
             const ok = await setAsapWithCapConfirm(job, release);
+            // ASAP stamps the date; if an installer was picked too, assign it (installer-only,
+            // keeps the ASAP date) so the mirror bar gets seeded in the same action.
+            if (ok && installer !== undefined) {
+                await jobsApi.updateStartInstall(job, release, null, installer);
+            }
             if (ok) refresh();
         } catch (e) {
             alert(`Failed to set ASAP: ${e.message}`);

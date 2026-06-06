@@ -37,6 +37,9 @@ from app.trello.api import (
     update_num_guys_in_description,
     update_trello_card_description,
     update_card_custom_field_number,
+    set_mirror_date_range,
+    sync_num_guys_on_card,
+    set_num_guys_in_description,
 )
 from app.models import Releases, SyncOperation, SyncLog, SyncStatus, ReleaseEvents, TrelloOutbox, db
 from datetime import datetime, date, timezone, time, timedelta
@@ -143,6 +146,179 @@ def _is_brain_echo_webhook(rec, event_info):
     return False
 
 
+def _apply_num_guys_change(rec, new_num_guys, *, source, trello_user_id=None):
+    """Persist a num_guys change and recompute comp_eta from it.
+
+    num_guys drives install duration, so a change re-stretches the install bar from a
+    FIXED start_install (the start never moves): comp_eta = start_install + duration(
+    install_hrs, num_guys). The new comp_eta is written to the release and pushed to the
+    mirror card's due (the bar end). Only hard-dated releases recompute here — formula-driven
+    rows get their comp_eta from the scheduling engine, which already reads rec.num_guys.
+
+    Mutates rec and emits events but does NOT commit (the caller commits). Returns True if
+    anything changed.
+    """
+    if not new_num_guys or new_num_guys <= 0:
+        return False
+
+    changed = False
+    if rec.num_guys != new_num_guys:
+        rec.num_guys = new_num_guys
+        changed = True
+        # DB is the source of truth: push the canonical value to BOTH cards so the primary
+        # and mirror never disagree. The triggering card is already correct (no-op push);
+        # the resulting echo webhook re-parses the same value and no-ops.
+        for cid in (rec.trello_card_id, rec.mirror_trello_card_id):
+            if cid:
+                try:
+                    sync_num_guys_on_card(cid, rec.install_hrs, new_num_guys)
+                except Exception as e:
+                    logger.error(
+                        f"num_guys change: failed to sync card {cid} for "
+                        f"{rec.job}-{rec.release}: {e}", exc_info=True,
+                    )
+
+    if rec.start_install is not None and rec.start_install_formulaTF is False:
+        from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
+        new_comp_eta = calculate_install_complete_date(
+            rec.start_install, rec.install_hrs, new_num_guys
+        )
+        if new_comp_eta != rec.comp_eta:
+            old_comp_eta = rec.comp_eta
+            rec.comp_eta = new_comp_eta
+            changed = True
+            JobEventService.create_and_close(
+                job=rec.job, release=rec.release,
+                action="updated", source=source,
+                payload={
+                    "field": "comp_eta",
+                    "old_value": old_comp_eta.isoformat() if old_comp_eta else None,
+                    "new_value": new_comp_eta.isoformat() if new_comp_eta else None,
+                    "reason": "num_guys_changed",
+                    "num_guys": new_num_guys,
+                },
+                external_user_id=trello_user_id,
+            )
+            # Push the new bar end to the mirror card (start unchanged). Best-effort; the
+            # resulting due webhook is a no-op echo (DB already == card).
+            if rec.trello_card_id:
+                try:
+                    set_mirror_date_range(rec.trello_card_id, rec.start_install, new_comp_eta)
+                except Exception as e:
+                    logger.error(
+                        f"num_guys change: failed to update mirror bar for "
+                        f"{rec.job}-{rec.release}: {e}", exc_info=True,
+                    )
+    return changed
+
+
+def _handle_mirror_writeback(card_id, card_data, event_info, sync_op):
+    """If `card_id` is a tracked mirror card, apply its changes back to the release and
+    return True. Returns False when the card isn't a known mirror.
+
+    The mirror card is the installer-team editing surface:
+      - sliding `start`/`due` writes start_install/comp_eta back VERBATIM, and
+      - editing "Number of Guys" in the description recomputes comp_eta (the bar end) from
+        the fixed start_install.
+    A value-diff guard makes Brain's own pushes no-op echoes; outbound pushes target only the
+    primary due / the mirror due, so there is no inbound loop.
+    """
+    mirror_rec = Releases.query.filter_by(mirror_trello_card_id=card_id).one_or_none()
+    if not mirror_rec:
+        return False
+
+    change_types = event_info.get("change_types", [])
+    trello_user_id = event_info.get("trello_user_id")
+    event_time = parse_trello_datetime(event_info.get("time")) or datetime.utcnow()
+    changed = False
+
+    # 1) Date slides -> verbatim write-back.
+    if "start_date_change" in change_types or "due_date_change" in change_types:
+        new_start = parse_trello_datetime(card_data["start"]) if card_data.get("start") else None
+        new_due = parse_trello_datetime(card_data["due"]) if card_data.get("due") else None
+        new_start_date = new_start.date() if isinstance(new_start, datetime) else new_start
+        new_due_date = new_due.date() if isinstance(new_due, datetime) else new_due
+
+        cur_start = mirror_rec.start_install
+        cur_due = mirror_rec.comp_eta
+        start_changed = new_start_date is not None and new_start_date != cur_start
+        due_changed = new_due_date is not None and new_due_date != cur_due
+
+        if start_changed:
+            old_start = cur_start
+            # Verbatim: the mirror start becomes a hard start_install (normal color).
+            mirror_rec.start_install = new_start_date
+            mirror_rec.start_install_formula = None
+            mirror_rec.start_install_formulaTF = False
+            mirror_rec.start_install_no_color = False
+            JobEventService.create_and_close(
+                job=mirror_rec.job, release=mirror_rec.release,
+                action="update_start_install", source="Trello",
+                payload={
+                    "from": old_start.isoformat() if old_start else None,
+                    "to": new_start_date.isoformat(),
+                    "is_hard_date": True,
+                    "via": "mirror_card",
+                },
+                external_user_id=trello_user_id,
+            )
+            changed = True
+            # Realign the primary card due to the new start_install.
+            if mirror_rec.trello_card_id:
+                try:
+                    update_trello_card(
+                        card_id=mirror_rec.trello_card_id,
+                        new_due_date=new_start_date,
+                        clear_due_date=False,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Mirror writeback: failed to realign primary due for "
+                        f"{mirror_rec.job}-{mirror_rec.release}: {e}", exc_info=True,
+                    )
+
+        if due_changed:
+            old_due = cur_due
+            mirror_rec.comp_eta = new_due_date
+            JobEventService.create_and_close(
+                job=mirror_rec.job, release=mirror_rec.release,
+                action="updated", source="Trello",
+                payload={
+                    "field": "comp_eta",
+                    "old_value": old_due.isoformat() if old_due else None,
+                    "new_value": new_due_date.isoformat(),
+                    "via": "mirror_card",
+                },
+                external_user_id=trello_user_id,
+            )
+            changed = True
+
+    # 2) num_guys edited in the mirror description -> recompute comp_eta (the bar end).
+    if "description_change" in change_types:
+        ng = parse_num_guys_from_description(card_data.get("desc", "") or "")
+        if _apply_num_guys_change(mirror_rec, ng, source="Trello", trello_user_id=trello_user_id):
+            changed = True
+
+    if not changed:
+        safe_log_sync_event(
+            sync_op.operation_id, "INFO", "Mirror change — no actionable delta (echo or non-date)",
+            job=mirror_rec.job, release=mirror_rec.release, card_id=card_id,
+        )
+        return True
+
+    mirror_rec.last_updated_at = event_time
+    mirror_rec.source_of_update = "Trello"
+    db.session.commit()
+
+    safe_log_sync_event(
+        sync_op.operation_id, "INFO", "Mirror write-back applied",
+        job=mirror_rec.job, release=mirror_rec.release,
+        start_install=mirror_rec.start_install.isoformat() if mirror_rec.start_install else None,
+        comp_eta=mirror_rec.comp_eta.isoformat() if mirror_rec.comp_eta else None,
+    )
+    return True
+
+
 def sync_from_trello(event_info):
     """Sync data from Trello to database based on webhook payload."""
     from app.config import Config as cfg
@@ -211,8 +387,12 @@ def sync_from_trello(event_info):
 
         # Find DB record
         rec = Releases.query.filter_by(trello_card_id=card_id).one_or_none()
-        
+
         if not rec:
+            # Not a primary card — it may be a release's mirror (installer-team) card.
+            # Mirror start/due edits write back to the release verbatim.
+            if _handle_mirror_writeback(card_id, card_data, event_info, sync_op):
+                return
             safe_log_sync_event(sync_op.operation_id, "INFO", "No DB record found for card", card_id=card_id)
             # Just return - not an error, card isn't tracked
             return
@@ -477,51 +657,31 @@ def sync_from_trello(event_info):
                         "source"
                     )
 
-        # Handle description changes - update Number of Guys and recalculate installation duration if needed
+        # Handle description changes — keep num_guys (and the derived comp_eta) in sync.
         if event_info.get("has_description_change", False):
             new_description = card_data.get("desc", "") or ""
-            
-            # First, ensure Number of Guys field exists if we have install hours
-            if rec.install_hrs:
-                updated_description = update_num_guys_in_description(
-                    new_description,
-                    rec.install_hrs,
-                    default_num_guys=2
-                )
-                
-                # If Number of Guys was added/updated, update the card
+
+            # Ensure the Number of Guys field exists, seeded from the DB (the source of truth)
+            # so we never clobber a value set on the other card with a default.
+            if rec.install_hrs and "Number of Guys:" not in new_description:
+                seed = int(rec.num_guys) if rec.num_guys else 2
+                updated_description = set_num_guys_in_description(new_description, seed)
                 if updated_description != new_description:
                     update_trello_card_description(card_id, updated_description)
-                    new_description = updated_description  # Use updated description for duration calculation
+                    new_description = updated_description
+
+            # Parse and apply: persists num_guys, recomputes comp_eta, and syncs both cards'
+            # Number of Guys / Installation Duration text + the mirror date bar.
+            if "Number of Guys:" in new_description:
+                num_guys = parse_num_guys_from_description(new_description)
+                if _apply_num_guys_change(rec, num_guys, source="Trello", trello_user_id=trello_user_id):
                     safe_log_sync_event(
                         sync_op.operation_id,
                         "INFO",
-                        "Number of Guys field added/updated",
-                        install_hrs=rec.install_hrs
+                        "num_guys change applied (comp_eta + both cards synced)",
+                        num_guys=num_guys,
+                        install_hrs=rec.install_hrs,
                     )
-            
-            # Now check if Number of Guys exists and recalculate duration
-            if "Number of Guys:" in new_description:
-                num_guys = parse_num_guys_from_description(new_description)
-                
-                # Recalculate duration if Number of Guys exists and we have install hours
-                if num_guys and rec.install_hrs:
-                    updated_description = update_installation_duration_in_description(
-                        new_description,
-                        rec.install_hrs,
-                        num_guys
-                    )
-                    
-                    # Only update if description changed
-                    if updated_description != new_description:
-                        update_trello_card_description(card_id, updated_description)
-                        safe_log_sync_event(
-                            sync_op.operation_id,
-                            "INFO",
-                            "Installation duration updated",
-                            num_guys=num_guys,
-                            install_hrs=rec.install_hrs
-                        )
 
         # Commit DB changes
         db.session.add(rec)

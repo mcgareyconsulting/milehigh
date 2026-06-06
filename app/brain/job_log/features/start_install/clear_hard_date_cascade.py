@@ -1,16 +1,17 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: Idempotently clear a hard start_install date as a cascade from a completion-marking action (stage='Complete', stage='Install Complete', job_comp='X', invoiced='X'), emitting a child audit event linked by parent_event_id.
+purpose: Neutralize an install date's color when a release reaches the complete zone (stage='Complete'/'Install Complete', job_comp='X', invoiced='X') — the DATE is retained, only its red/green/yellow color flagging is stripped (start_install_no_color=True) so a finished release doesn't show an alarming date. Emits a child audit event linked by parent_event_id.
 exports:
-  clear_hard_date_cascade: Function that clears the hard-date flag and emits a child event when a hard date is present
+  neutralize_install_date_cascade: Set start_install_no_color (and clear start_install_asap) on a hard-dated release, keeping the date
 imports_from: [app.models, app.services.job_event_service]
 imported_by: [app/brain/job_log/features/stage/command.py, app/brain/job_log/routes.py]
 invariants:
-  - No-op when start_install_formulaTF is not False (no hard date present)
-  - No-op when start_install_no_color is True (preserve the ASAP-drop completion date)
-  - Sets start_install_formulaTF=True and start_install_formula=None; does NOT touch start_install column or push to Trello
-  - Emits action='updated', field='start_install_formulaTF' with parent_event_id so audit bundling under the triggering event works
+  - No-op unless a hard date is present (start_install_formulaTF is False and start_install is set)
+  - KEEPS start_install and its hard-date flag (the date is preserved; scheduling still skips hard rows)
+  - Sets start_install_no_color=True (renders neutral) and clears start_install_asap (no red)
+  - Idempotent: no-op when already neutral and not ASAP
+  - Emits action='updated', field='start_install_no_color' with parent_event_id for audit bundling
 """
 from datetime import datetime
 from typing import Literal
@@ -29,29 +30,33 @@ CascadeReason = Literal[
 ]
 
 
-def clear_hard_date_cascade(
+def neutralize_install_date_cascade(
     job_record: Releases,
     *,
     parent_event_id: int,
     reason: CascadeReason,
     source: str = 'Brain',
 ) -> bool:
-    """Idempotently clear a hard start_install date.
+    """Strip the color from a hard install date once the release is installed/complete.
 
-    Returns True if a hard date was present and cleared, False if no-op.
-    Caller is responsible for the surrounding db.session.commit() and any
-    scheduling cascade (which will recompute start_install from the formula).
+    Keeps start_install (and its hard-date flag) so the actual install date is preserved,
+    but sets start_install_no_color=True so it renders neutral instead of red/green/yellow,
+    and clears start_install_asap so a finished release never shows the red ASAP flag.
+
+    Returns True if it changed anything, False on no-op. Caller commits.
     """
-    if job_record.start_install_formulaTF is not False:
+    # Only a hard date with a concrete value shows color worth neutralizing. Formula-driven
+    # rows already render neutral, so leave them (and their recomputation) alone.
+    if job_record.start_install_formulaTF is not False or job_record.start_install is None:
         return False
 
-    # Preserve a no-color date recorded by the ASAP-drop on completion — it is a
-    # historical record of when the release shipped/completed, not a planning hard date.
-    if getattr(job_record, 'start_install_no_color', False):
+    already_neutral = bool(getattr(job_record, 'start_install_no_color', False))
+    is_asap = bool(getattr(job_record, 'start_install_asap', False))
+    if already_neutral and not is_asap:
         return False
 
-    job_record.start_install_formulaTF = True
-    job_record.start_install_formula = None
+    job_record.start_install_no_color = True
+    job_record.start_install_asap = False
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = source
 
@@ -61,8 +66,8 @@ def clear_hard_date_cascade(
         action='updated',
         source=source,
         payload={
-            'field': 'start_install_formulaTF',
-            'old_value': False,
+            'field': 'start_install_no_color',
+            'old_value': already_neutral,
             'new_value': True,
             'reason': reason,
             'parent_event_id': parent_event_id,
@@ -70,7 +75,7 @@ def clear_hard_date_cascade(
     )
 
     logger.info(
-        "Auto-cleared hard date on completion cascade",
+        "Neutralized install date color on completion cascade",
         extra={
             'job': job_record.job,
             'release': job_record.release,

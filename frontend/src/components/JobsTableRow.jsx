@@ -606,13 +606,18 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
-    const handleSetAsap = async () => {
+    const handleSetAsap = async (installer) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
         setIsStartInstallModalOpen(false);
         try {
             const ok = await setAsapWithCapConfirm(jobNumber, releaseNumber);
+            // ASAP stamps the date; if an installer was picked too, assign it (installer-only,
+            // keeps the ASAP date) so the mirror bar gets seeded in the same action.
+            if (ok && installer !== undefined) {
+                await jobsApi.updateStartInstall(jobNumber, releaseNumber, null, installer);
+            }
             if (ok && onUpdate) onUpdate();
         } catch (error) {
             console.error(`[START_INSTALL] Failed to set ASAP for job ${jobNumber}-${releaseNumber}:`, error);

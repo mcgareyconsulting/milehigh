@@ -70,18 +70,21 @@ def parse_webhook_data(data):
             # Detect field changes from 'old' data
             old_data = action_data.get("old", {})
             due_date_change = "due" in old_data
+            start_date_change = "start" in old_data
             description_change = "desc" in old_data
-            
+
             # Check if there are other field changes (name, labels, etc.)
             name_change = "name" in old_data
             label_change = "label" in action_data or "labels" in action_data
-            
+
             # Build list of change types
             change_types = []
             if list_move:
                 change_types.append("list_move")
             if due_date_change:
                 change_types.append("due_date_change")
+            if start_date_change:
+                change_types.append("start_date_change")
             if description_change:
                 change_types.append("description_change")
             if name_change:
@@ -105,6 +108,7 @@ def parse_webhook_data(data):
                 # Add specific flags for easier handling
                 result["has_list_move"] = list_move
                 result["has_due_date_change"] = due_date_change
+                result["has_start_date_change"] = start_date_change
                 result["has_description_change"] = description_change
                 
                 # Add list move details if applicable

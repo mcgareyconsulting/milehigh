@@ -188,40 +188,53 @@ def calculate_install_start_date(
 
 def calculate_install_complete_date(
     install_start_date: Optional[date],
-    install_hours: Optional[float]
+    install_hours: Optional[float],
+    num_guys: Optional[float] = None,
 ) -> Optional[date]:
     """
-    Calculate install completion ETA.
-    
-    Formula:
-    - Convert install hours → install days (round up)
-    - Completion date = install start + install days (working days only)
-    
+    Calculate install completion ETA (a.k.a. comp_eta).
+
+    Canonical formula used everywhere (job log, scheduling, mirror seed, Gantt):
+    - daily capacity = num_guys * HOURS_PER_INSTALLER_DAY (default num_guys=2 -> 16,
+      which equals the legacy INSTALL_HOURS_PER_DAY, so the default case is unchanged)
+    - install days = ceil(install_hours / daily capacity)
+    - completion date = install start + (install days - 1) working days, i.e. the last
+      working day of the install (a 1-day install completes the day it starts)
+
     Args:
         install_start_date: Install start date
         install_hours: Installation hours for the job-release
-        
+        num_guys: Installer headcount; defaults to SchedulingConfig.DEFAULT_NUM_GUYS
+
     Returns:
         date: Install completion date, or None if install_hours is zero/null or start_date is None
     """
     if install_start_date is None:
         return None
-    
+
     if install_hours is None or install_hours < 0:
         return None
 
     if install_hours == 0:
         return install_start_date
-    
-    # Convert install hours to days (round up)
-    install_capacity = SchedulingConfig.INSTALL_HOURS_PER_DAY
+
+    # Daily install throughput scales with the installer headcount. Coerce defensively
+    # (bad/missing data, or non-numeric mocks) and fall back to the default headcount.
+    try:
+        guys = float(num_guys) if num_guys is not None else SchedulingConfig.DEFAULT_NUM_GUYS
+    except (TypeError, ValueError):
+        guys = SchedulingConfig.DEFAULT_NUM_GUYS
+    if guys <= 0:
+        guys = SchedulingConfig.DEFAULT_NUM_GUYS
+    install_capacity = guys * SchedulingConfig.HOURS_PER_INSTALLER_DAY
     install_days = math.ceil(install_hours / install_capacity)
-    
+
     if install_days <= 0:
         return None
-    
-    # Add working days
-    return add_business_days(install_start_date, install_days)
+
+    # Completion is the LAST working day of the install (inclusive of the start day): a
+    # 1-day install completes the day it starts, so add (install_days - 1) business days.
+    return add_business_days(install_start_date, install_days - 1)
 
 
 def calculate_scheduling_fields(
@@ -257,6 +270,7 @@ def calculate_scheduling_fields(
     install_hours = job.get('install_hrs')
     fab_order = job.get('fab_order')
     stage = job.get('stage')
+    num_guys = job.get('num_guys')
     
     # Step 1: Calculate remaining fab hours
     remaining_fab_hours = calculate_remaining_fab_hours(total_fab_hours, stage)
@@ -288,10 +302,11 @@ def calculate_scheduling_fields(
     # Step 5: Calculate install start date
     install_start_date = calculate_install_start_date(projected_fab_complete_date)
     
-    # Step 6: Calculate install completion date
+    # Step 6: Calculate install completion date (scales by installer headcount)
     install_complete_date = calculate_install_complete_date(
         install_start_date,
-        install_hours
+        install_hours,
+        num_guys
     )
     
     return {

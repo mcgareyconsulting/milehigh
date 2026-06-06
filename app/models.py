@@ -409,11 +409,16 @@ class Releases(db.Model):
     start_install_formula = db.Column(db.String(256))  # New field for formula
     start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
     start_install_asap = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
-    # True when start_install holds a date auto-recorded by the ASAP-drop on completion
-    # (release reached Ship Complete or later). Renders neutral/no-color and is preserved
-    # through completion marking (clear_hard_date_cascade no-ops on these rows).
+    # True when the install date's color flagging is suppressed (renders neutral, not
+    # red/green/yellow). Set by neutralize_install_date_cascade once the release reaches the
+    # complete zone (Install Complete/Complete, job_comp='X', invoiced='X') so a finished
+    # release doesn't show an alarming date. The start_install value itself is retained.
     start_install_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     installer = db.Column(db.String(64), nullable=True)  # Installer team; matches Trello list name
+    # Installer headcount used to size install duration. Parsed/persisted from the Trello
+    # card description ("**Number of Guys:** N"); treated as 2 when absent.
+    # comp_eta = start_install + ceil(install_hrs / (num_guys * 8)) business days.
+    num_guys = db.Column(db.Float, nullable=True)
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -421,6 +426,9 @@ class Releases(db.Model):
 
     # Trello fields
     trello_card_id = db.Column(db.String(64), unique=True, nullable=True)
+    # The linked mirror card's id (the installer-team copy). Lets inbound webhooks on the
+    # mirror resolve back to this release with a direct lookup instead of an attachment walk.
+    mirror_trello_card_id = db.Column(db.String(64), nullable=True)
     trello_card_name = db.Column(db.String(256), nullable=True)
     trello_list_id = db.Column(db.String(64), nullable=True)
     trello_list_name = db.Column(db.String(128), nullable=True)
@@ -466,6 +474,8 @@ class Releases(db.Model):
             "start_install_formulaTF": self.start_install_formulaTF,
             "start_install_asap": self.start_install_asap,
             "start_install_no_color": self.start_install_no_color,
+            "installer": self.installer,
+            "num_guys": self.num_guys,
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,

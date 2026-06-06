@@ -46,6 +46,10 @@ def _installer_patches():
         patch(
             "app.brain.job_log.features.start_install.assign_installer.move_mirror_card",
         ),
+        patch(
+            "app.brain.job_log.features.start_install.assign_installer.set_mirror_date_range",
+            return_value={"success": True, "mirror_card_id": "mirror-999"},
+        ),
     )
 
 
@@ -62,8 +66,8 @@ class TestAssignInstallerRoute:
             _make_release(1, "A")
             db.session.commit()
 
-            p_list, p_move = _installer_patches()
-            with p_list, p_move as mock_move:
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move as mock_move, p_range:
                 resp = admin_client.patch(
                     "/brain/update-start-install/1/A",
                     json={"installer": "Saul 2"},
@@ -90,8 +94,8 @@ class TestAssignInstallerRoute:
             )
             db.session.commit()
 
-            p_list, p_move = _installer_patches()
-            with p_list, p_move:
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move, p_range:
                 resp = admin_client.patch(
                     "/brain/update-start-install/1/A",
                     json={"installer": "Saul 2"},
@@ -109,9 +113,9 @@ class TestAssignInstallerRoute:
             _make_release(1, "A")
             db.session.commit()
 
-            p_list, p_move = _installer_patches()
+            p_list, p_move, p_range = _installer_patches()
             p_trello, p_recalc = _date_command_patches()
-            with p_list, p_move as mock_move, p_trello, p_recalc:
+            with p_list, p_move as mock_move, p_range, p_trello, p_recalc:
                 resp = admin_client.patch(
                     "/brain/update-start-install/1/A",
                     json={"start_install": "2026-06-15", "installer": "Saul 2"},
@@ -149,3 +153,35 @@ class TestAssignInstallerRoute:
             r2 = Releases.query.filter_by(job=1, release="A").first()
             assert r2.installer is None
             mock_move.assert_called_once_with("card-123", "list-unassigned")
+
+    def test_assign_installer_seeds_mirror_date_range(self, app, admin_client):
+        """Assigning an installer to a dated release seeds the mirror card's date bar to
+        [start_install, comp_eta] and persists the mirror card id."""
+        from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
+
+        with app.app_context():
+            _make_release(
+                1, "A",
+                start_install=date(2026, 6, 15),
+                start_install_formulaTF=False,
+                install_hrs=32.0,
+                num_guys=2.0,
+            )
+            db.session.commit()
+
+            expected_comp_eta = calculate_install_complete_date(date(2026, 6, 15), 32.0, 2.0)
+
+            p_list, p_move, p_range = _installer_patches()
+            with p_list, p_move, p_range as mock_range:
+                resp = admin_client.patch(
+                    "/brain/update-start-install/1/A",
+                    json={"installer": "Saul 2"},
+                )
+            assert resp.status_code == 200
+
+            mock_range.assert_called_once_with("card-123", date(2026, 6, 15), expected_comp_eta)
+
+            db.session.expire_all()
+            r2 = Releases.query.filter_by(job=1, release="A").first()
+            assert r2.mirror_trello_card_id == "mirror-999"
+            assert r2.comp_eta == expected_comp_eta
