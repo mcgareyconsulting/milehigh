@@ -28,7 +28,8 @@ Usage (run from repo root):
     python -m app.procore.scripts.sandbox_webhook --delete
 
 Defaults: project-id 1344700 (PROJ. # 999), destination
-https://sandbox-mhmw.onrender.com/procore/webhook, namespace mile-high-metal-works.
+https://sandbox-mhmw.onrender.com/procore/webhook, namespace mile-high-metal-works-sandbox
+(a distinct namespace so the sandbox hook coexists with the prod hook on the same project).
 """
 
 import argparse
@@ -42,7 +43,10 @@ from app.procore.api import ProcoreAPI
 
 DEFAULT_PROJECT_ID = 1344700  # PROJ. # 999
 DEFAULT_DESTINATION_URL = "https://sandbox-mhmw.onrender.com/procore/webhook"
-DEFAULT_NAMESPACE = "mile-high-metal-works"
+# A Procore project allows only ONE hook per namespace. The PROD hook already owns
+# "mile-high-metal-works" (pointing at the prod app), so the sandbox hook needs its own
+# namespace to coexist instead of clobbering prod's destination_url.
+DEFAULT_NAMESPACE = "mile-high-metal-works-sandbox"
 REQUIRED_EVENT_TYPES = ["update", "create"]
 
 
@@ -113,10 +117,11 @@ def _hook_id(hook):
 
 
 def _existing_trigger_types(triggers):
+    # Procore returns event_type uppercased (e.g. "UPDATE"); normalize for comparison.
     found = set()
     for t in triggers:
         if isinstance(t, dict) and t.get("resource_name") == "Submittals":
-            et = t.get("event_type")
+            et = (t.get("event_type") or "").lower()
             if et in REQUIRED_EVENT_TYPES:
                 found.add(et)
     return found
@@ -186,7 +191,15 @@ def run(project_id, destination_url, namespace, company_id, payload_version,
     hook_id = _hook_id(existing) if existing else None
 
     if hook_id:
+        existing_dest = existing.get("destination_url") if isinstance(existing, dict) else None
         print(f"\nReusing existing hook {hook_id} (not re-creating; that would 400 'namespace taken').")
+        if existing_dest and existing_dest != destination_url:
+            print("  ⚠ WARNING: this hook's destination_url does NOT match the requested URL:")
+            print(f"      existing : {existing_dest}")
+            print(f"      requested: {destination_url}")
+            print("    Pick a namespace that isn't already used by another deployment "
+                  "(see --namespace), or --delete this hook first. Refusing to touch it.")
+            return 1
     else:
         if dry_run:
             print(f"\n[dry-run] would create hook -> {destination_url} with triggers {REQUIRED_EVENT_TYPES}")
