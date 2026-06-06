@@ -100,6 +100,8 @@ class UpdateStartInstallCommand:
         job_record.start_install = self.start_install
         job_record.start_install_formula = None
         job_record.start_install_formulaTF = False
+        # A user-set hard date is a normal (colored) date — drop any no-color marker.
+        job_record.start_install_no_color = False
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 

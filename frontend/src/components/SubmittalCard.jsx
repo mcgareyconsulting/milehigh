@@ -24,22 +24,6 @@ function statusColor(status) {
     return 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200';
 }
 
-function lifespanText(row) {
-    const ls = row['LIFESPAN'] ?? row.lifespan_days;
-    if (ls == null || ls === '') return null;
-    const days = parseFloat(ls);
-    if (!Number.isFinite(days)) return String(ls);
-    return `${Math.round(days)}d open`;
-}
-
-function lastBicText(row) {
-    const days = row['LAST BIC'] ?? row.days_since_ball_in_court_update;
-    if (days == null || days === '') return null;
-    const n = parseFloat(days);
-    if (!Number.isFinite(n)) return String(days);
-    return `${Math.round(n)}d in BIC`;
-}
-
 export default function SubmittalCard({ submittal, onOpen, isHighlighted = false }) {
     const orderNum = fmt(submittal['ORDER #']);
     const projNum = fmt(submittal['PROJ. #']);
@@ -49,8 +33,6 @@ export default function SubmittalCard({ submittal, onOpen, isHighlighted = false
     const procoreStatus = fmt(submittal['PROCORE STATUS']);
     const dueDate = formatDate(submittal['DUE DATE']);
     const notes = (submittal['NOTES'] || '').toString().trim();
-    const lifespan = lifespanText(submittal);
-    const lastBic = lastBicText(submittal);
 
     return (
         <button
@@ -95,8 +77,6 @@ export default function SubmittalCard({ submittal, onOpen, isHighlighted = false
 
                 {/* Footer row — keeps a consistent baseline across cards regardless of notes length */}
                 <div className="flex items-center gap-3 flex-wrap text-[11px] text-gray-600 dark:text-slate-400 pt-1">
-                    {lastBic && <span>⏱ {lastBic}</span>}
-                    {lifespan && <span>📅 {lifespan}</span>}
                     <span className="ml-auto text-[10px] text-gray-400 dark:text-slate-500 group-hover:text-accent-500 dark:group-hover:text-accent-400">
                         Tap for details →
                     </span>

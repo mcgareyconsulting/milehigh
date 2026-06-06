@@ -74,7 +74,12 @@ const DATE_COLUMNS = new Set(['Released', 'Start install', 'Comp. ETA']);
 
 const COLOR_GRAYED = [156, 163, 175];
 const COLOR_EVEN_ROW = [219, 234, 254];
-const COLOR_HARD_DATE = [239, 68, 68];
+// Start install hard-date states — mirror the on-screen Tailwind shades in
+// JobsTableRow.jsx (bg-red-500 / bg-green-500 / bg-yellow-400, text-gray-900).
+const COLOR_ASAP = [239, 68, 68];          // bg-red-500
+const COLOR_HARD_FUTURE = [34, 197, 94];   // bg-green-500
+const COLOR_HARD_PAST = [250, 204, 21];    // bg-yellow-400
+const COLOR_HARD_PAST_TEXT = [17, 24, 39]; // text-gray-900
 const COLOR_HEAD_FILL = [224, 224, 224];
 const COLOR_HEAD_LINE = [40, 40, 40];
 const COLOR_BODY_LINE = [40, 40, 40];
@@ -250,6 +255,9 @@ function buildColumnStyles(columnHeaders, columnWidthPercent) {
 
 function formatCell(job, column) {
     if (column === 'Urgency') return '';
+    // ASAP rows show the literal "ASAP" instead of a (usually empty) date,
+    // matching the on-screen displayValue in JobsTableRow.jsx.
+    if (column === 'Start install' && job['start_install_asap'] === true) return 'ASAP';
     const raw = job[column];
     const value = DATE_COLUMNS.has(column)
         ? formatDateShort(raw)
@@ -278,6 +286,26 @@ function truncateToTwoLines(doc, text, innerWidth) {
     return kept.join('\n');
 }
 
+// Resolve the Start install hard-date state for coloring. Mirrors the on-screen
+// logic in JobsTableRow.jsx:1148-1171: ASAP > past hard date > future/today hard
+// date. Formula-driven dates return null (no special fill). The past comparison
+// uses the LOCAL date (toISOString would shift to UTC).
+function startInstallState(job) {
+    if (job['start_install_asap'] === true) return 'asap';
+    // A no-color date (auto-recorded when an ASAP release reached Ship Complete+)
+    // shows the date plainly — mirror JobsTableRow.jsx so print matches the screen.
+    const isNoColor = job['start_install_no_color'] === true;
+    const isHardDate =
+        !isNoColor && job['start_install_formulaTF'] === false && Boolean(job['Start install']);
+    if (!isHardDate) return null;
+    const now = new Date();
+    const todayStr =
+        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-` +
+        `${String(now.getDate()).padStart(2, '0')}`;
+    const installDay = String(job['Start install'] ?? '').split('T')[0];
+    return installDay < todayStr ? 'hardPast' : 'hardFuture';
+}
+
 // Build a parallel rowMeta array (indexed by data.row.index) that the
 // didParseCell / didDrawCell hooks read for coloring + Urgency rendering.
 // innerWidths[i] is the usable text width (pt) of column i, used to pre-cap
@@ -293,8 +321,7 @@ function buildRows(jobs, columnHeaders, doc, innerWidths) {
         meta.push({
             isGrayed,
             stage: job['Stage'] || 'Released',
-            startInstallHard:
-                job['start_install_formulaTF'] === false && Boolean(job['Start install']),
+            startInstallState: startInstallState(job),
         });
         body.push(columnHeaders.map(
             (col, i) => truncateToTwoLines(doc, formatCell(job, col), innerWidths[i]),
@@ -413,9 +440,17 @@ export async function generateJobLogReviewPdf({ jobs, columnHeaders, columnWidth
                     data.cell.styles.fillColor = COLOR_EVEN_ROW;
                 }
 
-                if (data.column.index === startInstallIdx && rowMeta.startInstallHard) {
-                    data.cell.styles.fillColor = COLOR_HARD_DATE;
-                    data.cell.styles.textColor = 255;
+                if (data.column.index === startInstallIdx && rowMeta.startInstallState) {
+                    if (rowMeta.startInstallState === 'asap') {
+                        data.cell.styles.fillColor = COLOR_ASAP;
+                        data.cell.styles.textColor = 255;
+                    } else if (rowMeta.startInstallState === 'hardPast') {
+                        data.cell.styles.fillColor = COLOR_HARD_PAST;
+                        data.cell.styles.textColor = COLOR_HARD_PAST_TEXT;
+                    } else if (rowMeta.startInstallState === 'hardFuture') {
+                        data.cell.styles.fillColor = COLOR_HARD_FUTURE;
+                        data.cell.styles.textColor = 255;
+                    }
                     data.cell.styles.fontStyle = 'bold';
                 }
             },

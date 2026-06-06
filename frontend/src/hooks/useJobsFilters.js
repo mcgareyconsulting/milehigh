@@ -17,21 +17,10 @@
  * updated_by_agent: 2026-04-28T00:00:00Z
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { computeTotalFabHrs } from '../utils/fabHours';
 
-const _FAB_MODIFIER = {
-    'Released':         1.0,
-    'Cut Start':        0.9,
-    'Fitup Complete':   0.5,
-    'Welded QC':        0.0,
-    'Paint Start':      0.0,
-    'Paint Complete':   0.0,
-    'Store at MHMW':    0.0,
-    'Ship Planning':    0.0,
-    'Ship Complete':    0.0,
-    'Install Start':    0.0,
-    'Install Complete': 0.0,
-    'Complete':         0.0,
-};
+// Stages that make up the Paint department (the `paint` quick-filter set).
+const PAINT_STAGES = ['Welded QC', 'Paint Start'];
 
 // Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
 // in app/api/helpers.py — keep in sync. Drives the totalInstallHrs KPI; Job Comp
@@ -57,10 +46,6 @@ const _INSTALL_MODIFIER = {
     'Install Complete': 0.0,
     'Complete':         0.0,
 };
-
-function _getFabModifier(stage) {
-    return stage in _FAB_MODIFIER ? _FAB_MODIFIER[stage] : 1.0;
-}
 
 function _getInstallModifier(stage) {
     // Unknown stages default to 0 (excluded), mirroring the backend.
@@ -244,7 +229,15 @@ export function useJobsFilters(jobs = []) {
             const numB = Number(fabOrderB);
             if (!isNaN(numA) && !isNaN(numB)) {
                 if (numA !== numB) return numA - numB;
-                // Tiebreak by stage priority within the same fab_order
+                // Within the same fab_order (notably the many 80.555 placeholders),
+                // cascade chronologically by start_install date ascending so the
+                // displayed dates progress in order. Blanks sink to the end.
+                const dateA = a['Start install'] ? new Date(a['Start install']) : null;
+                const dateB = b['Start install'] ? new Date(b['Start install']) : null;
+                if (dateA && dateB && dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+                if (dateA && !dateB) return -1;
+                if (!dateA && dateB) return 1;
+                // Final tiebreak by stage priority within the same fab_order
                 const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
                 const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
                 return prioA - prioB;
@@ -308,33 +301,6 @@ export function useJobsFilters(jobs = []) {
     }, []);
 
     /**
-     * Sort jobs by fab order, then start install date as tiebreaker (for Paint+Fab view)
-     */
-    const sortByFabOrderThenStartInstall = useCallback((jobs) => {
-        return [...jobs].sort((a, b) => {
-            const fabOrderA = a['Fab Order'];
-            const fabOrderB = b['Fab Order'];
-            if (fabOrderA == null && fabOrderB == null) return 0;
-            if (fabOrderA == null) return 1;
-            if (fabOrderB == null) return -1;
-            const numA = Number(fabOrderA);
-            const numB = Number(fabOrderB);
-            if (!isNaN(numA) && !isNaN(numB)) {
-                if (numA !== numB) return numA - numB;
-                const dateA = a['Start install'] ? new Date(a['Start install']) : null;
-                const dateB = b['Start install'] ? new Date(b['Start install']) : null;
-                if (dateA && dateB && dateA.getTime() !== dateB.getTime()) return dateA - dateB;
-                if (dateA && !dateB) return -1;
-                if (!dateA && dateB) return 1;
-                const prioA = STAGE_SORT_PRIORITY[a['Stage']] ?? 999;
-                const prioB = STAGE_SORT_PRIORITY[b['Stage']] ?? 999;
-                return prioA - prioB;
-            }
-            return String(fabOrderA).localeCompare(String(fabOrderB));
-        });
-    }, []);
-
-    /**
      * Default sort: Job # ascending, then Release # ascending
      */
     const sortJobs = useCallback((filteredJobs) => {
@@ -381,6 +347,9 @@ export function useJobsFilters(jobs = []) {
      */
     const NUMERIC_COLUMNS = useMemo(() => new Set(['Job #', 'Fab Order', 'Fab Hrs', 'Install HRS']), []);
 
+    // Date-valued columns compare chronologically (asc = oldest first).
+    const DATE_COLUMNS = useMemo(() => new Set(['Released', 'Start install', 'Comp. ETA']), []);
+
     const compareByColumn = useCallback((a, b, column, direction) => {
         const va = a?.[column];
         const vb = b?.[column];
@@ -391,7 +360,17 @@ export function useJobsFilters(jobs = []) {
         if (aBlank) return 1;
         if (bBlank) return -1;
         let cmp;
-        if (NUMERIC_COLUMNS.has(column)) {
+        if (DATE_COLUMNS.has(column)) {
+            const ta = new Date(va).getTime();
+            const tb = new Date(vb).getTime();
+            const validA = !isNaN(ta);
+            const validB = !isNaN(tb);
+            // Unparseable dates sink to the end like blanks
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            cmp = ta - tb;
+        } else if (NUMERIC_COLUMNS.has(column)) {
             const na = Number(va);
             const nb = Number(vb);
             if (!isNaN(na) && !isNaN(nb)) {
@@ -403,15 +382,18 @@ export function useJobsFilters(jobs = []) {
             cmp = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
         }
         return direction === 'desc' ? -cmp : cmp;
-    }, [NUMERIC_COLUMNS]);
+    }, [NUMERIC_COLUMNS, DATE_COLUMNS]);
+
+    /**
+     * Base-filtered jobs (project name, job #, release #, etc.) before any subset
+     * narrowing. Shared by displayJobs and the ASAP-propagation memo.
+     */
+    const baseFiltered = useMemo(() => jobs.filter(matchesSelectedFilter), [jobs, matchesSelectedFilter]);
 
     /**
      * Filtered and sorted jobs for display based on selected subset
      */
     const displayJobs = useMemo(() => {
-        // First apply base filters (project name, job #, release #, etc.)
-        const baseFiltered = jobs.filter(matchesSelectedFilter);
-
         let result;
         if (!selectedSubset) {
             result = sortJobs([...baseFiltered]);
@@ -422,15 +404,14 @@ export function useJobsFilters(jobs = []) {
             const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
             result = sortByStageThenLastUpdated(rtsOnly);
         } else if (selectedSubset === 'paint') {
-            const paintStages = ['Welded QC', 'Paint Start'];
-            const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
+            const paintOnly = baseFiltered.filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()));
             result = sortByStageThenFabOrder(paintOnly);
         } else if (selectedSubset === 'paint_fab') {
-            const paintStages = ['Paint Complete', 'Welded QC', 'Paint Start'];
+            const paintStages = ['Paint Complete', ...PAINT_STAGES];
             const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
             const paintSorted = sortByStageThenFabOrder(paintOnly);
             const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
-            const fabSorted = sortByFabOrderThenStartInstall(fabOnly);
+            const fabSorted = sortByFabOrder(fabOnly);
             result = [...paintSorted, ...fabSorted];
         } else if (selectedSubset === 'fab') {
             result = getFabSubset(baseFiltered);
@@ -444,7 +425,33 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [jobs, matchesSelectedFilter, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrderThenStartInstall, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
+    }, [baseFiltered, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
+
+    /**
+     * Out-of-department ASAP releases to surface at the bottom of the Paint and
+     * Ready-to-Ship filters, so a downstream foreman can see hot releases still moving
+     * through an earlier department. Kept separate from displayJobs (the canonical
+     * in-filter list used for counts, CSV, and PDF) so these reference rows never
+     * inflate those. Tagged with _asapPropagated/_asapOrigin for the renderers; their
+     * stages never overlap the in-filter stages, so no de-duplication is needed.
+     */
+    const propagatedAsapJobs = useMemo(() => {
+        if (selectedSubset !== 'paint' && selectedSubset !== 'ready_to_ship') return [];
+
+        // Fab ASAPs surface in both Paint and Ready-to-Ship.
+        const fab = baseFiltered
+            .filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION' && job['start_install_asap'] === true)
+            .map(job => ({ ...job, _asapPropagated: true, _asapOrigin: 'Fab' }));
+
+        // Paint ASAPs additionally surface in Ready-to-Ship.
+        const paint = selectedSubset === 'ready_to_ship'
+            ? baseFiltered
+                .filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()) && job['start_install_asap'] === true)
+                .map(job => ({ ...job, _asapPropagated: true, _asapOrigin: 'Paint' }))
+            : [];
+
+        return sortByFabOrder([...fab, ...paint]);
+    }, [baseFiltered, selectedSubset, sortByFabOrder]);
 
     /**
      * Secondary search: jobs matching the search with all project/stage/subset
@@ -469,6 +476,34 @@ export function useJobsFilters(jobs = []) {
             }
         });
         return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }, [jobs]);
+
+    /**
+     * Project options for the standalone Projects dropdown: { number, name } pairs,
+     * one per unique project name (a name that spans multiple job numbers keeps the
+     * lowest number as its representative — rare). Sorted by job number ascending.
+     * The committed filter value remains the name, so it plugs into matchesFilters /
+     * selectedProjectNames unchanged.
+     */
+    const projectOptions = useMemo(() => {
+        const byName = new Map();
+        jobs.forEach((job) => {
+            const name = job['Job'];
+            if (name === null || name === undefined || String(name).trim() === '') return;
+            const trimmedName = String(name).trim();
+            const num = Number(job['Job #']);
+            const existing = byName.get(trimmedName);
+            if (!existing || (!isNaN(num) && num < existing.numberValue)) {
+                byName.set(trimmedName, {
+                    name: trimmedName,
+                    number: job['Job #'] ?? '',
+                    numberValue: isNaN(num) ? Infinity : num,
+                });
+            }
+        });
+        return Array.from(byName.values())
+            .sort((a, b) => a.numberValue - b.numberValue)
+            .map(({ name, number }) => ({ name, number }));
     }, [jobs]);
 
     /**
@@ -592,9 +627,7 @@ export function useJobsFilters(jobs = []) {
         });
     }, []);
 
-    const totalFabHrs = useMemo(() =>
-        jobs.reduce((sum, job) => sum + (job['Fab Hrs'] || 0) * _getFabModifier(job['Stage'] || ''), 0),
-    [jobs]);
+    const totalFabHrs = useMemo(() => computeTotalFabHrs(jobs), [jobs]);
 
     // Stage-driven install hour total. Each stage carries an install %
     // (Install Start = 50%, Install Complete = 0%, etc.) per the matrix in
@@ -644,6 +677,7 @@ export function useJobsFilters(jobs = []) {
 
         // Filter options
         projectNameOptions,
+        projectOptions,
         stageOptions,
         stageColors,
         stageToGroup,
@@ -656,6 +690,7 @@ export function useJobsFilters(jobs = []) {
 
         // Filtered and sorted jobs
         displayJobs,
+        propagatedAsapJobs,
         secondarySearchResults,
 
         // Aggregate KPIs (all jobs, not filtered)

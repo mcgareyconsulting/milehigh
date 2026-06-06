@@ -50,29 +50,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
         }
     };
 
-    const formatTimeAgo = (seconds) => {
-        if (!seconds && seconds !== 0) return 'N/A';
-        
-        const totalSeconds = Math.floor(seconds);
-        const days = Math.floor(totalSeconds / 86400);
-        const hours = Math.floor((totalSeconds % 86400) / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const secs = totalSeconds % 60;
-
-        if (days > 0) {
-            return `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''} ago`;
-        } else if (hours > 0) {
-            return `${hours} hour${hours !== 1 ? 's' : ''}, ${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-        } else if (minutes > 0) {
-            return `${minutes} minute${minutes !== 1 ? 's' : ''}, ${secs} second${secs !== 1 ? 's' : ''} ago`;
-        } else {
-            return `${secs} second${secs !== 1 ? 's' : ''} ago`;
-        }
-    };
-
     const createdAt = submittal.created_at || submittal['Created At'];
-    const lastBallUpdate = submittal.last_ball_in_court_update;
-    const timeSinceUpdate = submittal.time_since_ball_in_court_update_seconds;
 
     const modalContent = (
         <div
@@ -114,26 +92,6 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                             <p className="text-sm text-gray-600 dark:text-slate-300 pl-4">
                                 {formatDateTime(createdAt)}
                             </p>
-                        </div>
-
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Last Ball In Court Update:</span>
-                            </div>
-                            {lastBallUpdate ? (
-                                <>
-                                    <p className="text-sm text-gray-600 dark:text-slate-300 pl-4 mb-1">
-                                        {formatDateTime(lastBallUpdate)}
-                                    </p>
-                                    <p className="text-sm text-accent-600 dark:text-accent-400 font-medium pl-4">
-                                        {formatTimeAgo(timeSinceUpdate)}
-                                    </p>
-                                </>
-                            ) : (
-                                <p className="text-sm text-gray-500 dark:text-slate-400 italic pl-4">
-                                    No ball in court update recorded
-                                </p>
-                            )}
                         </div>
 
                         {submittal.ball_in_court || submittal['Ball In Court'] ? (

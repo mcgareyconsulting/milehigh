@@ -150,23 +150,6 @@ class Submittals(db.Model):
         return None
 
     def to_dict(self):
-        # Use cached last_bic_update column (populated by backfill migration M7)
-        # Do NOT call get_last_bic_from_events() here—it's expensive and only for audit/backfill
-        last_ball_update = self.last_bic_update
-        time_since_update = (datetime.utcnow() - last_ball_update) if last_ball_update else None
-        
-        # Calculate days since last ball in court update (aging report)
-        days_since_ball_update = None
-        if time_since_update:
-            days_since_ball_update = int(time_since_update.total_seconds() / 86400)  # Convert seconds to days
-
-        # Lifespan: days since creation (how old the submittal is)
-        lifespan = None
-        if self.created_at:
-            today = date.today()
-            created_date = self.created_at.date() if hasattr(self.created_at, 'date') else self.created_at
-            lifespan = (today - created_date).days
-        
         return {
             "id": self.id,
             "submittal_id": self.submittal_id,
@@ -182,13 +165,9 @@ class Submittals(db.Model):
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
             "due_date": _dt(self.due_date),
-            "lifespan": lifespan,
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
             "created_at": _dt(self.created_at),
-            "last_ball_in_court_update": _dt(last_ball_update),
-            "time_since_ball_in_court_update_seconds": time_since_update.total_seconds() if time_since_update else None,
-            "days_since_ball_in_court_update": days_since_ball_update,
         }
 
 class SystemLogs(db.Model):
@@ -409,6 +388,11 @@ class Releases(db.Model):
     start_install_formula = db.Column(db.String(256))  # New field for formula
     start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
     start_install_asap = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # True when start_install holds a date auto-recorded by the ASAP-drop on completion
+    # (release reached Ship Complete or later). Renders neutral/no-color and is preserved
+    # through completion marking (clear_hard_date_cascade no-ops on these rows).
+    start_install_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    installer = db.Column(db.String(64), nullable=True)  # Installer team; matches Trello list name
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -460,6 +444,7 @@ class Releases(db.Model):
             "start_install_formula": self.start_install_formula,
             "start_install_formulaTF": self.start_install_formulaTF,
             "start_install_asap": self.start_install_asap,
+            "start_install_no_color": self.start_install_no_color,
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,

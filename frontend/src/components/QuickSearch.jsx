@@ -29,7 +29,6 @@ const SUBMITTALS_COLS = [
   { key: 'status', label: 'Status' },
   { key: 'ball_in_court', label: 'BIC' },
   { key: 'submittal_drafting_status', label: 'Drafting Status' },
-  { key: 'days_since_ball_in_court_update', label: 'Time Since Last BIC', format: (v) => (v != null ? `${v} days` : '—') },
 ];
 
 export default function QuickSearch() {

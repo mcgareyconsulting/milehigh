@@ -78,7 +78,7 @@ class UpdateStageCommand:
     undone_event_id: Optional[int] = None
 
     def execute(self) -> StageUpdateResult:
-        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier
+        from app.api.helpers import get_stage_group_from_stage, get_fixed_tier, STAGE_PROGRESSION_RANK
 
         job_record: Releases = Releases.query.filter_by(
             job=self.job_id, release=self.release
@@ -171,11 +171,48 @@ class UpdateStageCommand:
 
         extras: dict = {}
 
-        # job_comp cascade. 'Install Complete' is the install-progress completion
-        # marker (job_comp='X'); 'Complete' is inert toward Install Prog. Linked
-        # events get `parent_event_id` so the undo endpoint can find them and
-        # bundle their reverts with the parent's.
-        if self.stage == 'Install Complete':
+        # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
+        # later stage, it is no longer a rush. Clear the ASAP flag and stamp Start
+        # Install with the date of this stage event, recorded as a neutral (no-color)
+        # hard date — preserved through later completion marking because
+        # clear_hard_date_cascade no-ops on no_color rows. Hold (rank 99) is excluded.
+        SHIP_COMPLETE_RANK = STAGE_PROGRESSION_RANK['Ship Complete']
+        new_rank = STAGE_PROGRESSION_RANK.get(self.stage, -1)
+        if (
+            bool(getattr(job_record, 'start_install_asap', False))
+            and SHIP_COMPLETE_RANK <= new_rank < 99
+        ):
+            drop_date = datetime.utcnow().date()
+            job_record.start_install_asap = False
+            job_record.start_install = drop_date
+            job_record.start_install_formula = None
+            job_record.start_install_formulaTF = False
+            job_record.start_install_no_color = True
+            JobEventService.create_and_close(
+                job=self.job_id, release=self.release,
+                action='updated', source=self.source,
+                payload={
+                    'field': 'start_install_asap',
+                    'old_value': True,
+                    'new_value': False,
+                    'reason': 'asap_dropped_on_ship_complete',
+                    'start_install': drop_date.isoformat(),
+                    'parent_event_id': event.id,
+                },
+            )
+            extras['asap_dropped'] = True
+            extras['start_install'] = drop_date.isoformat()
+
+        # job_comp cascade. 'Install Complete' and 'Complete' form a single
+        # "complete zone" for the Install Prog marker (job_comp='X'): entering
+        # the zone sets 'X', moving within it (Install Complete <-> Complete)
+        # keeps 'X', and leaving it clears 'X'. Note the asymmetry on the reverse
+        # path: 'X' in Install Prog only ever implies 'Install Complete' (see the
+        # update_job_comp route) — it never pushes a release to 'Complete'.
+        # Linked events get `parent_event_id` so the undo endpoint can find them
+        # and bundle their reverts with the parent's.
+        COMPLETE_ZONE = ('Install Complete', 'Complete')
+        if self.stage in COMPLETE_ZONE:
             current_job_comp = (job_record.job_comp or '').strip().upper()
             if current_job_comp != 'X':
                 old_jc = job_record.job_comp
@@ -187,12 +224,16 @@ class UpdateStageCommand:
                         'field': 'job_comp',
                         'old_value': old_jc,
                         'new_value': 'X',
-                        'reason': 'stage_set_to_install_complete',
+                        'reason': (
+                            'stage_set_to_install_complete'
+                            if self.stage == 'Install Complete'
+                            else 'stage_set_to_complete'
+                        ),
                         'parent_event_id': event.id,
                     },
                 )
                 extras['job_comp'] = 'X'
-        elif old_stage == 'Install Complete' and self.stage != 'Install Complete':
+        elif old_stage in COMPLETE_ZONE and self.stage not in COMPLETE_ZONE:
             current_job_comp = (job_record.job_comp or '').strip().upper()
             if current_job_comp == 'X':
                 old_jc = job_record.job_comp
@@ -204,7 +245,11 @@ class UpdateStageCommand:
                         'field': 'job_comp',
                         'old_value': old_jc,
                         'new_value': None,
-                        'reason': 'stage_changed_from_install_complete',
+                        'reason': (
+                            'stage_changed_from_install_complete'
+                            if old_stage == 'Install Complete'
+                            else 'stage_changed_from_complete'
+                        ),
                         'parent_event_id': event.id,
                     },
                 )

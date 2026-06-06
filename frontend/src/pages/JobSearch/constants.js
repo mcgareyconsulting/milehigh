@@ -29,11 +29,6 @@ export const SUBMITTALS_COLS = [
   { key: 'ball_in_court', label: 'BIC' },
   { key: 'submittal_drafting_status', label: 'Drafting Status' },
   { key: 'due_date', label: 'Due Date', format: (v) => formatDateShort(v) },
-  {
-    key: 'days_since_ball_in_court_update',
-    label: 'Time Since Last BIC',
-    format: (v) => (v != null ? `${v} days` : '—'),
-  },
 ];
 
 const JOB_INPUT_REGEX = /^\d{3}$/;
