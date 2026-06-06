@@ -10,7 +10,14 @@ derived from the most recently assigned value (handles wraparound).
 This migration only adds the columns. Existing DRR submittals are intentionally NOT
 backfilled — Rel numbers are assigned going forward as new DRR submittals are synced
 from Procore.
+
+Usage:
+    python migrations/add_rel_to_submittals.py
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import create_app
 from app.models import db
