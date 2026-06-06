@@ -102,6 +102,12 @@ class Submittals(db.Model):
     notes = db.Column(db.Text)
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
+    # Release identifier (100-999) assigned the first time a submittal hits the DRR
+    # ("Drafting Release Review") type. Assigned sequentially per DRR submittal, wrapping
+    # 999 -> 100. rel_assigned_at records when the number was handed out so the next
+    # assignment can be derived from the most recently assigned value (handles wraparound).
+    rel = db.Column(db.Integer, nullable=True)
+    rel_assigned_at = db.Column(db.DateTime, nullable=True)
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -164,6 +170,7 @@ class Submittals(db.Model):
             "order_number": self.order_number,
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
+            "rel": self.rel,
             "due_date": _dt(self.due_date),
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),

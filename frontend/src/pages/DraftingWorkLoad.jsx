@@ -49,14 +49,14 @@ const columnWidthStyles = `
 
 // Friendly labels + display order for the active-filter chips (keys match useFilters' columnFilters).
 const FILTER_LABELS = {
-    'PROJ. #': 'Project #',
+    'Job': 'Job',
     'NAME': 'Project Name',
     'TITLE': 'Title',
     'BIC': 'Ball in Court',
     'SUB MANAGER': 'Sub Manager',
     'PROCORE STATUS': 'Procore Status',
 };
-const FILTER_CHIP_ORDER = ['PROJ. #', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
+const FILTER_CHIP_ORDER = ['Job', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
 
 function DraftingWorkLoad() {
     const [searchParams] = useSearchParams();
@@ -141,13 +141,13 @@ function DraftingWorkLoad() {
 
     // Display labels for the primary "Project" filter only: maps project_name (the underlying
     // filter value) to "<project #> — <project name>". The committed/matched value stays the
-    // project name, so the column-specific PROJ. # / NAME dropdowns are unaffected.
+    // project name, so the column-specific Job / NAME dropdowns are unaffected.
     const projectFilterLabels = useMemo(() => {
         const map = {};
         for (const row of rows) {
             const name = (row.project_name ?? row['NAME'] ?? '').toString().trim();
             if (!name || map[name]) continue;
-            const number = (row.project_number ?? row['PROJ. #'] ?? '').toString().trim();
+            const number = (row.project_number ?? row['Job'] ?? '').toString().trim();
             map[name] = number ? `${number} — ${name}` : name;
         }
         return map;
@@ -270,7 +270,7 @@ function DraftingWorkLoad() {
 
     const hasData = displayRows.length > 0;
     const visibleColumns = columns.filter(column => column !== 'Submittals Id');
-    // Column display names are case-sensitive: ORDER #, PROJ. #, NAME, TITLE, etc.
+    // Column display names are case-sensitive: ORDER #, Job, Rel, NAME, TITLE, etc.
     const tableColumnCount = visibleColumns.length;
 
     return (
@@ -483,7 +483,8 @@ function DraftingWorkLoad() {
                                                     const isBallInCourt = column === 'BIC';
                                                     const isType = column === 'TYPE';
                                                     const isSubmittalId = column === 'Submittals Id';
-                                                    const isProjectNumber = column === 'PROJ. #';
+                                                    const isProjectNumber = column === 'Job';
+                                                    const isRel = column === 'Rel';
                                                     const isSubmittalManager = column === 'SUB MANAGER';
                                                     const isDueDate = column === 'DUE DATE';
 
@@ -496,6 +497,9 @@ function DraftingWorkLoad() {
                                                     } else if (isProjectNumber) {
                                                         headerStyle = { width: '4%' };
                                                         columnClass = 'dwl-col-project-number';
+                                                    } else if (isRel) {
+                                                        headerStyle = { width: '3%' };
+                                                        columnClass = 'dwl-col-rel';
                                                     } else if (isTitle) {
                                                         headerStyle = { width: '12%' };
                                                         columnClass = 'dwl-col-title';
@@ -526,7 +530,7 @@ function DraftingWorkLoad() {
                                                     }
 
                                                     // Reduce padding for specific columns
-                                                    const isProjectNumberHeader = column === 'PROJ. #';
+                                                    const isProjectNumberHeader = column === 'Job';
                                                     const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
                                                     // Determine if this column is sortable
