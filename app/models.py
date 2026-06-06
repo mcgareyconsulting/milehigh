@@ -838,6 +838,50 @@ class ReleaseDrawingVersion(db.Model):
         }
 
 
+class ReleasePhoto(db.Model):
+    """A photo attached to a release (job-site/progress images).
+
+    Unlike `ReleaseDrawingVersion` (versioned PDFs), photos are a flat list:
+    each upload is an independent row. Any image type is allowed and each photo
+    carries an optional free-text note that can be edited after upload.
+    """
+    __tablename__ = 'release_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default='image/jpeg')
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    note = db.Column(db.Text, nullable=True)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    release = db.relationship('Releases', backref=db.backref('photos', lazy='dynamic'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+
+    def to_dict(self):
+        uploaded_by_name = None
+        if self.uploaded_by:
+            first = (self.uploaded_by.first_name or '').strip()
+            last = (self.uploaded_by.last_name or '').strip()
+            uploaded_by_name = (f"{first} {last}".strip()) or self.uploaded_by.username
+        return {
+            'id': self.id,
+            'release_id': self.release_id,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'note': self.note,
+            'uploaded_by': {
+                'id': self.uploaded_by_user_id,
+                'name': uploaded_by_name,
+            },
+            'uploaded_at': _dt(self.uploaded_at),
+        }
+
+
 class FcCollectionRun(db.Model):
     """One row per nightly (or manual) FC PDF Pack retry pass.
 
