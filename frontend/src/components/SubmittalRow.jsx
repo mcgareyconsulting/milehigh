@@ -38,7 +38,7 @@ export default function SubmittalRow({ submittal, isHighlighted = false, onOpenD
     const [expanded, setExpanded] = useState(false);
 
     const orderNum = fmt(submittal['ORDER #']);
-    const projNum = fmt(submittal['PROJ. #']);
+    const projNum = fmt(submittal['Job'] ?? submittal.project_number);
     const projName = fmt(submittal['NAME']);
     const title = (submittal['TITLE'] || '').toString().trim();
     const bic = fmt(submittal['BIC']);

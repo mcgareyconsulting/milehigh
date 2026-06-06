@@ -302,9 +302,12 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     if (isSubmittalId) {
                         customWidthClass = 'w-32'; // Accommodate 8-10 digit ID + operations link icon
                         columnClass = 'dwl-col-submittal-id';
-                    } else if (column === 'PROJ. #') {
+                    } else if (column === 'Job') {
                         customWidthClass = 'w-20'; // Accommodate 3-4 digit number
                         columnClass = 'dwl-col-project-number';
+                    } else if (column === 'Rel') {
+                        customWidthClass = 'w-12'; // 3-digit release identifier
+                        columnClass = 'dwl-col-rel';
                     } else if (column === 'TITLE') {
                         customStyle = { maxWidth: '280px' };
                         columnClass = 'dwl-col-title';
@@ -734,8 +737,22 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle PROJ. # column - make it a link to Procore
-                    const isProjectNumber = column === 'PROJ. #';
+                    // Handle Rel column - read-only release identifier (only set for DRR submittals)
+                    if (column === 'Rel') {
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 whitespace-nowrap text-xs align-middle font-medium ${cellBgClass} border-r border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100 text-center dwl-col-rel`}
+                                style={{ maxWidth: '50px' }}
+                                title={cellValue}
+                            >
+                                {cellValue}
+                            </td>
+                        );
+                    }
+
+                    // Handle Job (project #) column - make it a link to Procore
+                    const isProjectNumber = column === 'Job';
                     if (isProjectNumber) {
                         const submittalId = row.submittal_id || row['Submittals Id'] || '';
                         const projectId = row.procore_project_id || row['Project Id'] || '';

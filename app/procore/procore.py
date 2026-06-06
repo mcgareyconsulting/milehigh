@@ -46,6 +46,55 @@ from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
 
 logger = logging.getLogger(__name__)
 
+# Submittal type that triggers a "Rel" (release) number assignment on the DWL tab.
+DRR_TYPE = "Drafting Release Review"
+# Rel numbers cycle through this inclusive range, wrapping back to REL_MIN after REL_MAX.
+REL_MIN = 100
+REL_MAX = 999
+
+
+def next_rel_number():
+    """Return the next Rel number to assign to a DRR submittal.
+
+    Numbers run 100..999 and wrap back to 100. "Next" is derived from the most
+    recently assigned Rel (by rel_assigned_at) so wraparound is handled naturally:
+    if the last assigned value was 999, the next is 100. Returns REL_MIN when no
+    Rel has ever been assigned.
+    """
+    last = (
+        Submittals.query
+        .filter(Submittals.rel.isnot(None))
+        .order_by(Submittals.rel_assigned_at.desc(), Submittals.id.desc())
+        .first()
+    )
+    if last is None or last.rel is None:
+        return REL_MIN
+    nxt = last.rel + 1
+    if nxt > REL_MAX:
+        nxt = REL_MIN
+    return nxt
+
+
+def assign_rel_if_drr(record):
+    """Assign a Rel number to ``record`` if it is a DRR submittal without one.
+
+    Idempotent: does nothing if the submittal is not DRR or already has a Rel.
+    The caller is responsible for committing the surrounding transaction.
+    Returns the assigned Rel number, or None if nothing was assigned.
+    """
+    if record is None:
+        return None
+    if (record.type or "").strip() != DRR_TYPE:
+        return None
+    if record.rel is not None:
+        return None
+    record.rel = next_rel_number()
+    record.rel_assigned_at = datetime.utcnow()
+    logger.info(
+        "Assigned Rel %s to DRR submittal %s", record.rel, record.submittal_id
+    )
+    return record.rel
+
 
 def _request_json(url, headers, params=None):
     """
@@ -558,9 +607,13 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             last_updated=datetime.utcnow()
         )
         
+        # Assign a Rel (release) number when this submittal arrives as a DRR.
+        # Done before commit so the number persists in the same transaction.
+        assign_rel_if_drr(new_submittal)
+
         db.session.add(new_submittal)
         logger.info(f"Added submittal to session, committing to database...")
-        
+
         try:
             db.session.commit()
             logger.info(f"Successfully committed submittal to database")
