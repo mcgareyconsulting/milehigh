@@ -60,6 +60,23 @@ class Config:
     AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
     AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
 
+    # Banana Boy mailbox ingestion (bb@mhmw.com → data lake bronze).
+    # App-only Graph read scoped to this single mailbox via an Azure
+    # ApplicationAccessPolicy — the workaround for not opening Graph org-wide.
+    # INGEST_ENABLED is off by default so tests/dev never poll; flip it on in
+    # prod once the access policy is verified.
+    BB_MAILBOX = os.environ.get("BB_MAILBOX", "bb@mhmw.com")
+    BB_MAIL_POLL_MINUTES = int(os.environ.get("BB_MAIL_POLL_MINUTES", "15"))
+    BB_MAIL_INGEST_ENABLED = os.environ.get("BB_MAIL_INGEST_ENABLED", "0") == "1"
+    # Central, admin-governed mailbox set. When BB_INGEST_GROUP_ID (an Entra
+    # security group object id) is set, the poller discovers that group's
+    # members via Graph and ingests each — so onboarding a mailbox is just
+    # "admin adds it to the group" (same group used by the ApplicationAccessPolicy
+    # that scopes the app's Mail.* access). Falls back to the explicit
+    # BB_MAILBOXES comma list, then to the single BB_MAILBOX.
+    BB_INGEST_GROUP_ID = os.environ.get("BB_INGEST_GROUP_ID")
+    BB_MAILBOXES = os.environ.get("BB_MAILBOXES")
+
     # Per-release marked-up PDF storage. In prod set to an absolute path on the
     # Render persistent disk (e.g. /var/data/pdfs). Local dev falls back to
     # <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.
