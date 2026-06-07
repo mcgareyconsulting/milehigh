@@ -607,9 +607,11 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             last_updated=datetime.utcnow()
         )
         
-        # Assign a Rel (release) number when this submittal arrives as a DRR.
-        # Done before commit so the number persists in the same transaction.
-        assign_rel_if_drr(new_submittal)
+        # Rel (release) number assignment is currently DISABLED. The Rel column is
+        # displayed empty in the Drafting Work Load tab and no numbers are handed out.
+        # The assignment helpers (next_rel_number / assign_rel_if_drr) are kept intact
+        # for when this is re-enabled; re-instate the call below to turn it back on.
+        # assign_rel_if_drr(new_submittal)
 
         db.session.add(new_submittal)
         logger.info(f"Added submittal to session, committing to database...")
