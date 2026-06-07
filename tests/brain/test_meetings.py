@@ -23,6 +23,12 @@ def _items(**over):
     return base
 
 
+def _extract_ret(items):
+    """Mimic extract(): items + zeroed (stub) usage, for patching service.extract."""
+    return {"items": items,
+            "usage": {"input_tokens": 0, "output_tokens": 0, "model": "stub", "cost_usd": 0.0}}
+
+
 # --------------------------------------------------------------------------- #
 # Extractor (deterministic stub path)
 # --------------------------------------------------------------------------- #
@@ -56,7 +62,7 @@ def test_create_meeting_extracts_links_and_notifies_reviewer(app):
         _items(title="480-146 redo, did not fit", release_ref="480-146", owner_name="Luis"),
         _items(title="Order galvanized lintels", item_type="action"),
     ]
-    with patch("app.brain.meetings.service.extract_items", return_value=proposed):
+    with patch("app.brain.meetings.service.extract", return_value=_extract_ret(proposed)):
         meeting = service.create_meeting_with_extraction(
             title="Shop touch-base", meeting_type="internal_shop",
             transcript="(stubbed)", created_by_id=bill.id,
@@ -74,7 +80,7 @@ def test_create_meeting_extracts_links_and_notifies_reviewer(app):
 
 def test_unresolved_reviewer_does_not_crash(app):
     # No user matches the configured reviewer username → ingestion still succeeds.
-    with patch("app.brain.meetings.service.extract_items", return_value=[_items(title="x")]):
+    with patch("app.brain.meetings.service.extract", return_value=_extract_ret([_items(title="x")])):
         meeting = service.create_meeting_with_extraction(
             title="m", meeting_type="other", transcript="x",
         )
@@ -163,7 +169,7 @@ def test_create_and_review_endpoints_happy_path(app, client):
     proposed = [_items(title="do the thing")]
     with patch("app.auth.utils.get_current_user", return_value=admin), \
          patch("app.brain.meetings.routes.get_current_user", return_value=admin), \
-         patch("app.brain.meetings.service.extract_items", return_value=proposed):
+         patch("app.brain.meetings.service.extract", return_value=_extract_ret(proposed)):
         resp = client.post("/brain/meetings", json={
             "title": "Shop", "meeting_type": "internal_shop", "transcript": "(stub)",
         })

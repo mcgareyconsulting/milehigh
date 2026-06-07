@@ -17,9 +17,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { checkAuth } from '../utils/auth';
 import {
     fetchMeetings, fetchMeeting, generateChecklist,
-    reviewChecklistItem, fetchAssignableUsers, scanDue, sendBot,
+    reviewChecklistItem, fetchAssignableUsers, scanDue, sendBot, createManualMeeting,
 } from '../services/meetingsApi';
 import { DEMO_USERS, DEMO_MEETING } from '../data/productionMeetingDemo';
+import { PRODUCTION_MEETING_TRANSCRIPT } from '../data/productionMeetingTranscript';
 
 const MEETING_TYPES = [
     { value: 'internal_draft', label: 'Internal — Draft' },
@@ -39,13 +40,15 @@ const ITEM_TYPES = [
 const ITEM_TYPE_BADGE = Object.fromEntries(ITEM_TYPES.map(t => [t.value, t]));
 
 // Recall bot lifecycle → display. Terminal states stop the status polling.
-const BOT_TERMINAL = ['done', 'call_ended', 'fatal', 'failed', 'media_expired'];
+const BOT_TERMINAL = ['done', 'call_ended', 'fatal', 'failed', 'media_expired', 'recording_denied'];
 const isLiveBot = (s) => !!s && !BOT_TERMINAL.includes(s);
 const BOT_STATUS_PILL = {
     scheduled: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
     joining: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
     in_waiting_room: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    in_call_not_recording: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     in_call_recording: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    recording_denied: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
     transcribing: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
     call_ended: 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-200',
     done: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
@@ -66,6 +69,7 @@ const formatWhen = (iso) => {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
     });
 };
+const formatCost = (c) => (c == null ? '' : c < 0.01 ? `$${c.toFixed(4)}` : `$${c.toFixed(2)}`);
 
 const draftFromItem = (it) => ({
     title: it.title || '',
@@ -101,6 +105,11 @@ export default function Meetings({ demoMode = false }) {
     const [botName, setBotName] = useState('');
     const [botBusy, setBotBusy] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [showPaste, setShowPaste] = useState(false);
+    const [pasteTitle, setPasteTitle] = useState('');
+    const [pasteType, setPasteType] = useState('internal_shop');
+    const [pasteText, setPasteText] = useState('');
+    const [pasteBusy, setPasteBusy] = useState(false);
 
     const seedDrafts = (meeting) => {
         const d = {};
@@ -172,6 +181,31 @@ export default function Meetings({ demoMode = false }) {
         } finally {
             setGenerating(false);
         }
+    };
+
+    const handleCreateManual = async (e) => {
+        e.preventDefault();
+        const transcript = pasteText.trim();
+        if (!transcript) return;
+        setPasteBusy(true); setError(null);
+        try {
+            const meeting = await createManualMeeting({
+                title: pasteTitle.trim() || undefined, meeting_type: pasteType, transcript,
+            });
+            setMeetings(prev => [meeting, ...prev.filter(m => m.id !== meeting.id)]);
+            setSelected(meeting); seedDrafts(meeting);
+            setPasteTitle(''); setPasteText(''); setShowPaste(false);
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Failed to create meeting');
+        } finally {
+            setPasteBusy(false);
+        }
+    };
+
+    const loadSampleTranscript = () => {
+        setPasteTitle('Production meeting — Jun 4 (sample)');
+        setPasteType('internal_shop');
+        setPasteText(PRODUCTION_MEETING_TRANSCRIPT);
     };
 
     // While any recall bot is mid-flight, poll the list so statuses update live.
@@ -262,6 +296,10 @@ export default function Meetings({ demoMode = false }) {
                             className="text-[11px] px-2 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
                             Scan due
                         </button>
+                        <button onClick={() => { setError(null); setShowPaste(true); }}
+                            className="px-3 py-1.5 text-sm font-medium rounded-lg border border-accent-300 dark:border-accent-600 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-accent-900/20">
+                            Paste transcript
+                        </button>
                         <button onClick={() => { setError(null); setShowSendBot(true); }}
                             className="px-3 py-1.5 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white">
                             + Send Bot
@@ -333,6 +371,13 @@ export default function Meetings({ demoMode = false }) {
                                     </button>
                                 )}
                             </div>
+                            {selected.extract_model && (
+                                <p className="text-[11px] text-gray-400 dark:text-slate-500 mb-2">
+                                    {selected.extract_model === 'stub'
+                                        ? '⚠ keyword stub (no API key/credits) · $0'
+                                        : `${selected.extract_model} · ${(selected.extract_input_tokens || 0).toLocaleString()} in + ${(selected.extract_output_tokens || 0).toLocaleString()} out tok · ${formatCost(selected.extract_cost_usd)}`}
+                                </p>
+                            )}
                             {items.length > 0 ? (
                                 <ul className="space-y-2.5">
                                     {items.map(it => (
@@ -378,6 +423,14 @@ export default function Meetings({ demoMode = false }) {
                     url={botUrl} name={botName} busy={botBusy} error={error}
                     onUrl={setBotUrl} onName={setBotName}
                     onSubmit={handleSendBot} onClose={() => setShowSendBot(false)}
+                />
+            )}
+            {showPaste && (
+                <PasteTranscriptModal
+                    title={pasteTitle} type={pasteType} text={pasteText} busy={pasteBusy} error={error}
+                    onTitle={setPasteTitle} onType={setPasteType} onText={setPasteText}
+                    onLoadSample={loadSampleTranscript}
+                    onSubmit={handleCreateManual} onClose={() => setShowPaste(false)}
                 />
             )}
         </div>
@@ -456,6 +509,53 @@ function SendBotModal({ url, name, busy, error, onUrl, onName, onSubmit, onClose
     );
 }
 
+function PasteTranscriptModal({ title, type, text, busy, error, onTitle, onType, onText, onLoadSample, onSubmit, onClose }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+            <form onSubmit={onSubmit} onClick={e => e.stopPropagation()}
+                className="w-full max-w-2xl rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-3 shadow-xl">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Paste a transcript</h2>
+                    <button type="button" onClick={onClose} aria-label="Close"
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-lg leading-none">✕</button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-slate-400">
+                    Creates a meeting from raw transcript text — open it and hit “Generate to-do list” to run the extractor.
+                    Also the fallback when a bot couldn’t join (Teams lobby / tenant policy).
+                </p>
+                <div className="flex gap-2">
+                    <input type="text" placeholder="Title (optional)" value={title} onChange={e => onTitle(e.target.value)}
+                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100" />
+                    <select value={type} onChange={e => onType(e.target.value)}
+                        className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200">
+                        {MEETING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                </div>
+                <textarea placeholder="Paste the meeting transcript…" rows={12} value={text} onChange={e => onText(e.target.value)}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100" />
+                {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+                <div className="flex items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={onLoadSample}
+                            className="text-[11px] px-2 py-1 rounded-md border border-accent-300 dark:border-accent-600 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-accent-900/20">
+                            Load Jun 4 production meeting (~70 min)
+                        </button>
+                        {text && <span className="text-[10px] text-gray-400 dark:text-slate-500">{text.length.toLocaleString()} chars</span>}
+                    </div>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={onClose}
+                            className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
+                        <button type="submit" disabled={busy || !text.trim()}
+                            className="px-3 py-2 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white disabled:opacity-50">
+                            {busy ? 'Creating…' : 'Create meeting'}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    );
+}
+
 function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, onDone }) {
     const isProposed = item.status === 'proposed';
     const badge = ITEM_TYPE_BADGE[item.item_type] || ITEM_TYPE_BADGE.action;
@@ -473,7 +573,13 @@ function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, o
             <div className="flex items-center gap-2 mb-1.5">
                 <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.badge}`}>{badge.label}</span>
                 {item.gc_facing && <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">GC-facing</span>}
-                {item.confidence != null && <span className="text-[10px] text-gray-400 dark:text-slate-500">conf {Math.round(item.confidence * 100)}%</span>}
+                {(item.matched_job_name || item.matched_job_number) && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                        {item.match_source === 'submittal' ? 'Submittal' : 'Release'} · {item.matched_job_name || `job ${item.matched_job_number}`}{item.confidence != null ? ` · ${Math.round(item.confidence * 100)}%` : ''}
+                    </span>
+                )}
+                {item.owner_inferred && <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">owner inferred</span>}
+                {item.name_corrected && <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300">name cleaned</span>}
                 <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-medium rounded capitalize ${STATUS_PILL[item.status]}`}>{item.status}</span>
             </div>
 

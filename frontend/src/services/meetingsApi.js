@@ -38,6 +38,12 @@ export async function sendBot({ meeting_url, bot_name } = {}) {
     return data; // { bot_id, status }
 }
 
+// Create a meeting from a pasted transcript (no auto-extraction — Generate runs it).
+export async function createManualMeeting({ title, meeting_type, transcript }) {
+    const { data } = await axios.post(`${BASE}/meetings/manual`, { title, meeting_type, transcript });
+    return data; // meeting + items + transcript
+}
+
 export async function fetchMeetings() {
     const { data } = await axios.get(`${BASE}/meetings`);
     return data.meetings;

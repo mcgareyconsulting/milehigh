@@ -18,8 +18,44 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-EXTRACT_MODEL = os.environ.get("CHECKLIST_EXTRACT_MODEL", "claude-sonnet-4-6")
+EXTRACT_MODEL = os.environ.get("CHECKLIST_EXTRACT_MODEL", "claude-opus-4-8")
 VALID_TYPES = {"action", "needs_gc_update", "decision", "risk", "fyi"}
+
+# USD per million tokens (input, output). Used to price each extraction so we can
+# surface token + cost per meeting. Prefix match keeps dated model ids working.
+MODEL_PRICING = {
+    "claude-opus-4": (15.0, 75.0),
+    "claude-sonnet-4": (3.0, 15.0),
+    "claude-haiku-4": (1.0, 5.0),
+}
+_DEFAULT_PRICING = (15.0, 75.0)  # assume Opus if unknown — never under-report cost
+
+
+def _price(model: str):
+    for prefix, rates in MODEL_PRICING.items():
+        if (model or "").startswith(prefix):
+            return rates
+    return _DEFAULT_PRICING
+
+
+def _usage(body: dict) -> dict:
+    """input/output tokens + computed USD cost from a Messages API response."""
+    u = body.get("usage") or {}
+    model = body.get("model") or EXTRACT_MODEL
+    inp = int(u.get("input_tokens") or 0)
+    out = int(u.get("output_tokens") or 0)
+    pin, pout = _price(model)
+    return {
+        "input_tokens": inp,
+        "output_tokens": out,
+        "model": model,
+        "cost_usd": round(inp / 1e6 * pin + out / 1e6 * pout, 6),
+    }
+
+
+def _stub_usage() -> dict:
+    """Zeroed usage marker when extraction fell back to the keyword stub (no API)."""
+    return {"input_tokens": 0, "output_tokens": 0, "model": "stub", "cost_usd": 0.0}
 
 _ACTION_HINTS = (
     "need", "redo", "today", "follow up", "follow-up", "asap", "by ", "send",
@@ -57,6 +93,9 @@ def _system_prompt(today: date, people=None) -> str:
         "- gc_facing = true when it involves a GC, owner, architect, or other external party.\n"
         "- release_ref = a job-release token like '480-146' if mentioned; submittal_ref = a "
         "submittal id/number if mentioned.\n"
+        "- Job-release codes are written XXX-YYY. If a bare six-digit number is used as a "
+        "job/release reference (e.g. '170348'), hyphenate it as XXX-YYY ('170-348') "
+        "everywhere it appears — in BOTH the title and release_ref.\n"
         "- item_type: action (someone must do something), needs_gc_update (waiting on / must "
         "update a GC), decision (a choice that was made), risk (a problem or blocker), fyi "
         "(notable, no action).\n"
@@ -103,7 +142,7 @@ def _call_anthropic(transcript: str, today: date, people=None) -> list:
     items = data.get("items", [])
     if not isinstance(items, list):
         raise ValueError("items is not a list")
-    return items
+    return items, _usage(body)
 
 
 def _stub_extract(transcript: str) -> list:
@@ -130,18 +169,25 @@ def _stub_extract(transcript: str) -> list:
     return items
 
 
-def extract_items(transcript: str, today: date = None, people=None) -> list:
-    """Return a list of proposed-item dicts. Never raises — falls back to the stub.
+def extract(transcript: str, today: date = None, people=None) -> dict:
+    """Return {'items': [...], 'usage': {input_tokens, output_tokens, model, cost_usd}}.
 
-    `people` is an optional list of team first names; passed to the LLM so owner_name
-    resolves to real users instead of guessed labels.
+    Never raises — on a missing key or any failure it falls back to the deterministic
+    keyword stub with zeroed usage (model='stub'), so a $0/0-token result is the visible
+    signal that extraction degraded. `people` is an optional roster of team first names
+    passed to the LLM so owner_name resolves to real users.
     """
     today = today or date.today()
     try:
-        items = _call_anthropic(transcript, today, people)
+        items, usage = _call_anthropic(transcript, today, people)
         if items:
-            return items
+            return {"items": items, "usage": usage}
         logger.info("checklist_extract_empty_llm_result")
     except Exception as e:  # noqa: BLE001 — any failure → deterministic stub
         logger.info("checklist_extract_fallback", error=str(e))
-    return _stub_extract(transcript)
+    return {"items": _stub_extract(transcript), "usage": _stub_usage()}
+
+
+def extract_items(transcript: str, today: date = None, people=None) -> list:
+    """Back-compat: items only (see `extract` for items + usage)."""
+    return extract(transcript, today, people)["items"]

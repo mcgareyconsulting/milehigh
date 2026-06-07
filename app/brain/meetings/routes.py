@@ -22,6 +22,21 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Recall webhook events we surface as the meeting's bot_status. Anything not listed
+# (bot.breakout_room_*, bot.recording_permission_allowed, transcript.deleted, …) is
+# acknowledged with 200 but ignored, so the status stays meaningful.
+_BOT_STATUS = {
+    'joining_call': 'joining',
+    'in_waiting_room': 'in_waiting_room',
+    'in_call_not_recording': 'in_call_not_recording',
+    'in_call_recording': 'in_call_recording',
+    'recording_permission_denied': 'recording_denied',
+    'call_ended': 'call_ended',
+    'done': 'done',
+    'fatal': 'fatal',
+}
+_TRANSCRIPT_STATUS = {'processing': 'transcribing', 'done': 'done', 'failed': 'failed'}
+
 
 @brain_bp.route('/meetings/assignable-users', methods=['GET'])
 @admin_required
@@ -100,6 +115,25 @@ def create_meeting():
 def list_meetings():
     rows = Meeting.query.order_by(Meeting.created_at.desc()).limit(100).all()
     return jsonify({'meetings': [m.to_dict() for m in rows]})
+
+
+@brain_bp.route('/meetings/manual', methods=['POST'])
+@admin_required
+def add_manual_meeting():
+    """Create a meeting from a pasted transcript (no auto-extraction). The reviewer
+    then runs the extractor via the 'Generate to-do list' button. Returns the meeting."""
+    data = request.get_json(silent=True) or {}
+    transcript = (data.get('transcript') or '').strip()
+    if not transcript:
+        return jsonify({'error': 'transcript is required'}), 400
+    user = get_current_user()
+    m = service.create_manual_meeting(
+        title=data.get('title'),
+        meeting_type=data.get('meeting_type'),
+        transcript=transcript,
+        created_by_id=user.id if user else None,
+    )
+    return jsonify(m.to_dict(include_items=True)), 201
 
 
 @brain_bp.route('/meetings/<int:meeting_id>/generate-checklist', methods=['POST'])
@@ -183,17 +217,16 @@ def recall_webhook():
     bot_id = bot.get('id') or data.get('bot_id')
     logger.info('recall_webhook_received', recall_event=event, bot_id=bot_id)
 
-    # Keep the meeting card's status fresh. Recall sends bot status-change events
-    # (`bot.status_change` with data.status.code, or discrete `bot.<code>`) when that
-    # subscription is enabled, and transcript-artifact events (`transcript.processing`
-    # / `transcript.done`) which arrive even without it. Map both.
-    status_code = (data.get('status') or {}).get('code')
-    if not status_code and event.startswith('bot.') and event != 'bot.status_change':
-        status_code = event.split('bot.', 1)[1]
-    if event.startswith('transcript.'):
-        phase = event.split('transcript.', 1)[1]  # processing | done | failed
-        status_code = {'processing': 'transcribing', 'done': 'done',
-                       'failed': 'failed'}.get(phase, status_code)
+    # Map only the meaningful lifecycle events to a status — everything else Recall
+    # sends (breakout rooms, recording_permission_allowed, transcript.deleted) is
+    # acknowledged but ignored so the meeting status stays meaningful.
+    status_code = None
+    if event == 'bot.status_change':
+        status_code = _BOT_STATUS.get((data.get('status') or {}).get('code'))
+    elif event.startswith('bot.'):
+        status_code = _BOT_STATUS.get(event.split('bot.', 1)[1])
+    elif event.startswith('transcript.'):
+        status_code = _TRANSCRIPT_STATUS.get(event.split('transcript.', 1)[1])
 
     if bot_id and status_code:
         service.update_bot_status(bot_id, status_code)

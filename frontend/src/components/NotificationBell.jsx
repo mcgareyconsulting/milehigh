@@ -111,6 +111,8 @@ export default function NotificationBell() {
             navigate('/board', { state: { openItemId: notif.board_item_id } });
         } else if (notif.submittal_id) {
             navigate(`/drafting-work-load?highlight=${encodeURIComponent(notif.submittal_id)}`);
+        } else if (notif.checklist_item_id) {
+            navigate('/todos');
         }
     };
 

@@ -19,6 +19,7 @@ const NAV_ITEMS = [
     { label: 'Drafting WL', path: '/drafting-work-load' },
     { label: 'PM Board', path: '/pm-board' },
     { label: 'Events', path: '/events' },
+    { label: 'To-Dos', path: '/todos' },
 ];
 
 const ADMIN_ITEMS = [

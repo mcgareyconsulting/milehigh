@@ -12,7 +12,7 @@ from app.logging_config import get_logger
 from app.models import (
     db, Meeting, ChecklistItem, Releases, Submittals, User, Notification,
 )
-from app.brain.meetings.extract import extract_items, VALID_TYPES
+from app.brain.meetings.extract import extract, VALID_TYPES
 
 logger = get_logger(__name__)
 
@@ -44,6 +44,14 @@ def _parse_due(value):
         return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
     except (ValueError, TypeError):
         return None
+
+
+def _end_of_week(today=None):
+    """End of the current work week (Friday). Returns today if it's already Friday;
+    rolls to next Friday on the weekend. Used as the default due date when the meeting
+    didn't state one — so every to-do gets a deadline to drive the reminder scan."""
+    today = today or date.today()
+    return today + timedelta(days=(4 - today.weekday()) % 7)  # Mon=0 … Fri=4
 
 
 def _resolve_release(ref):
@@ -80,7 +88,9 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     # Give the extractor the team roster so owner_name maps to real users.
     people = [u.first_name for u in User.query.filter_by(is_active=True).all()
               if u.first_name]
-    raw_items = extract_items(meeting.transcript or "", people=people)
+    result = extract(meeting.transcript or "", people=people)
+    raw_items = result["items"]
+    usage = result["usage"]
 
     created = 0
     for it in raw_items:
@@ -93,8 +103,10 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
             item_type=itype,
             gc_facing=bool(it.get("gc_facing")),
             proposed_owner_user_id=_resolve_owner_id(it.get("owner_name")),
-            proposed_due_date=_parse_due(it.get("due_date")),
-            confidence=it.get("confidence"),
+            # Default to end of the current week when the meeting didn't state a date.
+            proposed_due_date=_parse_due(it.get("due_date")) or _end_of_week(),
+            # confidence is reused for the owner-match score, set by the matcher below.
+            confidence=None,
             release_id=rel_id,
             submittal_id=_resolve_submittal(it.get("submittal_ref")),
         ))
@@ -103,6 +115,17 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
             meeting.project_number = rel_proj
 
     meeting.extracted_at = datetime.utcnow()
+    db.session.commit()
+
+    # Infer owners for the items no one was named on — match each to an active job and
+    # lift the PM / submittal manager. Haiku usage folds into the meeting cost meter.
+    from app.brain.meetings import owner_match
+    match_usage = owner_match.infer_owners_for_meeting(meeting)
+    blended = bool(match_usage.get("cost_usd"))
+    meeting.extract_model = usage["model"] + (" +haiku" if blended else "")
+    meeting.extract_input_tokens = (usage["input_tokens"] or 0) + (match_usage.get("input_tokens") or 0)
+    meeting.extract_output_tokens = (usage["output_tokens"] or 0) + (match_usage.get("output_tokens") or 0)
+    meeting.extract_cost_usd = round((usage["cost_usd"] or 0) + (match_usage.get("cost_usd") or 0), 6)
     db.session.commit()
 
     if notify:
@@ -129,6 +152,25 @@ def create_meeting_with_extraction(*, title, meeting_type, transcript,
     db.session.add(meeting)
     db.session.commit()  # persist before the (slow, external) extraction
     extract_into_meeting(meeting)
+    return meeting
+
+
+def create_manual_meeting(*, title, meeting_type, transcript, created_by_id=None):
+    """Create a meeting from a pasted transcript WITHOUT extracting — the checklist is
+    generated on demand via the 'Generate to-do list' button (so the transcript goes
+    straight to the LLM only when the reviewer asks). Returns the Meeting."""
+    meeting = Meeting(
+        title=(title or "Pasted meeting")[:255],
+        meeting_type=meeting_type or "other",
+        source="manual",
+        transcript=transcript,
+        occurred_at=datetime.utcnow(),
+        created_by=created_by_id,
+    )
+    db.session.add(meeting)
+    db.session.commit()
+    logger.info("manual_meeting_created", meeting_id=meeting.id,
+                chars=len(transcript or ""))
     return meeting
 
 
@@ -220,6 +262,7 @@ def review_item(item_id, *, action=None, fields=None, reviewer=None):
     if not item:
         return None
     fields = fields or {}
+    was_accepted = item.status == "accepted"
 
     for f in _EDITABLE:
         if f in fields:
@@ -244,7 +287,26 @@ def review_item(item_id, *, action=None, fields=None, reviewer=None):
         item.reviewed_at = datetime.utcnow()
 
     db.session.commit()
+    # On a fresh assignment (first accept with an owner), ping the assignee so the
+    # to-do surfaces in their notification bell.
+    if action == "accept" and item.owner_user_id and not was_accepted:
+        _notify_assignee(item)
     return item
+
+
+def _notify_assignee(item):
+    """Notify the owner of a newly-assigned to-do so it surfaces in their bell.
+    Fires even on self-assignment — an assigned to-do is meant to land in the bell as
+    the owner's inbox, including when the reviewer assigns it to themselves."""
+    due = f" (due {item.due_date.isoformat()})" if item.due_date else ""
+    db.session.add(Notification(
+        user_id=item.owner_user_id,
+        type="checklist_assigned",
+        message=f"New to-do: {item.title[:160]}{due}",
+        checklist_item_id=item.id,
+    ))
+    db.session.commit()
+    logger.info("checklist_assigned", item_id=item.id, owner_id=item.owner_user_id)
 
 
 def notify_due_items(today=None):

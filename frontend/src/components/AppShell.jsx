@@ -121,6 +121,7 @@ function AppShellInner({ isAuthenticated }) {
             {navBtn('/job-log', 'Job Log')}
             {navBtn('/drafting-work-load', 'Drafting WL')}
             {navBtn('/events', 'Events')}
+            {navBtn('/todos', 'To-Dos')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
             {isAdmin && navBtn('/meetings', 'Meetings')}
             {isAdmin && navBtn('/board', 'Bug Tracker')}
