@@ -65,27 +65,22 @@ def _resolve_submittal(ref):
     return row.submittal_id if row else None
 
 
-def create_meeting_with_extraction(*, title, meeting_type, transcript,
-                                   project_number=None, occurred_at=None,
-                                   created_by_id=None):
-    """Create a Meeting, mine the transcript into proposed ChecklistItems, and
-    notify the reviewer. Returns the Meeting."""
-    # Run the (slow, external) extraction BEFORE opening the write transaction —
-    # holding a DB transaction across the LLM HTTP call resets the connection and
-    # corrupts the unit of work.
-    raw_items = extract_items(transcript)
+def extract_into_meeting(meeting, *, regenerate=False, notify=True):
+    """Mine the meeting's stored transcript into proposed ChecklistItems.
 
-    meeting = Meeting(
-        title=(title or "Untitled meeting")[:255],
-        meeting_type=meeting_type or "other",
-        source="stub",
-        project_number=project_number,
-        occurred_at=occurred_at,
-        transcript=transcript,
-        created_by=created_by_id,
-    )
-    db.session.add(meeting)
-    db.session.flush()  # assign meeting.id
+    Shared by the paste-ingest flow and the on-demand "Generate to-do list" button.
+    The meeting must already be persisted (committed) so the LLM call isn't made with
+    an open write transaction. With regenerate=True, prior items are cleared first.
+    Returns the number of items created.
+    """
+    if regenerate:
+        ChecklistItem.query.filter_by(meeting_id=meeting.id).delete()
+        db.session.commit()
+
+    # Give the extractor the team roster so owner_name maps to real users.
+    people = [u.first_name for u in User.query.filter_by(is_active=True).all()
+              if u.first_name]
+    raw_items = extract_items(meeting.transcript or "", people=people)
 
     created = 0
     for it in raw_items:
@@ -110,9 +105,94 @@ def create_meeting_with_extraction(*, title, meeting_type, transcript,
     meeting.extracted_at = datetime.utcnow()
     db.session.commit()
 
-    _notify_reviewer(meeting, created)
-    logger.info("meeting_ingested", meeting_id=meeting.id, items=created,
-                meeting_type=meeting.meeting_type)
+    if notify:
+        _notify_reviewer(meeting, created)
+    logger.info("meeting_extracted", meeting_id=meeting.id, items=created)
+    return created
+
+
+def create_meeting_with_extraction(*, title, meeting_type, transcript,
+                                   project_number=None, occurred_at=None,
+                                   created_by_id=None):
+    """Create a Meeting from a pasted transcript and build its checklist. Returns the
+    Meeting. Commits the meeting before extraction so the LLM call never runs inside
+    an open write transaction (which would reset the connection)."""
+    meeting = Meeting(
+        title=(title or "Untitled meeting")[:255],
+        meeting_type=meeting_type or "other",
+        source="stub",
+        project_number=project_number,
+        occurred_at=occurred_at,
+        transcript=transcript,
+        created_by=created_by_id,
+    )
+    db.session.add(meeting)
+    db.session.commit()  # persist before the (slow, external) extraction
+    extract_into_meeting(meeting)
+    return meeting
+
+
+def create_recall_meeting(*, meeting_url, bot_id, title=None, meeting_type=None,
+                          created_by_id=None):
+    """Persist a meeting whose transcript will come from a Recall bot.
+
+    Immediate-send MVP: the bot joins now, so occurred_at is stamped now. No
+    transcript/extraction yet — that arrives via the pull step. bot_status starts at
+    'joining' and is kept fresh by the recall-webhook receiver.
+    """
+    meeting = Meeting(
+        title=(title or "Recall meeting")[:255],
+        meeting_type=meeting_type or "other",
+        source="recall",
+        meeting_url=(meeting_url or "")[:1000] or None,
+        recall_bot_id=bot_id,
+        bot_status="joining",
+        occurred_at=datetime.utcnow(),
+        created_by=created_by_id,
+    )
+    db.session.add(meeting)
+    db.session.commit()
+    logger.info("recall_meeting_created", meeting_id=meeting.id, bot_id=bot_id)
+    return meeting
+
+
+def update_bot_status(bot_id, status_code):
+    """Update the bot_status of the meeting tied to a Recall bot id. Idempotent;
+    no-op if the bot id isn't ours or the status is unchanged. Returns the Meeting."""
+    if not bot_id or not status_code:
+        return None
+    meeting = Meeting.query.filter_by(recall_bot_id=str(bot_id)).first()
+    if not meeting:
+        return None
+    if meeting.bot_status != status_code:
+        meeting.bot_status = str(status_code)[:30]
+        db.session.commit()
+        logger.info("recall_bot_status_updated", meeting_id=meeting.id,
+                    bot_id=bot_id, status=status_code)
+    return meeting
+
+
+def pull_transcript_for_bot(bot_id):
+    """Fetch the finished Recall transcript and store it on the meeting tied to this
+    bot. Idempotent — skips if already pulled. Returns the Meeting (or None).
+
+    Runs synchronously from the transcript.done webhook; transcripts are small enough
+    that the extra HTTP hops stay well under Recall's webhook timeout.
+    """
+    from app.brain.meetings import recall  # local import keeps module load order simple
+    meeting = Meeting.query.filter_by(recall_bot_id=str(bot_id)).first()
+    if not meeting or meeting.transcript:
+        return meeting
+    try:
+        text = recall.fetch_transcript_text(bot_id)
+    except recall.RecallError as e:
+        logger.warning("transcript_pull_failed", bot_id=bot_id, error=str(e))
+        return meeting
+    if text:
+        meeting.transcript = text
+        meeting.bot_status = "done"
+        db.session.commit()
+        logger.info("transcript_pulled", meeting_id=meeting.id, chars=len(text))
     return meeting
 
 

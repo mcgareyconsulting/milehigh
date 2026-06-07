@@ -58,6 +58,12 @@ function AppContent() {
       <UpdateAvailableBanner />
       <Routes>
         <Route path="/login" element={<Login onLogin={verifyAuth} />} />
+        {/* Public, no-auth demo of the meeting → checklist flow (self-contained, no backend). */}
+        <Route path="/demo" element={
+          <div className="min-h-screen flex flex-col bg-[#f8fafc] dark:bg-slate-900">
+            <Meetings demoMode />
+          </div>
+        } />
         <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} />}>
           {isAuthenticated ? (
             <>

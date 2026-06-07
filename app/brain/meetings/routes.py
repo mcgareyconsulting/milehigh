@@ -16,7 +16,8 @@ from flask import request, jsonify
 from app.brain import brain_bp
 from app.auth.utils import admin_required, get_current_user
 from app.models import db, Meeting, ChecklistItem, User
-from app.brain.meetings import service
+from app.brain.meetings import service, recall
+from app.brain.meetings.recall import RecallError
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -31,6 +32,39 @@ def list_assignable_users():
         {'id': u.id, 'first_name': u.first_name or u.username, 'last_name': u.last_name or ''}
         for u in users
     ]})
+
+
+@brain_bp.route('/meetings/bots', methods=['POST'])
+@admin_required
+def send_meeting_bot():
+    """Dispatch a Recall notetaker bot to a meeting URL (Teams / Google Meet / Zoom)
+    and persist a meeting card. Immediate-send: the bot joins now.
+
+    Transcript pull + extraction are separate later steps; here we just dispatch and
+    record the meeting so it shows on the tab with a live bot_status. Returns the
+    meeting dict.
+    """
+    data = request.get_json(silent=True) or {}
+    meeting_url = (data.get('meeting_url') or '').strip()
+    if not meeting_url:
+        return jsonify({'error': 'meeting_url is required'}), 400
+    try:
+        bot_id = recall.dispatch_bot(
+            meeting_url, bot_name=(data.get('bot_name') or 'BB'),
+        )
+    except RecallError as e:
+        logger.warning('send_meeting_bot_failed', error=str(e))
+        return jsonify({'error': str(e)}), 502
+
+    user = get_current_user()
+    meeting = service.create_recall_meeting(
+        meeting_url=meeting_url,
+        bot_id=bot_id,
+        title=(data.get('title') or data.get('name')),
+        meeting_type=data.get('meeting_type'),
+        created_by_id=user.id if user else None,
+    )
+    return jsonify(meeting.to_dict()), 201
 
 
 @brain_bp.route('/meetings', methods=['POST'])
@@ -66,6 +100,21 @@ def create_meeting():
 def list_meetings():
     rows = Meeting.query.order_by(Meeting.created_at.desc()).limit(100).all()
     return jsonify({'meetings': [m.to_dict() for m in rows]})
+
+
+@brain_bp.route('/meetings/<int:meeting_id>/generate-checklist', methods=['POST'])
+@admin_required
+def generate_checklist(meeting_id):
+    """On-demand: mine the meeting's transcript into a proposed checklist (the
+    'Generate to-do list' button). Returns the meeting with its items."""
+    m = db.session.get(Meeting, meeting_id)
+    if not m:
+        return jsonify({'error': 'not found'}), 404
+    if not (m.transcript or '').strip():
+        return jsonify({'error': 'no transcript to generate from yet'}), 400
+    data = request.get_json(silent=True) or {}
+    service.extract_into_meeting(m, regenerate=bool(data.get('regenerate')))
+    return jsonify(m.to_dict(include_items=True))
 
 
 @brain_bp.route('/meetings/<int:meeting_id>', methods=['GET'])
@@ -111,3 +160,45 @@ def review_checklist_item(item_id):
 def scan_due_items():
     """Manually run the deadline-notification scan (also runs on a schedule)."""
     return jsonify({'notified': service.notify_due_items()})
+
+
+@brain_bp.route('/meetings/recall-webhook', methods=['HEAD', 'POST'])
+def recall_webhook():
+    """Receive Recall.ai webhook events. PUBLIC (no auth) — Recall posts server-to-server.
+
+    Short-term posture is PULL, so this is intentionally thin: it acknowledges the
+    event (so Recall's test-event button and real deliveries get a 200 through the
+    ngrok tunnel) and logs it. The functional hook — mapping `data.bot.id` back to a
+    Meeting via recall_bot_id and auto-running the pull on `transcript.done` — lands
+    once steps 2/3 add the column + dispatch flow. Until then we never 4xx, so a test
+    event never looks like a wiring failure.
+    """
+    if request.method == 'HEAD':
+        return '', 200
+
+    payload = request.get_json(silent=True) or {}
+    event = payload.get('event') or 'unknown'
+    data = payload.get('data') or {}
+    bot = data.get('bot') or {}
+    bot_id = bot.get('id') or data.get('bot_id')
+    logger.info('recall_webhook_received', recall_event=event, bot_id=bot_id)
+
+    # Keep the meeting card's status fresh. Recall sends bot status-change events
+    # (`bot.status_change` with data.status.code, or discrete `bot.<code>`) when that
+    # subscription is enabled, and transcript-artifact events (`transcript.processing`
+    # / `transcript.done`) which arrive even without it. Map both.
+    status_code = (data.get('status') or {}).get('code')
+    if not status_code and event.startswith('bot.') and event != 'bot.status_change':
+        status_code = event.split('bot.', 1)[1]
+    if event.startswith('transcript.'):
+        phase = event.split('transcript.', 1)[1]  # processing | done | failed
+        status_code = {'processing': 'transcribing', 'done': 'done',
+                       'failed': 'failed'}.get(phase, status_code)
+
+    if bot_id and status_code:
+        service.update_bot_status(bot_id, status_code)
+    # Pull the finished transcript onto the meeting once it's ready.
+    if event == 'transcript.done' and bot_id:
+        service.pull_transcript_for_bot(bot_id)
+
+    return jsonify({'ok': True, 'event': event}), 200

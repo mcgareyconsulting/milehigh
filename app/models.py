@@ -910,6 +910,11 @@ class Meeting(db.Model):
     project_number = db.Column(db.String(100), nullable=True, index=True)
     occurred_at = db.Column(db.DateTime, nullable=True)
     transcript = db.Column(db.Text, nullable=True)
+    # Recall.ai notetaker bot dispatched for this meeting (source='recall'). bot_status
+    # tracks the bot lifecycle, kept fresh by the recall-webhook receiver.
+    meeting_url = db.Column(db.String(1000), nullable=True)
+    recall_bot_id = db.Column(db.String(64), nullable=True, index=True)
+    bot_status = db.Column(db.String(30), nullable=True)  # scheduled|joining|in_call_recording|done|failed
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     extracted_at = db.Column(db.DateTime, nullable=True)  # when checklist items were generated
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -930,11 +935,15 @@ class Meeting(db.Model):
             'occurred_at': _dt(self.occurred_at),
             'extracted_at': _dt(self.extracted_at),
             'created_at': _dt(self.created_at),
+            'meeting_url': self.meeting_url,
+            'recall_bot_id': self.recall_bot_id,
+            'bot_status': self.bot_status,
         }
         if include_items:
             items = self.items.order_by(ChecklistItem.id).all()
             d['items'] = [i.to_dict() for i in items]
             d['item_count'] = len(items)
+            d['transcript'] = self.transcript  # detail view only — keep the list lean
         else:
             d['item_count'] = self.items.count()
         return d

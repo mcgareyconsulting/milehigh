@@ -1,8 +1,9 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Admin page for the meeting → checklist → to-do/notify flow — paste a transcript, then curate
- *          the agent-proposed checklist (yes / no / edit owner + due date). Accepted items notify their owner.
+ * purpose: Admin page for the meeting → to-do flow. Center lists recent meetings; opening one shows its
+ *          transcript with a "Generate to-do list" button that builds a reviewable checklist (yes/no/edit
+ *          owner + due). "Send Bot" (a button + modal) dispatches a Recall notetaker to a meeting link.
  * exports:
  *   Meetings: Page component (admin-only).
  * imports_from: [react, ../utils/auth, ../services/meetingsApi]
@@ -10,13 +11,15 @@
  * invariants:
  *   - Admin-only; non-admins see an access-denied message (matches Board).
  *   - Owner + due date are agent-proposed but the reviewer has final say before accepting.
+ *   - Recall meetings carry a live bot_status; the list polls while any bot is mid-flight.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { checkAuth } from '../utils/auth';
 import {
-    createMeeting, fetchMeetings, fetchMeeting,
-    reviewChecklistItem, fetchAssignableUsers, scanDue,
+    fetchMeetings, fetchMeeting, generateChecklist,
+    reviewChecklistItem, fetchAssignableUsers, scanDue, sendBot,
 } from '../services/meetingsApi';
+import { DEMO_USERS, DEMO_MEETING } from '../data/productionMeetingDemo';
 
 const MEETING_TYPES = [
     { value: 'internal_draft', label: 'Internal — Draft' },
@@ -35,6 +38,35 @@ const ITEM_TYPES = [
 ];
 const ITEM_TYPE_BADGE = Object.fromEntries(ITEM_TYPES.map(t => [t.value, t]));
 
+// Recall bot lifecycle → display. Terminal states stop the status polling.
+const BOT_TERMINAL = ['done', 'call_ended', 'fatal', 'failed', 'media_expired'];
+const isLiveBot = (s) => !!s && !BOT_TERMINAL.includes(s);
+const BOT_STATUS_PILL = {
+    scheduled: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    joining: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    in_waiting_room: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    in_call_recording: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    transcribing: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+    call_ended: 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-200',
+    done: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    fatal: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+};
+const botStatusLabel = (s) => (s || 'unknown').replace(/_/g, ' ');
+// Mile High is a Denver shop; show all times in Denver regardless of the viewer.
+const COMPANY_TZ = 'America/Denver';
+const formatWhen = (iso) => {
+    if (!iso) return '';
+    // Backend timestamps are naive UTC (no offset) — append 'Z' so they parse as UTC
+    // rather than the browser's local zone, then render in the company's timezone.
+    const s = /([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`;
+    const d = new Date(s);
+    return isNaN(d) ? '' : d.toLocaleString('en-US', {
+        timeZone: COMPANY_TZ,
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+};
+
 const draftFromItem = (it) => ({
     title: it.title || '',
     detail: it.detail || '',
@@ -45,123 +77,122 @@ const draftFromItem = (it) => ({
 });
 
 // --- Self-contained demo (no backend / LLM / DB needed) --------------------
-// A realistic post-meeting checklist so the HITL review can be shown live to a
-// client. Review actions on a demo meeting mutate local state only.
-const DEMO_USERS = [
-    { id: 1, first_name: 'Bill', last_name: "O'Neill" },
-    { id: 2, first_name: 'David', last_name: 'Servold' },
-    { id: 3, first_name: 'Katie', last_name: 'Hearn' },
-    { id: 4, first_name: 'Luis', last_name: 'Solano' },
-    { id: 5, first_name: 'Gary', last_name: 'Almeida' },
-    { id: 6, first_name: 'Dalton', last_name: 'Rauer' },
-];
+// Real Jun 4 production-meeting checklist, generated from the actual Opus ingestion
+// (see ../data/productionMeetingDemo.js). Review actions on a demo meeting mutate
+// local state only. Each load gets a fresh deep copy so reviews reset on reload.
+const DEMO_TRANSCRIPT =
+    'Production meeting — June 4, 2026 (shop standup). Transcript ingested via the ' +
+    'Opus extractor; the items on the right are the agent\'s proposals awaiting review.';
 
-const DEMO_TRANSCRIPT = `Shop touch-base — Tuesday AM
+const buildDemoMeeting = () => JSON.parse(JSON.stringify(DEMO_MEETING));
 
-Bill: Let's run the list. Stair 6 first — what happened with the treads?
-Luis: They didn't fit on the install attempt, the landing connection was off. We need to refab the treads and get them back to site, I'm thinking Thursday.
-Bill: Alright. Garrett's going to ask about Stair 5 again on our call.
-Gary: Five's still in drafting — realistically four weeks out before it's released for fab. I'll get him the updated timeline today so we're straight with him.
-David: On the loose lintels — those are galvanized, I need to confirm the lead time with Dencol before we promise a date.
-Gary: Pergola precast is still on hold, we're waiting on Wildcat to stamp the anchor detail. That's blocking, somebody needs to chase it.
-Luis: Area 2 relief angle is welded and through QC, it's basically ready to ship — just need to lock the delivery and install window.
-David: Trash room decking is still in drafting, so there's no on-site date to give yet.
-Bill: Good. Let's get the redo moving this morning.`;
-
-const _addDays = (n) => {
-    const d = new Date();
-    d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
-};
-
-function buildDemoMeeting() {
-    const mk = (id, item_type, title, owner, days, conf, gc, detail = null) => ({
-        id, status: 'proposed', item_type, title, detail, gc_facing: gc, confidence: conf,
-        proposed_owner_user_id: owner, owner_user_id: null,
-        proposed_due_date: days == null ? null : _addDays(days), due_date: null,
-        release_id: null, submittal_id: null,
-    });
-    return {
-        id: 'demo', demo: true, title: 'Shop touch-base (demo)',
-        meeting_type: 'internal_shop', project_number: '480', item_count: 6,
-        items: [
-            mk('d1', 'action', "Stair #6 — treads didn't fit; refab and get back to site", 4, 2, 0.93, false,
-                'Landing connection was off on the install attempt; redo treads.'),
-            mk('d2', 'needs_gc_update', 'Send Garrett the revised Stair #5 timeline — still in drafting (~4 weeks out)', 5, 1, 0.88, true),
-            mk('d3', 'action', 'Confirm galvanizing lead time on the loose lintels with Dencol', 2, 3, 0.76, false),
-            mk('d4', 'risk', 'Precast pergola on hold pending Wildcat stamp / anchor approval — escalate', 5, 1, 0.81, true),
-            mk('d5', 'action', 'Area 2 relief angle welded & through QC — coordinate ship + install window', 4, 4, 0.70, false),
-            mk('d6', 'decision', 'Trash room decking stays in drafting — no on-site date until released', 2, null, 0.64, false),
-        ],
-    };
-}
-
-export default function Meetings() {
+export default function Meetings({ demoMode = false }) {
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
     const [meetings, setMeetings] = useState([]);
-    const [selected, setSelected] = useState(null);   // meeting + items
+    const [selected, setSelected] = useState(null);   // open meeting (+ items + transcript)
     const [users, setUsers] = useState([]);
     const [drafts, setDrafts] = useState({});          // itemId -> draft
-    const [form, setForm] = useState({ title: '', meeting_type: 'internal_shop', transcript: '' });
-    const [submitting, setSubmitting] = useState(false);
     const [busyItem, setBusyItem] = useState(null);
     const [error, setError] = useState(null);
     const [scanMsg, setScanMsg] = useState(null);
+    const [showSendBot, setShowSendBot] = useState(false);
+    const [botUrl, setBotUrl] = useState('');
+    const [botName, setBotName] = useState('');
+    const [botBusy, setBotBusy] = useState(false);
+    const [generating, setGenerating] = useState(false);
+
+    const seedDrafts = (meeting) => {
+        const d = {};
+        (meeting?.items || []).forEach(it => { d[it.id] = draftFromItem(it); });
+        setDrafts(d);
+    };
 
     useEffect(() => {
+        if (demoMode) {
+            // Public demo: no auth, no backend — load the real production meeting locally.
+            setIsAdmin(true);
+            const m = buildDemoMeeting();
+            setSelected(m); seedDrafts(m); setLoading(false);
+            return;
+        }
         checkAuth().then(u => { setIsAdmin(u?.is_admin || false); setLoading(false); });
-    }, []);
+    }, [demoMode]);
 
     const loadMeetings = useCallback(async () => {
         try { setMeetings(await fetchMeetings()); } catch { setError('Failed to load meetings'); }
     }, []);
 
     useEffect(() => {
-        if (!isAdmin) return;
+        if (demoMode || !isAdmin) return;
         loadMeetings();
         fetchAssignableUsers().then(setUsers).catch(() => {});
-    }, [isAdmin, loadMeetings]);
-
-    const seedDrafts = (meeting) => {
-        const d = {};
-        (meeting.items || []).forEach(it => { d[it.id] = draftFromItem(it); });
-        setDrafts(d);
-    };
+    }, [demoMode, isAdmin, loadMeetings]);
 
     const openMeeting = async (id) => {
         setError(null);
         try {
             const m = await fetchMeeting(id);
-            setSelected(m);
-            seedDrafts(m);
+            setSelected(m); seedDrafts(m);
         } catch { setError('Failed to load meeting'); }
     };
 
-    const handleSubmit = async (e) => {
+    const handleSendBot = async (e) => {
         e.preventDefault();
-        if (!form.transcript.trim()) return;
-        setSubmitting(true); setError(null);
+        // Pull the real link out of the field — tolerant of a pasted "label: <url>"
+        // prefix or stray whitespace that would otherwise reach Recall verbatim.
+        const raw = botUrl.trim();
+        const url = (raw.match(/https?:\/\/\S+/) || [raw])[0];
+        if (!url) return;
+        // Name: explicit field wins; else best-effort from the pasted blob's leading text.
+        const pasted = raw.replace(/https?:\/\/\S+/g, '').replace(/[\s:–-]+$/g, '').trim();
+        const title = botName.trim() || pasted.split('\n')[0].slice(0, 120) || undefined;
+        setBotBusy(true); setError(null);
         try {
-            const m = await createMeeting(form);
-            setSelected(m);
-            seedDrafts(m);
-            setMeetings(prev => [{ ...m }, ...prev]);
-            setForm({ title: '', meeting_type: form.meeting_type, transcript: '' });
-        } catch {
-            setError('Failed to ingest meeting');
+            const meeting = await sendBot({ meeting_url: url, title });
+            setMeetings(prev => [meeting, ...prev.filter(m => m.id !== meeting.id)]);
+            setSelected(meeting); seedDrafts(meeting);
+            setBotUrl(''); setBotName(''); setShowSendBot(false);
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Failed to send bot');
         } finally {
-            setSubmitting(false);
+            setBotBusy(false);
         }
     };
 
-    const loadDemo = () => {
-        const m = buildDemoMeeting();
-        setForm(f => ({ ...f, title: m.title, meeting_type: 'internal_shop', transcript: DEMO_TRANSCRIPT }));
-        setSelected(m);
-        seedDrafts(m);
-        setError(null);
+    const handleGenerate = async () => {
+        if (!selected || selected.demo) return;
+        setGenerating(true); setError(null);
+        try {
+            const updated = await generateChecklist(selected.id);
+            setSelected(updated); seedDrafts(updated);
+            setMeetings(prev => prev.map(m => (m.id === updated.id ? { ...m, item_count: updated.item_count } : m)));
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Failed to generate to-do list');
+        } finally {
+            setGenerating(false);
+        }
     };
+
+    // While any recall bot is mid-flight, poll the list so statuses update live.
+    useEffect(() => {
+        if (demoMode || !isAdmin) return;
+        if (!meetings.some(m => m.source === 'recall' && isLiveBot(m.bot_status))) return;
+        const t = setInterval(loadMeetings, 8000);
+        return () => clearInterval(t);
+    }, [demoMode, isAdmin, meetings, loadMeetings]);
+
+    // Mirror the polled bot_status onto the open meeting; when the bot finishes,
+    // re-fetch the detail so its freshly-pulled transcript shows.
+    useEffect(() => {
+        if (!selected || selected.source !== 'recall') return;
+        const fresh = meetings.find(m => m.id === selected.id);
+        if (!fresh || fresh.bot_status === selected.bot_status) return;
+        setSelected(s => ({ ...s, bot_status: fresh.bot_status }));
+        if (fresh.bot_status === 'done' && !selected.transcript) {
+            fetchMeeting(selected.id).then(setSelected).catch(() => {});
+        }
+    }, [meetings, selected]);
 
     const setDraft = (itemId, patch) =>
         setDrafts(prev => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
@@ -213,111 +244,214 @@ export default function Meetings() {
     const items = selected?.items || [];
     const proposedCount = items.filter(i => i.status === 'proposed').length;
     const ownerOptions = selected?.demo ? DEMO_USERS : users;
+    const transcriptText = selected?.transcript ?? (selected?.demo ? DEMO_TRANSCRIPT : '');
+    const hasTranscript = !!(transcriptText || '').trim();
+    const canGenerate = !selected?.demo && !!(selected?.transcript || '').trim();
 
     return (
         <div className="flex-1 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">Meetings &amp; Action Items</h1>
-            {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>}
-
-            <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
-                {/* Left: ingest + recent */}
-                <div className="space-y-5">
-                    <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-semibold text-gray-800 dark:text-slate-200">Log a meeting</h2>
-                            <button type="button" onClick={loadDemo}
-                                className="text-[11px] px-2 py-1 rounded-md border border-accent-300 dark:border-accent-600 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-accent-900/20">
-                                Load demo
-                            </button>
-                        </div>
-                        <input
-                            type="text" placeholder="Title (e.g. Shop touch-base)"
-                            value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                        />
-                        <select
-                            value={form.meeting_type} onChange={e => setForm({ ...form, meeting_type: e.target.value })}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                        >
-                            {MEETING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                        </select>
-                        <textarea
-                            placeholder="Paste the meeting transcript…" rows={8}
-                            value={form.transcript} onChange={e => setForm({ ...form, transcript: e.target.value })}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 font-mono"
-                        />
-                        <button
-                            type="submit" disabled={submitting || !form.transcript.trim()}
-                            className="w-full px-3 py-2 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white disabled:opacity-50"
-                        >
-                            {submitting ? 'Extracting…' : 'Ingest & build checklist'}
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 mb-4">
+                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">
+                    Meetings &amp; Action Items
+                    {demoMode && <span className="ml-2 px-2 py-0.5 text-[11px] font-semibold rounded bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300 align-middle">DEMO · no login</span>}
+                </h1>
+                {!demoMode && (
+                    <div className="flex items-center gap-2">
+                        <button onClick={runScan} title="Send due-date notifications now"
+                            className="text-[11px] px-2 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
+                            Scan due
                         </button>
-                    </form>
-
-                    <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <h2 className="text-sm font-semibold text-gray-800 dark:text-slate-200">Recent meetings</h2>
-                            <button onClick={runScan} title="Send due-date notifications now"
-                                className="text-[11px] px-2 py-1 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
-                                Scan due
-                            </button>
-                        </div>
-                        {scanMsg && <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">{scanMsg}</p>}
-                        <ul className="space-y-1.5">
-                            {meetings.length === 0 && <li className="text-xs text-gray-400 dark:text-slate-500">No meetings yet.</li>}
-                            {meetings.map(m => (
-                                <li key={m.id}>
-                                    <button onClick={() => openMeeting(m.id)}
-                                        className={`w-full text-left rounded-lg border p-2 transition-colors ${selected?.id === m.id
-                                            ? 'border-accent-300 dark:border-accent-600 bg-accent-50 dark:bg-accent-900/20'
-                                            : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'}`}>
-                                        <div className="text-xs font-medium text-gray-900 dark:text-slate-100 truncate">{m.title}</div>
-                                        <div className="text-[11px] text-gray-400 dark:text-slate-500">
-                                            {MEETING_TYPE_LABEL[m.meeting_type] || m.meeting_type} · {m.item_count} item(s)
-                                            {m.project_number ? ` · #${m.project_number}` : ''}
-                                        </div>
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
+                        <button onClick={() => { setError(null); setShowSendBot(true); }}
+                            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white">
+                            + Send Bot
+                        </button>
                     </div>
-                </div>
+                )}
+            </div>
+            {scanMsg && <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">{scanMsg}</p>}
+            {error && !showSendBot && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>}
 
-                {/* Right: checklist review */}
-                <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
-                    {!selected ? (
-                        <div className="h-full flex items-center justify-center py-16 text-sm text-gray-400 dark:text-slate-500">
-                            Ingest a meeting or pick one to review its checklist.
-                        </div>
-                    ) : (
-                        <>
-                            <div className="flex items-center justify-between mb-3">
+            {/* Body: recent-meetings list (nothing open) or the opened meeting detail */}
+            {!selected ? (
+                <MeetingsList meetings={meetings} onOpen={openMeeting} />
+            ) : (
+                <div className="space-y-3">
+                    {!demoMode && (
+                        <button onClick={() => setSelected(null)}
+                            className="text-xs text-accent-600 dark:text-accent-300 hover:underline">← All meetings</button>
+                    )}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                        {/* Transcript pane */}
+                        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+                            <div className="flex items-start justify-between gap-2 mb-2">
                                 <h2 className="text-sm font-semibold text-gray-800 dark:text-slate-200">
                                     {selected.title}
                                     {selected.demo && <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">DEMO</span>}
-                                    <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">
-                                        {proposedCount} to review · {items.length} total
-                                    </span>
                                 </h2>
+                                {selected.source === 'recall' && selected.bot_status && (
+                                    <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded capitalize ${BOT_STATUS_PILL[selected.bot_status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'} ${isLiveBot(selected.bot_status) ? 'animate-pulse' : ''}`}>
+                                        {botStatusLabel(selected.bot_status)}
+                                    </span>
+                                )}
                             </div>
-                            {items.length === 0 && <p className="text-sm text-gray-400 dark:text-slate-500">No action items were surfaced.</p>}
-                            <ul className="space-y-2.5">
-                                {items.map(it => (
-                                    <ChecklistRow
-                                        key={it.id} item={it} users={ownerOptions}
-                                        draft={drafts[it.id] || draftFromItem(it)}
-                                        busy={busyItem === it.id}
-                                        onDraft={(patch) => setDraft(it.id, patch)}
-                                        onAccept={() => review(it.id, 'accept')}
-                                        onReject={() => review(it.id, 'reject')}
-                                        onDone={() => review(it.id, 'done')}
-                                    />
-                                ))}
-                            </ul>
-                        </>
-                    )}
+                            <div className="text-[11px] text-gray-400 dark:text-slate-500 mb-3 space-y-0.5">
+                                {selected.occurred_at && <div>{selected.source === 'recall' ? '🤖 ' : ''}{formatWhen(selected.occurred_at)}</div>}
+                                {selected.meeting_url && (
+                                    <div className="truncate">
+                                        <a href={selected.meeting_url} target="_blank" rel="noreferrer" className="text-accent-600 dark:text-accent-300 hover:underline">{selected.meeting_url}</a>
+                                    </div>
+                                )}
+                            </div>
+                            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-1">Transcript</h3>
+                            {hasTranscript ? (
+                                <div className="whitespace-pre-wrap text-xs text-gray-700 dark:text-slate-300 max-h-[55vh] overflow-auto rounded-lg bg-gray-50 dark:bg-slate-900/50 p-3 border border-gray-100 dark:border-slate-700">
+                                    {transcriptText}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-gray-400 dark:text-slate-500 py-6 text-center">
+                                    {isLiveBot(selected.bot_status)
+                                        ? 'Bot is in the meeting — the transcript will appear here once it finishes.'
+                                        : 'No transcript yet.'}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* To-do pane */}
+                        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+                            <div className="flex items-center justify-between gap-2 mb-3">
+                                <h2 className="text-sm font-semibold text-gray-800 dark:text-slate-200">
+                                    To-do list
+                                    {items.length > 0 && (
+                                        <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">{proposedCount} to review · {items.length} total</span>
+                                    )}
+                                </h2>
+                                {!selected.demo && items.length > 0 && (
+                                    <button onClick={handleGenerate} disabled={generating || !canGenerate}
+                                        className="text-[11px] px-2 py-1 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
+                                        {generating ? 'Regenerating…' : 'Regenerate'}
+                                    </button>
+                                )}
+                            </div>
+                            {items.length > 0 ? (
+                                <ul className="space-y-2.5">
+                                    {items.map(it => (
+                                        <ChecklistRow
+                                            key={it.id} item={it} users={ownerOptions}
+                                            draft={drafts[it.id] || draftFromItem(it)}
+                                            busy={busyItem === it.id}
+                                            onDraft={(patch) => setDraft(it.id, patch)}
+                                            onAccept={() => review(it.id, 'accept')}
+                                            onReject={() => review(it.id, 'reject')}
+                                            onDone={() => review(it.id, 'done')}
+                                        />
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="py-10 text-center">
+                                    {selected.demo ? (
+                                        <p className="text-sm text-gray-400 dark:text-slate-500">No action items.</p>
+                                    ) : canGenerate ? (
+                                        <>
+                                            <p className="text-sm text-gray-500 dark:text-slate-400 mb-3">No to-dos yet — generate them from the transcript.</p>
+                                            <button onClick={handleGenerate} disabled={generating}
+                                                className="px-4 py-2 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white disabled:opacity-50">
+                                                {generating ? 'Generating…' : 'Generate to-do list'}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <p className="text-sm text-gray-400 dark:text-slate-500">
+                                            {isLiveBot(selected.bot_status)
+                                                ? 'Waiting for the transcript — the to-do list can be generated once the meeting ends.'
+                                                : 'No transcript available to generate a to-do list.'}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
+            )}
+
+            {showSendBot && (
+                <SendBotModal
+                    url={botUrl} name={botName} busy={botBusy} error={error}
+                    onUrl={setBotUrl} onName={setBotName}
+                    onSubmit={handleSendBot} onClose={() => setShowSendBot(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+function MeetingsList({ meetings, onOpen }) {
+    if (!meetings.length) {
+        return (
+            <div className="rounded-xl border border-dashed border-gray-300 dark:border-slate-700 p-12 text-center text-sm text-gray-400 dark:text-slate-500">
+                No meetings yet. Use “Send Bot” to dispatch a notetaker to a call.
             </div>
+        );
+    }
+    return (
+        <ul className="space-y-2">
+            {meetings.map(m => (
+                <li key={m.id}>
+                    <button onClick={() => onOpen(m.id)}
+                        className="w-full text-left rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 hover:border-gray-300 dark:hover:border-slate-600 transition-colors">
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1 text-sm font-medium text-gray-900 dark:text-slate-100 truncate">{m.title}</div>
+                            {m.source === 'recall' && m.bot_status && (
+                                <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded capitalize ${BOT_STATUS_PILL[m.bot_status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'} ${isLiveBot(m.bot_status) ? 'animate-pulse' : ''}`}>
+                                    {botStatusLabel(m.bot_status)}
+                                </span>
+                            )}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-gray-400 dark:text-slate-500">
+                            {m.source === 'recall'
+                                ? `🤖 bot${m.occurred_at ? ` · ${formatWhen(m.occurred_at)}` : ''} · ${m.item_count} to-do(s)`
+                                : `${MEETING_TYPE_LABEL[m.meeting_type] || m.meeting_type} · ${m.item_count} item(s)${m.project_number ? ` · #${m.project_number}` : ''}`}
+                        </div>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function SendBotModal({ url, name, busy, error, onUrl, onName, onSubmit, onClose }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+            <form onSubmit={onSubmit} onClick={e => e.stopPropagation()}
+                className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-3 shadow-xl">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Send a notetaker bot</h2>
+                    <button type="button" onClick={onClose} aria-label="Close"
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-lg leading-none">✕</button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-slate-400">
+                    Paste a Teams or Google Meet link. BB joins the call, records, and transcribes — no Azure admin or calendar access needed.
+                </p>
+                <input
+                    type="text" inputMode="url" autoComplete="off" spellCheck={false} autoFocus
+                    placeholder="https://teams.microsoft.com/l/meetup-join/…"
+                    value={url} onChange={e => onUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
+                />
+                <input
+                    type="text" placeholder="Meeting name (optional)"
+                    value={name} onChange={e => onName(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
+                />
+                {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+                <div className="flex justify-end gap-2 pt-1">
+                    <button type="button" onClick={onClose}
+                        className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button type="submit" disabled={busy || !url.trim()}
+                        className="px-3 py-2 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white disabled:opacity-50">
+                        {busy ? 'Sending…' : 'Send Bot'}
+                    </button>
+                </div>
+            </form>
         </div>
     );
 }

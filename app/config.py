@@ -101,6 +101,17 @@ class Config:
     # Falls back to a deterministic stub extractor when unset (tests / no key).
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+    # Recall.ai — dispatches a notetaker bot to a meeting URL (Teams/Zoom/Meet) and
+    # produces an async transcript we PULL down post-meeting (no webhook/data-lake
+    # dependency yet). The API host is region-pinned; set RECALL_REGION to match the
+    # account (us-east-1 | us-west-2 | eu-central-1) or override RECALL_BASE_URL.
+    RECALL_API_KEY = os.environ.get("RECALL_API_KEY")
+    RECALL_REGION = os.environ.get("RECALL_REGION", "us-east-1")
+    RECALL_BASE_URL = os.environ.get(
+        "RECALL_BASE_URL",
+        f"https://{os.environ.get('RECALL_REGION', 'us-east-1')}.recall.ai/api/v1",
+    )
+
     # Meeting → checklist reviewer. MVP: every post-meeting checklist surfaces to
     # this user (resolved by username, which is the user's email here).
     # Future distribution order on the admin side: Bill > David > Katie > Luis;

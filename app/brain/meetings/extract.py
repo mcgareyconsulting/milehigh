@@ -28,23 +28,50 @@ _ACTION_HINTS = (
 )
 
 
-def _system_prompt(today: date) -> str:
+def _system_prompt(today: date, people=None) -> str:
+    roster = ""
+    if people:
+        roster = (
+            "\nKnown team members — use these EXACT first names for owner_name when the "
+            "responsible person is one of them: " + ", ".join(sorted(set(people))) + ".\n"
+        )
     return (
-        "You extract action items from a steel-fabrication company's internal or GC "
-        "meeting transcript. Return STRICT JSON only — no prose, no markdown. "
-        f"Today is {today.isoformat()}. Schema: "
+        "You are an operations assistant for Mile High Metal Works, a structural-steel "
+        "fabricator. You read transcripts of internal shop/drafting standups and GC "
+        "(general contractor) coordination calls and extract a concrete, actionable "
+        "to-do list a project manager can work straight from.\n"
+        f"Today is {today.isoformat()} (America/Denver).\n"
+        "Domain context: jobs flow through drafting → submittals (DRR/GC/FC approvals) → "
+        "fabrication → paint → ship → install. People reference job-release tokens like "
+        "'480-146', submittal numbers, ball-in-court, fab hours, and start-install dates.\n"
+        + roster +
+        "Extraction rules:\n"
+        "- Capture every commitment, request, decision, risk, or needed follow-up — "
+        "especially anything with an owner or a deadline.\n"
+        "- Split compound asks into separate one-action items.\n"
+        "- Write specific, verb-first titles (e.g. 'Send RFI 12 response to Turner for "
+        "480-146'), not vague summaries ('discuss RFI').\n"
+        "- owner_name = the FIRST NAME of whoever is responsible, if identifiable.\n"
+        "- due_date = resolve relative dates (today, Thursday, EOW, 'by the 15th') to an "
+        "absolute YYYY-MM-DD from today's date.\n"
+        "- gc_facing = true when it involves a GC, owner, architect, or other external party.\n"
+        "- release_ref = a job-release token like '480-146' if mentioned; submittal_ref = a "
+        "submittal id/number if mentioned.\n"
+        "- item_type: action (someone must do something), needs_gc_update (waiting on / must "
+        "update a GC), decision (a choice that was made), risk (a problem or blocker), fyi "
+        "(notable, no action).\n"
+        "- confidence = 0..1 on how sure you are it is a real, actionable item.\n"
+        "- Skip greetings, filler, and chit-chat. If nothing is actionable, return an empty "
+        "items array.\n"
+        "Return STRICT JSON only — no prose, no markdown. Schema: "
         '{"items":[{"title":str,"detail":str|null,'
         '"item_type":"action|needs_gc_update|decision|risk|fyi",'
         '"owner_name":str|null,"due_date":"YYYY-MM-DD"|null,"gc_facing":bool,'
-        '"release_ref":str|null,"submittal_ref":str|null,"confidence":number}]}. '
-        "owner_name = first name of the responsible person if stated. "
-        "due_date = resolve relative dates (today, Thursday, EOW) to absolute. "
-        "release_ref = a job-release token like '480-146' if mentioned. "
-        "Only include real action items / decisions / risks — skip chit-chat."
+        '"release_ref":str|null,"submittal_ref":str|null,"confidence":number}]}'
     )
 
 
-def _call_anthropic(transcript: str, today: date) -> list:
+def _call_anthropic(transcript: str, today: date, people=None) -> list:
     key = cfg.ANTHROPIC_API_KEY
     if not key:
         raise RuntimeError("no ANTHROPIC_API_KEY")
@@ -57,14 +84,20 @@ def _call_anthropic(transcript: str, today: date) -> list:
         },
         json={
             "model": EXTRACT_MODEL,
-            "max_tokens": 2000,
-            "system": _system_prompt(today),
+            # A full standup transcript can yield 20-40 items; 2000 truncated the
+            # JSON mid-array on real data and silently fell back to the keyword stub.
+            "max_tokens": 8000,
+            "system": _system_prompt(today, people),
             "messages": [{"role": "user", "content": transcript[:100000]}],
         },
-        timeout=60,
+        timeout=120,
     )
     resp.raise_for_status()
-    text = "".join(b.get("text", "") for b in resp.json().get("content", []))
+    body = resp.json()
+    # Surface truncation loudly instead of letting a half-JSON fall through to the stub.
+    if body.get("stop_reason") == "max_tokens":
+        logger.warning("checklist_extract_truncated", model=EXTRACT_MODEL)
+    text = "".join(b.get("text", "") for b in body.get("content", []))
     m = re.search(r"\{.*\}", text, re.DOTALL)
     data = json.loads(m.group(0) if m else text)
     items = data.get("items", [])
@@ -97,11 +130,15 @@ def _stub_extract(transcript: str) -> list:
     return items
 
 
-def extract_items(transcript: str, today: date = None) -> list:
-    """Return a list of proposed-item dicts. Never raises — falls back to the stub."""
+def extract_items(transcript: str, today: date = None, people=None) -> list:
+    """Return a list of proposed-item dicts. Never raises — falls back to the stub.
+
+    `people` is an optional list of team first names; passed to the LLM so owner_name
+    resolves to real users instead of guessed labels.
+    """
     today = today or date.today()
     try:
-        items = _call_anthropic(transcript, today)
+        items = _call_anthropic(transcript, today, people)
         if items:
             return items
         logger.info("checklist_extract_empty_llm_result")
