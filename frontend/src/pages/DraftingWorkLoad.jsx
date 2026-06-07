@@ -44,21 +44,19 @@ const columnWidthStyles = `
         .dwl-col-sub-manager { max-width: 120px !important; }
         .dwl-col-notes { max-width: 300px !important; }
         .dwl-col-submittal-id { max-width: 128px !important; }
-        .dwl-col-last-bic-update { max-width: 100px !important; }
-        .dwl-col-lifespan { max-width: 75px !important; }
     }
 `;
 
 // Friendly labels + display order for the active-filter chips (keys match useFilters' columnFilters).
 const FILTER_LABELS = {
-    'PROJ. #': 'Project #',
+    'Job': 'Job',
     'NAME': 'Project Name',
     'TITLE': 'Title',
     'BIC': 'Ball in Court',
     'SUB MANAGER': 'Sub Manager',
     'PROCORE STATUS': 'Procore Status',
 };
-const FILTER_CHIP_ORDER = ['PROJ. #', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
+const FILTER_CHIP_ORDER = ['Job', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
 
 function DraftingWorkLoad() {
     const [searchParams] = useSearchParams();
@@ -141,6 +139,20 @@ function DraftingWorkLoad() {
     // Backend returns tab-specific data (open = Open status, draft = not Open/Closed), so use submittals as rows
     const rows = submittals;
 
+    // Display labels for the primary "Project" filter only: maps project_name (the underlying
+    // filter value) to "<project #> — <project name>". The committed/matched value stays the
+    // project name, so the column-specific Job / NAME dropdowns are unaffected.
+    const projectFilterLabels = useMemo(() => {
+        const map = {};
+        for (const row of rows) {
+            const name = (row.project_name ?? row['NAME'] ?? '').toString().trim();
+            if (!name || map[name]) continue;
+            const number = (row.project_number ?? row['Job'] ?? '').toString().trim();
+            map[name] = number ? `${number} — ${name}` : name;
+        }
+        return map;
+    }, [rows]);
+
     // Use the filters hook
     const {
         search,
@@ -196,7 +208,7 @@ function DraftingWorkLoad() {
     // SAME columnFilters state as the spreadsheet-style column-header filters, so the two surfaces
     // stay mirrored and stack additively with each other and with other columns' filters.
     // Single-select by default; Ctrl/Cmd+click adds more.
-    const renderToolbarFilter = (column, label) => {
+    const renderToolbarFilter = (column, label, labels = null) => {
         const colInfo = uniqueValuesByColumn[column];
         const colSelected = columnFilters[column] ?? [];
         return (
@@ -212,6 +224,7 @@ function DraftingWorkLoad() {
                 autoWidth
                 singleSelect
                 immediate
+                labels={labels}
             >
                 <span
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-semibold whitespace-nowrap ${colSelected.length > 0
@@ -257,7 +270,7 @@ function DraftingWorkLoad() {
 
     const hasData = displayRows.length > 0;
     const visibleColumns = columns.filter(column => column !== 'Submittals Id');
-    // Column display names are case-sensitive: ORDER #, PROJ. #, NAME, TITLE, etc.
+    // Column display names are case-sensitive: ORDER #, Job, Rel, NAME, TITLE, etc.
     const tableColumnCount = visibleColumns.length;
 
     return (
@@ -288,7 +301,7 @@ function DraftingWorkLoad() {
                                         Open/Draft is the rightmost element of this centered group. */}
                                     <div className="flex items-center gap-1.5 flex-wrap justify-center">
                                         <span className="text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Filter:</span>
-                                        {renderToolbarFilter('NAME', 'Project')}
+                                        {renderToolbarFilter('NAME', 'Project', projectFilterLabels)}
                                         {renderToolbarFilter('BIC', 'BIC')}
                                         {renderToolbarFilter('SUB MANAGER', 'Sub Mgr')}
                                         {/* Open / Draft segmented — rightmost element of the centered filters */}
@@ -470,13 +483,12 @@ function DraftingWorkLoad() {
                                                     const isBallInCourt = column === 'BIC';
                                                     const isType = column === 'TYPE';
                                                     const isSubmittalId = column === 'Submittals Id';
-                                                    const isProjectNumber = column === 'PROJ. #';
+                                                    const isProjectNumber = column === 'Job';
+                                                    const isRel = column === 'Rel';
                                                     const isSubmittalManager = column === 'SUB MANAGER';
-                                                    const isLastBIC = column === 'LAST BIC';
-                                                    const isLifespan = column === 'LIFESPAN';
                                                     const isDueDate = column === 'DUE DATE';
 
-                                                    // Percentage widths (must total 100%). PROCORE STATUS and LAST BIC get more space.
+                                                    // Percentage widths (must total 100%). PROCORE STATUS gets more space.
                                                     let headerStyle = {};
                                                     let columnClass = '';
                                                     if (isOrderNumber) {
@@ -485,6 +497,9 @@ function DraftingWorkLoad() {
                                                     } else if (isProjectNumber) {
                                                         headerStyle = { width: '4%' };
                                                         columnClass = 'dwl-col-project-number';
+                                                    } else if (isRel) {
+                                                        headerStyle = { width: '3%' };
+                                                        columnClass = 'dwl-col-rel';
                                                     } else if (isTitle) {
                                                         headerStyle = { width: '12%' };
                                                         columnClass = 'dwl-col-title';
@@ -506,12 +521,6 @@ function DraftingWorkLoad() {
                                                     } else if (isSubmittalManager) {
                                                         headerStyle = { width: '7%' };
                                                         columnClass = 'dwl-col-sub-manager';
-                                                    } else if (isLastBIC) {
-                                                        headerStyle = { width: '6%' };
-                                                        columnClass = 'dwl-col-last-bic-update';
-                                                    } else if (isLifespan) {
-                                                        headerStyle = { width: '7%' };
-                                                        columnClass = 'dwl-col-lifespan';
                                                     } else if (isDueDate) {
                                                         headerStyle = { width: '6%' };
                                                         columnClass = 'dwl-col-due-date';
@@ -521,9 +530,8 @@ function DraftingWorkLoad() {
                                                     }
 
                                                     // Reduce padding for specific columns
-                                                    const isLifespanHeader = column === 'LIFESPAN';
-                                                    const isProjectNumberHeader = column === 'PROJ. #';
-                                                    const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isLifespanHeader ? 'px-0 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
+                                                    const isProjectNumberHeader = column === 'Job';
+                                                    const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
                                                     // Determine if this column is sortable
                                                     // ORDER #, NOTES, PROCORE STATUS, COMP. STATUS are not sortable (interactive); DUE DATE is sortable (asc/desc)

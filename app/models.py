@@ -102,6 +102,12 @@ class Submittals(db.Model):
     notes = db.Column(db.Text)
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
+    # Release identifier (100-999) assigned the first time a submittal hits the DRR
+    # ("Drafting Release Review") type. Assigned sequentially per DRR submittal, wrapping
+    # 999 -> 100. rel_assigned_at records when the number was handed out so the next
+    # assignment can be derived from the most recently assigned value (handles wraparound).
+    rel = db.Column(db.Integer, nullable=True)
+    rel_assigned_at = db.Column(db.DateTime, nullable=True)
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -150,23 +156,6 @@ class Submittals(db.Model):
         return None
 
     def to_dict(self):
-        # Use cached last_bic_update column (populated by backfill migration M7)
-        # Do NOT call get_last_bic_from_events() here—it's expensive and only for audit/backfill
-        last_ball_update = self.last_bic_update
-        time_since_update = (datetime.utcnow() - last_ball_update) if last_ball_update else None
-        
-        # Calculate days since last ball in court update (aging report)
-        days_since_ball_update = None
-        if time_since_update:
-            days_since_ball_update = int(time_since_update.total_seconds() / 86400)  # Convert seconds to days
-
-        # Lifespan: days since creation (how old the submittal is)
-        lifespan = None
-        if self.created_at:
-            today = date.today()
-            created_date = self.created_at.date() if hasattr(self.created_at, 'date') else self.created_at
-            lifespan = (today - created_date).days
-        
         return {
             "id": self.id,
             "submittal_id": self.submittal_id,
@@ -181,14 +170,11 @@ class Submittals(db.Model):
             "order_number": self.order_number,
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
+            "rel": self.rel,
             "due_date": _dt(self.due_date),
-            "lifespan": lifespan,
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
             "created_at": _dt(self.created_at),
-            "last_ball_in_court_update": _dt(last_ball_update),
-            "time_since_ball_in_court_update_seconds": time_since_update.total_seconds() if time_since_update else None,
-            "days_since_ball_in_court_update": days_since_ball_update,
         }
 
 class SystemLogs(db.Model):
@@ -849,6 +835,55 @@ class ReleaseDrawingVersion(db.Model):
             'uploaded_at': _dt(self.uploaded_at),
             'source_version_id': self.source_version_id,
             'note': self.note,
+        }
+
+
+class ReleasePhoto(db.Model):
+    """A photo attached to a release (job-site/progress images).
+
+    Unlike `ReleaseDrawingVersion` (versioned PDFs), photos are a flat list:
+    each upload is an independent row. Any image type is allowed and each photo
+    carries an optional free-text note that can be edited after upload.
+    """
+    __tablename__ = 'release_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default='image/jpeg')
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    note = db.Column(db.Text, nullable=True)
+    # Optional stage tag. Set when a photo is uploaded to satisfy a stage gate
+    # (e.g. "Welded QC", "Paint Complete") so the stage-change validation can
+    # require proof for that specific stage.
+    stage = db.Column(db.String(64), nullable=True)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    release = db.relationship('Releases', backref=db.backref('photos', lazy='dynamic'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+
+    def to_dict(self):
+        uploaded_by_name = None
+        if self.uploaded_by:
+            first = (self.uploaded_by.first_name or '').strip()
+            last = (self.uploaded_by.last_name or '').strip()
+            uploaded_by_name = (f"{first} {last}".strip()) or self.uploaded_by.username
+        return {
+            'id': self.id,
+            'release_id': self.release_id,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'note': self.note,
+            'stage': self.stage,
+            'uploaded_by': {
+                'id': self.uploaded_by_user_id,
+                'name': uploaded_by_name,
+            },
+            'uploaded_at': _dt(self.uploaded_at),
         }
 
 

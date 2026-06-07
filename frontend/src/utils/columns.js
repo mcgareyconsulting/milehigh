@@ -17,17 +17,16 @@
  */
 export const DESIRED_COLUMN_ORDER = [
     'ORDER #',
-    'PROJ. #',
+    'Job',
+    'Rel',
     'NAME',
     'TITLE',
     'PROCORE STATUS',
     'BIC',
-    'LAST BIC',
     'TYPE',
     'COMP. STATUS',
     'SUB MANAGER',
     'DUE DATE',
-    'LIFESPAN',
     'NOTES'
 ];
 

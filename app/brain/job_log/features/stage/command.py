@@ -27,6 +27,30 @@ from app.brain.job_log.features.start_install.clear_hard_date_cascade import cle
 logger = get_logger(__name__)
 
 
+# Master switch for the stage photo gate. Held OFF for now — the gate
+# infrastructure below stays in place so flipping this back to True re-enables
+# it with no other changes. The frontend has a matching flag
+# (STAGE_PHOTO_GATE_ENABLED in JobsTableRow.jsx); keep the two in sync.
+STAGE_PHOTO_GATE_ENABLED = False
+
+# Stages that require a stage-tagged photo before a release may enter them
+# (only enforced when STAGE_PHOTO_GATE_ENABLED is True). The frontend opens the
+# upload modal proactively; this set is the authoritative server-side gate.
+STAGE_PHOTO_GATES = {"Welded QC", "Paint Complete"}
+
+
+class StagePhotoRequiredError(Exception):
+    """Raised when a stage change is blocked because its required photo is missing.
+
+    Carries the gated `stage` so the route can tell the client which stage needs
+    a photo uploaded.
+    """
+
+    def __init__(self, stage: str):
+        self.stage = stage
+        super().__init__(f"A photo tagged '{stage}' is required to move to {stage}")
+
+
 @dataclass
 class StageUpdateResult:
     job_id: int
@@ -88,6 +112,30 @@ class UpdateStageCommand:
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_stage = job_record.stage if job_record.stage else 'Released'
+
+        # Photo gate: certain stages require a photo (tagged with that stage)
+        # before a release may enter them. We check the requested stage before
+        # the ASAP intercept so "Paint Complete" still demands its photo even
+        # when it gets rerouted to Ship Planning. Skipped on undo (restoring a
+        # prior valid state) and when the stage isn't actually changing.
+        if (
+            STAGE_PHOTO_GATE_ENABLED
+            and self.stage in STAGE_PHOTO_GATES
+            and self.undone_event_id is None
+            and old_stage != self.stage
+        ):
+            from app.models import ReleasePhoto
+            has_photo = db.session.query(ReleasePhoto.id).filter(
+                ReleasePhoto.release_id == job_record.id,
+                ReleasePhoto.stage == self.stage,
+                ReleasePhoto.is_deleted.is_(False),
+            ).first() is not None
+            if not has_photo:
+                logger.info(
+                    f"Stage gate blocked {self.job_id}-{self.release} -> {self.stage}: "
+                    f"no photo tagged '{self.stage}'"
+                )
+                raise StagePhotoRequiredError(self.stage)
 
         # ASAP intercept: a release flagged ASAP that hits Paint Complete is ripped
         # straight to Ship Planning. We override self.stage here so the rest of the

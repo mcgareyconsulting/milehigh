@@ -65,6 +65,17 @@ class Config:
     # <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.
     PDF_STORAGE_ROOT = os.environ.get("PDF_STORAGE_ROOT")
 
+    # Per-release photo storage. Shares the same Render persistent disk as PDFs.
+    # Prefer an explicit PHOTO_STORAGE_ROOT; otherwise derive a sibling "photos"
+    # dir next to the PDF root (e.g. /var/data/pdfs -> /var/data/photos) so a
+    # single mounted disk serves both. Local dev (neither set) falls back to
+    # <repo>/app/storage/photos via app/brain/job_log/features/photos/storage.py.
+    PHOTO_STORAGE_ROOT = os.environ.get("PHOTO_STORAGE_ROOT")
+    if not PHOTO_STORAGE_ROOT and PDF_STORAGE_ROOT:
+        PHOTO_STORAGE_ROOT = os.path.join(
+            os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "photos"
+        )
+
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")
     PROCORE_SANDBOX_BASE_URL = os.environ.get("PROCORE_SANDBOX_BASE_URL")

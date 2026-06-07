@@ -24,21 +24,17 @@ function transformSubmittal(submittal, index) {
         'Submittals Id': submittal.submittal_id,
         'Project Id': submittal.procore_project_id,
         'ORDER #': submittal.order_number,
-        'PROJ. #': submittal.project_number,
+        'Job': submittal.project_number,
+        'Rel': submittal.rel,
         'NAME': submittal.project_name,
         'TITLE': submittal.title,
         'PROCORE STATUS': submittal.status,
         'BIC': submittal.ball_in_court,
-        'LAST BIC': submittal.days_since_ball_in_court_update,
         'TYPE': submittal.type,
         'COMP. STATUS': submittal.submittal_drafting_status,
         'SUB MANAGER': submittal.submittal_manager,
         'DUE DATE': submittal.due_date,
-        'LIFESPAN': submittal.lifespan,
         'NOTES': submittal.notes,
-        // Include ball_in_court tracking fields
-        last_ball_in_court_update: submittal.last_ball_in_court_update,
-        time_since_ball_in_court_update_seconds: submittal.time_since_ball_in_court_update_seconds,
         id: String(rawId)
     };
 }
