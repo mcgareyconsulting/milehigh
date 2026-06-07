@@ -4,8 +4,10 @@
  * purpose: HTTP calls for the meeting → checklist → to-do/notify feature so UI stays transport-agnostic.
  * exports:
  *   createMeeting: Ingest a transcript and get back the meeting + proposed checklist.
+ *   sendBot: Dispatch a Recall notetaker bot to a meeting URL (dispatch-only, no save).
  *   fetchMeetings: List recent meetings.
- *   fetchMeeting: One meeting with its checklist items.
+ *   fetchMeeting: One meeting with its checklist items + transcript.
+ *   generateChecklist: On-demand extraction of a meeting's transcript into to-dos.
  *   reviewChecklistItem: Accept / reject / done / edit an item (owner + due date editable).
  *   fetchAssignableUsers: Active users for the owner dropdown.
  *   scanDue: Manually trigger the deadline-notification scan.
@@ -29,6 +31,19 @@ export async function createMeeting({ title, meeting_type, transcript, project_n
     return data; // meeting + items
 }
 
+// Dispatch a Recall notetaker bot to a meeting URL. Dispatch-only for now —
+// no meeting is saved; this just confirms the bot joins and webhooks fire.
+export async function sendBot({ meeting_url, bot_name } = {}) {
+    const { data } = await axios.post(`${BASE}/meetings/bots`, { meeting_url, bot_name });
+    return data; // { bot_id, status }
+}
+
+// Create a meeting from a pasted transcript (no auto-extraction — Generate runs it).
+export async function createManualMeeting({ title, meeting_type, transcript }) {
+    const { data } = await axios.post(`${BASE}/meetings/manual`, { title, meeting_type, transcript });
+    return data; // meeting + items + transcript
+}
+
 export async function fetchMeetings() {
     const { data } = await axios.get(`${BASE}/meetings`);
     return data.meetings;
@@ -36,6 +51,12 @@ export async function fetchMeetings() {
 
 export async function fetchMeeting(id) {
     const { data } = await axios.get(`${BASE}/meetings/${id}`);
+    return data; // meeting + items + transcript
+}
+
+// On-demand: mine a meeting's transcript into a proposed checklist.
+export async function generateChecklist(id, { regenerate = false } = {}) {
+    const { data } = await axios.post(`${BASE}/meetings/${id}/generate-checklist`, { regenerate });
     return data; // meeting + items
 }
 

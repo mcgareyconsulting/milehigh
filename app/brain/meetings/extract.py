@@ -18,8 +18,44 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-EXTRACT_MODEL = os.environ.get("CHECKLIST_EXTRACT_MODEL", "claude-sonnet-4-6")
+EXTRACT_MODEL = os.environ.get("CHECKLIST_EXTRACT_MODEL", "claude-opus-4-8")
 VALID_TYPES = {"action", "needs_gc_update", "decision", "risk", "fyi"}
+
+# USD per million tokens (input, output). Used to price each extraction so we can
+# surface token + cost per meeting. Prefix match keeps dated model ids working.
+MODEL_PRICING = {
+    "claude-opus-4": (15.0, 75.0),
+    "claude-sonnet-4": (3.0, 15.0),
+    "claude-haiku-4": (1.0, 5.0),
+}
+_DEFAULT_PRICING = (15.0, 75.0)  # assume Opus if unknown — never under-report cost
+
+
+def _price(model: str):
+    for prefix, rates in MODEL_PRICING.items():
+        if (model or "").startswith(prefix):
+            return rates
+    return _DEFAULT_PRICING
+
+
+def _usage(body: dict) -> dict:
+    """input/output tokens + computed USD cost from a Messages API response."""
+    u = body.get("usage") or {}
+    model = body.get("model") or EXTRACT_MODEL
+    inp = int(u.get("input_tokens") or 0)
+    out = int(u.get("output_tokens") or 0)
+    pin, pout = _price(model)
+    return {
+        "input_tokens": inp,
+        "output_tokens": out,
+        "model": model,
+        "cost_usd": round(inp / 1e6 * pin + out / 1e6 * pout, 6),
+    }
+
+
+def _stub_usage() -> dict:
+    """Zeroed usage marker when extraction fell back to the keyword stub (no API)."""
+    return {"input_tokens": 0, "output_tokens": 0, "model": "stub", "cost_usd": 0.0}
 
 _ACTION_HINTS = (
     "need", "redo", "today", "follow up", "follow-up", "asap", "by ", "send",
@@ -28,23 +64,53 @@ _ACTION_HINTS = (
 )
 
 
-def _system_prompt(today: date) -> str:
+def _system_prompt(today: date, people=None) -> str:
+    roster = ""
+    if people:
+        roster = (
+            "\nKnown team members — use these EXACT first names for owner_name when the "
+            "responsible person is one of them: " + ", ".join(sorted(set(people))) + ".\n"
+        )
     return (
-        "You extract action items from a steel-fabrication company's internal or GC "
-        "meeting transcript. Return STRICT JSON only — no prose, no markdown. "
-        f"Today is {today.isoformat()}. Schema: "
+        "You are an operations assistant for Mile High Metal Works, a structural-steel "
+        "fabricator. You read transcripts of internal shop/drafting standups and GC "
+        "(general contractor) coordination calls and extract a concrete, actionable "
+        "to-do list a project manager can work straight from.\n"
+        f"Today is {today.isoformat()} (America/Denver).\n"
+        "Domain context: jobs flow through drafting → submittals (DRR/GC/FC approvals) → "
+        "fabrication → paint → ship → install. People reference job-release tokens like "
+        "'480-146', submittal numbers, ball-in-court, fab hours, and start-install dates.\n"
+        + roster +
+        "Extraction rules:\n"
+        "- Capture every commitment, request, decision, risk, or needed follow-up — "
+        "especially anything with an owner or a deadline.\n"
+        "- Split compound asks into separate one-action items.\n"
+        "- Write specific, verb-first titles (e.g. 'Send RFI 12 response to Turner for "
+        "480-146'), not vague summaries ('discuss RFI').\n"
+        "- owner_name = the FIRST NAME of whoever is responsible, if identifiable.\n"
+        "- due_date = resolve relative dates (today, Thursday, EOW, 'by the 15th') to an "
+        "absolute YYYY-MM-DD from today's date.\n"
+        "- gc_facing = true when it involves a GC, owner, architect, or other external party.\n"
+        "- release_ref = a job-release token like '480-146' if mentioned; submittal_ref = a "
+        "submittal id/number if mentioned.\n"
+        "- Job-release codes are written XXX-YYY. If a bare six-digit number is used as a "
+        "job/release reference (e.g. '170348'), hyphenate it as XXX-YYY ('170-348') "
+        "everywhere it appears — in BOTH the title and release_ref.\n"
+        "- item_type: action (someone must do something), needs_gc_update (waiting on / must "
+        "update a GC), decision (a choice that was made), risk (a problem or blocker), fyi "
+        "(notable, no action).\n"
+        "- confidence = 0..1 on how sure you are it is a real, actionable item.\n"
+        "- Skip greetings, filler, and chit-chat. If nothing is actionable, return an empty "
+        "items array.\n"
+        "Return STRICT JSON only — no prose, no markdown. Schema: "
         '{"items":[{"title":str,"detail":str|null,'
         '"item_type":"action|needs_gc_update|decision|risk|fyi",'
         '"owner_name":str|null,"due_date":"YYYY-MM-DD"|null,"gc_facing":bool,'
-        '"release_ref":str|null,"submittal_ref":str|null,"confidence":number}]}. '
-        "owner_name = first name of the responsible person if stated. "
-        "due_date = resolve relative dates (today, Thursday, EOW) to absolute. "
-        "release_ref = a job-release token like '480-146' if mentioned. "
-        "Only include real action items / decisions / risks — skip chit-chat."
+        '"release_ref":str|null,"submittal_ref":str|null,"confidence":number}]}'
     )
 
 
-def _call_anthropic(transcript: str, today: date) -> list:
+def _call_anthropic(transcript: str, today: date, people=None) -> list:
     key = cfg.ANTHROPIC_API_KEY
     if not key:
         raise RuntimeError("no ANTHROPIC_API_KEY")
@@ -57,20 +123,26 @@ def _call_anthropic(transcript: str, today: date) -> list:
         },
         json={
             "model": EXTRACT_MODEL,
-            "max_tokens": 2000,
-            "system": _system_prompt(today),
+            # A full standup transcript can yield 20-40 items; 2000 truncated the
+            # JSON mid-array on real data and silently fell back to the keyword stub.
+            "max_tokens": 8000,
+            "system": _system_prompt(today, people),
             "messages": [{"role": "user", "content": transcript[:100000]}],
         },
-        timeout=60,
+        timeout=120,
     )
     resp.raise_for_status()
-    text = "".join(b.get("text", "") for b in resp.json().get("content", []))
+    body = resp.json()
+    # Surface truncation loudly instead of letting a half-JSON fall through to the stub.
+    if body.get("stop_reason") == "max_tokens":
+        logger.warning("checklist_extract_truncated", model=EXTRACT_MODEL)
+    text = "".join(b.get("text", "") for b in body.get("content", []))
     m = re.search(r"\{.*\}", text, re.DOTALL)
     data = json.loads(m.group(0) if m else text)
     items = data.get("items", [])
     if not isinstance(items, list):
         raise ValueError("items is not a list")
-    return items
+    return items, _usage(body)
 
 
 def _stub_extract(transcript: str) -> list:
@@ -97,14 +169,25 @@ def _stub_extract(transcript: str) -> list:
     return items
 
 
-def extract_items(transcript: str, today: date = None) -> list:
-    """Return a list of proposed-item dicts. Never raises — falls back to the stub."""
+def extract(transcript: str, today: date = None, people=None) -> dict:
+    """Return {'items': [...], 'usage': {input_tokens, output_tokens, model, cost_usd}}.
+
+    Never raises — on a missing key or any failure it falls back to the deterministic
+    keyword stub with zeroed usage (model='stub'), so a $0/0-token result is the visible
+    signal that extraction degraded. `people` is an optional roster of team first names
+    passed to the LLM so owner_name resolves to real users.
+    """
     today = today or date.today()
     try:
-        items = _call_anthropic(transcript, today)
+        items, usage = _call_anthropic(transcript, today, people)
         if items:
-            return items
+            return {"items": items, "usage": usage}
         logger.info("checklist_extract_empty_llm_result")
     except Exception as e:  # noqa: BLE001 — any failure → deterministic stub
         logger.info("checklist_extract_fallback", error=str(e))
-    return _stub_extract(transcript)
+    return {"items": _stub_extract(transcript), "usage": _stub_usage()}
+
+
+def extract_items(transcript: str, today: date = None, people=None) -> list:
+    """Back-compat: items only (see `extract` for items + usage)."""
+    return extract(transcript, today, people)["items"]

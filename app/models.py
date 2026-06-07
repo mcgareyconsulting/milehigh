@@ -945,6 +945,17 @@ class Meeting(db.Model):
     project_number = db.Column(db.String(100), nullable=True, index=True)
     occurred_at = db.Column(db.DateTime, nullable=True)
     transcript = db.Column(db.Text, nullable=True)
+    # Recall.ai notetaker bot dispatched for this meeting (source='recall'). bot_status
+    # tracks the bot lifecycle, kept fresh by the recall-webhook receiver.
+    meeting_url = db.Column(db.String(1000), nullable=True)
+    recall_bot_id = db.Column(db.String(64), nullable=True, index=True)
+    bot_status = db.Column(db.String(30), nullable=True)  # scheduled|joining|in_call_recording|done|failed
+    # Token usage + cost of the LLM to-do extraction (model='stub' / $0 means it fell
+    # back to the keyword stub). Stamped each time the checklist is (re)generated.
+    extract_model = db.Column(db.String(40), nullable=True)
+    extract_input_tokens = db.Column(db.Integer, nullable=True)
+    extract_output_tokens = db.Column(db.Integer, nullable=True)
+    extract_cost_usd = db.Column(db.Float, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     extracted_at = db.Column(db.DateTime, nullable=True)  # when checklist items were generated
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -965,11 +976,19 @@ class Meeting(db.Model):
             'occurred_at': _dt(self.occurred_at),
             'extracted_at': _dt(self.extracted_at),
             'created_at': _dt(self.created_at),
+            'meeting_url': self.meeting_url,
+            'recall_bot_id': self.recall_bot_id,
+            'bot_status': self.bot_status,
+            'extract_model': self.extract_model,
+            'extract_input_tokens': self.extract_input_tokens,
+            'extract_output_tokens': self.extract_output_tokens,
+            'extract_cost_usd': self.extract_cost_usd,
         }
         if include_items:
             items = self.items.order_by(ChecklistItem.id).all()
             d['items'] = [i.to_dict() for i in items]
             d['item_count'] = len(items)
+            d['transcript'] = self.transcript  # detail view only — keep the list lean
         else:
             d['item_count'] = self.items.count()
         return d
@@ -1008,6 +1027,14 @@ class ChecklistItem(db.Model):
     release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True)
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id'), nullable=True)
 
+    # Owner inference (when no owner was stated): which active job it matched + whether
+    # the owner was inferred. `confidence` doubles as the match confidence (0..1).
+    owner_inferred = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    matched_job_number = db.Column(db.String(32), nullable=True)
+    matched_job_name = db.Column(db.String(128), nullable=True)  # canonical name from the matched job
+    match_source = db.Column(db.String(16), nullable=True)        # release | submittal
+    name_corrected = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
     # proposed | accepted | rejected | done
     status = db.Column(db.String(20), nullable=False, default='proposed', index=True)
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -1044,7 +1071,12 @@ class ChecklistItem(db.Model):
             'release_id': self.release_id,
             'submittal_id': self.submittal_id,
             'status': self.status,
-            'confidence': self.confidence,
+            'confidence': self.confidence,           # match confidence when owner_inferred
+            'owner_inferred': self.owner_inferred,
+            'matched_job_number': self.matched_job_number,
+            'matched_job_name': self.matched_job_name,
+            'match_source': self.match_source,
+            'name_corrected': self.name_corrected,
             'reviewed_at': _dt(self.reviewed_at),
             'created_at': _dt(self.created_at),
         }

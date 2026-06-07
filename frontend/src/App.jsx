@@ -26,6 +26,7 @@ import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
 import Meetings from './pages/Meetings';
+import ToDos from './pages/ToDos';
 import FcCollection from './pages/FcCollection';
 import InvoicingReport from './pages/InvoicingReport';
 import { checkAuth } from './utils/auth';
@@ -58,6 +59,12 @@ function AppContent() {
       <UpdateAvailableBanner />
       <Routes>
         <Route path="/login" element={<Login onLogin={verifyAuth} />} />
+        {/* Public, no-auth demo of the meeting → checklist flow (self-contained, no backend). */}
+        <Route path="/demo" element={
+          <div className="min-h-screen flex flex-col bg-[#f8fafc] dark:bg-slate-900">
+            <Meetings demoMode />
+          </div>
+        } />
         <Route path="/" element={<AppShell isAuthenticated={isAuthenticated} />}>
           {isAuthenticated ? (
             <>
@@ -71,6 +78,7 @@ function AppContent() {
               <Route path="jobsite-map" element={<JobsiteMap />} />
               <Route path="board" element={<Board />} />
               <Route path="meetings" element={<Meetings />} />
+              <Route path="todos" element={<ToDos />} />
               <Route path="invoicing-report" element={<InvoicingReport />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
               <Route path="*" element={<Navigate to="/job-log" replace />} />

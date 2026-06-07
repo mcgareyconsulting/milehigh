@@ -35,3 +35,4 @@ from app.brain.map import routes as map_routes
 from app.brain.board import routes as board_routes
 from app.brain.meetings import routes as meetings_routes
 from app.brain import notification_routes
+from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
