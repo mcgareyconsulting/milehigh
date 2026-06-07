@@ -48,6 +48,15 @@ def upload_release_photo(release_id):
     resolved_mime = sniff_image_mime(file_bytes) or (mimetype if mimetype.startswith('image/') else 'image/jpeg')
 
     note = (request.form.get('note') or '').strip() or None
+
+    # Optional stage tag (used to satisfy a stage-change photo gate). Reject
+    # values that aren't real stage names so we don't store garbage tags.
+    stage = (request.form.get('stage') or '').strip() or None
+    if stage is not None:
+        from app.api.helpers import STAGE_TO_GROUP
+        if stage not in STAGE_TO_GROUP:
+            return jsonify({'error': f'Unknown stage: {stage}'}), 400
+
     user = get_current_user()
 
     try:
@@ -58,6 +67,7 @@ def upload_release_photo(release_id):
             mime_type=resolved_mime,
             uploaded_by_user_id=user.id,
             note=note,
+            stage=stage,
         )
         photo = command.execute()
     except ValueError as exc:

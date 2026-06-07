@@ -854,6 +854,10 @@ class ReleasePhoto(db.Model):
     mime_type = db.Column(db.String(64), nullable=False, default='image/jpeg')
     file_size_bytes = db.Column(db.BigInteger, nullable=False)
     note = db.Column(db.Text, nullable=True)
+    # Optional stage tag. Set when a photo is uploaded to satisfy a stage gate
+    # (e.g. "Welded QC", "Paint Complete") so the stage-change validation can
+    # require proof for that specific stage.
+    stage = db.Column(db.String(64), nullable=True)
     uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
@@ -874,6 +878,7 @@ class ReleasePhoto(db.Model):
             'mime_type': self.mime_type,
             'file_size_bytes': self.file_size_bytes,
             'note': self.note,
+            'stage': self.stage,
             'uploaded_by': {
                 'id': self.uploaded_by_user_id,
                 'name': uploaded_by_name,

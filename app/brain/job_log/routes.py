@@ -1045,7 +1045,10 @@ def update_stage(job, release):
     Request Body:
         {"stage": "Released" | "Cut Start" | "Fitup Complete" | ...}
     """
-    from app.brain.job_log.features.stage.command import UpdateStageCommand
+    from app.brain.job_log.features.stage.command import (
+        UpdateStageCommand,
+        StagePhotoRequiredError,
+    )
 
     logger.info("update_stage called", extra={
         'job': job, 'release': release, 'stage': request.json.get('stage'),
@@ -1063,6 +1066,13 @@ def update_stage(job, release):
             'event_id': result.event_id,
             **result.extras,
         }), 200
+
+    except StagePhotoRequiredError as e:
+        return jsonify({
+            'error': str(e),
+            'code': 'photo_required',
+            'stage': e.stage,
+        }), 422
 
     except ValueError as e:
         msg = str(e)

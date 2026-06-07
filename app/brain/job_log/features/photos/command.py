@@ -42,6 +42,7 @@ class UploadPhotoCommand:
     mime_type: str
     uploaded_by_user_id: int
     note: Optional[str] = None
+    stage: Optional[str] = None
 
     def execute(self) -> ReleasePhoto:
         release: Releases = db.session.get(Releases, self.release_id)
@@ -55,6 +56,7 @@ class UploadPhotoCommand:
             mime_type=self.mime_type,
             file_size_bytes=len(self.file_bytes),
             note=self.note,
+            stage=self.stage,
             uploaded_by_user_id=self.uploaded_by_user_id,
             uploaded_at=datetime.utcnow(),
         )
@@ -78,6 +80,7 @@ class UploadPhotoCommand:
                         'photo_id': photo.id,
                         'filename': self.filename,
                         'note': self.note,
+                        'stage': self.stage,
                     },
                 },
             )

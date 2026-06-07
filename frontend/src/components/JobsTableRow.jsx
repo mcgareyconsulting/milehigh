@@ -25,6 +25,11 @@ import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { useTheme } from '../context/ThemeContext';
 
+// Stages that require a stage-tagged photo before a release may enter them.
+// Selecting one opens the attachment modal in gate mode instead of changing
+// the stage immediately. The backend enforces the same gate (422 photo_required).
+const STAGE_PHOTO_GATES = ['Welded QC', 'Paint Complete'];
+
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
@@ -33,6 +38,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [pdfMarkupVersionId, setPdfMarkupVersionId] = useState(null);
     const [pdfMarkupMode, setPdfMarkupMode] = useState('edit');
     const [pdfHistoryOpen, setPdfHistoryOpen] = useState(false);
+    // When set, the attachment modal is opened in stage-gate mode for this stage:
+    // a photo tagged with it must be uploaded before the stage change applies.
+    const [gateStage, setGateStage] = useState(null);
     const [hasDrawingLocal, setHasDrawingLocal] = useState(Boolean(row.has_drawing));
     const [showActionMenu, setShowActionMenu] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -395,8 +403,20 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const cellPy = isOldMan ? 'py-2' : 'py-0.5';
     const cellText = isOldMan ? 'text-[13px]' : 'text-[11px]';
 
-    // Handle stage change
-    const handleStageChange = async (newStage) => {
+    // Handle stage change. Gated stages (Welded QC / Paint Complete) require a
+    // tagged photo first: open the attachment modal in gate mode and defer the
+    // actual change until the user confirms. All other stages apply immediately.
+    const handleStageChange = (newStage) => {
+        if (STAGE_PHOTO_GATES.includes(newStage) && newStage !== localStage) {
+            setGateStage(newStage);
+            setPdfHistoryOpen(true);
+            return;
+        }
+        applyStageChange(newStage);
+    };
+
+    // Perform the stage update (optimistic UI + API call + refetch).
+    const applyStageChange = async (newStage) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
 
@@ -442,7 +462,15 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             setJobCompInputValue(oldJobComp ?? '');
             setLocalFabOrder(oldFabOrder);
             setFabOrderInputValue(oldFabOrder === null || oldFabOrder === undefined ? '' : String(oldFabOrder));
-            alert(`Failed to update stage: ${error.message}`);
+            // Backend stage gate: a tagged photo is required. Re-open the modal
+            // in gate mode so the user can upload one rather than just erroring.
+            const data = error?.response?.data;
+            if (data?.code === 'photo_required' && data?.stage) {
+                setGateStage(data.stage);
+                setPdfHistoryOpen(true);
+            } else {
+                alert(`Failed to update stage: ${data?.error || error.message}`);
+            }
         } finally {
             setUpdatingStage(false);
             if (onCascadeRecalculating) onCascadeRecalculating(false);
@@ -1214,7 +1242,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     {opensHub ? (
                                         <button
                                             type="button"
-                                            onClick={(e) => { e.stopPropagation(); setPdfHistoryOpen(true); }}
+                                            onClick={(e) => { e.stopPropagation(); setGateStage(null); setPdfHistoryOpen(true); }}
                                             className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium"
                                             title="Drawing versions — view, edit, upload, or open in Procore"
                                         >
@@ -1358,9 +1386,17 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 isOpen={pdfHistoryOpen}
                 releaseId={row.id}
                 viewerUrl={row.viewer_url}
-                onClose={() => setPdfHistoryOpen(false)}
+                gateStage={gateStage}
+                onConfirmStage={() => {
+                    const stageToApply = gateStage;
+                    setPdfHistoryOpen(false);
+                    setGateStage(null);
+                    applyStageChange(stageToApply);
+                }}
+                onClose={() => { setPdfHistoryOpen(false); setGateStage(null); }}
                 onOpenVersion={(vid, mode) => {
                     setPdfHistoryOpen(false);
+                    setGateStage(null);
                     setPdfMarkupVersionId(vid);
                     setPdfMarkupMode(canMarkup ? mode : 'view');
                     setPdfMarkupOpen(true);

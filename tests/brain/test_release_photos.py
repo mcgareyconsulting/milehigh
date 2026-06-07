@@ -54,10 +54,12 @@ def _patch_get_current_user(user):
     return stack
 
 
-def _post_photo(client, release_id, payload, *, note=None, filename="x.png"):
+def _post_photo(client, release_id, payload, *, note=None, stage=None, filename="x.png"):
     data = {'file': (io.BytesIO(payload), filename)}
     if note is not None:
         data['note'] = note
+    if stage is not None:
+        data['stage'] = stage
     return client.post(
         f'/brain/releases/{release_id}/photos',
         data=data,
@@ -109,6 +111,22 @@ def test_upload_requires_login(app, storage_root, release_id):
         client = app.test_client()
         resp = _post_photo(client, release_id, PNG_MIN)
     assert resp.status_code == 401
+
+
+def test_upload_with_valid_stage_tag_is_stored(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        resp = _post_photo(client, release_id, PNG_MIN, stage="Welded QC")
+
+    assert resp.status_code == 201, resp.data
+    assert resp.get_json()['stage'] == "Welded QC"
+
+
+def test_upload_with_unknown_stage_returns_400(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        resp = _post_photo(client, release_id, PNG_MIN, stage="Not A Stage")
+    assert resp.status_code == 400
 
 
 def test_non_image_returns_400(app, storage_root, release_id, plain_user):

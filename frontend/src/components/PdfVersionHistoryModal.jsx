@@ -26,6 +26,11 @@ export function PdfVersionHistoryModal({
     onClose,
     onOpenVersion,
     viewerUrl = '',
+    // When set (e.g. "Welded QC" / "Paint Complete"), the modal is in stage-gate
+    // mode: it requires a photo tagged with this stage before the stage change
+    // can be confirmed. Photo uploads are auto-tagged with this stage.
+    gateStage = null,
+    onConfirmStage,
 }) {
     const [versions, setVersions] = useState([]);
     const [photos, setPhotos] = useState([]);
@@ -114,12 +119,13 @@ export function PdfVersionHistoryModal({
         }
     };
 
-    const uploadPhoto = async (file) => {
+    const uploadPhoto = async (file, stageTag = null) => {
         setPhotoBusy(true);
         setError(null);
         try {
             const fd = new FormData();
             fd.append('file', file);
+            if (stageTag) fd.append('stage', stageTag);
             const resp = await fetch(`${API_BASE_URL}/brain/releases/${releaseId}/photos`, {
                 method: 'POST',
                 body: fd,
@@ -145,7 +151,7 @@ export function PdfVersionHistoryModal({
             if (isPdfFile(file)) {
                 await uploadDrawing(file);
             } else if (isImageFile(file)) {
-                await uploadPhoto(file);
+                await uploadPhoto(file, gateStage);
             } else {
                 setError('Unsupported file type — choose a PDF (drawing) or an image (photo).');
             }
@@ -158,7 +164,7 @@ export function PdfVersionHistoryModal({
         const file = event.target.files?.[0];
         if (!file) return;
         try {
-            await uploadPhoto(file);
+            await uploadPhoto(file, gateStage);
         } finally {
             if (cameraInputRef.current) cameraInputRef.current.value = '';
         }
@@ -202,6 +208,10 @@ export function PdfVersionHistoryModal({
     };
 
     if (!isOpen) return null;
+
+    // In gate mode, the stage change is only allowed once a non-deleted photo
+    // tagged with the gated stage exists.
+    const gateSatisfied = !gateStage || photos.some((p) => p.stage === gateStage);
 
     const fmtDate = (iso) => {
         if (!iso) return '—';
@@ -275,6 +285,16 @@ export function PdfVersionHistoryModal({
                     </span>
                     {(uploading || photoBusy) && <span className="text-sm text-gray-500">Uploading…</span>}
                 </div>
+
+                {gateStage && (
+                    <div className={`px-6 py-3 border-b text-sm flex items-center gap-2 ${gateSatisfied ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                        {gateSatisfied ? (
+                            <span>✓ Photo for <strong>{gateStage}</strong> attached — confirm below to move the stage.</span>
+                        ) : (
+                            <span>A photo is required to move to <strong>{gateStage}</strong>. Upload an image or use “Take photo” — it will be tagged automatically.</span>
+                        )}
+                    </div>
+                )}
 
                 {error && (
                     <div className="px-6 pt-3">
@@ -390,6 +410,11 @@ export function PdfVersionHistoryModal({
                                             </a>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-baseline gap-2 flex-wrap">
+                                                    {p.stage && (
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent-100 text-accent-700">
+                                                            {p.stage}
+                                                        </span>
+                                                    )}
                                                     <span className="text-xs text-gray-500">{fmtDate(p.uploaded_at)}</span>
                                                     <span className="text-xs text-gray-500">{p.uploaded_by?.name || '—'}</span>
                                                     <span className="text-xs text-gray-400 ml-auto">{fmtSize(p.file_size_bytes)}</span>
@@ -422,13 +447,23 @@ export function PdfVersionHistoryModal({
                     </section>
                 </div>
 
-                <div className="bg-gray-50 px-6 py-4 rounded-b-xl border-t border-gray-200 flex justify-end">
+                <div className="bg-gray-50 px-6 py-4 rounded-b-xl border-t border-gray-200 flex justify-end gap-3">
                     <button
                         onClick={onClose}
                         className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300"
                     >
-                        Close
+                        {gateStage ? 'Cancel' : 'Close'}
                     </button>
+                    {gateStage && (
+                        <button
+                            onClick={() => onConfirmStage?.()}
+                            disabled={!gateSatisfied}
+                            className="px-4 py-2 bg-accent-600 text-white rounded-lg font-semibold hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={gateSatisfied ? `Move to ${gateStage}` : `Upload a ${gateStage} photo first`}
+                        >
+                            Confirm {gateStage}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>,
