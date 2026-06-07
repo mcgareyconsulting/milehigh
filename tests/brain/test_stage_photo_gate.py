@@ -12,6 +12,14 @@ from app.models import Releases, ReleasePhoto, db
 
 
 @pytest.fixture(autouse=True)
+def _enable_stage_photo_gate():
+    # The gate ships disabled (STAGE_PHOTO_GATE_ENABLED=False). These tests
+    # verify the gate infrastructure works when the flag is flipped on.
+    with patch("app.brain.job_log.features.stage.command.STAGE_PHOTO_GATE_ENABLED", True):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def setup_auth(mock_admin_user):
     with patch("app.auth.utils.get_current_user", return_value=mock_admin_user), \
          patch("app.brain.job_log.routes.get_current_user", return_value=mock_admin_user):

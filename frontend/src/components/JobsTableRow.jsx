@@ -25,6 +25,11 @@ import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { useTheme } from '../context/ThemeContext';
 
+// Master switch for the stage photo gate. Held OFF for now — the gate UI/infra
+// stays in place so flipping this back to true re-enables it. Keep in sync with
+// the backend flag STAGE_PHOTO_GATE_ENABLED in stage/command.py.
+const STAGE_PHOTO_GATE_ENABLED = false;
+
 // Stages that require a stage-tagged photo before a release may enter them.
 // Selecting one opens the attachment modal in gate mode instead of changing
 // the stage immediately. The backend enforces the same gate (422 photo_required).
@@ -407,7 +412,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // tagged photo first: open the attachment modal in gate mode and defer the
     // actual change until the user confirms. All other stages apply immediately.
     const handleStageChange = (newStage) => {
-        if (STAGE_PHOTO_GATES.includes(newStage) && newStage !== localStage) {
+        if (STAGE_PHOTO_GATE_ENABLED && STAGE_PHOTO_GATES.includes(newStage) && newStage !== localStage) {
             setGateStage(newStage);
             setPdfHistoryOpen(true);
             return;

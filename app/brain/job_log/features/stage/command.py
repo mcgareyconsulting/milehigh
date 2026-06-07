@@ -27,9 +27,15 @@ from app.brain.job_log.features.start_install.clear_hard_date_cascade import cle
 logger = get_logger(__name__)
 
 
-# Stages that require a photo (tagged with that stage) before a release may
-# enter them. The frontend opens the upload modal proactively; this set is the
-# authoritative server-side gate.
+# Master switch for the stage photo gate. Held OFF for now — the gate
+# infrastructure below stays in place so flipping this back to True re-enables
+# it with no other changes. The frontend has a matching flag
+# (STAGE_PHOTO_GATE_ENABLED in JobsTableRow.jsx); keep the two in sync.
+STAGE_PHOTO_GATE_ENABLED = False
+
+# Stages that require a stage-tagged photo before a release may enter them
+# (only enforced when STAGE_PHOTO_GATE_ENABLED is True). The frontend opens the
+# upload modal proactively; this set is the authoritative server-side gate.
 STAGE_PHOTO_GATES = {"Welded QC", "Paint Complete"}
 
 
@@ -113,7 +119,8 @@ class UpdateStageCommand:
         # when it gets rerouted to Ship Planning. Skipped on undo (restoring a
         # prior valid state) and when the stage isn't actually changing.
         if (
-            self.stage in STAGE_PHOTO_GATES
+            STAGE_PHOTO_GATE_ENABLED
+            and self.stage in STAGE_PHOTO_GATES
             and self.undone_event_id is None
             and old_stage != self.stage
         ):
