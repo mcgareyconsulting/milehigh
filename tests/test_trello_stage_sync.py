@@ -24,6 +24,14 @@ from app.trello.list_mapper import TrelloListMapper
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
+def _disable_stage_photo_gate():
+    # Trello sync tests move releases across zones (incl. gated stages); the
+    # photo gate is covered in tests/brain/test_stage_photo_gate.py.
+    with patch("app.brain.job_log.features.stage.command.STAGE_PHOTO_GATES", set()):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def setup_auth(mock_admin_user):
     with patch("app.auth.utils.get_current_user", return_value=mock_admin_user):
         yield

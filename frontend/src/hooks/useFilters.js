@@ -19,7 +19,7 @@ const ALL_OPTION_VALUE = '__ALL__';
 const BLANKS = '(Blanks)';
 
 // Display columns that get an Excel-style header dropdown filter.
-const FILTER_COLUMNS = ['PROJ. #', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
+const FILTER_COLUMNS = ['Job', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
 
 /**
  * Get value from row by column name (handles both database field names and display names)
@@ -28,7 +28,8 @@ const getColumnValue = (row, column) => {
     // Map display column names to database field names (case-sensitive)
     const columnMap = {
         'ORDER #': 'order_number',
-        'PROJ. #': 'project_number',
+        'Job': 'project_number',
+        'Rel': 'rel',
         'NAME': 'project_name',
         'TITLE': 'title',
         'PROCORE STATUS': 'status',
@@ -151,7 +152,7 @@ export function useFilters(rows = []) {
         if (search.trim() === '') return true;
         const keywords = search.trim().toLowerCase().split(/\s+/);
         const haystack = [
-            String(row.project_number ?? row['PROJ. #'] ?? ''),
+            String(row.project_number ?? row['Job'] ?? ''),
             String(row.project_name ?? row['NAME'] ?? ''),
             String(row.title ?? row['TITLE'] ?? ''),
             String(row.ball_in_court ?? row['BIC'] ?? ''),
@@ -362,7 +363,7 @@ export function useFilters(rows = []) {
 
     /**
      * Cycle column sort: null -> asc -> desc -> null. Used by the plain (non-dropdown)
-     * sortable headers (TITLE, TYPE, DUE DATE, PROJ. #).
+     * sortable headers (TITLE, TYPE, DUE DATE, Rel).
      */
     const handleColumnSort = useCallback((column) => {
         setColumnSort((current) => {

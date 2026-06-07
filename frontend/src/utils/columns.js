@@ -17,7 +17,8 @@
  */
 export const DESIRED_COLUMN_ORDER = [
     'ORDER #',
-    'PROJ. #',
+    'Job',
+    'Rel',
     'NAME',
     'TITLE',
     'PROCORE STATUS',

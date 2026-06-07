@@ -65,6 +65,17 @@ class Config:
     # <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.
     PDF_STORAGE_ROOT = os.environ.get("PDF_STORAGE_ROOT")
 
+    # Per-release photo storage. Shares the same Render persistent disk as PDFs.
+    # Prefer an explicit PHOTO_STORAGE_ROOT; otherwise derive a sibling "photos"
+    # dir next to the PDF root (e.g. /var/data/pdfs -> /var/data/photos) so a
+    # single mounted disk serves both. Local dev (neither set) falls back to
+    # <repo>/app/storage/photos via app/brain/job_log/features/photos/storage.py.
+    PHOTO_STORAGE_ROOT = os.environ.get("PHOTO_STORAGE_ROOT")
+    if not PHOTO_STORAGE_ROOT and PDF_STORAGE_ROOT:
+        PHOTO_STORAGE_ROOT = os.path.join(
+            os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "photos"
+        )
+
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")
     PROCORE_SANDBOX_BASE_URL = os.environ.get("PROCORE_SANDBOX_BASE_URL")
@@ -96,6 +107,23 @@ class Config:
     
     # Admin PIN for health scan admin page
     ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
+
+    # Anthropic — used to extract checklist items from meeting transcripts.
+    # Falls back to a deterministic stub extractor when unset (tests / no key).
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+    # Meeting → checklist reviewer. MVP: every post-meeting checklist surfaces to
+    # this user (resolved by username, which is the user's email here).
+    # Future distribution order on the admin side: Bill > David > Katie > Luis;
+    # for a project meeting the assigned PM takes precedence. The dev admin
+    # (mcgareyconsulting@gmail.com) is excluded from ranking.
+    CHECKLIST_REVIEWER_USERNAME = os.environ.get("CHECKLIST_REVIEWER_USERNAME", "boneill@mhmw.com")
+    CHECKLIST_ADMIN_RANKING = [
+        "boneill@mhmw.com",   # Bill
+        "dservold@mhmw.com",  # David
+        "khearn@mhmw.com",    # Katie
+        "lsolano@mhmw.com",   # Luis
+    ]
 
 
 class LocalConfig(Config):
