@@ -6,6 +6,7 @@ back to 100 after 999. They are only assigned to submittals whose type is
 "Drafting Release Review" (DRR) and that do not already have a Rel.
 """
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -16,6 +17,7 @@ from app.procore.procore import (
     REL_MAX,
     next_rel_number,
     assign_rel_if_drr,
+    create_submittal_from_webhook,
 )
 
 
@@ -92,3 +94,42 @@ def test_sequential_assignment_across_multiple_drr(app):
             db.session.commit()
             assigned.append(s.rel)
         assert assigned == [100, 101, 102]
+
+
+# --- Integration: the create webhook path actually performs the assignment ---------
+# These drive the real create_submittal_from_webhook (DB write included), mocking only
+# the Procore HTTP fetches. They guard against the assignment call being removed or
+# re-disabled, which the helper-only tests above would not catch.
+
+def _patched_create(submittal_id, type_name):
+    """Run create_submittal_from_webhook with Procore fetches stubbed for ``type_name``."""
+    submittal_data = {
+        "type": {"name": type_name},
+        "status": {"name": "Open"},
+        "title": "Some Submittal",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+    with patch("app.procore.procore.get_submittal_by_id", return_value=submittal_data), \
+         patch("app.procore.procore.get_project_info",
+               return_value={"name": "Proj", "project_number": "100"}), \
+         patch("app.procore.procore.parse_ball_in_court_from_submittal",
+               return_value={"ball_in_court": None}), \
+         patch("app.procore.procore.parse_and_log_submittal_data", return_value=None):
+        return create_submittal_from_webhook(1, submittal_id)
+
+
+def test_create_webhook_assigns_rel_for_drr(app):
+    with app.app_context():
+        created, record, err = _patched_create("9001", DRR_TYPE)
+        assert created is True
+        assert err is None
+        assert record.rel == REL_MIN
+        assert record.rel_assigned_at is not None
+
+
+def test_create_webhook_skips_rel_for_non_drr(app):
+    with app.app_context():
+        created, record, err = _patched_create("9002", "Submittal for GC Approval")
+        assert created is True
+        assert record.rel is None
+        assert record.rel_assigned_at is None

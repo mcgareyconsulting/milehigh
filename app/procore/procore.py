@@ -607,11 +607,12 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             last_updated=datetime.utcnow()
         )
         
-        # Rel (release) number assignment is currently DISABLED. The Rel column is
-        # displayed empty in the Drafting Work Load tab and no numbers are handed out.
-        # The assignment helpers (next_rel_number / assign_rel_if_drr) are kept intact
-        # for when this is re-enabled; re-instate the call below to turn it back on.
-        # assign_rel_if_drr(new_submittal)
+        # Assign a Rel (release) number when this submittal is created as a DRR.
+        # Procore never mutates a submittal's type in place: a stage transition closes
+        # the old submittal and creates a revision of the new type, so a DRR always
+        # arrives as a fresh creation event. Assigning here (before commit) is therefore
+        # the complete and correct hook. No-op for non-DRR types or if already assigned.
+        assign_rel_if_drr(new_submittal)
 
         db.session.add(new_submittal)
         logger.info(f"Added submittal to session, committing to database...")
