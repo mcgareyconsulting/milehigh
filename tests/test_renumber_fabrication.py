@@ -9,27 +9,12 @@ from app.models import Releases, ReleaseEvents, TrelloOutbox, db
 from app.brain.job_log.features.fab_order.renumber_fabrication import (
     renumber_fabrication_fab_orders,
 )
+from tests.conftest import make_release
 
 
 @pytest.fixture(autouse=True)
-def setup_auth(mock_admin_user):
-    with patch('app.auth.utils.get_current_user', return_value=mock_admin_user):
-        yield
-
-
-def make_release(job, release, stage, stage_group, fab_order, trello_card_id=None, job_name="Test"):
-    r = Releases(
-        job=job,
-        release=release,
-        job_name=job_name,
-        stage=stage,
-        stage_group=stage_group,
-        fab_order=fab_order,
-        trello_card_id=trello_card_id,
-    )
-    db.session.add(r)
-    db.session.flush()
-    return r
+def setup_auth(admin_session):
+    yield
 
 
 def test_compresses_drifted_fabrication_fab_orders(app):

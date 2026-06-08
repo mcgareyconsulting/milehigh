@@ -10,28 +10,14 @@ import pytest
 from unittest.mock import patch
 
 from app.models import Releases, ReleaseEvents, db
+# Defaults (Cut Start / FABRICATION / fab_order 10 / "Test Job") match the root
+# factory exactly, so this is a straight alias.
+from tests.conftest import make_release as _make_release
 
 
 @pytest.fixture(autouse=True)
-def setup_auth(mock_admin_user):
-    with patch("app.auth.utils.get_current_user", return_value=mock_admin_user):
-        yield
-
-
-def _make_release(job, release, **kwargs):
-    defaults = dict(
-        job=job,
-        release=release,
-        job_name="Test Job",
-        stage="Cut Start",
-        stage_group="FABRICATION",
-        fab_order=10,
-    )
-    defaults.update(kwargs)
-    r = Releases(**defaults)
-    db.session.add(r)
-    db.session.flush()
-    return r
+def setup_auth(admin_session):
+    yield
 
 
 def _stage_command_patches():

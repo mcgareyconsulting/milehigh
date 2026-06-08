@@ -14,9 +14,10 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from app.models import Releases, db
+from app.models import db
 from app.api.helpers import STAGE_PROGRESSION_RANK
 from app.trello.list_mapper import TrelloListMapper
+from tests.conftest import make_release
 
 
 # ---------------------------------------------------------------------------
@@ -32,28 +33,8 @@ def _disable_stage_photo_gate():
 
 
 @pytest.fixture(autouse=True)
-def setup_auth(mock_admin_user):
-    with patch("app.auth.utils.get_current_user", return_value=mock_admin_user):
-        yield
-
-
-def make_release(
-    job, release, stage, stage_group, fab_order=5,
-    trello_card_id=None, trello_list_name=None, job_name="Test",
-):
-    r = Releases(
-        job=job,
-        release=release,
-        job_name=job_name,
-        stage=stage,
-        stage_group=stage_group,
-        fab_order=fab_order,
-        trello_card_id=trello_card_id,
-        trello_list_name=trello_list_name,
-    )
-    db.session.add(r)
-    db.session.flush()
-    return r
+def setup_auth(admin_session):
+    yield
 
 
 def stub_job(stage, job_id=1):
