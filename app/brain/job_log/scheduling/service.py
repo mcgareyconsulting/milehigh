@@ -81,6 +81,7 @@ def update_job_scheduling_fields(
             'install_hrs': _safe_float(j.install_hrs),
             'fab_order': _safe_float(j.fab_order),
             'stage': j.stage if j.stage else 'Released',
+            'num_guys': _safe_float(j.num_guys),
             'is_hard_date': j.start_install_formulaTF is False,
         })
 
@@ -90,6 +91,7 @@ def update_job_scheduling_fields(
         'install_hrs': _safe_float(job.install_hrs),
         'fab_order': _safe_float(job.fab_order),
         'stage': job.stage if job.stage else 'Released',
+        'num_guys': _safe_float(job.num_guys),
         'is_hard_date': job.start_install_formulaTF is False,
     }
     
@@ -189,6 +191,7 @@ def recalculate_all_jobs_scheduling(
             'install_hrs': _safe_float(job.install_hrs),
             'fab_order': _safe_float(job.fab_order),
             'stage': job.stage if job.stage else 'Released',
+            'num_guys': _safe_float(job.num_guys),
             'is_hard_date': job.start_install_formulaTF is False,
         })
     

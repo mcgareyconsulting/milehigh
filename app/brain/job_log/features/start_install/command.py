@@ -75,12 +75,16 @@ class UpdateStartInstallCommand:
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_start_install = job_record.start_install
+        old_asap = bool(getattr(job_record, 'start_install_asap', False))
 
         event_payload = {
             'from': old_start_install.isoformat() if old_start_install else None,
             'to': self.start_install.isoformat() if self.start_install else None,
             'is_hard_date': self.is_hard_date,
         }
+        # An explicit hard date supersedes ASAP's auto +1wk date, so ASAP no longer applies.
+        if old_asap:
+            event_payload['cleared_asap'] = True
         if self.undone_event_id is not None:
             event_payload['undone_event_id'] = self.undone_event_id
 
@@ -102,6 +106,15 @@ class UpdateStartInstallCommand:
         job_record.start_install_formulaTF = False
         # A user-set hard date is a normal (colored) date — drop any no-color marker.
         job_record.start_install_no_color = False
+        # Setting an explicit hard date takes manual control of the date, so clear ASAP
+        # (assigning an installer, by contrast, goes through AssignInstaller and keeps ASAP).
+        job_record.start_install_asap = False
+        # comp_eta follows from the hard start_install via the canonical num_guys formula
+        # (the scheduling recalc skips hard-dated rows, so it would otherwise go stale).
+        from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
+        job_record.comp_eta = calculate_install_complete_date(
+            self.start_install, job_record.install_hrs, job_record.num_guys
+        )
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 

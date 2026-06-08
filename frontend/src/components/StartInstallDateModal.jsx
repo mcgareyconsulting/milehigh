@@ -1,14 +1,17 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date; ASAP is a visual flag (no date written) that triggers Paint Complete → Ship Planning auto-advance.
+ * purpose: Lets users set or clear the Start Install date on a release, or flag the release ASAP. Any date entered is treated as a hard date; flagging ASAP sets a hard Start Install one week out (and triggers the Paint Complete → Ship Planning auto-advance).
  * exports:
  *   StartInstallDateModal: Date-picker modal with Save, Set ASAP, Clear Hard Date, Clear ASAP actions
  * imports_from: [react]
  * imported_by: [frontend/src/components/JobsTableRow.jsx]
  * invariants:
  *   - Any non-empty date submitted via Save is persisted as a hard date (is_hard_date=true).
- *   - ASAP toggle is mutually exclusive with the date input; when on, the date input is disabled and the confirm button reads "Set ASAP".
+ *   - ASAP toggle disables the date input (ASAP owns the date), but the installer select stays
+ *     enabled — an ASAP release still needs an installer assigned (that seeds the mirror bar).
+ *   - The confirm button reads "Set ASAP" only when turning ASAP on (off->on); otherwise "Save".
+ *     Saving an already-ASAP row with an installer change assigns the installer and keeps the date.
  *   - Clear Hard Date button is only shown when the row currently has a hard date (startInstallFormulaTF === false && currentDate && !isAsap).
  *   - Clear ASAP button is only shown when the row currently has ASAP set (isAsap === true).
  * updated_by_agent: 2026-05-12T00:00:00Z
@@ -73,18 +76,24 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
     };
 
     const installerChanged = installer !== initialInstaller;
+    // Turning ASAP on (off -> on) stamps the hard date via the ASAP path. When ASAP is
+    // already set, the toggle stays on but the installer/date controls still work — an
+    // ASAP release still needs an installer assigned (that's what seeds the mirror bar).
+    const turningAsapOn = asapToggle && !isAsap;
 
     const handleSave = () => {
-        if (asapToggle) {
-            onSetAsap();
+        if (turningAsapOn) {
+            // Flag ASAP (which stamps the date); also apply an installer if one was picked.
+            onSetAsap(installerChanged ? installer : undefined);
             return;
         }
         if (!dateInput && !installerChanged) {
             setError('Please select a date or installer');
             return;
         }
-        // Pass the installer only when it changed, so a date-only save leaves it untouched.
-        onSave(dateInput || null, installerChanged ? installer : undefined);
+        // An already-ASAP row keeps its ASAP date (pass null -> installer-only); otherwise use
+        // the date input. Installer is sent only when it changed, so a date-only save leaves it.
+        onSave(asapToggle ? null : (dateInput || null), installerChanged ? installer : undefined);
     };
 
     const handleCancel = () => {
@@ -97,8 +106,8 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
 
     if (!isOpen) return null;
 
-    const confirmLabel = asapToggle ? 'Set ASAP' : 'Set Install';
-    const confirmEnabled = asapToggle || !!dateInput || installerChanged;
+    const confirmLabel = turningAsapOn ? 'Set ASAP' : 'Save';
+    const confirmEnabled = turningAsapOn || !!dateInput || installerChanged;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -133,7 +142,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
                         <span>
                             <span className="block text-sm font-semibold text-gray-700">ASAP Mode</span>
                             <span className="block text-xs text-gray-500">
-                                Skip Paint Complete and rip to Shipping Planning automatically.
+                                Sets Start Install one week out and rips to Shipping Planning at Paint Complete.
                             </span>
                         </span>
                     </label>
@@ -156,7 +165,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
                         )}
                         <p className="text-gray-500 text-xs mt-2">
                             {asapToggle
-                                ? 'ASAP releases keep the formula-driven date and display "ASAP" in red.'
+                                ? 'ASAP sets a hard Start Install one week out and displays "ASAP" in red.'
                                 : 'Saving a date sets it as a hard date. Start Install dates cascade automatically.'}
                         </p>
                     </div>
@@ -168,10 +177,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
                         <select
                             value={installer}
                             onChange={(e) => { setInstaller(e.target.value); setError(''); }}
-                            disabled={asapToggle}
-                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 ${
-                                asapToggle ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''
-                            }`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
                         >
                             <option value="">— Unassigned —</option>
                             {installerOptions.map((name) => (
@@ -183,7 +189,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
                             )}
                         </select>
                         <p className="text-gray-500 text-xs mt-2">
-                            Assigning an installer moves this release's mirror card to that list on Trello.
+                            Assigning an installer moves the mirror card to that team's list and sets its date range on Trello.
                         </p>
                     </div>
 
@@ -218,7 +224,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
                                 disabled={!confirmEnabled}
                                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
                                     confirmEnabled
-                                        ? (asapToggle
+                                        ? (turningAsapOn
                                             ? 'bg-red-600 text-white hover:bg-red-700'
                                             : 'bg-accent-500 text-white hover:bg-accent-600')
                                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'

@@ -1390,13 +1390,16 @@ def get_card_attachments_by_card_id(trello_card_id):
         return {"success": False, "error": error_msg, "attachments": []}
 
 
-def calculate_installation_duration(install_hrs, num_guys=2.5):
+def calculate_installation_duration(install_hrs, num_guys=2):
     """
     Calculate installation duration in days from installation hours and number of guys.
 
+    Mirrors the canonical comp_eta formula: ceil(install_hrs / (num_guys * 8)) working days.
+    Default num_guys=2 (matches the card-creation default and SchedulingConfig.DEFAULT_NUM_GUYS).
+
     Args:
         install_hrs (float): Installation hours
-        num_guys (float): Number of guys (default: 2.5 for backward compatibility)
+        num_guys (float): Number of guys (default: 2)
 
     Returns:
         int: Installation duration in days, or None if calculation fails
@@ -1460,6 +1463,55 @@ def parse_num_guys_from_description(description):
             return None
 
     return None
+
+
+def set_num_guys_in_description(description, num_guys):
+    """Force the 'Number of Guys' value in a description to `num_guys` (add the line if missing).
+
+    Unlike update_num_guys_in_description (which only adds a default when absent), this sets an
+    explicit value — used to keep both cards in sync with the DB source of truth.
+    """
+    if description is None:
+        description = ""
+    # Whole numbers render without a trailing .0 (e.g. "2" not "2.0").
+    val = int(num_guys) if float(num_guys).is_integer() else num_guys
+
+    bold_pattern = r"\*\*Number\s+of\s+Guys:\*\*\s*\d+(?:\.\d+)?"
+    if re.search(bold_pattern, description, re.IGNORECASE):
+        return re.sub(bold_pattern, f"**Number of Guys:** {val}", description, flags=re.IGNORECASE)
+
+    plain_pattern = r"Number\s+of\s+Guys:\s*\d+(?:\.\d+)?"
+    if re.search(plain_pattern, description, re.IGNORECASE):
+        return re.sub(plain_pattern, f"Number of Guys: {val}", description, flags=re.IGNORECASE)
+
+    sep = "\n" if description and not description.endswith("\n") else ""
+    return f"{description}{sep}**Number of Guys:** {val}"
+
+
+def sync_num_guys_on_card(card_id, install_hrs, num_guys):
+    """Set 'Number of Guys' (and the derived 'Installation Duration') on a card to match the
+    given num_guys. Pushes the description only if it changed. Best-effort; returns True if
+    the card was updated. Used to keep both the primary and mirror cards in sync with the DB.
+    """
+    if not card_id or not num_guys:
+        return False
+    try:
+        card = get_trello_card_by_id(card_id)
+    except Exception as e:
+        print(f"[TRELLO API] sync_num_guys_on_card: fetch failed for {card_id}: {e}")
+        return False
+    if not card:
+        return False
+
+    desc = card.get("desc", "") or ""
+    new_desc = set_num_guys_in_description(desc, num_guys)
+    if install_hrs:
+        new_desc = update_installation_duration_in_description(new_desc, install_hrs, num_guys)
+
+    if new_desc != desc:
+        update_trello_card_description(card_id, new_desc)
+        return True
+    return False
 
 
 def update_installation_duration_in_description(description, install_hrs, num_guys):
@@ -1939,6 +1991,59 @@ def move_mirror_card(primary_card_id, target_list_id):
         return None
 
     return update_trello_card(card_id=mirror_short_link, new_list_id=target_list_id)
+
+
+def set_mirror_date_range(primary_card_id, start_date, due_date):
+    """Push an exact [start_date, due_date] range onto a release's mirror card.
+
+    Unlike update_mirror_card_date_range (which recomputes the due from install_hrs),
+    this writes the dates verbatim — used when seeding the mirror from the already-computed
+    start_install / comp_eta. Also resolves the mirror's full card id so callers can persist
+    it for inbound webhook matching.
+
+    Returns a dict: {success, mirror_short_link, mirror_card_id, error?}.
+    """
+    if not primary_card_id or start_date is None:
+        return {"success": False, "error": "missing primary card id or start date"}
+
+    attachments_result = get_card_attachments_by_card_id(primary_card_id)
+    if not attachments_result.get("success"):
+        return {"success": False, "error": "failed to read attachments"}
+
+    mirror_short_link = _mirror_short_link_from_attachments(attachments_result.get("attachments"))
+    if not mirror_short_link:
+        return {"success": False, "error": "no linked mirror card"}
+
+    # Resolve the mirror card BEFORE pushing. Its full id is needed for inbound matching, and
+    # the same response carries idBoard — so we can reject a cross-board "Linked card" link
+    # for free (no extra call). ShortLinks are global, so a stray link to another board would
+    # otherwise have us pushing dates onto the wrong board.
+    try:
+        mirror_card = get_trello_card_by_id(mirror_short_link)
+    except Exception as e:
+        print(f"[TRELLO API] set_mirror_date_range: could not resolve mirror card: {e}")
+        return {"success": False, "error": f"could not resolve mirror card: {e}"}
+    if not mirror_card:
+        return {"success": False, "error": "mirror card not found"}
+    if mirror_card.get("idBoard") != cfg.TRELLO_BOARD_ID:
+        print(
+            f"[TRELLO API] set_mirror_date_range: linked card {mirror_card.get('id')} is on board "
+            f"{mirror_card.get('idBoard')}, not {cfg.TRELLO_BOARD_ID}; refusing cross-board push"
+        )
+        return {
+            "success": False,
+            "error": "linked mirror card is on a different board",
+            "mirror_card_id": mirror_card.get("id"),
+            "mirror_board_id": mirror_card.get("idBoard"),
+        }
+    mirror_card_id = mirror_card.get("id")
+
+    # No comp_eta → single-day bar (start == due) so we never pass None to the date formatter.
+    effective_due = due_date if due_date is not None else start_date
+    result = update_card_date_range(mirror_short_link, start_date, effective_due)
+    result["mirror_short_link"] = mirror_short_link
+    result["mirror_card_id"] = mirror_card_id
+    return result
 
 
 def link_cards(primary_id, secondary_id):

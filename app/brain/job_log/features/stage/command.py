@@ -5,7 +5,7 @@ purpose: Encapsulate the full stage update workflow (DB write, stage_group sync,
 exports:
   UpdateStageCommand: Dataclass command that executes a stage update with all side effects
   StageUpdateResult: Dataclass result with event_id, job_comp/fab_order extras
-imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.clear_hard_date_cascade]
+imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.neutralize_install_date_cascade]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Fixed-tier stages (Ready-to-Ship / Complete groups) auto-assign fab_order via get_fixed_tier
@@ -22,7 +22,7 @@ from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
 
 logger = get_logger(__name__)
 
@@ -220,22 +220,16 @@ class UpdateStageCommand:
         extras: dict = {}
 
         # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
-        # later stage, it is no longer a rush. Clear the ASAP flag and stamp Start
-        # Install with the date of this stage event, recorded as a neutral (no-color)
-        # hard date — preserved through later completion marking because
-        # clear_hard_date_cascade no-ops on no_color rows. Hold (rank 99) is excluded.
+        # later stage, it is no longer a rush, so clear the ASAP flag. The start_install /
+        # comp_eta set at ASAP-flag time (and any subsequent mirror-card tweak) are LEFT
+        # intact — the PM owns the install date from then on. Hold (rank 99) is excluded.
         SHIP_COMPLETE_RANK = STAGE_PROGRESSION_RANK['Ship Complete']
         new_rank = STAGE_PROGRESSION_RANK.get(self.stage, -1)
         if (
             bool(getattr(job_record, 'start_install_asap', False))
             and SHIP_COMPLETE_RANK <= new_rank < 99
         ):
-            drop_date = datetime.utcnow().date()
             job_record.start_install_asap = False
-            job_record.start_install = drop_date
-            job_record.start_install_formula = None
-            job_record.start_install_formulaTF = False
-            job_record.start_install_no_color = True
             JobEventService.create_and_close(
                 job=self.job_id, release=self.release,
                 action='updated', source=self.source,
@@ -244,12 +238,10 @@ class UpdateStageCommand:
                     'old_value': True,
                     'new_value': False,
                     'reason': 'asap_dropped_on_ship_complete',
-                    'start_install': drop_date.isoformat(),
                     'parent_event_id': event.id,
                 },
             )
             extras['asap_dropped'] = True
-            extras['start_install'] = drop_date.isoformat()
 
         # job_comp cascade. 'Install Complete' and 'Complete' form a single
         # "complete zone" for the Install Prog marker (job_comp='X'): entering
@@ -303,12 +295,12 @@ class UpdateStageCommand:
                 )
                 extras['job_comp'] = None
 
-        # Red-date auto-clear: a hard start_install date is meaningless once the
-        # release is installed/complete. Helper is a no-op when no hard date is
-        # present. Fires for both terminal stages (Install Complete is the new
-        # completion marker; Complete stays for safety).
+        # Install-date neutralize: once the release is installed/complete, KEEP the install
+        # date but strip its color (and any ASAP red) so it stops showing as an alarming
+        # red/green/yellow date. No-op when no hard date is present. Fires for both terminal
+        # stages (Install Complete is the new completion marker; Complete stays for safety).
         if self.stage in ('Complete', 'Install Complete'):
-            if clear_hard_date_cascade(
+            if neutralize_install_date_cascade(
                 job_record,
                 parent_event_id=event.id,
                 reason=(

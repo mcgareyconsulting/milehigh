@@ -59,9 +59,18 @@ class SchedulingConfig:
     # Fabrication capacity (fixed daily capacity)
     FAB_HOURS_PER_DAY: float = 104.0  # 13 fabricators × 8 hrs/day
     
-    # Installation capacity (fixed daily capacity)
+    # Installation capacity (fixed daily capacity).
+    # Legacy fixed value (= DEFAULT_NUM_GUYS * HOURS_PER_INSTALLER_DAY = 2 * 8). Retained
+    # for reference; comp_eta now scales by the per-release num_guys instead (see below).
     INSTALL_HOURS_PER_DAY: float = 16.0
-    
+
+    # Per-installer daily capacity. comp_eta uses num_guys * HOURS_PER_INSTALLER_DAY as the
+    # daily install throughput, so the default (num_guys=2) reproduces INSTALL_HOURS_PER_DAY.
+    HOURS_PER_INSTALLER_DAY: float = 8.0
+
+    # Installer headcount assumed when a release has no recorded num_guys.
+    DEFAULT_NUM_GUYS: float = 2.0
+
     # Install buffer (working days between fab completion and install start)
     INSTALL_BUFFER_DAYS: int = 3
     

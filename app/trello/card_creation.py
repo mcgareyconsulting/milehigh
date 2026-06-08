@@ -347,6 +347,18 @@ def apply_card_post_creation_features(
                 update_trello_card(mirror_card_id, clear_due_date=True)
                 results["mirror_card_id"] = mirror_card_id
                 logger.info(f"Mirror card created and linked: {mirror_card_id}")
+
+                # Persist the mirror id on the release so inbound mirror webhooks resolve
+                # directly (no attachment walk). The clone is same-board by construction
+                # (created in UNASSIGNED_CARDS_LIST_ID); guard idBoard defensively.
+                if job_record is not None and cloned.get("idBoard") == cfg.TRELLO_BOARD_ID:
+                    from app.models import db
+                    try:
+                        job_record.mirror_trello_card_id = mirror_card_id
+                        db.session.commit()
+                    except Exception as persist_err:
+                        logger.warning(f"Failed to persist mirror_trello_card_id: {persist_err}")
+                        db.session.rollback()
             else:
                 logger.info(f"Card {card_id} already has a link, skipping mirror card creation")
         except Exception as mirror_err:

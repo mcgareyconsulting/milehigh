@@ -21,7 +21,8 @@ from app.models import Releases, db
 from app.config import Config
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.trello.api import move_mirror_card, get_list_by_name
+from app.trello.api import move_mirror_card, get_list_by_name, set_mirror_date_range
+from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 
 logger = get_logger(__name__)
 
@@ -114,6 +115,37 @@ class AssignInstallerCommand:
                 f"Job {self.job_id}-{self.release} has no trello_card_id, skipping mirror move",
                 extra={'job': self.job_id, 'release': self.release},
             )
+
+        # When assigning to a team (not clearing), seed the mirror card's date bar to
+        # [start_install, comp_eta] and remember the mirror's id for inbound write-back.
+        if new_installer and job_record.trello_card_id and job_record.start_install:
+            comp_eta = job_record.comp_eta or calculate_install_complete_date(
+                job_record.start_install, job_record.install_hrs, job_record.num_guys
+            )
+            if comp_eta and not job_record.comp_eta:
+                job_record.comp_eta = comp_eta
+            try:
+                range_result = set_mirror_date_range(
+                    job_record.trello_card_id, job_record.start_install, comp_eta
+                )
+                if range_result.get("success"):
+                    mirror_id = range_result.get("mirror_card_id")
+                    if mirror_id:
+                        job_record.mirror_trello_card_id = mirror_id
+                    logger.info(
+                        f"Mirror date range set for job {self.job_id}-{self.release} "
+                        f"[{job_record.start_install} -> {comp_eta}]"
+                    )
+                else:
+                    logger.warning(
+                        f"Could not set mirror date range for job {self.job_id}-{self.release}: "
+                        f"{range_result.get('error')}"
+                    )
+            except Exception as range_error:
+                logger.error(
+                    f"Failed to set mirror date range for job {self.job_id}-{self.release}: {range_error}",
+                    exc_info=True,
+                )
 
         JobEventService.close(event.id)
         db.session.commit()
