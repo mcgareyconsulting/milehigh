@@ -3,22 +3,12 @@ import pytest
 from unittest.mock import patch
 
 from app.models import Releases, db
+from tests.conftest import make_release
 
 
 @pytest.fixture(autouse=True)
-def setup_auth(mock_admin_user):
-    with patch('app.auth.utils.get_current_user', return_value=mock_admin_user):
-        yield
-
-
-def make_release(job, release, stage, stage_group, fab_order, job_name="Test"):
-    r = Releases(
-        job=job, release=release, job_name=job_name,
-        stage=stage, stage_group=stage_group, fab_order=fab_order,
-    )
-    db.session.add(r)
-    db.session.flush()
-    return r
+def setup_auth(admin_session):
+    yield
 
 
 def test_fab_order_manual_edit_no_stage_bounds(app):

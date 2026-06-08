@@ -10,31 +10,24 @@ from unittest.mock import patch
 import pytest
 
 from app.models import Releases, ReleaseEvents, db
+from tests.conftest import make_release
 
 
 @pytest.fixture(autouse=True)
-def setup_auth(mock_admin_user):
-    with patch("app.auth.utils.get_current_user", return_value=mock_admin_user):
-        yield
+def setup_auth(admin_session):
+    yield
 
 
 def _make_release(job, release, **kwargs):
-    defaults = dict(
-        job=job,
-        release=release,
-        job_name="Test Job",
-        stage="Paint Start",
-        stage_group="FABRICATION",
-        fab_order=12.5,
-        start_install_formulaTF=True,
-        start_install_asap=False,
-        trello_card_id="card-123",
-    )
-    defaults.update(kwargs)
-    r = Releases(**defaults)
-    db.session.add(r)
-    db.session.flush()
-    return r
+    """Installer-flow release: Paint Start, formula-driven date, mirror card."""
+    return make_release(job, release, **{
+        "stage": "Paint Start",
+        "fab_order": 12.5,
+        "start_install_formulaTF": True,
+        "start_install_asap": False,
+        "trello_card_id": "card-123",
+        **kwargs,
+    })
 
 
 def _installer_patches():

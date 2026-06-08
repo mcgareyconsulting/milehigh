@@ -35,6 +35,7 @@ from datetime import date
 import pytest
 
 from app.models import Releases, ReleaseEvents, Submittals, SubmittalEvents, db
+from tests.conftest import make_release
 
 
 # ---------------------------------------------------------------------------
@@ -45,17 +46,15 @@ from app.models import Releases, ReleaseEvents, Submittals, SubmittalEvents, db
 
 
 def _make_release(**overrides):
-    defaults = dict(
-        job=1234, release='A', job_name='Test Job',
-        stage='Welded QC', stage_group='FABRICATION',
+    """Undo-flow release: job 1234, Welded QC, formula-driven date.
+    (job_name/stage_group default to the root factory's matching values.)"""
+    params = dict(
+        job=1234, release='A', stage='Welded QC',
         fab_order=10.0, notes=None, start_install=None,
         start_install_formulaTF=True,
     )
-    defaults.update(overrides)
-    r = Releases(**defaults)
-    db.session.add(r)
-    db.session.flush()
-    return r
+    params.update(overrides)
+    return make_release(params.pop('job'), params.pop('release'), **params)
 
 
 def _seed_event(*, job=1234, release='A', action, payload, source='Brain'):

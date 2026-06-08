@@ -14,7 +14,7 @@ import os
 # Must run before any test module imports create_app
 os.environ.setdefault("TESTING", "1")
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -74,6 +74,24 @@ def mock_non_admin_user():
     return user
 
 
+@pytest.fixture
+def admin_session(mock_admin_user):
+    """Patch get_current_user at the shared auth.utils site to an admin.
+
+    The single patch target used by non-HTTP command/service tests. Files that
+    want every test authenticated as admin add a tiny autouse wrapper:
+
+        @pytest.fixture(autouse=True)
+        def setup_auth(admin_session):
+            yield
+
+    Brain HTTP-route tests that also import get_current_user at a blueprint
+    site keep their own multi-target patch (see tests/brain/conftest.py).
+    """
+    with patch("app.auth.utils.get_current_user", return_value=mock_admin_user):
+        yield mock_admin_user
+
+
 # ---------------------------------------------------------------------------
 # DB row factories
 #
@@ -102,8 +120,15 @@ def make_user(username, *, password_hash="x", password_set=True,
     return user
 
 
-def make_release(job, release, *, stage="Cut Start", stage_group="FABRICATION",
+def make_release(job, release, stage="Cut Start", stage_group="FABRICATION",
                  fab_order=10, job_name="Test Job", **extra):
+    """Single source of truth for constructing a Releases row in tests.
+
+    stage/stage_group/fab_order are positional-or-keyword so the ordering and
+    fab-order suites can call make_release(job, release, stage, group, fab_order)
+    positionally; everything else (trello_card_id, start_install_*, etc.) flows
+    through **extra. Flushes (not commits) so the row is queryable in-request.
+    """
     from app.models import Releases, db
     r = Releases(
         job=job, release=release, job_name=job_name,
