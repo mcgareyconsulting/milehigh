@@ -53,13 +53,65 @@ REL_MIN = 100
 REL_MAX = 999
 
 
-def next_rel_number():
-    """Return the next Rel number to assign to a DRR submittal.
+def _active_release_numbers_for_job(job):
+    """Release numbers held by ACTIVE job-log releases for ``job``.
 
-    Numbers run 100..999 and wrap back to 100. "Next" is derived from the most
-    recently assigned Rel (by rel_assigned_at) so wraparound is handled naturally:
-    if the last assigned value was 999, the next is 100. Returns REL_MIN when no
-    Rel has ever been assigned.
+    The uniqueness that matters is the job-release pair (``Releases.job`` +
+    ``Releases.release``): a Rel handed to a DRR submittal must not collide with
+    an active job-log release on the same job. "Active" means not archived
+    (``is_archived`` is False) and not explicitly deactivated (``is_active`` is
+    not False); a NULL ``is_active`` counts as active, matching the column
+    default, so an ambiguous row still blocks reuse (leak-proof bias).
+
+    ``Releases.job`` is an integer and ``Releases.release`` a string, while the
+    submittal carries ``project_number`` (the same job number, per spec) and an
+    integer Rel. Both sides are coerced to int for the comparison; any value that
+    isn't a clean integer is ignored. Returns the set of taken integers (empty
+    when ``job`` is missing or non-numeric, which simply means no guard applies).
+    """
+    if job is None:
+        return set()
+    try:
+        job_int = int(str(job).strip())
+    except (TypeError, ValueError):
+        return set()
+
+    rows = (
+        db.session.query(Releases.release)
+        .filter(
+            Releases.job == job_int,
+            Releases.is_archived.is_(False),
+            Releases.is_active.isnot(False),
+        )
+        .all()
+    )
+    taken = set()
+    for (value,) in rows:
+        if value is None:
+            continue
+        try:
+            taken.add(int(str(value).strip()))
+        except (TypeError, ValueError):
+            continue
+    return taken
+
+
+def next_rel_number(job=None):
+    """Return the next Rel number to assign to a DRR submittal on ``job``.
+
+    Numbers run 100..999 as a single global sequence and wrap back to 100. "Next"
+    is derived from the most recently assigned Rel (by rel_assigned_at) so
+    wraparound is handled naturally: if the last assigned value was 999, the next
+    is 100. Returns REL_MIN when no Rel has ever been assigned.
+
+    To keep the job-release pair unique, any candidate already held by an ACTIVE
+    job-log release on the same ``job`` is skipped, advancing through the sequence
+    (wrapping) until a free number is found. Archived/inactive releases do not
+    block reuse. When ``job`` is None the collision guard is inert and the plain
+    global sequence is returned (used by callers/tests that don't need it).
+
+    Raises RuntimeError only in the pathological case where every number in
+    [REL_MIN, REL_MAX] is held by an active release for the job.
     """
     last = (
         Submittals.query
@@ -68,19 +120,35 @@ def next_rel_number():
         .first()
     )
     if last is None or last.rel is None:
-        return REL_MIN
-    nxt = last.rel + 1
-    if nxt > REL_MAX:
-        nxt = REL_MIN
-    return nxt
+        start = REL_MIN
+    else:
+        start = last.rel + 1
+        if start > REL_MAX:
+            start = REL_MIN
+
+    taken = _active_release_numbers_for_job(job)
+    candidate = start
+    for _ in range(REL_MAX - REL_MIN + 1):
+        if candidate not in taken:
+            return candidate
+        candidate += 1
+        if candidate > REL_MAX:
+            candidate = REL_MIN
+
+    raise RuntimeError(
+        f"No free Rel number in [{REL_MIN}, {REL_MAX}] for job {job!r}: "
+        f"every value is held by an active job-log release."
+    )
 
 
 def assign_rel_if_drr(record):
     """Assign a Rel number to ``record`` if it is a DRR submittal without one.
 
     Idempotent: does nothing if the submittal is not DRR or already has a Rel.
-    The caller is responsible for committing the surrounding transaction.
-    Returns the assigned Rel number, or None if nothing was assigned.
+    The Rel is checked against active job-log releases for the same job
+    (``record.project_number``) so the job-release pair stays unique. The caller
+    is responsible for committing the surrounding transaction. Returns the
+    assigned Rel number, or None if nothing was assigned.
     """
     if record is None:
         return None
@@ -88,10 +156,11 @@ def assign_rel_if_drr(record):
         return None
     if record.rel is not None:
         return None
-    record.rel = next_rel_number()
+    record.rel = next_rel_number(record.project_number)
     record.rel_assigned_at = datetime.utcnow()
     logger.info(
-        "Assigned Rel %s to DRR submittal %s", record.rel, record.submittal_id
+        "Assigned Rel %s to DRR submittal %s (job %s)",
+        record.rel, record.submittal_id, record.project_number,
     )
     return record.rel
 

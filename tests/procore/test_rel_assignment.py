@@ -3,14 +3,16 @@ Unit tests for DRR "Rel" number assignment (app/procore/procore.py).
 
 Rel numbers are assigned per DRR submittal, sequentially in [100, 999], wrapping
 back to 100 after 999. They are only assigned to submittals whose type is
-"Drafting Release Review" (DRR) and that do not already have a Rel.
+"Drafting Release Review" (DRR) and that do not already have a Rel. A collision
+guard skips any candidate already held by an ACTIVE job-log release (Releases) on
+the same job so the job-release pair stays unique.
 """
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 
-from app.models import db, Submittals
+from app.models import db, Submittals, Releases
 from app.procore.procore import (
     DRR_TYPE,
     REL_MIN,
@@ -19,6 +21,17 @@ from app.procore.procore import (
     assign_rel_if_drr,
     create_submittal_from_webhook,
 )
+
+
+def _make_release(job, release, *, is_active=True, is_archived=False):
+    """Minimal job-log Releases row for collision-guard tests."""
+    return Releases(
+        job=int(job),
+        release=str(release),
+        job_name="Test Job",
+        is_active=is_active,
+        is_archived=is_archived,
+    )
 
 
 def _make_submittal(sid, type_, rel=None, rel_assigned_at=None):
@@ -133,3 +146,79 @@ def test_create_webhook_skips_rel_for_non_drr(app):
         assert created is True
         assert record.rel is None
         assert record.rel_assigned_at is None
+
+
+# --- Job-release collision guard ---------------------------------------------------
+# A Rel must not collide with an ACTIVE job-log release (Releases.job, Releases.release)
+# on the same job. Archived/inactive releases, and releases on other jobs, don't block.
+# Submittals.project_number is the same job number as Releases.job.
+
+def test_rel_skips_number_held_by_active_release_on_same_job(app):
+    with app.app_context():
+        db.session.add(_make_release(100, 100))  # job 100 already holds active release 100
+        db.session.commit()
+        # Global sequence would start at REL_MIN (100); 100 is taken on job 100 -> 101.
+        assert next_rel_number("100") == 101
+
+
+def test_rel_skips_consecutive_taken_numbers(app):
+    with app.app_context():
+        for r in (100, 101, 102):
+            db.session.add(_make_release(100, r))
+        db.session.commit()
+        assert next_rel_number("100") == 103
+
+
+def test_archived_release_does_not_block(app):
+    with app.app_context():
+        db.session.add(_make_release(100, 100, is_archived=True))
+        db.session.commit()
+        assert next_rel_number("100") == 100  # archived -> number is reusable
+
+
+def test_inactive_release_does_not_block(app):
+    with app.app_context():
+        db.session.add(_make_release(100, 100, is_active=False))
+        db.session.commit()
+        assert next_rel_number("100") == 100
+
+
+def test_release_on_other_job_does_not_block(app):
+    with app.app_context():
+        db.session.add(_make_release(999, 100))  # a different job holds 100
+        db.session.commit()
+        assert next_rel_number("100") == 100  # job 100 is still free
+
+
+def test_non_numeric_release_value_is_ignored(app):
+    with app.app_context():
+        db.session.add(_make_release(100, "N/A"))
+        db.session.commit()
+        assert next_rel_number("100") == 100
+
+
+def test_raises_when_every_number_taken_for_job(app):
+    with app.app_context():
+        with patch("app.procore.procore.REL_MIN", 100), \
+             patch("app.procore.procore.REL_MAX", 102):
+            for r in (100, 101, 102):
+                db.session.add(_make_release(100, r))
+            db.session.commit()
+            with pytest.raises(RuntimeError):
+                next_rel_number("100")
+
+
+def test_create_webhook_advances_past_active_job_release(app):
+    with app.app_context():
+        # Job 100 already has active job-log release 100; the global sequence would
+        # otherwise hand 100 to the new DRR. The guard must advance to 101, and the
+        # resulting job-release pair must not collide with an active release.
+        db.session.add(_make_release(100, 100))
+        db.session.commit()
+        created, record, err = _patched_create("9100", DRR_TYPE)
+        assert created is True
+        assert record.rel == 101
+        clash = Releases.query.filter_by(
+            job=100, release="101", is_archived=False
+        ).first()
+        assert clash is None
