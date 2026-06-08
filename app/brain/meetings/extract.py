@@ -68,8 +68,12 @@ def _system_prompt(today: date, people=None) -> str:
     roster = ""
     if people:
         roster = (
-            "\nKnown team members — use these EXACT first names for owner_name when the "
-            "responsible person is one of them: " + ", ".join(sorted(set(people))) + ".\n"
+            "\nKnown team members (the ONLY valid owners) — set owner_name to one of these "
+            "EXACT first names, and only when that person is clearly the one responsible: "
+            + ", ".join(sorted(set(people))) + ".\n"
+            "If the responsible person is not on this list, or you can't tell who it is, set "
+            "owner_name to null. NEVER invent an owner or name someone who isn't listed — a "
+            "wrong or out-of-org owner is worse than leaving it unassigned.\n"
         )
     return (
         "You are an operations assistant for Mile High Metal Works, a structural-steel "
@@ -87,7 +91,9 @@ def _system_prompt(today: date, people=None) -> str:
         "- Split compound asks into separate one-action items.\n"
         "- Write specific, verb-first titles (e.g. 'Send RFI 12 response to Turner for "
         "480-146'), not vague summaries ('discuss RFI').\n"
-        "- owner_name = the FIRST NAME of whoever is responsible, if identifiable.\n"
+        "- owner_name = the first name of whoever is responsible, but ONLY if they are a "
+        "real team member (see the roster above); if not, or if unsure, use null — never "
+        "guess or use a name that isn't a known team member.\n"
         "- due_date = resolve relative dates (today, Thursday, EOW, 'by the 15th') to an "
         "absolute YYYY-MM-DD from today's date.\n"
         "- gc_facing = true when it involves a GC, owner, architect, or other external party.\n"

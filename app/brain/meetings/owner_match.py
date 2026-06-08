@@ -47,8 +47,18 @@ def _norm_initials(code):
 
 
 def resolve_name_to_user(name):
-    """Resolve a full name (any order, with commas/apostrophes) to an active User id.
-    Returns user.id, or None if there's no unambiguous internal match."""
+    """Resolve a name (any order, with commas/apostrophes) to an ACTIVE User id.
+
+    THE ORG GATE: this only ever returns the id of a current active employee, or None.
+    A name that isn't a real team member, a garbled transcript token, or an ambiguous
+    match (two people share the name) yields None — we infer when we can but never assign
+    an owner who isn't in the org. All owner resolution (extracted names + inferred
+    release PM / submittal ball-in-court) funnels through here so the gate is uniform.
+
+    Tries progressively looser-but-still-unique matches: first+last → unique first name →
+    unique last name. Uniqueness is required at every step so we never guess between two
+    real users.
+    """
     if not name:
         return None
     toks = {t.lower() for t in re.split(r"[\s,]+", str(name)) if t}
@@ -61,9 +71,15 @@ def resolve_name_to_user(name):
             and u.first_name.lower() in toks and u.last_name.lower() in toks]
     if len(full) == 1:
         return full[0].id
-    # Fall back to a UNIQUE first-name match (skip if ambiguous).
+    # Then a UNIQUE first-name match (ambiguous → give up rather than guess).
     first = [u for u in users if u.first_name and u.first_name.lower() in toks]
-    return first[0].id if len(first) == 1 else None
+    if len(first) == 1:
+        return first[0].id
+    if len(first) > 1:
+        return None
+    # Last resort: a UNIQUE last-name match (e.g. transcript says only "Servold").
+    last = [u for u in users if u.last_name and u.last_name.lower() in toks]
+    return last[0].id if len(last) == 1 else None
 
 
 def resolve_pm_initials(code):

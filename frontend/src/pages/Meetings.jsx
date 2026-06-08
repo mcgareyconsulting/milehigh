@@ -153,17 +153,40 @@ export default function Meetings() {
 
     const handleGenerate = async () => {
         if (!selected) return;
+        // Regenerate (clear + rebuild) when the meeting already has items.
+        const regenerate = (selected.items || []).length > 0;
         setGenerating(true); setError(null);
         try {
-            const updated = await generateChecklist(selected.id);
-            setSelected(updated); seedDrafts(updated);
-            setMeetings(prev => prev.map(m => (m.id === updated.id ? { ...m, item_count: updated.item_count } : m)));
+            // Returns 202 with extract_status='extracting'; the poller below takes over
+            // until extraction finishes — the LLM calls run in the background.
+            const updated = await generateChecklist(selected.id, { regenerate });
+            setSelected(updated);
         } catch (err) {
             setError(err?.response?.data?.error || 'Failed to generate to-do list');
-        } finally {
             setGenerating(false);
         }
     };
+
+    // Checklist extraction runs in the background; poll the open meeting until it leaves
+    // 'extracting', then show the items (or surface the failure).
+    useEffect(() => {
+        if (selected?.extract_status !== 'extracting') return;
+        const id = selected.id;
+        let cancelled = false;
+        const tick = async () => {
+            try {
+                const m = await fetchMeeting(id);
+                if (cancelled || m.id !== id || m.extract_status === 'extracting') return;
+                setSelected(m); seedDrafts(m); setGenerating(false);
+                setMeetings(prev => prev.map(x => (x.id === m.id ? { ...x, item_count: m.item_count } : x)));
+                if (m.extract_status === 'failed') {
+                    setError(m.extract_error || 'Failed to generate to-do list');
+                }
+            } catch { /* transient — keep polling */ }
+        };
+        const h = setInterval(tick, 2500);
+        return () => { cancelled = true; clearInterval(h); };
+    }, [selected?.extract_status, selected?.id]);
 
     const handleCreateManual = async (e) => {
         e.preventDefault();
@@ -248,6 +271,9 @@ export default function Meetings() {
     const transcriptText = selected?.transcript ?? '';
     const hasTranscript = !!transcriptText.trim();
     const canGenerate = !!transcriptText.trim();
+    // True while a (possibly background) extraction is running — covers both the click
+    // we just made and a meeting opened while its run is already in flight.
+    const isGenerating = generating || selected?.extract_status === 'extracting';
 
     return (
         <div className="flex-1 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
@@ -322,9 +348,9 @@ export default function Meetings() {
                                     )}
                                 </h2>
                                 {items.length > 0 && (
-                                    <button onClick={handleGenerate} disabled={generating || !canGenerate}
+                                    <button onClick={handleGenerate} disabled={isGenerating || !canGenerate}
                                         className="text-[11px] px-2 py-1 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
-                                        {generating ? 'Regenerating…' : 'Regenerate'}
+                                        {isGenerating ? 'Regenerating…' : 'Regenerate'}
                                     </button>
                                 )}
                             </div>
@@ -353,10 +379,14 @@ export default function Meetings() {
                                 <div className="py-10 text-center">
                                     {canGenerate ? (
                                         <>
-                                            <p className="text-sm text-gray-500 dark:text-slate-400 mb-3">No to-dos yet — generate them from the transcript.</p>
-                                            <button onClick={handleGenerate} disabled={generating}
+                                            <p className="text-sm text-gray-500 dark:text-slate-400 mb-3">
+                                                {isGenerating
+                                                    ? 'Generating to-dos from the transcript — this can take a minute…'
+                                                    : 'No to-dos yet — generate them from the transcript.'}
+                                            </p>
+                                            <button onClick={handleGenerate} disabled={isGenerating}
                                                 className="px-4 py-2 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white disabled:opacity-50">
-                                                {generating ? 'Generating…' : 'Generate to-do list'}
+                                                {isGenerating ? 'Generating…' : 'Generate to-do list'}
                                             </button>
                                         </>
                                     ) : (
