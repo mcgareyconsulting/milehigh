@@ -3,7 +3,8 @@
  * schema_version: 1
  * purpose: Admin page for the meeting → to-do flow. Center lists recent meetings; opening one shows its
  *          transcript with a "Generate to-do list" button that builds a reviewable checklist (yes/no/edit
- *          owner + due). "Send Bot" (a button + modal) dispatches a Recall notetaker to a meeting link.
+ *          owner + due). "Send Bot" (a button + modal) dispatches a Recall notetaker to a meeting link;
+ *          "Paste transcript" creates a meeting from raw text (the bot-couldn't-join fallback).
  * exports:
  *   Meetings: Page component (admin-only).
  * imports_from: [react, ../utils/auth, ../services/meetingsApi]
@@ -19,8 +20,6 @@ import {
     fetchMeetings, fetchMeeting, generateChecklist,
     reviewChecklistItem, fetchAssignableUsers, scanDue, sendBot, createManualMeeting,
 } from '../services/meetingsApi';
-import { DEMO_USERS, DEMO_MEETING } from '../data/productionMeetingDemo';
-import { PRODUCTION_MEETING_TRANSCRIPT } from '../data/productionMeetingTranscript';
 
 const MEETING_TYPES = [
     { value: 'internal_draft', label: 'Internal — Draft' },
@@ -80,17 +79,7 @@ const draftFromItem = (it) => ({
     due_date: it.due_date ?? it.proposed_due_date ?? '',
 });
 
-// --- Self-contained demo (no backend / LLM / DB needed) --------------------
-// Real Jun 4 production-meeting checklist, generated from the actual Opus ingestion
-// (see ../data/productionMeetingDemo.js). Review actions on a demo meeting mutate
-// local state only. Each load gets a fresh deep copy so reviews reset on reload.
-const DEMO_TRANSCRIPT =
-    'Production meeting — June 4, 2026 (shop standup). Transcript ingested via the ' +
-    'Opus extractor; the items on the right are the agent\'s proposals awaiting review.';
-
-const buildDemoMeeting = () => JSON.parse(JSON.stringify(DEMO_MEETING));
-
-export default function Meetings({ demoMode = false }) {
+export default function Meetings() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
     const [meetings, setMeetings] = useState([]);
@@ -118,25 +107,18 @@ export default function Meetings({ demoMode = false }) {
     };
 
     useEffect(() => {
-        if (demoMode) {
-            // Public demo: no auth, no backend — load the real production meeting locally.
-            setIsAdmin(true);
-            const m = buildDemoMeeting();
-            setSelected(m); seedDrafts(m); setLoading(false);
-            return;
-        }
         checkAuth().then(u => { setIsAdmin(u?.is_admin || false); setLoading(false); });
-    }, [demoMode]);
+    }, []);
 
     const loadMeetings = useCallback(async () => {
         try { setMeetings(await fetchMeetings()); } catch { setError('Failed to load meetings'); }
     }, []);
 
     useEffect(() => {
-        if (demoMode || !isAdmin) return;
+        if (!isAdmin) return;
         loadMeetings();
         fetchAssignableUsers().then(setUsers).catch(() => {});
-    }, [demoMode, isAdmin, loadMeetings]);
+    }, [isAdmin, loadMeetings]);
 
     const openMeeting = async (id) => {
         setError(null);
@@ -170,7 +152,7 @@ export default function Meetings({ demoMode = false }) {
     };
 
     const handleGenerate = async () => {
-        if (!selected || selected.demo) return;
+        if (!selected) return;
         setGenerating(true); setError(null);
         try {
             const updated = await generateChecklist(selected.id);
@@ -202,19 +184,13 @@ export default function Meetings({ demoMode = false }) {
         }
     };
 
-    const loadSampleTranscript = () => {
-        setPasteTitle('Production meeting — Jun 4 (sample)');
-        setPasteType('internal_shop');
-        setPasteText(PRODUCTION_MEETING_TRANSCRIPT);
-    };
-
     // While any recall bot is mid-flight, poll the list so statuses update live.
     useEffect(() => {
-        if (demoMode || !isAdmin) return;
+        if (!isAdmin) return;
         if (!meetings.some(m => m.source === 'recall' && isLiveBot(m.bot_status))) return;
         const t = setInterval(loadMeetings, 8000);
         return () => clearInterval(t);
-    }, [demoMode, isAdmin, meetings, loadMeetings]);
+    }, [isAdmin, meetings, loadMeetings]);
 
     // Mirror the polled bot_status onto the open meeting; when the bot finishes,
     // re-fetch the detail so its freshly-pulled transcript shows.
@@ -247,15 +223,6 @@ export default function Meetings({ demoMode = false }) {
             owner_user_id: d.owner_user_id ? Number(d.owner_user_id) : null,
             due_date: d.due_date || null,
         };
-        // Demo meeting: mutate local state only — no backend round-trip.
-        if (selected?.demo) {
-            const cur = selected.items.find(i => i.id === itemId);
-            const updated = action === 'reject' ? { ...cur, status: 'rejected' }
-                : action === 'done' ? { ...cur, status: 'done' }
-                    : { ...cur, status: 'accepted', ...fields };
-            replaceItem(updated);
-            return;
-        }
         setBusyItem(itemId); setError(null);
         try {
             replaceItem(await reviewChecklistItem(itemId, { action, fields }));
@@ -277,56 +244,46 @@ export default function Meetings({ demoMode = false }) {
 
     const items = selected?.items || [];
     const proposedCount = items.filter(i => i.status === 'proposed').length;
-    const ownerOptions = selected?.demo ? DEMO_USERS : users;
-    const transcriptText = selected?.transcript ?? (selected?.demo ? DEMO_TRANSCRIPT : '');
-    const hasTranscript = !!(transcriptText || '').trim();
-    const canGenerate = !selected?.demo && !!(selected?.transcript || '').trim();
+    const ownerOptions = users;
+    const transcriptText = selected?.transcript ?? '';
+    const hasTranscript = !!transcriptText.trim();
+    const canGenerate = !!transcriptText.trim();
 
     return (
         <div className="flex-1 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
             {/* Header */}
             <div className="flex items-center justify-between gap-3 mb-4">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">
-                    Meetings &amp; Action Items
-                    {demoMode && <span className="ml-2 px-2 py-0.5 text-[11px] font-semibold rounded bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300 align-middle">DEMO · no login</span>}
-                </h1>
-                {!demoMode && (
-                    <div className="flex items-center gap-2">
-                        <button onClick={runScan} title="Send due-date notifications now"
-                            className="text-[11px] px-2 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
-                            Scan due
-                        </button>
-                        <button onClick={() => { setError(null); setShowPaste(true); }}
-                            className="px-3 py-1.5 text-sm font-medium rounded-lg border border-accent-300 dark:border-accent-600 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-accent-900/20">
-                            Paste transcript
-                        </button>
-                        <button onClick={() => { setError(null); setShowSendBot(true); }}
-                            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white">
-                            + Send Bot
-                        </button>
-                    </div>
-                )}
+                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Meetings &amp; Action Items</h1>
+                <div className="flex items-center gap-2">
+                    <button onClick={runScan} title="Send due-date notifications now"
+                        className="text-[11px] px-2 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
+                        Scan due
+                    </button>
+                    <button onClick={() => { setError(null); setShowPaste(true); }}
+                        className="px-3 py-1.5 text-sm font-medium rounded-lg border border-accent-300 dark:border-accent-600 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-accent-900/20">
+                        Paste transcript
+                    </button>
+                    <button onClick={() => { setError(null); setShowSendBot(true); }}
+                        className="px-3 py-1.5 text-sm font-medium rounded-lg bg-accent-500 hover:bg-accent-600 text-white">
+                        + Send Bot
+                    </button>
+                </div>
             </div>
             {scanMsg && <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">{scanMsg}</p>}
-            {error && !showSendBot && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>}
+            {error && !showSendBot && !showPaste && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-sm">{error}</div>}
 
             {/* Body: recent-meetings list (nothing open) or the opened meeting detail */}
             {!selected ? (
                 <MeetingsList meetings={meetings} onOpen={openMeeting} />
             ) : (
                 <div className="space-y-3">
-                    {!demoMode && (
-                        <button onClick={() => setSelected(null)}
-                            className="text-xs text-accent-600 dark:text-accent-300 hover:underline">← All meetings</button>
-                    )}
+                    <button onClick={() => setSelected(null)}
+                        className="text-xs text-accent-600 dark:text-accent-300 hover:underline">← All meetings</button>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                         {/* Transcript pane */}
                         <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
                             <div className="flex items-start justify-between gap-2 mb-2">
-                                <h2 className="text-sm font-semibold text-gray-800 dark:text-slate-200">
-                                    {selected.title}
-                                    {selected.demo && <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">DEMO</span>}
-                                </h2>
+                                <h2 className="text-sm font-semibold text-gray-800 dark:text-slate-200">{selected.title}</h2>
                                 {selected.source === 'recall' && selected.bot_status && (
                                     <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded capitalize ${BOT_STATUS_PILL[selected.bot_status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'} ${isLiveBot(selected.bot_status) ? 'animate-pulse' : ''}`}>
                                         {botStatusLabel(selected.bot_status)}
@@ -364,7 +321,7 @@ export default function Meetings({ demoMode = false }) {
                                         <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">{proposedCount} to review · {items.length} total</span>
                                     )}
                                 </h2>
-                                {!selected.demo && items.length > 0 && (
+                                {items.length > 0 && (
                                     <button onClick={handleGenerate} disabled={generating || !canGenerate}
                                         className="text-[11px] px-2 py-1 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
                                         {generating ? 'Regenerating…' : 'Regenerate'}
@@ -394,9 +351,7 @@ export default function Meetings({ demoMode = false }) {
                                 </ul>
                             ) : (
                                 <div className="py-10 text-center">
-                                    {selected.demo ? (
-                                        <p className="text-sm text-gray-400 dark:text-slate-500">No action items.</p>
-                                    ) : canGenerate ? (
+                                    {canGenerate ? (
                                         <>
                                             <p className="text-sm text-gray-500 dark:text-slate-400 mb-3">No to-dos yet — generate them from the transcript.</p>
                                             <button onClick={handleGenerate} disabled={generating}
@@ -429,7 +384,6 @@ export default function Meetings({ demoMode = false }) {
                 <PasteTranscriptModal
                     title={pasteTitle} type={pasteType} text={pasteText} busy={pasteBusy} error={error}
                     onTitle={setPasteTitle} onType={setPasteType} onText={setPasteText}
-                    onLoadSample={loadSampleTranscript}
                     onSubmit={handleCreateManual} onClose={() => setShowPaste(false)}
                 />
             )}
@@ -509,7 +463,7 @@ function SendBotModal({ url, name, busy, error, onUrl, onName, onSubmit, onClose
     );
 }
 
-function PasteTranscriptModal({ title, type, text, busy, error, onTitle, onType, onText, onLoadSample, onSubmit, onClose }) {
+function PasteTranscriptModal({ title, type, text, busy, error, onTitle, onType, onText, onSubmit, onClose }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
             <form onSubmit={onSubmit} onClick={e => e.stopPropagation()}
@@ -535,13 +489,7 @@ function PasteTranscriptModal({ title, type, text, busy, error, onTitle, onType,
                     className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100" />
                 {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
                 <div className="flex items-center justify-between gap-2 pt-1">
-                    <div className="flex items-center gap-2">
-                        <button type="button" onClick={onLoadSample}
-                            className="text-[11px] px-2 py-1 rounded-md border border-accent-300 dark:border-accent-600 text-accent-600 dark:text-accent-300 hover:bg-accent-50 dark:hover:bg-accent-900/20">
-                            Load Jun 4 production meeting (~70 min)
-                        </button>
-                        {text && <span className="text-[10px] text-gray-400 dark:text-slate-500">{text.length.toLocaleString()} chars</span>}
-                    </div>
+                    {text ? <span className="text-[10px] text-gray-400 dark:text-slate-500">{text.length.toLocaleString()} chars</span> : <span />}
                     <div className="flex gap-2">
                         <button type="button" onClick={onClose}
                             className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
