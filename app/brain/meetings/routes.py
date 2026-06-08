@@ -140,15 +140,39 @@ def add_manual_meeting():
 @admin_required
 def generate_checklist(meeting_id):
     """On-demand: mine the meeting's transcript into a proposed checklist (the
-    'Generate to-do list' button). Returns the meeting with its items."""
+    'Generate to-do list' button).
+
+    The extraction makes multi-minute LLM calls, so it runs in a background thread and
+    this returns 202 immediately with extract_status='extracting'; the UI polls
+    GET /meetings/<id> until it leaves that state. Running it inline used to exceed
+    gunicorn's worker timeout and 500 with no logs."""
+    from flask import current_app
+
     m = db.session.get(Meeting, meeting_id)
     if not m:
         return jsonify({'error': 'not found'}), 404
     if not (m.transcript or '').strip():
         return jsonify({'error': 'no transcript to generate from yet'}), 400
+
+    # Idempotent: if a run is already in flight (and not stale), report it rather than
+    # launching a duplicate.
+    in_flight = (
+        m.extract_status == 'extracting' and m.extract_started_at
+        and datetime.utcnow() - m.extract_started_at < service.EXTRACT_STALE_AFTER
+    )
+    if in_flight:
+        return jsonify(m.to_dict(include_items=True)), 202
+
     data = request.get_json(silent=True) or {}
-    service.extract_into_meeting(m, regenerate=bool(data.get('regenerate')))
-    return jsonify(m.to_dict(include_items=True))
+    m.extract_status = 'extracting'
+    m.extract_error = None
+    m.extract_started_at = datetime.utcnow()
+    db.session.commit()
+    service.start_extraction(
+        current_app._get_current_object(), m.id,
+        regenerate=bool(data.get('regenerate')),
+    )
+    return jsonify(m.to_dict(include_items=True)), 202
 
 
 @brain_bp.route('/meetings/<int:meeting_id>', methods=['GET'])

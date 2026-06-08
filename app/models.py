@@ -956,6 +956,13 @@ class Meeting(db.Model):
     extract_input_tokens = db.Column(db.Integer, nullable=True)
     extract_output_tokens = db.Column(db.Integer, nullable=True)
     extract_cost_usd = db.Column(db.Float, nullable=True)
+    # On-demand checklist extraction runs in a background thread (the web dyno has no
+    # APScheduler — that's the IS_RENDER_SCHEDULER process), because the LLM calls take
+    # minutes and would blow past gunicorn's worker timeout if held in the request. The
+    # UI polls these instead of waiting on the request. idle|extracting|done|failed.
+    extract_status = db.Column(db.String(20), nullable=True, default='idle')
+    extract_error = db.Column(db.Text, nullable=True)
+    extract_started_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     extracted_at = db.Column(db.DateTime, nullable=True)  # when checklist items were generated
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -983,6 +990,8 @@ class Meeting(db.Model):
             'extract_input_tokens': self.extract_input_tokens,
             'extract_output_tokens': self.extract_output_tokens,
             'extract_cost_usd': self.extract_cost_usd,
+            'extract_status': self.extract_status,
+            'extract_error': self.extract_error,
         }
         if include_items:
             items = self.items.order_by(ChecklistItem.id).all()

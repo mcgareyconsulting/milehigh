@@ -189,3 +189,107 @@ def test_create_meeting_endpoint_requires_transcript(app, client):
     with patch("app.auth.utils.get_current_user", return_value=admin):
         resp = client.post("/brain/meetings", json={"title": "x"})
     assert resp.status_code == 400
+
+
+def test_generate_checklist_is_async_returns_202(app, client):
+    """The button kicks off background extraction: 202 + extracting, no inline LLM call
+    (running it inline would exceed gunicorn's worker timeout — the production 500)."""
+    admin = make_user(REVIEWER, first_name="Bill", is_admin=True)
+    with app.app_context():
+        m = Meeting(title="Shop", meeting_type="internal_shop",
+                    source="manual", transcript="Luis: refab the treads by Thursday")
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    with patch("app.auth.utils.get_current_user", return_value=admin), \
+         patch("app.brain.meetings.service.start_extraction") as mock_start:
+        resp = client.post(f"/brain/meetings/{mid}/generate-checklist", json={})
+
+    assert resp.status_code == 202
+    assert resp.get_json()["extract_status"] == "extracting"
+    mock_start.assert_called_once()
+
+    # A second click while a (fresh) run is in flight is a no-op, not a duplicate launch.
+    with patch("app.auth.utils.get_current_user", return_value=admin), \
+         patch("app.brain.meetings.service.start_extraction") as mock_again:
+        resp2 = client.post(f"/brain/meetings/{mid}/generate-checklist", json={})
+    assert resp2.status_code == 202
+    mock_again.assert_not_called()
+
+
+def test_run_extraction_job_marks_done_and_creates_items(app):
+    """The background job mines the transcript and stamps the meeting done."""
+    make_user(REVIEWER, first_name="Bill", is_admin=True)
+    with app.app_context():
+        m = Meeting(title="Shop", source="manual", extract_status="extracting",
+                    transcript="(stub)")
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    with patch("app.brain.meetings.service.extract",
+               return_value=_extract_ret([_items(title="refab treads")])):
+        service._run_extraction_job(app, mid, False)
+
+    with app.app_context():
+        done = db.session.get(Meeting, mid)
+        assert done.extract_status == "done" and done.extract_error is None
+        assert ChecklistItem.query.filter_by(meeting_id=mid).count() == 1
+
+
+def test_owner_name_out_of_org_stays_unassigned(app):
+    """A name that isn't an active employee (e.g. a garbled transcript token) must NOT be
+    matched to anyone — the to-do is left unassigned for the reviewer."""
+    make_user("dservold@mhmw.com", first_name="David", last_name="Servold", is_admin=True)
+    proposed = [
+        _items(title="real person task", owner_name="David"),     # in-org → matches
+        _items(title="ghost task", owner_name="Holden"),          # not an employee → null
+        _items(title="garbled token", owner_name="Ror"),          # garbage → null
+    ]
+    with patch("app.brain.meetings.service.extract", return_value=_extract_ret(proposed)):
+        meeting = service.create_meeting_with_extraction(
+            title="m", meeting_type="internal_shop", transcript="x",
+        )
+    items = meeting.items.order_by(ChecklistItem.id).all()
+    assert items[0].proposed_owner_user_id is not None   # David resolved
+    assert items[1].proposed_owner_user_id is None        # Holden dropped
+    assert items[2].proposed_owner_user_id is None        # Ror dropped
+
+
+def test_resolve_name_to_user_gate_and_inference(app):
+    from app.brain.meetings.owner_match import resolve_name_to_user
+    david = make_user("dservold@mhmw.com", first_name="David", last_name="Servold")
+    make_user("dcortez@mhmw.com", first_name="David", last_name="Cortez")  # dup first name
+
+    assert resolve_name_to_user("Holden") is None          # not in org
+    assert resolve_name_to_user("Ror") is None             # garbled token
+    assert resolve_name_to_user("") is None
+    assert resolve_name_to_user("David Servold") == david.id   # first+last
+    assert resolve_name_to_user("Servold") == david.id          # unique last name
+    assert resolve_name_to_user("David") is None                # ambiguous first name → no guess
+
+
+def test_inactive_user_is_not_matched(app):
+    from app.brain.meetings.owner_match import resolve_name_to_user
+    make_user("gone@mhmw.com", first_name="Gone", last_name="Away", is_active=False)
+    assert resolve_name_to_user("Gone") is None
+    assert resolve_name_to_user("Gone Away") is None
+
+
+def test_run_extraction_job_records_failure(app):
+    """A failing extraction is caught, logged, and recorded — never a silent crash."""
+    with app.app_context():
+        m = Meeting(title="Shop", source="manual", extract_status="extracting",
+                    transcript="(stub)")
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    with patch("app.brain.meetings.service.extract", side_effect=RuntimeError("boom")):
+        service._run_extraction_job(app, mid, False)
+
+    with app.app_context():
+        failed = db.session.get(Meeting, mid)
+        assert failed.extract_status == "failed"
+        assert "boom" in (failed.extract_error or "")

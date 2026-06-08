@@ -5,6 +5,7 @@ feature-command split without the event/outbox machinery — checklist items are
 release-scoped and have no async external push.
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 
 from app.config import Config as cfg
@@ -21,6 +22,50 @@ NOTIFY_DEDUP_HOURS = 20    # don't re-ping the same item within this window
 _EDITABLE = ("title", "detail", "item_type", "gc_facing", "owner_user_id",
              "due_date", "release_id", "submittal_id")
 
+# The web dyno runs no APScheduler (that's the IS_RENDER_SCHEDULER process), so the
+# multi-minute extraction can't block the request — gunicorn's worker timeout would
+# SIGKILL the worker mid-call and the request 500s with no logs. Offload to an
+# in-process pool, mirroring how Trello sync hands work to a ThreadPoolExecutor.
+_EXTRACT_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="meeting-extract")
+# A run whose started_at is older than this is presumed dead (worker recycled mid-run)
+# and may be relaunched; until then a repeat Generate click is a no-op.
+EXTRACT_STALE_AFTER = timedelta(minutes=10)
+
+
+def start_extraction(app, meeting_id, *, regenerate=False):
+    """Queue background checklist extraction for a meeting. The caller must have already
+    flipped extract_status to 'extracting' and committed; this only runs the work
+    off-thread and returns immediately."""
+    _EXTRACT_POOL.submit(_run_extraction_job, app, meeting_id, regenerate)
+
+
+def _run_extraction_job(app, meeting_id, regenerate):
+    """Background body of an extraction: mine the transcript, then stamp the meeting
+    done/failed. Always logs and never lets the worker thread die silently — this is the
+    error path that was invisible when extraction ran (and timed out) inside the request."""
+    with app.app_context():
+        try:
+            meeting = db.session.get(Meeting, meeting_id)
+            if not meeting:
+                logger.warning("extract_job_meeting_missing", meeting_id=meeting_id)
+                return
+            extract_into_meeting(meeting, regenerate=regenerate)
+            meeting.extract_status = "done"
+            meeting.extract_error = None
+            db.session.commit()
+            logger.info("extract_job_done", meeting_id=meeting_id)
+        except Exception as e:  # noqa: BLE001 — record + log, never crash the worker
+            logger.error("extract_job_failed", meeting_id=meeting_id,
+                         error=str(e), exc_info=True)
+            db.session.rollback()
+            failed = db.session.get(Meeting, meeting_id)
+            if failed:
+                failed.extract_status = "failed"
+                failed.extract_error = str(e)[:1000]
+                db.session.commit()
+        finally:
+            db.session.remove()
+
 
 def get_reviewer():
     """The user who reviews post-meeting checklists (MVP: Bill, by config)."""
@@ -28,13 +73,15 @@ def get_reviewer():
 
 
 def _resolve_owner_id(owner_name):
-    if not owner_name:
-        return None
-    u = User.query.filter(
-        db.func.lower(User.first_name) == str(owner_name).strip().lower(),
-        User.is_active.is_(True),
-    ).first()
-    return u.id if u else None
+    """Resolve an extracted owner_name to an ACTIVE user id, or None.
+
+    Org gate: a name that isn't a current employee (out-of-org, a garbled transcript
+    token like 'RO/Ror', or ambiguous) yields None — the to-do is left unassigned for the
+    reviewer rather than guessed. Delegates to the same resolver the job-inference layer
+    uses (owner_match.resolve_name_to_user), so first / last / full-name handling and the
+    org gate stay consistent across both owner sources."""
+    from app.brain.meetings.owner_match import resolve_name_to_user
+    return resolve_name_to_user(owner_name)
 
 
 def _parse_due(value):
