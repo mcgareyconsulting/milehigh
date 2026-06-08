@@ -169,25 +169,18 @@ def test_rel_skips_consecutive_taken_numbers(app):
         assert next_rel_number("100") == 103
 
 
-def test_archived_release_does_not_block(app):
+@pytest.mark.parametrize("release_job,kwargs,reason", [
+    (100, {"is_archived": True}, "archived release is reusable"),
+    (100, {"is_active": False}, "inactive release is reusable"),
+    (999, {}, "active release on a different job doesn't block"),
+])
+def test_release_does_not_block_rel(app, release_job, kwargs, reason):
+    # In each case job 100's release 100 is free, so the global sequence's first
+    # candidate (REL_MIN) is handed out unchanged.
     with app.app_context():
-        db.session.add(_make_release(100, 100, is_archived=True))
+        db.session.add(_make_release(release_job, 100, **kwargs))
         db.session.commit()
-        assert next_rel_number("100") == 100  # archived -> number is reusable
-
-
-def test_inactive_release_does_not_block(app):
-    with app.app_context():
-        db.session.add(_make_release(100, 100, is_active=False))
-        db.session.commit()
-        assert next_rel_number("100") == 100
-
-
-def test_release_on_other_job_does_not_block(app):
-    with app.app_context():
-        db.session.add(_make_release(999, 100))  # a different job holds 100
-        db.session.commit()
-        assert next_rel_number("100") == 100  # job 100 is still free
+        assert next_rel_number("100") == 100, reason
 
 
 def test_non_numeric_release_value_is_ignored(app):

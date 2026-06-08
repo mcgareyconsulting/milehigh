@@ -42,6 +42,7 @@ from app.procore.helpers import (
 )
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
 from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
+from app.api.helpers import active_releases_filter
 
 
 logger = logging.getLogger(__name__)
@@ -53,15 +54,28 @@ REL_MIN = 100
 REL_MAX = 999
 
 
+def _to_int_or_none(value):
+    """Coerce ``value`` to int, or return None if it isn't a clean integer."""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _next_in_range(value):
+    """Next value in the REL_MIN..REL_MAX cycle, wrapping REL_MAX -> REL_MIN."""
+    nxt = value + 1
+    return REL_MIN if nxt > REL_MAX else nxt
+
+
 def _active_release_numbers_for_job(job):
     """Release numbers held by ACTIVE job-log releases for ``job``.
 
     The uniqueness that matters is the job-release pair (``Releases.job`` +
     ``Releases.release``): a Rel handed to a DRR submittal must not collide with
-    an active job-log release on the same job. "Active" means not archived
-    (``is_archived`` is False) and not explicitly deactivated (``is_active`` is
-    not False); a NULL ``is_active`` counts as active, matching the column
-    default, so an ambiguous row still blocks reuse (leak-proof bias).
+    an active job-log release on the same job. "Active" reuses the centralized
+    ``active_releases_filter`` (not archived; ``is_active`` True or NULL), so a
+    NULL ``is_active`` still blocks reuse (leak-proof bias).
 
     ``Releases.job`` is an integer and ``Releases.release`` a string, while the
     submittal carries ``project_number`` (the same job number, per spec) and an
@@ -71,28 +85,23 @@ def _active_release_numbers_for_job(job):
     """
     if job is None:
         return set()
-    try:
-        job_int = int(str(job).strip())
-    except (TypeError, ValueError):
+    job_int = _to_int_or_none(job)
+    if job_int is None:
+        logger.warning(
+            "Rel collision guard inert: project_number %r is not a valid job number", job
+        )
         return set()
 
     rows = (
         db.session.query(Releases.release)
-        .filter(
-            Releases.job == job_int,
-            Releases.is_archived.is_(False),
-            Releases.is_active.isnot(False),
-        )
+        .filter(Releases.job == job_int, active_releases_filter())
         .all()
     )
     taken = set()
     for (value,) in rows:
-        if value is None:
-            continue
-        try:
-            taken.add(int(str(value).strip()))
-        except (TypeError, ValueError):
-            continue
+        number = _to_int_or_none(value)
+        if number is not None:
+            taken.add(number)
     return taken
 
 
@@ -119,21 +128,14 @@ def next_rel_number(job=None):
         .order_by(Submittals.rel_assigned_at.desc(), Submittals.id.desc())
         .first()
     )
-    if last is None or last.rel is None:
-        start = REL_MIN
-    else:
-        start = last.rel + 1
-        if start > REL_MAX:
-            start = REL_MIN
+    start = _next_in_range(last.rel) if last and last.rel is not None else REL_MIN
 
     taken = _active_release_numbers_for_job(job)
     candidate = start
     for _ in range(REL_MAX - REL_MIN + 1):
         if candidate not in taken:
             return candidate
-        candidate += 1
-        if candidate > REL_MAX:
-            candidate = REL_MIN
+        candidate = _next_in_range(candidate)
 
     raise RuntimeError(
         f"No free Rel number in [{REL_MIN}, {REL_MAX}] for job {job!r}: "
