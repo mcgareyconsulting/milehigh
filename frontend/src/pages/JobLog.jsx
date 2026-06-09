@@ -31,7 +31,6 @@ import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
-import ViewToggle, { useViewMode } from '../components/ViewToggle';
 import ReleasesViewSwitcher from '../components/ReleasesViewSwitcher';
 import Dropdown, { DropdownItem } from '../components/Dropdown';
 import JobLogCardGrid from '../components/JobLogCardGrid';
@@ -157,12 +156,9 @@ function JobLog() {
     const [renumbering, setRenumbering] = useState(false);
     const tableScrollRef = useRef(null);
 
-    // View mode. Device default: phone → big single card, tablet → expandable cards, desktop → table.
-    // The toggle is admin-only; non-admins always follow the device.
-    const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
+    // View mode follows the device: phone → big single card, tablet → expandable cards, desktop → table.
     const { isMobile, isTablet } = useBreakpoint();
-    const deviceView = isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table';
-    const effectiveView = (isAdmin && viewMode !== 'auto') ? viewMode : deviceView;
+    const effectiveView = isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table';
 
     // Use the filters hook
     const {
@@ -730,10 +726,8 @@ function JobLog() {
                                     </div>
                                 )}
 
-                                {/* Row 2: view mode + primary CTA + Actions/Views dropdowns + project chevron */}
+                                {/* Row 2: primary CTA + Actions/Projects + quick filters + view switcher + project chevron */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                    {isAdmin && <ViewToggle value={viewMode} onChange={setViewMode} />}
-
                                     <button
                                         onClick={handleReleaseClick}
                                         className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
