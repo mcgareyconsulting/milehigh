@@ -32,6 +32,7 @@ import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
 import ViewToggle, { useViewMode } from '../components/ViewToggle';
+import ReleasesViewSwitcher from '../components/ReleasesViewSwitcher';
 import Dropdown, { DropdownItem } from '../components/Dropdown';
 import JobLogCardGrid from '../components/JobLogCardGrid';
 import JobLogRowList from '../components/JobLogRowList';
@@ -745,7 +746,6 @@ function JobLog() {
                                         <DropdownItem onClick={handlePrint} disabled={!hasData || loading || !reviewMode || printing}>
                                             {printing ? '⏳ Building…' : '🖨️ Print'}
                                         </DropdownItem>
-                                        <DropdownItem onClick={() => navigate('/pm-board')}>📋 PM Board</DropdownItem>
                                         <DropdownItem onClick={() => navigate('/archive')}>🗄️ Archive</DropdownItem>
                                         {isAdmin && (
                                             <DropdownItem onClick={handleExportCSV} disabled={!hasData || loading}>⬇️ Export CSV</DropdownItem>
@@ -791,6 +791,9 @@ function JobLog() {
                                     />
 
                                     <div className="flex-1" />
+
+                                    {/* Table | Board | Timeline — instant view switching over the shared releases dataset */}
+                                    <ReleasesViewSwitcher />
 
                                     {/* Project filter buttons — discreet chevron toggle, collapsed by default */}
                                     <button

@@ -3,27 +3,25 @@
  * schema_version: 1
  * purpose: Project-manager board offering list and Gantt-timeline views of active jobs for high-level scheduling oversight.
  * exports:
- *   PMBoard: Page component toggling between PMBoardList and GanttChart views of job data
- * imports_from: [react, react-router-dom, ../context/ReleasesContext, ../components/PMBoardList, ../components/GanttChart]
+ *   PMBoard: Page component rendering PMBoardList or GanttChart based on the ?view= search param
+ * imports_from: [react, react-router-dom, ../context/ReleasesContext, ../components/PMBoardList, ../components/GanttChart, ../components/ReleasesViewSwitcher]
  * imported_by: [App.jsx]
  * invariants:
- *   - View mode toggles between 'list' and 'timeline' without re-fetching data
+ *   - View mode derives from the URL (?view=timeline → Gantt, otherwise list), so the timeline is deep-linkable and the ReleasesViewSwitcher is the single source of truth
+ *   - Switching views never re-fetches data (shared ReleasesProvider)
  * updated_by_agent: 2026-05-04T00:00:00Z (Job-Log style chrome)
  */
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useReleases } from '../context/ReleasesContext';
 import PMBoardList from '../components/PMBoardList';
 import GanttChart from '../components/GanttChart';
+import ReleasesViewSwitcher from '../components/ReleasesViewSwitcher';
 
 function PMBoard() {
-    const navigate = useNavigate();
     const { jobs, loading, error: fetchError, refetch } = useReleases();
-    const [viewMode, setViewMode] = useState('list');
-
-    const pillBase = 'px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap';
-    const pillActive = `${pillBase} bg-blue-700 text-white`;
-    const pillInactive = `${pillBase} bg-white dark:bg-slate-600 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500`;
+    const [searchParams] = useSearchParams();
+    const viewMode = searchParams.get('view') === 'timeline' ? 'timeline' : 'list';
 
     return (
         <div className="w-full h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-50 via-accent-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-2 px-2 flex flex-col" style={{ width: '100%', minWidth: '100%' }}>
@@ -33,25 +31,8 @@ function PMBoard() {
                         <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-sm font-bold text-gray-700 dark:text-slate-200 mr-1">PM Board</span>
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    className={viewMode === 'list' ? pillActive : pillInactive}
-                                >
-                                    List
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('timeline')}
-                                    className={viewMode === 'timeline' ? pillActive : pillInactive}
-                                >
-                                    Timeline
-                                </button>
                                 <div className="flex-1" />
-                                <button
-                                    onClick={() => navigate('/job-log')}
-                                    className={pillInactive}
-                                >
-                                    📋 Job Log
-                                </button>
+                                <ReleasesViewSwitcher />
                             </div>
                         </div>
 
