@@ -4,7 +4,7 @@
  * purpose: Main job log page where users view, filter, reorder, and edit active job releases synced from Trello and Excel.
  * exports:
  *   JobLog: Page component with filterable job table, drag-and-drop row reordering, CSV release import, and jump-to-highlight support
- * imports_from: [react, react-router-dom, ../hooks/useJumpToHighlight, ../hooks/useJobsDataFetching, ../hooks/useJobsFilters, ../hooks/useJobsDragAndDrop, ../components/JobsTableRow, ../services/jobsApi]
+ * imports_from: [react, react-router-dom, ../hooks/useJumpToHighlight, ../context/ReleasesContext, ../hooks/useJobsFilters, ../hooks/useJobsDragAndDrop, ../components/JobsTableRow, ../services/jobsApi]
  * imported_by: [App.jsx]
  * invariants:
  *   - Admin-only actions: drag reorder, CSV release import, archive
@@ -15,7 +15,7 @@ import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react'
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
-import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
+import { useReleases } from '../context/ReleasesContext';
 import { useJobsFilters } from '../hooks/useJobsFilters';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import JobLogQuickFilters from '../components/JobLogQuickFilters';
@@ -111,7 +111,7 @@ const compareSameJob = (a, b) => {
 function JobLog() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useJobsDataFetching();
+    const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useReleases();
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [csvData, setCsvData] = useState('');
     const [parsedPreview, setParsedPreview] = useState(null);

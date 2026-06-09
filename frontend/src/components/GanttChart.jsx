@@ -4,7 +4,7 @@
  * purpose: Visualizes installer release windows as a Gantt-style timeline with day-snap drag, resize, and horizontal scroll for prototype scheduling.
  * exports:
  *   GanttChart: Day-snap timeline with move/resize drag interactions; week-snap navigation; horizontal scroll for multi-week visibility
- * imports_from: [react, ../services/jobsApi]
+ * imports_from: [react, ../hooks/useGanttProjects]
  * imported_by: [frontend/src/pages/PMBoard.jsx]
  * invariants:
  *   - Drag overrides live in component state only; never persisted to backend
@@ -14,7 +14,7 @@
  * updated_by_agent: 2026-05-04T00:00:00Z (timeline drag prototype)
  */
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { jobsApi } from '../services/jobsApi';
+import { useGanttProjects } from '../hooks/useGanttProjects';
 
 const addDays = (isoDate, days) => {
     const d = new Date(isoDate + 'T00:00:00');
@@ -57,10 +57,10 @@ const DAY_GRID_STYLE = {
 };
 
 function GanttChart({ filterComplete = false }) {
-    const [projects, setProjects] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [initialLoad, setInitialLoad] = useState(true);
-    const [error, setError] = useState(null);
+    const { projects, loading, error } = useGanttProjects({ filterComplete });
+    // The chart shows its spinner only on the very first load, before any
+    // projects exist; thereafter the shared dataset stays warm across re-renders.
+    const initialLoad = loading && projects.length === 0;
     const [hoveredItem, setHoveredItem] = useState(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const [overrides, setOverrides] = useState({});
@@ -73,63 +73,10 @@ function GanttChart({ filterComplete = false }) {
     // Drag-driven re-renders don't set this, so the chart never auto-scrolls mid-drag.
     const scrollIntentRef = useRef(null);
 
+    // Drag overrides are keyed by job-release; the project set changes when the
+    // Complete filter toggles, so clear stale overrides to avoid orphan bars.
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-
-                const [ganttData, jobs] = await Promise.all([
-                    jobsApi.fetchGanttData(),
-                    filterComplete ? jobsApi.fetchAllJobs() : Promise.resolve([])
-                ]);
-
-                let filteredProjects = ganttData.projects || [];
-
-                if (filterComplete && jobs.length > 0) {
-                    const nonCompleteJobs = new Set();
-                    jobs.forEach(job => {
-                        if (job['Stage'] !== 'Complete') {
-                            const jobNum = String(job['Job #'] || '').trim();
-                            const releaseNum = String(job['Release #'] || '').trim();
-                            if (jobNum && releaseNum) {
-                                nonCompleteJobs.add(`${jobNum}-${releaseNum}`);
-                            }
-                        }
-                    });
-
-                    filteredProjects = filteredProjects
-                        .map(project => {
-                            const filteredReleases = project.releases.filter(release => {
-                                const jobNum = String(release.job || '').trim();
-                                const releaseNum = String(release.release || '').trim();
-                                const jobKey = `${jobNum}-${releaseNum}`;
-                                return nonCompleteJobs.has(jobKey);
-                            });
-
-                            if (filteredReleases.length === 0) {
-                                return null;
-                            }
-
-                            return {
-                                ...project,
-                                releases: filteredReleases
-                            };
-                        })
-                        .filter(project => project !== null);
-                }
-
-                setProjects(filteredProjects);
-                setOverrides({});
-            } catch (err) {
-                setError(err.message || 'Failed to load Gantt chart data');
-            } finally {
-                setLoading(false);
-                setInitialLoad(false);
-            }
-        };
-
-        fetchData();
+        setOverrides({});
     }, [filterComplete]);
 
     const releaseKey = (release) => `${release.job}-${release.release}`;

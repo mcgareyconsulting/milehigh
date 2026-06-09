@@ -1,18 +1,20 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Manages cursor-based incremental job fetching and 30-second polling so the Job Log stays live without full reloads.
+ * purpose: App-level store for the releases dataset — lifts the cursor-merge + 30s polling engine out of useJobsDataFetching so Job Log, PM Board, and the Timeline share one load that survives navigation.
  * exports:
- *   useJobsDataFetching: Hook returning jobs, columns, loading/error state, refetch, and fetchAll handles
+ *   ReleasesProvider: Provider that fetches all releases once (gated on `enabled`) then polls; holds jobs/columns/loading/error/lastUpdated
+ *   useReleases: Accessor hook (throws outside the provider); returns the same shape the old useJobsDataFetching hook returned
+ *   mergeJobs: Pure cursor-merge reducer (add/update/soft-delete/archive removal + id sort) — exported for unit tests
  * imports_from: [react, ../services/jobsApi]
- * imported_by: [../pages/JobLog.jsx, ../pages/PMBoard.jsx]
+ * imported_by: [../components/AppShell.jsx, ../pages/JobLog.jsx, ../pages/PMBoard.jsx]
  * invariants:
- *   - Cursor timestamp is persisted in localStorage; initial mount always fetches all pages then sets cursor
+ *   - Cursor timestamp is persisted in localStorage (key jobLogCursorTimestamp); initial mount fetches all pages then sets the cursor
  *   - Polling pauses when the browser tab is hidden and resumes with an immediate fetch on visibility
  *   - Soft-deleted or archived jobs (is_active=false / is_archived=true) are removed from the in-memory array on merge
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Initial fetch + polling only run while `enabled` is true (prevents 401 spam before login)
  */
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 
 // localStorage keys
@@ -32,7 +34,67 @@ const setCursorTimestamp = (timestamp) => {
     }
 };
 
-export function useJobsDataFetching() {
+/**
+ * Merge a batch of new/updated jobs from a cursor poll into the previous array.
+ *
+ * Pure reducer extracted from the old useJobsDataFetching merge block so it can
+ * be unit tested. Semantics are unchanged:
+ *  - empty incoming → return prevJobs unchanged (referential no-op)
+ *  - is_active=false or is_archived=true → remove that id from the array
+ *  - otherwise add/update by id
+ *  - result sorted ascending by id for stable order
+ */
+export function mergeJobs(prevJobs, incomingJobs) {
+    const newJobsList = incomingJobs || [];
+    const prevCount = prevJobs.length;
+
+    if (newJobsList.length === 0) {
+        // No new jobs, return existing array unchanged
+        console.log('[CURSOR] No new jobs, keeping existing array unchanged');
+        return prevJobs;
+    }
+
+    // Create a map of existing jobs by ID for quick lookup
+    const jobsMap = new Map(prevJobs.map(job => [job.id, job]));
+    const existingIds = new Set(prevJobs.map(job => job.id));
+
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    // Update or add jobs from the new list
+    newJobsList.forEach(newJob => {
+        if (newJob.is_active === false || newJob.is_archived === true) {
+            // Soft-deleted or archived — remove from active job log
+            if (jobsMap.has(newJob.id)) {
+                jobsMap.delete(newJob.id);
+                console.log(`[CURSOR] Removing ${newJob.is_archived ? 'archived' : 'deleted'} job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
+            }
+            return;
+        }
+        if (existingIds.has(newJob.id)) {
+            updatedCount++;
+            console.log(`[CURSOR] Updating existing job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
+        } else {
+            addedCount++;
+            console.log(`[CURSOR] Adding new job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
+        }
+        jobsMap.set(newJob.id, newJob);
+    });
+
+    // Convert map back to array, maintaining order
+    const mergedJobs = Array.from(jobsMap.values());
+
+    // Sort by id to maintain consistent order
+    mergedJobs.sort((a, b) => (a.id || 0) - (b.id || 0));
+
+    console.log(`[CURSOR] Merge complete: ${prevCount} -> ${mergedJobs.length} jobs (${addedCount} added, ${updatedCount} updated)`);
+
+    return mergedJobs;
+}
+
+const ReleasesContext = createContext(null);
+
+export function ReleasesProvider({ children, enabled = true }) {
     const [jobs, setJobs] = useState([]);
     const [columns, setColumns] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -61,60 +123,13 @@ export function useJobsDataFetching() {
                 setCursorTimestamp(data.latest_timestamp);
                 console.log(`[CURSOR] Updated cursor timestamp to: ${data.latest_timestamp}`);
             } else if (newJobsList.length > 0) {
-                // If no latest_timestamp but we have jobs, use the last job's timestamp
-                // This shouldn't happen, but handle it gracefully
-                const lastJob = newJobsList[newJobsList.length - 1];
-                // Note: We'd need to get the actual last_updated_at from the job if available
+                // No latest_timestamp but jobs were returned — shouldn't happen;
+                // log and leave the cursor untouched so the next poll retries.
                 console.warn('[CURSOR] No latest_timestamp in response, but jobs were returned');
             }
 
             // Merge new/updated jobs into existing jobs array
-            setJobs(prevJobs => {
-                const prevCount = prevJobs.length;
-
-                if (newJobsList.length === 0) {
-                    // No new jobs, return existing array unchanged
-                    console.log('[CURSOR] No new jobs, keeping existing array unchanged');
-                    return prevJobs;
-                }
-
-                // Create a map of existing jobs by ID for quick lookup
-                const jobsMap = new Map(prevJobs.map(job => [job.id, job]));
-                const existingIds = new Set(prevJobs.map(job => job.id));
-
-                let addedCount = 0;
-                let updatedCount = 0;
-
-                // Update or add jobs from the new list
-                newJobsList.forEach(newJob => {
-                    if (newJob.is_active === false || newJob.is_archived === true) {
-                        // Soft-deleted or archived — remove from active job log
-                        if (jobsMap.has(newJob.id)) {
-                            jobsMap.delete(newJob.id);
-                            console.log(`[CURSOR] Removing ${newJob.is_archived ? 'archived' : 'deleted'} job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
-                        }
-                        return;
-                    }
-                    if (existingIds.has(newJob.id)) {
-                        updatedCount++;
-                        console.log(`[CURSOR] Updating existing job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
-                    } else {
-                        addedCount++;
-                        console.log(`[CURSOR] Adding new job: id=${newJob.id}, Job #=${newJob['Job #']}, Release #=${newJob['Release #']}`);
-                    }
-                    jobsMap.set(newJob.id, newJob);
-                });
-
-                // Convert map back to array, maintaining order
-                const mergedJobs = Array.from(jobsMap.values());
-
-                // Sort by id to maintain consistent order
-                mergedJobs.sort((a, b) => (a.id || 0) - (b.id || 0));
-
-                console.log(`[CURSOR] Merge complete: ${prevCount} -> ${mergedJobs.length} jobs (${addedCount} added, ${updatedCount} updated)`);
-
-                return mergedJobs;
-            });
+            setJobs(prevJobs => mergeJobs(prevJobs, newJobsList));
 
             // Get columns from first job if available (use existing or new)
             if (newJobsList.length > 0) {
@@ -191,17 +206,26 @@ export function useJobsDataFetching() {
         }
     }, []);
 
-    // Fetch all jobs on mount (paginated to get complete dataset)
+    // Fetch all jobs on mount (paginated to get complete dataset).
+    // Gated on `enabled` so no /brain/* requests fire before login.
     useEffect(() => {
+        if (!enabled) {
+            // Provider survives logout (AppShell stays mounted), so reset the
+            // guard — the next login must re-sync the full dataset instead of
+            // serving the previous session's snapshot.
+            hasFetchedAllRef.current = false;
+            return;
+        }
         // Use ref to prevent duplicate fetches (handles React Strict Mode double-invocation)
         if (!hasFetchedAllRef.current) {
             hasFetchedAllRef.current = true;
             fetchAllData();
         }
-    }, [fetchAllData]);
+    }, [enabled, fetchAllData]);
 
     // Poll for updates every 30 seconds, pauses when tab is not visible to save resources
     useEffect(() => {
+        if (!enabled) return;
         let intervalId = null;
         let visibilityChangeHandler = null;
 
@@ -253,9 +277,9 @@ export function useJobsDataFetching() {
             stopPolling();
             document.removeEventListener('visibilitychange', visibilityChangeHandler);
         };
-    }, [fetchData]);
+    }, [enabled, fetchData]);
 
-    return {
+    const value = useMemo(() => ({
         jobs,
         columns,
         loading,
@@ -263,6 +287,19 @@ export function useJobsDataFetching() {
         lastUpdated,
         refetch: fetchData,
         fetchAll: fetchAllData,
-    };
+    }), [jobs, columns, loading, error, lastUpdated, fetchData, fetchAllData]);
+
+    return (
+        <ReleasesContext.Provider value={value}>
+            {children}
+        </ReleasesContext.Provider>
+    );
 }
 
+export function useReleases() {
+    const ctx = useContext(ReleasesContext);
+    if (ctx === null) {
+        throw new Error('useReleases must be used within a ReleasesProvider');
+    }
+    return ctx;
+}

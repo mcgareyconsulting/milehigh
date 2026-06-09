@@ -7,12 +7,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Backend
 ```bash
 python run.py              # Run Flask app on http://localhost:8000
-flask db migrate -m "msg"  # Generate migration from model changes
-flask db upgrade           # Apply migrations
 pytest                     # Run all tests
 pytest tests/dwl/          # Run a specific test suite
 pytest tests/test_hours_summary.py  # Run a single test file
 ```
+
+There is no Alembic. Schema changes are made by editing `app/models.py` and
+shipping a standalone, idempotent migration script under `migrations/` (each
+script infers the DB URL from env/CLI and inspects the schema before mutating
+it). Run a migration per environment, e.g.:
+```bash
+python migrations/add_releases_submittals_indexes.py            # uses env/.env DB URL
+python migrations/add_releases_submittals_indexes.py --database-url postgresql://...
+```
+Clone `migrations/add_index_on_jobs_last_updated_at.py` as the template for new
+ones. Scripts are safe to re-run (existing objects are skipped).
 
 ### Frontend
 ```bash

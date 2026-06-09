@@ -4,7 +4,7 @@
  * purpose: Project-manager board offering list and Gantt-timeline views of active jobs for high-level scheduling oversight.
  * exports:
  *   PMBoard: Page component toggling between PMBoardList and GanttChart views of job data
- * imports_from: [react, react-router-dom, ../hooks/useJobsDataFetching, ../components/PMBoardList, ../components/GanttChart]
+ * imports_from: [react, react-router-dom, ../context/ReleasesContext, ../components/PMBoardList, ../components/GanttChart]
  * imported_by: [App.jsx]
  * invariants:
  *   - View mode toggles between 'list' and 'timeline' without re-fetching data
@@ -12,13 +12,13 @@
  */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
+import { useReleases } from '../context/ReleasesContext';
 import PMBoardList from '../components/PMBoardList';
 import GanttChart from '../components/GanttChart';
 
 function PMBoard() {
     const navigate = useNavigate();
-    const { jobs, loading, error: fetchError, refetch } = useJobsDataFetching();
+    const { jobs, loading, error: fetchError, refetch } = useReleases();
     const [viewMode, setViewMode] = useState('list');
 
     const pillBase = 'px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap';
