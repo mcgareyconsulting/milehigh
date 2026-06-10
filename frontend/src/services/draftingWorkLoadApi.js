@@ -227,6 +227,38 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Manually assign (or reassign) a Rel release number to a DRR submittal.
+     * @param {string} submittalId
+     * @param {number} rel - integer 100-999
+     */
+    async updateRel(submittalId, rel) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/rel`, {
+                submittal_id: submittalId,
+                rel: rel,
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to assign Rel for submittal ${submittalId}`);
+        }
+    }
+
+    /**
+     * Fetch the suggested next available Rel number (to prefill the assign popup).
+     * @param {string} [submittalId] - excludes this submittal's own current Rel
+     * @returns {Promise<number|null>}
+     */
+    async fetchNextRel(submittalId) {
+        try {
+            const params = submittalId ? { submittal_id: submittalId } : {};
+            const response = await axios.get(`${API_BASE_URL}/brain/drafting-work-load/rel/next`, { params });
+            return response.data.next_rel;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch suggested Rel');
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

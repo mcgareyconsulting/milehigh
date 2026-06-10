@@ -585,6 +585,71 @@ def update_submittal_due_date():
     }), 200
 
 
+@brain_bp.route("/drafting-work-load/rel", methods=["PUT"])
+@drafter_or_admin_required
+@handle_errors("update rel")
+@require_json("submittal_id", "rel")
+def update_submittal_rel():
+    """Manually assign (or reassign) a Rel release number to a DRR submittal.
+
+    Only DRR ("Drafting Release Review") submittals may receive a Rel; the value
+    must be in [100, 999] and unique across active job-log releases and pending
+    DRR submittals (see app.procore.procore.assign_rel_manual)."""
+    # Imported lazily to avoid a circular import (app.procore.procore imports
+    # app.brain.drafting_work_load.service at module load).
+    from app.procore.procore import assign_rel_manual, RelAssignmentError
+
+    submittal_id = str(g.json_data['submittal_id'])
+    rel = g.json_data.get('rel')
+
+    submittal, err = get_or_404(Submittals, "Submittal not found", submittal_id=submittal_id)
+    if err:
+        return err
+
+    old_rel = submittal.rel
+    try:
+        new_rel = assign_rel_manual(submittal, rel)
+    except RelAssignmentError as e:
+        return jsonify({"error": e.message, "code": e.code}), (409 if e.code == "collision" else 400)
+
+    db.session.commit()
+
+    user = get_current_user()
+    try:
+        create_submittal_event(
+            submittal_id, "updated",
+            {"rel": {"old": old_rel, "new": new_rel}},
+            webhook_payload=None, source="Brain",
+            internal_user_id=user.id if user else None,
+        )
+    except Exception as event_err:
+        logger.warning("Failed to create SubmittalEvent for rel update: %s", event_err)
+
+    return jsonify({
+        "success": True,
+        "submittal_id": submittal_id,
+        "rel": new_rel,
+    }), 200
+
+
+@brain_bp.route("/drafting-work-load/rel/next")
+@drafter_or_admin_required
+@handle_errors("get next rel")
+def get_next_rel():
+    """Suggest the next available Rel number, used to prefill the assign popup.
+
+    Optional ``submittal_id`` query param excludes that submittal's own current
+    Rel from the suggestion (for reassignment)."""
+    from app.procore.procore import next_rel_number
+
+    submittal_id = request.args.get('submittal_id') or None
+    try:
+        suggestion = next_rel_number(exclude_submittal_id=submittal_id)
+    except RuntimeError:
+        return jsonify({"next_rel": None}), 200
+    return jsonify({"next_rel": suggestion}), 200
+
+
 @brain_bp.route("/drafting-work-load/drag-order", methods=["PUT"])
 @admin_required
 @handle_errors("drag submittal order")

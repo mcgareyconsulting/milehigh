@@ -19,7 +19,7 @@ import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import MentionInput from './shared/MentionInput';
 import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -806,6 +806,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 isOpen={detailsOpen}
                 onClose={() => setDetailsOpen(false)}
                 submittal={row}
+                canEditRel={canEditDrafterFields}
+                onRelAssigned={onRelAssigned}
             />
         </>
     );
