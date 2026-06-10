@@ -24,6 +24,7 @@ from app.models import (
     db, Releases, Submittals, ReleaseEvents, SubmittalEvents, ExtractionSignal,
 )
 from app.brain.meetings import owner_match
+from app.brain.meetings.extract import MAX_CONTEXT_CHARS
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -168,9 +169,29 @@ def assemble_extraction_context(meeting):
     state = _light_state_lines(meeting)
     guidance = learned_guidance()
 
+    # State and guidance are small and bounded (MAX_ENTITIES / MAX_GUIDANCE); the agenda
+    # is unbounded user input. Budget the agenda against what remains under the
+    # extractor's context cap so a long agenda truncates ITSELF — the extractor's own
+    # tail-truncation would silently evict the state and guidance sections instead.
+    agenda_header = "=== PRE-MEETING CONTEXT (agenda / notes) ===\n"
+    reserved = sum(
+        len(header) + len(body) + 2  # +2 for the '\n\n' section separator
+        for header, body in (
+            ("=== JOB STATE (entities likely discussed) ===\n", state),
+            ("=== LEARNED GUIDANCE (from past meetings) ===\n", guidance),
+        ) if body
+    )
+    agenda_budget = MAX_CONTEXT_CHARS - len(agenda_header) - reserved
+    if agenda and len(agenda) > agenda_budget:
+        marker = "\n[... agenda truncated ...]"
+        agenda = agenda[:max(0, agenda_budget - len(marker))] + marker
+        logger.warning("meeting_agenda_truncated", meeting_id=meeting.id,
+                       agenda_chars=len(meeting.agenda_text or ""),
+                       budget=agenda_budget)
+
     sections = []
     if agenda:
-        sections.append("=== PRE-MEETING CONTEXT (agenda / notes) ===\n" + agenda)
+        sections.append(agenda_header + agenda)
     if state:
         sections.append("=== JOB STATE (entities likely discussed) ===\n" + state)
     if guidance:

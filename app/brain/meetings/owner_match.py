@@ -25,7 +25,9 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-MATCH_MODEL = os.environ.get("OWNER_MATCH_MODEL", "claude-haiku-4-5-20251001")
+# Owner/job matching across a 20-job production meeting (also reused by learn.py's
+# synthesis) — Opus by default; downgrade via env var if cost/latency ever matters.
+MATCH_MODEL = os.environ.get("OWNER_MATCH_MODEL", "claude-opus-4-8")
 FUZZY_ACCEPT = 0.6   # ≥60% of a job's distinctive tokens present in the to-do → accept
 _STOP = {"the", "and", "for", "to", "of", "on", "at", "in", "a", "an", "with", "by",
          "we", "need", "get", "this", "that"}
@@ -203,7 +205,7 @@ def _haiku_match(items, cands):
     try:
         resp = requests.post(ANTHROPIC_URL, headers={
             "x-api-key": cfg.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
-            "content-type": "application/json"}, json=body, timeout=60)
+            "content-type": "application/json"}, json=body, timeout=180)  # Opus-paced
         resp.raise_for_status()
         data = resp.json()
         text = "".join(b.get("text", "") for b in data.get("content", []))
@@ -262,7 +264,7 @@ def _haiku_correct_titles(items):
     try:
         resp = requests.post(ANTHROPIC_URL, headers={
             "x-api-key": cfg.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
-            "content-type": "application/json"}, json=body, timeout=60)
+            "content-type": "application/json"}, json=body, timeout=180)  # Opus-paced
         resp.raise_for_status()
         data = resp.json()
         text = "".join(b.get("text", "") for b in data.get("content", []))

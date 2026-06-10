@@ -22,9 +22,12 @@ EXTRACT_MODEL = os.environ.get("CHECKLIST_EXTRACT_MODEL", "claude-opus-4-8")
 VALID_TYPES = {"action", "needs_gc_update", "decision", "risk", "fyi"}
 
 # The whole user message (context + transcript) is kept under this char budget; context is
-# capped first so it can never crowd out the transcript it's meant to ground.
-MAX_TOTAL_CHARS = 100000
-MAX_CONTEXT_CHARS = 20000
+# capped first so it can never crowd out the transcript it's meant to ground. The context
+# cap fits a full multi-job production-meeting agenda (~25k chars) with room for the job
+# state + guidance sections; context.assemble_extraction_context budgets per-section
+# against this same cap so a long agenda truncates itself, never the other sections.
+MAX_TOTAL_CHARS = 150000
+MAX_CONTEXT_CHARS = 40000
 
 # USD per million tokens (input, output). Used to price each extraction so we can
 # surface token + cost per meeting. Prefix match keeps dated model ids working.
@@ -82,6 +85,18 @@ def _context_guidance(has_context: bool) -> str:
         "the job shown, and use that job's CANONICAL name and release token in "
         "titles/release_ref).\n"
         "- Follow any LEARNED GUIDANCE about which kinds of items tend to be noise.\n"
+        "- Structured agendas often pose explicit questions (e.g. 'Discussion Points', "
+        "'shipped?', 'installed?') and carry urgency/status flags (e.g. OVERDUE, DUE TODAY, "
+        "NEED CO — treat any similar marker the same way). Resolve them against the "
+        "transcript:\n"
+        "  - If the discussion reveals the system of record is stale (e.g. the agenda shows a "
+        "release in Ship Planning but the room confirms it shipped), emit an action to make "
+        "that exact update, citing the release token.\n"
+        "  - If the room commits to an answer the agenda was waiting on (a date, a CO, a "
+        "go/no-go), capture the commitment as an action with its owner and date.\n"
+        "  - If a flagged agenda question is never addressed in the transcript, emit a "
+        "follow-up action noting it was not covered in the meeting — use moderate "
+        "confidence (0.4-0.6) since the room never spoke to it.\n"
         "- Only the TRANSCRIPT (and explicit agenda asks) are the source of to-dos; never invent "
         "items from the JOB STATE lines alone.\n"
     )
@@ -165,11 +180,15 @@ def _call_anthropic(transcript: str, today: date, people=None, context=None) -> 
             "model": EXTRACT_MODEL,
             # A full standup transcript can yield 20-40 items; 2000 truncated the
             # JSON mid-array on real data and silently fell back to the keyword stub.
-            "max_tokens": 8000,
+            # A multi-job production meeting with agenda coverage-gap items can double
+            # that, so leave generous headroom — truncation = stub = garbage checklist.
+            "max_tokens": 16000,
             "system": _system_prompt(today, people, has_context=bool((context or "").strip())),
             "messages": [{"role": "user", "content": _build_user_content(transcript, context)}],
         },
-        timeout=120,
+        # Opus emits ~50 tok/s; 10k+ output tokens takes minutes. This runs on a
+        # background thread, so a long read is fine — a short one silently stubs.
+        timeout=480,
     )
     resp.raise_for_status()
     body = resp.json()

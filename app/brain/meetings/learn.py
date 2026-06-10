@@ -173,7 +173,7 @@ def _llm_synthesize(meeting, labeled, stats):
     try:
         resp = requests.post(ANTHROPIC_URL, headers={
             "x-api-key": cfg.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
-            "content-type": "application/json"}, json=body, timeout=90)
+            "content-type": "application/json"}, json=body, timeout=180)  # Opus-paced
         resp.raise_for_status()
         data = resp.json()
         text = "".join(b.get("text", "") for b in data.get("content", []))

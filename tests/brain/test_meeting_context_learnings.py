@@ -68,6 +68,26 @@ def test_assemble_extraction_context_has_agenda_state_and_guidance(app):
     assert "stage=Fabrication" in out["state"]   # light state line, no event history
 
 
+def test_long_agenda_truncates_itself_not_state_or_guidance(app):
+    """A production-meeting agenda can exceed the context cap; the agenda must absorb
+    the truncation so the JOB STATE and LEARNED GUIDANCE sections always survive."""
+    make_release(480, "146", job_name="Alta Flatirons", stage="Fabrication")
+    db.session.add(ExtractionSignal(signal_type="pattern", key="fyi:x",
+                                    value="fyi items are usually noise", count=3))
+    db.session.commit()
+    huge_agenda = "Walk the 480-146 fab status. " * 3000  # well past MAX_CONTEXT_CHARS
+    m = Meeting(title="Production", meeting_type="internal_shop", project_number="480",
+                agenda_text=huge_agenda, occurred_at=datetime(2026, 6, 9))
+    db.session.add(m); db.session.commit()
+
+    out = context.assemble_extraction_context(m)
+    assert len(out["combined"]) <= context.MAX_CONTEXT_CHARS
+    assert "[... agenda truncated ...]" in out["agenda"]
+    assert "JOB STATE" in out["combined"]          # survived the long agenda
+    assert "LEARNED GUIDANCE" in out["combined"]   # survived the long agenda
+    assert "stage=Fabrication" in out["combined"]
+
+
 # --------------------------------------------------------------------------- #
 # SUMMARY context: only events that landed DURING the meeting window
 # --------------------------------------------------------------------------- #
@@ -146,6 +166,44 @@ def test_extract_into_meeting_folds_summary_cost_into_meter(app):
     assert m.summary == "During the call nothing notable changed."
     assert "summary" in m.extract_model                 # tagged in the blended meter
     assert m.extract_input_tokens == 17                 # 10 (extract) + 7 (summary)
+
+
+def test_summary_content_reserves_events_before_agenda():
+    """Events are the summary's primary grounding — a long agenda caps itself and the
+    transcript absorbs the rest; the events block is never squeezed."""
+    from app.brain.meetings import summary
+    events = "E" * 5000
+    agenda = "A" * (summary.MAX_AGENDA_CHARS + 10000)
+    content = summary._build_user_content("T" * 200000, events, agenda)
+    assert events in content                                   # events fully present
+    assert "=== AGENDA (the plan — do not restate) ===" in content
+    assert "A" * summary.MAX_AGENDA_CHARS in content           # capped, not dropped
+    assert "A" * (summary.MAX_AGENDA_CHARS + 1) not in content
+    assert "=== TRANSCRIPT ===" in content
+    assert len(content) <= summary.MAX_TOTAL_CHARS + 100       # headers slack
+
+
+def test_extract_into_meeting_passes_agenda_to_summary(app):
+    make_user(REVIEWER, first_name="Bill", is_admin=True)
+    m = Meeting(title="Prod", meeting_type="internal_shop", transcript="(stub)",
+                agenda_text="Job 480 — OVERDUE: ship Rel 654 today",
+                occurred_at=datetime(2026, 6, 9))
+    db.session.add(m); db.session.commit()
+
+    ret = {"items": [], "usage": {"input_tokens": 0, "output_tokens": 0,
+                                  "model": "stub", "cost_usd": 0.0}}
+    captured = {}
+
+    def fake_call(transcript, events, agenda=""):
+        captured["agenda"] = agenda
+        return "ok", {"input_tokens": 1, "output_tokens": 1,
+                      "model": "claude-opus-4-8", "cost_usd": 0.0001}
+
+    with patch("app.brain.meetings.service.extract", return_value=ret), \
+         patch("app.brain.meetings.summary._call_anthropic", side_effect=fake_call):
+        service.extract_into_meeting(m, notify=False)
+
+    assert "OVERDUE: ship Rel 654" in captured["agenda"]   # plan reached the summary pass
 
 
 # --------------------------------------------------------------------------- #
