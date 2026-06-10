@@ -56,7 +56,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Keep local has_drawing flag in sync if parent re-renders the row
     useEffect(() => { setHasDrawingLocal(Boolean(row.has_drawing)); }, [row.has_drawing]);
 
-    const canMarkup = isAdmin || isDrafter;
+    // Uploading, viewing, and marking up drawings/photos is open to every
+    // logged-in user (deleting a drawing version stays admin-only on the
+    // backend). The attachment hub therefore opens in edit mode for everyone.
+    const canMarkup = true;
 
     // Check if row should be grayed (Complete status or both Job Comp and Invoiced are X).
     // Tolerates whitespace + case drift on the stage value.

@@ -5,6 +5,10 @@ Endpoints (registered on brain_bp under the /brain prefix):
   GET    /releases/<release_id>/drawing/versions                 — list versions (newest first)
   GET    /releases/<release_id>/drawing/versions/<vid>/file      — stream the PDF bytes
   DELETE /releases/<release_id>/drawing/versions/<vid>           — admin-only soft delete
+
+Any logged-in user may upload, view, and mark up drawings (matching photos);
+each save is attributed to its author via `uploaded_by_user_id`. Deleting a
+version remains admin-only to guard against accidental loss of markup history.
 """
 
 from flask import jsonify, request, send_file
@@ -12,7 +16,7 @@ from flask import jsonify, request, send_file
 from app.brain import brain_bp
 from app.auth.utils import (
     admin_required,
-    drafter_or_admin_required,
+    login_required,
     get_current_user,
 )
 from app.models import (
@@ -43,7 +47,7 @@ def _resolve_user_display_name(user: User) -> str:
 
 
 @brain_bp.route('/releases/<int:release_id>/drawing', methods=['POST'])
-@drafter_or_admin_required
+@login_required
 def upload_release_drawing(release_id):
     """Upload a PDF for a release.
 
@@ -114,7 +118,7 @@ def upload_release_drawing(release_id):
 
 
 @brain_bp.route('/releases/<int:release_id>/drawing/versions', methods=['GET'])
-@drafter_or_admin_required
+@login_required
 def list_release_drawing_versions(release_id):
     release = db.session.get(Releases, release_id)
     if not release:
@@ -136,7 +140,7 @@ def list_release_drawing_versions(release_id):
     '/releases/<int:release_id>/drawing/versions/<int:version_id>/file',
     methods=['GET'],
 )
-@drafter_or_admin_required
+@login_required
 def get_release_drawing_file(release_id, version_id):
     version = db.session.get(ReleaseDrawingVersion, version_id)
     if not version or version.release_id != release_id or version.is_deleted:

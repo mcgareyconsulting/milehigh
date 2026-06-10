@@ -178,7 +178,25 @@ def test_patch_updates_note(app, storage_root, release_id, plain_user):
         )
 
     assert resp.status_code == 200
-    assert resp.get_json()['note'] == 'updated note'
+    body = resp.get_json()
+    assert body['note'] == 'updated note'
+    # Editing the note attributes the change to the current user.
+    assert body['last_edited_by'] == {'id': plain_user.id, 'name': plain_user.username}
+    assert body['last_edited_at'] is not None
+
+
+def test_patch_unchanged_note_does_not_stamp_editor(app, storage_root, release_id, plain_user):
+    with _patch_get_current_user(plain_user):
+        client = app.test_client()
+        pid = _post_photo(client, release_id, PNG_MIN, note="same").get_json()['id']
+        resp = client.patch(
+            f'/brain/releases/{release_id}/photos/{pid}',
+            json={'note': 'same'},
+        )
+
+    assert resp.status_code == 200
+    # Re-saving an unchanged note leaves edit attribution untouched.
+    assert resp.get_json()['last_edited_by'] is None
 
 
 def test_patch_empty_note_clears_it(app, storage_root, release_id, plain_user):

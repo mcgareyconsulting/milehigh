@@ -419,6 +419,11 @@ export function PdfVersionHistoryModal({
                                                     <span className="text-xs text-gray-500">{p.uploaded_by?.name || '—'}</span>
                                                     <span className="text-xs text-gray-400 ml-auto">{fmtSize(p.file_size_bytes)}</span>
                                                 </div>
+                                                {p.last_edited_by && (
+                                                    <p className="text-[11px] text-gray-400 mt-1 italic">
+                                                        Note edited by {p.last_edited_by.name || '—'} · {fmtDate(p.last_edited_at)}
+                                                    </p>
+                                                )}
                                                 <textarea
                                                     value={noteDrafts[p.id] ?? ''}
                                                     onChange={(e) =>
