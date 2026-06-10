@@ -11,6 +11,8 @@ Any logged-in user may add, view, annotate, or remove photos (unlike drawings,
 which are drafter/admin only).
 """
 
+from datetime import datetime
+
 from flask import jsonify, request, send_file
 
 from app.brain import brain_bp
@@ -138,8 +140,15 @@ def update_release_photo(release_id, photo_id):
         return jsonify({'error': "Missing 'note'"}), 400
 
     note = data.get('note')
-    photo.note = (note or '').strip() or None
-    db.session.commit()
+    new_note = (note or '').strip() or None
+    # Only stamp edit attribution when the note actually changes, so re-saving an
+    # unchanged note doesn't rewrite who/when it was last edited.
+    if new_note != photo.note:
+        user = get_current_user()
+        photo.note = new_note
+        photo.last_edited_by_user_id = user.id if user else None
+        photo.last_edited_at = datetime.utcnow()
+        db.session.commit()
 
     return jsonify(photo.to_dict())
 

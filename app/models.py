@@ -870,17 +870,26 @@ class ReleasePhoto(db.Model):
     stage = db.Column(db.String(64), nullable=True)
     uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    # Attribution for the most recent note edit. Photos are open to all users, so
+    # these track who last changed a photo's note (and when) after upload. Null
+    # until the note is edited for the first time.
+    last_edited_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    last_edited_at = db.Column(db.DateTime, nullable=True)
     is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
 
     release = db.relationship('Releases', backref=db.backref('photos', lazy='dynamic'))
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    last_edited_by = db.relationship('User', foreign_keys=[last_edited_by_user_id])
+
+    @staticmethod
+    def _display_name(user):
+        if not user:
+            return None
+        first = (user.first_name or '').strip()
+        last = (user.last_name or '').strip()
+        return (f"{first} {last}".strip()) or user.username
 
     def to_dict(self):
-        uploaded_by_name = None
-        if self.uploaded_by:
-            first = (self.uploaded_by.first_name or '').strip()
-            last = (self.uploaded_by.last_name or '').strip()
-            uploaded_by_name = (f"{first} {last}".strip()) or self.uploaded_by.username
         return {
             'id': self.id,
             'release_id': self.release_id,
@@ -891,9 +900,14 @@ class ReleasePhoto(db.Model):
             'stage': self.stage,
             'uploaded_by': {
                 'id': self.uploaded_by_user_id,
-                'name': uploaded_by_name,
+                'name': self._display_name(self.uploaded_by),
             },
             'uploaded_at': _dt(self.uploaded_at),
+            'last_edited_by': {
+                'id': self.last_edited_by_user_id,
+                'name': self._display_name(self.last_edited_by),
+            } if self.last_edited_by_user_id else None,
+            'last_edited_at': _dt(self.last_edited_at),
         }
 
 
