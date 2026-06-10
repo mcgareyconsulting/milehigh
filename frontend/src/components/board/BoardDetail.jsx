@@ -9,11 +9,13 @@
  * invariants:
  *   - onUpdate(null) signals the item was deleted; parent must handle removal
  *   - After posting a comment, the full item is re-fetched to get server-rendered activity
+ *   - The Photos section (BoardPhotos) owns its own state/fetch; it is not driven by the item payload
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
 import { useState, useEffect } from 'react';
 import { updateBoardItem, addComment, deleteBoardItem, fetchBoardItem, fetchMentionableUsers } from '../../services/boardApi';
 import MentionInput from '../shared/MentionInput';
+import BoardPhotos from './BoardPhotos';
 
 const STATUS_OPTIONS = ['open', 'in_progress', 'deployed', 'closed'];
 const PRIORITY_OPTIONS = ['low', 'normal', 'high', 'urgent'];
@@ -132,6 +134,9 @@ export default function BoardDetail({ item, onUpdate, onClose }) {
                     {item.body}
                 </div>
             )}
+
+            {/* Photos / screenshots */}
+            <BoardPhotos itemId={item.id} />
 
             {/* Activity thread — scrollable, takes remaining space */}
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
