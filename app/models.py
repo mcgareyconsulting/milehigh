@@ -668,7 +668,58 @@ class BoardItem(db.Model):
         if include_activity:
             d['activity'] = [a.to_dict() for a in
                              self.activity.order_by(BoardActivity.created_at.asc()).all()]
+            d['photos'] = [p.to_dict() for p in
+                           self.photos.filter_by(is_deleted=False)
+                           .order_by(BoardItemPhoto.uploaded_at.desc(),
+                                     BoardItemPhoto.id.desc()).all()]
         return d
+
+
+class BoardItemPhoto(db.Model):
+    """A photo/screenshot attached to a board item for extra dev context.
+
+    Mirrors `ReleasePhoto` (a flat list of independent image rows) but is scoped
+    to a `BoardItem` instead of a release, has no stage tag, and carries no
+    per-photo caption (context lives in the card body/description).
+    """
+    __tablename__ = 'board_item_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'),
+                              nullable=False, index=True)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default='image/jpeg')
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    item = db.relationship('BoardItem', backref=db.backref('photos', lazy='dynamic',
+                                                           cascade='all, delete-orphan'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+
+    @staticmethod
+    def _display_name(user):
+        if not user:
+            return None
+        first = (user.first_name or '').strip()
+        last = (user.last_name or '').strip()
+        return (f"{first} {last}".strip()) or user.username
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'board_item_id': self.board_item_id,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'uploaded_by': {
+                'id': self.uploaded_by_user_id,
+                'name': self._display_name(self.uploaded_by),
+            },
+            'uploaded_at': _dt(self.uploaded_at),
+        }
 
 
 class BoardActivity(db.Model):

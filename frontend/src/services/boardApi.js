@@ -11,6 +11,10 @@
  *   deleteBoardItem: Delete a board item by ID.
  *   fetchMentionableUsers: List users available for @mention in comments.
  *   addComment: Post a comment on a board item.
+ *   fetchBoardPhotos: List photos attached to a board item.
+ *   uploadBoardPhoto: Upload one image to a board item.
+ *   deleteBoardPhoto: Soft-delete a photo.
+ *   boardPhotoFileUrl: Build the streaming URL for a photo's image bytes.
  * imports_from: [axios, ../utils/api]
  * imported_by: [components/board/NewItemModal.jsx, components/board/BoardDetail.jsx, pages/Board.jsx]
  * invariants:
@@ -71,4 +75,26 @@ export async function fetchMentionableUsers() {
 export async function addComment(itemId, body) {
     const { data } = await axios.post(`${BASE}/items/${itemId}/activity`, { body });
     return data;
+}
+
+export async function fetchBoardPhotos(itemId) {
+    const { data } = await axios.get(`${BASE}/items/${itemId}/photos`);
+    return data.photos;
+}
+
+export async function uploadBoardPhoto(itemId, file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await axios.post(`${BASE}/items/${itemId}/photos`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+}
+
+export async function deleteBoardPhoto(itemId, photoId) {
+    await axios.delete(`${BASE}/items/${itemId}/photos/${photoId}`);
+}
+
+export function boardPhotoFileUrl(itemId, photoId) {
+    return `${BASE}/items/${itemId}/photos/${photoId}/file`;
 }

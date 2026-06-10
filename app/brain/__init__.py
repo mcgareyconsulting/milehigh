@@ -33,6 +33,7 @@ from app.brain.job_log import photo_routes  # noqa: F401  (registers /releases/<
 from app.brain.drafting_work_load import routes as dwl_routes
 from app.brain.map import routes as map_routes
 from app.brain.board import routes as board_routes
+from app.brain.board import photo_routes as board_photo_routes  # noqa: F401  (registers /board/items/<id>/photos endpoints)
 from app.brain.meetings import routes as meetings_routes
 from app.brain import notification_routes
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
