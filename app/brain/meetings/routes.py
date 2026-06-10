@@ -4,6 +4,8 @@ Admin-only, matching the board's posture. Endpoints:
   POST   /brain/meetings                     ingest a transcript -> proposed checklist
   GET    /brain/meetings                      recent meetings
   GET    /brain/meetings/<id>                 meeting + its checklist items
+  PATCH  /brain/meetings/<id>                 edit pre-meeting context (agenda_text)
+  POST   /brain/meetings/<id>/learn           (re)synthesize learnings from the review
   GET    /brain/meetings/checklist/pending    proposed items awaiting review
   GET    /brain/meetings/assignable-users     active users for the owner picker
   PATCH  /brain/checklist-items/<id>          accept / reject / done / edit (owner+date)
@@ -77,6 +79,7 @@ def send_meeting_bot():
         bot_id=bot_id,
         title=(data.get('title') or data.get('name')),
         meeting_type=data.get('meeting_type'),
+        agenda_text=(data.get('agenda_text') or '').strip() or None,
         created_by_id=user.id if user else None,
     )
     return jsonify(meeting.to_dict()), 201
@@ -105,6 +108,7 @@ def create_meeting():
         transcript=transcript,
         project_number=data.get('project_number'),
         occurred_at=occurred_at,
+        agenda_text=(data.get('agenda_text') or '').strip() or None,
         created_by_id=user.id if user else None,
     )
     return jsonify(meeting.to_dict(include_items=True)), 201
@@ -131,6 +135,7 @@ def add_manual_meeting():
         title=data.get('title'),
         meeting_type=data.get('meeting_type'),
         transcript=transcript,
+        agenda_text=(data.get('agenda_text') or '').strip() or None,
         created_by_id=user.id if user else None,
     )
     return jsonify(m.to_dict(include_items=True)), 201
@@ -182,6 +187,37 @@ def get_meeting(meeting_id):
     if not m:
         return jsonify({'error': 'not found'}), 404
     return jsonify(m.to_dict(include_items=True))
+
+
+@brain_bp.route('/meetings/<int:meeting_id>', methods=['PATCH'])
+@admin_required
+def update_meeting(meeting_id):
+    """Edit pre-meeting context after creation — e.g. add agenda/notes to an
+    already-dispatched bot meeting before generating its checklist."""
+    m = db.session.get(Meeting, meeting_id)
+    if not m:
+        return jsonify({'error': 'not found'}), 404
+    data = request.get_json(silent=True) or {}
+    if 'agenda_text' in data:
+        m.agenda_text = (data.get('agenda_text') or '').strip() or None
+        db.session.commit()
+    return jsonify(m.to_dict(include_items=True))
+
+
+@brain_bp.route('/meetings/<int:meeting_id>/learn', methods=['POST'])
+@admin_required
+def generate_learnings(meeting_id):
+    """Manually (re)synthesize learnings for a meeting from its reviewed checklist.
+    Runs in the background like extraction; the UI re-fetches the meeting to see the
+    new learning. Also runs automatically once the last proposed item is reviewed."""
+    from flask import current_app
+    from app.brain.meetings import learn
+
+    m = db.session.get(Meeting, meeting_id)
+    if not m:
+        return jsonify({'error': 'not found'}), 404
+    learn.start_learning(current_app._get_current_object(), m.id)
+    return jsonify({'ok': True, 'meeting_id': m.id}), 202
 
 
 @brain_bp.route('/meetings/checklist/pending', methods=['GET'])

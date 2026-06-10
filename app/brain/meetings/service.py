@@ -135,7 +135,15 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     # Give the extractor the team roster so owner_name maps to real users.
     people = [u.first_name for u in User.query.filter_by(is_active=True).all()
               if u.first_name]
-    result = extract(meeting.transcript or "", people=people)
+    # Two context streams, two outputs:
+    #   - EXTRACTION context (agenda + light job state + learned guidance) grounds the to-dos.
+    #   - The events that landed DURING the meeting ground the summary — and are stored on
+    #     context_snapshot since that activity is what drifts and is worth recording.
+    from app.brain.meetings import context as meeting_context
+    ctx = meeting_context.assemble_extraction_context(meeting)
+    events_block = meeting_context.build_runtime_events(meeting)
+    meeting.context_snapshot = events_block or None
+    result = extract(meeting.transcript or "", people=people, context=ctx["combined"])
     raw_items = result["items"]
     usage = result["usage"]
 
@@ -168,11 +176,29 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     # lift the PM / submittal manager. Haiku usage folds into the meeting cost meter.
     from app.brain.meetings import owner_match
     match_usage = owner_match.infer_owners_for_meeting(meeting)
-    blended = bool(match_usage.get("cost_usd"))
-    meeting.extract_model = usage["model"] + (" +haiku" if blended else "")
-    meeting.extract_input_tokens = (usage["input_tokens"] or 0) + (match_usage.get("input_tokens") or 0)
-    meeting.extract_output_tokens = (usage["output_tokens"] or 0) + (match_usage.get("output_tokens") or 0)
-    meeting.extract_cost_usd = round((usage["cost_usd"] or 0) + (match_usage.get("cost_usd") or 0), 6)
+
+    # Second output: the meeting summary, grounded by the during-meeting events. Same
+    # generate step so one click produces both outputs; never raises.
+    from app.brain.meetings import summary as meeting_summary
+    sresult = meeting_summary.summarize(meeting.transcript or "", events_block)
+    meeting.summary = sresult["summary"] or None
+    summary_usage = sresult["usage"]
+
+    # Blend the three LLM passes (extract + owner-match + summary) into one cost meter.
+    tags = [usage["model"]]
+    in_tok = usage["input_tokens"] or 0
+    out_tok = usage["output_tokens"] or 0
+    cost = usage["cost_usd"] or 0
+    for label, extra in (("haiku", match_usage), ("summary", summary_usage)):
+        if extra.get("cost_usd"):
+            in_tok += extra.get("input_tokens") or 0
+            out_tok += extra.get("output_tokens") or 0
+            cost += extra.get("cost_usd") or 0
+            tags.append(label)
+    meeting.extract_model = (" +".join(tags))[:40]  # extract_model is VARCHAR(40)
+    meeting.extract_input_tokens = in_tok
+    meeting.extract_output_tokens = out_tok
+    meeting.extract_cost_usd = round(cost, 6)
     db.session.commit()
 
     if notify:
@@ -183,7 +209,7 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
 
 def create_meeting_with_extraction(*, title, meeting_type, transcript,
                                    project_number=None, occurred_at=None,
-                                   created_by_id=None):
+                                   agenda_text=None, created_by_id=None):
     """Create a Meeting from a pasted transcript and build its checklist. Returns the
     Meeting. Commits the meeting before extraction so the LLM call never runs inside
     an open write transaction (which would reset the connection)."""
@@ -194,6 +220,7 @@ def create_meeting_with_extraction(*, title, meeting_type, transcript,
         project_number=project_number,
         occurred_at=occurred_at,
         transcript=transcript,
+        agenda_text=(agenda_text or None),
         created_by=created_by_id,
     )
     db.session.add(meeting)
@@ -202,7 +229,8 @@ def create_meeting_with_extraction(*, title, meeting_type, transcript,
     return meeting
 
 
-def create_manual_meeting(*, title, meeting_type, transcript, created_by_id=None):
+def create_manual_meeting(*, title, meeting_type, transcript, agenda_text=None,
+                          created_by_id=None):
     """Create a meeting from a pasted transcript WITHOUT extracting — the checklist is
     generated on demand via the 'Generate to-do list' button (so the transcript goes
     straight to the LLM only when the reviewer asks). Returns the Meeting."""
@@ -211,6 +239,7 @@ def create_manual_meeting(*, title, meeting_type, transcript, created_by_id=None
         meeting_type=meeting_type or "other",
         source="manual",
         transcript=transcript,
+        agenda_text=(agenda_text or None),
         occurred_at=datetime.utcnow(),
         created_by=created_by_id,
     )
@@ -222,12 +251,13 @@ def create_manual_meeting(*, title, meeting_type, transcript, created_by_id=None
 
 
 def create_recall_meeting(*, meeting_url, bot_id, title=None, meeting_type=None,
-                          created_by_id=None):
+                          agenda_text=None, created_by_id=None):
     """Persist a meeting whose transcript will come from a Recall bot.
 
     Immediate-send MVP: the bot joins now, so occurred_at is stamped now. No
     transcript/extraction yet — that arrives via the pull step. bot_status starts at
-    'joining' and is kept fresh by the recall-webhook receiver.
+    'joining' and is kept fresh by the recall-webhook receiver. agenda_text is the
+    pre-meeting context the user dropped in when dispatching the bot.
     """
     meeting = Meeting(
         title=(title or "Recall meeting")[:255],
@@ -236,6 +266,7 @@ def create_recall_meeting(*, meeting_url, bot_id, title=None, meeting_type=None,
         meeting_url=(meeting_url or "")[:1000] or None,
         recall_bot_id=bot_id,
         bot_status="joining",
+        agenda_text=(agenda_text or None),
         occurred_at=datetime.utcnow(),
         created_by=created_by_id,
     )
@@ -255,6 +286,10 @@ def update_bot_status(bot_id, status_code):
         return None
     if meeting.bot_status != status_code:
         meeting.bot_status = str(status_code)[:30]
+        # Stamp meeting end on a terminal status (bounds the summary's event window) if
+        # the transcript pull hasn't already done so.
+        if str(status_code) in ("done", "failed") and not meeting.ended_at:
+            meeting.ended_at = datetime.utcnow()
         db.session.commit()
         logger.info("recall_bot_status_updated", meeting_id=meeting.id,
                     bot_id=bot_id, status=status_code)
@@ -280,6 +315,10 @@ def pull_transcript_for_bot(bot_id):
     if text:
         meeting.transcript = text
         meeting.bot_status = "done"
+        # The bot has left the call — stamp the meeting end so the summary's
+        # "events during meeting" window [occurred_at, ended_at] is bounded.
+        if not meeting.ended_at:
+            meeting.ended_at = datetime.utcnow()
         db.session.commit()
         logger.info("transcript_pulled", meeting_id=meeting.id, chars=len(text))
     return meeting
@@ -310,6 +349,7 @@ def review_item(item_id, *, action=None, fields=None, reviewer=None):
         return None
     fields = fields or {}
     was_accepted = item.status == "accepted"
+    was_proposed = item.status == "proposed"
 
     for f in _EDITABLE:
         if f in fields:
@@ -338,7 +378,28 @@ def review_item(item_id, *, action=None, fields=None, reviewer=None):
     # to-do surfaces in their notification bell.
     if action == "accept" and item.owner_user_id and not was_accepted:
         _notify_assignee(item)
+    # When this action retired the LAST un-reviewed item, the checklist is fully worked —
+    # synthesize learnings from the yes/no/edit outcomes. Fires exactly once (guarded on
+    # this item having just left 'proposed').
+    if action and was_proposed:
+        _maybe_trigger_learning(item.meeting_id)
     return item
+
+
+def _maybe_trigger_learning(meeting_id):
+    """Kick off background learnings synthesis once no proposed items remain for the
+    meeting. No-op outside an app context (e.g. a bare unit test) — safe to call anywhere."""
+    remaining = ChecklistItem.query.filter_by(
+        meeting_id=meeting_id, status="proposed").count()
+    if remaining:
+        return
+    try:
+        from flask import current_app
+        from app.brain.meetings import learn
+        learn.start_learning(current_app._get_current_object(), meeting_id)
+        logger.info("learning_triggered", meeting_id=meeting_id)
+    except Exception as e:  # noqa: BLE001 — never let learning kickoff break a review
+        logger.info("learning_trigger_skipped", meeting_id=meeting_id, error=str(e))
 
 
 def _notify_assignee(item):
