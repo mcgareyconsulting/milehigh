@@ -188,33 +188,44 @@ def calculate_install_start_date(
 
 def calculate_install_complete_date(
     install_start_date: Optional[date],
-    install_hours: Optional[float]
+    install_hours: Optional[float],
+    crew_size: Optional[int] = None
 ) -> Optional[date]:
     """
     Calculate install completion ETA.
-    
+
     Formula:
+    - Daily install capacity = crew_size × HOURS_PER_PERSON_PER_DAY
+      (falls back to the fixed INSTALL_HOURS_PER_DAY when crew_size is unset)
     - Convert install hours → install days (round up)
     - Completion date = install start + install days (working days only)
-    
+
     Args:
         install_start_date: Install start date
         install_hours: Installation hours for the job-release
-        
+        crew_size: Number of installers (num_guys). When provided, capacity is
+            crew_size × HOURS_PER_PERSON_PER_DAY; otherwise the legacy fixed
+            INSTALL_HOURS_PER_DAY (2 × 8) is used.
+
     Returns:
         date: Install completion date, or None if install_hours is zero/null or start_date is None
     """
     if install_start_date is None:
         return None
-    
+
     if install_hours is None or install_hours < 0:
         return None
 
     if install_hours == 0:
         return install_start_date
-    
+
+    # Daily capacity: crew-size-aware when num_guys is set, else legacy fixed value.
+    if crew_size and crew_size > 0:
+        install_capacity = crew_size * SchedulingConfig.HOURS_PER_PERSON_PER_DAY
+    else:
+        install_capacity = SchedulingConfig.INSTALL_HOURS_PER_DAY
+
     # Convert install hours to days (round up)
-    install_capacity = SchedulingConfig.INSTALL_HOURS_PER_DAY
     install_days = math.ceil(install_hours / install_capacity)
     
     if install_days <= 0:
@@ -255,6 +266,9 @@ def calculate_scheduling_fields(
     # Extract job data
     total_fab_hours = job.get('fab_hrs')
     install_hours = job.get('install_hrs')
+    # Crew size of the release's assigned installer crew (resolved by the caller
+    # from InstallerTeam). Drives install_complete_date; None ⇒ legacy default.
+    crew_size = job.get('crew_size')
     fab_order = job.get('fab_order')
     stage = job.get('stage')
     
@@ -288,10 +302,11 @@ def calculate_scheduling_fields(
     # Step 5: Calculate install start date
     install_start_date = calculate_install_start_date(projected_fab_complete_date)
     
-    # Step 6: Calculate install completion date
+    # Step 6: Calculate install completion date (crew-size aware)
     install_complete_date = calculate_install_complete_date(
         install_start_date,
-        install_hours
+        install_hours,
+        crew_size
     )
     
     return {

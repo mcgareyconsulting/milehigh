@@ -59,9 +59,15 @@ class SchedulingConfig:
     # Fabrication capacity (fixed daily capacity)
     FAB_HOURS_PER_DAY: float = 104.0  # 13 fabricators × 8 hrs/day
     
-    # Installation capacity (fixed daily capacity)
+    # Installation capacity (fixed daily capacity).
+    # Used as the fallback when a release has no crew size (num_guys) set —
+    # equals 2 installers × 8 hrs/day, the legacy assumption.
     INSTALL_HOURS_PER_DAY: float = 16.0
-    
+
+    # Per-installer daily capacity. When a release has num_guys set, install
+    # capacity = num_guys × HOURS_PER_PERSON_PER_DAY drives comp_eta.
+    HOURS_PER_PERSON_PER_DAY: float = 8.0
+
     # Install buffer (working days between fab completion and install start)
     INSTALL_BUFFER_DAYS: int = 3
     

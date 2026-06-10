@@ -440,6 +440,7 @@ class Releases(db.Model):
             "description": self.description,
             "fab_hrs": self.fab_hrs,
             "install_hrs": self.install_hrs,
+            "installer": self.installer,
             "paint_color": self.paint_color,
             "pm": self.pm,
             "by": self.by,
@@ -884,6 +885,39 @@ class ReleasePhoto(db.Model):
                 'name': uploaded_by_name,
             },
             'uploaded_at': _dt(self.uploaded_at),
+        }
+
+
+class InstallerTeam(db.Model):
+    """A loosely-coupled record of an installer team.
+
+    Deliberately NOT wired to `Releases` via a foreign key: the release owns
+    crew size (`Releases.num_guys`) as the source of truth for scheduling, and
+    scheduling never reads this table. This exists only to start accumulating
+    team data — `crew_size` here is the *latest known* value written back when a
+    release with this installer has its `num_guys` set, not an authoritative
+    input. It can be reshaped later once the use cases are clearer.
+
+    `trello_list_id` lets the mirror-card move resolve a list id without a name
+    lookup during the Trello transition; it may be null.
+    """
+    __tablename__ = "installer_teams"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), nullable=False, unique=True)
+    # Latest-known crew size for this team (written back from Releases.num_guys);
+    # NOT read by scheduling. Defaults to 2 to match the legacy 2x8 assumption.
+    crew_size = db.Column(db.Integer, nullable=False, default=2, server_default='2')
+    trello_list_id = db.Column(db.String(64), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "crew_size": self.crew_size,
+            "trello_list_id": self.trello_list_id,
+            "is_active": self.is_active,
         }
 
 

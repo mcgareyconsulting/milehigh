@@ -11,6 +11,15 @@ from app.brain.job_log.scheduling.calculator import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_crews():
+    """These are pure mocked unit tests (no DB). Stub the crew lookup the
+    scheduling service makes so it doesn't touch a real session."""
+    with patch('app.brain.job_log.scheduling.service.InstallerTeam') as m:
+        m.query.all.return_value = []
+        yield
+
+
 class TestRedDateProtection:
     """Verify that hard-date (red date) releases are not overwritten by the cascade."""
 
@@ -22,6 +31,7 @@ class TestRedDateProtection:
         rec.release = release
         rec.fab_hrs = fab_hrs
         rec.install_hrs = 40.0
+        rec.installer = None  # no crew assigned → default install capacity
         rec.stage = stage
         rec.fab_order = fab_order
         rec.start_install = start_install
@@ -137,6 +147,7 @@ class TestHoldReleaseCascade:
         rec.release = 'A'
         rec.fab_hrs = 80.0
         rec.install_hrs = 40.0
+        rec.installer = None  # no crew assigned → default install capacity
         rec.stage = 'Hold'
         rec.fab_order = 1.0
         rec.start_install = None
@@ -260,6 +271,7 @@ class TestSentinelChronologicalCascade:
         rec.release = release
         rec.fab_hrs = fab_hrs
         rec.install_hrs = 40.0
+        rec.installer = None  # no crew assigned → default install capacity
         rec.stage = 'Released'
         rec.fab_order = DEFAULT_FAB_ORDER
         rec.start_install = start_install

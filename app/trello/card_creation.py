@@ -134,6 +134,13 @@ def create_trello_card_core(
             - adopted: bool (True if an existing card was reused rather than created)
             - error: str (if not success)
     """
+    # TRELLO_MOCK kill switch: never create a card on the real board. Returns a
+    # non-success so the caller simply skips (no fake card_id is persisted).
+    from app.trello.api import _trello_writes_disabled
+    if _trello_writes_disabled():
+        logger.info(f"[TRELLO_MOCK] create_trello_card_core('{card_title}') — skipped (writes disabled)")
+        return {"success": False, "error": "TRELLO_MOCK: card creation disabled", "skipped": True}
+
     try:
         if idempotency_check:
             try:

@@ -10,9 +10,10 @@
  *   - Falls back to a default blue stage color when stageColor prop is not provided
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 
 const RELEASE_FIELDS = [
     { key: 'Job #', label: 'Job #' },
@@ -45,8 +46,11 @@ const DEFAULT_STAGE_COLOR = {
 export function PMBoardCardModal({ isOpen, onClose, job, stageColor }) {
     const navigate = useNavigate();
     const colors = stageColor || DEFAULT_STAGE_COLOR;
+    const [attachmentsOpen, setAttachmentsOpen] = useState(false);
 
     if (!isOpen || !job) return null;
+
+    const releaseId = job.id;
 
     const jobNumber = job['Job #'] || job.job;
     const releaseNumber = job['Release #'] || job.release;
@@ -174,6 +178,19 @@ export function PMBoardCardModal({ isOpen, onClose, job, stageColor }) {
                             View Events
                         </button>
                     )}
+                    {releaseId && (
+                        <button
+                            onClick={() => setAttachmentsOpen(true)}
+                            className="px-4 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+                        >
+                            Attachments
+                            {(job.has_drawing || job.has_photos) && (
+                                <span className="ml-1">
+                                    {job.has_drawing ? ' 📎' : ''}{job.has_photos ? ' 📷' : ''}
+                                </span>
+                            )}
+                        </button>
+                    )}
                     {job.trello_card_id && (
                         <a
                             href={`https://trello.com/c/${job.trello_card_id}`}
@@ -195,5 +212,18 @@ export function PMBoardCardModal({ isOpen, onClose, job, stageColor }) {
         </div>
     );
 
-    return createPortal(modalContent, document.body);
+    return (
+        <>
+            {createPortal(modalContent, document.body)}
+            {/* Same attachments hub (drawings + photos) used on the Job Log row,
+                in non-gate mode for plain browse/upload/markup. */}
+            <PdfVersionHistoryModal
+                isOpen={attachmentsOpen}
+                releaseId={releaseId}
+                viewerUrl={job.viewer_url || ''}
+                gateStage={null}
+                onClose={() => setAttachmentsOpen(false)}
+            />
+        </>
+    );
 }

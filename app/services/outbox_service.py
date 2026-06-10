@@ -97,6 +97,33 @@ class OutboxService:
             # Stash list_id for batch sort in process_pending_items (not persisted)
             outbox_item._trello_list_id = job_record.trello_list_id
 
+            # TRELLO_MOCK kill switch: never call the Trello API for ANY trello
+            # outbound action (move_card / update_fab_order / update_notes /
+            # create_card). For move_card we still mirror the target list onto the
+            # release so the internal board reflects the move; other actions just
+            # complete. This makes TRELLO_MOCK a complete outbound kill switch so
+            # board/timeline edits can be tested without touching the real board.
+            from flask import current_app
+            if current_app.config.get("TRELLO_MOCK") and outbox_item.destination == 'trello':
+                if outbox_item.action == 'move_card':
+                    stage = event.payload.get('to')
+                    if stage:
+                        from app.brain.job_log.routes import get_list_id_by_stage
+                        from app.trello.list_mapper import TrelloListMapper
+                        job_record.trello_list_id = get_list_id_by_stage(stage)
+                        job_record.trello_list_name = TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.get(stage)
+                outbox_item.status = 'completed'
+                outbox_item.completed_at = datetime.utcnow()
+                outbox_item.error_message = None
+                db.session.commit()
+                JobEventService.close(event.id)
+                db.session.commit()
+                logger.info(
+                    f"[TRELLO_MOCK] {outbox_item.action}: job {event.job}-{event.release} "
+                    f"— skipped Trello API call"
+                )
+                return True
+
             # Process based on destination and action
             if outbox_item.destination == 'trello' and outbox_item.action == 'move_card':
                 # Derive stage from event payload
@@ -127,28 +154,7 @@ class OutboxService:
                     db.session.commit()
                     return False
 
-                # TRELLO_MOCK: simulate the move locally — write the target list onto
-                # Releases (mirroring what the inbound webhook would have done) and
-                # close the event as if Trello accepted the call.
-                from flask import current_app
-                if current_app.config.get("TRELLO_MOCK"):
-                    from app.trello.list_mapper import TrelloListMapper
-                    target_list_name = TrelloListMapper.DB_STAGE_TO_TRELLO_LIST.get(stage)
-                    job_record.trello_list_id = list_id
-                    job_record.trello_list_name = target_list_name
-                    outbox_item.status = 'completed'
-                    outbox_item.completed_at = datetime.utcnow()
-                    outbox_item.error_message = None
-                    db.session.commit()
-                    JobEventService.close(event.id)
-                    db.session.commit()
-                    logger.info(
-                        f"[TRELLO_MOCK] move_card: job {event.job}-{event.release} "
-                        f"→ list '{target_list_name}' (id={list_id}) — skipped API call"
-                    )
-                    return True
-
-                # Execute the Trello API call
+                # Execute the Trello API call (TRELLO_MOCK short-circuits earlier).
                 try:
                     update_trello_card(card_id, new_list_id=list_id)
                     

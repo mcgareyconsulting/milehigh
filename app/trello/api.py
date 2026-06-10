@@ -37,6 +37,19 @@ import pandas as pd
 import math
 
 
+def _trello_writes_disabled():
+    """True when TRELLO_MOCK is set — outbound writes to Trello are short-circuited
+    so internal board/timeline edits never touch the real Trello board. Reads are
+    unaffected. Direct (non-outbox) write calls check this; the outbox processor
+    has its own kill switch."""
+    try:
+        if current_app and current_app.config.get("TRELLO_MOCK"):
+            return True
+    except Exception:
+        pass
+    return bool(getattr(cfg, "TRELLO_MOCK", False))
+
+
 # Main function for updating trello card information
 def update_trello_card(
     card_id, new_list_id=None, new_due_date=None, clear_due_date=False
@@ -50,6 +63,10 @@ def update_trello_card(
         new_due_date: New due date as datetime object (optional)
         clear_due_date: If True, explicitly clear the due date even if new_due_date is None
     """
+    if _trello_writes_disabled():
+        print(f"[TRELLO_MOCK] update_trello_card({card_id}) — skipped (writes disabled)")
+        return None
+
     url = f"https://api.trello.com/1/cards/{card_id}"
 
     payload = {
@@ -1924,6 +1941,10 @@ def move_mirror_card(primary_card_id, target_list_id):
     moves it to target_list_id. No-ops (logs a warning) when the primary has no
     linked mirror or no target list is available.
     """
+    if _trello_writes_disabled():
+        print(f"[TRELLO_MOCK] move_mirror_card({primary_card_id}) — skipped (writes disabled)")
+        return None
+
     if not primary_card_id or not target_list_id:
         print(f"[TRELLO API] move_mirror_card skipped: card={primary_card_id} list={target_list_id}")
         return None

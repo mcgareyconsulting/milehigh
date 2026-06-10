@@ -477,19 +477,28 @@ def add_scheduling_fields_to_jobs(
         list: List of job dictionaries with added scheduling fields
     """
     from app.brain.job_log.scheduling import calculate_all_job_scheduling
-    
+    from app.models import InstallerTeam
+
     if not jobs:
         return jobs
-    
+
+    # Crew size of a release's assigned installer crew drives its completion ETA.
+    # Build the name → crew_size map once to avoid an N+1 lookup.
+    crew_map = {t.name: t.crew_size for t in InstallerTeam.query.all()}
+
+    def _crew_size(job):
+        return crew_map.get(job.get('installer') or job.get('Installer'))
+
     # Use all_jobs_for_queue if provided, otherwise use jobs
     queue_jobs = all_jobs_for_queue if all_jobs_for_queue is not None else jobs
-    
+
     # Convert queue jobs to format expected by scheduling calculator
     queue_job_dicts = []
     for job in queue_jobs:
         job_dict = {
             'fab_hrs': job.get('Fab Hrs') or job.get('fab_hrs'),
             'install_hrs': job.get('Install HRS') or job.get('install_hrs'),
+            'crew_size': _crew_size(job),
             'fab_order': job.get('Fab Order') or job.get('fab_order'),
             'stage': job.get('Stage') or job.get('stage'),
             'is_hard_date': job.get('is_hard_date'),
@@ -526,6 +535,7 @@ def add_scheduling_fields_to_jobs(
             job_dict = {
                 'fab_hrs': job.get('Fab Hrs') or job.get('fab_hrs'),
                 'install_hrs': job.get('Install HRS') or job.get('install_hrs'),
+                'crew_size': _crew_size(job),
                 'fab_order': job.get('Fab Order') or job.get('fab_order'),
                 'stage': job.get('Stage') or job.get('stage'),
                 'is_hard_date': job.get('is_hard_date'),

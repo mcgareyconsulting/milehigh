@@ -10,16 +10,24 @@
  *   - View mode toggles between 'list' and 'timeline' without re-fetching data
  * updated_by_agent: 2026-05-04T00:00:00Z (Job-Log style chrome)
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
 import PMBoardList from '../components/PMBoardList';
 import GanttChart from '../components/GanttChart';
+import { EditCrewsModal } from '../components/EditCrewsModal';
+import { checkAuth } from '../utils/auth';
 
 function PMBoard() {
     const navigate = useNavigate();
     const { jobs, loading, error: fetchError, refetch } = useJobsDataFetching();
     const [viewMode, setViewMode] = useState('list');
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [crewsOpen, setCrewsOpen] = useState(false);
+
+    useEffect(() => {
+        checkAuth().then((u) => setIsAdmin(u?.is_admin || false));
+    }, []);
 
     const pillBase = 'px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap';
     const pillActive = `${pillBase} bg-blue-700 text-white`;
@@ -46,6 +54,14 @@ function PMBoard() {
                                     Timeline
                                 </button>
                                 <div className="flex-1" />
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => setCrewsOpen(true)}
+                                        className={pillInactive}
+                                    >
+                                        👷 Edit Crews
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => navigate('/job-log')}
                                     className={pillInactive}
@@ -89,6 +105,14 @@ function PMBoard() {
                     </div>
                 </div>
             </div>
+
+            {isAdmin && (
+                <EditCrewsModal
+                    isOpen={crewsOpen}
+                    onClose={() => setCrewsOpen(false)}
+                    onSaved={() => refetch(true)}
+                />
+            )}
         </div>
     );
 }

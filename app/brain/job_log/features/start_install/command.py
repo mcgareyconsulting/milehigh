@@ -65,6 +65,9 @@ class UpdateStartInstallCommand:
     source: str = "Brain"
     source_of_update: str = "Brain"
     undone_event_id: Optional[int] = None
+    # Timeline (Gantt) drags set push_trello=False so a scheduling move doesn't
+    # push an outbound Trello due-date change. Job Log edits leave it True.
+    push_trello: bool = True
 
     def execute(self) -> StartInstallUpdateResult:
         job_record: Releases = Releases.query.filter_by(
@@ -105,7 +108,7 @@ class UpdateStartInstallCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 
-        if job_record.trello_card_id:
+        if job_record.trello_card_id and self.push_trello:
             try:
                 update_trello_card(
                     card_id=job_record.trello_card_id,
@@ -122,6 +125,11 @@ class UpdateStartInstallCommand:
                     f"{self.job_id}-{self.release}: {trello_error}",
                     exc_info=True,
                 )
+        elif job_record.trello_card_id and not self.push_trello:
+            logger.info(
+                f"Skipping Trello due-date push for job {self.job_id}-{self.release} "
+                f"(scheduling move; skip_trello)"
+            )
         else:
             logger.warning(
                 f"Job {self.job_id}-{self.release} has no trello_card_id, skipping Trello update",

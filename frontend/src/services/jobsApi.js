@@ -195,6 +195,45 @@ class JobsApi {
         }
     }
 
+    // --- Installer crews (admin-managed via the PM board "Edit Crews" modal) ---
+    async getCrews() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/crews`);
+            return response.data.crews || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load crews');
+        }
+    }
+
+    async createCrew(name, crewSize) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/brain/crews`, {
+                name,
+                crew_size: crewSize,
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to create crew');
+        }
+    }
+
+    async updateCrew(id, updates) {
+        try {
+            const response = await axios.patch(`${API_BASE_URL}/brain/crews/${id}`, updates);
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update crew');
+        }
+    }
+
+    async deleteCrew(id) {
+        try {
+            await axios.delete(`${API_BASE_URL}/brain/crews/${id}`);
+        } catch (error) {
+            throw this._handleError(error, 'Failed to delete crew');
+        }
+    }
+
     async clearStartInstallHardDate(job, release) {
         try {
             const response = await axios.patch(
@@ -239,6 +278,24 @@ class JobsApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to fetch Gantt chart data');
+        }
+    }
+
+    async updateTimelineBar(job, release, { startInstall, compEta, installer } = {}) {
+        try {
+            // skip_trello: timeline scheduling changes must not push outbound to Trello
+            // (due-date update, mirror-card move). Job Log edits omit this and sync normally.
+            const payload = { is_hard_date: true, skip_trello: true };
+            if (startInstall) payload.start_install = startInstall;
+            if (compEta) payload.comp_eta = compEta;
+            if (installer !== undefined) payload.installer = installer;
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-start-install/${job}/${release}`,
+                payload
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update timeline');
         }
     }
 

@@ -26,7 +26,7 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, ReleasePhoto, Submittals, User
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
@@ -336,6 +336,22 @@ def _release_ids_with_drawings(release_ids):
     return {row[0] for row in rows}
 
 
+def _release_ids_with_photos(release_ids):
+    """One-shot batched lookup of which release IDs have at least one (non-deleted) photo."""
+    if not release_ids:
+        return set()
+    rows = (
+        db.session.query(ReleasePhoto.release_id)
+        .filter(
+            ReleasePhoto.release_id.in_(release_ids),
+            ReleasePhoto.is_deleted.is_(False),
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
 _VIEWER_PROJECT_ID_RE = re.compile(r"/projects/(\d+)")
 
 
@@ -525,6 +541,7 @@ def get_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'has_drawing': False,  # patched in batch below
+                    'has_photos': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -546,16 +563,25 @@ def get_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
-        # Patch has_drawing in one batched query (avoids N+1)
+        # Patch has_drawing / has_photos in batched queries (avoids N+1)
         try:
-            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            release_ids = [j['id'] for j in job_list]
+            ids_with_drawings = _release_ids_with_drawings(release_ids)
+            ids_with_photos = _release_ids_with_photos(release_ids)
             for j in job_list:
                 j['has_drawing'] = j['id'] in ids_with_drawings
+                j['has_photos'] = j['id'] in ids_with_photos
         except Exception as drawing_lookup_error:
             logger.warning(
-                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                f"Error batching has_drawing/has_photos flags: {drawing_lookup_error}",
                 exc_info=True,
             )
+
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the pared-down board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
 
         # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
         try:
@@ -813,6 +839,7 @@ def get_all_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'has_drawing': False,  # patched in batch below
+                    'has_photos': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_archived': serialize_value(job.is_archived),
                 }
@@ -833,16 +860,25 @@ def get_all_jobs():
                 logger.warning(error_msg, exc_info=True)
                 continue
 
-        # Patch has_drawing in one batched query (avoids N+1)
+        # Patch has_drawing / has_photos in batched queries (avoids N+1)
         try:
-            ids_with_drawings = _release_ids_with_drawings([j['id'] for j in job_list])
+            release_ids = [j['id'] for j in job_list]
+            ids_with_drawings = _release_ids_with_drawings(release_ids)
+            ids_with_photos = _release_ids_with_photos(release_ids)
             for j in job_list:
                 j['has_drawing'] = j['id'] in ids_with_drawings
+                j['has_photos'] = j['id'] in ids_with_photos
         except Exception as drawing_lookup_error:
             logger.warning(
-                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                f"Error batching has_drawing/has_photos flags: {drawing_lookup_error}",
                 exc_info=True,
             )
+
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the pared-down board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
 
         # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
         try:
@@ -913,123 +949,112 @@ def get_all_jobs():
 @login_required
 def get_gantt_data():
     """
-    Get Gantt chart data grouped by project (job number).
-    
+    Get installer-timeline data grouped by installer crew (one lane per crew).
+
     Returns:
-        JSON object with projects array, each containing:
-        - project: job number
-        - projectName: job name (from first release)
-        - startDate: earliest start_install across all releases
-        - endDate: latest comp_eta across all releases (or calculated)
+        JSON object with a `teams` array, each containing:
+        - team: installer crew name (matches Trello list / Releases.installer)
+        - color: assigned lane color (mirrors the List view's INSTALLER_PALETTE)
         - releases: array of release bars with start/end dates
-        - color: assigned color for this project
-        
+
+    Every active crew gets a lane (even when empty) so the frontend can render it
+    as a drop target; any installer value present in the data but not in the crew
+    roster is appended as an extra lane.
+
     Status Codes:
         - 200: Success
         - 500: Server error
     """
-    from app.models import Releases
+    from app.models import Releases, InstallerTeam
+    from app.config import Config
     from collections import defaultdict
 
     try:
         # Eligibility for the installer timeline:
         #  - start_install must be a hard date (formulaTF != True). NULL formulaTF is treated as hard.
-        #  - install_hrs must be present and > 0 so we can derive a comp_eta window.
-        #  - stage_group in FABRICATION, READY_TO_SHIP, or COMPLETE — "Shipping Complete"
-        #    rows are shipped-but-not-installed and belong on the timeline. The frontend's
-        #    filterComplete path drops only stage == 'Complete' rows.
+        #  - installer must be assigned — the crew is the timeline's y-axis.
+        #  - install_hrs present and > 0 so we can derive a default window.
+        #  - stage_group in FABRICATION, READY_TO_SHIP, or COMPLETE.
         jobs = Releases.query.filter(
             Releases.start_install.isnot(None),
             or_(Releases.start_install_formulaTF.is_(False),
                 Releases.start_install_formulaTF.is_(None)),
+            Releases.installer.isnot(None),
+            Releases.installer != '',
             Releases.install_hrs.isnot(None),
             Releases.install_hrs > 0,
             Releases.stage_group.in_(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE'])
         ).all()
 
-        # Group jobs by project (job number)
-        projects_dict = defaultdict(lambda: {
-            'releases': [],
-            'start_dates': [],
-            'end_dates': []
-        })
+        # Crew size drives the default window when no comp_eta is stored.
+        crew_map = {t.name: t.crew_size for t in InstallerTeam.query.all()}
 
+        teams_dict = defaultdict(list)
         for job in jobs:
-            project_key = job.job
             start_install = job.start_install
 
             # SQL `> 0` does not reliably exclude NaN across DB backends — guard here.
             if job.install_hrs is None or math.isnan(job.install_hrs) or job.install_hrs <= 0:
                 continue
 
-            # comp_eta = start_install + ceil(install_hrs / 24) calendar days.
-            # 24 = 3 installers * 8 hrs/day. Floor at 1 day so every release has a visible bar.
-            days_to_complete = max(1, math.ceil(job.install_hrs / 24))
-            comp_eta = start_install + timedelta(days=days_to_complete)
-            
-            # Store release data
-            release_data = {
+            team = (job.installer or '').strip()
+
+            # Prefer a manually-set comp_eta (dragged on the timeline). Fall back to a
+            # default window: start_install + ceil(install_hrs / (crew_size * 8)) days,
+            # floored at 1 so every release has a visible bar.
+            if job.comp_eta:
+                comp_eta = job.comp_eta
+            else:
+                crew_size = crew_map.get(team) or 2
+                days_to_complete = max(1, math.ceil(job.install_hrs / (crew_size * 8)))
+                comp_eta = start_install + timedelta(days=days_to_complete)
+
+            teams_dict[team].append({
                 'job': job.job,
                 'release': job.release,
                 'jobName': job.job_name,
                 'description': job.description or '',
+                'team': team,
                 'startDate': start_install.isoformat() if start_install else None,
                 'endDate': comp_eta.isoformat() if comp_eta else None,
                 'pm': job.pm or '',
                 'by': job.by or ''
-            }
-            
-            projects_dict[project_key]['releases'].append(release_data)
-            projects_dict[project_key]['start_dates'].append(start_install)
-            projects_dict[project_key]['end_dates'].append(comp_eta)
-        
-        # Convert to list format and calculate project-level dates
-        projects = []
-        # Color palette for projects (distinct colors)
-        colors = [
-            '#3B82F6',  # blue
-            '#10B981',  # green
-            '#F59E0B',  # amber
-            '#EF4444',  # red
-            '#8B5CF6',  # purple
-            '#EC4899',  # pink
-            '#06B6D4',  # cyan
-            '#F97316',  # orange
-            '#84CC16',  # lime
-            '#6366F1',  # indigo
-            '#14B8A6',  # teal
-            '#F43F5E',  # rose
-        ]
-        
-        for idx, (project_key, project_data) in enumerate(sorted(projects_dict.items())):
-            # Get project name from first release
-            first_release = project_data['releases'][0]
-            project_name = first_release['jobName']
-            
-            # Calculate project-level dates
-            project_start = min(project_data['start_dates'])
-            project_end = max(project_data['end_dates'])
-            
-            # Sort releases by start date
-            sorted_releases = sorted(project_data['releases'], 
-                                   key=lambda r: r['startDate'] or '')
-            
-            projects.append({
-                'project': project_key,
-                'projectName': project_name,
-                'startDate': project_start.isoformat() if project_start else None,
-                'endDate': project_end.isoformat() if project_end else None,
-                'releases': sorted_releases,
-                'color': colors[idx % len(colors)]  # Cycle through colors
             })
-        
-        # Sort projects by start date
-        projects.sort(key=lambda p: p['startDate'] or '')
-        
-        return jsonify({
-            'projects': projects
-        }), 200
-        
+
+        # Lane colors — mirror the List view's INSTALLER_PALETTE order.
+        colors = [
+            '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+            '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
+            '#84CC16', '#6366F1', '#14B8A6', '#F43F5E',
+        ]
+
+        # Active crews first (always shown as lanes), then any extra installer
+        # values present in the data but not in the roster. Fall back to the
+        # configured names if the crew table hasn't been seeded yet.
+        ordered_team_names = [
+            c.name for c in InstallerTeam.query
+            .filter(InstallerTeam.is_active.is_(True))
+            .order_by(InstallerTeam.name.asc())
+            .all()
+        ] or list(Config.INSTALLER_TEAMS)
+        for name in teams_dict:
+            if name not in ordered_team_names:
+                ordered_team_names.append(name)
+
+        teams = []
+        for idx, name in enumerate(ordered_team_names):
+            sorted_releases = sorted(
+                teams_dict.get(name, []),
+                key=lambda r: r['startDate'] or ''
+            )
+            teams.append({
+                'team': name,
+                'color': colors[idx % len(colors)],
+                'releases': sorted_releases
+            })
+
+        return jsonify({'teams': teams}), 200
+
     except Exception as e:
         logger.error("Error in /gantt-data endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
@@ -1443,9 +1468,22 @@ def update_invoiced(job, release):
 @brain_bp.route("/installer-teams", methods=["GET"])
 @login_required
 def get_installer_teams():
-    """Return the configured installer team names (match Trello list names)."""
+    """Return active installer crew names for the assign dropdown.
+
+    Sourced from the InstallerTeam table (managed via the admin Edit Crews UI);
+    falls back to the configured names if the table hasn't been seeded yet."""
+    from app.models import InstallerTeam
     from app.config import Config
-    return jsonify({'installer_teams': Config.INSTALLER_TEAMS}), 200
+
+    names = [
+        c.name for c in InstallerTeam.query
+        .filter(InstallerTeam.is_active.is_(True))
+        .order_by(InstallerTeam.name.asc())
+        .all()
+    ]
+    if not names:
+        names = Config.INSTALLER_TEAMS
+    return jsonify({'installer_teams': names}), 200
 
 
 @brain_bp.route("/update-start-install/<int:job>/<release>", methods=["PATCH"])
@@ -1484,7 +1522,47 @@ def update_start_install(job, release):
         asap = request.json.get('asap')  # tri-state: True sets ASAP, False clears, absent = ignore
         installer_in_req = 'installer' in (request.json or {})
         installer_val = request.json.get('installer')
+        # Timeline (Gantt) drags set skip_trello=true so a scheduling move/reassign
+        # doesn't push an outbound Trello due-date change or mirror-card move.
+        push_trello = not bool(request.json.get('skip_trello', False))
         start_install_date = None
+
+        # comp_eta is an explicit override written directly to the column, used by the
+        # timeline when a bar's end is dragged. Hard-date rows (all timeline bars) are
+        # skipped by the scheduling recalc, so a manual comp_eta survives.
+        comp_eta_in_req = 'comp_eta' in (request.json or {})
+        comp_eta_date = None
+        if comp_eta_in_req:
+            comp_eta_str = request.json.get('comp_eta')
+            if comp_eta_str and str(comp_eta_str).strip():
+                try:
+                    comp_eta_date = datetime.strptime(str(comp_eta_str).strip(), '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({'error': 'Invalid comp_eta format. Expected YYYY-MM-DD'}), 400
+
+        def _recalc_fabrication():
+            """Reflow scheduling (comp_eta depends on the assigned crew's size)."""
+            try:
+                from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
+                recalculate_all_jobs_scheduling(stage_group='FABRICATION')
+            except Exception as cascade_error:
+                logger.error(
+                    f"Scheduling cascade failed after installer change: {cascade_error}",
+                    exc_info=True,
+                )
+
+        def _apply_comp_eta():
+            """Write the explicit comp_eta override straight to the row. Returns True
+            if applied. Does not commit."""
+            if not comp_eta_in_req:
+                return False
+            rec = Releases.query.filter_by(job=job, release=release).first()
+            if not rec or rec.comp_eta == comp_eta_date:
+                return False
+            rec.comp_eta = comp_eta_date
+            rec.last_updated_at = datetime.utcnow()
+            rec.source_of_update = 'Brain'
+            return True
 
         # ASAP set/clear — visual flag only; does not write start_install or formula fields,
         # so no Trello due-date push and no scheduling recalc (formula isn't changing).
@@ -1621,22 +1699,38 @@ def update_start_install(job, release):
 
         has_date = bool(start_install_str and start_install_str.strip())
 
-        # Installer-only update: no date provided but an installer was sent.
-        # Do NOT run the date command, which would clear start_install.
-        if not has_date and installer_in_req:
-            try:
-                result = AssignInstallerCommand(
-                    job_id=job,
-                    release=release,
-                    installer=installer_val,
-                ).execute()
-            except ValueError as ve:
-                if str(ve) == "Event already exists":
-                    return jsonify({'error': 'Event already exists'}), 400
-                raise
+        # Non-date update: no start_install provided but an installer and/or a
+        # comp_eta override was sent (timeline lane-reassign / resize). Do NOT run
+        # the date command, which would clear start_install.
+        if not has_date and (installer_in_req or comp_eta_in_req):
+            event_id = None
+            installer_changed = False
+            if installer_in_req:
+                try:
+                    result = AssignInstallerCommand(
+                        job_id=job,
+                        release=release,
+                        installer=installer_val,
+                        move_mirror=push_trello,
+                    ).execute()
+                    event_id = result.event_id
+                    installer_changed = True
+                except ValueError as ve:
+                    if str(ve) != "Event already exists":
+                        raise
+                    # Installer unchanged; if there's nothing else to apply, it's a no-op.
+                    if not comp_eta_in_req:
+                        return jsonify({'error': 'Event already exists'}), 400
+
+            applied_eta = _apply_comp_eta()
+            if installer_changed or applied_eta:
+                db.session.commit()
+            if installer_changed:
+                _recalc_fabrication()  # assigned crew drives other rows' projection
+
             return jsonify({
                 'status': 'success',
-                'event_id': result.event_id,
+                'event_id': event_id,
             }), 200
 
         try:
@@ -1645,25 +1739,37 @@ def update_start_install(job, release):
                 release=release,
                 start_install=start_install_date,
                 is_hard_date=is_hard_date,
+                push_trello=push_trello,
             ).execute()
         except ValueError as ve:
             if str(ve) == "Event already exists":
                 return jsonify({'error': 'Event already exists'}), 400
             raise
 
-        # Apply the installer change alongside the date, if one was sent.
+        # Apply the installer change alongside the date, if one was sent. The
+        # assigned crew's size drives comp_eta, so recalc when it changes.
         if installer_in_req:
+            installer_changed = True
             try:
                 AssignInstallerCommand(
                     job_id=job,
                     release=release,
                     installer=installer_val,
+                    move_mirror=push_trello,
                 ).execute()
             except ValueError as ve:
                 # Installer unchanged within the dedup window — the date update
                 # already applied, so don't fail the request.
                 if str(ve) != "Event already exists":
                     raise
+                installer_changed = False
+            if installer_changed:
+                _recalc_fabrication()
+
+        # Apply an explicit comp_eta override last so it isn't clobbered by recalc
+        # (hard-date rows are skipped by recalc anyway).
+        if _apply_comp_eta():
+            db.session.commit()
 
         return jsonify({
             'status': 'success',

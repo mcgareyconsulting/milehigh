@@ -184,6 +184,8 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
                         </select>
                         <p className="text-gray-500 text-xs mt-2">
                             Assigning an installer moves this release's mirror card to that list on Trello.
+                            Crew size (which drives the completion ETA) is managed per crew under
+                            “Edit Crews” on the PM board.
                         </p>
                     </div>
 

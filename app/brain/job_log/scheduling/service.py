@@ -22,9 +22,19 @@ based on the scheduling logic.
 import math
 from datetime import date, datetime
 from typing import List, Optional
-from app.models import Releases, db
+from app.models import Releases, InstallerTeam, db
 from app.brain.job_log.scheduling.calculator import calculate_all_job_scheduling
 from app.logging_config import get_logger
+
+
+def _crew_size_map():
+    """Map installer-crew name → crew_size for resolving a release's comp_eta.
+
+    The crew's size (not a per-release value) drives the completion ETA. Built
+    once per recalc to avoid an N+1 lookup. Releases with no/unknown installer
+    fall back to the calculator's legacy default capacity.
+    """
+    return {t.name: t.crew_size for t in InstallerTeam.query.all()}
 
 
 def _safe_float(val):
@@ -73,12 +83,15 @@ def update_job_scheduling_fields(
     if all_jobs is None:
         all_jobs = Releases.query.all()
     
+    crew_map = _crew_size_map()
+
     # Convert Job models to dictionaries for calculation
     all_jobs_dicts = []
     for j in all_jobs:
         all_jobs_dicts.append({
             'fab_hrs': _safe_float(j.fab_hrs),
             'install_hrs': _safe_float(j.install_hrs),
+            'crew_size': crew_map.get(j.installer),
             'fab_order': _safe_float(j.fab_order),
             'stage': j.stage if j.stage else 'Released',
             'is_hard_date': j.start_install_formulaTF is False,
@@ -88,6 +101,7 @@ def update_job_scheduling_fields(
     job_dict = {
         'fab_hrs': _safe_float(job.fab_hrs),
         'install_hrs': _safe_float(job.install_hrs),
+        'crew_size': crew_map.get(job.installer),
         'fab_order': _safe_float(job.fab_order),
         'stage': job.stage if job.stage else 'Released',
         'is_hard_date': job.start_install_formulaTF is False,
@@ -182,11 +196,13 @@ def recalculate_all_jobs_scheduling(
     logger.info(f"Processing {total_jobs} jobs")
     
     # Convert to dictionaries for calculation
+    crew_map = _crew_size_map()
     jobs_dicts = []
     for job in all_jobs:
         jobs_dicts.append({
             'fab_hrs': _safe_float(job.fab_hrs),
             'install_hrs': _safe_float(job.install_hrs),
+            'crew_size': crew_map.get(job.installer),
             'fab_order': _safe_float(job.fab_order),
             'stage': job.stage if job.stage else 'Released',
             'is_hard_date': job.start_install_formulaTF is False,

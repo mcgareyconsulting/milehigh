@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from app.models import Releases, db
+from app.models import Releases, InstallerTeam, db
 from app.config import Config
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
@@ -52,6 +52,9 @@ class AssignInstallerCommand:
     installer: Optional[str]
     source: str = "Brain"
     undone_event_id: Optional[int] = None
+    # Timeline (Gantt) lane drags set move_mirror=False so a reassignment doesn't
+    # push an outbound Trello mirror-card move. Job Log edits leave it True.
+    move_mirror: bool = True
 
     def execute(self) -> AssignInstallerResult:
         job_record: Releases = Releases.query.filter_by(
@@ -85,10 +88,15 @@ class AssignInstallerCommand:
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source
 
-        # Resolve the target list: the installer list by name, or Unassigned when cleared.
+        # Resolve the target list: prefer the InstallerTeam's stored trello_list_id
+        # (decoupled from list names during the Trello transition), then fall back
+        # to a name lookup; Unassigned list when the installer is cleared.
         if new_installer:
-            entry = get_list_by_name(new_installer)
-            target_list_id = entry["id"] if entry else None
+            team = InstallerTeam.query.filter_by(name=new_installer).first()
+            target_list_id = team.trello_list_id if (team and team.trello_list_id) else None
+            if not target_list_id:
+                entry = get_list_by_name(new_installer)
+                target_list_id = entry["id"] if entry else None
             if not target_list_id:
                 logger.warning(
                     f"No Trello list found matching installer '{new_installer}'; "
@@ -97,7 +105,7 @@ class AssignInstallerCommand:
         else:
             target_list_id = Config.UNASSIGNED_CARDS_LIST_ID
 
-        if job_record.trello_card_id and target_list_id:
+        if job_record.trello_card_id and target_list_id and self.move_mirror:
             try:
                 move_mirror_card(job_record.trello_card_id, target_list_id)
                 logger.info(
@@ -109,6 +117,11 @@ class AssignInstallerCommand:
                     f"Failed to move mirror card for job {self.job_id}-{self.release}: {trello_error}",
                     exc_info=True,
                 )
+        elif job_record.trello_card_id and target_list_id and not self.move_mirror:
+            logger.info(
+                f"Skipping mirror move for job {self.job_id}-{self.release} "
+                f"(timeline reassign; skip_trello)"
+            )
         elif not job_record.trello_card_id:
             logger.warning(
                 f"Job {self.job_id}-{self.release} has no trello_card_id, skipping mirror move",

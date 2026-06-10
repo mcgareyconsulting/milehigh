@@ -30,6 +30,7 @@ brain_bp = Blueprint("brain", __name__)
 from app.brain.job_log import routes as job_log_routes
 from app.brain.job_log import pdf_markup_routes  # noqa: F401  (registers /releases/<id>/drawing endpoints)
 from app.brain.job_log import photo_routes  # noqa: F401  (registers /releases/<id>/photos endpoints)
+from app.brain.job_log import crew_routes  # noqa: F401  (registers /crews CRUD endpoints)
 from app.brain.drafting_work_load import routes as dwl_routes
 from app.brain.map import routes as map_routes
 from app.brain.board import routes as board_routes
