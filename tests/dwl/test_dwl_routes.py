@@ -462,3 +462,161 @@ class TestGetSubmittalStatuses:
         data = json.loads(response.data)
         assert 'submittal_statuses' in data
         assert isinstance(data['submittal_statuses'], list)
+
+
+# ==============================================================================
+# PUT /drafting-work-load/rel  +  GET /drafting-work-load/rel/next TESTS
+# ==============================================================================
+
+DRR_TYPE = "Drafting Release Review"
+
+
+def _seed_submittal(submittal_id, type_=DRR_TYPE, status="Open", rel=None):
+    """Commit a real Submittals row so the rel endpoints' DB queries see it."""
+    s = Submittals(
+        submittal_id=str(submittal_id),
+        procore_project_id="1",
+        project_number="100",
+        type=type_,
+        status=status,
+        rel=rel,
+        rel_assigned_at=datetime.utcnow() if rel is not None else None,
+    )
+    db.session.add(s)
+    db.session.commit()
+    return s
+
+
+def _seed_active_release(job, release, **extra):
+    from app.models import Releases
+    fields = {"is_active": True, "is_archived": False}
+    fields.update(extra)
+    r = Releases(job=int(job), release=str(release), job_name="Test Job", **fields)
+    db.session.add(r)
+    db.session.commit()
+    return r
+
+
+class TestUpdateSubmittalRel:
+    """Tests for PUT /drafting-work-load/rel endpoint (real DB rows)."""
+
+    def test_assign_rel_happy_path(self, client):
+        _seed_submittal("rel-1")
+        response = client.put(
+            '/brain/drafting-work-load/rel',
+            json={'submittal_id': 'rel-1', 'rel': 200},
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is True
+        assert data['rel'] == 200
+        assert Submittals.query.filter_by(submittal_id='rel-1').first().rel == 200
+
+    def test_assign_rel_non_drr_rejected(self, client):
+        _seed_submittal("rel-2", type_="Submittal for GC Approval")
+        response = client.put(
+            '/brain/drafting-work-load/rel',
+            json={'submittal_id': 'rel-2', 'rel': 200},
+        )
+        assert response.status_code == 400
+        assert json.loads(response.data)['code'] == 'type'
+
+    @pytest.mark.parametrize("bad", [50, 1000])
+    def test_assign_rel_out_of_range(self, client, bad):
+        _seed_submittal("rel-3")
+        response = client.put(
+            '/brain/drafting-work-load/rel',
+            json={'submittal_id': 'rel-3', 'rel': bad},
+        )
+        assert response.status_code == 400
+        assert json.loads(response.data)['code'] == 'range'
+
+    def test_assign_rel_collision_active_release(self, client):
+        _seed_active_release(777, 200)  # active release 200 on another job
+        _seed_submittal("rel-4")
+        response = client.put(
+            '/brain/drafting-work-load/rel',
+            json={'submittal_id': 'rel-4', 'rel': 200},
+        )
+        assert response.status_code == 409
+        assert json.loads(response.data)['code'] == 'collision'
+
+    def test_assign_rel_collision_other_pending_drr(self, client):
+        _seed_submittal("rel-holder", rel=200)  # pending DRR already holds 200
+        _seed_submittal("rel-5")
+        response = client.put(
+            '/brain/drafting-work-load/rel',
+            json={'submittal_id': 'rel-5', 'rel': 200},
+        )
+        assert response.status_code == 409
+        assert json.loads(response.data)['code'] == 'collision'
+
+    def test_assign_rel_reassign_self_allowed(self, client):
+        _seed_submittal("rel-6", rel=200)
+        # same number
+        same = client.put('/brain/drafting-work-load/rel',
+                          json={'submittal_id': 'rel-6', 'rel': 200})
+        assert same.status_code == 200
+        # different number
+        diff = client.put('/brain/drafting-work-load/rel',
+                          json={'submittal_id': 'rel-6', 'rel': 201})
+        assert diff.status_code == 200
+        assert Submittals.query.filter_by(submittal_id='rel-6').first().rel == 201
+
+    def test_assign_rel_archived_release_does_not_block(self, client):
+        _seed_active_release(777, 200, is_archived=True)
+        _seed_submittal("rel-7")
+        response = client.put('/brain/drafting-work-load/rel',
+                              json={'submittal_id': 'rel-7', 'rel': 200})
+        assert response.status_code == 200
+
+    def test_assign_rel_missing_rel(self, client):
+        _seed_submittal("rel-8")
+        response = client.put('/brain/drafting-work-load/rel',
+                              json={'submittal_id': 'rel-8'})
+        assert response.status_code == 400
+
+    def test_assign_rel_not_found(self, client):
+        response = client.put('/brain/drafting-work-load/rel',
+                              json={'submittal_id': 'nope', 'rel': 200})
+        assert response.status_code == 404
+
+    def test_assign_rel_writes_audit_event(self, client):
+        from app.models import SubmittalEvents
+        _seed_submittal("rel-9")
+        client.put('/brain/drafting-work-load/rel',
+                   json={'submittal_id': 'rel-9', 'rel': 200})
+        events = SubmittalEvents.query.filter_by(submittal_id='rel-9', action='updated').all()
+        assert any(e.payload and e.payload.get('rel') == {'old': None, 'new': 200} for e in events)
+
+    def test_assign_rel_forbidden_for_non_drafter(self, client, mock_non_admin_user):
+        _seed_submittal("rel-10")
+        with patch('app.auth.utils.get_current_user', return_value=mock_non_admin_user):
+            response = client.put('/brain/drafting-work-load/rel',
+                                  json={'submittal_id': 'rel-10', 'rel': 200})
+        assert response.status_code == 403
+
+
+class TestGetNextRel:
+    """Tests for GET /drafting-work-load/rel/next endpoint."""
+
+    def test_next_rel_default(self, client):
+        response = client.get('/brain/drafting-work-load/rel/next')
+        assert response.status_code == 200
+        assert json.loads(response.data)['next_rel'] == 100
+
+    def test_next_rel_skips_global_taken(self, client):
+        _seed_active_release(777, 100)
+        response = client.get('/brain/drafting-work-load/rel/next')
+        assert json.loads(response.data)['next_rel'] == 101
+
+    def test_next_rel_excludes_self(self, client):
+        # 'anchor199' (Closed, non-blocking) is the most-recent rel, so the
+        # sequence starts at 200. 's1' (pending) holds 200: excluding it frees
+        # 200 for re-suggestion; including it pushes the suggestion to 201.
+        _seed_submittal("s1", rel=200, status="Open")
+        _seed_submittal("anchor199", rel=199, status="Closed")
+        with_self = client.get('/brain/drafting-work-load/rel/next?submittal_id=s1')
+        assert json.loads(with_self.data)['next_rel'] == 200
+        without = client.get('/brain/drafting-work-load/rel/next')
+        assert json.loads(without.data)['next_rel'] == 201

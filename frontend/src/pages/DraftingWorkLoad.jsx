@@ -644,6 +644,7 @@ function DraftingWorkLoad() {
                                                             rowIndex={index}
                                                             isAdmin={isAdmin}
                                                             isDrafter={isDrafter}
+                                                            onRelAssigned={refetch}
                                                             onDragStart={isAdmin ? handleDragStart : undefined}
                                                             onDragOver={isAdmin ? handleDragOver : undefined}
                                                             onDragLeave={isAdmin ? handleDragLeave : undefined}

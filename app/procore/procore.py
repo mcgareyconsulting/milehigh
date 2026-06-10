@@ -25,6 +25,7 @@ import os
 import hashlib
 import requests
 from datetime import datetime
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from requests.exceptions import ConnectionError, Timeout
 from urllib3.exceptions import ProtocolError
@@ -68,59 +69,83 @@ def _next_in_range(value):
     return REL_MIN if nxt > REL_MAX else nxt
 
 
-def _active_release_numbers_for_job(job):
-    """Release numbers held by ACTIVE job-log releases for ``job``.
+class RelAssignmentError(Exception):
+    """Raised when a manual Rel assignment is invalid.
 
-    The uniqueness that matters is the job-release pair (``Releases.job`` +
-    ``Releases.release``): a Rel handed to a DRR submittal must not collide with
-    an active job-log release on the same job. "Active" reuses the centralized
-    ``active_releases_filter`` (not archived; ``is_active`` True or NULL), so a
-    NULL ``is_active`` still blocks reuse (leak-proof bias).
-
-    ``Releases.job`` is an integer and ``Releases.release`` a string, while the
-    submittal carries ``project_number`` (the same job number, per spec) and an
-    integer Rel. Both sides are coerced to int for the comparison; any value that
-    isn't a clean integer is ignored. Returns the set of taken integers (empty
-    when ``job`` is missing or non-numeric, which simply means no guard applies).
+    ``code`` is one of 'type' (submittal isn't a DRR), 'range' (not an integer
+    in [REL_MIN, REL_MAX]), or 'collision' (number already taken).
     """
-    if job is None:
-        return set()
-    job_int = _to_int_or_none(job)
-    if job_int is None:
-        logger.warning(
-            "Rel collision guard inert: project_number %r is not a valid job number", job
-        )
-        return set()
 
-    rows = (
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _globally_taken_rel_numbers(exclude_submittal_id=None):
+    """Rel numbers that are unavailable system-wide, keyed on the value alone.
+
+    Uniqueness is locked on the 3-digit Rel value (job-agnostic). A number is
+    taken if it appears in the union of two sources:
+
+    (a) Active release #s -- every ACTIVE job-log ``Releases`` row, any job
+        (``active_releases_filter``: not archived; ``is_active`` True or NULL).
+    (b) Pending DRR release #s -- DRR submittals that hold a ``rel`` but haven't
+        become a release yet (status not 'Closed'), excluding the submittal being
+        edited (``exclude_submittal_id``).
+
+    A Closed DRR is on its way to being an active release that (a) catches, so it
+    is intentionally not reserved here -- otherwise every historical Closed DRR
+    would hold its number forever and exhaust the 100..999 range. Values that
+    aren't clean integers are ignored. Returns the set of taken integers.
+    """
+    taken = set()
+
+    release_rows = (
         db.session.query(Releases.release)
-        .filter(Releases.job == job_int, active_releases_filter())
+        .filter(active_releases_filter())
         .all()
     )
-    taken = set()
-    for (value,) in rows:
+    for (value,) in release_rows:
         number = _to_int_or_none(value)
         if number is not None:
             taken.add(number)
+
+    drr_filters = [
+        Submittals.type == DRR_TYPE,
+        Submittals.rel.isnot(None),
+        or_(Submittals.status.is_(None), Submittals.status != "Closed"),
+    ]
+    if exclude_submittal_id is not None:
+        drr_filters.append(Submittals.submittal_id != str(exclude_submittal_id))
+    drr_rows = (
+        db.session.query(Submittals.rel)
+        .filter(*drr_filters)
+        .all()
+    )
+    for (value,) in drr_rows:
+        number = _to_int_or_none(value)
+        if number is not None:
+            taken.add(number)
+
     return taken
 
 
-def next_rel_number(job=None):
-    """Return the next Rel number to assign to a DRR submittal on ``job``.
+def next_rel_number(exclude_submittal_id=None):
+    """Return a suggested next Rel number (used to prefill the manual popup).
 
     Numbers run 100..999 as a single global sequence and wrap back to 100. "Next"
     is derived from the most recently assigned Rel (by rel_assigned_at) so
     wraparound is handled naturally: if the last assigned value was 999, the next
     is 100. Returns REL_MIN when no Rel has ever been assigned.
 
-    To keep the job-release pair unique, any candidate already held by an ACTIVE
-    job-log release on the same ``job`` is skipped, advancing through the sequence
-    (wrapping) until a free number is found. Archived/inactive releases do not
-    block reuse. When ``job`` is None the collision guard is inert and the plain
-    global sequence is returned (used by callers/tests that don't need it).
+    Any candidate already taken (see ``_globally_taken_rel_numbers``) is skipped,
+    advancing through the sequence (wrapping) until a free number is found.
+    ``exclude_submittal_id`` lets the submittal being edited ignore its own
+    current Rel when computing a suggestion.
 
     Raises RuntimeError only in the pathological case where every number in
-    [REL_MIN, REL_MAX] is held by an active release for the job.
+    [REL_MIN, REL_MAX] is taken.
     """
     last = (
         Submittals.query
@@ -130,7 +155,7 @@ def next_rel_number(job=None):
     )
     start = _next_in_range(last.rel) if last and last.rel is not None else REL_MIN
 
-    taken = _active_release_numbers_for_job(job)
+    taken = _globally_taken_rel_numbers(exclude_submittal_id)
     candidate = start
     for _ in range(REL_MAX - REL_MIN + 1):
         if candidate not in taken:
@@ -138,33 +163,42 @@ def next_rel_number(job=None):
         candidate = _next_in_range(candidate)
 
     raise RuntimeError(
-        f"No free Rel number in [{REL_MIN}, {REL_MAX}] for job {job!r}: "
-        f"every value is held by an active job-log release."
+        f"No free Rel number in [{REL_MIN}, {REL_MAX}]: every value is taken "
+        f"by an active release or pending DRR."
     )
 
 
-def assign_rel_if_drr(record):
-    """Assign a Rel number to ``record`` if it is a DRR submittal without one.
+def assign_rel_manual(submittal, desired_rel):
+    """Validate and assign a manually-entered Rel to a DRR submittal.
 
-    Idempotent: does nothing if the submittal is not DRR or already has a Rel.
-    The Rel is checked against active job-log releases for the same job
-    (``record.project_number``) so the job-release pair stays unique. The caller
-    is responsible for committing the surrounding transaction. Returns the
-    assigned Rel number, or None if nothing was assigned.
+    Raises ``RelAssignmentError`` (code 'type' | 'range' | 'collision') on
+    failure and leaves the submittal untouched. On success sets ``rel`` and
+    ``rel_assigned_at`` and returns the assigned integer. The caller commits.
+    Reassignment is allowed: the submittal's own current Rel is excluded from
+    the collision check.
     """
-    if record is None:
-        return None
-    if (record.type or "").strip() != DRR_TYPE:
-        return None
-    if record.rel is not None:
-        return None
-    record.rel = next_rel_number(record.project_number)
-    record.rel_assigned_at = datetime.utcnow()
+    if submittal is None or (submittal.type or "").strip() != DRR_TYPE:
+        raise RelAssignmentError(
+            "type", "Rel can only be assigned to a Drafting Release Review submittal."
+        )
+    number = _to_int_or_none(desired_rel)
+    if number is None or not (REL_MIN <= number <= REL_MAX):
+        raise RelAssignmentError(
+            "range", f"Rel must be a whole number from {REL_MIN} to {REL_MAX}."
+        )
+    taken = _globally_taken_rel_numbers(exclude_submittal_id=submittal.submittal_id)
+    if number in taken:
+        raise RelAssignmentError(
+            "collision",
+            f"Rel {number} is already assigned to an active release or pending DRR.",
+        )
+    submittal.rel = number
+    submittal.rel_assigned_at = datetime.utcnow()
     logger.info(
         "Assigned Rel %s to DRR submittal %s (job %s)",
-        record.rel, record.submittal_id, record.project_number,
+        number, submittal.submittal_id, submittal.project_number,
     )
-    return record.rel
+    return number
 
 
 def _request_json(url, headers, params=None):
@@ -678,12 +712,9 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             last_updated=datetime.utcnow()
         )
         
-        # Assign a Rel (release) number when this submittal is created as a DRR.
-        # Procore never mutates a submittal's type in place: a stage transition closes
-        # the old submittal and creates a revision of the new type, so a DRR always
-        # arrives as a fresh creation event. Assigning here (before commit) is therefore
-        # the complete and correct hook. No-op for non-DRR types or if already assigned.
-        assign_rel_if_drr(new_submittal)
+        # Rel (release) numbers are no longer assigned automatically on creation.
+        # A drafter/admin assigns one manually from the DWL submittal popup
+        # (assign_rel_manual), so a freshly-created DRR arrives with rel=None.
 
         db.session.add(new_submittal)
         logger.info(f"Added submittal to session, committing to database...")
