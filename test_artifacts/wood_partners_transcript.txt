@@ -1,0 +1,35 @@
+Will: Alright, let's run the Wood Partners list. Start with 9099-146, the Building A stairs.
+
+Luis: 9099-146 is basically through fab. We finished welding this morning, it's moving to ship. Should be on a truck Thursday.
+
+Will: Good. Turner is asking for a firm start-install date. Luis, can you confirm the crew can be on site the 15th?
+
+Luis: Yeah, the 15th works. I'll lock that in.
+
+Will: Perfect. I'll send Turner the install date for 9099-146 by end of day.
+
+Katie: Quick one — is 9099-146 going to be ready to invoice once it ships? I want to get it on this month's billing.
+
+Will: Should be, yeah. Katie, go ahead and queue 9099-146 for invoicing after it ships Thursday.
+
+Will: Next, 9099-150, Building B embeds.
+
+Luis: Detailing is almost done. One thing — the paint color callout was wrong on the last set, it had the Building A color. Somebody needs to fix that before it releases to fab.
+
+Will: Okay. Luis, please correct the paint color on 9099-150 and re-release the drawings.
+
+Will: On submittals — SD-1, the stair shop drawings, came back from the architect. It got approved as noted and the ball's back in our court now.
+
+Luis: Got it. So we can fab to those?
+
+Will: Yes, but read the architect's notes first. Luis, review the SD-1 markups before we cut anything.
+
+Will: Last thing, the GC asks. We owe Turner a response on RFI 12.
+
+Will: I'll handle RFI 12 — I'll get the response over to Turner by Friday.
+
+Will: And we still need to order the galvanized lintels for Building A. Luis, can you get that PO out today?
+
+Luis: On it.
+
+Will: Oh, and somebody mentioned the office coffee machine is broken again. Not our problem today. Alright, that's it, thanks everyone.

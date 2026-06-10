@@ -953,8 +953,22 @@ class Meeting(db.Model):
     meeting_type = db.Column(db.String(40), nullable=False, default='other')
     source = db.Column(db.String(30), nullable=False, default='stub')  # stub | recall | graph
     project_number = db.Column(db.String(100), nullable=True, index=True)
-    occurred_at = db.Column(db.DateTime, nullable=True)
+    occurred_at = db.Column(db.DateTime, nullable=True)   # meeting start (bot join time)
+    # Meeting end — stamped when the Recall transcript is pulled (bot leaves the call).
+    # Bounds the "during meeting runtime" window used to gather the events that feed the
+    # meeting summary: events whose created_at falls in [occurred_at, ended_at].
+    ended_at = db.Column(db.DateTime, nullable=True)
     transcript = db.Column(db.Text, nullable=True)
+    # Pre-meeting context the user drops in when dispatching the bot (agenda / notes; an
+    # uploaded .md lands here too). Feeds to-do EXTRACTION as the authored "before" view —
+    # grounds vague references and improves matching. A PDF→text path writes here later.
+    agenda_text = db.Column(db.Text, nullable=True)
+    # The release/submittal event updates that landed DURING the meeting window — the
+    # "events context" rendered for the SUMMARY (and recorded here because state drifts).
+    context_snapshot = db.Column(db.Text, nullable=True)
+    # The generated meeting summary (events-during-runtime + transcript). The second of the
+    # two outputs produced from a meeting, alongside the to-do checklist.
+    summary = db.Column(db.Text, nullable=True)
     # Recall.ai notetaker bot dispatched for this meeting (source='recall'). bot_status
     # tracks the bot lifecycle, kept fresh by the recall-webhook receiver.
     meeting_url = db.Column(db.String(1000), nullable=True)
@@ -975,10 +989,15 @@ class Meeting(db.Model):
     extract_started_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     extracted_at = db.Column(db.DateTime, nullable=True)  # when checklist items were generated
+    learned_at = db.Column(db.DateTime, nullable=True)    # when the learnings step last ran
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     items = db.relationship(
         'ChecklistItem', backref='meeting', lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+    learnings = db.relationship(
+        'MeetingLearning', backref='meeting', lazy='dynamic',
         cascade='all, delete-orphan',
     )
     created_by_user = db.relationship('User', foreign_keys=[created_by])
@@ -991,7 +1010,9 @@ class Meeting(db.Model):
             'source': self.source,
             'project_number': self.project_number,
             'occurred_at': _dt(self.occurred_at),
+            'ended_at': _dt(self.ended_at),
             'extracted_at': _dt(self.extracted_at),
+            'learned_at': _dt(self.learned_at),
             'created_at': _dt(self.created_at),
             'meeting_url': self.meeting_url,
             'recall_bot_id': self.recall_bot_id,
@@ -1008,6 +1029,11 @@ class Meeting(db.Model):
             d['items'] = [i.to_dict() for i in items]
             d['item_count'] = len(items)
             d['transcript'] = self.transcript  # detail view only — keep the list lean
+            d['agenda_text'] = self.agenda_text
+            d['context_snapshot'] = self.context_snapshot
+            d['summary'] = self.summary
+            latest = self.learnings.order_by(MeetingLearning.id.desc()).first()
+            d['learning'] = latest.to_dict() if latest else None
         else:
             d['item_count'] = self.items.count()
         return d
@@ -1098,4 +1124,87 @@ class ChecklistItem(db.Model):
             'name_corrected': self.name_corrected,
             'reviewed_at': _dt(self.reviewed_at),
             'created_at': _dt(self.created_at),
+        }
+
+
+class MeetingLearning(db.Model):
+    """What the agent learned from a meeting once the human worked its checklist.
+
+    Synthesized on review completion from {agenda, transcript, event snapshot, the
+    yes/no/edit review outcomes}. `summary` is the human-readable insight; `payload`
+    structures it by the three dimensions the learnings are keyed on:
+    by_outcome (accepted/rejected/edited), by_item_type, and by_event (the underlying
+    release/submittal activity). Reusable cross-meeting signals distilled here are stored
+    separately in ExtractionSignal so future extractions can read them back.
+    """
+    __tablename__ = "meeting_learnings"
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(
+        db.Integer, db.ForeignKey('meetings.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    summary = db.Column(db.Text, nullable=True)
+    payload = db.Column(db.JSON, nullable=True)
+    # Usage meter, mirroring Meeting.extract_* ('stub'/$0 = LLM synthesis was skipped).
+    model = db.Column(db.String(40), nullable=True)
+    input_tokens = db.Column(db.Integer, nullable=True)
+    output_tokens = db.Column(db.Integer, nullable=True)
+    cost_usd = db.Column(db.Float, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'meeting_id': self.meeting_id,
+            'summary': self.summary,
+            'payload': self.payload,
+            'model': self.model,
+            'input_tokens': self.input_tokens,
+            'output_tokens': self.output_tokens,
+            'cost_usd': self.cost_usd,
+            'created_at': _dt(self.created_at),
+        }
+
+
+class ExtractionSignal(db.Model):
+    """A reusable, cross-meeting learning fed back into future to-do extractions.
+
+    signal_type:
+      - 'alias'     : a garbled meeting name -> the canonical job name (key=garbled,
+                      value=canonical). Applied to normalize names BEFORE matching.
+      - 'owner_map' : a proposed-owner correction the reviewer made (key=context,
+                      value=target user id) so recurring jobs default to the right owner.
+      - 'pattern'   : qualitative guidance keyed by item_type / situation (value=text),
+                      injected as LEARNED GUIDANCE in the extraction prompt.
+
+    Unique on (signal_type, key): re-observation upserts and bumps `count` rather than
+    duplicating, so a signal earns weight as it recurs across meetings.
+    """
+    __tablename__ = "extraction_signals"
+    __table_args__ = (
+        db.UniqueConstraint('signal_type', 'key', name='uq_extraction_signal_type_key'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    signal_type = db.Column(db.String(20), nullable=False, index=True)  # alias|owner_map|pattern
+    key = db.Column(db.String(255), nullable=False)
+    value = db.Column(db.Text, nullable=True)
+    count = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
+    source_meeting_id = db.Column(
+        db.Integer, db.ForeignKey('meetings.id', ondelete='SET NULL'), nullable=True,
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'signal_type': self.signal_type,
+            'key': self.key,
+            'value': self.value,
+            'count': self.count,
+            'active': self.active,
+            'source_meeting_id': self.source_meeting_id,
+            'updated_at': _dt(self.updated_at),
         }

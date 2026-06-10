@@ -19,6 +19,7 @@ import { checkAuth } from '../utils/auth';
 import {
     fetchMeetings, fetchMeeting, generateChecklist,
     reviewChecklistItem, fetchAssignableUsers, scanDue, sendBot, createManualMeeting,
+    updateMeeting, generateLearnings,
 } from '../services/meetingsApi';
 
 const MEETING_TYPES = [
@@ -92,7 +93,10 @@ export default function Meetings() {
     const [showSendBot, setShowSendBot] = useState(false);
     const [botUrl, setBotUrl] = useState('');
     const [botName, setBotName] = useState('');
+    const [botAgenda, setBotAgenda] = useState('');
     const [botBusy, setBotBusy] = useState(false);
+    const [learnBusy, setLearnBusy] = useState(false);
+    const [learnAnchor, setLearnAnchor] = useState(null);  // learned_at at click time
     const [generating, setGenerating] = useState(false);
     const [showPaste, setShowPaste] = useState(false);
     const [pasteTitle, setPasteTitle] = useState('');
@@ -111,7 +115,8 @@ export default function Meetings() {
     }, []);
 
     const loadMeetings = useCallback(async () => {
-        try { setMeetings(await fetchMeetings()); } catch { setError('Failed to load meetings'); }
+        try { setMeetings(await fetchMeetings() || []); }
+        catch { setMeetings([]); setError('Failed to load meetings'); }
     }, []);
 
     useEffect(() => {
@@ -140,14 +145,37 @@ export default function Meetings() {
         const title = botName.trim() || pasted.split('\n')[0].slice(0, 120) || undefined;
         setBotBusy(true); setError(null);
         try {
-            const meeting = await sendBot({ meeting_url: url, title });
+            const meeting = await sendBot({
+                meeting_url: url, title, agenda_text: botAgenda.trim() || undefined,
+            });
             setMeetings(prev => [meeting, ...prev.filter(m => m.id !== meeting.id)]);
             setSelected(meeting); seedDrafts(meeting);
-            setBotUrl(''); setBotName(''); setShowSendBot(false);
+            setBotUrl(''); setBotName(''); setBotAgenda(''); setShowSendBot(false);
         } catch (err) {
             setError(err?.response?.data?.error || 'Failed to send bot');
         } finally {
             setBotBusy(false);
+        }
+    };
+
+    // Save edited pre-meeting agenda/notes onto the open meeting.
+    const handleSaveAgenda = async (text) => {
+        if (!selected) return;
+        try {
+            const m = await updateMeeting(selected.id, { agenda_text: text });
+            setSelected(s => ({ ...s, agenda_text: m.agenda_text }));
+        } catch { setError('Failed to save agenda'); }
+    };
+
+    // Kick off (re)synthesis of learnings, then poll until learned_at advances.
+    const handleGenerateLearnings = async () => {
+        if (!selected) return;
+        setLearnBusy(true); setLearnAnchor(selected.learned_at || null); setError(null);
+        try {
+            await generateLearnings(selected.id);
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Failed to generate learnings');
+            setLearnBusy(false);
         }
     };
 
@@ -187,6 +215,23 @@ export default function Meetings() {
         const h = setInterval(tick, 2500);
         return () => { cancelled = true; clearInterval(h); };
     }, [selected?.extract_status, selected?.id]);
+
+    // Learnings synthesis runs in the background; poll the open meeting until learned_at
+    // advances past where it was when we kicked off, then show the fresh learning.
+    useEffect(() => {
+        if (!learnBusy || !selected) return;
+        const id = selected.id;
+        let cancelled = false;
+        const tick = async () => {
+            try {
+                const m = await fetchMeeting(id);
+                if (cancelled || m.id !== id || !m.learned_at || m.learned_at === learnAnchor) return;
+                setSelected(m); seedDrafts(m); setLearnBusy(false);
+            } catch { /* transient — keep polling */ }
+        };
+        const h = setInterval(tick, 3000);
+        return () => { cancelled = true; clearInterval(h); };
+    }, [learnBusy, learnAnchor, selected?.id]);
 
     const handleCreateManual = async (e) => {
         e.preventDefault();
@@ -400,13 +445,19 @@ export default function Meetings() {
                             )}
                         </div>
                     </div>
+                    <ContextLearningPanel
+                        meeting={selected}
+                        onSaveAgenda={handleSaveAgenda}
+                        onGenerateLearnings={handleGenerateLearnings}
+                        learnBusy={learnBusy}
+                    />
                 </div>
             )}
 
             {showSendBot && (
                 <SendBotModal
-                    url={botUrl} name={botName} busy={botBusy} error={error}
-                    onUrl={setBotUrl} onName={setBotName}
+                    url={botUrl} name={botName} agenda={botAgenda} busy={botBusy} error={error}
+                    onUrl={setBotUrl} onName={setBotName} onAgenda={setBotAgenda}
                     onSubmit={handleSendBot} onClose={() => setShowSendBot(false)}
                 />
             )}
@@ -422,7 +473,7 @@ export default function Meetings() {
 }
 
 function MeetingsList({ meetings, onOpen }) {
-    if (!meetings.length) {
+    if (!meetings?.length) {
         return (
             <div className="rounded-xl border border-dashed border-gray-300 dark:border-slate-700 p-12 text-center text-sm text-gray-400 dark:text-slate-500">
                 No meetings yet. Use “Send Bot” to dispatch a notetaker to a call.
@@ -455,7 +506,7 @@ function MeetingsList({ meetings, onOpen }) {
     );
 }
 
-function SendBotModal({ url, name, busy, error, onUrl, onName, onSubmit, onClose }) {
+function SendBotModal({ url, name, agenda, busy, error, onUrl, onName, onAgenda, onSubmit, onClose }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
             <form onSubmit={onSubmit} onClick={e => e.stopPropagation()}
@@ -479,6 +530,32 @@ function SendBotModal({ url, name, busy, error, onUrl, onName, onSubmit, onClose
                     value={name} onChange={e => onName(e.target.value)}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
                 />
+                <div>
+                    <textarea
+                        rows={4} placeholder="Agenda / pre-meeting notes (optional) — paste the agenda or upload a .md below; fed into to-do extraction as context."
+                        value={agenda} onChange={e => onAgenda(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
+                    />
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                            Grounds to-do extraction with what the meeting is about — job state is added automatically.
+                        </p>
+                        <label className="shrink-0 text-[10px] px-2 py-1 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer">
+                            Upload .md
+                            <input
+                                type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" className="hidden"
+                                onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const reader = new FileReader();
+                                    reader.onload = () => onAgenda(String(reader.result || ''));
+                                    reader.readAsText(file);
+                                    e.target.value = '';  // allow re-selecting the same file
+                                }}
+                            />
+                        </label>
+                    </div>
+                </div>
                 {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
                 <div className="flex justify-end gap-2 pt-1">
                     <button type="button" onClick={onClose}
@@ -530,6 +607,106 @@ function PasteTranscriptModal({ title, type, text, busy, error, onTitle, onType,
                     </div>
                 </div>
             </form>
+        </div>
+    );
+}
+
+function ContextLearningPanel({ meeting, onSaveAgenda, onGenerateLearnings, learnBusy }) {
+    const [agenda, setAgenda] = useState(meeting.agenda_text || '');
+    const [savedAt, setSavedAt] = useState(null);
+    // Re-seed the editor when switching meetings.
+    useEffect(() => { setAgenda(meeting.agenda_text || ''); setSavedAt(null); }, [meeting.id]);
+
+    const learning = meeting.learning;
+    const payload = learning?.payload || {};
+    const dirty = (agenda || '') !== (meeting.agenda_text || '');
+    const save = async () => { await onSaveAgenda(agenda.trim()); setSavedAt(Date.now()); };
+
+    const renderMap = (obj) =>
+        obj && typeof obj === 'object'
+            ? Object.entries(obj).filter(([, v]) => v).map(([k, v]) => (
+                <li key={k}><span className="font-medium capitalize">{k.replace(/_/g, ' ')}:</span> {String(v)}</li>
+            ))
+            : null;
+
+    return (
+        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-4">
+            {/* Meeting summary (the second output — grounded by during-meeting events) */}
+            {meeting.summary && (
+                <div>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-1">Meeting summary</h3>
+                    <p className="whitespace-pre-wrap text-xs text-gray-700 dark:text-slate-300">{meeting.summary}</p>
+                </div>
+            )}
+
+            {/* Pre-meeting context */}
+            <div className={meeting.summary ? 'border-t border-gray-100 dark:border-slate-700 pt-3' : ''}>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-1">Pre-meeting context</h3>
+                <textarea
+                    rows={3} value={agenda} onChange={e => setAgenda(e.target.value)}
+                    placeholder="Agenda / notes for this meeting — grounds to-do extraction."
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
+                />
+                <div className="mt-1 flex items-center gap-2">
+                    <button onClick={save} disabled={!dirty}
+                        className="text-[11px] px-2 py-1 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
+                        Save notes
+                    </button>
+                    {savedAt && !dirty && <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Saved</span>}
+                </div>
+                {meeting.context_snapshot && (
+                    <details className="mt-2">
+                        <summary className="text-[11px] text-gray-500 dark:text-slate-400 cursor-pointer hover:underline">
+                            Job updates during the meeting (used for the summary)
+                        </summary>
+                        <pre className="mt-1 whitespace-pre-wrap text-[11px] text-gray-600 dark:text-slate-300 max-h-56 overflow-auto rounded-lg bg-gray-50 dark:bg-slate-900/50 p-2 border border-gray-100 dark:border-slate-700">{meeting.context_snapshot}</pre>
+                    </details>
+                )}
+            </div>
+
+            {/* Learnings */}
+            <div className="border-t border-gray-100 dark:border-slate-700 pt-3">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Learnings</h3>
+                    <button onClick={onGenerateLearnings} disabled={learnBusy}
+                        className="text-[11px] px-2 py-1 rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
+                        {learnBusy ? 'Synthesizing…' : learning ? 'Regenerate learnings' : 'Generate learnings'}
+                    </button>
+                </div>
+                {learning ? (
+                    <div className="space-y-2 text-xs text-gray-700 dark:text-slate-300">
+                        {learning.summary && <p>{learning.summary}</p>}
+                        {payload.by_outcome && (
+                            <div>
+                                <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400">By review outcome</p>
+                                <ul className="list-disc ml-4 text-[11px]">{renderMap(payload.by_outcome)}</ul>
+                            </div>
+                        )}
+                        {payload.by_item_type && (
+                            <div>
+                                <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400">By item type</p>
+                                <ul className="list-disc ml-4 text-[11px]">{renderMap(payload.by_item_type)}</ul>
+                            </div>
+                        )}
+                        {payload.by_event && (
+                            <div>
+                                <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400">Vs. recent activity</p>
+                                <p className="text-[11px]">{String(payload.by_event)}</p>
+                            </div>
+                        )}
+                        <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                            {learning.model === 'stub' ? 'deterministic only (no API)' : `${learning.model} · ${formatCost(learning.cost_usd)}`}
+                            {meeting.learned_at ? ` · ${formatWhen(meeting.learned_at)}` : ''}
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-gray-400 dark:text-slate-500">
+                        {learnBusy
+                            ? 'Synthesizing learnings from the reviewed checklist…'
+                            : 'Generated automatically once every to-do has been reviewed — or generate now.'}
+                    </p>
+                )}
+            </div>
         </div>
     );
 }

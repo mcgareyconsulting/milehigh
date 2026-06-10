@@ -21,6 +21,11 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 EXTRACT_MODEL = os.environ.get("CHECKLIST_EXTRACT_MODEL", "claude-opus-4-8")
 VALID_TYPES = {"action", "needs_gc_update", "decision", "risk", "fyi"}
 
+# The whole user message (context + transcript) is kept under this char budget; context is
+# capped first so it can never crowd out the transcript it's meant to ground.
+MAX_TOTAL_CHARS = 100000
+MAX_CONTEXT_CHARS = 20000
+
 # USD per million tokens (input, output). Used to price each extraction so we can
 # surface token + cost per meeting. Prefix match keeps dated model ids working.
 MODEL_PRICING = {
@@ -64,7 +69,25 @@ _ACTION_HINTS = (
 )
 
 
-def _system_prompt(today: date, people=None) -> str:
+def _context_guidance(has_context: bool) -> str:
+    if not has_context:
+        return ""
+    return (
+        "\nThe user message has a CONTEXT block before the transcript, in delimited "
+        "sections (PRE-MEETING CONTEXT, JOB STATE, LEARNED GUIDANCE). "
+        "Use it as grounding, not as a source of new to-dos:\n"
+        "- PRE-MEETING CONTEXT is the agenda/notes — use it to know what the meeting is about "
+        "and to disambiguate vague references; explicit agenda asks may themselves be to-dos.\n"
+        "- Ground vague references against the entities in JOB STATE (resolve 'Sand Creek' to "
+        "the job shown, and use that job's CANONICAL name and release token in "
+        "titles/release_ref).\n"
+        "- Follow any LEARNED GUIDANCE about which kinds of items tend to be noise.\n"
+        "- Only the TRANSCRIPT (and explicit agenda asks) are the source of to-dos; never invent "
+        "items from the JOB STATE lines alone.\n"
+    )
+
+
+def _system_prompt(today: date, people=None, has_context: bool = False) -> str:
     roster = ""
     if people:
         roster = (
@@ -84,7 +107,7 @@ def _system_prompt(today: date, people=None) -> str:
         "Domain context: jobs flow through drafting → submittals (DRR/GC/FC approvals) → "
         "fabrication → paint → ship → install. People reference job-release tokens like "
         "'480-146', submittal numbers, ball-in-court, fab hours, and start-install dates.\n"
-        + roster +
+        + roster + _context_guidance(has_context) +
         "Extraction rules:\n"
         "- Capture every commitment, request, decision, risk, or needed follow-up — "
         "especially anything with an owner or a deadline.\n"
@@ -116,7 +139,18 @@ def _system_prompt(today: date, people=None) -> str:
     )
 
 
-def _call_anthropic(transcript: str, today: date, people=None) -> list:
+def _build_user_content(transcript: str, context=None) -> str:
+    """Context block (capped) + the transcript, kept under the total char budget so the
+    grounding context can never crowd out the transcript. No context → bare transcript."""
+    ctx = (context or "").strip()
+    if not ctx:
+        return (transcript or "")[:MAX_TOTAL_CHARS]
+    ctx = ctx[:MAX_CONTEXT_CHARS]
+    transcript_budget = MAX_TOTAL_CHARS - len(ctx)
+    return f"{ctx}\n\n=== TRANSCRIPT ===\n{(transcript or '')[:transcript_budget]}"
+
+
+def _call_anthropic(transcript: str, today: date, people=None, context=None) -> list:
     key = cfg.ANTHROPIC_API_KEY
     if not key:
         raise RuntimeError("no ANTHROPIC_API_KEY")
@@ -132,8 +166,8 @@ def _call_anthropic(transcript: str, today: date, people=None) -> list:
             # A full standup transcript can yield 20-40 items; 2000 truncated the
             # JSON mid-array on real data and silently fell back to the keyword stub.
             "max_tokens": 8000,
-            "system": _system_prompt(today, people),
-            "messages": [{"role": "user", "content": transcript[:100000]}],
+            "system": _system_prompt(today, people, has_context=bool((context or "").strip())),
+            "messages": [{"role": "user", "content": _build_user_content(transcript, context)}],
         },
         timeout=120,
     )
@@ -175,17 +209,19 @@ def _stub_extract(transcript: str) -> list:
     return items
 
 
-def extract(transcript: str, today: date = None, people=None) -> dict:
+def extract(transcript: str, today: date = None, people=None, context=None) -> dict:
     """Return {'items': [...], 'usage': {input_tokens, output_tokens, model, cost_usd}}.
 
     Never raises — on a missing key or any failure it falls back to the deterministic
     keyword stub with zeroed usage (model='stub'), so a $0/0-token result is the visible
     signal that extraction degraded. `people` is an optional roster of team first names
-    passed to the LLM so owner_name resolves to real users.
+    passed to the LLM so owner_name resolves to real users. `context` is an optional
+    pre-meeting context block (agenda + current state/recent events + learned guidance)
+    handed to the LLM as grounding alongside the transcript.
     """
     today = today or date.today()
     try:
-        items, usage = _call_anthropic(transcript, today, people)
+        items, usage = _call_anthropic(transcript, today, people, context)
         if items:
             return {"items": items, "usage": usage}
         logger.info("checklist_extract_empty_llm_result")

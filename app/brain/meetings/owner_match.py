@@ -157,6 +157,17 @@ def _candidate_owner(c):
     return resolve_name_to_user(c.get("sub_mgr"))
 
 
+def _learned_owner(job_number):
+    """A reviewer-corrected owner learned for this job (ExtractionSignal 'owner_map'),
+    resolved through the org gate. None when nothing has been learned for the job."""
+    if not job_number:
+        return None
+    from app.models import ExtractionSignal
+    sig = ExtractionSignal.query.filter_by(
+        signal_type="owner_map", key=str(job_number), active=True).first()
+    return resolve_name_to_user(sig.value) if sig and sig.value else None
+
+
 def _best_fuzzy(text, cands):
     """Best candidate by coverage of its distinctive tokens in the to-do text."""
     tt = set(_tokens(text))
@@ -212,7 +223,8 @@ def _apply(item, cand, confidence):
     item.matched_job_name = _project_part(cand.get("label") or "")[:128] or None
     item.match_source = cand.get("kind")  # release | submittal
     item.confidence = round(float(confidence), 3)
-    owner = _candidate_owner(cand)
+    # Prefer a reviewer-corrected owner learned for this job; fall back to PM / BIC.
+    owner = _learned_owner(cand.get("job_number")) or _candidate_owner(cand)
     if owner:
         item.proposed_owner_user_id = owner
         item.owner_inferred = True
@@ -277,9 +289,12 @@ def infer_owners_for_meeting(meeting):
     if not cands:
         return _zero_usage()
 
+    # Normalize learned garbled→canonical names before matching so a job the meeting
+    # mangled still resolves up front (instead of only via the post-hoc title fix).
+    from app.brain.meetings.context import apply_aliases
     pending = []
     for it in items:
-        best, score = _best_fuzzy(f"{it.title or ''} {it.detail or ''}", cands)
+        best, score = _best_fuzzy(apply_aliases(f"{it.title or ''} {it.detail or ''}"), cands)
         if best and score >= FUZZY_ACCEPT:
             _apply(it, best, score)
         else:
