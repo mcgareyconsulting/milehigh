@@ -579,6 +579,12 @@ def get_jobs():
                 exc_info=True,
             )
 
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the PM board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
+
         # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
         try:
             submittal_refs = _procore_submittal_refs_for_releases(jobs)
@@ -870,6 +876,12 @@ def get_all_jobs():
                 f"Error batching has_drawing flags: {drawing_lookup_error}",
                 exc_info=True,
             )
+
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the PM board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
 
         # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
         try:

@@ -6,16 +6,27 @@
  *   formatDate: Formats a date value as MM/DD/YYYY
  *   formatDateShort: Formats a date value as MM/DD/YY without timezone conversion
  *   formatCellValue: Coalesces null/undefined/empty to an em-dash, joins arrays
+ *   localTodayStr: Today as local-timezone YYYY-MM-DD (toISOString would shift to UTC and flip the day near midnight)
  * imports_from: []
- * imported_by: [pages/DraftingWorkLoad.jsx, pages/JobSearch/JobSearchTable.jsx, pages/JobSearch/constants.js, components/TableRow.jsx, components/QuickSearch.jsx, utils/pdfUtils.js]
+ * imported_by: [pages/DraftingWorkLoad.jsx, pages/JobSearch/JobSearchTable.jsx, pages/JobSearch/constants.js, components/TableRow.jsx, components/QuickSearch.jsx, components/PMBoardList.jsx, components/GanttChart.jsx, utils/pdfUtils.js]
  * invariants:
  *   - parseDateOnly is intentionally not exported; it avoids timezone shifts by string-splitting before Date parsing
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ * updated_by_agent: 2026-06-10 (added localTodayStr)
  */
 
 /**
  * Shared formatting utilities for displaying data
  */
+
+/**
+ * Today's date as a local-timezone YYYY-MM-DD string. Use this for comparing
+ * against date-only columns (e.g. Start install): `new Date().toISOString()`
+ * would convert to UTC and flip the day near midnight.
+ */
+export function localTodayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 /**
  * Format a date value for display
@@ -29,7 +40,7 @@ export function formatDate(dateValue) {
         const day = String(date.getDate()).padStart(2, '0');
         const year = date.getFullYear();
         return `${month}/${day}/${year}`;
-    } catch (e) {
+    } catch {
         return '—';
     }
 }
@@ -55,7 +66,7 @@ function parseDateOnly(dateString) {
             const [year, month, day] = dateStr.split('-').map(Number);
             return { year, month, day };
         }
-    } catch (e) {
+    } catch {
         // Fall through to Date parsing
     }
     
@@ -68,7 +79,7 @@ function parseDateOnly(dateString) {
             month: date.getMonth() + 1,
             day: date.getDate()
         };
-    } catch (e) {
+    } catch {
         return null;
     }
 }

@@ -19,9 +19,10 @@ import UpdateAvailableBanner from './components/UpdateAvailableBanner';
 import DraftingWorkLoad from './pages/DraftingWorkLoad';
 import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import Events from './pages/Events';
-import JobLog from './pages/JobLog';
+import ReleasesLayout from './pages/ReleasesLayout';
+import JobLogContent from './pages/JobLogContent';
 import Archive from './pages/Archive';
-import PMBoard from './pages/PMBoard';
+import PMBoardContent from './pages/PMBoardContent';
 import Login from './pages/Login';
 import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
@@ -63,12 +64,16 @@ function AppContent() {
           {isAuthenticated ? (
             <>
               <Route index element={<Navigate to="/job-log" replace />} />
-              <Route path="job-log" element={<JobLog />} />
+              {/* Shared releases shell: the toolbar/header stays mounted across
+                  Table ↔ Board ↔ Timeline; only the Outlet content swaps. */}
+              <Route element={<ReleasesLayout />}>
+                <Route path="job-log" element={<JobLogContent />} />
+                <Route path="pm-board" element={<PMBoardContent />} />
+              </Route>
               <Route path="archive" element={<Archive />} />
               <Route path="events" element={<Events />} />
               <Route path="drafting-work-load" element={<DraftingWorkLoad />} />
               <Route path="drafting-work-load/admin" element={<DraftingWorkLoadAdmin />} />
-              <Route path="pm-board" element={<PMBoard />} />
               <Route path="jobsite-map" element={<JobsiteMap />} />
               <Route path="board" element={<Board />} />
               <Route path="meetings" element={<Meetings />} />

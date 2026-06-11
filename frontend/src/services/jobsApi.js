@@ -235,8 +235,9 @@ class JobsApi {
 
     /**
      * @deprecated The Gantt/Timeline view is now built on the frontend from the
-     * shared releases dataset (see hooks/useGanttProjects.js). No caller hits
-     * this anymore; it will be removed alongside the /brain/gantt-data route.
+     * shared releases dataset (see the toBar selector in components/GanttChart.jsx).
+     * No caller hits this anymore; it will be removed alongside the
+     * /brain/gantt-data route.
      */
     async fetchGanttData() {
         try {

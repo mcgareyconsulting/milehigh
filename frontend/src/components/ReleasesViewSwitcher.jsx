@@ -1,11 +1,11 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Segmented Table/Board/Timeline switcher for the three release views (Job Log table, PM Board, Gantt timeline) — sits on the right side of each view's header for instant switching over the shared ReleasesProvider dataset.
+ * purpose: Segmented Table/Board/Timeline switcher for the three release views (Job Log table, PM Board, Gantt timeline) — sits in the shared ReleasesLayout toolbar for instant switching over the shared ReleasesProvider dataset.
  * exports:
  *   ReleasesViewSwitcher: Router-aware segmented control. Table → /job-log, Board → /pm-board, Timeline → /pm-board?view=timeline.
  * imports_from: [react-router-dom]
- * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/PMBoard.jsx]
+ * imported_by: [frontend/src/pages/ReleasesLayout.jsx]
  * invariants:
  *   - Active segment derives from the current location (no local state), so deep links and back/forward stay correct.
  *   - Navigation only — never touches release data; switching views must not trigger a refetch (the provider survives navigation).

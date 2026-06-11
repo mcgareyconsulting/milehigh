@@ -7,7 +7,7 @@
  *   useReleases: Accessor hook (throws outside the provider); returns the same shape the old useJobsDataFetching hook returned
  *   mergeJobs: Pure cursor-merge reducer (add/update/soft-delete/archive removal + id sort) — exported for unit tests
  * imports_from: [react, ../services/jobsApi]
- * imported_by: [../components/AppShell.jsx, ../pages/JobLog.jsx, ../pages/PMBoard.jsx]
+ * imported_by: [../components/AppShell.jsx, ../pages/ReleasesLayout.jsx, ../components/GanttChart.jsx]
  * invariants:
  *   - Cursor timestamp is persisted in localStorage (key jobLogCursorTimestamp); initial mount fetches all pages then sets the cursor
  *   - Polling pauses when the browser tab is hidden and resumes with an immediate fetch on visibility
