@@ -28,7 +28,9 @@ class JobsApi {
             // Fetch all pages until we have all the data
             while (hasMore) {
                 const response = await axios.get(`${API_BASE_URL}/brain/get-all-jobs`, {
-                    params: { page, archived }
+                    // per_page=1000 pulls the whole dataset in one request (the
+                    // has_more loop below stays as a safety net for >1000 rows).
+                    params: { page, archived, per_page: 1000 }
                 });
 
                 // Parse response data if it's a string (sometimes axios doesn't auto-parse)
@@ -231,6 +233,12 @@ class JobsApi {
         }
     }
 
+    /**
+     * @deprecated The Gantt/Timeline view is now built on the frontend from the
+     * shared releases dataset (see the toBar selector in components/GanttChart.jsx).
+     * No caller hits this anymore; it will be removed alongside the
+     * /brain/gantt-data route.
+     */
     async fetchGanttData() {
         try {
             const response = await axios.get(

@@ -4,7 +4,7 @@
  * purpose: Wraps all authenticated pages with the top navigation bar, theme toggle, location controls, and notification bell. Collapses nav into a slide-in drawer below the nav (1440px) breakpoint for iPad (incl. iPad Pro) and phone.
  * exports:
  *   AppShell: Layout shell with nav chrome, renders child routes via Outlet
- * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer]
+ * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ../context/ReleasesContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
  *   - Admin-only nav items are gated on checkAuth result
@@ -16,6 +16,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { logout, checkAuth, userCanAccessInvoicing } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
+import { ReleasesProvider } from '../context/ReleasesContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
@@ -233,7 +234,9 @@ function AppShellInner({ isAuthenticated }) {
 function AppShell({ isAuthenticated }) {
   return (
     <LocationProvider>
-      <AppShellInner isAuthenticated={isAuthenticated} />
+      <ReleasesProvider enabled={!!isAuthenticated}>
+        <AppShellInner isAuthenticated={isAuthenticated} />
+      </ReleasesProvider>
     </LocationProvider>
   );
 }

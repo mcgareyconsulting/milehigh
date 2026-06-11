@@ -391,33 +391,42 @@ export function useJobsFilters(jobs = []) {
     const baseFiltered = useMemo(() => jobs.filter(matchesSelectedFilter), [jobs, matchesSelectedFilter]);
 
     /**
+     * Apply the active quick-filter subset (Job Order / Ready to Ship / Paint /
+     * Paint+Fab / Fab) to an already-filtered base list, returning the subset's
+     * membership + canonical ordering. Pure of column-header filters and column
+     * sort — those are layered on top by displayJobs only. Shared by displayJobs
+     * (table) and boardJobs (PM Board), so both honor the same subset semantics.
+     */
+    const selectSubset = useCallback((base) => {
+        if (!selectedSubset) {
+            return sortJobs([...base]);
+        } else if (selectedSubset === 'job_order') {
+            return getJobOrderSubset(base);
+        } else if (selectedSubset === 'ready_to_ship') {
+            const readyToShipStages = ['Ship Planning', 'Store at MHMW', 'Paint Complete'];
+            const rtsOnly = base.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
+            return sortByStageThenLastUpdated(rtsOnly);
+        } else if (selectedSubset === 'paint') {
+            const paintOnly = base.filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()));
+            return sortByStageThenFabOrder(paintOnly);
+        } else if (selectedSubset === 'paint_fab') {
+            const paintStages = ['Paint Complete', ...PAINT_STAGES];
+            const paintOnly = base.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
+            const paintSorted = sortByStageThenFabOrder(paintOnly);
+            const fabOnly = base.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
+            const fabSorted = sortByFabOrder(fabOnly);
+            return [...paintSorted, ...fabSorted];
+        } else if (selectedSubset === 'fab') {
+            return getFabSubset(base);
+        }
+        return [...base];
+    }, [selectedSubset, sortJobs, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByStageThenLastUpdated, sortByStageThenFabOrder]);
+
+    /**
      * Filtered and sorted jobs for display based on selected subset
      */
     const displayJobs = useMemo(() => {
-        let result;
-        if (!selectedSubset) {
-            result = sortJobs([...baseFiltered]);
-        } else if (selectedSubset === 'job_order') {
-            result = getJobOrderSubset(baseFiltered);
-        } else if (selectedSubset === 'ready_to_ship') {
-            const readyToShipStages = ['Ship Planning', 'Store at MHMW', 'Paint Complete'];
-            const rtsOnly = baseFiltered.filter(job => readyToShipStages.includes(String(job['Stage'] ?? '').trim()));
-            result = sortByStageThenLastUpdated(rtsOnly);
-        } else if (selectedSubset === 'paint') {
-            const paintOnly = baseFiltered.filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()));
-            result = sortByStageThenFabOrder(paintOnly);
-        } else if (selectedSubset === 'paint_fab') {
-            const paintStages = ['Paint Complete', ...PAINT_STAGES];
-            const paintOnly = baseFiltered.filter(job => paintStages.includes(String(job['Stage'] ?? '').trim()));
-            const paintSorted = sortByStageThenFabOrder(paintOnly);
-            const fabOnly = baseFiltered.filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION');
-            const fabSorted = sortByFabOrder(fabOnly);
-            result = [...paintSorted, ...fabSorted];
-        } else if (selectedSubset === 'fab') {
-            result = getFabSubset(baseFiltered);
-        } else {
-            result = [...baseFiltered];
-        }
+        let result = selectSubset(baseFiltered);
 
         // Column sort overrides default/subset ordering when active
         if (columnSort.column && columnSort.direction) {
@@ -425,7 +434,19 @@ export function useJobsFilters(jobs = []) {
         }
 
         return result;
-    }, [baseFiltered, sortJobs, selectedSubset, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByStageThenLastUpdated, sortByStageThenFabOrder, columnSort, compareByColumn]);
+    }, [baseFiltered, selectSubset, columnSort, compareByColumn]);
+
+    /**
+     * PM Board list: narrowed by the toolbar controls ONLY — project + stage +
+     * search + the quick-filter subset — but NOT the per-column header dropdowns
+     * (matchesColumnFilters) or the column sort. The board groups/sorts internally,
+     * so only membership matters here.
+     */
+    const baseFilteredToolbar = useMemo(
+        () => jobs.filter(job => matchesFilters(job) && matchesSearch(job, search)),
+        [jobs, matchesFilters, matchesSearch, search]
+    );
+    const boardJobs = useMemo(() => selectSubset(baseFilteredToolbar), [selectSubset, baseFilteredToolbar]);
 
     /**
      * Out-of-department ASAP releases to surface at the bottom of the Paint and
@@ -690,6 +711,7 @@ export function useJobsFilters(jobs = []) {
 
         // Filtered and sorted jobs
         displayJobs,
+        boardJobs,
         propagatedAsapJobs,
         secondarySearchResults,
 

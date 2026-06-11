@@ -33,6 +33,7 @@ from app.api.helpers import DEFAULT_FAB_ORDER
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from datetime import datetime, timedelta
 from sqlalchemy import or_
 import json
@@ -363,6 +364,25 @@ def _procore_submittal_refs_for_releases(releases):
 
     return refs
 
+
+def _comp_eta_effective(job):
+    """Resolve the effective completion ETA for a release row.
+
+    Mirrors the /gantt-data route: prefer the canonical comp_eta column; fall
+    back to computing it from (start_install, install_hrs, num_guys); finally
+    floor at start_install so every eligible release has a visible bar. The
+    `> 0` SQL guard does not reliably exclude NaN across DB backends, so the NaN
+    guard from the gantt route is reused here before calling the calculator.
+    """
+    if job.comp_eta:
+        return job.comp_eta
+    install_hrs = job.install_hrs
+    if install_hrs is None or math.isnan(install_hrs) or install_hrs <= 0:
+        return job.start_install
+    return calculate_install_complete_date(
+        job.start_install, install_hrs, job.num_guys
+    ) or job.start_install
+
 # ==============================================================================
 # Job Data Routes
 # ==============================================================================
@@ -518,6 +538,8 @@ def get_jobs():
                     'start_install_no_color': serialize_value(job.start_install_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
+                    'comp_eta_effective': serialize_value(_comp_eta_effective(job)),
+                    'num_guys': serialize_value(job.num_guys),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
                     'Notes': serialize_value(job.notes),
@@ -556,6 +578,12 @@ def get_jobs():
                 f"Error batching has_drawing flags: {drawing_lookup_error}",
                 exc_info=True,
             )
+
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the PM board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
 
         # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
         try:
@@ -742,8 +770,10 @@ def get_all_jobs():
         # Get archived parameter from query string
         archived = request.args.get('archived', 'false').lower() == 'true'
 
-        # Set limit
-        limit = 100
+        # Set limit (per_page). Default 100 (byte-identical legacy behavior when
+        # the param is absent); cap at 2000 and floor at 1.
+        per_page = request.args.get('per_page', 100, type=int)
+        limit = min(max(per_page, 1), 2000)
 
         # Calculate offset
         offset = (page - 1) * limit
@@ -806,6 +836,8 @@ def get_all_jobs():
                     'start_install_no_color': serialize_value(job.start_install_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
+                    'comp_eta_effective': serialize_value(_comp_eta_effective(job)),
+                    'num_guys': serialize_value(job.num_guys),
                     'Job Comp': serialize_value(job.job_comp),
                     'Invoiced': serialize_value(job.invoiced),
                     'Notes': serialize_value(job.notes),
@@ -814,6 +846,7 @@ def get_all_jobs():
                     'viewer_url': serialize_value(job.viewer_url),
                     'has_drawing': False,  # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
+                    'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
                 }
                 # Validate the job data
@@ -844,6 +877,12 @@ def get_all_jobs():
                 exc_info=True,
             )
 
+        # PM Board column: map each release's DB stage to its Trello list using the
+        # authoritative TrelloListMapper (Hold → None → hidden on the PM board).
+        from app.trello.list_mapper import TrelloListMapper
+        for j in job_list:
+            j['trello_list'] = TrelloListMapper.get_trello_list_for_stage(j.get('Stage'))
+
         # Patch procore submittal refs (project + submittal IDs) for releases with viewer_url
         try:
             submittal_refs = _procore_submittal_refs_for_releases(jobs)
@@ -861,8 +900,16 @@ def get_all_jobs():
         # Note: hours_in_front requires ALL jobs in database for accurate queue calculation
         from app.api.helpers import add_scheduling_fields_to_jobs
         try:
-            # Fetch all jobs for queue calculation (regardless of pagination)
-            all_jobs_for_queue = Releases.query.all()
+            # Fetch all jobs for queue calculation (regardless of pagination).
+            # Only 5 columns feed the queue math, so pull just those with
+            # with_entities to avoid hydrating full Releases objects.
+            all_jobs_for_queue = Releases.query.with_entities(
+                Releases.fab_hrs,
+                Releases.install_hrs,
+                Releases.fab_order,
+                Releases.stage,
+                Releases.start_install_formulaTF,
+            ).all()
             all_jobs_dicts = []
             for j in all_jobs_for_queue:
                 all_jobs_dicts.append({
@@ -914,7 +961,13 @@ def get_all_jobs():
 def get_gantt_data():
     """
     Get Gantt chart data grouped by project (job number).
-    
+
+    DEPRECATED: the Gantt/Timeline view is now built entirely on the frontend
+    from the shared releases dataset (see frontend/src/hooks/useGanttProjects.js,
+    which replicates this grouping over rows that already carry
+    comp_eta_effective). No frontend caller hits this route anymore; it is kept
+    only for back-compat with older bundles and will be removed.
+
     Returns:
         JSON object with projects array, each containing:
         - project: job number
@@ -963,12 +1016,7 @@ def get_gantt_data():
             if job.install_hrs is None or math.isnan(job.install_hrs) or job.install_hrs <= 0:
                 continue
 
-            # Use the canonical comp_eta column (num_guys-based, business days). Fall back to
-            # computing it if not yet populated; floor at start_install so every release has
-            # a visible bar.
-            comp_eta = job.comp_eta or calculate_install_complete_date(
-                start_install, job.install_hrs, job.num_guys
-            ) or start_install
+            comp_eta = _comp_eta_effective(job)
             
             # Store release data
             release_data = {

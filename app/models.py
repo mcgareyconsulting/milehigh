@@ -91,14 +91,14 @@ class Submittals(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     submittal_id = db.Column(db.String(255), unique=True, nullable=False)
     procore_project_id = db.Column(db.String(100))
-    project_number = db.Column(db.String(100))
+    project_number = db.Column(db.String(100), index=True)
     project_name = db.Column(db.String(255))
     title = db.Column(db.Text)
-    status = db.Column(db.String(100))
+    status = db.Column(db.String(100), index=True)
     type = db.Column(db.String(100))
-    ball_in_court = db.Column(db.String(255))  # Increased to handle multiple assignees (comma-separated)
+    ball_in_court = db.Column(db.String(255), index=True)  # Increased to handle multiple assignees (comma-separated)
     submittal_manager = db.Column(db.String(255))
-    order_number = db.Column(db.Float)
+    order_number = db.Column(db.Float, index=True)
     notes = db.Column(db.Text)
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
@@ -371,7 +371,13 @@ class JobChangeLog(db.Model):
 
 class Releases(db.Model):
     __tablename__ = "releases"
-    __table_args__ = (db.UniqueConstraint("job", "release", name="_job_release_uc"),)
+    __table_args__ = (
+        db.UniqueConstraint("job", "release", name="_job_release_uc"),
+        db.Index("idx_releases_last_updated_at_id", "last_updated_at", "id"),  # cursor poll: filter + ORDER BY match
+        db.Index("idx_releases_archived_active", "is_archived", "is_active"),  # every list endpoint
+        db.Index("idx_releases_stage_group", "stage_group"),
+        db.Index("idx_releases_stage", "stage"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     # Job # and Release # for identifiers
     job = db.Column(db.Integer, nullable=False)
