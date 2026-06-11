@@ -28,8 +28,11 @@ _EDITABLE = ("title", "detail", "item_type", "gc_facing", "owner_user_id",
 # in-process pool, mirroring how Trello sync hands work to a ThreadPoolExecutor.
 _EXTRACT_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="meeting-extract")
 # A run whose started_at is older than this is presumed dead (worker recycled mid-run)
-# and may be relaunched; until then a repeat Generate click is a no-op.
-EXTRACT_STALE_AFTER = timedelta(minutes=10)
+# and may be relaunched; until then a repeat Generate click is a no-op. Must outlast the
+# longest LEGITIMATE run — all-Opus on a big production meeting (extract + owner match +
+# summary, each with multi-minute timeouts) can pass 10 minutes; a premature relaunch
+# runs CONCURRENTLY with the live run and double-inserts items.
+EXTRACT_STALE_AFTER = timedelta(minutes=20)
 
 
 def start_extraction(app, meeting_id, *, regenerate=False):
@@ -177,10 +180,12 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     from app.brain.meetings import owner_match
     match_usage = owner_match.infer_owners_for_meeting(meeting)
 
-    # Second output: the meeting summary, grounded by the during-meeting events. Same
+    # Second output: the meeting summary, grounded by the during-meeting events and
+    # judged against the agenda (plan vs. what happened — never restated). Same
     # generate step so one click produces both outputs; never raises.
     from app.brain.meetings import summary as meeting_summary
-    sresult = meeting_summary.summarize(meeting.transcript or "", events_block)
+    sresult = meeting_summary.summarize(meeting.transcript or "", events_block,
+                                        agenda=(meeting.agenda_text or ""))
     meeting.summary = sresult["summary"] or None
     summary_usage = sresult["usage"]
 
@@ -189,7 +194,7 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     in_tok = usage["input_tokens"] or 0
     out_tok = usage["output_tokens"] or 0
     cost = usage["cost_usd"] or 0
-    for label, extra in (("haiku", match_usage), ("summary", summary_usage)):
+    for label, extra in (("match", match_usage), ("summary", summary_usage)):
         if extra.get("cost_usd"):
             in_tok += extra.get("input_tokens") or 0
             out_tok += extra.get("output_tokens") or 0
