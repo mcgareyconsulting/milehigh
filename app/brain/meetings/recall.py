@@ -50,8 +50,14 @@ def _get(path):
     return resp.json()
 
 
-def dispatch_bot(meeting_url, *, bot_name="BB"):
-    """Send a bot to `meeting_url` with async transcription enabled. Returns bot_id."""
+def dispatch_bot(meeting_url, *, bot_name="BB", join_at=None):
+    """Send a bot to `meeting_url` with async transcription enabled. Returns bot_id.
+
+    `join_at` (a naive-UTC datetime) schedules the bot to join at that time instead
+    of immediately — used by the calendar poller so a bot invited to a future Teams
+    meeting shows up when the meeting actually starts. Recall holds the bot until
+    `join_at`, so we can dispatch as soon as the event appears on the calendar.
+    """
     if not meeting_url or not str(meeting_url).strip():
         raise RecallError("meeting_url is required")
     body = {
@@ -64,6 +70,9 @@ def dispatch_bot(meeting_url, *, bot_name="BB"):
         # platform-captions path if transcription cost matters more than reliability.
         "recording_config": {"transcript": {"provider": {"recallai_streaming": {}}}},
     }
+    if join_at is not None:
+        # Recall expects ISO-8601 UTC; our datetimes are naive UTC, so append Z.
+        body["join_at"] = join_at.replace(microsecond=0).isoformat() + "Z"
     resp = requests.post(_url("/bot/"), headers=_headers(), json=body, timeout=60)
     if resp.status_code >= 400:
         logger.warning("recall_dispatch_failed", status=resp.status_code, body=resp.text[:500])

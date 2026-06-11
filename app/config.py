@@ -146,6 +146,28 @@ class Config:
         f"https://{os.environ.get('RECALL_REGION', 'us-east-1')}.recall.ai/api/v1",
     )
 
+    # Calendar → Recall scheduling (app-only Graph). Invite RECALL_CALENDAR_MAILBOX
+    # (e.g. bb@mhmw.com) to a Teams meeting and a poller schedules a Recall bot to
+    # join at the event's start time — the calendar IS the scheduling UI. Reads the
+    # mailbox's calendar as the application via the same AZURE_* app registration,
+    # scoped by an ApplicationAccessPolicy (needs Calendars.Read application
+    # permission). Off by default so dev/tests never poll Graph; flip the flag on
+    # once the access policy is live.
+    RECALL_CALENDAR_ENABLED = os.environ.get("RECALL_CALENDAR_ENABLED", "0") == "1"
+    RECALL_CALENDAR_MAILBOX = os.environ.get("RECALL_CALENDAR_MAILBOX", "bb@mhmw.com")
+    RECALL_CALENDAR_POLL_MINUTES = int(os.environ.get("RECALL_CALENDAR_POLL_MINUTES", "10"))
+    # How far ahead to schedule bots. Events starting within this window get a bot
+    # dispatched with join_at = start; the poll cadence must be < this so an event is
+    # seen before it starts.
+    RECALL_CALENDAR_LOOKAHEAD_MINUTES = int(
+        os.environ.get("RECALL_CALENDAR_LOOKAHEAD_MINUTES", "60")
+    )
+    # Join this many seconds before the scheduled start (Recall spins the bot up a
+    # little early so it's in the room when the meeting begins).
+    RECALL_CALENDAR_JOIN_LEAD_SECONDS = int(
+        os.environ.get("RECALL_CALENDAR_JOIN_LEAD_SECONDS", "60")
+    )
+
     # Meeting → checklist reviewer. MVP: every post-meeting checklist surfaces to
     # this user (resolved by username, which is the user's email here).
     # Future distribution order on the admin side: Bill > David > Katie > Luis;

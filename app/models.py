@@ -1274,6 +1274,10 @@ class Meeting(db.Model):
     meeting_url = db.Column(db.String(1000), nullable=True)
     recall_bot_id = db.Column(db.String(64), nullable=True, index=True)
     bot_status = db.Column(db.String(30), nullable=True)  # scheduled|joining|in_call_recording|done|failed
+    # Source Graph calendar event id when the bot was scheduled off a calendar invite
+    # (calendar → Recall). The poller's idempotency key: one event schedules exactly
+    # one bot across polls. NULL for immediate-send and pasted meetings.
+    calendar_event_id = db.Column(db.String(255), nullable=True, index=True)
     # Token usage + cost of the LLM to-do extraction (model='stub' / $0 means it fell
     # back to the keyword stub). Stamped each time the checklist is (re)generated.
     extract_model = db.Column(db.String(40), nullable=True)
@@ -1321,6 +1325,7 @@ class Meeting(db.Model):
             'meeting_url': self.meeting_url,
             'recall_bot_id': self.recall_bot_id,
             'bot_status': self.bot_status,
+            'calendar_event_id': self.calendar_event_id,
             'extract_model': self.extract_model,
             'extract_input_tokens': self.extract_input_tokens,
             'extract_output_tokens': self.extract_output_tokens,
