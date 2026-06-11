@@ -64,31 +64,64 @@ def normalize_sqlite_path(path: str) -> str:
     return f"sqlite:///{path}"
 
 
+def _coerce_url(value: str) -> str:
+    """Normalize a candidate value into a SQLAlchemy URL."""
+    value = value.strip()
+    if value.startswith("postgres://"):
+        # SQLAlchemy expects postgresql://
+        return value.replace("postgres://", "postgresql://", 1)
+
+    if value.startswith(("postgresql://", "mysql://", "mariadb://", "sqlite://")):
+        return value
+
+    # Treat anything else as a filesystem path to a SQLite DB
+    return normalize_sqlite_path(value)
+
+
 def infer_database_url(cli_url: str = None) -> str:
-    """Figure out which database to hit, honoring CLI and environment defaults."""
+    """Figure out which database to hit, honoring CLI and ENVIRONMENT.
+
+    Mirrors app/db_config.py: ENVIRONMENT selects which *_DATABASE_URL var is
+    authoritative (production → PRODUCTION_DATABASE_URL, sandbox →
+    SANDBOX_DATABASE_URL, local → LOCAL_DATABASE_URL), each falling back to
+    DATABASE_URL. For sandbox/production a missing URL is a hard error — the
+    old behavior silently fell through to other environments' vars (or a local
+    SQLite file) and reported success against the wrong database.
+    """
+    if cli_url:
+        return _coerce_url(cli_url)
+
+    environment = (os.environ.get("ENVIRONMENT") or "local").strip().lower()
+
+    if environment == "production":
+        value = os.environ.get("PRODUCTION_DATABASE_URL") or os.environ.get("DATABASE_URL")
+        if not value:
+            raise ValueError(
+                "ENVIRONMENT=production but neither PRODUCTION_DATABASE_URL nor "
+                "DATABASE_URL is set (refusing to guess; pass --database-url)."
+            )
+        return _coerce_url(value)
+
+    if environment == "sandbox":
+        value = os.environ.get("SANDBOX_DATABASE_URL") or os.environ.get("DATABASE_URL")
+        if not value:
+            raise ValueError(
+                "ENVIRONMENT=sandbox but neither SANDBOX_DATABASE_URL nor "
+                "DATABASE_URL is set (refusing to guess; pass --database-url)."
+            )
+        return _coerce_url(value)
+
+    # local (or unset): keep the legacy permissive candidate chain
     candidates = [
-        cli_url,
+        os.environ.get("LOCAL_DATABASE_URL"),
         os.environ.get("DATABASE_URL"),
-        os.environ.get("SANDBOX_DATABASE_URL"),
         os.environ.get("SQLALCHEMY_DATABASE_URI"),
         os.environ.get("JOBS_DB_URL"),
         os.environ.get("JOBS_SQLITE_PATH"),
     ]
-
     for value in candidates:
-        if not value:
-            continue
-
-        value = value.strip()
-        if value.startswith("postgres://"):
-            # SQLAlchemy expects postgresql://
-            return value.replace("postgres://", "postgresql://", 1)
-
-        if value.startswith(("postgresql://", "mysql://", "mariadb://", "sqlite://")):
-            return value
-
-        # Treat anything else as a filesystem path to a SQLite DB
-        return normalize_sqlite_path(value)
+        if value:
+            return _coerce_url(value)
 
     # Fall back to bundled SQLite file
     return normalize_sqlite_path(DEFAULT_SQLITE_PATH)
