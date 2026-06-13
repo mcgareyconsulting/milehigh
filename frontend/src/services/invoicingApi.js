@@ -3,7 +3,8 @@
  * schema_version: 1
  * purpose: Wraps the monthly invoicing report endpoint so the report page stays free of HTTP logic.
  * exports:
- *   invoicingApi: Singleton exposing fetchMonthlyReport({ year, month }).
+ *   invoicingApi: Singleton exposing fetchMonthlyReport({ year, month }) and
+ *     fetchReleaseHistory({ job, release }).
  * imports_from: [axios, ../utils/api]
  * imported_by: [pages/InvoicingReport.jsx]
  * invariants:
@@ -33,6 +34,21 @@ class InvoicingApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to load invoicing report');
+        }
+    }
+
+    /**
+     * Fetch the full (not month-bounded) change history for a single release.
+     * @param {{ job: number, release: string }} params
+     */
+    async fetchReleaseHistory({ job, release } = {}) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/api/jobs/${job}/${encodeURIComponent(release)}/history`
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load release history');
         }
     }
 
