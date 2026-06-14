@@ -1155,7 +1155,8 @@ class ChecklistItem(db.Model):
     status = db.Column(db.String(20), nullable=False, default='proposed', index=True)
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
-    last_notified_at = db.Column(db.DateTime, nullable=True)  # dedup deadline pings
+    last_notified_at = db.Column(db.DateTime, nullable=True)  # last deadline ping (audit)
+    last_notified_state = db.Column(db.String(10), nullable=True)  # None | 'due' | 'overdue' — dedup key
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # joined eager-load avoids an N+1 on owner-name lookups when serializing item lists

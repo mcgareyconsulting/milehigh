@@ -141,6 +141,61 @@ def test_notify_due_items_pings_owner_once(app):
     assert service.notify_due_items(today=date(2026, 6, 2)) == 0
 
 
+def test_notify_overdue_does_not_repeat_daily(app):
+    """An item that stays overdue must ping exactly once, not every daily scan."""
+    owner = make_user("lsolano@mhmw.com", first_name="Luis", is_admin=True)
+    m = Meeting(title="m", meeting_type="other")
+    db.session.add(m); db.session.flush()
+    item = ChecklistItem(meeting_id=m.id, title="overdue", status="accepted",
+                         owner_user_id=owner.id, due_date=date(2026, 6, 1))
+    db.session.add(item); db.session.commit()
+
+    assert service.notify_due_items(today=date(2026, 6, 2)) == 1  # day it goes overdue
+    assert service.notify_due_items(today=date(2026, 6, 3)) == 0  # next day: no repeat
+    assert service.notify_due_items(today=date(2026, 6, 4)) == 0  # still no repeat
+    notes = Notification.query.filter_by(user_id=owner.id, type="checklist_due").all()
+    assert len(notes) == 1 and notes[0].message.startswith("To-do overdue:")
+
+
+def test_notify_fires_once_per_state(app):
+    """At most one 'due soon' ping and one 'overdue' ping over an item's life."""
+    owner = make_user("lsolano@mhmw.com", first_name="Luis", is_admin=True)
+    m = Meeting(title="m", meeting_type="other")
+    db.session.add(m); db.session.flush()
+    item = ChecklistItem(meeting_id=m.id, title="thing", status="accepted",
+                         owner_user_id=owner.id, due_date=date(2026, 6, 3))
+    db.session.add(item); db.session.commit()
+
+    # due soon (within lead window) -> one "due" ping, then quiet
+    assert service.notify_due_items(today=date(2026, 6, 2)) == 1
+    assert service.notify_due_items(today=date(2026, 6, 3)) == 0
+    # now overdue -> one "overdue" ping, then quiet
+    assert service.notify_due_items(today=date(2026, 6, 4)) == 1
+    assert service.notify_due_items(today=date(2026, 6, 5)) == 0
+
+    notes = Notification.query.filter_by(user_id=owner.id, type="checklist_due") \
+        .order_by(Notification.id).all()
+    assert [n.message.split(":")[0] for n in notes] == ["To-do due 2026-06-03", "To-do overdue"]
+
+
+def test_reschedule_rearms_notifications(app):
+    """Pushing the due date out lets the item ping again on its new deadline."""
+    owner = make_user("lsolano@mhmw.com", first_name="Luis", is_admin=True)
+    m = Meeting(title="m", meeting_type="other")
+    db.session.add(m); db.session.flush()
+    item = ChecklistItem(meeting_id=m.id, title="thing", status="accepted",
+                         owner_user_id=owner.id, due_date=date(2026, 6, 1))
+    db.session.add(item); db.session.commit()
+
+    assert service.notify_due_items(today=date(2026, 6, 2)) == 1  # overdue ping
+    assert service.notify_due_items(today=date(2026, 6, 3)) == 0  # suppressed
+
+    service.review_item(item.id, fields={"due_date": "2026-06-20"})
+    assert db.session.get(ChecklistItem, item.id).last_notified_state is None
+    # new deadline approaches -> pings again
+    assert service.notify_due_items(today=date(2026, 6, 19)) == 1
+
+
 def test_notify_skips_unaccepted_and_far_future(app):
     owner = make_user("lsolano@mhmw.com", first_name="Luis", is_admin=True)
     m = Meeting(title="m", meeting_type="other")

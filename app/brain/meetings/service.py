@@ -18,7 +18,6 @@ from app.brain.meetings.extract import extract, VALID_TYPES
 logger = get_logger(__name__)
 
 NOTIFY_LEAD_DAYS = 2       # ping when the due date is within this many days
-NOTIFY_DEDUP_HOURS = 20    # don't re-ping the same item within this window
 _EDITABLE = ("title", "detail", "item_type", "gc_facing", "owner_user_id",
              "due_date", "release_id", "submittal_id")
 
@@ -361,6 +360,11 @@ def review_item(item_id, *, action=None, fields=None, reviewer=None):
             val = fields[f]
             if f == "due_date":
                 val = _parse_due(val)
+                # Rescheduling re-arms the deadline pings: a pushed-out item should be
+                # able to ping again when its new due date approaches.
+                if val != item.due_date:
+                    item.last_notified_state = None
+                    item.last_notified_at = None
             setattr(item, f, val)
 
     if action == "accept":
@@ -423,11 +427,14 @@ def _notify_assignee(item):
 
 
 def notify_due_items(today=None):
-    """Ping owners of accepted items whose due date is near/overdue (deduped).
+    """Ping owners of accepted items whose due date is near/overdue.
+
+    Deduped on notification *state*, not a time window: each item fires at most one
+    "due soon" ping and one "overdue" ping, ever. (A time-window dedup that's shorter
+    than the daily scan interval re-pings every morning — the bug this replaces.)
     Returns the number of notifications sent. Safe to run on a schedule."""
     today = today or date.today()
     cutoff = today + timedelta(days=NOTIFY_LEAD_DAYS)
-    dedup_before = datetime.utcnow() - timedelta(hours=NOTIFY_DEDUP_HOURS)
 
     items = ChecklistItem.query.filter(
         ChecklistItem.status == "accepted",
@@ -438,9 +445,14 @@ def notify_due_items(today=None):
 
     sent = 0
     for item in items:
-        if item.last_notified_at and item.last_notified_at > dedup_before:
+        state = "overdue" if item.due_date < today else "due"
+        # 'due' fires once (from a clean slate); 'overdue' fires once, whether reached
+        # via due→overdue or first seen already overdue (state is None).
+        if state == "due" and item.last_notified_state is not None:
             continue
-        when = "overdue" if item.due_date < today else f"due {item.due_date.isoformat()}"
+        if state == "overdue" and item.last_notified_state == "overdue":
+            continue
+        when = "overdue" if state == "overdue" else f"due {item.due_date.isoformat()}"
         db.session.add(Notification(
             user_id=item.owner_user_id,
             type="checklist_due",
@@ -448,6 +460,7 @@ def notify_due_items(today=None):
             checklist_item_id=item.id,
         ))
         item.last_notified_at = datetime.utcnow()
+        item.last_notified_state = state
         sent += 1
     if sent:
         db.session.commit()
