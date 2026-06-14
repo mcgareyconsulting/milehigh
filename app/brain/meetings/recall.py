@@ -84,6 +84,30 @@ def dispatch_bot(meeting_url, *, bot_name="BB", join_at=None):
     return bot_id
 
 
+def delete_bot(bot_id):
+    """Cancel a SCHEDULED bot that hasn't joined yet. Returns True if cancelled.
+
+    Used by the calendar poller to retract a bot when its meeting is cancelled or
+    moved (re-dispatch follows). Recall returns 400 `cannot_delete_bot` once the
+    bot has begun joining — that's not an error here (the bot is already live and
+    will be left alone), so we return False rather than raise. A 404 (already gone)
+    is likewise treated as "nothing to cancel" → True.
+    """
+    if not bot_id:
+        return False
+    resp = requests.delete(_url(f"/bot/{bot_id}/"), headers=_headers(), timeout=60)
+    if resp.status_code in (200, 204, 404):
+        logger.info("recall_bot_deleted", bot_id=bot_id, status=resp.status_code)
+        return True
+    if resp.status_code == 400:
+        # cannot_delete_bot — already joining/joined; caller leaves it live.
+        logger.info("recall_bot_delete_too_late", bot_id=bot_id, body=resp.text[:200])
+        return False
+    logger.warning("recall_bot_delete_failed", bot_id=bot_id,
+                   status=resp.status_code, body=resp.text[:200])
+    return False
+
+
 def get_bot(bot_id):
     """Raw bot object — status, recording references, etc."""
     return _get(f"/bot/{bot_id}/")

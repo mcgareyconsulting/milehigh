@@ -1273,7 +1273,7 @@ class Meeting(db.Model):
     # tracks the bot lifecycle, kept fresh by the recall-webhook receiver.
     meeting_url = db.Column(db.String(1000), nullable=True)
     recall_bot_id = db.Column(db.String(64), nullable=True, index=True)
-    bot_status = db.Column(db.String(30), nullable=True)  # scheduled|joining|in_call_recording|done|failed
+    bot_status = db.Column(db.String(30), nullable=True)  # scheduled|joining|in_call_recording|done|failed|cancelled
     # Source Graph calendar event id when the bot was scheduled off a calendar invite
     # (calendar → Recall). The poller's idempotency key: one event schedules exactly
     # one bot across polls. NULL for immediate-send and pasted meetings.

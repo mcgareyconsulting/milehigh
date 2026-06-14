@@ -1,23 +1,30 @@
 """Calendar → Recall scheduling (app-only Graph).
 
 The calendar IS the scheduling UI: invite the configured mailbox (e.g.
-bb@mhmw.com) to a Teams meeting and this poller schedules a Recall notetaker bot
-to join at the event's start time. Reads the mailbox's calendar *as the
+bb@mhmw.com) to a Teams meeting and a Recall notetaker bot ("BB") joins on its
+own at the event's start time. We read the mailbox's calendar *as the
 application* (app-only Graph, scoped by an ApplicationAccessPolicy), so no user
 logs in and nothing is opened org-wide.
 
-Flow per poll (every RECALL_CALENDAR_POLL_MINUTES):
-  1. `calendarView` over [now, now + lookahead] — expands recurrences into
-     concrete instances, so each occurrence is handled on its own.
-  2. Keep events that carry a Teams join URL.
-  3. For each one not already scheduled (idempotent on the Graph event id),
-     dispatch a Recall bot with `join_at` = start (minus a small lead) and
-     persist a `source='recall'`, `bot_status='scheduled'` meeting.
+We deliberately do NOT use Recall's own Calendar-V2 integration: that would mean
+connecting bb's calendar to Recall via delegated OAuth (re-introducing the
+consent/exposure wall the app-only approach exists to avoid). Instead we poll
+Graph ourselves and dispatch bots directly.
 
-`join_at` lets us dispatch as soon as the event appears — Recall holds the bot
-until the meeting starts — so the poll only needs to run more often than the
-lookahead window is wide.
+Flow per poll (every RECALL_CALENDAR_POLL_MINUTES):
+  1. `calendarView` over [now − overlap, now + lookahead] — expands recurrences
+     into concrete instances, so each occurrence is handled on its own.
+  2. For each event, reconcile against any meeting we already scheduled for it
+     (idempotent on the Graph event id):
+       - new + has a Teams join URL + not cancelled/declined → schedule a bot
+         with join_at = start (Recall guarantees on-time join when join_at is
+         ≥10 min out; nearer/started meetings join ad-hoc immediately);
+       - already scheduled but the event was cancelled/declined → cancel the bot;
+       - already scheduled but the start moved → cancel + re-dispatch at the new
+         time. Only ever reconcile a bot still in 'scheduled' — once it's live
+         (joining/recording/done) we leave it alone.
 """
+import re
 from datetime import datetime, timedelta
 
 from flask import current_app
@@ -32,7 +39,19 @@ logger = get_logger(__name__)
 # Ask Graph to return all event times in UTC so we can parse them as naive UTC
 # (the convention the rest of the app stores datetimes in).
 _UTC_PREFER = {"Prefer": 'outlook.timezone="UTC"'}
-CALENDAR_SELECT = "id,subject,start,end,isOnlineMeeting,onlineMeeting,bodyPreview"
+CALENDAR_SELECT = (
+    "id,subject,start,end,isCancelled,isOnlineMeeting,onlineMeeting,"
+    "onlineMeetingUrl,responseStatus,bodyPreview"
+)
+# Look slightly into the past so a just-started meeting (and late cancellations of
+# imminent events) are still caught; calendarView returns events overlapping the window.
+WINDOW_BACK = timedelta(minutes=5)
+# A Teams join link anywhere in the event body, as a last resort when the structured
+# onlineMeeting fields are absent (e.g. a link pasted into the invite body).
+_TEAMS_LINK_RE = re.compile(r"https://teams\.microsoft\.com/l/meetup-join/\S+")
+# Bot lifecycle states we may still reconcile (cancel / move). Once a bot is live we
+# never touch it — anything not 'scheduled' is left alone.
+_RECONCILABLE = {"scheduled"}
 
 
 def _parse_graph_dt(node):
@@ -54,10 +73,21 @@ def _parse_graph_dt(node):
 
 
 def _join_url(event):
-    """Teams join URL for an event, or None if it isn't an online Teams meeting."""
+    """Teams join URL for an event, or None if it isn't an online Teams meeting.
+
+    Prefers the structured onlineMeeting.joinUrl, then onlineMeetingUrl, then a
+    Teams link pasted into the body preview.
+    """
     online = event.get("onlineMeeting") or {}
-    url = online.get("joinUrl")
-    return url.strip() if url else None
+    url = online.get("joinUrl") or event.get("onlineMeetingUrl")
+    if url:
+        return url.strip()
+    match = _TEAMS_LINK_RE.search(event.get("bodyPreview") or "")
+    return match.group(0) if match else None
+
+
+def _is_declined(event):
+    return ((event.get("responseStatus") or {}).get("response")) == "declined"
 
 
 def list_upcoming_events(mailbox, window_start, window_end):
@@ -82,60 +112,90 @@ def list_upcoming_events(mailbox, window_start, window_end):
     return events
 
 
-def _already_scheduled(event_id):
-    return db.session.query(
-        Meeting.query.filter_by(calendar_event_id=event_id).exists()
-    ).scalar()
+def _join_at_for(starts_at, now, lead):
+    """When to tell Recall to join: start − lead, or None (join now) if that's past."""
+    join_at = starts_at - lead
+    return join_at if join_at > now else None
 
 
-def _schedule_event(event, now, lead):
-    """Dispatch a bot for one calendar event and persist its meeting.
+def _handle_event(event, now, lead, dry_run):
+    """Reconcile one calendar event with our scheduling state.
 
-    Returns 'scheduled' | 'skipped' | 'failed'. Idempotent: an event already tied
-    to a meeting is skipped.
+    Returns one of: 'scheduled' | 'rescheduled' | 'cancelled' | 'skipped'.
     """
     event_id = event.get("id")
+    if not event_id:
+        return "skipped"
+
+    existing = Meeting.query.filter_by(calendar_event_id=event_id).first()
+    cancelled = bool(event.get("isCancelled")) or _is_declined(event)
     join_url = _join_url(event)
-    if not event_id or not join_url:
-        return "skipped"
-    if _already_scheduled(event_id):
-        return "skipped"
-
     starts_at = _parse_graph_dt(event.get("start"))
-    if starts_at is None:
-        logger.warning("calendar_event_no_start", event_id=event_id)
+
+    # --- Already scheduled: reconcile cancel / move (only while still 'scheduled') ---
+    if existing is not None:
+        if existing.bot_status not in _RECONCILABLE:
+            return "skipped"  # bot is live or finished — hands off
+        if cancelled:
+            if not dry_run:
+                recall.delete_bot(existing.recall_bot_id)
+                existing.bot_status = "cancelled"
+                db.session.commit()
+            logger.info("calendar_recall_cancelled", event_id=event_id,
+                        bot_id=existing.recall_bot_id, dry_run=dry_run)
+            return "cancelled"
+        if starts_at and existing.occurred_at != starts_at and join_url:
+            # Meeting moved — retract the old bot and dispatch one for the new time.
+            if not dry_run:
+                deleted = recall.delete_bot(existing.recall_bot_id)
+                if not deleted:
+                    return "skipped"  # bot already joining; can't move it
+                try:
+                    bot_id = recall.dispatch_bot(
+                        join_url, join_at=_join_at_for(starts_at, now, lead))
+                except recall.RecallError as exc:
+                    logger.warning("calendar_recall_reschedule_dispatch_failed",
+                                   event_id=event_id, error=str(exc))
+                    return "skipped"
+                existing.recall_bot_id = bot_id
+                existing.occurred_at = starts_at
+                existing.meeting_url = join_url[:1000]
+                db.session.commit()
+            logger.info("calendar_recall_rescheduled", event_id=event_id,
+                        starts_at=starts_at.isoformat(), dry_run=dry_run)
+            return "rescheduled"
+        return "skipped"  # unchanged
+
+    # --- New event: schedule a bot if it's a live, joinable, future Teams meeting ---
+    if cancelled or not join_url or starts_at is None:
         return "skipped"
-
-    # Future start → schedule a join a touch early. Already-running meeting (start
-    # in the past but still inside the window) → join now (join_at=None).
-    join_at = starts_at - lead
-    if join_at <= now:
-        join_at = None
-
-    try:
-        bot_id = recall.dispatch_bot(join_url, join_at=join_at)
-    except recall.RecallError as exc:
-        logger.warning("calendar_recall_dispatch_failed", event_id=event_id, error=str(exc))
-        return "failed"
-
-    service.create_scheduled_recall_meeting(
-        meeting_url=join_url,
-        bot_id=bot_id,
-        calendar_event_id=event_id,
-        starts_at=starts_at,
-        title=event.get("subject") or "Scheduled meeting",
-        agenda_text=(event.get("bodyPreview") or "").strip() or None,
-    )
-    logger.info("calendar_recall_scheduled", event_id=event_id, bot_id=bot_id,
-                starts_at=starts_at.isoformat())
+    if not dry_run:
+        try:
+            bot_id = recall.dispatch_bot(join_url, join_at=_join_at_for(starts_at, now, lead))
+        except recall.RecallError as exc:
+            logger.warning("calendar_recall_dispatch_failed", event_id=event_id, error=str(exc))
+            return "skipped"
+        service.create_scheduled_recall_meeting(
+            meeting_url=join_url,
+            bot_id=bot_id,
+            calendar_event_id=event_id,
+            starts_at=starts_at,
+            title=event.get("subject") or "Scheduled meeting",
+            agenda_text=(event.get("bodyPreview") or "").strip() or None,
+        )
+    logger.info("calendar_recall_scheduled", event_id=event_id,
+                starts_at=starts_at.isoformat(), dry_run=dry_run)
     return "scheduled"
 
 
-def poll():
-    """Scan the configured mailbox's calendar and schedule bots for new meetings.
+def poll(dry_run=False):
+    """Scan the configured mailbox's calendar and reconcile Recall bots.
 
-    Returns a summary dict. Safe to call on a schedule and idempotent — an event
-    already scheduled is skipped, so overlapping windows land 0 new bots.
+    Idempotent and safe to run on a schedule — an unchanged, already-scheduled event
+    is a no-op. With dry_run=True, classifies every event and reports the action it
+    WOULD take without dispatching/cancelling anything (for live testing).
+
+    Returns a summary dict {mailbox, events, scheduled, rescheduled, cancelled, skipped}.
     """
     cfg = current_app.config
     mailbox = cfg.get("RECALL_CALENDAR_MAILBOX", "bb@mhmw.com")
@@ -143,11 +203,12 @@ def poll():
     lead = timedelta(seconds=cfg.get("RECALL_CALENDAR_JOIN_LEAD_SECONDS", 60))
 
     now = datetime.utcnow()
-    events = list_upcoming_events(mailbox, now, now + lookahead)
+    events = list_upcoming_events(mailbox, now - WINDOW_BACK, now + lookahead)
 
-    counts = {"scheduled": 0, "skipped": 0, "failed": 0}
+    counts = {"scheduled": 0, "rescheduled": 0, "cancelled": 0, "skipped": 0}
     for event in events:
-        counts[_schedule_event(event, now, lead)] += 1
+        counts[_handle_event(event, now, lead, dry_run)] += 1
 
-    logger.info("calendar_recall_poll", mailbox=mailbox, events=len(events), **counts)
-    return {"mailbox": mailbox, "events": len(events), **counts}
+    summary = {"mailbox": mailbox, "events": len(events), "dry_run": dry_run, **counts}
+    logger.info("calendar_recall_poll", **summary)
+    return summary

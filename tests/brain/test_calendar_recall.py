@@ -153,3 +153,130 @@ def test_parse_graph_dt_trims_to_naive_utc():
     assert parsed == datetime(2026, 6, 12, 18, 30, 0)
     assert calendar._parse_graph_dt(None) is None
     assert calendar._parse_graph_dt({"dateTime": "garbage"}) is None
+
+
+# --------------------------------------------------------------------------- #
+# join-URL extraction (structured → onlineMeetingUrl → body link)
+# --------------------------------------------------------------------------- #
+def test_join_url_falls_back_to_online_meeting_url_then_body():
+    assert calendar._join_url({"onlineMeeting": {"joinUrl": " https://teams.microsoft.com/l/a "}}) \
+        == "https://teams.microsoft.com/l/a"
+    assert calendar._join_url(
+        {"onlineMeeting": None, "onlineMeetingUrl": "https://teams.microsoft.com/l/b"}
+    ) == "https://teams.microsoft.com/l/b"
+    assert calendar._join_url(
+        {"bodyPreview": "join here https://teams.microsoft.com/l/meetup-join/xyz now"}
+    ) == "https://teams.microsoft.com/l/meetup-join/xyz"
+    assert calendar._join_url({"bodyPreview": "no link here"}) is None
+
+
+# --------------------------------------------------------------------------- #
+# reconciliation: cancel / reschedule / dry-run
+# --------------------------------------------------------------------------- #
+def test_poll_cancels_bot_when_event_cancelled(app):
+    start = datetime.utcnow() + timedelta(minutes=40)
+    live = [_event("evt-c", start=start)]
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": live}), \
+            patch.object(recall, "dispatch_bot", return_value="bot-c"):
+        calendar.poll()
+
+    cancelled_event = _event("evt-c", start=start)
+    cancelled_event["isCancelled"] = True
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": [cancelled_event]}), \
+            patch.object(recall, "delete_bot", return_value=True) as mdelete:
+        result = calendar.poll()
+
+    assert result["cancelled"] == 1
+    mdelete.assert_called_once_with("bot-c")
+    meeting = Meeting.query.filter_by(calendar_event_id="evt-c").first()
+    assert meeting.bot_status == "cancelled"
+
+
+def test_poll_reschedules_bot_when_start_moves(app):
+    start = datetime.utcnow() + timedelta(minutes=40)
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": [_event("evt-m", start=start)]}), \
+            patch.object(recall, "dispatch_bot", return_value="bot-old"):
+        calendar.poll()
+
+    moved = start + timedelta(hours=2)  # outside the first window, but reconciled by id
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": [_event("evt-m", start=moved)]}), \
+            patch.object(recall, "delete_bot", return_value=True) as mdelete, \
+            patch.object(recall, "dispatch_bot", return_value="bot-new") as mdispatch:
+        result = calendar.poll()
+
+    assert result["rescheduled"] == 1
+    mdelete.assert_called_once_with("bot-old")
+    assert mdispatch.call_count == 1
+    meeting = Meeting.query.filter_by(calendar_event_id="evt-m").first()
+    assert meeting.recall_bot_id == "bot-new"
+    assert meeting.occurred_at == moved.replace(microsecond=0)
+
+
+def test_poll_skips_reschedule_when_bot_already_joining(app):
+    start = datetime.utcnow() + timedelta(minutes=40)
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": [_event("evt-j", start=start)]}), \
+            patch.object(recall, "dispatch_bot", return_value="bot-j"):
+        calendar.poll()
+        # Bot has gone live — reconciliation must leave it alone.
+        Meeting.query.filter_by(calendar_event_id="evt-j").first().bot_status = "in_call_recording"
+        db.session.commit()
+
+    moved = start + timedelta(minutes=15)
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": [_event("evt-j", start=moved)]}), \
+            patch.object(recall, "delete_bot") as mdelete, \
+            patch.object(recall, "dispatch_bot") as mdispatch:
+        result = calendar.poll()
+
+    assert result["skipped"] == 1
+    mdelete.assert_not_called()
+    mdispatch.assert_not_called()
+
+
+def test_poll_skips_declined_event(app):
+    start = datetime.utcnow() + timedelta(minutes=30)
+    ev = _event("evt-d", start=start)
+    ev["responseStatus"] = {"response": "declined"}
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": [ev]}), \
+            patch.object(recall, "dispatch_bot") as mdispatch:
+        result = calendar.poll()
+    assert result["scheduled"] == 0 and result["skipped"] == 1
+    mdispatch.assert_not_called()
+    assert Meeting.query.count() == 0
+
+
+def test_dry_run_classifies_without_dispatching(app):
+    start = datetime.utcnow() + timedelta(minutes=30)
+    with app.app_context(), \
+            patch.object(calendar, "graph_get", return_value={"value": [_event("evt-dry", start=start)]}), \
+            patch.object(recall, "dispatch_bot") as mdispatch:
+        result = calendar.poll(dry_run=True)
+
+    assert result["scheduled"] == 1 and result["dry_run"] is True
+    mdispatch.assert_not_called()
+    assert Meeting.query.count() == 0  # nothing persisted
+
+
+# --------------------------------------------------------------------------- #
+# on-demand admin endpoint
+# --------------------------------------------------------------------------- #
+def test_trigger_endpoint_503_when_disabled(admin_client):
+    resp = admin_client.post('/brain/meetings/calendar/poll', json={})
+    assert resp.status_code == 503
+
+
+def test_trigger_endpoint_runs_poll_when_enabled(admin_client, app):
+    app.config['RECALL_CALENDAR_ENABLED'] = True
+    start = datetime.utcnow() + timedelta(minutes=30)
+    with patch.object(calendar, "graph_get", return_value={"value": [_event("evt-ep", start=start)]}), \
+            patch.object(recall, "dispatch_bot", return_value="bot-ep"):
+        resp = admin_client.post('/brain/meetings/calendar/poll', json={})
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["status"] == "ok" and body["scheduled"] == 1

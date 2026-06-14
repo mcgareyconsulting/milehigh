@@ -155,10 +155,13 @@ class Config:
     # once the access policy is live.
     RECALL_CALENDAR_ENABLED = os.environ.get("RECALL_CALENDAR_ENABLED", "0") == "1"
     RECALL_CALENDAR_MAILBOX = os.environ.get("RECALL_CALENDAR_MAILBOX", "bb@mhmw.com")
-    RECALL_CALENDAR_POLL_MINUTES = int(os.environ.get("RECALL_CALENDAR_POLL_MINUTES", "10"))
+    RECALL_CALENDAR_POLL_MINUTES = int(os.environ.get("RECALL_CALENDAR_POLL_MINUTES", "5"))
     # How far ahead to schedule bots. Events starting within this window get a bot
-    # dispatched with join_at = start; the poll cadence must be < this so an event is
-    # seen before it starts.
+    # dispatched with join_at = start. Recall only *guarantees* an on-time join when
+    # join_at is ≥10 min out, so the lookahead is kept well above that — a meeting bb
+    # is invited to in advance gets its bot dispatched ~an hour early. Meetings bb is
+    # added to <10 min before start still get a bot, just ad-hoc (best-effort) rather
+    # than guaranteed.
     RECALL_CALENDAR_LOOKAHEAD_MINUTES = int(
         os.environ.get("RECALL_CALENDAR_LOOKAHEAD_MINUTES", "60")
     )
