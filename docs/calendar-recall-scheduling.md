@@ -83,3 +83,27 @@ Reuses `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID` and
 
 Invite `bb@mhmw.com` (or forward the calendar invite). Recurring meetings are handled
 per-occurrence, so a standing weekly meeting records every week with no further action.
+
+## BB avatar (optional, no code impact)
+
+Teams only shows a profile picture for **signed-in** bots; an anonymous bot can't have
+one. Chosen posture: **always capture the meeting, show the avatar when possible** →
+Recall dashboard **Login Mandatory = OFF**.
+
+- **Off** = the bot joins anonymously by default and signs in (showing the BB name +
+  photo) **only on meetings that require signed-in participants**. It never fails to
+  join for the sake of the avatar, so capture is never at risk.
+- This is **entirely separate from this connector** — it's a workspace-level credential
+  in the Recall dashboard (Meeting Bot Setup → Microsoft Teams), applied automatically
+  to every dispatched bot including the scheduled ones. **No code changes**, and our
+  `bot_name="BB"` is ignored for signed-in bots (name + photo come from the account).
+
+Setup (one-time, IT): stand up a **separate** Microsoft tenant with an M365 Business
+Basic license for the bot account (do **not** use a `bb@mhmw.com` user — sign-in needs
+MFA/Security Defaults disabled, which you only want on an isolated bot tenant), set its
+display name to **BB** and profile photo to the BB avatar, then paste its credentials
+into the Recall dashboard with Login Mandatory **off**. Without this account the toggle
+has nothing to sign into and no avatar ever appears.
+
+To get the avatar *more* often without flipping to mandatory, optionally require sign-in
+on the specific internal meetings you care about (Teams meeting options / policy).
