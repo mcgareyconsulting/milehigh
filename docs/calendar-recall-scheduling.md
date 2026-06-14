@@ -84,26 +84,15 @@ Reuses `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID` and
 Invite `bb@mhmw.com` (or forward the calendar invite). Recurring meetings are handled
 per-occurrence, so a standing weekly meeting records every week with no further action.
 
-## BB avatar (optional, no code impact)
+## BB avatar — deferred (anonymous bot for now)
 
-Teams only shows a profile picture for **signed-in** bots; an anonymous bot can't have
-one. Chosen posture: **always capture the meeting, show the avatar when possible** →
-Recall dashboard **Login Mandatory = OFF**.
+The bot joins **anonymously** (shows as "BB"/notetaker, no profile picture). A custom
+avatar would require a Recall **signed-in bot**, which needs a *separate* Microsoft
+tenant + license for a dedicated bot account (Teams only shows pictures for signed-in
+accounts, and signing in needs MFA/Security Defaults disabled — never on a real
+mailbox). **Decided overkill for a notetaker; not pursued.**
 
-- **Off** = the bot joins anonymously by default and signs in (showing the BB name +
-  photo) **only on meetings that require signed-in participants**. It never fails to
-  join for the sake of the avatar, so capture is never at risk.
-- This is **entirely separate from this connector** — it's a workspace-level credential
-  in the Recall dashboard (Meeting Bot Setup → Microsoft Teams), applied automatically
-  to every dispatched bot including the scheduled ones. **No code changes**, and our
-  `bot_name="BB"` is ignored for signed-in bots (name + photo come from the account).
-
-Setup (one-time, IT): stand up a **separate** Microsoft tenant with an M365 Business
-Basic license for the bot account (do **not** use a `bb@mhmw.com` user — sign-in needs
-MFA/Security Defaults disabled, which you only want on an isolated bot tenant), set its
-display name to **BB** and profile photo to the BB avatar, then paste its credentials
-into the Recall dashboard with Login Mandatory **off**. Without this account the toggle
-has nothing to sign into and no avatar ever appears.
-
-To get the avatar *more* often without flipping to mandatory, optionally require sign-in
-on the specific internal meetings you care about (Teams meeting options / policy).
+This is purely a Recall-dashboard concern, so there's nothing to build or undo here —
+the connector dispatches an anonymous bot either way. Revisit only if a verified
+identity/avatar becomes worth standing up a throwaway bot tenant. Do **not** reuse
+`bb@mhmw.com`'s credentials for it.
