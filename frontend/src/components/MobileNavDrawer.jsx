@@ -23,6 +23,7 @@ const NAV_ITEMS = [
 ];
 
 const ADMIN_ITEMS = [
+    { label: 'Rentals', path: '/rental-reports' },
     { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
 ];

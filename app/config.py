@@ -76,6 +76,12 @@ class Config:
             os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "photos"
         )
 
+    # Sunbelt rental report discrepancy thresholds. A rental is flagged a
+    # cost/duration outlier once accrued cost (weeks on rent * week_rate) reaches
+    # SUNBELT_COST_OUTLIER_USD, or it has been on rent SUNBELT_DURATION_OUTLIER_DAYS.
+    SUNBELT_COST_OUTLIER_USD = float(os.environ.get("SUNBELT_COST_OUTLIER_USD", "12000"))
+    SUNBELT_DURATION_OUTLIER_DAYS = int(os.environ.get("SUNBELT_DURATION_OUTLIER_DAYS", "150"))
+
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")
     PROCORE_SANDBOX_BASE_URL = os.environ.get("PROCORE_SANDBOX_BASE_URL")

@@ -15,10 +15,11 @@ invariants:
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 import os
+from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request, g
 from app.models import Projects, ReleaseDrawingVersion, FcCollectionRun, db
-from app.auth.utils import admin_required
+from app.auth.utils import admin_required, get_current_user
 from app.brain.map.utils.geofence import generate_geofence_polygon
 from app.brain.job_log.features.pdf_markup.storage import absolute_path
 from app.logging_config import get_logger
@@ -261,3 +262,84 @@ def fc_collection_run_now():
     from app.procore.fc_retry_worker import retry_missing_fc_viewer_urls
     summary = retry_missing_fc_viewer_urls(trigger="manual")
     return jsonify({"success": True, "run": summary}), 200
+
+
+# --- Sunbelt equipment-on-rent reports -------------------------------------
+
+@admin_bp.route('/sunbelt/report', methods=['GET'])
+@admin_required
+@handle_errors("load sunbelt report")
+def sunbelt_report_latest():
+    """Latest Sunbelt rental snapshot, reconciled to our jobs, with flags + diff."""
+    from app.brain.sunbelt import service as sunbelt_service
+    return jsonify(sunbelt_service.get_report()), 200
+
+
+@admin_bp.route('/sunbelt/report/<int:snapshot_id>', methods=['GET'])
+@admin_required
+@handle_errors("load sunbelt report")
+def sunbelt_report_snapshot(snapshot_id):
+    """A specific historical Sunbelt snapshot."""
+    from app.brain.sunbelt import service as sunbelt_service
+    report = sunbelt_service.get_report(snapshot_id)
+    if report.get("snapshot") is None:
+        return jsonify({"error": "snapshot not found"}), 404
+    return jsonify(report), 200
+
+
+@admin_bp.route('/sunbelt/snapshots', methods=['GET'])
+@admin_required
+@handle_errors("list sunbelt snapshots")
+def sunbelt_snapshots():
+    """Snapshot metadata for the history dropdown (most recent first)."""
+    from app.brain.sunbelt import service as sunbelt_service
+    return jsonify({"snapshots": sunbelt_service.list_snapshots()}), 200
+
+
+@admin_bp.route('/sunbelt/upload', methods=['POST'])
+@admin_required
+@handle_errors("upload sunbelt report")
+def sunbelt_upload():
+    """Ingest an uploaded weekly Sunbelt CSV as a new snapshot.
+
+    Multipart form: `file` (the CSV) and optional `snapshot_date` (YYYY-MM-DD,
+    defaults to today). All ingest routes through ingest_snapshot — the same seam
+    a future bb@mhmw.com email adapter will use.
+    """
+    from app.brain.sunbelt.parser import parse_sunbelt_csv, SunbeltCsvError
+    from app.brain.sunbelt.ingest import ingest_snapshot
+    from app.brain.sunbelt import service as sunbelt_service
+
+    file = request.files.get('file')
+    if file is None or not file.filename:
+        return jsonify({"error": "No CSV file provided (form field 'file')."}), 400
+
+    try:
+        rows = parse_sunbelt_csv(file.stream)
+    except SunbeltCsvError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    if not rows:
+        return jsonify({"error": "No rental rows found in the CSV."}), 400
+
+    snapshot_date = None
+    raw_date = (request.form.get('snapshot_date') or '').strip()
+    if raw_date:
+        try:
+            snapshot_date = datetime.strptime(raw_date, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({"error": "snapshot_date must be YYYY-MM-DD."}), 400
+
+    user = get_current_user()
+    snapshot = ingest_snapshot(
+        rows,
+        snapshot_date=snapshot_date,
+        source='upload',
+        filename=file.filename,
+        created_by=(user.username if user else None),
+    )
+    return jsonify({
+        "success": True,
+        "snapshot": snapshot.to_dict(),
+        "report": sunbelt_service.get_report(snapshot.id),
+    }), 201
