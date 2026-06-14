@@ -1280,3 +1280,109 @@ class ExtractionSignal(db.Model):
             'source_meeting_id': self.source_meeting_id,
             'updated_at': _dt(self.updated_at),
         }
+
+
+class SunbeltRentalSnapshot(db.Model):
+    """One imported Sunbelt 'Equipment on Rent' report — a weekly snapshot.
+
+    All rental lines from a single CSV upload (or, later, a bb@mhmw.com email
+    pull) hang off one snapshot so we can diff week-over-week. ``snapshot_date``
+    is the report's effective date (defaults to import day; overridable).
+    Ingestion goes through app.brain.sunbelt.ingest.ingest_snapshot.
+    """
+    __tablename__ = 'sunbelt_rental_snapshots'
+    id = db.Column(db.Integer, primary_key=True)
+    snapshot_date = db.Column(db.Date, nullable=False, index=True)
+    source = db.Column(db.String(20), nullable=False, default='upload')  # 'upload' | 'email'
+    filename = db.Column(db.String(512))
+    row_count = db.Column(db.Integer, nullable=False, default=0)
+    created_by = db.Column(db.String(255))  # username of the admin who imported
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    rentals = db.relationship(
+        'SunbeltRental', backref='snapshot', lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'snapshot_date': _dt(self.snapshot_date),
+            'source': self.source,
+            'filename': self.filename,
+            'row_count': self.row_count,
+            'created_by': self.created_by,
+            'created_at': _dt(self.created_at),
+        }
+
+
+class SunbeltRental(db.Model):
+    """One equipment-on-rent line from a Sunbelt report, reconciled to our jobs.
+
+    Raw Sunbelt columns are parsed/typed at ingest; the resolved match
+    (matched_job_number / matched_project_name / match_method) is computed by
+    app.brain.sunbelt.matching. Discrepancy flags (overdue / on-finished-job /
+    cost-outlier) are NOT stored — they are computed at read time relative to
+    'today' and current release/submittal state.
+    """
+    __tablename__ = 'sunbelt_rentals'
+    __table_args__ = (
+        db.Index('ix_sunbelt_rentals_snapshot', 'snapshot_id'),
+        db.Index('ix_sunbelt_rentals_contract', 'contract_number'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey('sunbelt_rental_snapshots.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+
+    # Raw Sunbelt fields (parsed)
+    contract_number = db.Column(db.String(40))    # per-line key
+    sunbelt_job_label = db.Column(db.String(255))  # Sunbelt "Job #" e.g. "1 - OAK HIL"
+    po_number = db.Column(db.String(40))           # Sunbelt "PO_Number" = MHMW job number
+    job_location = db.Column(db.String(500))
+    ordered_by = db.Column(db.String(255))
+    equipment_type = db.Column(db.String(255))
+    equipment_number = db.Column(db.String(64))
+    make = db.Column(db.String(64))
+    model = db.Column(db.String(64))
+    quantity = db.Column(db.Integer, default=1)
+    est_return_date = db.Column(db.Date)
+    day_rate = db.Column(db.Numeric(10, 2))
+    week_rate = db.Column(db.Numeric(10, 2))
+    four_week_rate = db.Column(db.Numeric(10, 2))
+    billed_through = db.Column(db.Date)
+    date_rented = db.Column(db.Date)
+
+    # Resolved match (set at ingest)
+    matched_job_number = db.Column(db.Integer)
+    matched_project_name = db.Column(db.String(255))
+    match_method = db.Column(db.String(20))  # po_number | address | submittal | unmatched
+
+    def to_dict(self):
+        def _money(v):
+            return float(v) if v is not None else None
+        return {
+            'id': self.id,
+            'snapshot_id': self.snapshot_id,
+            'contract_number': self.contract_number,
+            'sunbelt_job_label': self.sunbelt_job_label,
+            'po_number': self.po_number,
+            'job_location': self.job_location,
+            'ordered_by': self.ordered_by,
+            'equipment_type': self.equipment_type,
+            'equipment_number': self.equipment_number,
+            'make': self.make,
+            'model': self.model,
+            'quantity': self.quantity,
+            'est_return_date': _dt(self.est_return_date),
+            'day_rate': _money(self.day_rate),
+            'week_rate': _money(self.week_rate),
+            'four_week_rate': _money(self.four_week_rate),
+            'billed_through': _dt(self.billed_through),
+            'date_rented': _dt(self.date_rented),
+            'matched_job_number': self.matched_job_number,
+            'matched_project_name': self.matched_project_name,
+            'match_method': self.match_method,
+        }
