@@ -76,47 +76,43 @@ function AppShellInner({ isAuthenticated }) {
         className="relative flex items-center h-14 3xl:h-16 px-3 lg:px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        {/* Quick search */}
-        <QuickSearch />
-
-        {/* Map + Location shortcuts (left side) — visible on 2xl+ only */}
-        <div className="hidden min-[1440px]:flex items-center gap-2">
-          {navBtn('/jobsite-map', 'Map')}
-          <button
-            type="button"
-            onClick={handleLocationToggle}
-            disabled={locationRequesting}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
-              locationEnabled
-                ? 'bg-green-500 text-white hover:bg-green-600'
-                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-            } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
-            title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
-          >
-            {locationRequesting ? (
-              <>
-                <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                Location…
-              </>
-            ) : locationEnabled ? (
-              <>📍 Location on</>
-            ) : (
-              <>📍 Location</>
-            )}
-          </button>
-        </div>
-
-        {/* Centered title — absolute positioning only at 2xl+; flex spacer below */}
-        <h1 className="hidden min-[1440px]:block absolute left-1/2 -translate-x-1/2 text-xl 3xl:text-2xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none">
-          MHMW Brain
-        </h1>
-        {/* Mobile/iPad title — inline, smaller */}
-        <h1 className="min-[1440px]:hidden flex-1 text-center text-base font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none truncate">
+        {/* Brand — pinned far left */}
+        <h1 className="shrink-0 text-lg 3xl:text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent whitespace-nowrap select-none">
           MHMW Brain
         </h1>
 
-        {/* Right cluster — full nav at 2xl+, condensed below */}
+        {/* Everything else expands from the right; search is the leftmost item */}
         <div className="ml-auto flex items-center gap-2">
+          {/* Quick search — leftmost of the right cluster */}
+          <QuickSearch />
+
+          {/* Map + Location shortcuts — visible on 2xl+ only */}
+          <div className="hidden min-[1440px]:flex items-center gap-2">
+            {navBtn('/jobsite-map', 'Map')}
+            <button
+              type="button"
+              onClick={handleLocationToggle}
+              disabled={locationRequesting}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
+                locationEnabled
+                  ? 'bg-green-500 text-white hover:bg-green-600'
+                  : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+              } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+              title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
+            >
+              {locationRequesting ? (
+                <>
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Location…
+                </>
+              ) : locationEnabled ? (
+                <>📍 Location on</>
+              ) : (
+                <>📍 Location</>
+              )}
+            </button>
+          </div>
+
           {/* Inline nav buttons — 2xl+ only */}
           <div className="hidden min-[1440px]:flex items-center gap-2">
             {navBtn('/job-log', 'Job Log')}
