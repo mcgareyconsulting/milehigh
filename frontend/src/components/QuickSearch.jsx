@@ -8,10 +8,11 @@
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
  *   - Only triggers search for 1-3 digit numeric input to avoid API noise
- *   - Dropdown closes on outside click via document-level mousedown listener
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Dropdown closes on outside click, Escape, or route change via resetSearch()
+ * updated_by_agent: 2026-06-14T00:00:00Z (fix/global-search-stuck)
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { searchByJob } from '../services/jobSearchApi';
 import { JobSearchTable } from '../pages/JobSearch/JobSearchTable';
 import { formatDateShort } from '../utils/formatters';
@@ -40,6 +41,18 @@ export default function QuickSearch() {
   const [searchedJob, setSearchedJob] = useState(null);
   const debounceRef = useRef(null);
   const containerRef = useRef(null);
+  const location = useLocation();
+
+  // Single authoritative reset: clears all state and closes the dropdown.
+  const resetSearch = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setJobInput('');
+    setReleases([]);
+    setSubmittals([]);
+    setSearchedJob(null);
+    setError(null);
+    setLoading(false);
+  }, []);
 
   const runSearch = useCallback(async (trimmed) => {
     if (!trimmed || !/^\d{1,3}$/.test(trimmed)) return;
@@ -82,16 +95,30 @@ export default function QuickSearch() {
     };
   }, [jobInput, runSearch]);
 
-  // Click-outside: clear input and close dropdown
+  // Click-outside and Escape: fully reset and close the dropdown.
   useEffect(() => {
     const handleMouseDown = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setJobInput('');
+        resetSearch();
       }
     };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') resetSearch();
+    };
     document.addEventListener('mousedown', handleMouseDown);
-    return () => document.removeEventListener('mousedown', handleMouseDown);
-  }, []);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [resetSearch]);
+
+  // Close on route change — QuickSearch lives in the persistent AppShell header
+  // and never unmounts, so navigating elsewhere would otherwise leave stale
+  // results open over the new page.
+  useEffect(() => {
+    resetSearch();
+  }, [location.pathname, resetSearch]);
 
   const isOpen = searchedJob != null || loading || !!error;
 
@@ -119,7 +146,16 @@ export default function QuickSearch() {
 
       {/* Dropdown results panel */}
       {isOpen && (
-        <div className="fixed left-4 right-4 mt-1 z-50 max-h-[45vh] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-xl top-[3.75rem] 3xl:top-[4.25rem]">
+        <>
+          {/* Transparent backdrop: dismisses when the user clicks page content
+              the panel overlays. Sits below the navbar (z-40) so nav stays
+              clickable, and below the panel (z-50) so results stay clickable. */}
+          <div
+            className="fixed inset-0 z-30"
+            aria-hidden="true"
+            onMouseDown={resetSearch}
+          />
+          <div className="fixed left-4 right-4 mt-1 z-50 max-h-[45vh] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-xl top-[3.75rem] 3xl:top-[4.25rem]">
           {loading && (
             <p className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400">Searching…</p>
           )}
@@ -143,7 +179,7 @@ export default function QuickSearch() {
                         ? `/job-log?job=${job}&release=${encodeURIComponent(release)}`
                         : null;
                     },
-                    onJump: () => setJobInput(''),
+                    onJump: () => resetSearch(),
                   }}
                 />
               </div>
@@ -161,13 +197,14 @@ export default function QuickSearch() {
                         ? `/drafting-work-load?highlight=${encodeURIComponent(String(sid))}`
                         : null;
                     },
-                    onJump: () => setJobInput(''),
+                    onJump: () => resetSearch(),
                   }}
                 />
               </div>
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
