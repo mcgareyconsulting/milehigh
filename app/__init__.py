@@ -147,6 +147,27 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # Surface the BB ingest gate at startup so it's obvious whether forwarded
+    # mail will actually be pulled. Logs on every boot regardless of the flag.
+    # Tenant + client id are common to both the app-only and device-code flows;
+    # the device-code (public client) path has no secret, so we don't require one.
+    _bb_enabled = bool(app.config.get("BB_MAIL_INGEST_ENABLED"))
+    _bb_has_app_reg = bool(
+        app.config.get("AZURE_TENANT_ID") and app.config.get("AZURE_CLIENT_ID")
+    )
+    logger.info(
+        "BB mail ingest status",
+        enabled=_bb_enabled,
+        mailbox=app.config.get("BB_MAILBOX"),
+        poll_minutes=bb_mail_poll_minutes,
+        azure_app_registered=_bb_has_app_reg,
+        note=(
+            "active — polling on schedule" if _bb_enabled and _bb_has_app_reg
+            else "DORMANT — set BB_MAIL_INGEST_ENABLED=1"
+            + ("" if _bb_has_app_reg else " and AZURE_TENANT_ID / AZURE_CLIENT_ID")
+        ),
+    )
+
     # --- Checklist deadline notifications (daily 6:00 AM Mountain Time) ---
     # Pings the owner of each accepted post-meeting to-do whose due date is near
     # or overdue (deduped via ChecklistItem.last_notified_at).
