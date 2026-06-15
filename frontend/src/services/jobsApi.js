@@ -302,6 +302,36 @@ class JobsApi {
     }
 
     /**
+     * Supplier material orders tagged to a release (ordered-but-not-received, etc.)
+     */
+    async getMaterialOrders(job, release) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/material-orders`,
+                { params: { job, release } }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch material orders');
+        }
+    }
+
+    /**
+     * Mark a material order received (or un-receive with received=false).
+     */
+    async markMaterialOrderReceived(orderId, received = true) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/material-orders/${orderId}/received`,
+                { received }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update material order');
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

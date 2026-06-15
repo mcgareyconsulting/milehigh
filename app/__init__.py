@@ -135,6 +135,13 @@ def init_scheduler(app):
                     logger.info("BB mail poll landed records", **{
                         k: result[k] for k in ("mailboxes", "created", "updated", "unchanged", "fetched")
                     })
+                # Consume newly-landed emails into supplier material orders (no-op
+                # for non-order mail; idempotent so a stable mailbox is cheap).
+                try:
+                    from app.brain.material_orders import service as material_orders_service
+                    material_orders_service.ingest_unprocessed()
+                except Exception as e:
+                    logger.error("Material order ingest failed", error=str(e), exc_info=True)
             except Exception as e:
                 logger.error("BB mail poll failed", error=str(e), exc_info=True)
 

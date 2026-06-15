@@ -37,3 +37,4 @@ from app.brain.board import photo_routes as board_photo_routes  # noqa: F401  (r
 from app.brain.meetings import routes as meetings_routes
 from app.brain import notification_routes
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
+from app.brain.material_orders import routes as material_orders_routes  # noqa: F401  (registers /material-orders endpoints)

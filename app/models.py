@@ -1110,6 +1110,85 @@ class MicrosoftDelegatedToken(db.Model):
         return cls.query.filter_by(account_email=(account_email or "").lower()).first()
 
 
+class MaterialOrder(db.Model):
+    """A part/material ordered from a supplier, tagged to a job-release.
+
+    Parsed from supplier order emails forwarded to bb@mhmw.com (the first source
+    is Drexel Supply decking orders). Mirrors the "Dencol orders" interaction
+    path — it does NOT create a Trello card; it surfaces on the release's detail
+    modal as outstanding material. Linked to Releases by (job, release) *value*,
+    not a FK, matching how the app links job-log to job sites.
+
+    Lifecycle: status 'ordered' on parse → 'received' when marked (manually for
+    now; a receiving-email adapter can close it later). Idempotency: upsert by
+    (source_record_id, line_index) so re-ingesting the same email is a no-op.
+    Plain columns + simple types only (SQLite-test-safe).
+    """
+    __tablename__ = "material_orders"
+    __table_args__ = (
+        db.UniqueConstraint("source_record_id", "line_index", name="uq_material_order_source_line"),
+        db.Index("ix_material_orders_job_release", "job", "release"),
+        db.Index("ix_material_orders_status", "status"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    # Job-release link (by value, not FK — release may be null if the PO only names a job)
+    job = db.Column(db.Integer, nullable=True)
+    release = db.Column(db.String(16), nullable=True)
+
+    supplier = db.Column(db.String(128), nullable=True)          # e.g. 'Drexel Supply'
+    supplier_contact = db.Column(db.String(255), nullable=True)  # rep name/email
+    po_number = db.Column(db.String(64), nullable=True)          # e.g. '580-659'
+
+    # Order line
+    description = db.Column(db.String(512), nullable=True)       # full part text
+    quantity = db.Column(db.Float, nullable=True)
+    unit = db.Column(db.String(32), nullable=True)               # e.g. 'pcs'
+    # Best-effort parsed sub-fields (nullable; description is authoritative)
+    profile = db.Column(db.String(64), nullable=True)           # e.g. '1.5C'
+    gauge = db.Column(db.String(32), nullable=True)             # e.g. '18Ga'
+    finish = db.Column(db.String(64), nullable=True)           # e.g. 'Galvanized'
+    dimension = db.Column(db.String(64), nullable=True)        # e.g. '48"'
+
+    status = db.Column(db.String(16), nullable=False, default="ordered", server_default="ordered")
+    ordered_at = db.Column(db.Date, nullable=True)
+    received_at = db.Column(db.Date, nullable=True)
+
+    # Provenance: which raw lake record + which line of it this came from
+    source = db.Column(db.String(64), nullable=True)            # e.g. 'm365_mail'
+    source_record_id = db.Column(db.Integer, nullable=True)    # raw_source_records.id (loose link)
+    line_index = db.Column(db.Integer, nullable=False, default=0)
+    raw_line = db.Column(db.String(512), nullable=True)        # original order line text
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "job": self.job,
+            "release": self.release,
+            "supplier": self.supplier,
+            "supplier_contact": self.supplier_contact,
+            "po_number": self.po_number,
+            "description": self.description,
+            "quantity": self.quantity,
+            "unit": self.unit,
+            "profile": self.profile,
+            "gauge": self.gauge,
+            "finish": self.finish,
+            "dimension": self.dimension,
+            "status": self.status,
+            "ordered_at": _dt(self.ordered_at),
+            "received_at": _dt(self.received_at),
+            "source": self.source,
+            "source_record_id": self.source_record_id,
+            "line_index": self.line_index,
+            "raw_line": self.raw_line,
+            "created_at": _dt(self.created_at),
+            "updated_at": _dt(self.updated_at),
+        }
+
+
 class Meeting(db.Model):
     """A captured meeting whose transcript is mined for checklist items.
 

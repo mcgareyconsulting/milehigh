@@ -10,13 +10,43 @@
  *   - Renders via createPortal to document.body to escape table overflow clipping
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+import { jobsApi } from '../services/jobsApi';
 import { EventsModal } from './EventsModal';
 
 export function JobDetailsModal({ isOpen, onClose, job }) {
     const [eventsOpen, setEventsOpen] = useState(false);
+    const [materialOrders, setMaterialOrders] = useState([]);
+    const [ordersLoading, setOrdersLoading] = useState(false);
+
+    // Identifiers derived before any early return so the effect's deps are stable.
+    const jobId = job ? (job['Job #'] || job.job) : null;
+    const relId = job ? (job['Release #'] || job.release) : null;
+
+    useEffect(() => {
+        if (!isOpen || jobId == null) return;
+        let cancelled = false;
+        setOrdersLoading(true);
+        jobsApi.getMaterialOrders(jobId, relId)
+            .then((data) => { if (!cancelled) setMaterialOrders(data?.orders || []); })
+            .catch(() => { if (!cancelled) setMaterialOrders([]); })
+            .finally(() => { if (!cancelled) setOrdersLoading(false); });
+        return () => { cancelled = true; };
+    }, [isOpen, jobId, relId]);
+
+    const handleToggleReceived = async (order) => {
+        const next = order.status !== 'received';
+        try {
+            const data = await jobsApi.markMaterialOrderReceived(order.id, next);
+            setMaterialOrders((prev) =>
+                prev.map((o) => (o.id === order.id ? (data?.order || o) : o))
+            );
+        } catch (e) {
+            // Leave the row unchanged (e.g. insufficient permissions).
+        }
+    };
 
     if (!isOpen || !job) return null;
 
@@ -140,6 +170,48 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                             )}
                         </div>
                     </div>
+
+                    {(ordersLoading || materialOrders.length > 0) && (
+                        <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                                Materials Ordered
+                            </h4>
+                            {ordersLoading ? (
+                                <p className="text-sm text-gray-500 dark:text-slate-400 italic">Loading…</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {materialOrders.map((o) => {
+                                        const received = o.status === 'received';
+                                        const meta = [o.supplier, o.po_number ? `PO ${o.po_number}` : null]
+                                            .filter(Boolean).join(' · ');
+                                        return (
+                                            <li key={o.id} className="border-l-2 border-accent-500 pl-3">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${received
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+                                                        {received ? 'Received' : 'Ordered'}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleToggleReceived(o)}
+                                                        className="text-xs text-accent-600 dark:text-accent-400 hover:underline"
+                                                    >
+                                                        {received ? 'Mark ordered' : 'Mark received'}
+                                                    </button>
+                                                </div>
+                                                <p className="text-sm text-gray-900 dark:text-slate-100 mt-0.5">
+                                                    {o.quantity != null ? `(${o.quantity}) ` : ''}{o.description}
+                                                </p>
+                                                {meta && (
+                                                    <p className="text-xs text-gray-500 dark:text-slate-400">{meta}</p>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-gray-50 dark:bg-slate-700 px-6 py-4 rounded-b-xl border-t border-gray-200 dark:border-slate-600 space-y-3">
