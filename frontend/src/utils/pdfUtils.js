@@ -128,10 +128,10 @@ export function generateDraftingWorkLoadPDF(displayRows, columns, lastUpdated = 
     // Find the index of the TYPE column (for DRR green highlight)
     const typeColumnIndex = columns.findIndex(col => col === 'TYPE');
 
-    // Build column styles by index (ORDER #, PROJ. #, NAME, TITLE, PROCORE STATUS, BIC, TYPE, COMP. STATUS, SUB MANAGER, DUE DATE, NOTES)
+    // Build column styles by index (ORDER #, Job, Rel, NAME, TITLE, PROCORE STATUS, BIC, TYPE, COMP. STATUS, SUB MANAGER, DUE DATE, NOTES)
     const defaultWidth = 80;
     const columnStyles = columns.reduce((acc, _, i) => {
-        const widths = [50, 65, 180, 180, 80, 100, 70, 90, 100, 75, 200]; // match new column order
+        const widths = [50, 65, 45, 180, 180, 80, 100, 70, 90, 100, 75, 200]; // match DESIRED_COLUMN_ORDER
         acc[i] = { cellWidth: widths[i] ?? defaultWidth, halign: 'center' };
         return acc;
     }, {});

@@ -10,17 +10,68 @@
  *   - Procore URL is only rendered when both projectId and submittalId are present
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { EventsModal } from './EventsModal';
+import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
 
-export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
+const DRR_TYPE = 'Drafting Release Review';
+
+export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel = false, onRelAssigned }) {
     const [eventsOpen, setEventsOpen] = useState(false);
+    const [relInput, setRelInput] = useState('');
+    const [relSaving, setRelSaving] = useState(false);
+    const [relError, setRelError] = useState(null);
+    const [relSuccess, setRelSuccess] = useState(false);
+
+    const submittalId = (submittal?.submittal_id || submittal?.['Submittals Id'] || '');
+    const isDRR = (submittal?.type ?? submittal?.['TYPE']) === DRR_TYPE;
+    const currentRel = submittal?.rel ?? submittal?.['Rel'] ?? null;
+
+    // Prefill the Rel input when the popup opens on a DRR: the current value if
+    // one is set, otherwise the server-suggested next available number.
+    useEffect(() => {
+        if (!isOpen) {
+            setRelError(null);
+            setRelSuccess(false);
+            return;
+        }
+        if (!isDRR || !canEditRel) return;
+        setRelError(null);
+        setRelSuccess(false);
+        if (currentRel != null) {
+            setRelInput(String(currentRel));
+            return;
+        }
+        let cancelled = false;
+        draftingWorkLoadApi.fetchNextRel(submittalId)
+            .then((n) => { if (!cancelled && n != null) setRelInput(String(n)); })
+            .catch(() => { /* leave blank on failure */ });
+        return () => { cancelled = true; };
+    }, [isOpen, isDRR, canEditRel, currentRel, submittalId]);
+
+    const handleAssignRel = async () => {
+        setRelError(null);
+        setRelSuccess(false);
+        const n = parseInt(relInput, 10);
+        if (Number.isNaN(n) || n < 101 || n > 998) {
+            setRelError('Rel must be a whole number from 101 to 998.');
+            return;
+        }
+        setRelSaving(true);
+        try {
+            await draftingWorkLoadApi.updateRel(submittalId, n);
+            setRelSuccess(true);
+            if (onRelAssigned) onRelAssigned(true);
+        } catch (err) {
+            setRelError(err?.message || 'Failed to assign Rel.');
+        } finally {
+            setRelSaving(false);
+        }
+    };
 
     if (!isOpen || !submittal) return null;
-
-    const submittalId = submittal.submittal_id || submittal['Submittals Id'] || '';
     const projectId = submittal.procore_project_id || submittal['Project Id'] || '';
     const procoreUrl = projectId && submittalId
         ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
@@ -104,6 +155,51 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal }) {
                                 </p>
                             </div>
                         ) : null}
+
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Release (Rel):</span>
+                                <span className="text-sm text-gray-600 dark:text-slate-300">
+                                    {currentRel != null ? currentRel : '—'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 pl-4">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={relInput}
+                                    onChange={(e) => setRelInput(e.target.value.replace(/[^0-9]/g, ''))}
+                                    disabled={!isDRR || !canEditRel || relSaving}
+                                    placeholder="101–998"
+                                    className="w-24 px-2 py-1 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed"
+                                />
+                                {isDRR && canEditRel ? (
+                                    <button
+                                        onClick={handleAssignRel}
+                                        disabled={relSaving}
+                                        className="px-3 py-1 text-sm font-medium bg-accent-600 text-white rounded hover:bg-accent-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {relSaving ? 'Saving…' : (currentRel != null ? 'Update Rel' : 'Assign Rel')}
+                                    </button>
+                                ) : (
+                                    <button
+                                        disabled
+                                        title={!isDRR
+                                            ? 'Rel can only be assigned to Drafting Release Review submittals'
+                                            : 'You do not have permission to assign a Rel'}
+                                        className="px-3 py-1 text-sm font-medium bg-gray-400 dark:bg-slate-500 text-white rounded cursor-not-allowed"
+                                    >
+                                        {currentRel != null ? 'Update Rel' : 'Assign Rel'}
+                                    </button>
+                                )}
+                            </div>
+                            {relError ? (
+                                <p className="text-sm text-red-600 dark:text-red-400 pl-4 mt-1">{relError}</p>
+                            ) : null}
+                            {relSuccess ? (
+                                <p className="text-sm text-green-600 dark:text-green-400 pl-4 mt-1">Rel saved.</p>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
 

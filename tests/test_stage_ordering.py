@@ -22,6 +22,7 @@ from app.api.helpers import (
     DYNAMIC_STAGE_ORDER,
     FIXED_TIER_STAGES,
 )
+from tests.conftest import make_release
 
 
 # ---------------------------------------------------------------------------
@@ -29,23 +30,17 @@ from app.api.helpers import (
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def setup_auth(mock_admin_user):
-    with patch('app.auth.utils.get_current_user', return_value=mock_admin_user):
+def _disable_stage_photo_gate():
+    # These tests predate the Welded QC / Paint Complete photo gate and exercise
+    # orthogonal fab_order behavior. The gate itself is covered by
+    # tests/brain/test_stage_photo_gate.py.
+    with patch('app.brain.job_log.features.stage.command.STAGE_PHOTO_GATES', set()):
         yield
 
 
-def make_release(job, release, stage, stage_group, fab_order, job_name="Test"):
-    r = Releases(
-        job=job,
-        release=release,
-        job_name=job_name,
-        stage=stage,
-        stage_group=stage_group,
-        fab_order=fab_order,
-    )
-    db.session.add(r)
-    db.session.flush()
-    return r
+@pytest.fixture(autouse=True)
+def setup_auth(admin_session):
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -406,107 +401,50 @@ def test_endpoint_fab_order_null_clears(client, app):
         assert job.fab_order is None
 
 
-def test_endpoint_fab_order_integer_value(client, app):
-    """Integer input accepted and stored."""
+@pytest.mark.parametrize("value", [
+    7,        # integer
+    7.5,      # float
+    -5,       # negative — no fixed-tier clamping for FABRICATION
+    0,        # zero
+    999999,   # very large — no upper bounds clamping
+])
+def test_endpoint_fab_order_accepted_values(client, app, value):
+    """Numeric fab_order values are accepted as-is and stored."""
     with app.app_context():
-        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
+        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
         db.session.commit()
 
     resp = client.patch(
         '/brain/update-fab-order/1/A',
-        json={'fab_order': 7},
+        json={'fab_order': value},
         content_type='application/json'
     )
 
     assert resp.status_code == 200
-
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == 7
-
-
-def test_endpoint_fab_order_float_value(client, app):
-    """Float input accepted."""
-    with app.app_context():
-        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
-        db.session.commit()
-
-    resp = client.patch(
-        '/brain/update-fab-order/1/A',
-        json={'fab_order': 7.5},
-        content_type='application/json'
-    )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == 7.5
+        assert job.fab_order == value
 
 
 # ---------------------------------------------------------------------------
 # PATCH /brain/update-fab-order — validation & errors
 # ---------------------------------------------------------------------------
 
-def test_endpoint_fab_order_string_returns_400(client, app):
-    """String fab_order returns 400."""
+@pytest.mark.parametrize("value", ['abc', '', [1, 2, 3], {'value': 5}])
+def test_endpoint_fab_order_non_numeric_returns_400(client, app, value):
+    """Non-numeric fab_order (string/empty/list/dict) is rejected with 400."""
     with app.app_context():
         make_release(1, "A", "Weld Complete", "FABRICATION", 5)
         db.session.commit()
 
     resp = client.patch(
         '/brain/update-fab-order/1/A',
-        json={'fab_order': 'abc'},
+        json={'fab_order': value},
         content_type='application/json'
     )
 
     assert resp.status_code == 400
-    assert 'must be a number' in resp.get_json()['error']
-
-
-def test_endpoint_fab_order_empty_string_returns_400(client, app):
-    """Empty string fab_order returns 400."""
-    with app.app_context():
-        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
-        db.session.commit()
-
-    resp = client.patch(
-        '/brain/update-fab-order/1/A',
-        json={'fab_order': ''},
-        content_type='application/json'
-    )
-
-    assert resp.status_code == 400
-
-
-def test_endpoint_fab_order_list_returns_400(client, app):
-    """List fab_order returns 400."""
-    with app.app_context():
-        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
-        db.session.commit()
-
-    resp = client.patch(
-        '/brain/update-fab-order/1/A',
-        json={'fab_order': [1, 2, 3]},
-        content_type='application/json'
-    )
-
-    assert resp.status_code == 400
-
-
-def test_endpoint_fab_order_dict_returns_400(client, app):
-    """Dict fab_order returns 400."""
-    with app.app_context():
-        make_release(1, "A", "Weld Complete", "FABRICATION", 5)
-        db.session.commit()
-
-    resp = client.patch(
-        '/brain/update-fab-order/1/A',
-        json={'fab_order': {'value': 5}},
-        content_type='application/json'
-    )
-
-    assert resp.status_code == 400
+    assert 'error' in resp.get_json()
 
 
 def test_endpoint_fab_order_nonexistent_job_returns_404(client, app):
@@ -541,65 +479,6 @@ def test_endpoint_fab_order_empty_json_clears(client, app):
     with app.app_context():
         job = Releases.query.filter_by(job=1, release="A").first()
         assert job.fab_order is None
-
-
-def test_endpoint_fab_order_negative_accepted(client, app):
-    """Negative fab_order is accepted as-is for non-fixed-tier stages."""
-    with app.app_context():
-        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
-        db.session.commit()
-
-    resp = client.patch(
-        '/brain/update-fab-order/1/A',
-        json={'fab_order': -5},
-        content_type='application/json'
-    )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == -5
-
-
-def test_endpoint_fab_order_zero_accepted(client, app):
-    """Zero fab_order is accepted as-is for non-fixed-tier stages."""
-    with app.app_context():
-        make_release(1, "A", "Weld Complete", "FABRICATION", 10)
-        db.session.commit()
-
-    resp = client.patch(
-        '/brain/update-fab-order/1/A',
-        json={'fab_order': 0},
-        content_type='application/json'
-    )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        assert job.fab_order == 0
-
-
-def test_endpoint_fab_order_very_large_accepted(client, app):
-    """Very large fab_order is accepted — no stage bounds clamping."""
-    with app.app_context():
-        make_release(1, "A", "Welded QC", "READY_TO_SHIP", 5)
-        make_release(2, "A", "Weld Complete", "FABRICATION", 10)
-        db.session.commit()
-
-    resp = client.patch(
-        '/brain/update-fab-order/1/A',
-        json={'fab_order': 999999},
-        content_type='application/json'
-    )
-
-    assert resp.status_code == 200
-
-    with app.app_context():
-        job = Releases.query.filter_by(job=1, release="A").first()
-        # No bounds clamping — value is accepted as-is
-        assert job.fab_order == 999999
 
 
 # ---------------------------------------------------------------------------

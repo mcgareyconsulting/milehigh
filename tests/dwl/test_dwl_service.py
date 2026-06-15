@@ -41,113 +41,50 @@ def create_fake_submittal():
 class TestDraftingWorkLoadService:
     """Tests for DraftingWorkLoadService methods."""
     
-    def test_update_notes_sets_the_value(self):
-        """Test that update_notes sets the value."""
-        submittal = create_fake_submittal()
-        DraftingWorkLoadService.update_notes(submittal, 'Test New Note')
-        assert submittal.notes == 'Test New Note'
+    # NOTE: input validation/normalization (trimming, empty→None, None→'',
+    # date-format parsing, the full valid-status set) is covered by the engine
+    # tests in test_dwl_engine.py. These service tests only pin the behavior the
+    # service layer adds on top: writing the value onto the submittal, stamping
+    # last_updated on success, and leaving both untouched on failure.
 
-    def test_update_notes_trims_whitespace(self):
-        """Test that update_notes trims whitespace."""
-        submittal = create_fake_submittal()
-        DraftingWorkLoadService.update_notes(submittal, '  Test New Note  ')
-        assert submittal.notes == 'Test New Note'
-
-    def test_update_notes_sets_timestamp(self):
-        """Test that last_updated is set when notes are updated."""
+    def test_update_notes_writes_value_and_stamps(self):
+        """Service writes the validated note onto the submittal and stamps it."""
         submittal = create_fake_submittal()
         DraftingWorkLoadService.update_notes(submittal, "New notes")
-        assert submittal.last_updated is not None
+        assert submittal.notes == "New notes"
         assert isinstance(submittal.last_updated, datetime)
 
-    def test_update_notes_clears_empty_notes(self):
-        """Test that empty notes become None."""
-        submittal = create_fake_submittal()
-        submittal.notes = "Old notes"
-        DraftingWorkLoadService.update_notes(submittal, "   ")
-        assert submittal.notes is None
-
-    def test_update_notes_with_none_clears_notes(self):
-        """Test that passing None clears the notes."""
-        submittal = create_fake_submittal()
-        submittal.notes = "Old notes"
-        DraftingWorkLoadService.update_notes(submittal, None)
-        assert submittal.notes is None
-
-    def test_update_drafting_status_with_valid_status(self):
-        """Test updating with a valid status."""
+    def test_update_drafting_status_writes_value_and_stamps(self):
+        """Service writes a valid status onto the submittal and stamps it."""
         submittal = create_fake_submittal()
         success, error = DraftingWorkLoadService.update_drafting_status(submittal, 'STARTED')
         assert success is True
         assert error is None
         assert submittal.submittal_drafting_status == 'STARTED'
-
-    def test_update_drafting_status_with_invalid_status(self):
-        """Test that invalid status is rejected."""
-        submittal = create_fake_submittal()
-        submittal.submittal_drafting_status = 'HOLD'
-        success, error = DraftingWorkLoadService.update_drafting_status(submittal, 'INVALID')
-        assert success is False
-        assert error is not None
-        assert "must be one of" in error
-        assert submittal.submittal_drafting_status == 'HOLD'
-
-    def test_update_drafting_status_sets_timestamp(self):
-        """Test that timestamp is updated."""
-        submittal = create_fake_submittal()
-        DraftingWorkLoadService.update_drafting_status(submittal, 'STARTED')
-        assert submittal.last_updated is not None
         assert isinstance(submittal.last_updated, datetime)
 
-    def test_update_drafting_status_with_none_sets_empty(self):
-        """Test that None is normalized to empty string."""
+    def test_update_drafting_status_failure_leaves_value_and_stamp_untouched(self):
+        """On a rejected status the submittal value and timestamp are unchanged."""
         submittal = create_fake_submittal()
-        submittal.submittal_drafting_status = 'STARTED'
-        success, error = DraftingWorkLoadService.update_drafting_status(submittal, None)
-        assert success is True
-        assert submittal.submittal_drafting_status == ''
-
-    def test_update_drafting_status_with_each_valid_option(self):
-        """Test all valid status options."""
-        valid_statuses = ['', 'STARTED', 'NEED VIF', 'HOLD']
-        
-        for status in valid_statuses:
-            submittal = create_fake_submittal()
-            success, error = DraftingWorkLoadService.update_drafting_status(submittal, status)
-            assert success is True, f"Status '{status}' should be valid"
-            assert submittal.submittal_drafting_status == status
-
-    def test_update_drafting_status_doesnt_update_timestamp_on_failure(self):
-        """Test that timestamp isn't updated when validation fails."""
-        submittal = create_fake_submittal()
+        submittal.submittal_drafting_status = 'HOLD'
         original_timestamp = datetime(2024, 1, 1)
         submittal.last_updated = original_timestamp
         success, error = DraftingWorkLoadService.update_drafting_status(submittal, 'INVALID')
         assert success is False
+        assert error is not None
+        assert submittal.submittal_drafting_status == 'HOLD'
         assert submittal.last_updated == original_timestamp
 
-    def test_update_due_date_valid(self):
-        """Test updating with a valid due date."""
+    def test_update_due_date_writes_parsed_date(self):
+        """Service writes the parsed date onto the submittal."""
         submittal = create_fake_submittal()
         success, error = DraftingWorkLoadService.update_due_date(submittal, '2024-01-15')
         assert success is True
         assert error is None
-        assert submittal.due_date is not None
-        assert submittal.due_date.year == 2024
-        assert submittal.due_date.month == 1
-        assert submittal.due_date.day == 15
+        assert (submittal.due_date.year, submittal.due_date.month, submittal.due_date.day) == (2024, 1, 15)
 
-    def test_update_due_date_none(self):
-        """Test that None clears the due date."""
-        submittal = create_fake_submittal()
-        submittal.due_date = datetime(2024, 1, 15).date()
-        success, error = DraftingWorkLoadService.update_due_date(submittal, None)
-        assert success is True
-        assert error is None
-        assert submittal.due_date is None
-
-    def test_update_due_date_invalid_format(self):
-        """Test that invalid date format is rejected."""
+    def test_update_due_date_invalid_format_rejected(self):
+        """Invalid date format is rejected at the service boundary."""
         submittal = create_fake_submittal()
         success, error = DraftingWorkLoadService.update_due_date(submittal, '01/15/2024')
         assert success is False

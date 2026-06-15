@@ -280,11 +280,13 @@ def test_delete_requires_admin(app, storage_root, release_id, drafter_user, admi
     assert admin_resp.status_code == 200, admin_resp.data
 
 
-def test_upload_forbidden_for_non_drafter_non_admin(app, storage_root, release_id, plain_user):
+def test_upload_allowed_for_plain_user_returns_201(app, storage_root, release_id, plain_user):
+    # Drawing upload/markup is open to any logged-in user (deleting a version
+    # stays admin-only — see test_delete_requires_admin).
     with _patch_get_current_user(plain_user):
         client = app.test_client()
         resp = _post_pdf(client, release_id, PDF_MIN)
-    assert resp.status_code == 403
+    assert resp.status_code == 201, resp.data
 
 
 def test_upload_allowed_for_admin_without_drafter_flag(app, storage_root, release_id, admin_user):

@@ -49,14 +49,14 @@ const columnWidthStyles = `
 
 // Friendly labels + display order for the active-filter chips (keys match useFilters' columnFilters).
 const FILTER_LABELS = {
-    'PROJ. #': 'Project #',
+    'Job': 'Job',
     'NAME': 'Project Name',
     'TITLE': 'Title',
     'BIC': 'Ball in Court',
     'SUB MANAGER': 'Sub Manager',
     'PROCORE STATUS': 'Procore Status',
 };
-const FILTER_CHIP_ORDER = ['PROJ. #', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
+const FILTER_CHIP_ORDER = ['Job', 'NAME', 'TITLE', 'BIC', 'SUB MANAGER', 'PROCORE STATUS'];
 
 function DraftingWorkLoad() {
     const [searchParams] = useSearchParams();
@@ -70,6 +70,8 @@ function DraftingWorkLoad() {
     const effectiveView = viewMode === 'auto' ? (isTabletOrSmaller ? 'cards' : 'table') : viewMode;
     // Tab state: 'open' or 'draft' — passed to API so backend returns tab-specific submittals
     const [selectedTab, setSelectedTab] = useState('open');
+    // On the Draft tab the toolbar's accent color shifts blue → green so it's visually distinct.
+    const isDraftTab = selectedTab === 'draft';
     // When a jump-to param is present, load all tabs so we can find the row regardless of its status
     const hasJumpToParam = searchParams.has('highlight');
     const tabForFetch = hasJumpToParam ? 'all' : selectedTab;
@@ -141,13 +143,13 @@ function DraftingWorkLoad() {
 
     // Display labels for the primary "Project" filter only: maps project_name (the underlying
     // filter value) to "<project #> — <project name>". The committed/matched value stays the
-    // project name, so the column-specific PROJ. # / NAME dropdowns are unaffected.
+    // project name, so the column-specific Job / NAME dropdowns are unaffected.
     const projectFilterLabels = useMemo(() => {
         const map = {};
         for (const row of rows) {
             const name = (row.project_name ?? row['NAME'] ?? '').toString().trim();
             if (!name || map[name]) continue;
-            const number = (row.project_number ?? row['PROJ. #'] ?? '').toString().trim();
+            const number = (row.project_number ?? row['Job'] ?? '').toString().trim();
             map[name] = number ? `${number} — ${name}` : name;
         }
         return map;
@@ -224,11 +226,13 @@ function DraftingWorkLoad() {
                 autoWidth
                 singleSelect
                 immediate
+                closeOnSelect
+                large
                 labels={labels}
             >
                 <span
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-semibold whitespace-nowrap ${colSelected.length > 0
-                        ? 'bg-blue-700 text-white border-blue-700'
+                        ? (isDraftTab ? 'bg-green-700 text-white border-green-700' : 'bg-blue-700 text-white border-blue-700')
                         : 'bg-white dark:bg-slate-600 border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200'}`}
                 >
                     {label}{colSelected.length > 0 ? ` (${colSelected.length})` : ''}
@@ -270,7 +274,7 @@ function DraftingWorkLoad() {
 
     const hasData = displayRows.length > 0;
     const visibleColumns = columns.filter(column => column !== 'Submittals Id');
-    // Column display names are case-sensitive: ORDER #, PROJ. #, NAME, TITLE, etc.
+    // Column display names are case-sensitive: ORDER #, Job, Rel, NAME, TITLE, etc.
     const tableColumnCount = visibleColumns.length;
 
     return (
@@ -293,7 +297,7 @@ function DraftingWorkLoad() {
                             <div className="bg-gray-100 dark:bg-slate-700 rounded-lg p-1.5 border border-gray-200 dark:border-slate-600 flex-shrink-0 space-y-1.5">
                                 {/* Row 2: view mode + primary CTA + Actions + Open/Draft + priority filters */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                    <ViewToggle value={viewMode} onChange={setViewMode} />
+                                    <ViewToggle value={viewMode} onChange={setViewMode} accent={isDraftTab ? 'green' : 'blue'} />
 
                                     <div className="flex-1" />
 
@@ -318,7 +322,7 @@ function DraftingWorkLoad() {
                                             <button
                                                 onClick={() => setSelectedTab('draft')}
                                                 className={`px-3 py-1 text-xs font-semibold transition-all whitespace-nowrap border-l border-gray-400 dark:border-slate-500 ${selectedTab === 'draft'
-                                                    ? 'bg-blue-700 text-white'
+                                                    ? 'bg-green-700 text-white'
                                                     : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
                                                     }`}
                                             >
@@ -340,7 +344,7 @@ function DraftingWorkLoad() {
                                     {isAdmin && (
                                         <button
                                             onClick={() => setAddProjectOpen(true)}
-                                            className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
+                                            className={`px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 text-white ${isDraftTab ? 'bg-green-700 border border-green-700 hover:bg-green-800' : 'bg-blue-700 border border-blue-700 hover:bg-blue-800'}`}
                                             title="Add a new Procore project to the system"
                                         >
                                             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>New Project
@@ -385,7 +389,7 @@ function DraftingWorkLoad() {
                                         </div>
                                         <button
                                             onClick={resetFilters}
-                                            className="text-sm text-blue-600 dark:text-blue-400 underline hover:no-underline whitespace-nowrap"
+                                            className={`text-sm underline hover:no-underline whitespace-nowrap ${isDraftTab ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'}`}
                                         >
                                             Reset Filters
                                         </button>
@@ -412,13 +416,17 @@ function DraftingWorkLoad() {
                                         {activeFilterChips.map((chip) => (
                                             <span
                                                 key={`${chip.column}:${chip.value}`}
-                                                className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-xs font-medium"
+                                                className={`inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full border text-xs font-medium ${isDraftTab
+                                                    ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700 text-green-700 dark:text-green-300'
+                                                    : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'}`}
                                             >
                                                 <span className="whitespace-nowrap">{chip.label}: {chip.value}</span>
                                                 <button
                                                     type="button"
                                                     onClick={() => setColumnFilter(chip.column, (columnFilters[chip.column] ?? []).filter((v) => v !== chip.value))}
-                                                    className="flex items-center justify-center w-4 h-4 rounded-full leading-none text-blue-500 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 hover:text-blue-800 dark:hover:text-blue-100 transition-colors"
+                                                    className={`flex items-center justify-center w-4 h-4 rounded-full leading-none transition-colors ${isDraftTab
+                                                        ? 'text-green-500 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800 hover:text-green-800 dark:hover:text-green-100'
+                                                        : 'text-blue-500 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 hover:text-blue-800 dark:hover:text-blue-100'}`}
                                                     aria-label={`Remove ${chip.label} filter ${chip.value}`}
                                                     title={`Remove ${chip.label}: ${chip.value}`}
                                                 >
@@ -483,7 +491,8 @@ function DraftingWorkLoad() {
                                                     const isBallInCourt = column === 'BIC';
                                                     const isType = column === 'TYPE';
                                                     const isSubmittalId = column === 'Submittals Id';
-                                                    const isProjectNumber = column === 'PROJ. #';
+                                                    const isProjectNumber = column === 'Job';
+                                                    const isRel = column === 'Rel';
                                                     const isSubmittalManager = column === 'SUB MANAGER';
                                                     const isDueDate = column === 'DUE DATE';
 
@@ -496,6 +505,9 @@ function DraftingWorkLoad() {
                                                     } else if (isProjectNumber) {
                                                         headerStyle = { width: '4%' };
                                                         columnClass = 'dwl-col-project-number';
+                                                    } else if (isRel) {
+                                                        headerStyle = { width: '3%' };
+                                                        columnClass = 'dwl-col-rel';
                                                     } else if (isTitle) {
                                                         headerStyle = { width: '12%' };
                                                         columnClass = 'dwl-col-title';
@@ -526,7 +538,7 @@ function DraftingWorkLoad() {
                                                     }
 
                                                     // Reduce padding for specific columns
-                                                    const isProjectNumberHeader = column === 'PROJ. #';
+                                                    const isProjectNumberHeader = column === 'Job';
                                                     const headerPaddingClass = isOrderNumber ? 'px-0.5 py-0.5' : isProjectNumberHeader ? 'px-0.5 py-0.5' : 'px-1 py-0.5';
 
                                                     // Determine if this column is sortable
@@ -640,6 +652,7 @@ function DraftingWorkLoad() {
                                                             rowIndex={index}
                                                             isAdmin={isAdmin}
                                                             isDrafter={isDrafter}
+                                                            onRelAssigned={refetch}
                                                             onDragStart={isAdmin ? handleDragStart : undefined}
                                                             onDragOver={isAdmin ? handleDragOver : undefined}
                                                             onDragLeave={isAdmin ? handleDragLeave : undefined}

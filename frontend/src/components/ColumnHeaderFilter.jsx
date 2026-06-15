@@ -14,6 +14,10 @@
  *     selects only that value (replacing the prior pick); Ctrl/Cmd+click adds/removes a value
  *     (multi-select). Still committed via Apply. There is no (Select All) row in this mode.
  *     Default (singleSelect=false) is the standard checkbox multi-select and is unchanged.
+ *   - closeOnSelect (opt-in, used with singleSelect): a plain click also closes the popover
+ *     promptly; Ctrl/Cmd+click keeps it open so several values can be picked.
+ *   - large (opt-in): roomier popover (wider min width + taller list) for the DWL toolbar
+ *     filters so short lists need no scrolling.
  *   - Popover is rendered via portal at document.body and positioned with fixed coords so it
  *     escapes the table's overflow:auto clip and stays inside the viewport.
  */
@@ -23,6 +27,8 @@ import { createPortal } from 'react-dom';
 const BLANKS = '(Blanks)';
 const POPOVER_WIDTH = 280;        // also the minimum when autoWidth is on
 const POPOVER_MAX_HEIGHT = 440;   // approximate; just used for vertical clamp
+const LARGE_POPOVER_WIDTH = 380;      // wider min width when `large`
+const LARGE_POPOVER_MAX_HEIGHT = 680; // positioning clamp matching the taller `large` list
 const VIEWPORT_PAD = 8;
 // Chrome around a value label: checkbox + gap + label padding + list padding + scrollbar slack.
 const AUTOWIDTH_CHROME = 76;
@@ -52,8 +58,13 @@ export default function ColumnHeaderFilter({
     sortLabels,
     singleSelect = false,
     immediate = false,
+    closeOnSelect = false,
+    large = false,
     labels = null,
 }) {
+    // Minimum popover width; `large` callers get a roomier default. autoWidth still grows past it.
+    const minWidth = large ? LARGE_POPOVER_WIDTH : POPOVER_WIDTH;
+    const maxHeight = large ? LARGE_POPOVER_MAX_HEIGHT : POPOVER_MAX_HEIGHT;
     // Display-only relabeling: maps a value to the text shown in the list (and matched by
     // the search box). The committed/filtered value is always the underlying `v`, never the label.
     const labelFor = useCallback((v) => labels?.[v] ?? v, [labels]);
@@ -62,7 +73,7 @@ export default function ColumnHeaderFilter({
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [draft, setDraft] = useState(selected);
-    const [coords, setCoords] = useState({ top: 0, left: 0, width: POPOVER_WIDTH });
+    const [coords, setCoords] = useState({ top: 0, left: 0, width: minWidth });
     const triggerRef = useRef(null);
     const popoverRef = useRef(null);
 
@@ -74,15 +85,15 @@ export default function ColumnHeaderFilter({
     // When autoWidth is on, the popover grows to fit the longest value label
     // (clamped to the viewport in updatePosition); otherwise it stays at the fixed width.
     const contentWidth = useMemo(() => {
-        if (!autoWidth) return POPOVER_WIDTH;
+        if (!autoWidth) return minWidth;
         let maxText = 0;
         for (const v of values) {
             const w = measureTextWidth(labelFor(v));
             if (w > maxText) maxText = w;
         }
         if (hasBlanks) maxText = Math.max(maxText, measureTextWidth(BLANKS));
-        return Math.max(POPOVER_WIDTH, Math.ceil(maxText + AUTOWIDTH_CHROME));
-    }, [autoWidth, values, hasBlanks, labelFor]);
+        return Math.max(minWidth, Math.ceil(maxText + AUTOWIDTH_CHROME));
+    }, [autoWidth, values, hasBlanks, labelFor, minWidth]);
 
     const updatePosition = useCallback(() => {
         const el = triggerRef.current;
@@ -99,13 +110,13 @@ export default function ColumnHeaderFilter({
         if (left + width > vw - VIEWPORT_PAD) left = vw - VIEWPORT_PAD - width;
         // Prefer below; flip above if it would overflow.
         let top = rect.bottom + 4;
-        if (top + POPOVER_MAX_HEIGHT > vh - VIEWPORT_PAD) {
-            const above = rect.top - 4 - POPOVER_MAX_HEIGHT;
-            if (above >= VIEWPORT_PAD) top = rect.top - 4 - POPOVER_MAX_HEIGHT;
-            else top = Math.max(VIEWPORT_PAD, vh - VIEWPORT_PAD - POPOVER_MAX_HEIGHT);
+        if (top + maxHeight > vh - VIEWPORT_PAD) {
+            const above = rect.top - 4 - maxHeight;
+            if (above >= VIEWPORT_PAD) top = rect.top - 4 - maxHeight;
+            else top = Math.max(VIEWPORT_PAD, vh - VIEWPORT_PAD - maxHeight);
         }
         setCoords({ top, left, width });
-    }, [contentWidth]);
+    }, [contentWidth, maxHeight]);
 
     // Position on open + keep in sync with scroll/resize while open
     useLayoutEffect(() => {
@@ -191,8 +202,15 @@ export default function ColumnHeaderFilter({
     // Single-select list: a plain click stages just this value (replacing the prior pick);
     // Ctrl/Cmd+click adds/removes it (multi-select). Committed on Apply (or live in immediate mode).
     const handleSingleClick = (v, e) => {
-        if (e.ctrlKey || e.metaKey) toggleValue(v);
-        else commit(new Set([v]));
+        if (e.ctrlKey || e.metaKey) {
+            toggleValue(v);              // multi-select: stays open
+        } else {
+            commit(new Set([v]));        // single pick
+            if (closeOnSelect) {
+                setOpen(false);
+                setSearch('');
+            }
+        }
     };
 
     const clear = () => {
@@ -262,7 +280,7 @@ export default function ColumnHeaderFilter({
                         />
                     </div>
 
-                    <div className="max-h-72 overflow-y-auto px-2 pb-2 text-sm">
+                    <div className={`${large ? 'max-h-[60vh]' : 'max-h-72'} overflow-y-auto px-2 pb-2 text-sm`}>
                         {optionCount === 0 ? (
                             <div className="px-1 py-2 text-gray-500 dark:text-slate-400 italic">No values</div>
                         ) : singleSelect ? (

@@ -4,7 +4,7 @@
  * purpose: Wraps all authenticated pages with the top navigation bar, theme toggle, location controls, and notification bell. Collapses nav into a slide-in drawer below the nav (1440px) breakpoint for iPad (incl. iPad Pro) and phone.
  * exports:
  *   AppShell: Layout shell with nav chrome, renders child routes via Outlet
- * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer]
+ * imports_from: [react, react-router-dom, ../utils/auth, ../context/ThemeContext, ../context/LocationContext, ../context/ReleasesContext, ./QuickSearch, ./NotificationBell, ./MobileNavDrawer]
  * imported_by: [frontend/src/App.jsx]
  * invariants:
  *   - Admin-only nav items are gated on checkAuth result
@@ -16,9 +16,12 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { logout, checkAuth, userCanAccessInvoicing } from '../utils/auth';
 import { useTheme } from '../context/ThemeContext';
 import { LocationProvider, useLocationContext } from '../context/LocationContext';
+import { ReleasesProvider } from '../context/ReleasesContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
+import PatchNotesModal from './PatchNotesModal';
+import { CURRENT_VERSION } from '../data/patchNotes';
 
 function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
@@ -29,6 +32,7 @@ function AppShellInner({ isAuthenticated }) {
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   const [isAdmin, setIsAdmin] = useState(false);
   const [canSeeReport, setCanSeeReport] = useState(false);
+  const [showPatchNotes, setShowPatchNotes] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -75,53 +79,62 @@ function AppShellInner({ isAuthenticated }) {
         className="relative flex items-center h-14 3xl:h-16 px-3 lg:px-4 gap-2 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-600 sticky top-0 z-40 shrink-0"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        {/* Quick search */}
-        <QuickSearch />
-
-        {/* Map + Location shortcuts (left side) — visible on 2xl+ only */}
-        <div className="hidden min-[1440px]:flex items-center gap-2">
-          {navBtn('/jobsite-map', 'Map')}
-          <button
-            type="button"
-            onClick={handleLocationToggle}
-            disabled={locationRequesting}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
-              locationEnabled
-                ? 'bg-green-500 text-white hover:bg-green-600'
-                : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
-            } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
-            title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
-          >
-            {locationRequesting ? (
-              <>
-                <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                Location…
-              </>
-            ) : locationEnabled ? (
-              <>📍 Location on</>
-            ) : (
-              <>📍 Location</>
-            )}
-          </button>
-        </div>
-
-        {/* Centered title — absolute positioning only at 2xl+; flex spacer below */}
-        <h1 className="hidden min-[1440px]:block absolute left-1/2 -translate-x-1/2 text-xl 3xl:text-2xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none">
-          MHMW Brain
-        </h1>
-        {/* Mobile/iPad title — inline, smaller */}
-        <h1 className="min-[1440px]:hidden flex-1 text-center text-base font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent pointer-events-none truncate">
+        {/* Brand — pinned far left */}
+        <h1 className="shrink-0 text-lg 3xl:text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent whitespace-nowrap select-none">
           MHMW Brain
         </h1>
 
-        {/* Right cluster — full nav at 2xl+, condensed below */}
+        {/* Version badge — opens patch notes */}
+        <button
+          type="button"
+          onClick={() => setShowPatchNotes(true)}
+          className="shrink-0 px-1.5 py-0.5 text-[11px] font-medium rounded-md text-gray-500 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          title="What's new — view patch notes"
+        >
+          {CURRENT_VERSION}
+        </button>
+
+        {/* Everything else expands from the right; search is the leftmost item */}
         <div className="ml-auto flex items-center gap-2">
+          {/* Quick search — leftmost of the right cluster */}
+          <QuickSearch />
+
+          {/* Map + Location shortcuts — visible on 2xl+ only */}
+          <div className="hidden min-[1440px]:flex items-center gap-2">
+            {navBtn('/jobsite-map', 'Map')}
+            <button
+              type="button"
+              onClick={handleLocationToggle}
+              disabled={locationRequesting}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
+                locationEnabled
+                  ? 'bg-green-500 text-white hover:bg-green-600'
+                  : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+              } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+              title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
+            >
+              {locationRequesting ? (
+                <>
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Location…
+                </>
+              ) : locationEnabled ? (
+                <>📍 Location on</>
+              ) : (
+                <>📍 Location</>
+              )}
+            </button>
+          </div>
+
           {/* Inline nav buttons — 2xl+ only */}
           <div className="hidden min-[1440px]:flex items-center gap-2">
             {navBtn('/job-log', 'Job Log')}
             {navBtn('/drafting-work-load', 'Drafting WL')}
             {navBtn('/events', 'Events')}
+            {navBtn('/todos', 'To-Dos')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
+            {isAdmin && navBtn('/rental-reports', 'Rentals')}
+            {isAdmin && navBtn('/meetings', 'Meetings')}
             {isAdmin && navBtn('/board', 'Bug Tracker')}
           </div>
 
@@ -220,6 +233,8 @@ function AppShellInner({ isAuthenticated }) {
         onLogin={() => navigate('/login')}
       />
 
+      <PatchNotesModal isOpen={showPatchNotes} onClose={() => setShowPatchNotes(false)} isAdmin={isAdmin} />
+
       {/* Main content */}
       <main className="flex-1 w-full min-h-0 flex flex-col">
         <Outlet />
@@ -231,7 +246,9 @@ function AppShellInner({ isAuthenticated }) {
 function AppShell({ isAuthenticated }) {
   return (
     <LocationProvider>
-      <AppShellInner isAuthenticated={isAuthenticated} />
+      <ReleasesProvider enabled={!!isAuthenticated}>
+        <AppShellInner isAuthenticated={isAuthenticated} />
+      </ReleasesProvider>
     </LocationProvider>
   );
 }

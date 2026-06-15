@@ -26,7 +26,7 @@ function statusColor(status) {
 
 export default function SubmittalCard({ submittal, onOpen, isHighlighted = false }) {
     const orderNum = fmt(submittal['ORDER #']);
-    const projNum = fmt(submittal['PROJ. #']);
+    const projNum = fmt(submittal['Job'] ?? submittal.project_number);
     const projName = fmt(submittal['NAME']);
     const title = fmt(submittal['TITLE']);
     const bic = fmt(submittal['BIC']);

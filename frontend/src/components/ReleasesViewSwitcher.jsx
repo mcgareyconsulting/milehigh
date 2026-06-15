@@ -1,0 +1,109 @@
+/**
+ * @milehigh-header
+ * schema_version: 1
+ * purpose: Segmented Table/Board/Timeline switcher for the three release views (Job Log table, PM Board, Gantt timeline) — sits in the shared ReleasesLayout toolbar for instant switching over the shared ReleasesProvider dataset.
+ * exports:
+ *   ReleasesViewSwitcher: Router-aware segmented control. Table → /job-log, Board → /pm-board, Timeline → /pm-board?view=timeline.
+ * imports_from: [react-router-dom]
+ * imported_by: [frontend/src/pages/ReleasesLayout.jsx]
+ * invariants:
+ *   - Active segment derives from the current location (no local state), so deep links and back/forward stay correct.
+ *   - Navigation only — never touches release data; switching views must not trigger a refetch (the provider survives navigation).
+ */
+import { useLocation, useNavigate } from 'react-router-dom';
+
+const ICON_PROPS = {
+    width: 12,
+    height: 12,
+    viewBox: '0 0 14 14',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.6,
+    strokeLinecap: 'round',
+    'aria-hidden': true,
+};
+
+const VIEWS = [
+    {
+        key: 'table',
+        label: 'Table',
+        to: '/job-log',
+        title: 'Job Log table',
+        icon: (
+            <svg {...ICON_PROPS}>
+                <rect x="1.5" y="2" width="11" height="10" rx="1" />
+                <path d="M1.5 5.5h11M1.5 8.75h11M5.5 5.5v6.5" />
+            </svg>
+        ),
+    },
+    {
+        key: 'board',
+        label: 'Board',
+        to: '/pm-board',
+        title: 'PM Board',
+        icon: (
+            <svg {...ICON_PROPS}>
+                <rect x="1.5" y="2" width="3" height="10" rx="0.75" />
+                <rect x="5.5" y="2" width="3" height="7" rx="0.75" />
+                <rect x="9.5" y="2" width="3" height="4.5" rx="0.75" />
+            </svg>
+        ),
+    },
+    {
+        key: 'timeline',
+        label: 'Timeline',
+        to: '/pm-board?view=timeline',
+        title: 'Install timeline (Gantt)',
+        icon: (
+            <svg {...ICON_PROPS}>
+                <path d="M1.5 3.5h6M3.5 7h7M6 10.5h6.5" strokeWidth="2.2" />
+            </svg>
+        ),
+    },
+];
+
+function activeViewFor(location) {
+    if (location.pathname.startsWith('/job-log')) return 'table';
+    if (location.pathname.startsWith('/pm-board')) {
+        const view = new URLSearchParams(location.search).get('view');
+        return view === 'timeline' ? 'timeline' : 'board';
+    }
+    return null;
+}
+
+export default function ReleasesViewSwitcher() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const active = activeViewFor(location);
+
+    return (
+        <div
+            className="inline-flex rounded-lg border border-gray-300 dark:border-slate-500 overflow-hidden flex-shrink-0 shadow-sm"
+            role="tablist"
+            aria-label="Release views"
+        >
+            {VIEWS.map((view, i) => (
+                <button
+                    key={view.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active === view.key}
+                    title={view.title}
+                    onClick={() => {
+                        if (active !== view.key) navigate(view.to);
+                    }}
+                    className={`px-2.5 py-1 text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 ${
+                        i > 0 ? 'border-l border-gray-300 dark:border-slate-500' : ''
+                    } ${
+                        active === view.key
+                            ? 'bg-blue-700 text-white'
+                            : 'bg-white dark:bg-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-500'
+                    }`}
+                >
+                    {view.icon}
+                    {view.label}
+                </button>
+            ))}
+        </div>
+    );
+}

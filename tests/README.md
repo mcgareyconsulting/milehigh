@@ -33,18 +33,21 @@ Tests fall into three layers. Pick the layer that matches the unit you're testin
 
 ## Fixtures
 
-Root `tests/conftest.py` provides the shared fixtures:
+Root `tests/conftest.py` provides the shared fixtures and row factories:
 
 - `app` — Flask app with in-memory SQLite, `db.create_all()` / `db.drop_all()` lifecycle
 - `client` — `app.test_client()`
 - `mock_admin_user`, `mock_non_admin_user` — `Mock`-spec User objects for auth patching
+- `admin_session` — patches `get_current_user` at the single `app.auth.utils` site to an admin. Non-HTTP command/service files opt every test in with a one-line autouse wrapper: `def setup_auth(admin_session): yield`. **Don't re-copy the `with patch("app.auth.utils.get_current_user", ...)` block into each file** — depend on `admin_session` instead.
+- `make_release(job, release, stage=…, stage_group=…, fab_order=…, job_name=…, **extra)` — the single factory for a `Releases` row (`stage`/`stage_group`/`fab_order` are positional-or-keyword; everything else, e.g. `trello_card_id`/`start_install_*`, flows through `**extra`). **Import this — don't redefine a local `make_release`/`_make_release`.** Files that want different defaults wrap it thinly (e.g. `tests/brain/test_installer_assignment.py`), and red-date aliases it directly since its defaults match.
+- `make_user(...)` — factory for a real `User` row.
 
 Subdirectory `conftest.py` files add domain-specific fixtures only:
 
 - `tests/dwl/conftest.py` — `mock_submittal`, autouse `setup_auth` (DWL tests run authenticated by default)
 - `tests/brain/conftest.py` — `admin_client`, `non_admin_client` (these patch brain-specific call sites of `get_current_user`)
 
-When the patch sites for `get_current_user` differ across blueprints (e.g. `app.brain.job_log.routes` imports it directly), define the auth-patching fixture next to the tests, not in root.
+When the patch sites for `get_current_user` differ across blueprints (e.g. `app.brain.job_log.routes` imports it directly, as in `test_stage_photo_gate.py` and the brain HTTP-route tests), keep the multi-target patch next to the tests rather than using the single-site `admin_session`.
 
 ## Mocking conventions
 
@@ -59,10 +62,10 @@ When the patch sites for `get_current_user` differ across blueprints (e.g. `app.
 - Test functions: `test_<what>_<condition>_<outcome>` — e.g. `test_login_inactive_user_returns_401`
 - One assertion concept per test. Multiple `assert` lines are fine if they verify the same outcome; don't combine unrelated checks.
 
-## Coverage map (as of 2026-04-27)
+## Coverage map (as of 2026-06-08)
 
 ### Well-tested
-- **Drafting Work Load** — engine, service, routes (3-layer pyramid, ~135 tests)
+- **Drafting Work Load** — engine, service, routes (3-layer pyramid, ~125 tests; engine owns validation, service tests only the mutation/timestamp it adds on top)
 - **Stage ordering / fab order** — comprehensive helper + command coverage
 - **Trello ↔ job log sync** — rank gate, hold stickiness, outbound gate
 - **Procore helpers** — webhook helpers, token expiry, API client retries
@@ -75,9 +78,11 @@ When the patch sites for `get_current_user` differ across blueprints (e.g. `app.
 - **Outbox service** — retry/backoff, max-retry exhaustion (`tests/services/test_outbox_service.py`)
 - **Procore webhook handler** — burst dedup, connector skip, create/update branching (`tests/test_procore_webhook.py`)
 - **Trello webhook handler** — lock contention, queue overflow (`tests/test_trello_webhook.py`)
-- **Board / bug tracker** — CRUD, mentions, status changes (`tests/brain/test_board.py`)
 
 ### Out of scope (lower runtime risk)
+- `app/brain/board/` — admin-only bug-tracker CRUD; internal tool, low business risk (suite removed 2026-06-08 in the test pare-down — re-add focused mention-parsing coverage if the board grows logic)
+- invoicing report — reporting view, read-mostly and high-churn after the DRR redesign (suite removed 2026-06-08)
+- `/api/version` + cache-control headers — deploy plumbing, near-zero regression value (suite removed 2026-06-08)
 - `app/sync/sync.py` — large; covered indirectly through Trello sync tests
 - `app/services/database_mapping.py` — Excel ingest path
 - `app/onedrive/` — polling currently disabled

@@ -5,7 +5,7 @@ purpose: Encapsulate the full stage update workflow (DB write, stage_group sync,
 exports:
   UpdateStageCommand: Dataclass command that executes a stage update with all side effects
   StageUpdateResult: Dataclass result with event_id, job_comp/fab_order extras
-imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.clear_hard_date_cascade]
+imports_from: [app.models, app.services.outbox_service, app.services.job_event_service, app.api.helpers, app.brain.job_log.scheduling.service, app.brain.job_log.features.start_install.neutralize_install_date_cascade]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
   - Fixed-tier stages (Ready-to-Ship / Complete groups) auto-assign fab_order via get_fixed_tier
@@ -22,9 +22,33 @@ from app.models import Releases, db
 from app.services.job_event_service import JobEventService
 from app.services.outbox_service import OutboxService
 from app.logging_config import get_logger
-from app.brain.job_log.features.start_install.clear_hard_date_cascade import clear_hard_date_cascade
+from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
 
 logger = get_logger(__name__)
+
+
+# Master switch for the stage photo gate. Held OFF for now — the gate
+# infrastructure below stays in place so flipping this back to True re-enables
+# it with no other changes. The frontend has a matching flag
+# (STAGE_PHOTO_GATE_ENABLED in JobsTableRow.jsx); keep the two in sync.
+STAGE_PHOTO_GATE_ENABLED = False
+
+# Stages that require a stage-tagged photo before a release may enter them
+# (only enforced when STAGE_PHOTO_GATE_ENABLED is True). The frontend opens the
+# upload modal proactively; this set is the authoritative server-side gate.
+STAGE_PHOTO_GATES = {"Welded QC", "Paint Complete"}
+
+
+class StagePhotoRequiredError(Exception):
+    """Raised when a stage change is blocked because its required photo is missing.
+
+    Carries the gated `stage` so the route can tell the client which stage needs
+    a photo uploaded.
+    """
+
+    def __init__(self, stage: str):
+        self.stage = stage
+        super().__init__(f"A photo tagged '{stage}' is required to move to {stage}")
 
 
 @dataclass
@@ -88,6 +112,30 @@ class UpdateStageCommand:
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_stage = job_record.stage if job_record.stage else 'Released'
+
+        # Photo gate: certain stages require a photo (tagged with that stage)
+        # before a release may enter them. We check the requested stage before
+        # the ASAP intercept so "Paint Complete" still demands its photo even
+        # when it gets rerouted to Ship Planning. Skipped on undo (restoring a
+        # prior valid state) and when the stage isn't actually changing.
+        if (
+            STAGE_PHOTO_GATE_ENABLED
+            and self.stage in STAGE_PHOTO_GATES
+            and self.undone_event_id is None
+            and old_stage != self.stage
+        ):
+            from app.models import ReleasePhoto
+            has_photo = db.session.query(ReleasePhoto.id).filter(
+                ReleasePhoto.release_id == job_record.id,
+                ReleasePhoto.stage == self.stage,
+                ReleasePhoto.is_deleted.is_(False),
+            ).first() is not None
+            if not has_photo:
+                logger.info(
+                    f"Stage gate blocked {self.job_id}-{self.release} -> {self.stage}: "
+                    f"no photo tagged '{self.stage}'"
+                )
+                raise StagePhotoRequiredError(self.stage)
 
         # ASAP intercept: a release flagged ASAP that hits Paint Complete is ripped
         # straight to Ship Planning. We override self.stage here so the rest of the
@@ -172,22 +220,16 @@ class UpdateStageCommand:
         extras: dict = {}
 
         # ASAP drop on completion: once an ASAP release reaches Ship Complete or any
-        # later stage, it is no longer a rush. Clear the ASAP flag and stamp Start
-        # Install with the date of this stage event, recorded as a neutral (no-color)
-        # hard date — preserved through later completion marking because
-        # clear_hard_date_cascade no-ops on no_color rows. Hold (rank 99) is excluded.
+        # later stage, it is no longer a rush, so clear the ASAP flag. The start_install /
+        # comp_eta set at ASAP-flag time (and any subsequent mirror-card tweak) are LEFT
+        # intact — the PM owns the install date from then on. Hold (rank 99) is excluded.
         SHIP_COMPLETE_RANK = STAGE_PROGRESSION_RANK['Ship Complete']
         new_rank = STAGE_PROGRESSION_RANK.get(self.stage, -1)
         if (
             bool(getattr(job_record, 'start_install_asap', False))
             and SHIP_COMPLETE_RANK <= new_rank < 99
         ):
-            drop_date = datetime.utcnow().date()
             job_record.start_install_asap = False
-            job_record.start_install = drop_date
-            job_record.start_install_formula = None
-            job_record.start_install_formulaTF = False
-            job_record.start_install_no_color = True
             JobEventService.create_and_close(
                 job=self.job_id, release=self.release,
                 action='updated', source=self.source,
@@ -196,12 +238,10 @@ class UpdateStageCommand:
                     'old_value': True,
                     'new_value': False,
                     'reason': 'asap_dropped_on_ship_complete',
-                    'start_install': drop_date.isoformat(),
                     'parent_event_id': event.id,
                 },
             )
             extras['asap_dropped'] = True
-            extras['start_install'] = drop_date.isoformat()
 
         # job_comp cascade. 'Install Complete' and 'Complete' form a single
         # "complete zone" for the Install Prog marker (job_comp='X'): entering
@@ -255,12 +295,12 @@ class UpdateStageCommand:
                 )
                 extras['job_comp'] = None
 
-        # Red-date auto-clear: a hard start_install date is meaningless once the
-        # release is installed/complete. Helper is a no-op when no hard date is
-        # present. Fires for both terminal stages (Install Complete is the new
-        # completion marker; Complete stays for safety).
+        # Install-date neutralize: once the release is installed/complete, KEEP the install
+        # date but strip its color (and any ASAP red) so it stops showing as an alarming
+        # red/green/yellow date. No-op when no hard date is present. Fires for both terminal
+        # stages (Install Complete is the new completion marker; Complete stays for safety).
         if self.stage in ('Complete', 'Install Complete'):
-            if clear_hard_date_cascade(
+            if neutralize_install_date_cascade(
                 job_record,
                 parent_event_id=event.id,
                 reason=(

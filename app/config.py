@@ -82,6 +82,23 @@ class Config:
     # <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.
     PDF_STORAGE_ROOT = os.environ.get("PDF_STORAGE_ROOT")
 
+    # Per-release photo storage. Shares the same Render persistent disk as PDFs.
+    # Prefer an explicit PHOTO_STORAGE_ROOT; otherwise derive a sibling "photos"
+    # dir next to the PDF root (e.g. /var/data/pdfs -> /var/data/photos) so a
+    # single mounted disk serves both. Local dev (neither set) falls back to
+    # <repo>/app/storage/photos via app/brain/job_log/features/photos/storage.py.
+    PHOTO_STORAGE_ROOT = os.environ.get("PHOTO_STORAGE_ROOT")
+    if not PHOTO_STORAGE_ROOT and PDF_STORAGE_ROOT:
+        PHOTO_STORAGE_ROOT = os.path.join(
+            os.path.dirname(PDF_STORAGE_ROOT.rstrip("/")), "photos"
+        )
+
+    # Sunbelt rental report discrepancy thresholds. A rental is flagged a
+    # cost/duration outlier once accrued cost (weeks on rent * week_rate) reaches
+    # SUNBELT_COST_OUTLIER_USD, or it has been on rent SUNBELT_DURATION_OUTLIER_DAYS.
+    SUNBELT_COST_OUTLIER_USD = float(os.environ.get("SUNBELT_COST_OUTLIER_USD", "12000"))
+    SUNBELT_DURATION_OUTLIER_DAYS = int(os.environ.get("SUNBELT_DURATION_OUTLIER_DAYS", "150"))
+
     # Sandbox Procore
     PROCORE_ACCESS_TOKEN = os.environ.get("PROCORE_ACCESS_TOKEN")
     PROCORE_SANDBOX_BASE_URL = os.environ.get("PROCORE_SANDBOX_BASE_URL")
@@ -113,6 +130,34 @@ class Config:
     
     # Admin PIN for health scan admin page
     ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")
+
+    # Anthropic — used to extract checklist items from meeting transcripts.
+    # Falls back to a deterministic stub extractor when unset (tests / no key).
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+    # Recall.ai — dispatches a notetaker bot to a meeting URL (Teams/Zoom/Meet) and
+    # produces an async transcript we PULL down post-meeting (no webhook/data-lake
+    # dependency yet). The API host is region-pinned; set RECALL_REGION to match the
+    # account (us-east-1 | us-west-2 | eu-central-1) or override RECALL_BASE_URL.
+    RECALL_API_KEY = os.environ.get("RECALL_API_KEY")
+    RECALL_REGION = os.environ.get("RECALL_REGION", "us-east-1")
+    RECALL_BASE_URL = os.environ.get(
+        "RECALL_BASE_URL",
+        f"https://{os.environ.get('RECALL_REGION', 'us-east-1')}.recall.ai/api/v1",
+    )
+
+    # Meeting → checklist reviewer. MVP: every post-meeting checklist surfaces to
+    # this user (resolved by username, which is the user's email here).
+    # Future distribution order on the admin side: Bill > David > Katie > Luis;
+    # for a project meeting the assigned PM takes precedence. The dev admin
+    # (mcgareyconsulting@gmail.com) is excluded from ranking.
+    CHECKLIST_REVIEWER_USERNAME = os.environ.get("CHECKLIST_REVIEWER_USERNAME", "boneill@mhmw.com")
+    CHECKLIST_ADMIN_RANKING = [
+        "boneill@mhmw.com",   # Bill
+        "dservold@mhmw.com",  # David
+        "khearn@mhmw.com",    # Katie
+        "lsolano@mhmw.com",   # Luis
+    ]
 
 
 class LocalConfig(Config):

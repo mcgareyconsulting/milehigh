@@ -6,6 +6,8 @@
  * exports:
  *   setAsapWithCapConfirm(job, release): Promise<boolean> — true if the flag was set, false if the
  *     user declined past the cap. Throws on any other failure.
+ *   setAsapAndAssign(job, release, installer): Promise<boolean> — set ASAP, then (when an installer
+ *     was picked) assign it installer-only so the mirror bar is seeded in the same action.
  * imports_from: [../services/jobsApi]
  * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/StartInstallEditor.jsx]
  */
@@ -26,4 +28,14 @@ export async function setAsapWithCapConfirm(job, release) {
         }
         throw error;
     }
+}
+
+export async function setAsapAndAssign(job, release, installer) {
+    const ok = await setAsapWithCapConfirm(job, release);
+    // ASAP stamps the date; if an installer was also picked, assign it (installer-only, null
+    // date) so the ASAP date is kept and the mirror bar is seeded in the same action.
+    if (ok && installer !== undefined) {
+        await jobsApi.updateStartInstall(job, release, null, installer);
+    }
+    return ok;
 }

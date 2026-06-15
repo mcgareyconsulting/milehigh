@@ -472,6 +472,29 @@ def monthly_invoicing_report():
             for s in Submittals.query.filter(Submittals.submittal_id.in_(submittal_ids)).all():
                 submittals_by_id[s.submittal_id] = s
 
+        # When each release entered its *current* stage. Not month-bounded: the
+        # current stage is live (r.stage), so its entry date is the latest
+        # update_stage regardless of month. Prefer the latest update_stage whose
+        # payload 'to' matches the live stage; fall back to the latest one seen
+        # (a stage can rarely be set by a non-update_stage path).
+        entered_stage_at = {}  # (job, release) -> datetime
+        if release_keys:
+            jobs = {k[0] for k in release_keys}
+            latest_stage_ev = {}  # (job, release) -> datetime (any update_stage)
+            for e in ReleaseEvents.query.filter(
+                ReleaseEvents.job.in_(jobs),
+                ReleaseEvents.action == 'update_stage',
+                ReleaseEvents.is_system_echo == False,  # noqa: E712
+            ).order_by(ReleaseEvents.created_at.asc()).all():
+                key = (e.job, e.release)
+                latest_stage_ev[key] = e.created_at  # asc order => last write wins
+                r = releases_by_key.get(key)
+                to = (e.payload or {}).get('to')
+                if r is not None and to == r.stage:
+                    entered_stage_at[key] = e.created_at
+            for key, dt in latest_stage_ev.items():
+                entered_stage_at.setdefault(key, dt)
+
         # Canonical project names keyed by project number (string).
         project_numbers = {str(job) for (job, _release) in release_keys}
         for sid in submittal_ids:
@@ -515,6 +538,10 @@ def monthly_invoicing_report():
                     'description': r.description if r else None,
                     'pm': r.pm if r else None,
                     'stage': r.stage if r else None,
+                    'stage_entered_at': (
+                        format_datetime_mountain(entered_stage_at[rkey])
+                        if rkey in entered_stage_at else None
+                    ),
                     'install_prog': r.job_comp if r else None,
                     'invoiced': r.invoiced if r else None,
                     'events': [],

@@ -107,9 +107,9 @@ export default function JobLogQuickFilters({
     }, [open]);
 
     if (!compact) {
-        // Linear button row (desktop)
+        // Linear button row (desktop) — tight inline group so the whole toolbar stays on one line.
         return (
-            <div className="flex items-center gap-1.5 flex-wrap flex-1 justify-center">
+            <div className="flex items-center gap-1.5">
                 {QUICK_FILTERS.map(({ key, label, activeClass, title }) => (
                     <button
                         key={key}

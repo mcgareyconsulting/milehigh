@@ -25,6 +25,7 @@ import os
 import hashlib
 import requests
 from datetime import datetime
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from requests.exceptions import ConnectionError, Timeout
 from urllib3.exceptions import ProtocolError
@@ -42,9 +43,161 @@ from app.procore.helpers import (
 )
 from app.brain.drafting_work_load.service import UrgencyService, SubmittalOrderingService
 from app.brain.drafting_work_load.engine import SubmittalOrderingEngine
+from app.api.helpers import active_releases_filter
 
 
 logger = logging.getLogger(__name__)
+
+# Submittal type that triggers a "Rel" (release) number assignment on the DWL tab.
+DRR_TYPE = "Drafting Release Review"
+# Rel numbers cycle through this inclusive range, rolling over to REL_MIN once
+# REL_MAX is occupied.
+REL_MIN = 101
+REL_MAX = 998
+
+
+def _to_int_or_none(value):
+    """Coerce ``value`` to int, or return None if it isn't a clean integer."""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+class RelAssignmentError(Exception):
+    """Raised when a manual Rel assignment is invalid.
+
+    ``code`` is one of 'type' (submittal isn't a DRR), 'range' (not an integer
+    in [REL_MIN, REL_MAX]), or 'collision' (number already taken).
+    """
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _globally_taken_rel_numbers(exclude_submittal_id=None):
+    """Rel numbers that are unavailable system-wide, keyed on the value alone.
+
+    Uniqueness is locked on the 3-digit Rel value (job-agnostic). A number is
+    taken if it appears in the union of two sources:
+
+    (a) Active release #s -- every ACTIVE job-log ``Releases`` row, any job
+        (``active_releases_filter``: not archived; ``is_active`` True or NULL).
+    (b) Pending DRR release #s -- DRR submittals that hold a ``rel`` but haven't
+        become a release yet (status not 'Closed'), excluding the submittal being
+        edited (``exclude_submittal_id``).
+
+    A Closed DRR is on its way to being an active release that (a) catches, so it
+    is intentionally not reserved here -- otherwise every historical Closed DRR
+    would hold its number forever and exhaust the 101..998 range. Values that
+    aren't clean integers are ignored. Returns the set of taken integers.
+    """
+    taken = set()
+
+    release_rows = (
+        db.session.query(Releases.release)
+        .filter(active_releases_filter())
+        .all()
+    )
+    for (value,) in release_rows:
+        number = _to_int_or_none(value)
+        if number is not None:
+            taken.add(number)
+
+    drr_filters = [
+        Submittals.type == DRR_TYPE,
+        Submittals.rel.isnot(None),
+        or_(Submittals.status.is_(None), Submittals.status != "Closed"),
+    ]
+    if exclude_submittal_id is not None:
+        drr_filters.append(Submittals.submittal_id != str(exclude_submittal_id))
+    drr_rows = (
+        db.session.query(Submittals.rel)
+        .filter(*drr_filters)
+        .all()
+    )
+    for (value,) in drr_rows:
+        number = _to_int_or_none(value)
+        if number is not None:
+            taken.add(number)
+
+    return taken
+
+
+def next_rel_number(exclude_submittal_id=None):
+    """Return the suggested next Rel number (used to prefill the manual popup).
+
+    Assignment is "semi-chronological": the sequence climbs to the next highest
+    available value rather than back-filling gaps. The suggestion is
+    ``max(currently-taken) + 1``, so a run like 650, 651, 652 keeps advancing
+    even when intermediate numbers are blocked -- if 653 is taken the max is
+    >= 653 and the next suggestion is 654, never a low/freed number like 101.
+    (Nothing above the max is taken, so ``max + 1`` is always free.)
+
+    Freed numbers -- archived releases and never-used gaps below the max -- are
+    NOT reused until the sequence rolls over. Rollover happens only once REL_MAX
+    is occupied: the suggestion then drops to the lowest free value from REL_MIN
+    up, recycling the freed low numbers.
+
+    "Taken" is the union in ``_globally_taken_rel_numbers``.
+    ``exclude_submittal_id`` lets the submittal being edited ignore its own
+    current Rel. Returns REL_MIN when nothing is taken. Raises RuntimeError only
+    in the pathological case where every number in [REL_MIN, REL_MAX] is taken.
+    """
+    taken = _globally_taken_rel_numbers(exclude_submittal_id)
+    in_range = [n for n in taken if REL_MIN <= n <= REL_MAX]
+    if not in_range:
+        return REL_MIN
+
+    current_max = max(in_range)
+    if current_max < REL_MAX:
+        # Nothing above current_max is taken, so current_max + 1 is free.
+        return current_max + 1
+
+    # REL_MAX is occupied -> roll over and recycle the lowest free number.
+    for candidate in range(REL_MIN, REL_MAX + 1):
+        if candidate not in taken:
+            return candidate
+
+    raise RuntimeError(
+        f"No free Rel number in [{REL_MIN}, {REL_MAX}]: every value is taken "
+        f"by an active release or pending DRR."
+    )
+
+
+def assign_rel_manual(submittal, desired_rel):
+    """Validate and assign a manually-entered Rel to a DRR submittal.
+
+    Raises ``RelAssignmentError`` (code 'type' | 'range' | 'collision') on
+    failure and leaves the submittal untouched. On success sets ``rel`` and
+    ``rel_assigned_at`` and returns the assigned integer. The caller commits.
+    Reassignment is allowed: the submittal's own current Rel is excluded from
+    the collision check.
+    """
+    if submittal is None or (submittal.type or "").strip() != DRR_TYPE:
+        raise RelAssignmentError(
+            "type", "Rel can only be assigned to a Drafting Release Review submittal."
+        )
+    number = _to_int_or_none(desired_rel)
+    if number is None or not (REL_MIN <= number <= REL_MAX):
+        raise RelAssignmentError(
+            "range", f"Rel must be a whole number from {REL_MIN} to {REL_MAX}."
+        )
+    taken = _globally_taken_rel_numbers(exclude_submittal_id=submittal.submittal_id)
+    if number in taken:
+        raise RelAssignmentError(
+            "collision",
+            f"Rel {number} is already assigned to an active release or pending DRR.",
+        )
+    submittal.rel = number
+    submittal.rel_assigned_at = datetime.utcnow()
+    logger.info(
+        "Assigned Rel %s to DRR submittal %s (job %s)",
+        number, submittal.submittal_id, submittal.project_number,
+    )
+    return number
 
 
 def _request_json(url, headers, params=None):
@@ -558,9 +711,13 @@ def create_submittal_from_webhook(project_id, submittal_id, webhook_payload=None
             last_updated=datetime.utcnow()
         )
         
+        # Rel (release) numbers are no longer assigned automatically on creation.
+        # A drafter/admin assigns one manually from the DWL submittal popup
+        # (assign_rel_manual), so a freshly-created DRR arrives with rel=None.
+
         db.session.add(new_submittal)
         logger.info(f"Added submittal to session, committing to database...")
-        
+
         try:
             db.session.commit()
             logger.info(f"Successfully committed submittal to database")

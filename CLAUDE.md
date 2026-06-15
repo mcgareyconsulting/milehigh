@@ -7,12 +7,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Backend
 ```bash
 python run.py              # Run Flask app on http://localhost:8000
-flask db migrate -m "msg"  # Generate migration from model changes
-flask db upgrade           # Apply migrations
 pytest                     # Run all tests
 pytest tests/dwl/          # Run a specific test suite
 pytest tests/test_hours_summary.py  # Run a single test file
 ```
+
+There is no Alembic. Schema changes are made by editing `app/models.py` and
+shipping a standalone, idempotent migration script under `migrations/` (each
+script infers the DB URL from env/CLI and inspects the schema before mutating
+it). Run a migration per environment, e.g.:
+```bash
+python migrations/add_releases_submittals_indexes.py            # uses env/.env DB URL
+python migrations/add_releases_submittals_indexes.py --database-url postgresql://...
+```
+Clone `migrations/add_index_on_jobs_last_updated_at.py` as the template for new
+ones. Scripts are safe to re-run (existing objects are skipped).
 
 ### Frontend
 ```bash
@@ -97,7 +106,7 @@ M1 (users) → M2 (rename submittals table) → M3 (release_events) → M4 (subm
 - `app/brain/job_log/features/` — feature folders that own one bounded behavior each (`fab_order/`, `notes/`, `stage/`, `start_install/`). Each folder has `command.py` (DB write + event + outbox + cascade) plus optionally `events.py`, `payloads.py`, `results.py` and any one-off migrations or helpers. Commands accept `defer_cascade=True` and `undone_event_id` for use by the undo endpoint. The Job Log routes file delegates here rather than holding the logic inline.
   - `fab_order/renumber_fabrication.py` — admin button on Job Log; compresses FABRICATION-group `fab_order` to a contiguous block starting at 3, preserves ties and the 80.555 placeholder, queues Trello sync only when `Config.FAB_ORDER_FIELD_ID` is set.
   - `fab_order/migrate_unified.py` — one-time tier migration (Complete=NULL, tier 1 = 1, tier 2 = 2, dynamic stages 3+).
-  - `start_install/clear_hard_date_cascade.py` — idempotently clears a hard `start_install` date (`start_install_formulaTF=True`, `start_install_formula=None`) when a release enters the complete zone: stage='Complete' (via `UpdateStageCommand`), job_comp='X' (via `update_job_comp` route), or invoiced='X' (via `update_invoiced` route). Emits a child `ReleaseEvents` row linked by `parent_event_id` for audit bundling. No-op when the date is already formula-driven.
+  - `start_install/neutralize_install_date_cascade.py` — when a release enters the complete zone (stage='Complete'/'Install Complete' via `UpdateStageCommand`, job_comp='X' via `update_job_comp`, or invoiced='X' via `update_invoiced`), KEEPS the hard `start_install` date but strips its color (`start_install_no_color=True`, ASAP cleared) so a finished release shows a neutral date. Emits a child `ReleaseEvents` row linked by `parent_event_id`. No-op unless a hard date is present.
 - `app/services/` — `OutboxService` (retry), `JobEventService` (deduplication with time-bucketed hashing), `DatabaseMappingService` (field mappings)
 - `app/history/` — event audit trail queries
 - `scripts/` — operational scripts run from the CLI (e.g. `scripts/refresh_jobsites_from_procore.py` rebuilds `docs/jobsites.json` from Procore project data and upserts `ProjectManager` rows). Default is dry-run; pass `--apply` to write.

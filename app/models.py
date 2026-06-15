@@ -91,17 +91,23 @@ class Submittals(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     submittal_id = db.Column(db.String(255), unique=True, nullable=False)
     procore_project_id = db.Column(db.String(100))
-    project_number = db.Column(db.String(100))
+    project_number = db.Column(db.String(100), index=True)
     project_name = db.Column(db.String(255))
     title = db.Column(db.Text)
-    status = db.Column(db.String(100))
+    status = db.Column(db.String(100), index=True)
     type = db.Column(db.String(100))
-    ball_in_court = db.Column(db.String(255))  # Increased to handle multiple assignees (comma-separated)
+    ball_in_court = db.Column(db.String(255), index=True)  # Increased to handle multiple assignees (comma-separated)
     submittal_manager = db.Column(db.String(255))
-    order_number = db.Column(db.Float)
+    order_number = db.Column(db.Float, index=True)
     notes = db.Column(db.Text)
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
+    # Release identifier (101-998) shown in the DWL Rel column. Suggested as the
+    # next highest available value (max-in-use + 1) so assignment is semi-
+    # chronological; freed/low numbers are recycled only after REL_MAX is occupied
+    # and the sequence rolls over. rel_assigned_at records when it was handed out.
+    rel = db.Column(db.Integer, nullable=True)
+    rel_assigned_at = db.Column(db.DateTime, nullable=True)
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -164,6 +170,7 @@ class Submittals(db.Model):
             "order_number": self.order_number,
             "notes": self.notes,
             "submittal_drafting_status": self.submittal_drafting_status,
+            "rel": self.rel,
             "due_date": _dt(self.due_date),
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
@@ -364,7 +371,13 @@ class JobChangeLog(db.Model):
 
 class Releases(db.Model):
     __tablename__ = "releases"
-    __table_args__ = (db.UniqueConstraint("job", "release", name="_job_release_uc"),)
+    __table_args__ = (
+        db.UniqueConstraint("job", "release", name="_job_release_uc"),
+        db.Index("idx_releases_last_updated_at_id", "last_updated_at", "id"),  # cursor poll: filter + ORDER BY match
+        db.Index("idx_releases_archived_active", "is_archived", "is_active"),  # every list endpoint
+        db.Index("idx_releases_stage_group", "stage_group"),
+        db.Index("idx_releases_stage", "stage"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     # Job # and Release # for identifiers
     job = db.Column(db.Integer, nullable=False)
@@ -388,11 +401,16 @@ class Releases(db.Model):
     start_install_formula = db.Column(db.String(256))  # New field for formula
     start_install_formulaTF = db.Column(db.Boolean)  # New field for formula check
     start_install_asap = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
-    # True when start_install holds a date auto-recorded by the ASAP-drop on completion
-    # (release reached Ship Complete or later). Renders neutral/no-color and is preserved
-    # through completion marking (clear_hard_date_cascade no-ops on these rows).
+    # True when the install date's color flagging is suppressed (renders neutral, not
+    # red/green/yellow). Set by neutralize_install_date_cascade once the release reaches the
+    # complete zone (Install Complete/Complete, job_comp='X', invoiced='X') so a finished
+    # release doesn't show an alarming date. The start_install value itself is retained.
     start_install_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     installer = db.Column(db.String(64), nullable=True)  # Installer team; matches Trello list name
+    # Installer headcount used to size install duration. Parsed/persisted from the Trello
+    # card description ("**Number of Guys:** N"); treated as 2 when absent.
+    # comp_eta = start_install + ceil(install_hrs / (num_guys * 8)) business days.
+    num_guys = db.Column(db.Float, nullable=True)
     comp_eta = db.Column(db.Date)  # Changed from String to Date
     job_comp = db.Column(db.String(8))
     invoiced = db.Column(db.String(8))
@@ -400,6 +418,9 @@ class Releases(db.Model):
 
     # Trello fields
     trello_card_id = db.Column(db.String(64), unique=True, nullable=True)
+    # The linked mirror card's id (the installer-team copy). Lets inbound webhooks on the
+    # mirror resolve back to this release with a direct lookup instead of an attachment walk.
+    mirror_trello_card_id = db.Column(db.String(64), nullable=True)
     trello_card_name = db.Column(db.String(256), nullable=True)
     trello_list_id = db.Column(db.String(64), nullable=True)
     trello_list_name = db.Column(db.String(128), nullable=True)
@@ -445,6 +466,8 @@ class Releases(db.Model):
             "start_install_formulaTF": self.start_install_formulaTF,
             "start_install_asap": self.start_install_asap,
             "start_install_no_color": self.start_install_no_color,
+            "installer": self.installer,
+            "num_guys": self.num_guys,
             "comp_eta": self.comp_eta,
             "job_comp": self.job_comp,
             "invoiced": self.invoiced,
@@ -651,7 +674,58 @@ class BoardItem(db.Model):
         if include_activity:
             d['activity'] = [a.to_dict() for a in
                              self.activity.order_by(BoardActivity.created_at.asc()).all()]
+            d['photos'] = [p.to_dict() for p in
+                           self.photos.filter_by(is_deleted=False)
+                           .order_by(BoardItemPhoto.uploaded_at.desc(),
+                                     BoardItemPhoto.id.desc()).all()]
         return d
+
+
+class BoardItemPhoto(db.Model):
+    """A photo/screenshot attached to a board item for extra dev context.
+
+    Mirrors `ReleasePhoto` (a flat list of independent image rows) but is scoped
+    to a `BoardItem` instead of a release, has no stage tag, and carries no
+    per-photo caption (context lives in the card body/description).
+    """
+    __tablename__ = 'board_item_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'),
+                              nullable=False, index=True)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default='image/jpeg')
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    item = db.relationship('BoardItem', backref=db.backref('photos', lazy='dynamic',
+                                                           cascade='all, delete-orphan'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+
+    @staticmethod
+    def _display_name(user):
+        if not user:
+            return None
+        first = (user.first_name or '').strip()
+        last = (user.last_name or '').strip()
+        return (f"{first} {last}".strip()) or user.username
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'board_item_id': self.board_item_id,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'uploaded_by': {
+                'id': self.uploaded_by_user_id,
+                'name': self._display_name(self.uploaded_by),
+            },
+            'uploaded_at': _dt(self.uploaded_at),
+        }
 
 
 class BoardActivity(db.Model):
@@ -691,6 +765,7 @@ class Notification(db.Model):
     board_item_id = db.Column(db.Integer, db.ForeignKey('board_items.id', ondelete='CASCADE'), nullable=True)
     board_activity_id = db.Column(db.Integer, db.ForeignKey('board_activity.id', ondelete='CASCADE'), nullable=True)
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id', ondelete='CASCADE'), nullable=True, index=True)
+    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id', ondelete='CASCADE'), nullable=True, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -698,6 +773,7 @@ class Notification(db.Model):
     board_item = db.relationship('BoardItem', lazy='select')
     board_activity = db.relationship('BoardActivity', lazy='select')
     submittal = db.relationship('Submittals', lazy='select')
+    checklist_item = db.relationship('ChecklistItem', lazy='select')
 
     def to_dict(self):
         return {
@@ -708,6 +784,7 @@ class Notification(db.Model):
             'board_item_id': self.board_item_id,
             'board_activity_id': self.board_activity_id,
             'submittal_id': self.submittal_id,
+            'checklist_item_id': self.checklist_item_id,
             'is_read': self.is_read,
             'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
@@ -825,6 +902,69 @@ class ReleaseDrawingVersion(db.Model):
             'uploaded_at': _dt(self.uploaded_at),
             'source_version_id': self.source_version_id,
             'note': self.note,
+        }
+
+
+class ReleasePhoto(db.Model):
+    """A photo attached to a release (job-site/progress images).
+
+    Unlike `ReleaseDrawingVersion` (versioned PDFs), photos are a flat list:
+    each upload is an independent row. Any image type is allowed and each photo
+    carries an optional free-text note that can be edited after upload.
+    """
+    __tablename__ = 'release_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default='image/jpeg')
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    note = db.Column(db.Text, nullable=True)
+    # Optional stage tag. Set when a photo is uploaded to satisfy a stage gate
+    # (e.g. "Welded QC", "Paint Complete") so the stage-change validation can
+    # require proof for that specific stage.
+    stage = db.Column(db.String(64), nullable=True)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    # Attribution for the most recent note edit. Photos are open to all users, so
+    # these track who last changed a photo's note (and when) after upload. Null
+    # until the note is edited for the first time.
+    last_edited_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    last_edited_at = db.Column(db.DateTime, nullable=True)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    release = db.relationship('Releases', backref=db.backref('photos', lazy='dynamic'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    last_edited_by = db.relationship('User', foreign_keys=[last_edited_by_user_id])
+
+    @staticmethod
+    def _display_name(user):
+        if not user:
+            return None
+        first = (user.first_name or '').strip()
+        last = (user.last_name or '').strip()
+        return (f"{first} {last}".strip()) or user.username
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'release_id': self.release_id,
+            'original_filename': self.original_filename,
+            'mime_type': self.mime_type,
+            'file_size_bytes': self.file_size_bytes,
+            'note': self.note,
+            'stage': self.stage,
+            'uploaded_by': {
+                'id': self.uploaded_by_user_id,
+                'name': self._display_name(self.uploaded_by),
+            },
+            'uploaded_at': _dt(self.uploaded_at),
+            'last_edited_by': {
+                'id': self.last_edited_by_user_id,
+                'name': self._display_name(self.last_edited_by),
+            } if self.last_edited_by_user_id else None,
+            'last_edited_at': _dt(self.last_edited_at),
         }
 
 
@@ -968,3 +1108,381 @@ class MicrosoftDelegatedToken(db.Model):
     @classmethod
     def get_for_account(cls, account_email):
         return cls.query.filter_by(account_email=(account_email or "").lower()).first()
+
+
+class Meeting(db.Model):
+    """A captured meeting whose transcript is mined for checklist items.
+
+    MVP: ingestion is stubbed — a transcript is pasted/uploaded via the API rather
+    than pulled from Recall.ai/Teams. Maps to the future data-lake
+    `core_communication(kind='meeting')`; the Recall/Graph adapters land here later.
+    """
+    __tablename__ = "meetings"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    # internal_draft | internal_shop | gc_pm | other
+    meeting_type = db.Column(db.String(40), nullable=False, default='other')
+    source = db.Column(db.String(30), nullable=False, default='stub')  # stub | recall | graph
+    project_number = db.Column(db.String(100), nullable=True, index=True)
+    occurred_at = db.Column(db.DateTime, nullable=True)   # meeting start (bot join time)
+    # Meeting end — stamped when the Recall transcript is pulled (bot leaves the call).
+    # Bounds the "during meeting runtime" window used to gather the events that feed the
+    # meeting summary: events whose created_at falls in [occurred_at, ended_at].
+    ended_at = db.Column(db.DateTime, nullable=True)
+    transcript = db.Column(db.Text, nullable=True)
+    # Pre-meeting context the user drops in when dispatching the bot (agenda / notes; an
+    # uploaded .md lands here too). Feeds to-do EXTRACTION as the authored "before" view —
+    # grounds vague references and improves matching. A PDF→text path writes here later.
+    agenda_text = db.Column(db.Text, nullable=True)
+    # The release/submittal event updates that landed DURING the meeting window — the
+    # "events context" rendered for the SUMMARY (and recorded here because state drifts).
+    context_snapshot = db.Column(db.Text, nullable=True)
+    # The generated meeting summary (events-during-runtime + transcript). The second of the
+    # two outputs produced from a meeting, alongside the to-do checklist.
+    summary = db.Column(db.Text, nullable=True)
+    # Recall.ai notetaker bot dispatched for this meeting (source='recall'). bot_status
+    # tracks the bot lifecycle, kept fresh by the recall-webhook receiver.
+    meeting_url = db.Column(db.String(1000), nullable=True)
+    recall_bot_id = db.Column(db.String(64), nullable=True, index=True)
+    bot_status = db.Column(db.String(30), nullable=True)  # scheduled|joining|in_call_recording|done|failed
+    # Token usage + cost of the LLM to-do extraction (model='stub' / $0 means it fell
+    # back to the keyword stub). Stamped each time the checklist is (re)generated.
+    extract_model = db.Column(db.String(40), nullable=True)
+    extract_input_tokens = db.Column(db.Integer, nullable=True)
+    extract_output_tokens = db.Column(db.Integer, nullable=True)
+    extract_cost_usd = db.Column(db.Float, nullable=True)
+    # On-demand checklist extraction runs in a background thread (the web dyno has no
+    # APScheduler — that's the IS_RENDER_SCHEDULER process), because the LLM calls take
+    # minutes and would blow past gunicorn's worker timeout if held in the request. The
+    # UI polls these instead of waiting on the request. idle|extracting|done|failed.
+    extract_status = db.Column(db.String(20), nullable=True, default='idle')
+    extract_error = db.Column(db.Text, nullable=True)
+    extract_started_at = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    extracted_at = db.Column(db.DateTime, nullable=True)  # when checklist items were generated
+    learned_at = db.Column(db.DateTime, nullable=True)    # when the learnings step last ran
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    items = db.relationship(
+        'ChecklistItem', backref='meeting', lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+    learnings = db.relationship(
+        'MeetingLearning', backref='meeting', lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+    created_by_user = db.relationship('User', foreign_keys=[created_by])
+
+    def to_dict(self, include_items=False):
+        d = {
+            'id': self.id,
+            'title': self.title,
+            'meeting_type': self.meeting_type,
+            'source': self.source,
+            'project_number': self.project_number,
+            'occurred_at': _dt(self.occurred_at),
+            'ended_at': _dt(self.ended_at),
+            'extracted_at': _dt(self.extracted_at),
+            'learned_at': _dt(self.learned_at),
+            'created_at': _dt(self.created_at),
+            'meeting_url': self.meeting_url,
+            'recall_bot_id': self.recall_bot_id,
+            'bot_status': self.bot_status,
+            'extract_model': self.extract_model,
+            'extract_input_tokens': self.extract_input_tokens,
+            'extract_output_tokens': self.extract_output_tokens,
+            'extract_cost_usd': self.extract_cost_usd,
+            'extract_status': self.extract_status,
+            'extract_error': self.extract_error,
+        }
+        if include_items:
+            items = self.items.order_by(ChecklistItem.id).all()
+            d['items'] = [i.to_dict() for i in items]
+            d['item_count'] = len(items)
+            d['transcript'] = self.transcript  # detail view only — keep the list lean
+            d['agenda_text'] = self.agenda_text
+            d['context_snapshot'] = self.context_snapshot
+            d['summary'] = self.summary
+            latest = self.learnings.order_by(MeetingLearning.id.desc()).first()
+            d['learning'] = latest.to_dict() if latest else None
+        else:
+            d['item_count'] = self.items.count()
+        return d
+
+
+class ChecklistItem(db.Model):
+    """An agent-proposed to-do surfaced from a meeting transcript.
+
+    Lifecycle: the extractor creates rows as `status='proposed'` with an inferred
+    owner + due date. The reviewer (MVP: Bill) curates each via yes/no/edit — accept
+    sets the final owner_user_id + due_date and flips status to 'accepted'; the
+    notification worker then pings the owner as the due date approaches.
+    """
+    __tablename__ = "checklist_items"
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(
+        db.Integer, db.ForeignKey('meetings.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    title = db.Column(db.Text, nullable=False)
+    detail = db.Column(db.Text, nullable=True)
+    # action | needs_gc_update | decision | risk | fyi
+    item_type = db.Column(db.String(30), nullable=False, default='action')
+    gc_facing = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Agent inference — immutable record of what was proposed
+    proposed_owner_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    proposed_due_date = db.Column(db.Date, nullable=True)
+    confidence = db.Column(db.Float, nullable=True)
+
+    # Final, human-curated values (set on accept/edit; owner + date editable)
+    owner_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+
+    # Optional links to internal records (expands to the lake reference spine later)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True)
+    submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id'), nullable=True)
+
+    # Owner inference (when no owner was stated): which active job it matched + whether
+    # the owner was inferred. `confidence` doubles as the match confidence (0..1).
+    owner_inferred = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    matched_job_number = db.Column(db.String(32), nullable=True)
+    matched_job_name = db.Column(db.String(128), nullable=True)  # canonical name from the matched job
+    match_source = db.Column(db.String(16), nullable=True)        # release | submittal
+    name_corrected = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    # proposed | accepted | rejected | done
+    status = db.Column(db.String(20), nullable=False, default='proposed', index=True)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    last_notified_at = db.Column(db.DateTime, nullable=True)  # last deadline ping (audit)
+    last_notified_state = db.Column(db.String(10), nullable=True)  # None | 'due' | 'overdue' — dedup key
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    # joined eager-load avoids an N+1 on owner-name lookups when serializing item lists
+    owner = db.relationship('User', foreign_keys=[owner_user_id], lazy='joined')
+    proposed_owner = db.relationship('User', foreign_keys=[proposed_owner_user_id], lazy='joined')
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by])
+
+    @staticmethod
+    def _name(u):
+        if not u:
+            return None
+        full = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
+        return full or u.username
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'meeting_id': self.meeting_id,
+            'title': self.title,
+            'detail': self.detail,
+            'item_type': self.item_type,
+            'gc_facing': self.gc_facing,
+            'proposed_owner_user_id': self.proposed_owner_user_id,
+            'proposed_owner_name': self._name(self.proposed_owner),
+            'proposed_due_date': _dt(self.proposed_due_date),
+            'owner_user_id': self.owner_user_id,
+            'owner_name': self._name(self.owner),
+            'due_date': _dt(self.due_date),
+            'release_id': self.release_id,
+            'submittal_id': self.submittal_id,
+            'status': self.status,
+            'confidence': self.confidence,           # match confidence when owner_inferred
+            'owner_inferred': self.owner_inferred,
+            'matched_job_number': self.matched_job_number,
+            'matched_job_name': self.matched_job_name,
+            'match_source': self.match_source,
+            'name_corrected': self.name_corrected,
+            'reviewed_at': _dt(self.reviewed_at),
+            'created_at': _dt(self.created_at),
+        }
+
+
+class MeetingLearning(db.Model):
+    """What the agent learned from a meeting once the human worked its checklist.
+
+    Synthesized on review completion from {agenda, transcript, event snapshot, the
+    yes/no/edit review outcomes}. `summary` is the human-readable insight; `payload`
+    structures it by the three dimensions the learnings are keyed on:
+    by_outcome (accepted/rejected/edited), by_item_type, and by_event (the underlying
+    release/submittal activity). Reusable cross-meeting signals distilled here are stored
+    separately in ExtractionSignal so future extractions can read them back.
+    """
+    __tablename__ = "meeting_learnings"
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(
+        db.Integer, db.ForeignKey('meetings.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    summary = db.Column(db.Text, nullable=True)
+    payload = db.Column(db.JSON, nullable=True)
+    # Usage meter, mirroring Meeting.extract_* ('stub'/$0 = LLM synthesis was skipped).
+    model = db.Column(db.String(40), nullable=True)
+    input_tokens = db.Column(db.Integer, nullable=True)
+    output_tokens = db.Column(db.Integer, nullable=True)
+    cost_usd = db.Column(db.Float, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'meeting_id': self.meeting_id,
+            'summary': self.summary,
+            'payload': self.payload,
+            'model': self.model,
+            'input_tokens': self.input_tokens,
+            'output_tokens': self.output_tokens,
+            'cost_usd': self.cost_usd,
+            'created_at': _dt(self.created_at),
+        }
+
+
+class ExtractionSignal(db.Model):
+    """A reusable, cross-meeting learning fed back into future to-do extractions.
+
+    signal_type:
+      - 'alias'     : a garbled meeting name -> the canonical job name (key=garbled,
+                      value=canonical). Applied to normalize names BEFORE matching.
+      - 'owner_map' : a proposed-owner correction the reviewer made (key=context,
+                      value=target user id) so recurring jobs default to the right owner.
+      - 'pattern'   : qualitative guidance keyed by item_type / situation (value=text),
+                      injected as LEARNED GUIDANCE in the extraction prompt.
+
+    Unique on (signal_type, key): re-observation upserts and bumps `count` rather than
+    duplicating, so a signal earns weight as it recurs across meetings.
+    """
+    __tablename__ = "extraction_signals"
+    __table_args__ = (
+        db.UniqueConstraint('signal_type', 'key', name='uq_extraction_signal_type_key'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    signal_type = db.Column(db.String(20), nullable=False, index=True)  # alias|owner_map|pattern
+    key = db.Column(db.String(255), nullable=False)
+    value = db.Column(db.Text, nullable=True)
+    count = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    active = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
+    source_meeting_id = db.Column(
+        db.Integer, db.ForeignKey('meetings.id', ondelete='SET NULL'), nullable=True,
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'signal_type': self.signal_type,
+            'key': self.key,
+            'value': self.value,
+            'count': self.count,
+            'active': self.active,
+            'source_meeting_id': self.source_meeting_id,
+            'updated_at': _dt(self.updated_at),
+        }
+
+
+class SunbeltRentalSnapshot(db.Model):
+    """One imported Sunbelt 'Equipment on Rent' report — a weekly snapshot.
+
+    All rental lines from a single CSV upload (or, later, a bb@mhmw.com email
+    pull) hang off one snapshot so we can diff week-over-week. ``snapshot_date``
+    is the report's effective date (defaults to import day; overridable).
+    Ingestion goes through app.brain.sunbelt.ingest.ingest_snapshot.
+    """
+    __tablename__ = 'sunbelt_rental_snapshots'
+    id = db.Column(db.Integer, primary_key=True)
+    snapshot_date = db.Column(db.Date, nullable=False, index=True)
+    source = db.Column(db.String(20), nullable=False, default='upload')  # 'upload' | 'email'
+    filename = db.Column(db.String(512))
+    row_count = db.Column(db.Integer, nullable=False, default=0)
+    created_by = db.Column(db.String(255))  # username of the admin who imported
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    rentals = db.relationship(
+        'SunbeltRental', backref='snapshot', lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'snapshot_date': _dt(self.snapshot_date),
+            'source': self.source,
+            'filename': self.filename,
+            'row_count': self.row_count,
+            'created_by': self.created_by,
+            'created_at': _dt(self.created_at),
+        }
+
+
+class SunbeltRental(db.Model):
+    """One equipment-on-rent line from a Sunbelt report, reconciled to our jobs.
+
+    Raw Sunbelt columns are parsed/typed at ingest; the resolved match
+    (matched_job_number / matched_project_name / match_method) is computed by
+    app.brain.sunbelt.matching. Discrepancy flags (overdue / on-finished-job /
+    cost-outlier) are NOT stored — they are computed at read time relative to
+    'today' and current release/submittal state.
+    """
+    __tablename__ = 'sunbelt_rentals'
+    __table_args__ = (
+        db.Index('ix_sunbelt_rentals_snapshot', 'snapshot_id'),
+        db.Index('ix_sunbelt_rentals_contract', 'contract_number'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey('sunbelt_rental_snapshots.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+
+    # Raw Sunbelt fields (parsed)
+    contract_number = db.Column(db.String(40))    # per-line key
+    sunbelt_job_label = db.Column(db.String(255))  # Sunbelt "Job #" e.g. "1 - OAK HIL"
+    po_number = db.Column(db.String(40))           # Sunbelt "PO_Number" = MHMW job number
+    job_location = db.Column(db.String(500))
+    ordered_by = db.Column(db.String(255))
+    equipment_type = db.Column(db.String(255))
+    equipment_number = db.Column(db.String(64))
+    make = db.Column(db.String(64))
+    model = db.Column(db.String(64))
+    quantity = db.Column(db.Integer, default=1)
+    est_return_date = db.Column(db.Date)
+    day_rate = db.Column(db.Numeric(10, 2))
+    week_rate = db.Column(db.Numeric(10, 2))
+    four_week_rate = db.Column(db.Numeric(10, 2))
+    billed_through = db.Column(db.Date)
+    date_rented = db.Column(db.Date)
+
+    # Resolved match (set at ingest)
+    matched_job_number = db.Column(db.Integer)
+    matched_project_name = db.Column(db.String(255))
+    match_method = db.Column(db.String(20))  # po_number | address | submittal | unmatched
+
+    def to_dict(self):
+        def _money(v):
+            return float(v) if v is not None else None
+        return {
+            'id': self.id,
+            'snapshot_id': self.snapshot_id,
+            'contract_number': self.contract_number,
+            'sunbelt_job_label': self.sunbelt_job_label,
+            'po_number': self.po_number,
+            'job_location': self.job_location,
+            'ordered_by': self.ordered_by,
+            'equipment_type': self.equipment_type,
+            'equipment_number': self.equipment_number,
+            'make': self.make,
+            'model': self.model,
+            'quantity': self.quantity,
+            'est_return_date': _dt(self.est_return_date),
+            'day_rate': _money(self.day_rate),
+            'week_rate': _money(self.week_rate),
+            'four_week_rate': _money(self.four_week_rate),
+            'billed_through': _dt(self.billed_through),
+            'date_rented': _dt(self.date_rented),
+            'matched_job_number': self.matched_job_number,
+            'matched_project_name': self.matched_project_name,
+            'match_method': self.match_method,
+        }

@@ -17,7 +17,7 @@
 import React, { useState } from 'react';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { jobsApi } from '../services/jobsApi';
-import { setAsapWithCapConfirm } from '../utils/asap';
+import { setAsapAndAssign } from '../utils/asap';
 import { formatDateShort } from '../utils/formatters';
 
 export default function StartInstallEditor({
@@ -65,10 +65,10 @@ export default function StartInstallEditor({
         }
     };
 
-    const handleSetAsap = async () => {
+    const handleSetAsap = async (installer) => {
         setOpen(false);
         try {
-            const ok = await setAsapWithCapConfirm(job, release);
+            const ok = await setAsapAndAssign(job, release, installer);
             if (ok) refresh();
         } catch (e) {
             alert(`Failed to set ASAP: ${e.message}`);

@@ -1,66 +1,33 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Main job log page where users view, filter, reorder, and edit active job releases synced from Trello and Excel.
+ * purpose: Persistent shell for the three release views (Table / Board / Timeline). Renders the Job Log toolbar + filter state ONCE and stays mounted across the view switch (pathless layout route), so only the Outlet content swaps. The toolbar's Projects / quick-filter / Search controls drive both the table and the PM Board.
  * exports:
- *   JobLog: Page component with filterable job table, drag-and-drop row reordering, CSV release import, and jump-to-highlight support
- * imports_from: [react, react-router-dom, ../hooks/useJumpToHighlight, ../hooks/useJobsDataFetching, ../hooks/useJobsFilters, ../hooks/useJobsDragAndDrop, ../components/JobsTableRow, ../services/jobsApi]
- * imported_by: [App.jsx]
+ *   ReleasesLayout: Layout route element owning useReleases + useJobsFilters + the toolbar, Actions handlers, and modals; provides filtered data to child views via <Outlet context>.
+ * imports_from: [react, react-router-dom, ../context/ThemeContext, ../hooks/useJumpToHighlight, ../context/ReleasesContext, ../hooks/useJobsFilters, ../hooks/useBreakpoint, ../components/JobLogQuickFilters, ../components/ProjectFilterDropdown, ../components/ActiveFilterChips, ../components/ReleasesViewSwitcher, ../components/Dropdown, ../services/jobsApi, ../utils/auth, ../utils/jobLogPdf, ../utils/jobLogColumns]
+ * imported_by: [../App.jsx]
  * invariants:
- *   - Admin-only actions: drag reorder, CSV release import, archive
- *   - Jump-to highlight param triggers fetchAll to load every row regardless of filter
- * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
+ *   - Lives mounted across /job-log ↔ /pm-board navigation (pathless parent route), so filter state + header DOM persist; the search input keeps focus across a view switch.
+ *   - displayJobs (table) applies project + subset + search + column-header filters + sort; boardJobs (PM Board) applies ONLY project + subset + search.
+ *   - Actions (Export CSV / Print / Archive / Renumber / New Release) resolve here because the toolbar is always mounted while the table content may not be.
  */
 import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation, Outlet } from 'react-router-dom';
 import { useJumpToHighlight } from '../hooks/useJumpToHighlight';
-import { useJobsDataFetching } from '../hooks/useJobsDataFetching';
+import { useReleases } from '../context/ReleasesContext';
 import { useJobsFilters } from '../hooks/useJobsFilters';
-import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import JobLogQuickFilters from '../components/JobLogQuickFilters';
 import ProjectFilterDropdown from '../components/ProjectFilterDropdown';
 import ActiveFilterChips from '../components/ActiveFilterChips';
-import { useJobsDragAndDrop } from '../hooks/useJobsDragAndDrop';
-import { JobsTableRow } from '../components/JobsTableRow';
-import { BananaCodeHeader } from '../components/StageIconRow';
-import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
+import ReleasesViewSwitcher from '../components/ReleasesViewSwitcher';
+import Dropdown, { DropdownItem } from '../components/Dropdown';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth } from '../utils/auth';
 import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
-import { isCompleteStage } from '../utils/stageProgress';
-import { formatDateShort, formatCellValue } from '../utils/formatters';
-import { HEADER_OVERRIDES } from '../constants/columnHeaders';
-import ViewToggle, { useViewMode } from '../components/ViewToggle';
-import Dropdown, { DropdownItem } from '../components/Dropdown';
-import JobLogCardGrid from '../components/JobLogCardGrid';
-import JobLogRowList from '../components/JobLogRowList';
-import { useBreakpoint } from '../hooks/useBreakpoint';
+import { reviewSort, columnOrder, COLUMN_WIDTH_PERCENT, FILTERABLE_COLUMNS } from '../utils/jobLogColumns';
 
-// Stage completeness order (index 0 = least complete, higher = more complete).
-// Canonical names — see app/api/helpers.py STAGE_PROGRESSION_RANK.
-const STAGE_COMPLETENESS = {
-    'Released':         0, 'Material Ordered': 1, 'Cut Start':       2, 'Cut Complete':     3,
-    'Fitup Start':      4, 'Fitup Complete':   5, 'Weld Start':      6, 'Weld Complete':    7,
-    'Welded QC':        9, 'Paint Start':     10, 'Paint Complete': 11,
-    'Store at MHMW':   12, 'Ship Planning':   13, 'Ship Complete':  14,
-    'Install Start':   15, 'Install Complete':16, 'Complete':       17,
-};
-
-const SHIP_COMPLETE_STAGE = 'Ship Complete';
-
-// 'X' = installed (highest); percent strings rank by their numeric value;
-// missing/blank ranks lowest so it sorts to the bottom of the ship-complete group.
-const installProgRank = (val) => {
-    if (val == null) return -1;
-    const s = val.toString().trim();
-    if (s === '') return -1;
-    if (s.toLowerCase() === 'x') return 101;
-    const n = parseFloat(s);
-    return Number.isFinite(n) ? n : -1;
-};
-
-// PM (alphabetical) → Job # (asc) → compareSameJob tie-break. Returns a new sorted array.
 // Friendly labels + display order for the active-filter chips (keys match the column-filter keys).
 const JL_FILTER_LABELS = {
     'Job #': 'Job',
@@ -76,42 +43,22 @@ const JL_FILTER_LABELS = {
 };
 const JL_FILTER_CHIP_ORDER = ['Job #', 'Release #', 'Job', 'PM', 'BY', 'Stage', 'Fab Order', 'Paint color', 'Job Comp', 'Invoiced'];
 
-const reviewSort = (jobs) => {
-    const sorted = [...jobs];
-    sorted.sort((a, b) => {
-        const pmA = (a['PM'] || 'No PM').toString();
-        const pmB = (b['PM'] || 'No PM').toString();
-        if (pmA !== pmB) return pmA.toLowerCase().localeCompare(pmB.toLowerCase());
-        const jobA = a['Job #'] || 0;
-        const jobB = b['Job #'] || 0;
-        if (jobA !== jobB) return jobA - jobB;
-        return compareSameJob(a, b);
-    });
-    return sorted;
-};
-
-// Tie-break for two rows that share the same PM + Job #.
-const compareSameJob = (a, b) => {
-    const ca = isCompleteStage(a['Stage']);
-    const cb = isCompleteStage(b['Stage']);
-    if (ca !== cb) return ca ? 1 : -1;
-
-    const sa = STAGE_COMPLETENESS[a['Stage']] ?? -1;
-    const sb = STAGE_COMPLETENESS[b['Stage']] ?? -1;
-    if (sa !== sb) return sb - sa;
-
-    if (a['Stage'] === SHIP_COMPLETE_STAGE) {
-        return installProgRank(b['Job Comp']) - installProgRank(a['Job Comp']);
-    }
-    const foA = a['Fab Order'] ?? Number.POSITIVE_INFINITY;
-    const foB = b['Fab Order'] ?? Number.POSITIVE_INFINITY;
-    return foA - foB;
-};
-
-function JobLog() {
+function ReleasesLayout() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useJobsDataFetching();
+    const location = useLocation();
+    const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useReleases();
+    const { isOldMan } = useTheme();
+    const { isMobile, isTablet } = useBreakpoint();
+
+    // Which child view is active — the Board ignores column-header filters, so the
+    // toolbar's record count must follow boardJobs there; table-only memos (e.g.
+    // uniqueValuesByColumn) can also skip their work while the table is unmounted.
+    const onBoardRoute = location.pathname.startsWith('/pm-board');
+
+    // View mode follows the device: phone → big single card, tablet → expandable cards, desktop → table.
+    const effectiveView = isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table';
+
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [csvData, setCsvData] = useState('');
     const [parsedPreview, setParsedPreview] = useState(null);
@@ -137,7 +84,7 @@ function JobLog() {
             }, 2000);
         }
     }, []);
-    const { isOldMan } = useTheme();
+
     const [reviewMode, setReviewMode] = useState(
         () => localStorage.getItem('jl_reviewMode') === 'true'
     );
@@ -154,37 +101,24 @@ function JobLog() {
     const [showRenumberModal, setShowRenumberModal] = useState(false);
     const [renumberPreview, setRenumberPreview] = useState(null);
     const [renumbering, setRenumbering] = useState(false);
-    const tableScrollRef = useRef(null);
 
-    // View mode. Device default: phone → big single card, tablet → expandable cards, desktop → table.
-    // The toggle is admin-only; non-admins always follow the device.
-    const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
-    const { isMobile, isTablet } = useBreakpoint();
-    const deviceView = isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table';
-    const effectiveView = (isAdmin && viewMode !== 'auto') ? viewMode : deviceView;
-
-    // Use the filters hook
     const {
         selectedProjectNames,
-        selectedStages,
         search,
         setSelectedProjectNames,
-        setSelectedStages,
         setSearch,
         projectNameOptions,
         projectOptions,
-        stageOptions,
-        stageColors,
         stageToGroup,
         stageGroupColors,
         stageGroupDupColors,
         displayJobs,
+        boardJobs,
         propagatedAsapJobs,
         secondarySearchResults,
         totalFabHrs,
         totalInstallHrs,
         resetFilters,
-        toggleStage,
         selectedSubset,
         setSelectedSubset,
         columnFilters,
@@ -223,27 +157,14 @@ function JobLog() {
         fetchUserInfo();
     }, []);
 
-    // Persist filter panel state to localStorage
+    // Persist filter panel + review state to localStorage
     useEffect(() => { localStorage.setItem('jl_minimized', isFilterMinimized); }, [isFilterMinimized]);
     useEffect(() => { localStorage.setItem('jl_reviewMode', reviewMode); }, [reviewMode]);
 
-    // Update fab order handler (refetch after update to show collision detection changes)
-    const updateFabOrder = useCallback(async (job, release, fabOrder) => {
-        try {
-            await jobsApi.updateFabOrder(job, release, fabOrder);
-            // Refetch immediately to show collision detection changes and latest state
-            await refetch(true);
-        } catch (error) {
-            // Error is already handled in the component, just rethrow
-            throw error;
-        }
-    }, [refetch]);
-
-    // Delete job handler
+    // Delete job handler (passed to the table content)
     const handleDeleteJob = useCallback(async (row) => {
         try {
             await jobsApi.deleteJob(row['Job #'], row['Release #']);
-            // Refetch to remove the deleted row from the table
             await refetch(true);
         } catch (error) {
             console.error('Failed to delete job:', error);
@@ -251,29 +172,8 @@ function JobLog() {
         }
     }, [refetch]);
 
-    // Drag and drop functionality (disabled for now)
-    // const {
-    //     draggedIndex,
-    //     dragOverIndex,
-    //     handleDragStart,
-    //     handleDragOver,
-    //     handleDragLeave,
-    //     handleDrop,
-    // } = useJobsDragAndDrop(jobs, displayJobs, updateFabOrder, selectedSubset);
-
-    // Disabled drag and drop - set to null/empty handlers
-    const draggedIndex = null;
-    const dragOverIndex = null;
-    const handleDragStart = () => { };
-    const handleDragOver = () => { };
-    const handleDragLeave = () => { };
-    const handleDrop = () => { };
-
     const formattedLastUpdated = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown';
 
-    // Check if we have data to display
-    // Only show "No records found" if we've finished loading and have no jobs at all
-    // If we have jobs but displayJobs is empty, that means filters are excluding everything
     const hasData = displayJobs.length > 0;
     const hasJobsData = !loading && jobs.length > 0;
 
@@ -282,9 +182,6 @@ function JobLog() {
         () => (reviewMode ? reviewSort(displayJobs) : displayJobs),
         [displayJobs, reviewMode]
     );
-
-    // Print always uses the review sort regardless of the on-screen toggle.
-    const printSortedJobs = useMemo(() => reviewSort(displayJobs), [displayJobs]);
 
     // On-screen render list: the in-filter jobs followed by the out-of-department ASAP
     // block (divider sentinel + propagated rows). The divider is assembled here, at the
@@ -298,13 +195,9 @@ function JobLog() {
         ];
     }, [reviewDisplayJobs, propagatedAsapJobs]);
 
-    // Compute fab_order values that appear on more than one release *within the same
-    // stage group*. The client uses Welded QC (READY_TO_SHIP) for paint-sequence
-    // ordering, so its numbering naturally collides with FABRICATION numbering — those
-    // cross-group collisions are not real conflicts. 80.555 is the DEFAULT_FAB_ORDER
-    // sentinel and values < 3 are reserved fixed tiers; both are excluded. The
-    // FABRICATION dynamic block starts at 3, so ties at 3+ are real collisions.
-    // Returns Map<groupKey, Set<number>> keyed by stage group.
+    // Compute fab_order values that appear on more than one release within the same
+    // stage group (cross-group collisions aren't real conflicts). 80.555 is the
+    // DEFAULT_FAB_ORDER sentinel; values < 3 are reserved fixed tiers — both excluded.
     const duplicateFabOrders = useMemo(() => {
         const countsByGroup = new Map();
         for (const row of reviewDisplayJobs) {
@@ -329,100 +222,11 @@ function JobLog() {
         return dupesByGroup;
     }, [reviewDisplayJobs, stageToGroup]);
 
-    // Define column order explicitly
-    const columnOrder = [
-        'Job #',
-        'Release #',
-        'Job',
-        'Description',
-        'Fab Hrs',
-        'Install HRS',
-        'Paint color',
-        'PM',
-        'BY',
-        'Released',
-        'Fab Order',
-        'Stage',
-        'Urgency',
-        'Start install',
-        'Comp. ETA',
-        'Job Comp',
-        'Invoiced',
-        'Notes'
-    ];
-
-    /**
-     * Job log column widths as percentage of table width. Tune these to taste; they are
-     * normalized so visible columns always sum to 100%. Only columns listed here get
-     * custom widths; others share the remainder equally.
-     *
-     * --------------------------------------------------------------------------
-     * VIEWPORT TUNING (foundation, not final)
-     * --------------------------------------------------------------------------
-     * These percentages — together with the per-cell `min-width`s in JobsTableRow.jsx
-     * (Job Name 170px, Description 170px, Stage 140px, Urgency 230px, Fab Order
-     * input 48px, Notes textarea no-floor) and the `iconSize=26` Banana Code row
-     * with 4px gaps — are tuned for a standard desktop / laptop viewport, roughly
-     * 1280–1700px wide.
-     *
-     * On smaller screens the Banana Code's 230px floor + min-widths above will push
-     * the table into horizontal scroll. On large/ultrawide screens (>1920) the
-     * extra room distributes proportionally and the icons stay 26px (the Urgency
-     * cell will just gain whitespace).
-     *
-     * TODO when adding responsive breakpoints:
-     *   - Mobile (<768px): drop the Banana Code column entirely, or collapse the
-     *     7 dept icons to a single overall-progress badge. Hide low-signal
-     *     columns (PM, BY, Fab Hrs, Install Hrs, Comp. ETA).
-     *   - Tablet (768–1280px): show 5 of the 7 dept icons (skip Admin + Store-at-MHMW
-     *     equivalents) and shrink iconSize to 20.
-     *   - Large desktop (>1920px): bump iconSize to 30 so the banana row scales with
-     *     the rest of the table instead of leaving a gap.
-     *
-     * Sub-label widths in the Banana Code header (currently 26px each, gap-1)
-     * MUST stay equal to the icon size + gap in `StageIconRow` so the per-icon
-     * labels line up with the icons below.
-     * --------------------------------------------------------------------------
-     */
-    const COLUMN_WIDTH_PERCENT = {
-        'Job #': 3,
-        'Release #': 3,
-        'Job': 9,
-        'Description': 8,
-        'Fab Hrs': 3,
-        'Install HRS': 3,
-        'Paint color': 5,
-        'PM': 3,
-        'BY': 3,
-        'Released': 4,
-        'Fab Order': 4,
-        'Stage': 6,
-        'Urgency': 14,
-        'Start install': 4,
-        'Comp. ETA': 4,
-        'Job Comp': 4,
-        'Invoiced': 4,
-        'Notes': 9,
-        'Actions': 5,
-    };
-
-    // Filter and order columns based on defined order
-    const columnHeaders = useMemo(() => {
-        // Only include columns that exist in the data and are in our defined order
-        return columnOrder.filter(col => columns.includes(col) || col === 'Urgency');
-    }, [columns]);
-
-    // Columns that get an Excel-style header dropdown filter. Spreadsheet-style:
-    // every column except Urgency (composite Banana Code icons) and Notes (free text).
-    const FILTERABLE_COLUMNS = useMemo(() => new Set([
-        'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS',
-        'Paint color', 'PM', 'BY', 'Released', 'Fab Order', 'Stage',
-        'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced',
-    ]), []);
-
-    // Date-valued columns: their header dropdown sorts chronologically and shows
-    // "Newest → Oldest" / "Oldest → Newest" labels instead of A→Z / Z→A.
-    const DATE_COLUMNS = useMemo(() => new Set(['Released', 'Start install', 'Comp. ETA']), []);
+    // Filter and order columns based on the defined order
+    const columnHeaders = useMemo(
+        () => columnOrder.filter(col => columns.includes(col) || col === 'Urgency'),
+        [columns]
+    );
 
     /**
      * Per-column reachable values: for each filterable column C, the set of unique
@@ -430,6 +234,10 @@ function JobLog() {
      * column filter (Excel-style narrowing). Also tracks whether blanks are reachable.
      */
     const uniqueValuesByColumn = useMemo(() => {
+        // Table-only output: the Board never renders the column-header dropdowns,
+        // so skip the O(columns × jobs) sweep entirely while it's unmounted. The
+        // memo recomputes on the route flip back to the table.
+        if (onBoardRoute) return {};
         const out = {};
         FILTERABLE_COLUMNS.forEach((col) => {
             const set = new Set();
@@ -460,9 +268,7 @@ function JobLog() {
             };
         });
         return out;
-    }, [jobs, columnFilters, matchesFilters, matchesSearch, search, FILTERABLE_COLUMNS]);
-
-    const tableColumnCount = columnHeaders.length;
+    }, [onBoardRoute, jobs, columnFilters, matchesFilters, matchesSearch, search]);
 
     const jumpToTarget = useJumpToHighlight({
         loading,
@@ -505,22 +311,18 @@ function JobLog() {
         }
 
         try {
-            // Detect delimiter
             const firstLine = data.split('\n')[0];
             const delimiter = firstLine.includes('\t') ? '\t' : ',';
 
-            // Parse rows
             const lines = data.split('\n').filter(line => line.trim());
             const expectedColumns = [
                 'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs',
                 'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'
             ];
 
-            // Check if first row is headers
             let startIdx = 0;
             const firstRow = lines[0].split(delimiter);
             if (firstRow.length === expectedColumns.length) {
-                // Check if it looks like headers
                 const firstRowLower = firstRow.map(cell => cell.toLowerCase().trim());
                 const hasHeaderKeywords = expectedColumns.some((col, idx) =>
                     col.toLowerCase().includes(firstRowLower[idx]) ||
@@ -531,13 +333,11 @@ function JobLog() {
                 }
             }
 
-            // Parse data rows
             const parsedRows = [];
             for (let i = startIdx; i < lines.length; i++) {
                 const cells = lines[i].split(delimiter);
                 if (cells.length === 0 || cells.every(cell => !cell.trim())) continue;
 
-                // Pad with empty strings if needed
                 while (cells.length < expectedColumns.length) {
                     cells.push('');
                 }
@@ -583,15 +383,12 @@ function JobLog() {
                 collision_count: result.collision_count || 0
             });
 
-            // Unlock the modal immediately so user can cancel/edit/retry
             setReleasing(false);
 
-            // Refresh in the background only if something was actually created
             if (result.created_count > 0) {
                 fetchAll();
             }
 
-            // Only auto-close if everything succeeded with no collisions
             if (!result.collisions || result.collisions.length === 0) {
                 setTimeout(() => {
                     handleCloseModal();
@@ -643,7 +440,7 @@ function JobLog() {
         );
 
         const csv = [headerRow, ...dataRows].join('\r\n');
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const now = new Date();
         const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -660,8 +457,11 @@ function JobLog() {
         if (printing) return;
         setPrinting(true);
         try {
+            // Print always uses the review sort regardless of the on-screen toggle.
+            // Sorted here, on demand, rather than in a memo that would re-run on
+            // every filter/poll change for a rarely-used action.
             await generateJobLogReviewPdf({
-                jobs: printSortedJobs,
+                jobs: reviewSort(displayJobs),
                 columnHeaders,
                 columnWidthPercent: COLUMN_WIDTH_PERCENT,
             });
@@ -672,6 +472,33 @@ function JobLog() {
             setPrinting(false);
         }
     };
+
+    // Everything the child content views (JobLogContent / PMBoardContent) need.
+    const outletContext = useMemo(() => ({
+        // dataset / status
+        loading, fetchError, refetch,
+        // filtered lists
+        displayJobs, boardJobs, renderRows, secondarySearchResults,
+        // filter outputs for the table column-header dropdowns
+        search, selectedSubset,
+        columnFilters, columnSort, setColumnFilter, setColumnSort, uniqueValuesByColumn,
+        stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders,
+        // table column metadata
+        columnHeaders, columnWidthPercents,
+        // role / view / theme
+        isAdmin, isDrafter, isOldMan, effectiveView, reviewMode, hasJobsData,
+        // shared handlers
+        handleDeleteJob, handleCascadeRecalculating, jumpToTarget,
+    }), [
+        loading, fetchError, refetch,
+        displayJobs, boardJobs, renderRows, secondarySearchResults,
+        search, selectedSubset,
+        columnFilters, columnSort, setColumnFilter, setColumnSort, uniqueValuesByColumn,
+        stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders,
+        columnHeaders, columnWidthPercents,
+        isAdmin, isDrafter, isOldMan, effectiveView, reviewMode, hasJobsData,
+        handleDeleteJob, handleCascadeRecalculating, jumpToTarget,
+    ]);
 
     return (
         <>
@@ -729,10 +556,8 @@ function JobLog() {
                                     </div>
                                 )}
 
-                                {/* Row 2: view mode + primary CTA + Actions/Views dropdowns + project chevron */}
+                                {/* Row 2: primary CTA + Actions/Projects + quick filters + view switcher + project chevron */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                    {isAdmin && <ViewToggle value={viewMode} onChange={setViewMode} />}
-
                                     <button
                                         onClick={handleReleaseClick}
                                         className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
@@ -745,7 +570,6 @@ function JobLog() {
                                         <DropdownItem onClick={handlePrint} disabled={!hasData || loading || !reviewMode || printing}>
                                             {printing ? '⏳ Building…' : '🖨️ Print'}
                                         </DropdownItem>
-                                        <DropdownItem onClick={() => navigate('/pm-board')}>📋 PM Board</DropdownItem>
                                         <DropdownItem onClick={() => navigate('/archive')}>🗄️ Archive</DropdownItem>
                                         {isAdmin && (
                                             <DropdownItem onClick={handleExportCSV} disabled={!hasData || loading}>⬇️ Export CSV</DropdownItem>
@@ -791,6 +615,9 @@ function JobLog() {
                                     />
 
                                     <div className="flex-1" />
+
+                                    {/* Table | Board | Timeline — instant view switching over the shared releases dataset */}
+                                    <ReleasesViewSwitcher />
 
                                     {/* Project filter buttons — discreet chevron toggle, collapsed by default */}
                                     <button
@@ -844,7 +671,8 @@ function JobLog() {
                                     </div>
                                     <div className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-slate-200">
                                         <span>
-                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{displayJobs.length}</span> records
+                                            {/* Board ignores column-header filters, so its count comes from boardJobs */}
+                                            Total: <span className="text-gray-900 dark:text-slate-100 font-bold">{onBoardRoute ? boardJobs.length : displayJobs.length}</span> records
                                         </span>
                                         <span className="text-gray-300 dark:text-slate-500">|</span>
                                         <span>
@@ -886,219 +714,8 @@ function JobLog() {
                                 )}
                             </div>
 
-
-
-                            {loading && (
-                                <div className="text-center py-12">
-                                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mb-4"></div>
-                                    <p className="text-gray-600 font-medium">Loading Jobs data...</p>
-                                </div>
-                            )}
-
-                            {fetchError && !loading && (
-                                <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded-lg shadow-sm">
-                                    <div className="flex items-start">
-                                        <span className="text-xl mr-3">⚠️</span>
-                                        <div>
-                                            <p className="font-semibold">Unable to load Jobs data</p>
-                                            <p className="text-sm mt-1">{fetchError}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {!loading && !fetchError && effectiveView === 'mobilecard' && (
-                                <JobLogCardGrid
-                                    jobs={renderRows}
-                                    secondaryResults={secondarySearchResults}
-                                    search={search}
-                                    jumpToTarget={jumpToTarget}
-                                    stageToGroup={stageToGroup}
-                                    stageGroupColors={stageGroupColors}
-                                    stageGroupDupColors={stageGroupDupColors}
-                                    duplicateFabOrders={duplicateFabOrders}
-                                    hasJobsData={hasJobsData}
-                                    onUpdate={() => refetch(true)}
-                                />
-                            )}
-
-                            {!loading && !fetchError && effectiveView === 'cards' && (
-                                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <JobLogRowList
-                                        jobs={renderRows}
-                                        secondaryResults={secondarySearchResults}
-                                        search={search}
-                                        jumpToTarget={jumpToTarget}
-                                        columns={columnHeaders}
-                                        formatCellValue={formatCellValue}
-                                        formatDate={formatDateShort}
-                                        onUpdate={() => refetch(true)}
-                                        onCascadeRecalculating={handleCascadeRecalculating}
-                                        stageToGroup={stageToGroup}
-                                        stageGroupColors={stageGroupColors}
-                                        stageGroupDupColors={stageGroupDupColors}
-                                        isAdmin={isAdmin}
-                                        isDrafter={isDrafter}
-                                        onDelete={handleDeleteJob}
-                                        duplicateFabOrders={duplicateFabOrders}
-                                        hasJobsData={hasJobsData}
-                                    />
-                                </div>
-                            )}
-
-                            {!loading && !fetchError && effectiveView === 'table' && (
-                                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                                    <div
-                                        ref={tableScrollRef}
-                                        className="job-log-table-scroll overflow-auto flex-1"
-                                    >
-                                        <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
-                                            <thead className="sticky top-0 z-10">
-                                                <tr>
-                                                    {columnHeaders.map((column) => {
-                                                        const isReleaseNumber = column === 'Release #';
-                                                        const displayHeader = HEADER_OVERRIDES[column] ?? column;
-                                                        const colWidthPct = columnWidthPercents[column];
-                                                        const isFilterable = FILTERABLE_COLUMNS.has(column);
-                                                        const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
-                                                        const colSelected = columnFilters[column] ?? [];
-                                                        const isUrgency = column === 'Urgency';
-                                                        return (
-                                                            <th
-                                                                key={column}
-                                                                className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-400 dark:border-slate-500`}
-                                                                style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
-                                                            >
-                                                                {isUrgency ? (
-                                                                    <BananaCodeHeader />
-                                                                ) : isFilterable ? (
-                                                                    <ColumnHeaderFilter
-                                                                        column={column}
-                                                                        values={colInfo?.values ?? []}
-                                                                        hasBlanks={colInfo?.hasBlanks ?? false}
-                                                                        selected={new Set(colSelected)}
-                                                                        onChange={(next) => setColumnFilter(column, [...next])}
-                                                                        sort={columnSort}
-                                                                        onSort={(dir) => setColumnSort(column, dir)}
-                                                                        isActive={colSelected.length > 0}
-                                                                        sortLabels={DATE_COLUMNS.has(column)
-                                                                            ? { asc: 'Oldest → Newest', desc: 'Newest → Oldest' }
-                                                                            : undefined}
-                                                                    >
-                                                                        {displayHeader}
-                                                                    </ColumnHeaderFilter>
-                                                                ) : (
-                                                                    displayHeader
-                                                                )}
-                                                            </th>
-                                                        );
-                                                    })}
-                                                    {isAdmin && (
-                                                        <th className="px-1 py-0.5 text-center text-xl font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider bg-gray-100 dark:bg-slate-700 border-r border-b-2 border-gray-400 dark:border-slate-500 w-8">
-                                                            ⚙
-                                                        </th>
-                                                    )}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {renderRows.length === 0 ? (
-                                                    hasJobsData && search.trim() !== '' && secondarySearchResults.length > 0 ? (
-                                                        <>
-                                                            <tr>
-                                                                <td
-                                                                    colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
-                                                                    className="px-6 py-6 text-center text-amber-800 dark:text-amber-200 font-medium bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800"
-                                                                >
-                                                                    <span className="mr-2">⚠️</span>
-                                                                    {`'${search.trim()}' not found under current filters. Showing results from unfiltered search:`}
-                                                                </td>
-                                                            </tr>
-                                                            {secondarySearchResults.map((row, index) => (
-                                                                <JobsTableRow
-                                                                    key={row.id}
-                                                                    row={row}
-                                                                    columns={columnHeaders}
-                                                                    isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                                    formatCellValue={formatCellValue}
-                                                                    formatDate={formatDateShort}
-                                                                    rowIndex={index}
-                                                                    onDragStart={handleDragStart}
-                                                                    onDragOver={handleDragOver}
-                                                                    onDragLeave={handleDragLeave}
-                                                                    onDrop={handleDrop}
-                                                                    isDragging={draggedIndex}
-                                                                    dragOverIndex={dragOverIndex}
-                                                                    onUpdate={() => refetch(true)}
-                                                                    onCascadeRecalculating={handleCascadeRecalculating}
-                                                                    stageToGroup={stageToGroup}
-                                                                    stageGroupColors={stageGroupColors}
-                                                                    stageGroupDupColors={stageGroupDupColors}
-                                                                    isAdmin={isAdmin}
-                                                                    isDrafter={isDrafter}
-                                                                    onDelete={handleDeleteJob}
-                                                                    tableScrollRef={tableScrollRef}
-                                                                    duplicateFabOrders={duplicateFabOrders}
-                                                                />
-                                                            ))}
-                                                        </>
-                                                    ) : (
-                                                        <tr>
-                                                            <td
-                                                                colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
-                                                                className="px-6 py-12 text-center text-gray-500 dark:text-slate-400 font-medium bg-white dark:bg-slate-800 rounded-md"
-                                                            >
-                                                                {hasJobsData
-                                                                    ? 'No records match the selected filters.'
-                                                                    : 'No records found.'
-                                                                }
-                                                            </td>
-                                                        </tr>
-                                                    )
-                                                ) : (
-                                                    renderRows.map((row, index) => (
-                                                        row._asapDivider ? (
-                                                            <tr key={row.id}>
-                                                                <td
-                                                                    colSpan={tableColumnCount + (isAdmin ? 1 : 0)}
-                                                                    className={`${ASAP_DIVIDER_BOX_CLASS} border-y`}
-                                                                >
-                                                                    <AsapDividerLabel count={row._asapCount} />
-                                                                </td>
-                                                            </tr>
-                                                        ) : (
-                                                        <JobsTableRow
-                                                            key={row.id}
-                                                            row={row}
-                                                            columns={columnHeaders}
-                                                            isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
-                                                            formatCellValue={formatCellValue}
-                                                            formatDate={formatDateShort}
-                                                            rowIndex={index}
-                                                            onDragStart={handleDragStart}
-                                                            onDragOver={handleDragOver}
-                                                            onDragLeave={handleDragLeave}
-                                                            onDrop={handleDrop}
-                                                            isDragging={draggedIndex}
-                                                            dragOverIndex={dragOverIndex}
-                                                            onUpdate={() => refetch(true)}
-                                                            onCascadeRecalculating={handleCascadeRecalculating}
-                                                            stageToGroup={stageToGroup}
-                                                            stageGroupColors={stageGroupColors}
-                                                            stageGroupDupColors={stageGroupDupColors}
-                                                            isAdmin={isAdmin}
-                                                            isDrafter={isDrafter}
-                                                            onDelete={handleDeleteJob}
-                                                            tableScrollRef={tableScrollRef}
-                                                            duplicateFabOrders={duplicateFabOrders}
-                                                        />
-                                                        )
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
+                            {/* Active view content (Table / Board / Timeline) */}
+                            <Outlet context={outletContext} />
                         </div>
                     </div>
                 </div>
@@ -1456,10 +1073,8 @@ function JobLog() {
                 )}
 
             </div>
-
         </>
     );
 }
 
-export default JobLog;
-
+export default ReleasesLayout;

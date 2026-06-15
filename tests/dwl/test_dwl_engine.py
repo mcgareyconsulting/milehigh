@@ -19,77 +19,44 @@ from app.brain.drafting_work_load.engine import (
 class TestDraftingWorkLoadEngine:
     """Tests for DraftingWorkLoadEngine validation methods."""
     
-    def test_validate_notes_with_none(self):
-        """Test that None returns None."""
-        result = DraftingWorkLoadEngine.validate_notes(None)
-        assert result is None
+    @pytest.mark.parametrize("raw,expected", [
+        (None, None),
+        ("  hello  ", "hello"),
+        ("   ", None),
+    ])
+    def test_validate_notes(self, raw, expected):
+        assert DraftingWorkLoadEngine.validate_notes(raw) == expected
 
-    def test_validate_notes_trims_whitespace(self):
-        """Test that whitespace is trimmed."""
-        result = DraftingWorkLoadEngine.validate_notes("  hello  ")
-        assert result == "hello"
-
-    def test_validate_notes_empty_becomes_none(self):
-        """Test that empty string becomes None."""
-        result = DraftingWorkLoadEngine.validate_notes("   ")
-        assert result is None
-
-    def test_validate_drafting_status_accepts_valid(self):
-        """Test that valid status is accepted."""
-        is_valid, normalized, error = DraftingWorkLoadEngine.validate_drafting_status('STARTED')
-        
+    @pytest.mark.parametrize("raw,expected_normalized", [
+        ('STARTED', 'STARTED'),
+        ('NEED VIF', 'NEED VIF'),
+        ('HOLD', 'HOLD'),
+        ('', ''),
+        (None, ''),  # None normalizes to empty string
+    ])
+    def test_validate_drafting_status_valid(self, raw, expected_normalized):
+        is_valid, normalized, error = DraftingWorkLoadEngine.validate_drafting_status(raw)
         assert is_valid is True
-        assert normalized == 'STARTED'
+        assert normalized == expected_normalized
         assert error is None
 
     def test_validate_drafting_status_rejects_invalid(self):
-        """Test that invalid status is rejected."""
         is_valid, normalized, error = DraftingWorkLoadEngine.validate_drafting_status('INVALID')
-        
         assert is_valid is False
         assert error is not None
 
-    def test_validate_drafting_status_none_becomes_empty(self):
-        """Test that None is normalized to empty string."""
-        is_valid, normalized, error = DraftingWorkLoadEngine.validate_drafting_status(None)
-        
+    @pytest.mark.parametrize("raw,expected_normalized", [
+        (None, None),
+        ('', None),
+        ('2024-01-15', '2024-01-15'),
+    ])
+    def test_validate_due_date_valid(self, raw, expected_normalized):
+        is_valid, normalized, error = DraftingWorkLoadEngine.validate_due_date(raw)
         assert is_valid is True
-        assert normalized == ''
-        assert error is None
-
-    def test_validate_drafting_status_with_each_valid_option(self):
-        """Test all valid status options."""
-        valid_statuses = ['', 'STARTED', 'NEED VIF', 'HOLD']
-        
-        for status in valid_statuses:
-            is_valid, normalized, error = DraftingWorkLoadEngine.validate_drafting_status(status)
-            
-            assert is_valid is True, f"Status '{status}' should be valid"
-            assert normalized == status
-
-    def test_validate_due_date_none(self):
-        """Test that None due date is valid."""
-        is_valid, normalized, error = DraftingWorkLoadEngine.validate_due_date(None)
-        assert is_valid is True
-        assert normalized is None
-        assert error is None
-
-    def test_validate_due_date_empty_string(self):
-        """Test that empty string due date is valid."""
-        is_valid, normalized, error = DraftingWorkLoadEngine.validate_due_date('')
-        assert is_valid is True
-        assert normalized is None
-        assert error is None
-
-    def test_validate_due_date_valid_format(self):
-        """Test that valid ISO date format is accepted."""
-        is_valid, normalized, error = DraftingWorkLoadEngine.validate_due_date('2024-01-15')
-        assert is_valid is True
-        assert normalized == '2024-01-15'
+        assert normalized == expected_normalized
         assert error is None
 
     def test_validate_due_date_invalid_format(self):
-        """Test that invalid date format is rejected."""
         is_valid, normalized, error = DraftingWorkLoadEngine.validate_due_date('01/15/2024')
         assert is_valid is False
         assert error is not None
@@ -102,65 +69,32 @@ class TestDraftingWorkLoadEngine:
 class TestSubmittalOrderingEngine:
     """Tests for SubmittalOrderingEngine methods."""
     
-    def test_safe_float_order_integer(self):
-        """Test that order number is converted to float."""
-        result = SubmittalOrderingEngine.safe_float_order(12)
-        assert result == 12.0
+    @pytest.mark.parametrize("raw,expected", [
+        (12, 12.0),
+        ('12', 12.0),
+        (None, None),
+        ('INVALID', None),
+    ])
+    def test_safe_float_order(self, raw, expected):
+        assert SubmittalOrderingEngine.safe_float_order(raw) == expected
 
-    def test_safe_float_order_none(self):
-        """Test that None returns None."""
-        result = SubmittalOrderingEngine.safe_float_order(None)
-        assert result is None
-
-    def test_safe_float_order_invalid(self):
-        """Test that invalid order number is rejected."""
-        result = SubmittalOrderingEngine.safe_float_order('INVALID')
-        assert result is None
-
-    def test_safe_float_order_string(self):
-        """Test that string is converted to float."""
-        result = SubmittalOrderingEngine.safe_float_order('12')
-        assert result == 12.0
-
-    def test_validate_order_number_accepts_valid(self):
-        """Test that valid order number is accepted."""
-        is_valid, error = SubmittalOrderingEngine.validate_order_number(1.0)
+    @pytest.mark.parametrize("value", [
+        1.0, None,  # plain valid order number and the "no order" sentinel
+        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,  # urgency slots
+    ])
+    def test_validate_order_number_valid(self, value):
+        is_valid, error = SubmittalOrderingEngine.validate_order_number(value)
         assert is_valid is True
         assert error is None
 
-    def test_validate_order_number_rejects_invalid(self):
-        """Test that invalid order number is rejected."""
-        is_valid, error = SubmittalOrderingEngine.validate_order_number('INVALID')
+    @pytest.mark.parametrize("value", [
+        'INVALID', 0,  # non-numeric and zero
+        0.05, 0.15, 0.25, 0.95,  # off-grid urgency slots
+    ])
+    def test_validate_order_number_invalid(self, value):
+        is_valid, error = SubmittalOrderingEngine.validate_order_number(value)
         assert is_valid is False
         assert error is not None
-
-    def test_validate_order_number_none_allowed(self):
-        """Test that None is allowed."""
-        is_valid, error = SubmittalOrderingEngine.validate_order_number(None)
-        assert is_valid is True
-        assert error is None
-
-    def test_validate_order_number_zero_rejected(self):
-        """Test that zero is rejected."""
-        is_valid, error = SubmittalOrderingEngine.validate_order_number(0)
-        assert is_valid is False
-        assert error is not None
-
-    def test_validate_order_number_urgency_slot_valid(self):
-        """Test that valid urgency slots are accepted."""
-        valid_slots = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-        for slot in valid_slots:
-            is_valid, error = SubmittalOrderingEngine.validate_order_number(slot)
-            assert is_valid is True, f"Slot {slot} should be valid"
-            assert error is None
-
-    def test_validate_order_number_urgency_slot_invalid(self):
-        """Test that invalid urgency slots are rejected."""
-        invalid_slots = [0.05, 0.15, 0.25, 0.95]
-        for slot in invalid_slots:
-            is_valid, error = SubmittalOrderingEngine.validate_order_number(slot)
-            assert is_valid is False, f"Slot {slot} should be invalid"
-            assert error is not None
 
     def test_categorize_submittals_separates_urgent_and_regular(self):
         """Test that submittals are correctly categorized."""

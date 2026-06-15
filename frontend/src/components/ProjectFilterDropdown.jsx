@@ -17,8 +17,8 @@
 import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
-const POPOVER_WIDTH = 260;
-const POPOVER_MAX_HEIGHT = 360;
+const POPOVER_WIDTH = 440;
+const POPOVER_MAX_HEIGHT = 680;
 const VIEWPORT_PAD = 8;
 
 export default function ProjectFilterDropdown({ options = [], selected = [], onChange }) {
@@ -144,19 +144,19 @@ export default function ProjectFilterDropdown({ options = [], selected = [], onC
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search number or name…"
-                            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                             autoFocus
                         />
                     </div>
 
-                    <div className="max-h-72 overflow-y-auto px-2 pb-2 text-xs">
+                    <div className="max-h-[60vh] overflow-y-auto px-2 pb-2 text-sm">
                         {filteredOptions.length === 0 ? (
                             <div className="px-1 py-2 text-gray-500 dark:text-slate-400 italic">No projects</div>
                         ) : (
                             filteredOptions.map((o) => (
                                 <label
                                     key={o.name}
-                                    className="flex items-center gap-2 px-1 py-1 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                                    className="flex items-center gap-2 px-1.5 py-1.5 cursor-pointer select-none rounded hover:bg-gray-100 dark:hover:bg-slate-700"
                                 >
                                     <input
                                         type="checkbox"
