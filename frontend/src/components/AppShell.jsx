@@ -20,6 +20,8 @@ import { ReleasesProvider } from '../context/ReleasesContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
+import PatchNotesModal from './PatchNotesModal';
+import { CURRENT_VERSION } from '../data/patchNotes';
 
 function AppShellInner({ isAuthenticated }) {
   const navigate = useNavigate();
@@ -30,6 +32,7 @@ function AppShellInner({ isAuthenticated }) {
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   const [isAdmin, setIsAdmin] = useState(false);
   const [canSeeReport, setCanSeeReport] = useState(false);
+  const [showPatchNotes, setShowPatchNotes] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -80,6 +83,16 @@ function AppShellInner({ isAuthenticated }) {
         <h1 className="shrink-0 text-lg 3xl:text-xl font-bold bg-gradient-to-r from-accent-500 to-accent-600 dark:from-accent-300 dark:to-accent-400 bg-clip-text text-transparent whitespace-nowrap select-none">
           MHMW Brain
         </h1>
+
+        {/* Version badge — opens patch notes */}
+        <button
+          type="button"
+          onClick={() => setShowPatchNotes(true)}
+          className="shrink-0 px-1.5 py-0.5 text-[11px] font-medium rounded-md text-gray-500 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          title="What's new — view patch notes"
+        >
+          {CURRENT_VERSION}
+        </button>
 
         {/* Everything else expands from the right; search is the leftmost item */}
         <div className="ml-auto flex items-center gap-2">
@@ -219,6 +232,8 @@ function AppShellInner({ isAuthenticated }) {
         onLogout={handleLogout}
         onLogin={() => navigate('/login')}
       />
+
+      <PatchNotesModal isOpen={showPatchNotes} onClose={() => setShowPatchNotes(false)} isAdmin={isAdmin} />
 
       {/* Main content */}
       <main className="flex-1 w-full min-h-0 flex flex-col">
