@@ -171,13 +171,16 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                         </div>
                     </div>
 
-                    {(ordersLoading || materialOrders.length > 0) && (
-                        <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
+                    <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
                             <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
                                 Materials Ordered
                             </h4>
                             {ordersLoading ? (
                                 <p className="text-sm text-gray-500 dark:text-slate-400 italic">Loading…</p>
+                            ) : materialOrders.length === 0 ? (
+                                <p className="text-sm text-gray-500 dark:text-slate-400 italic">
+                                    No materials ordered for this release.
+                                </p>
                             ) : (
                                 <ul className="space-y-2">
                                     {materialOrders.map((o) => {
@@ -210,8 +213,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                                     })}
                                 </ul>
                             )}
-                        </div>
-                    )}
+                    </div>
                 </div>
 
                 <div className="bg-gray-50 dark:bg-slate-700 px-6 py-4 rounded-b-xl border-t border-gray-200 dark:border-slate-600 space-y-3">
