@@ -3,7 +3,7 @@
  * schema_version: 1
  * purpose: Vertical list of SubmittalRow components for the iPad/touch view of Drafting Work Load. Replaces the prior card-grid layout with dense, collapsible read-only rows.
  * exports:
- *   default SubmittalRowList: Props — rows, jumpToTarget.
+ *   default SubmittalRowList: Props — rows, jumpToTarget, canEditRel, onRelAssigned.
  * imports_from: [react, ./SubmittalRow, ./SubmittalDetailsModal]
  * imported_by: [frontend/src/pages/DraftingWorkLoad.jsx]
  */
@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import SubmittalRow from './SubmittalRow';
 import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 
-export default function SubmittalRowList({ rows, jumpToTarget = null }) {
+export default function SubmittalRowList({ rows, jumpToTarget = null, canEditRel = false, onRelAssigned }) {
     const [selected, setSelected] = useState(null);
 
     const isHighlighted = (row) => {
@@ -45,6 +45,8 @@ export default function SubmittalRowList({ rows, jumpToTarget = null }) {
                 isOpen={selected != null}
                 onClose={() => setSelected(null)}
                 submittal={selected}
+                canEditRel={canEditRel}
+                onRelAssigned={onRelAssigned}
             />
         </div>
     );

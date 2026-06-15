@@ -467,6 +467,8 @@ function DraftingWorkLoad() {
                                 <SubmittalRowList
                                     rows={displayRows}
                                     jumpToTarget={jumpToTarget}
+                                    canEditRel={canEditDrafterFields}
+                                    onRelAssigned={refetch}
                                 />
                             </div>
                         )}
