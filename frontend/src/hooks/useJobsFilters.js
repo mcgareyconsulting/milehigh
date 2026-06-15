@@ -12,7 +12,8 @@
  *     ready_to_ship and paint sort by stage priority (Ship Planning → Store at MHMW →
  *     Paint Complete → Paint Start → Welded QC) then last_updated_at ascending.
  *     paint_fab uses that same stage+date sort for the paint band, then fab_order
- *     for the FABRICATION band.
+ *     for the FABRICATION band. katie (downstream: Ready-to-Ship + COMPLETE bands)
+ *     sorts by KATIE_STAGE_PRIORITY (most-complete first) then last_updated_at ascending.
  *   - totalFabHrs and totalInstallHrs are computed over ALL jobs, not the filtered displayJobs
  * updated_by_agent: 2026-04-28T00:00:00Z
  */
@@ -21,6 +22,19 @@ import { computeTotalFabHrs } from '../utils/fabHours';
 
 // Stages that make up the Paint department (the `paint` quick-filter set).
 const PAINT_STAGES = ['Welded QC', 'Paint Start'];
+
+// Katie downstream view (the `katie` quick-filter set): the three Ready-to-Ship
+// stages plus the whole COMPLETE band. Maps stage → sort rank, most-complete first.
+// Membership is keyed off this map (a stage is in the set iff it has a rank here).
+const KATIE_STAGE_PRIORITY = {
+    'Complete':         1,
+    'Install Complete': 2,
+    'Install Start':    3,
+    'Ship Complete':    4,
+    'Ship Planning':    5,
+    'Store at MHMW':    6,
+    'Paint Complete':   7,
+};
 
 // Per-stage % of install hours remaining. Mirrors STAGE_HOUR_PERCENTAGES.install
 // in app/api/helpers.py — keep in sync. Drives the totalInstallHrs KPI; Job Comp
@@ -66,7 +80,7 @@ export function useJobsFilters(jobs = []) {
     const [search, setSearch] = useState('');
     const [selectedSubset, setSelectedSubset] = useState(
         () => localStorage.getItem('jl_subset') || null
-    ); // 'job_order', 'ready_to_ship', 'paint', 'paint_fab', 'fab', or null for default
+    ); // 'job_order', 'ready_to_ship', 'paint', 'paint_fab', 'fab', 'katie', or null for default
 
     // Per-column dropdown filters: { [columnName]: string[] of allowed values; '(Blanks)' represents null/empty }
     const [columnFilters, setColumnFiltersState] = useState(() => {
@@ -301,6 +315,31 @@ export function useJobsFilters(jobs = []) {
     }, []);
 
     /**
+     * Sort jobs by Katie's downstream stage rank (KATIE_STAGE_PRIORITY, most-complete
+     * first), then last_updated_at ascending (oldest-waiting first) within a stage.
+     * Mirrors sortByStageThenLastUpdated; rows with an unknown stage or null
+     * last_updated_at sink to the bottom of their tier.
+     */
+    const sortByKatieStage = useCallback((jobs) => {
+        return [...jobs].sort((a, b) => {
+            const prioA = KATIE_STAGE_PRIORITY[String(a['Stage'] ?? '').trim()] ?? 999;
+            const prioB = KATIE_STAGE_PRIORITY[String(b['Stage'] ?? '').trim()] ?? 999;
+            if (prioA !== prioB) return prioA - prioB;
+
+            const rawA = a['last_updated_at'];
+            const rawB = b['last_updated_at'];
+            const dateA = rawA ? new Date(rawA) : null;
+            const dateB = rawB ? new Date(rawB) : null;
+            const validA = dateA && !isNaN(dateA.getTime());
+            const validB = dateB && !isNaN(dateB.getTime());
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dateA.getTime() - dateB.getTime();
+        });
+    }, []);
+
+    /**
      * Default sort: Job # ascending, then Release # ascending
      */
     const sortJobs = useCallback((filteredJobs) => {
@@ -418,9 +457,13 @@ export function useJobsFilters(jobs = []) {
             return [...paintSorted, ...fabSorted];
         } else if (selectedSubset === 'fab') {
             return getFabSubset(base);
+        } else if (selectedSubset === 'katie') {
+            const katieOnly = base.filter(job =>
+                KATIE_STAGE_PRIORITY[String(job['Stage'] ?? '').trim()] !== undefined);
+            return sortByKatieStage(katieOnly);
         }
         return [...base];
-    }, [selectedSubset, sortJobs, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByStageThenLastUpdated, sortByStageThenFabOrder]);
+    }, [selectedSubset, sortJobs, getJobOrderSubset, getFabSubset, sortByFabOrder, sortByStageThenLastUpdated, sortByStageThenFabOrder, sortByKatieStage]);
 
     /**
      * Filtered and sorted jobs for display based on selected subset
@@ -457,15 +500,15 @@ export function useJobsFilters(jobs = []) {
      * stages never overlap the in-filter stages, so no de-duplication is needed.
      */
     const propagatedAsapJobs = useMemo(() => {
-        if (selectedSubset !== 'paint' && selectedSubset !== 'ready_to_ship') return [];
+        if (!['paint', 'ready_to_ship', 'katie'].includes(selectedSubset)) return [];
 
-        // Fab ASAPs surface in both Paint and Ready-to-Ship.
+        // Fab ASAPs surface in Paint, Ready-to-Ship, and Katie.
         const fab = baseFiltered
             .filter(job => String(job['Stage Group'] ?? '').trim() === 'FABRICATION' && job['start_install_asap'] === true)
             .map(job => ({ ...job, _asapPropagated: true, _asapOrigin: 'Fab' }));
 
-        // Paint ASAPs additionally surface in Ready-to-Ship.
-        const paint = selectedSubset === 'ready_to_ship'
+        // Paint ASAPs additionally surface in Ready-to-Ship and Katie (both downstream of paint).
+        const paint = (selectedSubset === 'ready_to_ship' || selectedSubset === 'katie')
             ? baseFiltered
                 .filter(job => PAINT_STAGES.includes(String(job['Stage'] ?? '').trim()) && job['start_install_asap'] === true)
                 .map(job => ({ ...job, _asapPropagated: true, _asapOrigin: 'Paint' }))

@@ -44,3 +44,10 @@ export const logout = async () => {
 export const userCanAccessInvoicing = (user) =>
     !!user && (user.is_admin || (user.username || '').toLowerCase() === 'khearn@mhmw.com');
 
+// Katie downstream Job Log quick-filter is restricted to exactly these two users
+// (intentionally NOT admins — by email only).
+export const userCanAccessKatieFilter = (user) => {
+    const u = (user?.username || '').toLowerCase();
+    return u === 'khearn@mhmw.com' || u === 'mcgareyconsulting@gmail.com';
+};
+

@@ -19,6 +19,7 @@ const SUBSET_LABELS = {
     paint: 'Paint',
     paint_fab: 'Paint+Fab',
     fab: 'Fab',
+    katie: 'Katie',
 };
 
 function Chip({ label, onRemove, title }) {
