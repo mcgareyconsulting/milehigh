@@ -1,14 +1,16 @@
 """
 Unit tests for DRR "Rel" number assignment (app/procore/procore.py).
 
-Rel numbers live in [100, 999]. They are assigned MANUALLY from the DWL submittal
-popup (assign_rel_manual) -- creation no longer assigns one automatically. A Rel
-is unique on the value alone (job-agnostic): it may not collide with an ACTIVE
-job-log release (Releases, any job) nor with a pending (non-Closed) DRR submittal
-already holding the number. next_rel_number suggests the next free value to
-prefill the popup.
+Rel numbers live in [101, 998] (999 is a reserved special-job sentinel assigned
+directly upstream, never via the popup). They are assigned MANUALLY from the DWL
+submittal popup (assign_rel_manual) -- creation no longer assigns one
+automatically. A Rel is unique on the value alone (job-agnostic): it may not
+collide with an ACTIVE job-log release (Releases, any job) nor with a pending
+(non-Closed) DRR submittal already holding the number. next_rel_number suggests
+the next highest available value -- max-in-use + 1, climbing past gaps, rolling
+over to the low 100s only once 998 is occupied -- to prefill the popup.
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -49,64 +51,106 @@ def _make_submittal(sid, type_, rel=None, rel_assigned_at=None, status=None, pro
 
 
 # --- next_rel_number suggestion ----------------------------------------------------
+# Suggestion = max-in-use + 1 ("next highest available"), climbing past unused
+# gaps, rolling over to the lowest free value only once REL_MAX (998) is occupied.
 
 def test_first_rel_is_min(app):
     with app.app_context():
         assert next_rel_number() == REL_MIN
 
 
-def test_next_rel_increments_from_most_recent(app):
+def test_next_rel_is_max_in_use_plus_one(app):
     with app.app_context():
-        now = datetime.utcnow()
-        db.session.add(_make_submittal("a", DRR_TYPE, rel=100, status="Closed", rel_assigned_at=now - timedelta(minutes=2)))
-        db.session.add(_make_submittal("b", DRR_TYPE, rel=101, status="Closed", rel_assigned_at=now - timedelta(minutes=1)))
+        for r in (650, 651, 652):
+            db.session.add(_make_release(500 + r, r))  # different jobs, all active
         db.session.commit()
-        # Most recently assigned is 101 -> next is 102 (by recency, not by max value).
-        # Both are Closed so they don't themselves block.
-        assert next_rel_number() == 102
+        # Highest in use is 652 -> next is 653.
+        assert next_rel_number() == 653
 
 
-def test_rel_wraps_after_max(app):
+def test_next_rel_climbs_past_gap_not_back_to_low(app):
     with app.app_context():
-        db.session.add(_make_submittal("a", DRR_TYPE, rel=REL_MAX, status="Closed", rel_assigned_at=datetime.utcnow()))
+        # 650-652 in use; 101-649 are free (e.g. never used or archived). The
+        # suggestion must keep climbing (653), NOT drop back into the low gap.
+        for r in (650, 651, 652):
+            db.session.add(_make_release(500 + r, r))
+        db.session.add(_make_release(101, 101, is_archived=True))  # freed low number
+        db.session.commit()
+        assert next_rel_number() == 653
+
+
+def test_next_rel_ignores_gaps_below_the_max(app):
+    with app.app_context():
+        # A stray low active release does not pull the sequence down: max wins.
+        db.session.add(_make_release(200, 200))
+        db.session.add(_make_release(650, 650))
+        db.session.commit()
+        assert next_rel_number() == 651
+
+
+def test_blocked_number_still_advances_to_next(app):
+    with app.app_context():
+        # 650, 651, 652 assigned; 653 is blocked (in use) -> next is 654, not low.
+        for r in (650, 651, 652, 653):
+            db.session.add(_make_release(500 + r, r))
+        db.session.commit()
+        assert next_rel_number() == 654
+
+
+def test_rollover_to_low_once_max_occupied(app):
+    with app.app_context():
+        # Someone occupies REL_MAX (998) -> roll over to the lowest free value.
+        db.session.add(_make_release(998, REL_MAX))
         db.session.commit()
         assert next_rel_number() == REL_MIN
 
 
-def test_next_rel_skips_active_release_any_job(app):
+def test_rollover_recycles_lowest_free(app):
     with app.app_context():
-        db.session.add(_make_release(777, 100))  # active release 100 on some other job
+        # After rollover (998 occupied) the freed low numbers come back into play,
+        # filling from the bottom up. 101 is free (archived) so it is reused.
+        db.session.add(_make_release(998, REL_MAX))
+        db.session.add(_make_release(102, 102))             # active, blocks 102
+        db.session.add(_make_release(101, 101, is_archived=True))  # freed -> reusable
         db.session.commit()
-        # Job-agnostic: 100 is taken anywhere -> suggestion advances to 101.
         assert next_rel_number() == 101
 
 
-def test_next_rel_skips_consecutive_taken_numbers(app):
+def test_special_999_is_a_sentinel_not_in_sequence(app):
     with app.app_context():
-        for r in (100, 101, 102):
-            db.session.add(_make_release(500 + r, r))  # different jobs, all active
+        # 999 is reserved for special jobs (assigned directly). It is never
+        # suggested and -- crucially -- does not count as "998 occupied", so it
+        # must not trigger rollover. With only 999 in use, next is still REL_MIN.
+        db.session.add(_make_release(999, 999))
         db.session.commit()
-        assert next_rel_number() == 103
+        assert next_rel_number() == REL_MIN
+
+
+def test_special_999_does_not_become_the_max(app):
+    with app.app_context():
+        db.session.add(_make_release(999, 999))  # sentinel, out of range
+        db.session.add(_make_release(650, 650))  # real high-water mark
+        db.session.commit()
+        assert next_rel_number() == 651
 
 
 def test_next_rel_skips_pending_drr_submittal(app):
     with app.app_context():
-        db.session.add(_make_submittal("p", DRR_TYPE, rel=100, status="Open", rel_assigned_at=datetime.utcnow()))
+        db.session.add(_make_submittal("p", DRR_TYPE, rel=300, status="Open", rel_assigned_at=datetime.utcnow()))
         db.session.commit()
-        # A pending (non-Closed) DRR holds 100 -> suggestion skips to 101.
-        assert next_rel_number() == 101
+        # A pending (non-Closed) DRR holds 300 -> it is the max in use -> next 301.
+        assert next_rel_number() == 301
 
 
 def test_next_rel_ignores_closed_drr_submittal(app):
     with app.app_context():
         now = datetime.utcnow()
-        # Anchor (most recent) is 105 -> sequence starts at 106. A Closed DRR sits
-        # exactly on 106; because Closed DRRs don't reserve their number, 106 is
-        # handed out rather than skipped. (Were it Open, the suggestion would be 107.)
-        db.session.add(_make_submittal("anchor", DRR_TYPE, rel=105, status="Closed", rel_assigned_at=now))
-        db.session.add(_make_submittal("c", DRR_TYPE, rel=106, status="Closed", rel_assigned_at=now - timedelta(minutes=1)))
+        # Closed DRRs don't reserve their number, so 500 does not count toward the
+        # max. Only the active release at 650 does -> next is 651.
+        db.session.add(_make_submittal("closed", DRR_TYPE, rel=500, status="Closed", rel_assigned_at=now))
+        db.session.add(_make_release(650, 650))
         db.session.commit()
-        assert next_rel_number() == 106
+        assert next_rel_number() == 651
 
 
 @pytest.mark.parametrize("kwargs,reason", [
@@ -115,25 +159,27 @@ def test_next_rel_ignores_closed_drr_submittal(app):
 ])
 def test_inactive_release_does_not_block_rel(app, kwargs, reason):
     with app.app_context():
-        db.session.add(_make_release(100, 100, **kwargs))
+        db.session.add(_make_release(500, 500, **kwargs))
         db.session.commit()
-        assert next_rel_number() == 100, reason
+        # Only an inactive release exists -> nothing in use -> first number.
+        assert next_rel_number() == REL_MIN, reason
 
 
 def test_non_numeric_release_value_is_ignored(app):
     with app.app_context():
-        db.session.add(_make_release(100, "N/A"))
+        db.session.add(_make_release(500, "N/A"))
         db.session.commit()
-        assert next_rel_number() == 100
+        assert next_rel_number() == REL_MIN
 
 
 def test_raises_when_every_number_taken(app):
     with app.app_context():
-        with patch("app.procore.procore.REL_MIN", 100), \
-             patch("app.procore.procore.REL_MAX", 102):
-            for r in (100, 101, 102):
+        with patch("app.procore.procore.REL_MIN", 101), \
+             patch("app.procore.procore.REL_MAX", 103):
+            for r in (101, 102, 103):
                 db.session.add(_make_release(500 + r, r))
             db.session.commit()
+            # 103 (REL_MAX) occupied -> rollover, but nothing free -> RuntimeError.
             with pytest.raises(RuntimeError):
                 next_rel_number()
 
@@ -170,7 +216,9 @@ def test_assign_manual_rejects_non_drr(app):
         assert non_drr.rel is None
 
 
-@pytest.mark.parametrize("bad", [99, 1000, "abc", None, 0, -5])
+# 100 (below REL_MIN) and 999 (the reserved special-job sentinel) are out of the
+# popup-assignable range and must be rejected.
+@pytest.mark.parametrize("bad", [99, 100, 999, 1000, "abc", None, 0, -5])
 def test_assign_manual_rejects_out_of_range(app, bad):
     with app.app_context():
         drr = _make_submittal("r", DRR_TYPE, status="Open")

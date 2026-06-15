@@ -55,8 +55,8 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
         setRelError(null);
         setRelSuccess(false);
         const n = parseInt(relInput, 10);
-        if (Number.isNaN(n) || n < 100 || n > 999) {
-            setRelError('Rel must be a whole number from 100 to 999.');
+        if (Number.isNaN(n) || n < 101 || n > 998) {
+            setRelError('Rel must be a whole number from 101 to 998.');
             return;
         }
         setRelSaving(true);
@@ -170,7 +170,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                                     value={relInput}
                                     onChange={(e) => setRelInput(e.target.value.replace(/[^0-9]/g, ''))}
                                     disabled={!isDRR || !canEditRel || relSaving}
-                                    placeholder="100–999"
+                                    placeholder="101–998"
                                     className="w-24 px-2 py-1 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed"
                                 />
                                 {isDRR && canEditRel ? (

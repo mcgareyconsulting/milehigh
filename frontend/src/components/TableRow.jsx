@@ -31,6 +31,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
     const dueDateInputRef = useRef(null);
+    // On the Draft tab the row's accent (bump button + links) shifts blue → green to match the toolbar.
+    const isDraftTab = selectedTab === 'draft';
+    const linkAccent = isDraftTab
+        ? 'text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300'
+        : 'text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300';
 
     const canEditDrafterFields = isAdmin || isDrafter;
 
@@ -419,7 +424,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                     {canBump && onBump && (
                                         <button
                                             onClick={handleBumpClick}
-                                            className="px-1.5 py-0.5 text-xs font-medium bg-accent-500 hover:bg-accent-600 text-white rounded transition-colors shadow-sm"
+                                            className={`px-1.5 py-0.5 text-xs font-medium text-white rounded transition-colors shadow-sm ${isDraftTab ? 'bg-green-600 hover:bg-green-700' : 'bg-accent-500 hover:bg-accent-600'}`}
                                             title={rawIsNull ? "Bump: add to end of ordered list" : "Bump submittal to 0.9 urgency slot"}
                                         >
                                             Bump
@@ -645,7 +650,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                             e.stopPropagation();
                                             setDetailsOpen(true);
                                         }}
-                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-medium"
+                                        className={`${linkAccent} underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-medium`}
                                     >
                                         {truncatedProjectName}
                                     </button>
@@ -751,15 +756,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // Handle Job (project #) column - make it a link to Procore
+                    // Handle Job (project #) column - plain text (Procore quick link removed)
                     const isProjectNumber = column === 'Job';
                     if (isProjectNumber) {
-                        const submittalId = row.submittal_id || row['Submittals Id'] || '';
-                        const projectId = row.procore_project_id || row['Project Id'] || '';
-                        const procoreUrl = projectId && submittalId
-                            ? `https://app.procore.com/webclients/host/companies/18521/projects/${projectId}/tools/submittals/${submittalId}`
-                            : null;
-
                         return (
                             <td
                                 key={`${row.id}-${column}`}
@@ -767,21 +766,9 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 style={{ maxWidth: '65px' }}
                                 draggable={false}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title={procoreUrl ? `${cellValue} - Click to open in Procore` : cellValue}
+                                title={cellValue}
                             >
-                                {procoreUrl ? (
-                                    <a
-                                        href={procoreUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition-colors"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        {cellValue}
-                                    </a>
-                                ) : (
-                                    <span className="text-gray-900 dark:text-slate-100">{cellValue}</span>
-                                )}
+                                <span className="text-gray-900 dark:text-slate-100">{cellValue}</span>
                             </td>
                         );
                     }
