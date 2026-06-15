@@ -4,7 +4,7 @@
  * purpose: Job Log quick-filter control (Job Order, Ready to Ship, Paint, Paint+Fab, Fab, Review).
  *   Renders a linear button row on desktop and collapses into a single dropdown on tablet/mobile.
  * exports:
- *   JobLogQuickFilters: default — props { selectedSubset, setSelectedSubset, reviewMode, setReviewMode, compact }
+ *   JobLogQuickFilters: default — props { selectedSubset, setSelectedSubset, reviewMode, setReviewMode, compact, canUseKatie }
  * imports_from: [react, react-dom]
  * imported_by: [../pages/JobLog.jsx]
  * invariants:
@@ -22,6 +22,7 @@ const QUICK_FILTERS = [
     { key: 'paint',         label: 'Paint',         activeClass: 'bg-emerald-600 text-white', title: 'Show only releases in Welded QC or Paint Start stages, sorted by Fab Order. Use to focus on jobs currently in paint.' },
     { key: 'paint_fab',     label: 'Paint+Fab',     activeClass: 'bg-emerald-600 text-white', title: 'Combined view of Paint stages (Welded QC, Paint Start, Paint Complete) followed by all Fabrication-group stages, sorted by Fab Order with Start Install date as tiebreaker.' },
     { key: 'fab',           label: 'Fab',           activeClass: 'bg-blue-700 text-white',    title: 'Show only releases in the Fabrication stage group, sorted by Fab Order. Use to focus on shop floor work.' },
+    { key: 'katie',         label: 'Katie',         activeClass: 'bg-violet-600 text-white',  title: 'Downstream view: Paint Complete, Store at MHMW, Ship Planning, Ship Complete, Installs, and Complete — most-complete first. Upstream (Fab/Paint) ASAPs shown at the bottom.' },
     { key: 'review',        label: 'Review',        activeClass: 'bg-blue-700 text-white',    title: 'Group releases by PM (alphabetical), then by Project # ascending, with the most-complete stage first within each project. Intended for PM review meetings.' },
 ];
 
@@ -35,9 +36,13 @@ export default function JobLogQuickFilters({
     reviewMode,
     setReviewMode,
     compact = false,
+    canUseKatie = false,
 }) {
     // Map current state to the active quick-filter key (or null for the default view).
     const activeKey = reviewMode ? 'review' : (selectedSubset || null);
+
+    // The Katie downstream filter is restricted to specific users; hide it otherwise.
+    const visibleFilters = canUseKatie ? QUICK_FILTERS : QUICK_FILTERS.filter((f) => f.key !== 'katie');
 
     // Apply a selection by key; null clears to the default view.
     const apply = useCallback((key) => {
@@ -110,7 +115,7 @@ export default function JobLogQuickFilters({
         // Linear button row (desktop) — tight inline group so the whole toolbar stays on one line.
         return (
             <div className="flex items-center gap-1.5">
-                {QUICK_FILTERS.map(({ key, label, activeClass, title }) => (
+                {visibleFilters.map(({ key, label, activeClass, title }) => (
                     <button
                         key={key}
                         onClick={() => toggle(key)}
@@ -155,7 +160,7 @@ export default function JobLogQuickFilters({
                     >
                         Default
                     </button>
-                    {QUICK_FILTERS.map(({ key, label }) => (
+                    {visibleFilters.map(({ key, label }) => (
                         <button
                             key={key}
                             type="button"

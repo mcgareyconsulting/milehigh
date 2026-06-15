@@ -24,7 +24,7 @@ import ActiveFilterChips from '../components/ActiveFilterChips';
 import ReleasesViewSwitcher from '../components/ReleasesViewSwitcher';
 import Dropdown, { DropdownItem } from '../components/Dropdown';
 import { jobsApi } from '../services/jobsApi';
-import { checkAuth } from '../utils/auth';
+import { checkAuth, userCanAccessKatieFilter } from '../utils/auth';
 import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
 import { reviewSort, columnOrder, COLUMN_WIDTH_PERCENT, FILTERABLE_COLUMNS } from '../utils/jobLogColumns';
 
@@ -90,6 +90,7 @@ function ReleasesLayout() {
     );
     const [isAdmin, setIsAdmin] = useState(false);
     const [isDrafter, setIsDrafter] = useState(false);
+    const [canUseKatie, setCanUseKatie] = useState(false);
     const [isFilterMinimized, setIsFilterMinimized] = useState(() => {
         // Default minimal: collapse the big project-filter buttons on first load. Returning users keep their choice.
         const stored = localStorage.getItem('jl_minimized');
@@ -148,10 +149,12 @@ function ReleasesLayout() {
                 const user = await checkAuth();
                 setIsAdmin(user?.is_admin || false);
                 setIsDrafter(user?.is_drafter || false);
+                setCanUseKatie(userCanAccessKatieFilter(user));
             } catch (err) {
                 console.error('Error fetching user info:', err);
                 setIsAdmin(false);
                 setIsDrafter(false);
+                setCanUseKatie(false);
             }
         };
         fetchUserInfo();
@@ -612,6 +615,7 @@ function ReleasesLayout() {
                                         reviewMode={reviewMode}
                                         setReviewMode={setReviewMode}
                                         compact={isMobile || isTablet}
+                                        canUseKatie={canUseKatie}
                                     />
 
                                     <div className="flex-1" />
