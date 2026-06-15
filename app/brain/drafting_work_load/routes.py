@@ -593,7 +593,7 @@ def update_submittal_rel():
     """Manually assign (or reassign) a Rel release number to a DRR submittal.
 
     Only DRR ("Drafting Release Review") submittals may receive a Rel; the value
-    must be in [100, 999] and unique across active job-log releases and pending
+    must be in [101, 998] and unique across active job-log releases and pending
     DRR submittals (see app.procore.procore.assign_rel_manual)."""
     # Imported lazily to avoid a circular import (app.procore.procore imports
     # app.brain.drafting_work_load.service at module load).

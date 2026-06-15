@@ -50,9 +50,10 @@ logger = logging.getLogger(__name__)
 
 # Submittal type that triggers a "Rel" (release) number assignment on the DWL tab.
 DRR_TYPE = "Drafting Release Review"
-# Rel numbers cycle through this inclusive range, wrapping back to REL_MIN after REL_MAX.
-REL_MIN = 100
-REL_MAX = 999
+# Rel numbers cycle through this inclusive range, rolling over to REL_MIN once
+# REL_MAX is occupied.
+REL_MIN = 101
+REL_MAX = 998
 
 
 def _to_int_or_none(value):
@@ -61,12 +62,6 @@ def _to_int_or_none(value):
         return int(str(value).strip())
     except (TypeError, ValueError):
         return None
-
-
-def _next_in_range(value):
-    """Next value in the REL_MIN..REL_MAX cycle, wrapping REL_MAX -> REL_MIN."""
-    nxt = value + 1
-    return REL_MIN if nxt > REL_MAX else nxt
 
 
 class RelAssignmentError(Exception):
@@ -96,7 +91,7 @@ def _globally_taken_rel_numbers(exclude_submittal_id=None):
 
     A Closed DRR is on its way to being an active release that (a) catches, so it
     is intentionally not reserved here -- otherwise every historical Closed DRR
-    would hold its number forever and exhaust the 100..999 range. Values that
+    would hold its number forever and exhaust the 101..998 range. Values that
     aren't clean integers are ignored. Returns the set of taken integers.
     """
     taken = set()
@@ -132,35 +127,39 @@ def _globally_taken_rel_numbers(exclude_submittal_id=None):
 
 
 def next_rel_number(exclude_submittal_id=None):
-    """Return a suggested next Rel number (used to prefill the manual popup).
+    """Return the suggested next Rel number (used to prefill the manual popup).
 
-    Numbers run 100..999 as a single global sequence and wrap back to 100. "Next"
-    is derived from the most recently assigned Rel (by rel_assigned_at) so
-    wraparound is handled naturally: if the last assigned value was 999, the next
-    is 100. Returns REL_MIN when no Rel has ever been assigned.
+    Assignment is "semi-chronological": the sequence climbs to the next highest
+    available value rather than back-filling gaps. The suggestion is
+    ``max(currently-taken) + 1``, so a run like 650, 651, 652 keeps advancing
+    even when intermediate numbers are blocked -- if 653 is taken the max is
+    >= 653 and the next suggestion is 654, never a low/freed number like 101.
+    (Nothing above the max is taken, so ``max + 1`` is always free.)
 
-    Any candidate already taken (see ``_globally_taken_rel_numbers``) is skipped,
-    advancing through the sequence (wrapping) until a free number is found.
+    Freed numbers -- archived releases and never-used gaps below the max -- are
+    NOT reused until the sequence rolls over. Rollover happens only once REL_MAX
+    is occupied: the suggestion then drops to the lowest free value from REL_MIN
+    up, recycling the freed low numbers.
+
+    "Taken" is the union in ``_globally_taken_rel_numbers``.
     ``exclude_submittal_id`` lets the submittal being edited ignore its own
-    current Rel when computing a suggestion.
-
-    Raises RuntimeError only in the pathological case where every number in
-    [REL_MIN, REL_MAX] is taken.
+    current Rel. Returns REL_MIN when nothing is taken. Raises RuntimeError only
+    in the pathological case where every number in [REL_MIN, REL_MAX] is taken.
     """
-    last = (
-        Submittals.query
-        .filter(Submittals.rel.isnot(None))
-        .order_by(Submittals.rel_assigned_at.desc(), Submittals.id.desc())
-        .first()
-    )
-    start = _next_in_range(last.rel) if last and last.rel is not None else REL_MIN
-
     taken = _globally_taken_rel_numbers(exclude_submittal_id)
-    candidate = start
-    for _ in range(REL_MAX - REL_MIN + 1):
+    in_range = [n for n in taken if REL_MIN <= n <= REL_MAX]
+    if not in_range:
+        return REL_MIN
+
+    current_max = max(in_range)
+    if current_max < REL_MAX:
+        # Nothing above current_max is taken, so current_max + 1 is free.
+        return current_max + 1
+
+    # REL_MAX is occupied -> roll over and recycle the lowest free number.
+    for candidate in range(REL_MIN, REL_MAX + 1):
         if candidate not in taken:
             return candidate
-        candidate = _next_in_range(candidate)
 
     raise RuntimeError(
         f"No free Rel number in [{REL_MIN}, {REL_MAX}]: every value is taken "

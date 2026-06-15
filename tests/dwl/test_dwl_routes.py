@@ -603,20 +603,20 @@ class TestGetNextRel:
     def test_next_rel_default(self, client):
         response = client.get('/brain/drafting-work-load/rel/next')
         assert response.status_code == 200
-        assert json.loads(response.data)['next_rel'] == 100
-
-    def test_next_rel_skips_global_taken(self, client):
-        _seed_active_release(777, 100)
-        response = client.get('/brain/drafting-work-load/rel/next')
         assert json.loads(response.data)['next_rel'] == 101
 
+    def test_next_rel_is_max_in_use_plus_one(self, client):
+        _seed_active_release(777, 300)
+        response = client.get('/brain/drafting-work-load/rel/next')
+        # Highest in use is 300 -> suggestion is 301.
+        assert json.loads(response.data)['next_rel'] == 301
+
     def test_next_rel_excludes_self(self, client):
-        # 'anchor199' (Closed, non-blocking) is the most-recent rel, so the
-        # sequence starts at 200. 's1' (pending) holds 200: excluding it frees
-        # 200 for re-suggestion; including it pushes the suggestion to 201.
-        _seed_submittal("s1", rel=200, status="Open")
-        _seed_submittal("anchor199", rel=199, status="Closed")
+        # 's1' (pending) holds the high-water mark 300; an active release sits at
+        # 250. Excluding 's1' drops the max to 250 -> 251; including it -> 301.
+        _seed_submittal("s1", rel=300, status="Open")
+        _seed_active_release(777, 250)
         with_self = client.get('/brain/drafting-work-load/rel/next?submittal_id=s1')
-        assert json.loads(with_self.data)['next_rel'] == 200
+        assert json.loads(with_self.data)['next_rel'] == 251
         without = client.get('/brain/drafting-work-load/rel/next')
-        assert json.loads(without.data)['next_rel'] == 201
+        assert json.loads(without.data)['next_rel'] == 301

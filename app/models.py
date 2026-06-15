@@ -102,10 +102,10 @@ class Submittals(db.Model):
     notes = db.Column(db.Text)
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
-    # Release identifier (100-999) assigned the first time a submittal hits the DRR
-    # ("Drafting Release Review") type. Assigned sequentially per DRR submittal, wrapping
-    # 999 -> 100. rel_assigned_at records when the number was handed out so the next
-    # assignment can be derived from the most recently assigned value (handles wraparound).
+    # Release identifier (101-998) shown in the DWL Rel column. Suggested as the
+    # next highest available value (max-in-use + 1) so assignment is semi-
+    # chronological; freed/low numbers are recycled only after REL_MAX is occupied
+    # and the sequence rolls over. rel_assigned_at records when it was handed out.
     rel = db.Column(db.Integer, nullable=True)
     rel_assigned_at = db.Column(db.DateTime, nullable=True)
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
