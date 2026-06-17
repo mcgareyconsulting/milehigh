@@ -53,6 +53,18 @@ def is_email(value):
     email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
     return bool(re.match(email_pattern, value.strip()))
 
+def strip_company_suffix(name):
+    """Strip a trailing "(Company, Inc.)" suffix Procore appends to some person names.
+
+    On submittal creation Procore returns ball-in-court names as
+    "David Servold (Mile High Metal Works, Inc.)" while later updates return the
+    bare "David Servold". Normalize both to the bare name so DWL doesn't show the
+    company on freshly added projects.
+    """
+    if not name or not isinstance(name, str):
+        return name
+    return re.sub(r'\s*\([^()]*\)\s*$', '', name).strip()
+
 def parse_ball_in_court_from_submittal(submittal_data):
     """
     Parse the users assigned to ball_in_court and approvers from submittal webhook data.
@@ -87,9 +99,9 @@ def parse_ball_in_court_from_submittal(submittal_data):
             if isinstance(entry, dict):
                 user = entry.get("user") or entry
                 if user and isinstance(user, dict):
-                    name = user.get("name")
+                    name = strip_company_suffix(user.get("name"))
                     login = user.get("login")
-                    
+
                     # Prefer name over login, but skip if either is an email
                     if name and not is_email(name):
                         ball_in_court_users.append(name)
@@ -129,9 +141,9 @@ def parse_ball_in_court_from_submittal(submittal_data):
             if is_pending:
                 user = approver.get("user")
                 if user and isinstance(user, dict):
-                    name = user.get("name")
+                    name = strip_company_suffix(user.get("name"))
                     login = user.get("login")
-                    
+
                     # Prefer name over login, but skip if either is an email
                     if name and not is_email(name) and name not in ball_in_court_users:
                         ball_in_court_users.append(name)
