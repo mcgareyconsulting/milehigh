@@ -18,6 +18,9 @@ import { formatDate, formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import MentionInput from './shared/MentionInput';
 import { SubmittalDetailsModal } from './SubmittalDetailsModal';
+import DateCellPill from './DateCellPill';
+import { StartInstallDwlModal } from './StartInstallDwlModal';
+import { DateFieldModal } from './DateFieldModal';
 
 export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStartInstallChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
@@ -25,15 +28,11 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const [editingNotes, setEditingNotes] = useState(false);
     const [notesValue, setNotesValue] = useState('');
     const [pendingNotes, setPendingNotes] = useState(null);
-    const [editingDueDate, setEditingDueDate] = useState(false);
-    const [dueDateValue, setDueDateValue] = useState('');
-    const [editingStartInstall, setEditingStartInstall] = useState(false);
-    const [startInstallValue, setStartInstallValue] = useState('');
+    const [dueDateModalOpen, setDueDateModalOpen] = useState(false);
+    const [startInstallModalOpen, setStartInstallModalOpen] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
-    const dueDateInputRef = useRef(null);
-    const startInstallInputRef = useRef(null);
     // On the Draft tab the row's accent (bump button + links) shifts blue → green to match the toolbar.
     const isDraftTab = selectedTab === 'draft';
     const linkAccent = isDraftTab
@@ -131,20 +130,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         }
     }, [editingNotes]);
 
-    useEffect(() => {
-        if (editingDueDate && dueDateInputRef.current) {
-            dueDateInputRef.current.focus();
-            dueDateInputRef.current.select();
-        }
-    }, [editingDueDate]);
-
-    useEffect(() => {
-        if (editingStartInstall && startInstallInputRef.current) {
-            startInstallInputRef.current.focus();
-            startInstallInputRef.current.select();
-        }
-    }, [editingStartInstall]);
-
     // Normalize a stored date value (YYYY-MM-DD, ISO, or Date) to the YYYY-MM-DD a
     // <input type="date"> expects. UTC accessors avoid a timezone day-shift.
     const toInputDate = (currentValue) => {
@@ -168,110 +153,45 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
         return '';
     };
 
-    const handleStartInstallFocus = () => {
-        if (!canEditDrafterFields) return;
-        setStartInstallValue(toInputDate(row['START INSTALL'] ?? row.start_install ?? ''));
-        setEditingStartInstall(true);
+    // Timing color shared by the DUE DATE and START INSTALL pills, matching the Job Log
+    // Start Install logic: upcoming = green, past/today = yellow. Empty handled by callers.
+    const timingTone = (raw) => {
+        const ymd = toInputDate(raw);
+        if (!ymd) return 'neutral';
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const d = new Date(`${ymd}T00:00:00`);
+        return (!isNaN(d.getTime()) && d > today) ? 'green' : 'yellow';
     };
 
-    const handleStartInstallBlur = () => {
-        setEditingStartInstall(false);
+    // Start Install is edited through a modal (pick date → proposed due date → confirm sets both).
+    const handleStartInstallConfirm = (startInstall, dueDate) => {
+        setStartInstallModalOpen(false);
         if (submittalId && onStartInstallChange) {
-            const valueToSend = startInstallValue.trim() === '' ? null : startInstallValue;
-            onStartInstallChange(submittalId, valueToSend);
+            onStartInstallChange(submittalId, startInstall, dueDate);
         }
     };
 
-    const handleStartInstallKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.target.blur();
-        } else if (e.key === 'Escape') {
-            setStartInstallValue(toInputDate(row['START INSTALL'] ?? row.start_install ?? ''));
-            setEditingStartInstall(false);
+    const handleStartInstallClear = () => {
+        setStartInstallModalOpen(false);
+        // Clearing the start install also wipes the due date (the derived DDD) — server-side.
+        if (submittalId && onStartInstallChange) {
+            onStartInstallChange(submittalId, null, null);
         }
     };
 
-    const handleDueDateFocus = () => {
-        // Only allow editing if user is admin or drafter
-        if (!canEditDrafterFields) {
-            return;
-        }
-        const currentValue = row['DUE DATE'] ?? row.due_date ?? '';
-        // Format date for input (YYYY-MM-DD)
-        let formattedDate = '';
-        if (currentValue) {
-            // If it's already in YYYY-MM-DD format, use it directly
-            if (typeof currentValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
-                formattedDate = currentValue;
-            } else {
-                // Try to extract YYYY-MM-DD from ISO string or Date object
-                try {
-                    const dateStr = typeof currentValue === 'string' ? currentValue.split('T')[0] : currentValue;
-                    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-                        formattedDate = dateStr;
-                    } else {
-                        // Fallback: parse as Date and format
-                        const date = new Date(currentValue);
-                        if (!isNaN(date.getTime())) {
-                            // Use UTC methods to avoid timezone shift
-                            const year = date.getUTCFullYear();
-                            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                            const day = String(date.getUTCDate()).padStart(2, '0');
-                            formattedDate = `${year}-${month}-${day}`;
-                        }
-                    }
-                } catch (e) {
-                    // Invalid date, leave empty
-                }
-            }
-        }
-        setDueDateValue(formattedDate);
-        setEditingDueDate(true);
-    };
-
-    const handleDueDateBlur = () => {
-        setEditingDueDate(false);
+    // Due date is edited through a modal (same interaction as Start Install, no coupled logic).
+    const handleDueDateConfirm = (dueDate) => {
+        setDueDateModalOpen(false);
         if (submittalId && onDueDateChange) {
-            // Send empty string if cleared, otherwise send the date value
-            const valueToSend = dueDateValue.trim() === '' ? null : dueDateValue;
-            onDueDateChange(submittalId, valueToSend);
+            onDueDateChange(submittalId, dueDate);
         }
     };
 
-    const handleDueDateKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.target.blur();
-        } else if (e.key === 'Escape') {
-            const currentValue = row['DUE DATE'] ?? row.due_date ?? '';
-            let formattedDate = '';
-            if (currentValue) {
-                // If it's already in YYYY-MM-DD format, use it directly
-                if (typeof currentValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
-                    formattedDate = currentValue;
-                } else {
-                    // Try to extract YYYY-MM-DD from ISO string
-                    try {
-                        const dateStr = typeof currentValue === 'string' ? currentValue.split('T')[0] : currentValue;
-                        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-                            formattedDate = dateStr;
-                        } else {
-                            // Fallback: parse as Date and format
-                            const date = new Date(currentValue);
-                            if (!isNaN(date.getTime())) {
-                                // Use UTC methods to avoid timezone shift
-                                const year = date.getUTCFullYear();
-                                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                                const day = String(date.getUTCDate()).padStart(2, '0');
-                                formattedDate = `${year}-${month}-${day}`;
-                            }
-                        }
-                    } catch (e) {
-                        // Invalid date, leave empty
-                    }
-                }
-            }
-            setDueDateValue(formattedDate);
-            setEditingDueDate(false);
+    const handleDueDateClear = () => {
+        setDueDateModalOpen(false);
+        if (submittalId && onDueDateChange) {
+            onDueDateChange(submittalId, null);
         }
     };
 
@@ -350,7 +270,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isBallInCourt = column === 'BIC';
                     const isDueDate = column === 'DUE DATE';
                     const isStartInstall = column === 'START INSTALL';
-                    const isDDD = column === 'DDD';
 
                     // Skip rendering the Submittals Id column
                     if (isSubmittalId) {
@@ -398,9 +317,6 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     } else if (isStartInstall) {
                         customStyle = { maxWidth: '120px' };
                         columnClass = 'dwl-col-start-install';
-                    } else if (isDDD) {
-                        customStyle = { maxWidth: '120px' };
-                        columnClass = 'dwl-col-ddd';
                     }
 
                     // Apply Type truncation mapping before formatting
@@ -635,55 +551,42 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    if (isDueDate && editingDueDate) {
-                        return (
-                            <td
-                                key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-due-date`}
-                                style={{ maxWidth: '120px' }}
-                                draggable={false}
-                                onMouseDown={handleProtectedCellMouseDown}
-                            >
-                                <input
-                                    ref={dueDateInputRef}
-                                    type="date"
-                                    value={dueDateValue}
-                                    onChange={(e) => setDueDateValue(e.target.value)}
-                                    onBlur={handleDueDateBlur}
-                                    onKeyDown={handleDueDateKeyDown}
-                                    className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 font-medium text-gray-900 dark:text-slate-100"
-                                />
-                            </td>
-                        );
-                    }
-
                     if (isDueDate) {
-                        const dueDateValue = row['DUE DATE'] ?? row.due_date ?? '';
-                        const hasDueDate = dueDateValue && dueDateValue !== '';
-                        // Use formatDateShort which now handles date-only strings without timezone conversion
-                        const formattedDate = hasDueDate ? formatDateShort(dueDateValue) : '';
-
+                        const ddVal = row['DUE DATE'] ?? row.due_date ?? '';
+                        const hasDueDate = ddVal && ddVal !== '';
+                        // formatDateShort handles date-only strings without timezone conversion.
+                        const formattedDate = hasDueDate ? formatDateShort(ddVal) : '';
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-due-date`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
-                                onClick={canEditDrafterFields ? handleDueDateFocus : undefined}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title={canEditDrafterFields ? "Click to edit due date" : "Read-only"}
                             >
-                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${
-                                    canEditDrafterFields
-                                        ? hasDueDate
-                                            ? 'border-red-300 dark:border-red-700 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/50 hover:border-red-400 text-red-900 dark:text-red-200 font-medium cursor-text'
-                                            : 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text'
-                                        : hasDueDate
-                                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 font-medium cursor-default'
-                                            : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default'
-                                }`}>
-                                    {hasDueDate ? formattedDate : <span className="italic">{canEditDrafterFields ? "Click to add..." : "—"}</span>}
-                                </div>
+                                {(canEditDrafterFields || hasDueDate) ? (
+                                    <DateCellPill
+                                        value={formattedDate}
+                                        tone={hasDueDate ? timingTone(ddVal) : 'neutral'}
+                                        interactive={canEditDrafterFields}
+                                        title={canEditDrafterFields ? 'Set due date' : undefined}
+                                        onClick={canEditDrafterFields ? () => setDueDateModalOpen(true) : undefined}
+                                    />
+                                ) : (
+                                    <span className="text-xs text-gray-300 dark:text-slate-600">—</span>
+                                )}
+                                {canEditDrafterFields && (
+                                    <DateFieldModal
+                                        isOpen={dueDateModalOpen}
+                                        onClose={() => setDueDateModalOpen(false)}
+                                        title="Set Due Date"
+                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''}${(row['Rel'] ?? row.rel) ? ` · Rel ${row['Rel'] ?? row.rel}` : ''}`}
+                                        label="Due date"
+                                        currentDate={ddVal}
+                                        onConfirm={handleDueDateConfirm}
+                                        onClear={handleDueDateClear}
+                                    />
+                                )}
                             </td>
                         );
                     }
@@ -698,86 +601,40 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         const siRaw = row['START INSTALL'] ?? row.start_install ?? '';
                         const hasStartInstall = siRaw && siRaw !== '';
 
-                        if (canEditStartInstall && editingStartInstall) {
-                            return (
-                                <td
-                                    key={`${row.id}-${column}`}
-                                    className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-start-install`}
-                                    style={{ maxWidth: '120px' }}
-                                    draggable={false}
-                                    onMouseDown={handleProtectedCellMouseDown}
-                                >
-                                    <input
-                                        ref={startInstallInputRef}
-                                        type="date"
-                                        value={startInstallValue}
-                                        onChange={(e) => setStartInstallValue(e.target.value)}
-                                        onBlur={handleStartInstallBlur}
-                                        onKeyDown={handleStartInstallKeyDown}
-                                        className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 font-medium text-gray-900 dark:text-slate-100"
-                                    />
-                                </td>
-                            );
-                        }
-
-                        const formattedSi = hasStartInstall ? formatDateShort(siRaw) : '';
-                        // Color like the job log: future = green, past/today = yellow.
-                        let siColorClass;
-                        if (!canEditStartInstall) {
-                            siColorClass = hasStartInstall
-                                ? 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/50 text-gray-600 dark:text-slate-300 font-medium cursor-default'
-                                : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default';
-                        } else if (!hasStartInstall) {
-                            siColorClass = 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text';
-                        } else {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            const siDate = new Date(`${toInputDate(siRaw)}T00:00:00`);
-                            const isFuture = !isNaN(siDate.getTime()) && siDate > today;
-                            siColorClass = isFuture
-                                ? 'border-green-300 dark:border-green-700 bg-green-100 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-800/50 hover:border-green-400 text-green-900 dark:text-green-200 font-medium cursor-text'
-                                : 'border-yellow-300 dark:border-yellow-700 bg-yellow-100 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-800/50 hover:border-yellow-400 text-yellow-900 dark:text-yellow-200 font-medium cursor-text';
-                        }
-
-                        const siTitle = canEditStartInstall
-                            ? 'Click to set desired start install (transfers to the release when created)'
-                            : (isDraftingReleaseReview ? 'Assign a Rel before setting start install' : 'Start install applies to DRR submittals only');
-
+                        // Same pill as DUE DATE / the Job Log Start Install: green = upcoming,
+                        // yellow = past-due, neutral clickable pill when empty. Clicking opens the
+                        // modal (date → proposed due date → confirm). Non-DRR / no-Rel rows have
+                        // nothing to set, so they render a plain muted dash instead.
                         return (
                             <td
                                 key={`${row.id}-${column}`}
                                 className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-start-install`}
                                 style={{ maxWidth: '120px' }}
                                 draggable={false}
-                                onClick={canEditStartInstall ? handleStartInstallFocus : undefined}
                                 onMouseDown={handleProtectedCellMouseDown}
-                                title={siTitle}
                             >
-                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${siColorClass}`}>
-                                    {hasStartInstall
-                                        ? formattedSi
-                                        : <span className="italic">{canEditStartInstall ? 'Click to add...' : '—'}</span>}
-                                </div>
-                            </td>
-                        );
-                    }
-
-                    // DDD (Design Drawings Due): read-only, auto-derived 15 business days before start install.
-                    if (isDDD) {
-                        const dddRaw = row['DDD'] ?? row.design_drawings_due ?? '';
-                        const hasDdd = dddRaw && dddRaw !== '';
-                        return (
-                            <td
-                                key={`${row.id}-${column}`}
-                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-ddd`}
-                                style={{ maxWidth: '120px' }}
-                                draggable={false}
-                                onMouseDown={handleProtectedCellMouseDown}
-                                title="Design Drawings Due — 15 business days before start install (auto)"
-                            >
-                                <div className="px-0.5 py-0 text-xs rounded-sm border border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-600 dark:text-slate-300 min-h-[10px] text-center cursor-default">
-                                    {hasDdd ? formatDateShort(dddRaw) : <span className="text-gray-400 dark:text-slate-500">—</span>}
-                                </div>
+                                {(canEditStartInstall || hasStartInstall) ? (
+                                    <DateCellPill
+                                        value={hasStartInstall ? formatDateShort(siRaw) : ''}
+                                        tone={hasStartInstall ? timingTone(siRaw) : 'neutral'}
+                                        interactive={canEditStartInstall}
+                                        title={canEditStartInstall ? 'Set start install date' : undefined}
+                                        onClick={canEditStartInstall ? () => setStartInstallModalOpen(true) : undefined}
+                                    />
+                                ) : (
+                                    <span className="text-xs text-gray-300 dark:text-slate-600">—</span>
+                                )}
+                                {canEditStartInstall && (
+                                    <StartInstallDwlModal
+                                        isOpen={startInstallModalOpen}
+                                        onClose={() => setStartInstallModalOpen(false)}
+                                        currentStartInstall={siRaw}
+                                        currentDueDate={row['DUE DATE'] ?? row.due_date ?? ''}
+                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''} · Rel ${rowRel}`}
+                                        onConfirm={handleStartInstallConfirm}
+                                        onClear={handleStartInstallClear}
+                                    />
+                                )}
                             </td>
                         );
                     }

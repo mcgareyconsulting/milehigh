@@ -497,7 +497,6 @@ function DraftingWorkLoad() {
                                                     const isSubmittalManager = column === 'SUB MANAGER';
                                                     const isDueDate = column === 'DUE DATE';
                                                     const isStartInstall = column === 'START INSTALL';
-                                                    const isDDD = column === 'DDD';
 
                                                     // Percentage widths (must total 100%). PROCORE STATUS gets more space.
                                                     let headerStyle = {};
@@ -538,9 +537,6 @@ function DraftingWorkLoad() {
                                                     } else if (isStartInstall) {
                                                         headerStyle = { width: '6%' };
                                                         columnClass = 'dwl-col-start-install';
-                                                    } else if (isDDD) {
-                                                        headerStyle = { width: '5%' };
-                                                        columnClass = 'dwl-col-ddd';
                                                     } else if (isProjectName) {
                                                         headerStyle = { width: '12%' };
                                                         columnClass = 'dwl-col-name';

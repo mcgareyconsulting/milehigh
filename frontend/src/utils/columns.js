@@ -28,7 +28,6 @@ export const DESIRED_COLUMN_ORDER = [
     'SUB MANAGER',
     'DUE DATE',
     'START INSTALL',
-    'DDD',
     'NOTES'
 ];
 

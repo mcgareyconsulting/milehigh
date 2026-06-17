@@ -18,7 +18,7 @@ from app.procore.procore import DRR_TYPE
 from app.trello.utils import calculate_business_days_before
 
 
-def _make_submittal(sid, *, type_=DRR_TYPE, rel=None, project_number="100", status="Open"):
+def _make_submittal(sid, *, type_=DRR_TYPE, rel=None, project_number="100", status="Open", due_date=None):
     s = Submittals(
         submittal_id=str(sid),
         procore_project_id="1",
@@ -26,6 +26,7 @@ def _make_submittal(sid, *, type_=DRR_TYPE, rel=None, project_number="100", stat
         type=type_,
         status=status,
         rel=rel,
+        due_date=due_date,
     )
     db.session.add(s)
     db.session.commit()
@@ -35,7 +36,7 @@ def _make_submittal(sid, *, type_=DRR_TYPE, rel=None, project_number="100", stat
 # --- PUT /drafting-work-load/start-install -----------------------------------------
 
 class TestUpdateStartInstall:
-    def test_set_on_drr_with_rel_derives_ddd_and_creates_pending(self, app, client):
+    def test_set_overwrites_due_date_and_creates_pending(self, app, client):
         _make_submittal("S1", rel=201, project_number="100")
         si = date(2026, 9, 1)
 
@@ -46,13 +47,14 @@ class TestUpdateStartInstall:
 
         assert resp.status_code == 200
         data = json.loads(resp.data)
-        expected_ddd = calculate_business_days_before(si, 15)
+        # Due date is overwritten with the drawings-due date: 15 business days before.
+        expected_due = calculate_business_days_before(si, 15)
         assert data["start_install"] == si.isoformat()
-        assert data["design_drawings_due"] == expected_ddd.isoformat()
+        assert data["due_date"] == expected_due.isoformat()
 
         s = Submittals.query.filter_by(submittal_id="S1").first()
         assert s.start_install == si
-        assert s.design_drawings_due == expected_ddd
+        assert s.due_date == expected_due
 
         pending = PendingStartInstall.query.filter_by(rel=201).first()
         assert pending is not None
@@ -61,13 +63,45 @@ class TestUpdateStartInstall:
         assert pending.submittal_id == "S1"
         assert pending.consumed_at is None
 
-    def test_clear_removes_date_ddd_and_pending(self, app, client):
+    def test_explicit_due_date_overrides_computed_default(self, app, client):
+        # The modal sends a (possibly tweaked) due date; the backend uses it verbatim.
+        _make_submittal("S1c", rel=211)
+        si = date(2026, 9, 1)
+        tweaked = date(2026, 8, 14)  # not the 15-business-day default
+
+        resp = client.put(
+            "/brain/drafting-work-load/start-install",
+            json={"submittal_id": "S1c", "start_install": si.isoformat(), "due_date": tweaked.isoformat()},
+        )
+
+        assert resp.status_code == 200
+        assert json.loads(resp.data)["due_date"] == tweaked.isoformat()
+        s = Submittals.query.filter_by(submittal_id="S1c").first()
+        assert s.start_install == si
+        assert s.due_date == tweaked
+
+    def test_set_overwrites_existing_due_date(self, app, client):
+        # Even a manually-entered due date is overwritten when a start install is set.
+        _make_submittal("S1b", rel=210, due_date=date(2026, 8, 20))
+        si = date(2026, 9, 1)
+
+        client.put(
+            "/brain/drafting-work-load/start-install",
+            json={"submittal_id": "S1b", "start_install": si.isoformat()},
+        )
+
+        s = Submittals.query.filter_by(submittal_id="S1b").first()
+        assert s.due_date == calculate_business_days_before(si, 15)  # not 2026-08-20
+
+    def test_clear_removes_start_install_due_date_and_pending(self, app, client):
         _make_submittal("S2", rel=202)
         si = date(2026, 9, 1)
         client.put(
             "/brain/drafting-work-load/start-install",
             json={"submittal_id": "S2", "start_install": si.isoformat()},
         )
+        computed_due = calculate_business_days_before(si, 15)
+        assert Submittals.query.filter_by(submittal_id="S2").first().due_date == computed_due
         assert PendingStartInstall.query.filter_by(rel=202).first() is not None
 
         resp = client.put(
@@ -78,7 +112,7 @@ class TestUpdateStartInstall:
         assert resp.status_code == 200
         s = Submittals.query.filter_by(submittal_id="S2").first()
         assert s.start_install is None
-        assert s.design_drawings_due is None
+        assert s.due_date is None  # clearing the start install wipes the derived due date too
         assert PendingStartInstall.query.filter_by(rel=202).first() is None
 
     def test_reject_non_drr(self, app, client):

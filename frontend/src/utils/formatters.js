@@ -29,6 +29,37 @@ export function localTodayStr() {
 }
 
 /**
+ * Normalize a stored date value (YYYY-MM-DD string, ISO string, or Date) to the
+ * YYYY-MM-DD string an <input type="date"> expects. Returns '' for empty/invalid.
+ */
+export function toYmd(value) {
+    if (!value) return '';
+    if (typeof value === 'string') return value.split('T')[0];
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Return the date that is `n` business days (Mon–Fri) before `ymd`, as a YYYY-MM-DD
+ * string. Mirrors the backend app.trello.utils.calculate_business_days_before so the
+ * DWL's proposed Design Drawings Due date matches what the server would compute.
+ */
+export function subtractBusinessDays(ymd, n) {
+    if (!ymd || typeof ymd !== 'string') return '';
+    const [y, m, d] = ymd.split('-').map(Number);
+    if (!y || !m || !d) return '';
+    const date = new Date(y, m - 1, d); // local, no timezone shift
+    let counted = 0;
+    while (counted < n) {
+        date.setDate(date.getDate() - 1);
+        const dow = date.getDay(); // 0=Sun … 6=Sat
+        if (dow !== 0 && dow !== 6) counted += 1;
+    }
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Format a date value for display
  */
 export function formatDate(dateValue) {

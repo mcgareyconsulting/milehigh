@@ -190,19 +190,24 @@ class DraftingWorkLoadService:
         logger.info(f"Updated due date for submittal {submittal.submittal_id} to '{normalized_date}'")
         return True, None
 
-    # DDD (Design Drawings Due) lead time before the desired start install.
-    DDD_BUSINESS_DAYS = 15
+    # When a start install is set, the due date is overwritten to this many business days
+    # before it (the due date then doubles as the Design Drawings Due date).
+    DUE_DATE_LEAD_BUSINESS_DAYS = 15
 
     @staticmethod
-    def update_start_install(submittal, start_install: Optional[str]) -> Tuple[bool, Optional[str]]:
-        """Set/clear the DWL start_install on a submittal, derive DDD, and keep the
-        PendingStartInstall handoff row in sync.
+    def update_start_install(submittal, start_install: Optional[str], due_date: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+        """Set/clear the DWL start_install on a submittal, set the due date (the Design
+        Drawings Due date) when start_install is set, and keep the PendingStartInstall
+        handoff row in sync.
 
         The caller is responsible for the DRR + Rel gate and for committing the session.
 
         Args:
             submittal: The submittal object to update (must be a DRR with a Rel).
             start_install: New start install value (ISO date string or None to clear).
+            due_date: Drafter-chosen Design Drawings Due date (ISO string). When start_install
+                is set and this is omitted, it defaults to DUE_DATE_LEAD_BUSINESS_DAYS business
+                days before the start install. Ignored when clearing (which also wipes the due date).
 
         Returns:
             (success, error_message)
@@ -218,12 +223,21 @@ class DraftingWorkLoadService:
         if normalized_date:
             si_date = datetime.strptime(normalized_date, '%Y-%m-%d').date()
             submittal.start_install = si_date
-            submittal.design_drawings_due = calculate_business_days_before(
-                si_date, DraftingWorkLoadService.DDD_BUSINESS_DAYS
-            )
+            # Setting a start install sets the due date to the drawings-due date. The modal
+            # sends the (possibly tweaked) date; fall back to the computed default if omitted.
+            if due_date:
+                ok, normalized_due, due_error = DraftingWorkLoadEngine.validate_due_date(due_date)
+                if not ok:
+                    return False, due_error
+                submittal.due_date = datetime.strptime(normalized_due, '%Y-%m-%d').date()
+            else:
+                submittal.due_date = calculate_business_days_before(
+                    si_date, DraftingWorkLoadService.DUE_DATE_LEAD_BUSINESS_DAYS
+                )
         else:
+            # Clearing the start install also wipes the due date — it was the derived DDD.
             submittal.start_install = None
-            submittal.design_drawings_due = None
+            submittal.due_date = None
 
         submittal.last_updated = datetime.utcnow()
 

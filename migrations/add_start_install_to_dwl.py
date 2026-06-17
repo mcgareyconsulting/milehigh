@@ -1,14 +1,14 @@
 """
-Add DWL start-install tracking: `start_install` and `design_drawings_due` columns on
-the submittals table, plus the `pending_start_installs` handoff table.
+Add DWL start-install tracking: the `start_install` column on the submittals table, plus
+the `pending_start_installs` handoff table.
 
 A desired start-install date can be set on a DRR ("Drafting Release Review") submittal in
-the Drafting Work Load before any release exists. `design_drawings_due` (DDD) is derived as
-15 business days before that date. The `pending_start_installs` table queues the date keyed
-by Rel so the matching job-log release picks it up when it is created (the pasted Release #
-equals the Rel).
+the Drafting Work Load before any release exists. Setting it overwrites the submittal's
+due date with the drawings-due date (15 business days before) — handled in app code, no
+separate column. The `pending_start_installs` table queues the date keyed by Rel so the
+matching job-log release picks it up when it is created (the pasted Release # equals the Rel).
 
-This migration only adds the columns/table; nothing is backfilled.
+This migration only adds the column/table; nothing is backfilled.
 
 Usage:
     python migrations/add_start_install_to_dwl.py
@@ -182,11 +182,6 @@ def _migrate_postgres(engine) -> bool:
                 "ALTER TABLE submittals ADD COLUMN IF NOT EXISTS start_install DATE",
                 "submittals.start_install",
             )
-            _run_with_retry(
-                conn,
-                "ALTER TABLE submittals ADD COLUMN IF NOT EXISTS design_drawings_due DATE",
-                "submittals.design_drawings_due",
-            )
             _run_with_retry(conn, _PENDING_TABLE.format(pk="SERIAL PRIMARY KEY"), "pending_start_installs table")
             _run_with_retry(conn, _PENDING_INDEX, "pending_start_installs.rel unique index")
         except OperationalError as exc:
@@ -219,12 +214,6 @@ def _migrate_sqlite(engine) -> bool:
         else:
             print("submittals.start_install already exists, skipping")
 
-        if "design_drawings_due" not in existing:
-            conn.execute(text("ALTER TABLE submittals ADD COLUMN design_drawings_due DATE"))
-            print("✓ submittals.design_drawings_due")
-        else:
-            print("submittals.design_drawings_due already exists, skipping")
-
         conn.execute(text(_PENDING_TABLE.format(pk="INTEGER PRIMARY KEY AUTOINCREMENT")))
         conn.execute(text(_PENDING_INDEX))
         print("✓ pending_start_installs table + rel unique index")
@@ -252,7 +241,7 @@ def migrate(database_url: str = None) -> bool:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Add DWL start_install/DDD columns and the pending_start_installs table."
+        description="Add DWL start_install column and the pending_start_installs table."
     )
     parser.add_argument(
         "--database-url",

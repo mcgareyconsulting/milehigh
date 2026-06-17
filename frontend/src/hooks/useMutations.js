@@ -119,9 +119,9 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
-    const updateStartInstall = useCallback(async (submittalId, startInstall) => {
+    const updateStartInstall = useCallback(async (submittalId, startInstall, dueDate) => {
         await executeMutation(
-            () => draftingWorkLoadApi.updateStartInstall(submittalId, startInstall),
+            () => draftingWorkLoadApi.updateStartInstall(submittalId, startInstall, dueDate),
             `Failed to update start install for submittal ${submittalId}`
         );
     }, [executeMutation]);

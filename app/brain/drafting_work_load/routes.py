@@ -600,6 +600,9 @@ def update_submittal_start_install():
 
     submittal_id = str(g.json_data['submittal_id'])
     start_install = g.json_data.get('start_install') or None
+    # Optional drafter-tweaked Design Drawings Due date from the modal; the service falls
+    # back to the computed default (15 business days before) when it is omitted.
+    due_date = g.json_data.get('due_date') or None
 
     submittal, err = get_or_404(Submittals, "Submittal not found", submittal_id=submittal_id)
     if err:
@@ -613,20 +616,25 @@ def update_submittal_start_install():
         }), 400
 
     old_start_install = submittal.start_install.isoformat() if submittal.start_install else None
-    success, error_msg = DraftingWorkLoadService.update_start_install(submittal, start_install)
+    old_due_date = submittal.due_date.isoformat() if submittal.due_date else None
+    success, error_msg = DraftingWorkLoadService.update_start_install(submittal, start_install, due_date)
     if not success:
         return jsonify({"error": error_msg}), 400
 
     new_start_install = submittal.start_install.isoformat() if submittal.start_install else None
-    new_ddd = submittal.design_drawings_due.isoformat() if submittal.design_drawings_due else None
+    new_due_date = submittal.due_date.isoformat() if submittal.due_date else None
 
     db.session.commit()
 
     user = get_current_user()
     try:
+        # Setting a start install overwrites the due date with the drawings-due date, so
+        # record that in the same audit event when it actually changed.
+        payload = {"start_install": {"old": old_start_install, "new": new_start_install}}
+        if new_due_date != old_due_date:
+            payload["due_date"] = {"old": old_due_date, "new": new_due_date}
         create_submittal_event(
-            submittal_id, "updated",
-            {"start_install": {"old": old_start_install, "new": new_start_install}},
+            submittal_id, "updated", payload,
             webhook_payload=None, source="Brain",
             internal_user_id=user.id if user else None,
         )
@@ -637,7 +645,7 @@ def update_submittal_start_install():
         "success": True,
         "submittal_id": submittal_id,
         "start_install": new_start_install,
-        "design_drawings_due": new_ddd,
+        "due_date": new_due_date,
     }), 200
 
 

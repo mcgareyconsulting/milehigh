@@ -111,10 +111,9 @@ class Submittals(db.Model):
     # Desired install date known ahead of drawings, set on the DWL. Only ever set on
     # DRR submittals that already have a Rel assigned. Hard date only (no ASAP/formula);
     # transfers to the matching Releases row at release creation via PendingStartInstall.
+    # Setting it also overwrites due_date with the drawings-due date (15 business days
+    # before), so the due date doubles as the Design Drawings Due date.
     start_install = db.Column(db.Date, nullable=True)
-    # Design Drawings Due: auto-derived as 15 business days before start_install
-    # (see app.trello.utils.calculate_business_days_before). Read-only in the UI.
-    design_drawings_due = db.Column(db.Date, nullable=True)
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -180,7 +179,6 @@ class Submittals(db.Model):
             "rel": self.rel,
             "due_date": _dt(self.due_date),
             "start_install": _dt(self.start_install),
-            "design_drawings_due": _dt(self.design_drawings_due),
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
             "created_at": _dt(self.created_at),

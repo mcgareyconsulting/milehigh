@@ -45,7 +45,6 @@ export default function SubmittalRow({ submittal, isHighlighted = false, onOpenD
     const procoreStatus = fmt(submittal['PROCORE STATUS']);
     const dueDate = formatDate(submittal['DUE DATE']);
     const startInstall = formatDate(submittal['START INSTALL']);
-    const ddd = formatDate(submittal['DDD']);
     const notes = (submittal['NOTES'] || '').toString().trim();
 
     const containerCls = `border-b border-gray-200 dark:border-slate-700 ${
@@ -99,7 +98,6 @@ export default function SubmittalRow({ submittal, isHighlighted = false, onOpenD
                         <FieldPair label="Proj #" value={projNum} />
                         <FieldPair label="BIC" value={bic} />
                         {startInstall ? <FieldPair label="Start Install" value={startInstall} /> : null}
-                        {ddd ? <FieldPair label="DDD" value={ddd} /> : null}
                     </div>
 
                     {notes && (
