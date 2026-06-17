@@ -82,6 +82,42 @@ class TestParseBallInCourtFromSubmittal:
         from app.procore.helpers import parse_ball_in_court_from_submittal
         assert parse_ball_in_court_from_submittal("not a dict") is None
 
+    def test_strips_company_suffix_on_create(self):
+        # On submittal creation Procore returns a flat entry with the company
+        # appended to the name; it must be stripped to match the update path.
+        from app.procore.helpers import parse_ball_in_court_from_submittal
+        data = {"ball_in_court": [{"name": "David Servold (Mile High Metal Works, Inc.)"}]}
+        result = parse_ball_in_court_from_submittal(data)
+        assert result["ball_in_court"] == "David Servold"
+
+    def test_strips_company_suffix_from_approvers(self):
+        from app.procore.helpers import parse_ball_in_court_from_submittal
+        data = {
+            "approvers": [
+                {
+                    "response_required": True,
+                    "distributed": False,
+                    "user": {"name": "David Servold (Mile High Metal Works, Inc.)"},
+                }
+            ]
+        }
+        result = parse_ball_in_court_from_submittal(data)
+        assert result["ball_in_court"] == "David Servold"
+
+
+class TestStripCompanySuffix:
+    def test_strips_trailing_parenthetical(self):
+        from app.procore.helpers import strip_company_suffix
+        assert strip_company_suffix("David Servold (Mile High Metal Works, Inc.)") == "David Servold"
+
+    def test_leaves_bare_name_unchanged(self):
+        from app.procore.helpers import strip_company_suffix
+        assert strip_company_suffix("David Servold") == "David Servold"
+
+    def test_handles_none(self):
+        from app.procore.helpers import strip_company_suffix
+        assert strip_company_suffix(None) is None
+
 
 class TestExtractProcoreUserIdFromWebhook:
     def test_user_id_key(self):
