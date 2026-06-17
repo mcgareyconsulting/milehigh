@@ -21,6 +21,7 @@ import {
     reviewChecklistItem, fetchAssignableUsers, scanDue, sendBot, createManualMeeting,
     updateMeeting, generateLearnings,
 } from '../services/meetingsApi';
+import { searchByJob } from '../services/jobSearchApi';
 
 const MEETING_TYPES = [
     { value: 'internal_draft', label: 'Internal — Draft' },
@@ -78,6 +79,7 @@ const draftFromItem = (it) => ({
     gc_facing: !!it.gc_facing,
     owner_user_id: String(it.owner_user_id ?? it.proposed_owner_user_id ?? ''),
     due_date: it.due_date ?? it.proposed_due_date ?? '',
+    release_id: it.release_id != null ? String(it.release_id) : '',
 });
 
 export default function Meetings() {
@@ -290,6 +292,7 @@ export default function Meetings() {
             gc_facing: d.gc_facing,
             owner_user_id: d.owner_user_id ? Number(d.owner_user_id) : null,
             due_date: d.due_date || null,
+            release_id: d.release_id ? Number(d.release_id) : null,
         };
         setBusyItem(itemId); setError(null);
         try {
@@ -711,6 +714,66 @@ function ContextLearningPanel({ meeting, onSaveAgenda, onGenerateLearnings, lear
     );
 }
 
+// Anchor a to-do to a job-release by hand: type a 1–3 digit job prefix, pick from the
+// matches. Sets release_id on the draft (committed on Yes). Reuses /brain/job-search.
+function ReleasePicker({ value, matchedLabel, onPick }) {
+    const [open, setOpen] = useState(false);
+    const [q, setQ] = useState('');
+    const [results, setResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+
+    const run = async (prefix) => {
+        setQ(prefix);
+        if (!/^\d{1,3}$/.test(prefix.trim())) { setResults([]); return; }
+        setSearching(true);
+        try { setResults((await searchByJob(prefix.trim())).releases); }
+        catch { setResults([]); }
+        finally { setSearching(false); }
+    };
+
+    const label = value
+        ? (results.find(r => String(r.id) === String(value))?.job_release || matchedLabel || `release #${value}`)
+        : (matchedLabel || 'link release');
+
+    return (
+        <div className="relative">
+            <button type="button" onClick={() => setOpen(o => !o)}
+                className={`px-2 py-1 text-xs rounded-md border ${value
+                    ? 'border-indigo-300 text-indigo-700 dark:border-indigo-700 dark:text-indigo-300'
+                    : 'border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300'} bg-white dark:bg-slate-900`}>
+                🔗 {label}
+            </button>
+            {open && (
+                <div className="absolute z-10 mt-1 w-64 p-2 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg">
+                    <input autoFocus type="text" value={q} placeholder="job # (e.g. 480)"
+                        onChange={e => run(e.target.value)}
+                        className="w-full px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 mb-1" />
+                    <div className="max-h-40 overflow-y-auto">
+                        {searching && <p className="text-[11px] text-gray-400 px-1 py-0.5">Searching…</p>}
+                        {!searching && results.map(r => (
+                            <button key={r.id} type="button"
+                                onClick={() => { onPick(String(r.id)); setOpen(false); }}
+                                className="block w-full text-left px-1.5 py-1 text-[11px] rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200">
+                                <span className="font-medium">{r.job_release}</span> {r.job_name}
+                                <span className="text-gray-400"> · {r.stage}</span>
+                            </button>
+                        ))}
+                        {!searching && q && results.length === 0 && (
+                            <p className="text-[11px] text-gray-400 px-1 py-0.5">No matches</p>
+                        )}
+                    </div>
+                    {value && (
+                        <button type="button" onClick={() => { onPick(''); setOpen(false); }}
+                            className="mt-1 text-[11px] text-rose-600 dark:text-rose-400 hover:underline">
+                            Clear link
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, onDone }) {
     const isProposed = item.status === 'proposed';
     const badge = ITEM_TYPE_BADGE[item.item_type] || ITEM_TYPE_BADGE.action;
@@ -735,8 +798,21 @@ function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, o
                 )}
                 {item.owner_inferred && <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">owner inferred</span>}
                 {item.name_corrected && <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300">name cleaned</span>}
+                {item.brain_update_pending && (
+                    <span title="The room agreed to this change but the Brain still shows the old value — update it."
+                        className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">
+                        ⚠ Brain not updated
+                    </span>
+                )}
                 <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-medium rounded capitalize ${STATUS_PILL[item.status]}`}>{item.status}</span>
             </div>
+            {item.expected_update && (
+                <p className="mb-1.5 text-[11px] text-gray-500 dark:text-slate-400">
+                    Agreed update: <span className="font-medium">{item.expected_update.field}</span>
+                    {' → '}<span className="font-medium">{String(item.expected_update.new_value)}</span>
+                    {' '}({item.expected_update.target})
+                </p>
+            )}
 
             {isProposed ? (
                 <>
@@ -759,6 +835,11 @@ function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, o
                         <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-300">
                             <input type="checkbox" checked={draft.gc_facing} onChange={e => onDraft({ gc_facing: e.target.checked })} /> GC
                         </label>
+                        <ReleasePicker
+                            value={draft.release_id}
+                            matchedLabel={item.matched_job_name || (item.matched_job_number ? `job ${item.matched_job_number}` : '')}
+                            onPick={id => onDraft({ release_id: id })}
+                        />
                         <div className="ml-auto flex gap-1.5">
                             <button onClick={onReject} disabled={busy}
                                 className="px-2.5 py-1 text-xs rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50">No</button>

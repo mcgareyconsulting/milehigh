@@ -124,7 +124,12 @@ def _d(value):
 
 
 def _release_state_line(r):
-    return (f"- {r.job}-{r.release} {r.job_name or ''} — stage={r.stage or '—'}, "
+    # description is the scope phrase the shop actually says aloud ("the canopy steel",
+    # "east stair") — job_name is the GC-prefixed formal title nobody speaks. Showing
+    # both lets the model match a spoken item to the right release.
+    desc = (r.description or "").strip()
+    desc = f' "{desc}"' if desc else ""
+    return (f"- {r.job}-{r.release} {r.job_name or ''}{desc} — stage={r.stage or '—'}, "
             f"PM={r.pm or '—'}, start_install={_d(r.start_install)}, "
             f"comp_eta={_d(r.comp_eta)}")
 
@@ -174,10 +179,14 @@ def assemble_extraction_context(meeting):
     # extractor's context cap so a long agenda truncates ITSELF — the extractor's own
     # tail-truncation would silently evict the state and guidance sections instead.
     agenda_header = "=== PRE-MEETING CONTEXT (agenda / notes) ===\n"
+    state_header = (
+        "=== BRAIN SNAPSHOT (current job-log / DWL state for the entities likely "
+        "discussed — these are FIELDS, the system of record as it stands now) ===\n"
+    )
     reserved = sum(
         len(header) + len(body) + 2  # +2 for the '\n\n' section separator
         for header, body in (
-            ("=== JOB STATE (entities likely discussed) ===\n", state),
+            (state_header, state),
             ("=== LEARNED GUIDANCE (from past meetings) ===\n", guidance),
         ) if body
     )
@@ -193,7 +202,7 @@ def assemble_extraction_context(meeting):
     if agenda:
         sections.append(agenda_header + agenda)
     if state:
-        sections.append("=== JOB STATE (entities likely discussed) ===\n" + state)
+        sections.append(state_header + state)
     if guidance:
         sections.append("=== LEARNED GUIDANCE (from past meetings) ===\n" + guidance)
 

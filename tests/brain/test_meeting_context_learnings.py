@@ -63,7 +63,7 @@ def test_assemble_extraction_context_has_agenda_state_and_guidance(app):
 
     out = context.assemble_extraction_context(m)
     assert "PRE-MEETING CONTEXT" in out["combined"]
-    assert "JOB STATE" in out["combined"]
+    assert "BRAIN SNAPSHOT" in out["combined"]
     assert "LEARNED GUIDANCE" in out["combined"]
     assert "stage=Fabrication" in out["state"]   # light state line, no event history
 
@@ -83,7 +83,7 @@ def test_long_agenda_truncates_itself_not_state_or_guidance(app):
     out = context.assemble_extraction_context(m)
     assert len(out["combined"]) <= context.MAX_CONTEXT_CHARS
     assert "[... agenda truncated ...]" in out["agenda"]
-    assert "JOB STATE" in out["combined"]          # survived the long agenda
+    assert "BRAIN SNAPSHOT" in out["combined"]     # survived the long agenda
     assert "LEARNED GUIDANCE" in out["combined"]   # survived the long agenda
     assert "stage=Fabrication" in out["combined"]
 
@@ -141,7 +141,7 @@ def test_extract_into_meeting_grounds_todos_and_builds_summary(app):
 
     # To-do extraction got the agenda + light job state (NOT event history).
     assert "PRE-MEETING CONTEXT" in (seen["context"] or "")
-    assert "JOB STATE" in seen["context"]
+    assert "BRAIN SNAPSHOT" in seen["context"]
     assert "Ready to Ship" not in seen["context"]   # event activity is NOT in the to-do context
     # The during-meeting events were stored and fed the summary.
     assert m.context_snapshot and "Ready to Ship" in m.context_snapshot

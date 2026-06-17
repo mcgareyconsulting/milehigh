@@ -77,28 +77,39 @@ def _context_guidance(has_context: bool) -> str:
         return ""
     return (
         "\nThe user message has a CONTEXT block before the transcript, in delimited "
-        "sections (PRE-MEETING CONTEXT, JOB STATE, LEARNED GUIDANCE). "
+        "sections (PRE-MEETING CONTEXT, BRAIN SNAPSHOT, LEARNED GUIDANCE). "
         "Use it as grounding, not as a source of new to-dos:\n"
         "- PRE-MEETING CONTEXT is the agenda/notes — use it to know what the meeting is about "
         "and to disambiguate vague references; explicit agenda asks may themselves be to-dos.\n"
-        "- Ground vague references against the entities in JOB STATE (resolve 'Sand Creek' to "
-        "the job shown, and use that job's CANONICAL name and release token in "
-        "titles/release_ref).\n"
+        "- BRAIN SNAPSHOT is the current job-log / DWL state, read straight from the system of "
+        "record. Each line shows a release or submittal with its FIELDS: stage, start_install, "
+        "comp_eta, status, ball_in_court, due_date. These are field VALUES describing how the "
+        "record stands right now — they are NOT to-dos. 'start_install=2026-07-01' means the "
+        "install date field already holds that date; it does NOT mean someone must set a start "
+        "install. Never turn a snapshot field into an action by itself.\n"
+        "- Ground vague references against the entities in the BRAIN SNAPSHOT — resolve "
+        "'Sand Creek' or a spoken scope phrase to the job shown (match on its description/scope, "
+        "not just the formal name), and use that job's CANONICAL name and release token in "
+        "titles/release_ref.\n"
         "- Follow any LEARNED GUIDANCE about which kinds of items tend to be noise.\n"
         "- Structured agendas often pose explicit questions (e.g. 'Discussion Points', "
         "'shipped?', 'installed?') and carry urgency/status flags (e.g. OVERDUE, DUE TODAY, "
         "NEED CO — treat any similar marker the same way). Resolve them against the "
         "transcript:\n"
-        "  - If the discussion reveals the system of record is stale (e.g. the agenda shows a "
-        "release in Ship Planning but the room confirms it shipped), emit an action to make "
-        "that exact update, citing the release token.\n"
+        "  - When the room AGREES a release/submittal field should change (e.g. 'mark 480-146 "
+        "shipped', 'push install to next Friday', 'BIC is the GC now', 'comp ETA is the 20th') "
+        "AND the BRAIN SNAPSHOT still shows the old value, that is a Brain update that must "
+        "land. Emit the action AND populate `brain_update` with the target/field/new_value so "
+        "we can verify it actually went through on the Brain by the end of the meeting. Use the "
+        "exact snapshot field names (release: stage, start_install, comp_eta, job_comp, "
+        "invoiced, num_guys, installer; submittal: status, ball_in_court, due_date).\n"
         "  - If the room commits to an answer the agenda was waiting on (a date, a CO, a "
         "go/no-go), capture the commitment as an action with its owner and date.\n"
         "  - If a flagged agenda question is never addressed in the transcript, emit a "
         "follow-up action noting it was not covered in the meeting — use moderate "
         "confidence (0.4-0.6) since the room never spoke to it.\n"
         "- Only the TRANSCRIPT (and explicit agenda asks) are the source of to-dos; never invent "
-        "items from the JOB STATE lines alone.\n"
+        "items from the BRAIN SNAPSHOT lines alone.\n"
     )
 
 
@@ -144,13 +155,19 @@ def _system_prompt(today: date, people=None, has_context: bool = False) -> str:
         "update a GC), decision (a choice that was made), risk (a problem or blocker), fyi "
         "(notable, no action).\n"
         "- confidence = 0..1 on how sure you are it is a real, actionable item.\n"
+        "- brain_update = set ONLY when the room agreed a specific release/submittal field "
+        "should change to a specific value (so we can later check the Brain actually got "
+        "updated): {\"target\":\"release\"|\"submittal\",\"field\":<exact snapshot field "
+        "name>,\"new_value\":<the agreed value, as a date YYYY-MM-DD or short string>}. Leave "
+        "it null for anything that isn't a concrete field change to the system of record.\n"
         "- Skip greetings, filler, and chit-chat. If nothing is actionable, return an empty "
         "items array.\n"
         "Return STRICT JSON only — no prose, no markdown. Schema: "
         '{"items":[{"title":str,"detail":str|null,'
         '"item_type":"action|needs_gc_update|decision|risk|fyi",'
         '"owner_name":str|null,"due_date":"YYYY-MM-DD"|null,"gc_facing":bool,'
-        '"release_ref":str|null,"submittal_ref":str|null,"confidence":number}]}'
+        '"release_ref":str|null,"submittal_ref":str|null,"confidence":number,'
+        '"brain_update":{"target":"release|submittal","field":str,"new_value":str}|null}]}'
     )
 
 

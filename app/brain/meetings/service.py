@@ -69,6 +69,18 @@ def _run_extraction_job(app, meeting_id, regenerate):
             db.session.remove()
 
 
+def _capture_pre_snapshot(meeting):
+    """Stamp the meeting's pre_snapshot (Brain state at meeting start) and commit. Best
+    effort — a snapshot failure must never block meeting creation."""
+    from app.brain.meetings import snapshot
+    try:
+        meeting.pre_snapshot = snapshot.capture_snapshot(meeting)
+        db.session.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("pre_snapshot_skipped", meeting_id=meeting.id, error=str(e))
+        db.session.rollback()
+
+
 def get_reviewer():
     """The user who reviews post-meeting checklists (MVP: Bill, by config)."""
     return User.query.filter_by(username=cfg.CHECKLIST_REVIEWER_USERNAME).first()
@@ -149,6 +161,7 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     raw_items = result["items"]
     usage = result["usage"]
 
+    from app.brain.meetings import snapshot
     created = 0
     for it in raw_items:
         itype = it.get("item_type") if it.get("item_type") in VALID_TYPES else "action"
@@ -166,6 +179,8 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
             confidence=None,
             release_id=rel_id,
             submittal_id=_resolve_submittal(it.get("submittal_ref")),
+            # A field change the room agreed to make to the Brain — reconciled below.
+            expected_update=snapshot.sanitize_expected_update(it.get("brain_update")),
         ))
         created += 1
         if rel_proj and not meeting.project_number:
@@ -173,6 +188,17 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
 
     meeting.extracted_at = datetime.utcnow()
     db.session.commit()
+
+    # Post-meeting Brain snapshot + reconciliation: did the field changes the room agreed
+    # to actually land? Items whose agreed update is still missing get brain_update_pending,
+    # surfacing them as recommended "you forgot to update the Brain" actions. Never fatal.
+    try:
+        meeting.post_snapshot = snapshot.capture_snapshot(meeting)
+        snapshot.reconcile(meeting)
+        db.session.commit()
+    except Exception as e:  # noqa: BLE001 — reconciliation is additive, never break extract
+        logger.warning("meeting_reconcile_skipped", meeting_id=meeting.id, error=str(e))
+        db.session.rollback()
 
     # Infer owners for the items no one was named on — match each to an active job and
     # lift the PM / submittal manager. Haiku usage folds into the meeting cost meter.
@@ -229,6 +255,7 @@ def create_meeting_with_extraction(*, title, meeting_type, transcript,
     )
     db.session.add(meeting)
     db.session.commit()  # persist before the (slow, external) extraction
+    _capture_pre_snapshot(meeting)
     extract_into_meeting(meeting)
     return meeting
 
@@ -249,6 +276,7 @@ def create_manual_meeting(*, title, meeting_type, transcript, agenda_text=None,
     )
     db.session.add(meeting)
     db.session.commit()
+    _capture_pre_snapshot(meeting)
     logger.info("manual_meeting_created", meeting_id=meeting.id,
                 chars=len(transcript or ""))
     return meeting
@@ -276,6 +304,8 @@ def create_recall_meeting(*, meeting_url, bot_id, title=None, meeting_type=None,
     )
     db.session.add(meeting)
     db.session.commit()
+    # Immediate-send: the bot is joining now, so this IS the meeting-start Brain state.
+    _capture_pre_snapshot(meeting)
     logger.info("recall_meeting_created", meeting_id=meeting.id, bot_id=bot_id)
     return meeting
 

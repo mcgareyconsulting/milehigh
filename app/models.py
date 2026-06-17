@@ -1040,6 +1040,14 @@ class Meeting(db.Model):
     # The generated meeting summary (events-during-runtime + transcript). The second of the
     # two outputs produced from a meeting, alongside the to-do checklist.
     summary = db.Column(db.Text, nullable=True)
+    # Job-log / DWL field snapshots of the entities discussed, captured at meeting START
+    # (pre_snapshot, stamped when the bot is dispatched / the meeting is created) and at
+    # meeting END (post_snapshot, stamped during extraction once the transcript is in).
+    # Comparing them surfaces "the room agreed to change X but the Brain still shows the
+    # old value" — see app/brain/meetings/snapshot.py. Shape:
+    # {"captured_at": iso, "releases": {"480-146": {field: value}}, "submittals": {...}}.
+    pre_snapshot = db.Column(db.JSON, nullable=True)
+    post_snapshot = db.Column(db.JSON, nullable=True)
     # Recall.ai notetaker bot dispatched for this meeting (source='recall'). bot_status
     # tracks the bot lifecycle, kept fresh by the recall-webhook receiver.
     meeting_url = db.Column(db.String(1000), nullable=True)
@@ -1103,6 +1111,8 @@ class Meeting(db.Model):
             d['agenda_text'] = self.agenda_text
             d['context_snapshot'] = self.context_snapshot
             d['summary'] = self.summary
+            d['pre_snapshot'] = self.pre_snapshot
+            d['post_snapshot'] = self.post_snapshot
             latest = self.learnings.order_by(MeetingLearning.id.desc()).first()
             d['learning'] = latest.to_dict() if latest else None
         else:
@@ -1142,6 +1152,15 @@ class ChecklistItem(db.Model):
     # Optional links to internal records (expands to the lake reference spine later)
     release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True)
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id'), nullable=True)
+
+    # A field change the meeting agreed to make to the Brain (job log / DWL), captured by
+    # the extractor: {"target": "release"|"submittal", "field": str, "new_value": str}.
+    # The reconciliation pass (snapshot.py) compares it to the post-meeting Brain state and
+    # sets brain_update_pending=True when the change never landed — i.e. "we said we'd
+    # update this but the Brain still shows the old value", a recommended action.
+    expected_update = db.Column(db.JSON, nullable=True)
+    brain_update_pending = db.Column(db.Boolean, nullable=False, default=False,
+                                     server_default='0')
 
     # Owner inference (when no owner was stated): which active job it matched + whether
     # the owner was inferred. `confidence` doubles as the match confidence (0..1).
@@ -1187,6 +1206,8 @@ class ChecklistItem(db.Model):
             'due_date': _dt(self.due_date),
             'release_id': self.release_id,
             'submittal_id': self.submittal_id,
+            'expected_update': self.expected_update,
+            'brain_update_pending': self.brain_update_pending,
             'status': self.status,
             'confidence': self.confidence,           # match confidence when owner_inferred
             'owner_inferred': self.owner_inferred,

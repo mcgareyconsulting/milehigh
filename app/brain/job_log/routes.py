@@ -704,6 +704,7 @@ def job_search():
 
         release_list = [
             {
+                'id': r.id,
                 'job_release': f"{r.job}-{r.release}",
                 'job': r.job,
                 'release': r.release,
