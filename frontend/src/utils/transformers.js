@@ -34,6 +34,8 @@ function transformSubmittal(submittal, index) {
         'COMP. STATUS': submittal.submittal_drafting_status,
         'SUB MANAGER': submittal.submittal_manager,
         'DUE DATE': submittal.due_date,
+        'START INSTALL': submittal.start_install,
+        'DDD': submittal.design_drawings_due,
         'NOTES': submittal.notes,
         id: String(rawId)
     };

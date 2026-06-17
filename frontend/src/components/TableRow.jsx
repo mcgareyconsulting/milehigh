@@ -19,7 +19,7 @@ import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import MentionInput from './shared/MentionInput';
 import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
+export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStartInstallChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -27,10 +27,13 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     const [pendingNotes, setPendingNotes] = useState(null);
     const [editingDueDate, setEditingDueDate] = useState(false);
     const [dueDateValue, setDueDateValue] = useState('');
+    const [editingStartInstall, setEditingStartInstall] = useState(false);
+    const [startInstallValue, setStartInstallValue] = useState('');
     const [detailsOpen, setDetailsOpen] = useState(false);
     const inputRef = useRef(null);
     const notesInputRef = useRef(null);
     const dueDateInputRef = useRef(null);
+    const startInstallInputRef = useRef(null);
     // On the Draft tab the row's accent (bump button + links) shifts blue → green to match the toolbar.
     const isDraftTab = selectedTab === 'draft';
     const linkAccent = isDraftTab
@@ -134,6 +137,59 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
             dueDateInputRef.current.select();
         }
     }, [editingDueDate]);
+
+    useEffect(() => {
+        if (editingStartInstall && startInstallInputRef.current) {
+            startInstallInputRef.current.focus();
+            startInstallInputRef.current.select();
+        }
+    }, [editingStartInstall]);
+
+    // Normalize a stored date value (YYYY-MM-DD, ISO, or Date) to the YYYY-MM-DD a
+    // <input type="date"> expects. UTC accessors avoid a timezone day-shift.
+    const toInputDate = (currentValue) => {
+        if (!currentValue) return '';
+        if (typeof currentValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
+            return currentValue;
+        }
+        try {
+            const dateStr = typeof currentValue === 'string' ? currentValue.split('T')[0] : currentValue;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+            const date = new Date(currentValue);
+            if (!isNaN(date.getTime())) {
+                const year = date.getUTCFullYear();
+                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(date.getUTCDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+        } catch (e) {
+            // Invalid date, fall through to empty
+        }
+        return '';
+    };
+
+    const handleStartInstallFocus = () => {
+        if (!canEditDrafterFields) return;
+        setStartInstallValue(toInputDate(row['START INSTALL'] ?? row.start_install ?? ''));
+        setEditingStartInstall(true);
+    };
+
+    const handleStartInstallBlur = () => {
+        setEditingStartInstall(false);
+        if (submittalId && onStartInstallChange) {
+            const valueToSend = startInstallValue.trim() === '' ? null : startInstallValue;
+            onStartInstallChange(submittalId, valueToSend);
+        }
+    };
+
+    const handleStartInstallKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            setStartInstallValue(toInputDate(row['START INSTALL'] ?? row.start_install ?? ''));
+            setEditingStartInstall(false);
+        }
+    };
 
     const handleDueDateFocus = () => {
         // Only allow editing if user is admin or drafter
@@ -293,6 +349,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     const isProjectName = column === 'NAME';
                     const isBallInCourt = column === 'BIC';
                     const isDueDate = column === 'DUE DATE';
+                    const isStartInstall = column === 'START INSTALL';
+                    const isDDD = column === 'DDD';
 
                     // Skip rendering the Submittals Id column
                     if (isSubmittalId) {
@@ -337,6 +395,12 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                     } else if (isDueDate) {
                         customStyle = { maxWidth: '120px' };
                         columnClass = 'dwl-col-due-date';
+                    } else if (isStartInstall) {
+                        customStyle = { maxWidth: '120px' };
+                        columnClass = 'dwl-col-start-install';
+                    } else if (isDDD) {
+                        customStyle = { maxWidth: '120px' };
+                        columnClass = 'dwl-col-ddd';
                     }
 
                     // Apply Type truncation mapping before formatting
@@ -619,6 +683,100 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                             : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default'
                                 }`}>
                                     {hasDueDate ? formattedDate : <span className="italic">{canEditDrafterFields ? "Click to add..." : "—"}</span>}
+                                </div>
+                            </td>
+                        );
+                    }
+
+                    // START INSTALL: a desired install date set ahead of the release, only on
+                    // DRR submittals with an assigned Rel. Hard date only (no ASAP). Transfers
+                    // to the job-log release at creation time via the Rel.
+                    if (isStartInstall) {
+                        const rowRel = row['Rel'] ?? row.rel ?? null;
+                        const hasRel = rowRel !== null && rowRel !== undefined && rowRel !== '';
+                        const canEditStartInstall = canEditDrafterFields && isDraftingReleaseReview && hasRel;
+                        const siRaw = row['START INSTALL'] ?? row.start_install ?? '';
+                        const hasStartInstall = siRaw && siRaw !== '';
+
+                        if (canEditStartInstall && editingStartInstall) {
+                            return (
+                                <td
+                                    key={`${row.id}-${column}`}
+                                    className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-start-install`}
+                                    style={{ maxWidth: '120px' }}
+                                    draggable={false}
+                                    onMouseDown={handleProtectedCellMouseDown}
+                                >
+                                    <input
+                                        ref={startInstallInputRef}
+                                        type="date"
+                                        value={startInstallValue}
+                                        onChange={(e) => setStartInstallValue(e.target.value)}
+                                        onBlur={handleStartInstallBlur}
+                                        onKeyDown={handleStartInstallKeyDown}
+                                        className="w-full px-0.5 py-0 text-xs border-2 border-accent-500 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-600 bg-white dark:bg-slate-700 font-medium text-gray-900 dark:text-slate-100"
+                                    />
+                                </td>
+                            );
+                        }
+
+                        const formattedSi = hasStartInstall ? formatDateShort(siRaw) : '';
+                        // Color like the job log: future = green, past/today = yellow.
+                        let siColorClass;
+                        if (!canEditStartInstall) {
+                            siColorClass = hasStartInstall
+                                ? 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/50 text-gray-600 dark:text-slate-300 font-medium cursor-default'
+                                : 'border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 cursor-default';
+                        } else if (!hasStartInstall) {
+                            siColorClass = 'border-gray-200 dark:border-slate-500 bg-gray-50/50 dark:bg-slate-600/50 hover:bg-gray-100 dark:hover:bg-slate-500 hover:border-accent-300 text-gray-500 dark:text-slate-400 cursor-text';
+                        } else {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const siDate = new Date(`${toInputDate(siRaw)}T00:00:00`);
+                            const isFuture = !isNaN(siDate.getTime()) && siDate > today;
+                            siColorClass = isFuture
+                                ? 'border-green-300 dark:border-green-700 bg-green-100 dark:bg-green-900/40 hover:bg-green-200 dark:hover:bg-green-800/50 hover:border-green-400 text-green-900 dark:text-green-200 font-medium cursor-text'
+                                : 'border-yellow-300 dark:border-yellow-700 bg-yellow-100 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-800/50 hover:border-yellow-400 text-yellow-900 dark:text-yellow-200 font-medium cursor-text';
+                        }
+
+                        const siTitle = canEditStartInstall
+                            ? 'Click to set desired start install (transfers to the release when created)'
+                            : (isDraftingReleaseReview ? 'Assign a Rel before setting start install' : 'Start install applies to DRR submittals only');
+
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-start-install`}
+                                style={{ maxWidth: '120px' }}
+                                draggable={false}
+                                onClick={canEditStartInstall ? handleStartInstallFocus : undefined}
+                                onMouseDown={handleProtectedCellMouseDown}
+                                title={siTitle}
+                            >
+                                <div className={`px-0.5 py-0 text-xs rounded-sm border transition-all min-h-[10px] text-center ${siColorClass}`}>
+                                    {hasStartInstall
+                                        ? formattedSi
+                                        : <span className="italic">{canEditStartInstall ? 'Click to add...' : '—'}</span>}
+                                </div>
+                            </td>
+                        );
+                    }
+
+                    // DDD (Design Drawings Due): read-only, auto-derived 15 business days before start install.
+                    if (isDDD) {
+                        const dddRaw = row['DDD'] ?? row.design_drawings_due ?? '';
+                        const hasDdd = dddRaw && dddRaw !== '';
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`px-0.5 py-0.5 align-middle text-center ${rowBgClass} border-r border-gray-300 dark:border-slate-600 dwl-col-ddd`}
+                                style={{ maxWidth: '120px' }}
+                                draggable={false}
+                                onMouseDown={handleProtectedCellMouseDown}
+                                title="Design Drawings Due — 15 business days before start install (auto)"
+                            >
+                                <div className="px-0.5 py-0 text-xs rounded-sm border border-gray-200 dark:border-slate-600 bg-gray-50/50 dark:bg-slate-700/50 text-gray-600 dark:text-slate-300 min-h-[10px] text-center cursor-default">
+                                    {hasDdd ? formatDateShort(dddRaw) : <span className="text-gray-400 dark:text-slate-500">—</span>}
                                 </div>
                             </td>
                         );

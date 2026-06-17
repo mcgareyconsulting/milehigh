@@ -83,6 +83,7 @@ function DraftingWorkLoad() {
         updateProcoreStatus,
         bumpSubmittal,
         updateDueDate,
+        updateStartInstall,
         stepSubmittal,
     } = useMutations(refetch);
 
@@ -495,6 +496,8 @@ function DraftingWorkLoad() {
                                                     const isRel = column === 'Rel';
                                                     const isSubmittalManager = column === 'SUB MANAGER';
                                                     const isDueDate = column === 'DUE DATE';
+                                                    const isStartInstall = column === 'START INSTALL';
+                                                    const isDDD = column === 'DDD';
 
                                                     // Percentage widths (must total 100%). PROCORE STATUS gets more space.
                                                     let headerStyle = {};
@@ -532,6 +535,12 @@ function DraftingWorkLoad() {
                                                     } else if (isDueDate) {
                                                         headerStyle = { width: '6%' };
                                                         columnClass = 'dwl-col-due-date';
+                                                    } else if (isStartInstall) {
+                                                        headerStyle = { width: '6%' };
+                                                        columnClass = 'dwl-col-start-install';
+                                                    } else if (isDDD) {
+                                                        headerStyle = { width: '5%' };
+                                                        columnClass = 'dwl-col-ddd';
                                                     } else if (isProjectName) {
                                                         headerStyle = { width: '12%' };
                                                         columnClass = 'dwl-col-name';
@@ -647,6 +656,7 @@ function DraftingWorkLoad() {
                                                             selectedTab={selectedTab}
                                                             onBump={isAdmin ? handleBump : undefined}
                                                             onDueDateChange={canEditDrafterFields ? updateDueDate : undefined}
+                                                            onStartInstallChange={canEditDrafterFields ? updateStartInstall : undefined}
                                                             onStepOrder={isAdmin ? stepSubmittal : undefined}
                                                             allRows={rows}
                                                             rowIndex={index}
