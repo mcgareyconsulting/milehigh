@@ -3,9 +3,10 @@
  * schema_version: 1
  * purpose: Wraps all job log CRUD, stage/field updates, Gantt data, and archive operations so page components remain free of HTTP logic.
  * exports:
- *   jobsApi: Singleton with methods for fetching, updating, releasing, deleting, archiving, and scheduling jobs.
+ *   jobsApi: Singleton with methods for fetching, updating, releasing, deleting, archiving, and scheduling jobs,
+ *            plus read-only release enrichment (checklist/to-dos, photos, drawings) for the timeline detail modal.
  * imports_from: [axios, ../utils/api]
- * imported_by: [components/PMBoardList.jsx, components/JobsTableRow.jsx, components/GanttChart.jsx, pages/PMBoard.jsx, pages/JobLog.jsx, pages/Archive.jsx, hooks/useJobsDataFetching.js, hooks/useArchiveDataFetching.js]
+ * imported_by: [components/PMBoardList.jsx, components/JobsTableRow.jsx, components/GanttChart.jsx, components/ReleaseDetailModal.jsx, pages/PMBoard.jsx, pages/JobLog.jsx, pages/Archive.jsx, hooks/useJobsDataFetching.js, hooks/useArchiveDataFetching.js]
  * invariants:
  *   - Exported as a singleton; all callers share the same instance.
  *   - fetchAllJobs paginates internally and returns the full accumulated array.
@@ -194,6 +195,35 @@ class JobsApi {
             return response.data.installer_teams || [];
         } catch (error) {
             throw this._handleError(error, 'Failed to load installer teams');
+        }
+    }
+
+    // Read-only enrichment for the timeline detail modal. release_id is the Releases PK
+    // (the `id` field the get-all-jobs serializer emits), not the job/release pair.
+    async getReleaseChecklist(releaseId) {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/releases/${releaseId}/checklist`);
+            return response.data; // { release_id, todos, meetings }
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load release checklist');
+        }
+    }
+
+    async getReleasePhotos(releaseId) {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/releases/${releaseId}/photos`);
+            return response.data.photos || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load release photos');
+        }
+    }
+
+    async getReleaseDrawings(releaseId) {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions`);
+            return response.data.versions || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load release drawings');
         }
     }
 

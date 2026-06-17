@@ -16,4 +16,9 @@ from app import create_app
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=False, port=8000)
+    # threaded=True so the dev server handles concurrent requests. The frontend fires
+    # bursts of parallel calls (e.g. the timeline release-detail modal loads checklist +
+    # photos + drawings at once, and the drawing hub adds more); a single-threaded server
+    # resets the colliding connections, surfacing as intermittent "HTTP 0" in the browser.
+    # Production runs under gunicorn (multi-worker) and is unaffected by this.
+    app.run(debug=False, port=8000, threaded=True)

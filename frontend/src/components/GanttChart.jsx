@@ -6,22 +6,24 @@
  *   client selector over the shared releases dataset (useReleases) — no fetch, no writes.
  * exports:
  *   GanttChart: Team-laned read-only timeline with week-snap nav and a jump-to-date picker.
- * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters]
+ * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
  *   - READ-ONLY: bars cannot be dragged, resized, or reassigned. The Timeline never writes; only Job Log does.
+ *     Bars are clickable to open a read-only detail modal (ReleaseDetailModal); clicking never edits.
  *   - Lanes come from /brain/installer-teams (the roster); any installer present in the data but off-roster is appended as an extra lane so no bar is silently dropped. Lane colors come from the shared constants/installerPalette so List and Timeline match.
  *   - Eligibility mirrors the List installer columns plus an install_hrs gate (matching the backend /gantt-data filter): hard date (start_install_formulaTF === false) + Start install + installer + Install HRS > 0 + Stage Group in FABRICATION/READY_TO_SHIP/COMPLETE.
  *   - Overlapping bars within a lane stack into packed sub-rows so they never visually collide.
  *   - When filterComplete is true, releases whose Stage === 'Complete' are excluded.
  *   - Week-snap nav buttons always anchor viewStart to a Monday; horizontal scroll is free-form then day-snaps.
- * updated_by_agent: 2026-06-10 (ported team-laned timeline to shared layer, read-only)
+ * updated_by_agent: 2026-06-17 (clickable bars open a read-only release detail modal; enriched tooltip title)
  */
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { useReleases } from '../context/ReleasesContext';
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { localTodayStr as todayIso } from '../utils/formatters';
+import ReleaseDetailModal from './ReleaseDetailModal';
 
 const addDays = (isoDate, days) => {
     const d = new Date(isoDate + 'T00:00:00');
@@ -83,6 +85,7 @@ function toBar(job, filterComplete) {
     // derives a window, floored at start_install) — never before startDate.
     const endDate = dayPart(job['comp_eta_effective']) || dayPart(job['Comp. ETA']) || startDate;
     return {
+        id: job['id'],
         job: job['Job #'],
         release: job['Release #'],
         jobName: job['Job'] || '',
@@ -92,6 +95,9 @@ function toBar(job, filterComplete) {
         endDate,
         pm: job['PM'] || '',
         by: job['BY'] || '',
+        // Full source row, handed to the read-only detail modal on click (carries every
+        // core field + Trello/Procore/viewer links the modal renders without a fetch).
+        raw: job,
     };
 }
 
@@ -101,6 +107,7 @@ function GanttChart({ filterComplete = false }) {
     const [teamsLoaded, setTeamsLoaded] = useState(false);
     const [hoveredItem, setHoveredItem] = useState(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+    const [selectedRelease, setSelectedRelease] = useState(null);   // full job row for the detail modal
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
     const [navNonce, setNavNonce] = useState(0);   // bumps each nav so the scroll fires even when viewStart is unchanged
     const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -425,7 +432,7 @@ function GanttChart({ filterComplete = false }) {
                                             return (
                                                 <div
                                                     key={`${release.job}-${release.release}`}
-                                                    className="absolute rounded shadow-sm flex items-center px-1 select-none cursor-default"
+                                                    className="absolute rounded shadow-sm flex items-center px-1 select-none cursor-pointer hover:opacity-100"
                                                     style={{
                                                         left: bar.left,
                                                         width: bar.width,
@@ -434,6 +441,7 @@ function GanttChart({ filterComplete = false }) {
                                                         backgroundColor: band.color,
                                                         opacity: 0.85
                                                     }}
+                                                    onClick={() => setSelectedRelease(release.raw)}
                                                     onMouseMove={(e) => handleMouseMove(e, {
                                                         type: 'release',
                                                         job: release.job,
@@ -449,7 +457,9 @@ function GanttChart({ filterComplete = false }) {
                                                     onMouseLeave={handleMouseLeave}
                                                 >
                                                     <span className="text-white text-[10px] font-medium truncate pointer-events-none px-1">
-                                                        {release.job}-{release.release}
+                                                        <span className="font-bold">{release.job}-{release.release}</span>
+                                                        {release.jobName ? ` · ${release.jobName}` : ''}
+                                                        {release.description ? ` — ${release.description}` : ''}
                                                     </span>
                                                 </div>
                                             );
@@ -509,10 +519,11 @@ function GanttChart({ filterComplete = false }) {
                         maxWidth: '300px'
                     }}
                 >
-                    <div className="font-bold mb-1">Job {hoveredItem.job}-{hoveredItem.release}</div>
-                    <div className="text-gray-300">{hoveredItem.jobName}</div>
+                    <div className="font-bold mb-1">
+                        Job {hoveredItem.job}-{hoveredItem.release}{hoveredItem.jobName ? ` · ${hoveredItem.jobName}` : ''}
+                    </div>
                     {hoveredItem.description && (
-                        <div className="text-gray-400 text-[10px] mt-1">{hoveredItem.description}</div>
+                        <div className="text-gray-300 text-[10px]">{hoveredItem.description}</div>
                     )}
                     <div className="mt-2 pt-2 border-t border-gray-700">
                         {hoveredItem.team && <div>Team: {hoveredItem.team}</div>}
@@ -523,6 +534,11 @@ function GanttChart({ filterComplete = false }) {
                     </div>
                 </div>
             )}
+            <ReleaseDetailModal
+                isOpen={!!selectedRelease}
+                release={selectedRelease}
+                onClose={() => setSelectedRelease(null)}
+            />
         </>
     );
 }
