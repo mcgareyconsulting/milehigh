@@ -26,7 +26,7 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User, PendingStartInstall
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
@@ -1975,8 +1975,58 @@ def release_job_data():
                     last_updated_at=datetime.utcnow(),
                     source_of_update='Brain'
                 )
+
+                # Start-install handoff: a DRR in the DWL may have pre-set a desired
+                # start install for this Rel before any release existed. The pasted
+                # Release # equals the Rel (see Submittals.rel), so look up an
+                # unconsumed PendingStartInstall row and stamp the date now — the
+                # pasting user does not know it. Non-numeric release #s can't match a Rel.
+                try:
+                    rel_int = int(release_number)
+                except (TypeError, ValueError):
+                    rel_int = None
+                pending_si = (
+                    PendingStartInstall.query.filter_by(rel=rel_int, consumed_at=None).first()
+                    if rel_int is not None else None
+                )
+                if pending_si and pending_si.start_install:
+                    new_job.start_install = pending_si.start_install
+                    new_job.start_install_formulaTF = False
+                    new_job.start_install_no_color = False
+                    new_job.comp_eta = calculate_install_complete_date(
+                        pending_si.start_install, new_job.install_hrs, new_job.num_guys
+                    )
+
                 db.session.add(new_job)
                 db.session.commit()
+
+                # Record the transfer for audit and mark the pending row consumed.
+                if pending_si and pending_si.start_install:
+                    try:
+                        si_event = JobEventService.create(
+                            job=job_number,
+                            release=release_number,
+                            action='update_start_install',
+                            source='Brain',
+                            payload={
+                                'from': None,
+                                'to': pending_si.start_install.isoformat(),
+                                'is_hard_date': True,
+                                'from_pending_rel': rel_int,
+                                'origin': 'release_creation',
+                            },
+                        )
+                        if si_event:
+                            JobEventService.close(si_event.id)
+                    except Exception as si_event_err:
+                        logger.warning(
+                            "Failed to record start_install transfer event for %s-%s: %s",
+                            job_number, release_number, si_event_err,
+                        )
+                    pending_si.consumed_at = datetime.utcnow()
+                    pending_si.consumed_job = job_number
+                    pending_si.consumed_release = release_number
+                    db.session.commit()
 
                 # Queue Trello card creation via outbox for async processing
                 OutboxService.add(

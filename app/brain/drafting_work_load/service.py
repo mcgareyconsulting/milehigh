@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Optional, List, Tuple
 import logging
 from sqlalchemy import text
-from app.models import db, Submittals, Projects
+from app.models import db, Submittals, Projects, PendingStartInstall
 from app.brain.drafting_work_load.engine import (
     DraftingWorkLoadEngine,
     SubmittalOrderingEngine,
@@ -188,6 +188,79 @@ class DraftingWorkLoadService:
         
         submittal.last_updated = datetime.utcnow()
         logger.info(f"Updated due date for submittal {submittal.submittal_id} to '{normalized_date}'")
+        return True, None
+
+    # When a start install is set, the due date is overwritten to this many business days
+    # before it (the due date then doubles as the Design Drawings Due date).
+    DUE_DATE_LEAD_BUSINESS_DAYS = 15
+
+    @staticmethod
+    def update_start_install(submittal, start_install: Optional[str], due_date: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+        """Set/clear the DWL start_install on a submittal, set the due date (the Design
+        Drawings Due date) when start_install is set, and keep the PendingStartInstall
+        handoff row in sync.
+
+        The caller is responsible for the DRR + Rel gate and for committing the session.
+
+        Args:
+            submittal: The submittal object to update (must be a DRR with a Rel).
+            start_install: New start install value (ISO date string or None to clear).
+            due_date: Drafter-chosen Design Drawings Due date (ISO string). When start_install
+                is set and this is omitted, it defaults to DUE_DATE_LEAD_BUSINESS_DAYS business
+                days before the start install. Ignored when clearing (which also wipes the due date).
+
+        Returns:
+            (success, error_message)
+        """
+        # Reuse the same date validation as due_date (ISO YYYY-MM-DD or blank).
+        is_valid, normalized_date, error = DraftingWorkLoadEngine.validate_due_date(start_install)
+        if not is_valid:
+            logger.warning(f"Invalid start install for submittal {submittal.submittal_id}: {error}")
+            return False, error
+
+        from app.trello.utils import calculate_business_days_before
+
+        if normalized_date:
+            si_date = datetime.strptime(normalized_date, '%Y-%m-%d').date()
+            submittal.start_install = si_date
+            # Setting a start install sets the due date to the drawings-due date. The modal
+            # sends the (possibly tweaked) date; fall back to the computed default if omitted.
+            if due_date:
+                ok, normalized_due, due_error = DraftingWorkLoadEngine.validate_due_date(due_date)
+                if not ok:
+                    return False, due_error
+                submittal.due_date = datetime.strptime(normalized_due, '%Y-%m-%d').date()
+            else:
+                submittal.due_date = calculate_business_days_before(
+                    si_date, DraftingWorkLoadService.DUE_DATE_LEAD_BUSINESS_DAYS
+                )
+        else:
+            # Clearing the start install also wipes the due date — it was the derived DDD.
+            submittal.start_install = None
+            submittal.due_date = None
+
+        submittal.last_updated = datetime.utcnow()
+
+        # Keep the handoff queue in sync, keyed by Rel.
+        pending = PendingStartInstall.query.filter_by(rel=submittal.rel).first()
+        if submittal.start_install is not None:
+            if pending is None:
+                pending = PendingStartInstall(rel=submittal.rel)
+                db.session.add(pending)
+            pending.job_number = submittal.project_number
+            pending.submittal_id = submittal.submittal_id
+            pending.start_install = submittal.start_install
+            # A fresh date re-opens the handoff even if a prior date was already consumed.
+            pending.consumed_at = None
+            pending.consumed_job = None
+            pending.consumed_release = None
+        elif pending is not None:
+            db.session.delete(pending)
+
+        logger.info(
+            f"Updated start_install for submittal {submittal.submittal_id} (rel {submittal.rel}) "
+            f"to '{normalized_date}'"
+        )
         return True, None
 
 

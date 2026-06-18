@@ -171,6 +171,24 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Set/clear the desired start-install date for a DRR submittal (with an assigned Rel).
+     * When setting, due_date is the (possibly drafter-tweaked) Design Drawings Due date; the
+     * backend falls back to 15 business days before if it is omitted. Pass start_install null to clear.
+     */
+    async updateStartInstall(submittalId, startInstall, dueDate) {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/start-install`, {
+                submittal_id: submittalId,
+                start_install: startInstall,
+                due_date: dueDate,
+            });
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, `Failed to update start install for submittal ${submittalId}`);
+        }
+    }
+
+    /**
      * Compress ordered (>= 1) submittals for a drafter to sequential integers
      */
     async resortDrafter(ballInCourt) {

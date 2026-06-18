@@ -108,6 +108,12 @@ class Submittals(db.Model):
     # and the sequence rolls over. rel_assigned_at records when it was handed out.
     rel = db.Column(db.Integer, nullable=True)
     rel_assigned_at = db.Column(db.DateTime, nullable=True)
+    # Desired install date known ahead of drawings, set on the DWL. Only ever set on
+    # DRR submittals that already have a Rel assigned. Hard date only (no ASAP/formula);
+    # transfers to the matching Releases row at release creation via PendingStartInstall.
+    # Setting it also overwrites due_date with the drawings-due date (15 business days
+    # before), so the due date doubles as the Design Drawings Due date.
+    start_install = db.Column(db.Date, nullable=True)
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -172,10 +178,46 @@ class Submittals(db.Model):
             "submittal_drafting_status": self.submittal_drafting_status,
             "rel": self.rel,
             "due_date": _dt(self.due_date),
+            "start_install": _dt(self.start_install),
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
             "created_at": _dt(self.created_at),
         }
+
+class PendingStartInstall(db.Model):
+    """Handoff queue: a desired start-install date set on a DRR submittal in the DWL,
+    waiting to be claimed by the matching job-log release when it is created.
+
+    The join key is ``rel``: the pasted Release # on the Job Log equals the DRR's Rel
+    (see app.procore.procore._globally_taken_rel_numbers). When a release is created via
+    the CSV/TSV paste, release_job_data() looks up the unconsumed pending row for that rel
+    and stamps the date onto the new Releases row. ``rel`` is unique-safe because
+    assign_rel_manual() forbids two pending DRRs from sharing a Rel.
+    """
+    __tablename__ = "pending_start_installs"
+    id = db.Column(db.Integer, primary_key=True)
+    rel = db.Column(db.Integer, unique=True, nullable=False, index=True)  # join key (== future Releases.release)
+    job_number = db.Column(db.String(100))   # source Submittals.project_number, for reference/validation
+    submittal_id = db.Column(db.String(255))  # source DRR submittal_id
+    start_install = db.Column(db.Date, nullable=False)
+    consumed_at = db.Column(db.DateTime, nullable=True)  # set when a release claims the date
+    consumed_job = db.Column(db.Integer, nullable=True)
+    consumed_release = db.Column(db.String(16), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "rel": self.rel,
+            "job_number": self.job_number,
+            "submittal_id": self.submittal_id,
+            "start_install": _dt(self.start_install),
+            "consumed_at": _dt(self.consumed_at),
+            "consumed_job": self.consumed_job,
+            "consumed_release": self.consumed_release,
+        }
+
 
 class SystemLogs(db.Model):
     """System logs table for tracking critical errors and system events."""

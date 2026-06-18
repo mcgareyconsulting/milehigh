@@ -119,6 +119,13 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
+    const updateStartInstall = useCallback(async (submittalId, startInstall, dueDate) => {
+        await executeMutation(
+            () => draftingWorkLoadApi.updateStartInstall(submittalId, startInstall, dueDate),
+            `Failed to update start install for submittal ${submittalId}`
+        );
+    }, [executeMutation]);
+
     const updateProcoreStatus = useCallback(async (submittalId, statusId) => {
         await executeMutation(
             () => draftingWorkLoadApi.updateProcoreStatus(submittalId, statusId),
@@ -154,6 +161,9 @@ export function useMutations(refetch) {
 
         // Due date mutation
         updateDueDate,
+
+        // Start install mutation (DWL → job log handoff)
+        updateStartInstall,
 
         // Step mutation (up/down arrows)
         stepSubmittal,

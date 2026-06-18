@@ -585,6 +585,70 @@ def update_submittal_due_date():
     }), 200
 
 
+@brain_bp.route("/drafting-work-load/start-install", methods=["PUT"])
+@drafter_or_admin_required
+@handle_errors("update start_install")
+@require_json("submittal_id")
+def update_submittal_start_install():
+    """Set/clear a desired start-install date for a DRR submittal.
+
+    Only DRR ("Drafting Release Review") submittals that already have a Rel assigned
+    may receive a start install (the Rel is the join key used to hand the date off to
+    the job-log release when it is created). Setting the date also derives the read-only
+    DDD (15 business days earlier) and maintains a PendingStartInstall row keyed by Rel."""
+    from app.procore.procore import DRR_TYPE
+
+    submittal_id = str(g.json_data['submittal_id'])
+    start_install = g.json_data.get('start_install') or None
+    # Optional drafter-tweaked Design Drawings Due date from the modal; the service falls
+    # back to the computed default (15 business days before) when it is omitted.
+    due_date = g.json_data.get('due_date') or None
+
+    submittal, err = get_or_404(Submittals, "Submittal not found", submittal_id=submittal_id)
+    if err:
+        return err
+
+    # Gate: DRR + assigned Rel. This guarantees every pending handoff row has a Rel key.
+    if (submittal.type or "").strip() != DRR_TYPE or submittal.rel is None:
+        return jsonify({
+            "error": "Start install can only be set on a Drafting Release Review submittal with an assigned Rel.",
+            "code": "drr_rel_required",
+        }), 400
+
+    old_start_install = submittal.start_install.isoformat() if submittal.start_install else None
+    old_due_date = submittal.due_date.isoformat() if submittal.due_date else None
+    success, error_msg = DraftingWorkLoadService.update_start_install(submittal, start_install, due_date)
+    if not success:
+        return jsonify({"error": error_msg}), 400
+
+    new_start_install = submittal.start_install.isoformat() if submittal.start_install else None
+    new_due_date = submittal.due_date.isoformat() if submittal.due_date else None
+
+    db.session.commit()
+
+    user = get_current_user()
+    try:
+        # Setting a start install overwrites the due date with the drawings-due date, so
+        # record that in the same audit event when it actually changed.
+        payload = {"start_install": {"old": old_start_install, "new": new_start_install}}
+        if new_due_date != old_due_date:
+            payload["due_date"] = {"old": old_due_date, "new": new_due_date}
+        create_submittal_event(
+            submittal_id, "updated", payload,
+            webhook_payload=None, source="Brain",
+            internal_user_id=user.id if user else None,
+        )
+    except Exception as event_err:
+        logger.warning("Failed to create SubmittalEvent for start_install update: %s", event_err)
+
+    return jsonify({
+        "success": True,
+        "submittal_id": submittal_id,
+        "start_install": new_start_install,
+        "due_date": new_due_date,
+    }), 200
+
+
 @brain_bp.route("/drafting-work-load/rel", methods=["PUT"])
 @drafter_or_admin_required
 @handle_errors("update rel")

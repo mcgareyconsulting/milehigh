@@ -23,6 +23,21 @@ python migrations/add_releases_submittals_indexes.py --database-url postgresql:/
 Clone `migrations/add_index_on_jobs_last_updated_at.py` as the template for new
 ones. Scripts are safe to re-run (existing objects are skipped).
 
+**Postgres migrations run against the live prod DB — follow `migrations/README.md`
+or you can freeze the table.** Non-negotiables, learned from a prod incident:
+- Use **idempotent `IF NOT EXISTS` DDL** (`ADD COLUMN IF NOT EXISTS`, `CREATE
+  TABLE/INDEX IF NOT EXISTS`) so the script needs **no schema reflection** at all.
+  Never call `inspect()`/`get_columns()` while a transaction holds a lock — doing so
+  opens a second pooled connection that blocks on your own `ACCESS EXCLUSIVE` lock, an
+  undetectable self-deadlock that hangs forever.
+- Use **one AUTOCOMMIT connection**, one statement per implicit transaction, so the
+  exclusive lock is held for an instant, never across the whole migration.
+- Always `SET lock_timeout` (e.g. `'5s'`) so a blocked `ALTER` **fails fast** instead of
+  queueing and blocking every later query on the table; retry with backoff.
+- Keep `ADD COLUMN` **metadata-only** (nullable, no volatile default) so it's instant.
+- **Mask the DB URL** in logs — never print credentials.
+`migrations/add_start_install_to_dwl.py` is the reference implementation of all of this.
+
 ### Frontend
 ```bash
 cd frontend
