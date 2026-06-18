@@ -17,6 +17,7 @@ import {
     DEPARTMENTS,
     DEPARTMENT_LABELS,
     DEPARTMENT_LABELS_SHORT,
+    ICON_STATES,
     BANANA_CODE_ICON_SIZE,
     getStageIconRow,
     isHoldStage,
@@ -32,6 +33,21 @@ import {
 const ICON_BASE = '/icons';
 const ICON_ASPECT_W_OVER_H = 2 / 3;
 const HOLD_FLAG_PATH_D = `M ${HOLD_FLAG_POINTS.map(([x, y]) => `${x} ${y}`).join(' L ')} Z`;
+
+// Warm the browser cache with all 28 banana-code icons (7 depts × 4 states) the
+// first time any row mounts, so a long list paints without a burst of image
+// fetches/decodes. Module-level guard keeps it to a single pass per page load.
+let iconsPreloaded = false;
+function preloadStageIcons() {
+    if (iconsPreloaded || typeof window === 'undefined') return;
+    iconsPreloaded = true;
+    for (const dept of DEPARTMENTS) {
+        for (const state of ICON_STATES) {
+            const img = new Image();
+            img.src = `${ICON_BASE}/${dept}_${state}.png`;
+        }
+    }
+}
 
 function HoldFlag({ width }) {
     const flagSize = Math.max(10, Math.round(width * 0.7));
@@ -69,6 +85,7 @@ function HoldFlag({ width }) {
 }
 
 function StageIconRowImpl({ stage, iconSize = BANANA_CODE_ICON_SIZE }) {
+    preloadStageIcons();
     const row = getStageIconRow(stage);
     const hold = isHoldStage(stage);
     const titleStage = stage || 'Released';
@@ -92,6 +109,8 @@ function StageIconRowImpl({ stage, iconSize = BANANA_CODE_ICON_SIZE }) {
                             width={w}
                             height={h}
                             draggable={false}
+                            decoding="async"
+                            loading="eager"
                             style={{ display: 'block' }}
                         />
                         {hold && dept === 'weld' && <HoldFlag width={w} />}

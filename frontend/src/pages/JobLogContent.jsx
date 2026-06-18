@@ -11,7 +11,7 @@
  *   - Column-header dropdown UI renders here but mutates layout state via setColumnFilter/setColumnSort from context (the reactive loop recomputes displayJobs/uniqueValuesByColumn upstream).
  *   - effectiveView (mobilecard/cards/table) is device-driven and orthogonal to the Table/Board/Timeline switch.
  */
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { JobsTableRow } from '../components/JobsTableRow';
@@ -41,6 +41,7 @@ function JobLogContent() {
         handleCascadeRecalculating,
         columnHeaders,
         columnWidthPercents,
+        isDesktop,
         uniqueValuesByColumn,
         columnFilters,
         columnSort,
@@ -54,6 +55,19 @@ function JobLogContent() {
 
     const tableScrollRef = useRef(null);
 
+    // On iPad/narrow widths the full table doesn't fit in landscape, so drop the two
+    // lowest-frequency columns (BY, Released) and re-normalize the remaining widths to
+    // 100% (fixed-layout table). Desktop keeps every column; CSV/PDF export are
+    // unaffected (they read the full columnHeaders from ReleasesLayout).
+    const { tableColumns, tableWidthPercents } = useMemo(() => {
+        if (isDesktop) return { tableColumns: columnHeaders, tableWidthPercents: columnWidthPercents };
+        const NARROW_HIDDEN = new Set(['BY', 'Released']);
+        const cols = columnHeaders.filter((c) => !NARROW_HIDDEN.has(c));
+        const sum = cols.reduce((acc, c) => acc + (columnWidthPercents[c] ?? 0), 0) || 1;
+        const widths = Object.fromEntries(cols.map((c) => [c, ((columnWidthPercents[c] ?? 0) / sum) * 100]));
+        return { tableColumns: cols, tableWidthPercents: widths };
+    }, [isDesktop, columnHeaders, columnWidthPercents]);
+
     // Drag-and-drop reorder is disabled — keep no-op handlers so JobsTableRow's props stay satisfied.
     const draggedIndex = null;
     const dragOverIndex = null;
@@ -62,7 +76,7 @@ function JobLogContent() {
     const handleDragLeave = () => { };
     const handleDrop = () => { };
 
-    const tableColumnCount = columnHeaders.length;
+    const tableColumnCount = tableColumns.length;
 
     return (
         <>
@@ -133,10 +147,10 @@ function JobLogContent() {
                         <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                             <thead className="sticky top-0 z-10">
                                 <tr>
-                                    {columnHeaders.map((column) => {
+                                    {tableColumns.map((column) => {
                                         const isReleaseNumber = column === 'Release #';
                                         const displayHeader = HEADER_OVERRIDES[column] ?? column;
-                                        const colWidthPct = columnWidthPercents[column];
+                                        const colWidthPct = tableWidthPercents[column];
                                         const isFilterable = FILTERABLE_COLUMNS.has(column);
                                         const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
                                         const colSelected = columnFilters[column] ?? [];
@@ -195,7 +209,7 @@ function JobLogContent() {
                                                 <JobsTableRow
                                                     key={row.id}
                                                     row={row}
-                                                    columns={columnHeaders}
+                                                    columns={tableColumns}
                                                     isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
                                                     formatCellValue={formatCellValue}
                                                     formatDate={formatDateShort}
@@ -247,7 +261,7 @@ function JobLogContent() {
                                         <JobsTableRow
                                             key={row.id}
                                             row={row}
-                                            columns={columnHeaders}
+                                            columns={tableColumns}
                                             isJumpToHighlight={jumpToTarget && String(row['Job #']) === jumpToTarget.job && String(row['Release #']) === jumpToTarget.release}
                                             formatCellValue={formatCellValue}
                                             formatDate={formatDateShort}
