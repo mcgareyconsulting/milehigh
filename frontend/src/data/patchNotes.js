@@ -30,12 +30,6 @@ export const PATCH_NOTES = [
       },
       {
         type: 'new',
-        title: '"Katie" view on the Job Log',
-        detail:
-          'A new Katie quick filter shows the downstream pipeline — Paint Complete, Store at MHMW, Ship Planning, Ship Complete, Installs, and Complete — with the most-complete releases first and upstream ASAPs at the bottom.',
-      },
-      {
-        type: 'new',
         title: 'Project timeline view',
         detail:
           'A read-only, team-laned timeline (Gantt) with week-snap navigation and a jump-to-date picker. Click a release to open a detail panel showing its open to-dos and meeting notes.',
@@ -103,6 +97,12 @@ export const PATCH_NOTES = [
         title: 'Global search closes cleanly',
         detail:
           'The quick/global search no longer gets stuck open; it now closes reliably when you click away or finish a search.',
+      },
+      {
+        type: 'fixed',
+        title: 'Repeat to-do notifications',
+        detail:
+          'Overdue to-dos stop firing duplicate reminder notifications. (Foundational fix — more notification controls to come.)',
       },
     ],
   },
