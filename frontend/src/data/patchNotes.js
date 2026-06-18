@@ -17,6 +17,51 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.262',
+    date: 'June 17, 2026',
+    summary:
+      'Set Start Install dates right from the Drafting Work Load, a new "Katie" downstream view on the Job Log, a read-only project timeline, and the next round of meeting-notes smarts.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Start Install from the Drafting Work Load',
+        detail:
+          'Drafters can now set a desired Start Install date directly on the Drafting Work Load. The date hands off to the Job Log automatically, so there\'s no need to jump between boards to schedule a release.',
+      },
+      {
+        type: 'new',
+        title: '"Katie" view on the Job Log',
+        detail:
+          'A new Katie quick filter shows the downstream pipeline — Paint Complete, Store at MHMW, Ship Planning, Ship Complete, Installs, and Complete — with the most-complete releases first and upstream ASAPs at the bottom.',
+      },
+      {
+        type: 'new',
+        title: 'Project timeline view',
+        detail:
+          'A read-only, team-laned timeline (Gantt) with week-snap navigation and a jump-to-date picker. Click a release to open a detail panel showing its open to-dos and meeting notes.',
+      },
+      {
+        type: 'improved',
+        title: 'Smarter meeting notes (BB Meeting v2)',
+        adminOnly: true,
+        detail:
+          'Meeting to-dos now reconcile against a before/after Brain snapshot, flagging agreed changes that never landed, and you can match an item to a specific release from a dropdown.',
+      },
+      {
+        type: 'improved',
+        title: 'Release assignment open to more users',
+        detail:
+          'Both admins and drafters can now assign release numbers from the Drafting Work Load.',
+      },
+      {
+        type: 'fixed',
+        title: 'Cleaner submittal naming on the Drafting Work Load',
+        detail:
+          'Fixed how submittal type and names are derived so the Drafting Work Load no longer shows missing or doubled-up names.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.255',
     date: 'June 14, 2026',
     summary:
@@ -58,12 +103,6 @@ export const PATCH_NOTES = [
         title: 'Global search closes cleanly',
         detail:
           'The quick/global search no longer gets stuck open; it now closes reliably when you click away or finish a search.',
-      },
-      {
-        type: 'fixed',
-        title: 'Repeat to-do notifications',
-        detail:
-          'Overdue to-dos stop firing duplicate reminder notifications. (Foundational fix — more notification controls to come.)',
       },
     ],
   },
