@@ -11,7 +11,7 @@
  *   - Release # opens the FC drawing: version-history hub for drafters/admins, latest markup (view) or Procore link otherwise.
  *   - Expanded section embeds JobsTableRow restricted to the remaining columns (showActions={false}); those edit handlers route through the same JobsTableRow APIs as the desktop table.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { JobsTableRow } from './JobsTableRow';
 import StartInstallEditor from './StartInstallEditor';
 import ReleaseNumberLink from './ReleaseNumberLink';
@@ -50,8 +50,15 @@ export default function JobLogRow({
     onDelete = null,
     tableScrollRef = null,
     duplicateFabOrders = null,
+    expandSignal = null,
 }) {
     const [expanded, setExpanded] = useState(false);
+
+    // Expand-all / Collapse-all: the list bumps expandSignal (fresh identity each
+    // click) to drive every row; individual chevron toggles still work afterward.
+    useEffect(() => {
+        if (expandSignal) setExpanded(expandSignal.value);
+    }, [expandSignal]);
 
     const jobNum = fmt(job['Job #']);
     const jobName = fmt(job['Job']);
@@ -85,9 +92,22 @@ export default function JobLogRow({
         duplicateFabOrders,
     };
 
-    const containerCls = `border-b border-gray-200 dark:border-slate-700 ${
-        job._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''
-    } ${isJumpToHighlight ? 'bg-amber-50 dark:bg-amber-900/20' : ''} ${complete ? 'opacity-90' : ''}`;
+    // Row background mirrors the desktop table (JobsTableRow): complete rows gray out,
+    // otherwise alternate white / blue. Jump-to highlight wins over the base tone.
+    const rowBgClass = isJumpToHighlight
+        ? 'bg-amber-50 dark:bg-amber-900/20'
+        : complete
+            ? 'bg-gray-300 dark:bg-slate-600'
+            : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-200 dark:bg-slate-700');
+
+    // Collapsed rows read as a tight list (bottom border only). Expanded rows lift
+    // into a distinct card — margin + border + shadow — so adjacent open cards
+    // separate cleanly in the Expand-all view.
+    const containerCls = `${rowBgClass} ${job._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''} ${
+        expanded
+            ? 'mx-2 my-2 rounded-lg border border-gray-300 dark:border-slate-600 shadow-sm overflow-hidden'
+            : 'border-b border-gray-200 dark:border-slate-700'
+    }`;
 
     const toggle = () => setExpanded((v) => !v);
     const handleKey = (e) => {
@@ -106,7 +126,7 @@ export default function JobLogRow({
                 aria-expanded={expanded}
                 onClick={toggle}
                 onKeyDown={handleKey}
-                className="w-full flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-inset"
+                className="w-full flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-black/10 dark:hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-inset"
             >
                 {/* Job # · Release # — single inline group so both share one baseline.
                     Release # opens the FC drawing / version hub; the rest toggles the row. */}
@@ -165,14 +185,14 @@ export default function JobLogRow({
 
             {/* Expanded section — remaining columns with full editing */}
             {expanded && expandedColumns.length > 0 && (
-                <div className="bg-gray-50 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-700 overflow-x-auto">
+                <div className="border-t border-gray-300 dark:border-slate-600 overflow-x-auto">
                     <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                         <thead>
                             <tr>
                                 {expandedColumns.map((col) => (
                                     <th
                                         key={col}
-                                        className="px-1 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-700/80 border-r border-gray-200 dark:border-slate-600 whitespace-nowrap"
+                                        className="px-1 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-700 dark:text-slate-300 border border-gray-400 dark:border-slate-500 whitespace-nowrap"
                                     >
                                         {col}
                                     </th>

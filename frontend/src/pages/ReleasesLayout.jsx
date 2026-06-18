@@ -22,6 +22,7 @@ import JobLogQuickFilters from '../components/JobLogQuickFilters';
 import ProjectFilterDropdown from '../components/ProjectFilterDropdown';
 import ActiveFilterChips from '../components/ActiveFilterChips';
 import ReleasesViewSwitcher from '../components/ReleasesViewSwitcher';
+import ViewToggle, { useViewMode } from '../components/ViewToggle';
 import Dropdown, { DropdownItem } from '../components/Dropdown';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth, userCanAccessKatieFilter } from '../utils/auth';
@@ -49,15 +50,22 @@ function ReleasesLayout() {
     const location = useLocation();
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useReleases();
     const { isOldMan } = useTheme();
-    const { isMobile, isTablet } = useBreakpoint();
+    const { isMobile, isTablet, isDesktop } = useBreakpoint();
 
     // Which child view is active — the Board ignores column-header filters, so the
     // toolbar's record count must follow boardJobs there; table-only memos (e.g.
     // uniqueValuesByColumn) can also skip their work while the table is unmounted.
     const onBoardRoute = location.pathname.startsWith('/pm-board');
 
-    // View mode follows the device: phone → big single card, tablet → expandable cards, desktop → table.
-    const effectiveView = isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table';
+    // User-selectable view (persisted), reconciled with the device width:
+    //  - 'auto'  → phone: big card, tablet: expandable rows, desktop: table (default)
+    //  - 'table' → full table on every screen (iPad landscape drops a couple columns)
+    //  - 'cards' → tiles on phone, dense expandable rows on tablet/desktop
+    const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
+    const effectiveView =
+        viewMode === 'table' ? 'table'
+        : viewMode === 'cards' ? (isMobile ? 'mobilecard' : 'cards')
+        : (isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table');
 
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [csvData, setCsvData] = useState('');
@@ -489,7 +497,7 @@ function ReleasesLayout() {
         // table column metadata
         columnHeaders, columnWidthPercents,
         // role / view / theme
-        isAdmin, isDrafter, isOldMan, effectiveView, reviewMode, hasJobsData,
+        isAdmin, isDrafter, isOldMan, effectiveView, isDesktop, reviewMode, hasJobsData,
         // shared handlers
         handleDeleteJob, handleCascadeRecalculating, jumpToTarget,
     }), [
@@ -499,7 +507,7 @@ function ReleasesLayout() {
         columnFilters, columnSort, setColumnFilter, setColumnSort, uniqueValuesByColumn,
         stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders,
         columnHeaders, columnWidthPercents,
-        isAdmin, isDrafter, isOldMan, effectiveView, reviewMode, hasJobsData,
+        isAdmin, isDrafter, isOldMan, effectiveView, isDesktop, reviewMode, hasJobsData,
         handleDeleteJob, handleCascadeRecalculating, jumpToTarget,
     ]);
 
@@ -561,6 +569,11 @@ function ReleasesLayout() {
 
                                 {/* Row 2: primary CTA + Actions/Projects + quick filters + view switcher + project chevron */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                    {/* Table | Cards | Auto — how the Table view renders (left-aligned to mirror DWL); irrelevant on Board/Timeline */}
+                                    {!onBoardRoute && (
+                                        <ViewToggle value={viewMode} onChange={setViewMode} />
+                                    )}
+
                                     <button
                                         onClick={handleReleaseClick}
                                         className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-blue-700 text-white border border-blue-700 hover:bg-blue-800"
