@@ -115,16 +115,21 @@ def _end_of_week(today=None):
     return today + timedelta(days=(4 - today.weekday()) % 7)  # Mon=0 … Fri=4
 
 
-def _resolve_release(ref):
-    """'480-146' -> (Releases.id, job_number_str); best-effort."""
+def _release_row(ref):
+    """'480-625' -> the Releases row (or None). The single release-token parser; both
+    _resolve_release (id + job label) and drift anchoring read off the row it returns."""
     if not ref:
-        return None, None
+        return None
     m = re.match(r"\s*(\d+)\s*-\s*(\w+)\s*$", str(ref))
     if not m:
-        return None, None
-    job, rel = int(m.group(1)), m.group(2)
-    row = Releases.query.filter_by(job=job, release=rel).first()
-    return (row.id, str(job)) if row else (None, None)
+        return None
+    return Releases.query.filter_by(job=int(m.group(1)), release=m.group(2)).first()
+
+
+def _resolve_release(ref):
+    """'480-146' -> (Releases.id, job_number_str); best-effort."""
+    row = _release_row(ref)
+    return (row.id, str(row.job)) if row else (None, None)
 
 
 def _resolve_submittal(ref):
@@ -132,16 +137,6 @@ def _resolve_submittal(ref):
         return None
     row = Submittals.query.filter_by(submittal_id=str(ref)).first()
     return row.submittal_id if row else None
-
-
-def _release_row(ref):
-    """'480-625' -> the Releases row (or None) — used to anchor a drift + label it."""
-    if not ref:
-        return None
-    m = re.match(r"\s*(\d+)\s*-\s*(\w+)\s*$", str(ref))
-    if not m:
-        return None
-    return Releases.query.filter_by(job=int(m.group(1)), release=m.group(2)).first()
 
 
 def _detect_and_store_drifts(meeting):
@@ -174,7 +169,7 @@ def _detect_and_store_drifts(meeting):
             meeting_id=meeting.id,
             target=d["target"],
             ref=d["ref"],
-            entity_name=(entity_name or None) and entity_name[:255],
+            entity_name=entity_name[:255] if entity_name else None,
             field=d["field"],
             stated_value=d["stated_value"],
             brain_value=d["brain_value"],

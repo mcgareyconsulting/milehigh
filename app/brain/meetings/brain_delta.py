@@ -214,11 +214,8 @@ def sanitize_drift(raw):
     ref = (str(raw.get("ref") or "")).strip()
     if not ref or not field:
         return None
-    if target == "release" and field in RELEASE_FIELDS:
-        pass
-    elif target == "submittal" and field in SUBMITTAL_FIELDS:
-        pass
-    else:
+    allowed = {"release": RELEASE_FIELDS, "submittal": SUBMITTAL_FIELDS}.get(target, ())
+    if field not in allowed:
         return None
     # The model sometimes reports a "drift" whose stated value equals the Brain value.
     if _is_noop(raw.get("stated_value"), raw.get("brain_value")):
