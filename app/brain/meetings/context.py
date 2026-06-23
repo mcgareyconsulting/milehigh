@@ -30,7 +30,7 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 # Bounds that keep context from crowding out the transcript or ballooning cost.
-MAX_ENTITIES = 15          # cap submittals brought into context
+MAX_SUBMITTALS = 15          # cap submittals brought into context
 # A multi-job production standup touches many jobs and drift detection needs the SPECIFIC
 # release the room named in context, so releases get a larger budget than submittals and a
 # per-job cap keeps one big job (480 has 40+ releases) from flooding the set.
@@ -163,7 +163,7 @@ def relevant_entities(meeting):
             seen_sub.add(s.submittal_id)
             submittals.append(s)
 
-    return releases[:MAX_RELEASES], submittals[:MAX_ENTITIES]
+    return releases[:MAX_RELEASES], submittals[:MAX_SUBMITTALS]
 
 
 # --- state-line rendering (shared) ------------------------------------------- #
@@ -227,7 +227,7 @@ def assemble_extraction_context(meeting):
     state = _light_state_lines(meeting)
     guidance = learned_guidance()
 
-    # State and guidance are small and bounded (MAX_ENTITIES / MAX_GUIDANCE); the agenda
+    # State and guidance are small and bounded (MAX_SUBMITTALS / MAX_GUIDANCE); the agenda
     # is unbounded user input. Budget the agenda against what remains under the
     # extractor's context cap so a long agenda truncates ITSELF — the extractor's own
     # tail-truncation would silently evict the state and guidance sections instead.
