@@ -1121,6 +1121,10 @@ class Meeting(db.Model):
         'MeetingLearning', backref='meeting', lazy='dynamic',
         cascade='all, delete-orphan',
     )
+    drifts = db.relationship(
+        'BrainDrift', backref='meeting', lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
     created_by_user = db.relationship('User', foreign_keys=[created_by])
 
     def to_dict(self, include_items=False):
@@ -1155,6 +1159,7 @@ class Meeting(db.Model):
             d['summary'] = self.summary
             d['pre_snapshot'] = self.pre_snapshot
             d['post_snapshot'] = self.post_snapshot
+            d['drifts'] = [dr.to_dict() for dr in self.drifts.order_by(BrainDrift.id).all()]
             latest = self.learnings.order_by(MeetingLearning.id.desc()).first()
             d['learning'] = latest.to_dict() if latest else None
         else:
@@ -1297,6 +1302,64 @@ class MeetingLearning(db.Model):
             'input_tokens': self.input_tokens,
             'output_tokens': self.output_tokens,
             'cost_usd': self.cost_usd,
+            'created_at': _dt(self.created_at),
+        }
+
+
+class BrainDrift(db.Model):
+    """A place where the meeting's spoken reality diverges from the Brain (job log / DWL).
+
+    Produced by the read-only drift-detection pass (app/brain/meetings/brain_delta.py):
+    for every release/submittal the room discussed, it compares what was SAID against the
+    current field value in the system of record and records each mismatch — both
+    `contradiction` (a status statement that disagrees, e.g. "that's at 25%" vs
+    job_comp=20%) and `agreed_change` (a change the room agreed that never landed). This
+    SUBSUMES the v2 ChecklistItem.brain_update_pending flag.
+
+    v3 only DETECTS and surfaces drifts (status stays 'open'); it never writes back to the
+    Brain. `status` is the forward hook for the medium-term HITL review loop (open →
+    accepted/dismissed → applied) and the long-term live-update path — add reviewed_by /
+    decided_at / applied_at columns then; v3 leaves them off.
+    """
+    __tablename__ = "brain_drifts"
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(
+        db.Integer, db.ForeignKey('meetings.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    target = db.Column(db.String(12), nullable=False)   # release | submittal
+    ref = db.Column(db.String(64), nullable=True)        # display token: '480-625' / submittal id
+    entity_name = db.Column(db.String(255), nullable=True)  # job/project name for display
+    field = db.Column(db.String(40), nullable=False)     # a RELEASE_FIELDS / SUBMITTAL_FIELDS name
+    stated_value = db.Column(db.String(255), nullable=True)   # what the room said
+    brain_value = db.Column(db.String(255), nullable=True)    # what the Brain held at detection
+    kind = db.Column(db.String(20), nullable=False, default='contradiction')  # contradiction|agreed_change
+    quote = db.Column(db.Text, nullable=True)            # verbatim transcript span
+    confidence = db.Column(db.Float, nullable=True)
+    # Anchors to the system-of-record row (one of the two is set; an unanchored drift is
+    # dropped before persistence since it can't be acted on).
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True)
+    submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id'), nullable=True)
+    # open (detected, unreviewed) — the only state v3 sets. HITL adds dismissed/applied later.
+    status = db.Column(db.String(20), nullable=False, default='open', server_default='open')
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'meeting_id': self.meeting_id,
+            'target': self.target,
+            'ref': self.ref,
+            'entity_name': self.entity_name,
+            'field': self.field,
+            'stated_value': self.stated_value,
+            'brain_value': self.brain_value,
+            'kind': self.kind,
+            'quote': self.quote,
+            'confidence': self.confidence,
+            'release_id': self.release_id,
+            'submittal_id': self.submittal_id,
+            'status': self.status,
             'created_at': _dt(self.created_at),
         }
 

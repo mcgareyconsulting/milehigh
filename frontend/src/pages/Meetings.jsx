@@ -642,6 +642,42 @@ function ContextLearningPanel({ meeting, onSaveAgenda, onGenerateLearnings, lear
                 </div>
             )}
 
+            {/* Brain drifts (v3) — where what was said diverged from the job log / DWL.
+                Read-only: surfaced for the reviewer to act on; the system never writes back. */}
+            {meeting.drifts?.length > 0 && (
+                <div className={meeting.summary ? 'border-t border-gray-100 dark:border-slate-700 pt-3' : ''}>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-rose-500 dark:text-rose-400 mb-1">
+                        ⚠ Brain drifts ({meeting.drifts.length})
+                    </h3>
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 mb-2">
+                        Where what was said disagrees with the Brain. Read-only — update the job log / DWL yourself.
+                    </p>
+                    <ul className="space-y-1.5">
+                        {meeting.drifts.map(d => (
+                            <li key={d.id} className="rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-900/10 p-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${d.kind === 'agreed_change'
+                                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                        : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                        {d.kind === 'agreed_change' ? 'agreed change' : 'contradiction'}
+                                    </span>
+                                    <span className="text-[11px] font-medium text-gray-800 dark:text-slate-200">{d.ref}</span>
+                                    {d.entity_name && <span className="text-[10px] text-gray-400 dark:text-slate-500 truncate max-w-[160px]">{d.entity_name}</span>}
+                                    {d.confidence != null && <span className="ml-auto text-[10px] text-gray-400">{Math.round(d.confidence * 100)}%</span>}
+                                </div>
+                                <p className="mt-1 text-[11px] text-gray-700 dark:text-slate-300">
+                                    <span className="font-medium">{d.field}</span>: said{' '}
+                                    <span className="font-semibold text-rose-700 dark:text-rose-300">{String(d.stated_value)}</span>
+                                    {' · Brain shows '}
+                                    <span className="font-semibold">{d.brain_value == null ? '—' : String(d.brain_value)}</span>
+                                </p>
+                                {d.quote && <p className="mt-0.5 text-[10px] italic text-gray-500 dark:text-slate-400">“{d.quote}”</p>}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             {/* Pre-meeting context */}
             <div className={meeting.summary ? 'border-t border-gray-100 dark:border-slate-700 pt-3' : ''}>
                 <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-1">Pre-meeting context</h3>

@@ -38,6 +38,21 @@ def _hermetic_meeting_summary():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_brain_delta(request):
+    """extract_into_meeting now also runs the read-only drift-detection pass, which would
+    make a live LLM call when an ANTHROPIC_API_KEY is present. Force the API hop to fail so
+    detect_drifts() returns no drifts. Tests exercising the success path re-patch
+    brain_delta._call_anthropic locally; `@pytest.mark.live` tests opt OUT of the patch to
+    exercise the real prompt against the real transcript."""
+    if request.node.get_closest_marker("live"):
+        yield
+        return
+    with patch('app.brain.meetings.brain_delta._call_anthropic',
+               side_effect=RuntimeError('hermetic: no live drift detection in tests')):
+        yield
+
+
 def _authed_client(app, user):
     with ExitStack() as stack:
         for target in _BRAIN_PATCH_TARGETS:

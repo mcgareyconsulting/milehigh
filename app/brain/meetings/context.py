@@ -30,7 +30,12 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 # Bounds that keep context from crowding out the transcript or ballooning cost.
-MAX_ENTITIES = 15          # cap releases / submittals brought into context
+MAX_ENTITIES = 15          # cap submittals brought into context
+# A multi-job production standup touches many jobs and drift detection needs the SPECIFIC
+# release the room named in context, so releases get a larger budget than submittals and a
+# per-job cap keeps one big job (480 has 40+ releases) from flooding the set.
+MAX_RELEASES = 25
+PER_JOB_RELEASES = 6       # releases per name-only-mentioned job (explicit tokens bypass this)
 EVENTS_PER_ENTITY = 8      # most recent in-window events shown per entity (summary)
 MAX_GUIDANCE = 6           # top learned patterns injected as extraction guidance
 
@@ -57,64 +62,108 @@ def apply_aliases(text):
 
 # --- entity scoping (shared by both context streams) ------------------------- #
 
-def _releases_for_job(job_number):
+def _int(value):
     try:
-        jn = int(str(job_number).strip())
+        return int(str(value).strip())
     except (TypeError, ValueError):
+        return None
+
+
+def _releases_for_job(job_number):
+    jn = _int(job_number)
+    if jn is None:
         return []
     return (Releases.query
             .filter(Releases.job == jn, Releases.is_archived.is_(False))
             .all())
 
 
+def _rank_releases_for_job(releases, text_tokens):
+    """Order a job's releases by how well their scope description overlaps the meeting text
+    (so 'P3 canopies' surfaces 480-625 ahead of its 40+ siblings), then by release token."""
+    def score(r):
+        desc_tokens = set(owner_match._tokens(f"{r.description or ''} {r.job_name or ''}"))
+        return (-len(desc_tokens & text_tokens), str(r.release))
+    return sorted(releases, key=score)
+
+
 def relevant_entities(meeting):
-    """(releases, submittals) most likely discussed in this meeting — hybrid scoping.
+    """(releases, submittals) most likely discussed — ADDITIVE, release-aware scoping.
 
-    project_number set → that project's rows. Otherwise scan transcript + agenda for job
-    tokens and fuzzy-match active jobs (after applying learned aliases). Capped so a big
-    standup can't blow up the prompt.
+    project_number SEEDS the set (its rows are always included) but never EXCLUDES: we
+    always also scan transcript + agenda for explicit job-release tokens and fuzzy-match
+    active jobs (after learned aliases), then union. This fixes the v2 bug where a
+    multi-job production standup pinned to one project_number dropped every other job that
+    was actually discussed (and so could never be drift-checked).
+
+    Release-aware: a specifically-named release (e.g. '480-625') is always pulled in, while
+    a job mentioned only by name contributes its most scope-relevant releases — not all of
+    them — so one big job can't flood the budget.
     """
-    if meeting.project_number:
-        releases = _releases_for_job(meeting.project_number)
-        submittals = (Submittals.query
-                      .filter(Submittals.project_number == str(meeting.project_number))
-                      .all())
-        return releases[:MAX_ENTITIES], submittals[:MAX_ENTITIES]
-
     text = apply_aliases(f"{meeting.transcript or ''}\n{meeting.agenda_text or ''}")
+    text_tokens = set(owner_match._tokens(text))
 
-    # 1. Explicit job-release tokens → releases by job number.
-    job_numbers = {m.group(1) for m in _JOB_TOKEN.finditer(text)}
+    # Explicit 'JOB-REL' tokens — capture both the job AND the specific release the room
+    # named, and count job mentions to rank when we exceed the cap.
+    explicit = {(m.group(1), m.group(2)) for m in _JOB_TOKEN.finditer(text)}
+    explicit_by_job, job_mentions = {}, {}
+    for job, rel in explicit:
+        explicit_by_job.setdefault(job, set()).add(rel)
+        job_mentions[job] = job_mentions.get(job, 0) + 1
+    job_numbers = set(job_mentions)
 
-    # 2. Fuzzy name matches against active jobs (reuse owner_match's candidate builder).
-    cands = owner_match.build_candidates()
-    tt = set(owner_match._tokens(text))
+    # Fuzzy name matches against active jobs / open submittals.
     matched_submittal_ids = set()
-    for c in cands:
-        inter = tt & c["tokens"]
+    for c in owner_match.build_candidates():
+        inter = text_tokens & c["tokens"]
         if not inter or not any(len(t) >= 4 for t in inter):
             continue
         if len(inter) / len(c["tokens"]) < owner_match.FUZZY_ACCEPT:
             continue
         if c["job_number"]:
-            job_numbers.add(str(c["job_number"]))
+            jn = str(c["job_number"])
+            job_numbers.add(jn)
+            job_mentions[jn] = max(job_mentions.get(jn, 0), len(inter))
         if c.get("submittal_id"):
             matched_submittal_ids.add(c["submittal_id"])
 
+    # project_number SEEDS: always present, even with no mention (and even pre-transcript,
+    # e.g. the snapshot captured at meeting creation before any transcript exists).
+    seed = str(meeting.project_number).strip() if meeting.project_number else None
+    if seed:
+        job_numbers.add(seed)
+
+    # Rank jobs: the project seed first, then by mention frequency, then numerically.
+    ordered_jobs = sorted(
+        job_numbers, key=lambda jn: (jn != seed, -job_mentions.get(jn, 0), jn))
+
     releases, seen = [], set()
-    for jn in job_numbers:
-        for r in _releases_for_job(jn):
+    for jn in ordered_jobs:
+        job_rels = _releases_for_job(jn)
+        wanted = explicit_by_job.get(jn, set())
+        named = [r for r in job_rels if str(r.release) in wanted]          # always include
+        others = _rank_releases_for_job(
+            [r for r in job_rels if str(r.release) not in wanted], text_tokens)
+        for r in named + others[:PER_JOB_RELEASES]:
             if r.id not in seen:
                 seen.add(r.id)
                 releases.append(r)
+        if len(releases) >= MAX_RELEASES:
+            break
 
-    submittals = []
+    submittals, seen_sub = [], set()
+    sub_rows = []
+    if seed:
+        sub_rows += Submittals.query.filter(Submittals.project_number == seed).all()
     if matched_submittal_ids:
-        submittals = (Submittals.query
-                      .filter(Submittals.submittal_id.in_(matched_submittal_ids))
-                      .all())
+        sub_rows += (Submittals.query
+                     .filter(Submittals.submittal_id.in_(matched_submittal_ids)).all())
+    for s in sub_rows:
+        if s.submittal_id not in seen_sub:
+            seen_sub.add(s.submittal_id)
+            submittals.append(s)
 
-    return releases[:MAX_ENTITIES], submittals[:MAX_ENTITIES]
+    return releases[:MAX_RELEASES], submittals[:MAX_ENTITIES]
 
 
 # --- state-line rendering (shared) ------------------------------------------- #
@@ -129,9 +178,13 @@ def _release_state_line(r):
     # both lets the model match a spoken item to the right release.
     desc = (r.description or "").strip()
     desc = f' "{desc}"' if desc else ""
+    # job_comp / invoiced are the completion-zone fields the shop reports on aloud
+    # ("that's at 25%", "did we invoice it") — show them so the model can spot a spoken
+    # value that contradicts the record (drift detection), not just stage/dates.
     return (f"- {r.job}-{r.release} {r.job_name or ''}{desc} — stage={r.stage or '—'}, "
             f"PM={r.pm or '—'}, start_install={_d(r.start_install)}, "
-            f"comp_eta={_d(r.comp_eta)}")
+            f"comp_eta={_d(r.comp_eta)}, job_comp={r.job_comp or '—'}, "
+            f"invoiced={r.invoiced or '—'}")
 
 
 def _submittal_state_line(s):
