@@ -12,7 +12,7 @@ from typing import Optional
 
 from sqlalchemy import func
 
-from app.models import Releases, ReleaseDrawingVersion, db
+from app.models import Releases, ReleaseDrawingVersion, User, db
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 
@@ -24,7 +24,6 @@ logger = get_logger(__name__)
 def _username_suffix(user_id: Optional[int]) -> str:
     if not user_id:
         return "Brain"
-    from app.models import User
     user = db.session.get(User, user_id)
     if not user:
         return "Brain"
