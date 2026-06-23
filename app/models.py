@@ -1052,6 +1052,185 @@ class FcCollectionRun(db.Model):
         return d
 
 
+class RawSourceRecord(db.Model):
+    """Bronze landing table for the Hive Mind data lake.
+
+    Immutable raw records from any external source (email is the first; Teams
+    meetings etc. land here later, distinguished by `source`). The source of
+    truth stays in the originating systems — this is a normalized text+structure
+    copy for audit, embeddings, and fast joins, with `external_pointer` holding
+    references to raw media kept in M365.
+
+    Idempotency: upsert by (source, external_id); `content_hash` detects whether
+    a re-pulled record actually changed, so re-pulling an overlapping window is
+    safe and lands no duplicates. Plain columns + JSON only (SQLite-test-safe).
+    """
+    __tablename__ = "raw_source_records"
+    __table_args__ = (
+        db.UniqueConstraint("source", "external_id", name="uq_raw_source_external_id"),
+        db.Index("ix_raw_source_records_content_hash", "content_hash"),
+        db.Index("ix_raw_source_records_occurred_at", "occurred_at"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(64), nullable=False)         # e.g. 'm365_mail'
+    record_type = db.Column(db.String(64), nullable=False)    # e.g. 'email'
+    source_account = db.Column(db.String(255), nullable=True)  # mailbox, e.g. 'bb@mhmw.com'
+    external_id = db.Column(db.String(1024), nullable=False)  # Graph message id
+    content_hash = db.Column(db.String(64), nullable=False)   # sha256 idempotency key
+    occurred_at = db.Column(db.DateTime, nullable=True)       # source event time (receivedDateTime)
+    ingested_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    payload = db.Column(db.JSON, nullable=False)              # normalized record
+    external_pointer = db.Column(db.JSON, nullable=True)      # refs kept in M365 (webLink, attachments)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "source": self.source,
+            "record_type": self.record_type,
+            "source_account": self.source_account,
+            "external_id": self.external_id,
+            "content_hash": self.content_hash,
+            "occurred_at": _dt(self.occurred_at),
+            "ingested_at": _dt(self.ingested_at),
+            "payload": self.payload,
+            "external_pointer": self.external_pointer,
+        }
+
+
+class LakeIngestState(db.Model):
+    """Per-source watermark for incremental lake ingestion.
+
+    Holds the last poll time and the max `occurred_at` landed so far, so polls
+    only fetch records newer than the watermark (minus a small overlap).
+    Correctness does not depend on this — RawSourceRecord's (source, external_id)
+    uniqueness makes overlapping re-pulls idempotent; the watermark just bounds
+    how far back each poll re-reads. Keyed by (source, account) so each mailbox
+    in the ingested set advances independently.
+    """
+    __tablename__ = "lake_ingest_state"
+    __table_args__ = (
+        db.UniqueConstraint("source", "account", name="uq_lake_ingest_source_account"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(64), nullable=False)
+    account = db.Column(db.String(255), nullable=True)  # mailbox, e.g. 'bb@mhmw.com'
+    last_polled_at = db.Column(db.DateTime, nullable=True)
+    last_occurred_at = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @classmethod
+    def get_or_create(cls, source, account=None):
+        row = cls.query.filter_by(source=source, account=account).first()
+        if row is None:
+            row = cls(source=source, account=account)
+            db.session.add(row)
+            db.session.flush()
+        return row
+
+
+class MicrosoftDelegatedToken(db.Model):
+    """Stored delegated OAuth token for a single mailbox identity (device-code flow).
+
+    Used when org policy blocks app-only Graph application permissions: the
+    mailbox (bb@mhmw.com) signs in once via the device-code flow and consents
+    for itself (user consent, not admin consent). The refresh token here lets
+    the poller mint access tokens going forward without further interaction.
+    One row per account_email. Tokens are db.Text (no length cap) since refresh
+    tokens are large.
+    """
+    __tablename__ = "microsoft_delegated_tokens"
+    id = db.Column(db.Integer, primary_key=True)
+    account_email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    access_token = db.Column(db.Text, nullable=True)
+    refresh_token = db.Column(db.Text, nullable=True)
+    token_expires_at = db.Column(db.DateTime, nullable=True)
+    scopes = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @classmethod
+    def get_for_account(cls, account_email):
+        return cls.query.filter_by(account_email=(account_email or "").lower()).first()
+
+
+class MaterialOrder(db.Model):
+    """A part/material ordered from a supplier, tagged to a job-release.
+
+    Parsed from supplier order emails forwarded to bb@mhmw.com (the first source
+    is Drexel Supply decking orders). Mirrors the "Dencol orders" interaction
+    path — it does NOT create a Trello card; it surfaces on the release's detail
+    modal as outstanding material. Linked to Releases by (job, release) *value*,
+    not a FK, matching how the app links job-log to job sites.
+
+    Lifecycle: status 'ordered' on parse → 'received' when marked (manually for
+    now; a receiving-email adapter can close it later). Idempotency: upsert by
+    (source_record_id, line_index) so re-ingesting the same email is a no-op.
+    Plain columns + simple types only (SQLite-test-safe).
+    """
+    __tablename__ = "material_orders"
+    __table_args__ = (
+        db.UniqueConstraint("source_record_id", "line_index", name="uq_material_order_source_line"),
+        db.Index("ix_material_orders_job_release", "job", "release"),
+        db.Index("ix_material_orders_status", "status"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    # Job-release link (by value, not FK — release may be null if the PO only names a job)
+    job = db.Column(db.Integer, nullable=True)
+    release = db.Column(db.String(16), nullable=True)
+
+    supplier = db.Column(db.String(128), nullable=True)          # e.g. 'Drexel Supply'
+    supplier_contact = db.Column(db.String(255), nullable=True)  # rep name/email
+    po_number = db.Column(db.String(64), nullable=True)          # e.g. '580-659'
+
+    # Order line
+    description = db.Column(db.String(512), nullable=True)       # full part text
+    quantity = db.Column(db.Float, nullable=True)
+    unit = db.Column(db.String(32), nullable=True)               # e.g. 'pcs'
+    # Best-effort parsed sub-fields (nullable; description is authoritative)
+    profile = db.Column(db.String(64), nullable=True)           # e.g. '1.5C'
+    gauge = db.Column(db.String(32), nullable=True)             # e.g. '18Ga'
+    finish = db.Column(db.String(64), nullable=True)           # e.g. 'Galvanized'
+    dimension = db.Column(db.String(64), nullable=True)        # e.g. '48"'
+
+    status = db.Column(db.String(16), nullable=False, default="ordered", server_default="ordered")
+    ordered_at = db.Column(db.Date, nullable=True)
+    received_at = db.Column(db.Date, nullable=True)
+
+    # Provenance: which raw lake record + which line of it this came from
+    source = db.Column(db.String(64), nullable=True)            # e.g. 'm365_mail'
+    source_record_id = db.Column(db.Integer, nullable=True)    # raw_source_records.id (loose link)
+    line_index = db.Column(db.Integer, nullable=False, default=0)
+    raw_line = db.Column(db.String(512), nullable=True)        # original order line text
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "job": self.job,
+            "release": self.release,
+            "supplier": self.supplier,
+            "supplier_contact": self.supplier_contact,
+            "po_number": self.po_number,
+            "description": self.description,
+            "quantity": self.quantity,
+            "unit": self.unit,
+            "profile": self.profile,
+            "gauge": self.gauge,
+            "finish": self.finish,
+            "dimension": self.dimension,
+            "status": self.status,
+            "ordered_at": _dt(self.ordered_at),
+            "received_at": _dt(self.received_at),
+            "source": self.source,
+            "source_record_id": self.source_record_id,
+            "line_index": self.line_index,
+            "raw_line": self.raw_line,
+            "created_at": _dt(self.created_at),
+            "updated_at": _dt(self.updated_at),
+        }
+
+
 class Meeting(db.Model):
     """A captured meeting whose transcript is mined for checklist items.
 

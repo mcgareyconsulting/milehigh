@@ -31,6 +31,7 @@ from app.auth.routes import auth_bp
 from app.history import history_bp
 from app.admin import admin_bp
 from app.api import api_bp
+from app.lake import lake_bp
 
 from app.trello.api import create_trello_card_from_excel_data
 
@@ -117,6 +118,63 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # --- Banana Boy mailbox poll (bb@mhmw.com → data lake bronze) ---
+    # Incrementally pulls forwarded emails into RawSourceRecord. Gated by
+    # BB_MAIL_INGEST_ENABLED so it stays dormant until the Azure app-only
+    # access policy is in place. On-demand pulls go through /lake/ingest/mail/pull.
+    bb_mail_poll_minutes = app.config.get("BB_MAIL_POLL_MINUTES", 15)
+
+    def bb_mail_poll():
+        with app.app_context():
+            if not app.config.get("BB_MAIL_INGEST_ENABLED"):
+                return
+            from app.lake.ingest import m365_mail
+            try:
+                result = m365_mail.poll()
+                if result.get("created") or result.get("updated"):
+                    logger.info("BB mail poll landed records", **{
+                        k: result[k] for k in ("mailboxes", "created", "updated", "unchanged", "fetched")
+                    })
+                # Consume newly-landed emails into supplier material orders (no-op
+                # for non-order mail; idempotent so a stable mailbox is cheap).
+                try:
+                    from app.brain.material_orders import service as material_orders_service
+                    material_orders_service.ingest_unprocessed()
+                except Exception as e:
+                    logger.error("Material order ingest failed", error=str(e), exc_info=True)
+            except Exception as e:
+                logger.error("BB mail poll failed", error=str(e), exc_info=True)
+
+    scheduler.add_job(
+        func=bb_mail_poll,
+        trigger="interval",
+        minutes=bb_mail_poll_minutes,
+        id="bb_mail_poll",
+        name="BB Mailbox Poll",
+        replace_existing=True,
+    )
+
+    # Surface the BB ingest gate at startup so it's obvious whether forwarded
+    # mail will actually be pulled. Logs on every boot regardless of the flag.
+    # Tenant + client id are common to both the app-only and device-code flows;
+    # the device-code (public client) path has no secret, so we don't require one.
+    _bb_enabled = bool(app.config.get("BB_MAIL_INGEST_ENABLED"))
+    _bb_has_app_reg = bool(
+        app.config.get("AZURE_TENANT_ID") and app.config.get("AZURE_CLIENT_ID")
+    )
+    logger.info(
+        "BB mail ingest status",
+        enabled=_bb_enabled,
+        mailbox=app.config.get("BB_MAILBOX"),
+        poll_minutes=bb_mail_poll_minutes,
+        azure_app_registered=_bb_has_app_reg,
+        note=(
+            "active — polling on schedule" if _bb_enabled and _bb_has_app_reg
+            else "DORMANT — set BB_MAIL_INGEST_ENABLED=1"
+            + ("" if _bb_has_app_reg else " and AZURE_TENANT_ID / AZURE_CLIENT_ID")
+        ),
+    )
+
     # --- Checklist deadline notifications (daily 6:00 AM Mountain Time) ---
     # Pings the owner of each accepted post-meeting to-do whose due date is near
     # or overdue (deduped via ChecklistItem.last_notified_at).
@@ -160,6 +218,12 @@ def init_scheduler(app):
             "name": "FC PDF Pack Retry",
             "schedule": "Daily at 02:00 America/Denver",
             "description": "Retry Procore FC viewer_url for releases missing it (last 7 days)",
+        },
+        {
+            "id": "bb_mail_poll",
+            "name": "BB Mailbox Poll",
+            "schedule": f"Every {bb_mail_poll_minutes} minutes",
+            "description": "Pull forwarded emails from bb@mhmw.com into the data lake (when enabled)",
         },
         {
             "id": "checklist_due_scan",
@@ -249,6 +313,7 @@ def create_app():
         "procore/",
         "brain/",
         "admin/",
+        "lake/",
     ]
 
     # Paths under an API prefix that are actually React pages and should
@@ -505,6 +570,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(lake_bp, url_prefix="/lake")
 
     # Catch-all route for React Router (must be last, after all API routes)
     # This handles direct URL access to React routes like /history, /operations, etc.
