@@ -17,6 +17,47 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.268',
+    date: 'June 23, 2026',
+    summary:
+      'Comment threads on PDF drawings, an ordered-materials view on job details, and the next layer of meeting-notes intelligence.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Comment threads on PDF drawings',
+        detail:
+          'Each version of an uploaded drawing now has its own comment thread. @mention a teammate and they get a notification-bell alert that clicks straight through to the drawing.',
+      },
+      {
+        type: 'new',
+        title: 'Ordered materials on job details',
+        detail:
+          'The job details panel now lists materials ordered from suppliers but not yet received, so you can see what\'s still outstanding for a release at a glance.',
+      },
+      {
+        type: 'improved',
+        title: 'Automatic supplier-order capture',
+        adminOnly: true,
+        detail:
+          'Supplier order confirmations forwarded to the Banana Boy mailbox are parsed automatically into ordered-material line items and fed into the data lake. Off by default until the mailbox connection is switched on.',
+      },
+      {
+        type: 'new',
+        title: 'Meeting "brain drift" detection (BB Meeting v3)',
+        adminOnly: true,
+        detail:
+          'After a meeting, BB now compares what was discussed against the current state of the Brain and flags agreed changes that never landed — read-only for now, surfaced on the meeting view.',
+      },
+      {
+        type: 'new',
+        title: 'Auto-schedule the meeting bot from your calendar',
+        adminOnly: true,
+        detail:
+          'Invite bb@mhmw.com to a Teams meeting and the notetaker bot schedules itself to join at the start time. Off by default, pending calendar permissions.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.262',
     date: 'June 17, 2026',
     summary:
