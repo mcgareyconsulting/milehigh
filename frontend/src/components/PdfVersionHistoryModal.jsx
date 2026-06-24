@@ -11,6 +11,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '../utils/api';
+import { jobsApi } from '../services/jobsApi';
+import { fetchMentionableUsers } from '../services/notificationApi';
+import MentionInput from './shared/MentionInput';
 
 const isPdfFile = (file) =>
     (file?.type || '').toLowerCase() === 'application/pdf' ||
@@ -20,11 +23,23 @@ const isImageFile = (file) =>
     (file?.type || '').toLowerCase().startsWith('image/') ||
     /\.(png|jpe?g|gif|webp|bmp|heic|heif|tiff?)$/i.test(file?.name || '');
 
+/** Render @FirstName mentions in bold accent (mirrors board comment rendering). */
+function renderCommentBody(body) {
+    return (body || '').split(/(@\w+)/g).map((part, i) =>
+        part.startsWith('@')
+            ? <span key={i} className="font-semibold text-accent-500">{part}</span>
+            : part
+    );
+}
+
 export function PdfVersionHistoryModal({
     isOpen,
     releaseId,
     onClose,
     onOpenVersion,
+    // When set, that version's comment thread is auto-expanded on open (used by
+    // the notification bell to land directly on the mentioned drawing comment).
+    initialCommentVersionId = null,
     viewerUrl = '',
     // When set (e.g. "Welded QC" / "Paint Complete"), the modal is in stage-gate
     // mode: it requires a photo tagged with this stage before the stage change
@@ -40,6 +55,12 @@ export function PdfVersionHistoryModal({
     const [uploading, setUploading] = useState(false);
     const [photoBusy, setPhotoBusy] = useState(false);
     const [noteDrafts, setNoteDrafts] = useState({});
+    // Per-version comment threads (lazy-loaded on expand).
+    const [expandedComments, setExpandedComments] = useState({});      // versionId -> bool
+    const [commentsByVersion, setCommentsByVersion] = useState({});    // versionId -> comment[]
+    const [commentDrafts, setCommentDrafts] = useState({});            // versionId -> string
+    const [commentBusy, setCommentBusy] = useState({});               // versionId -> bool
+    const [mentionableUsers, setMentionableUsers] = useState([]);
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
 
@@ -86,6 +107,58 @@ export function PdfVersionHistoryModal({
         loadPhotos();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, releaseId]);
+
+    // Mentionable users for the comment typeahead — loaded once when the modal opens.
+    useEffect(() => {
+        if (!isOpen || mentionableUsers.length > 0) return;
+        fetchMentionableUsers().then(setMentionableUsers).catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
+
+    // Auto-expand the version a notification pointed at, once it appears.
+    useEffect(() => {
+        if (!isOpen || !initialCommentVersionId) return;
+        setExpandedComments((prev) => ({ ...prev, [initialCommentVersionId]: true }));
+        if (commentsByVersion[initialCommentVersionId] === undefined) {
+            loadComments(initialCommentVersionId);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, initialCommentVersionId]);
+
+    const loadComments = async (versionId) => {
+        try {
+            const comments = await jobsApi.getVersionComments(releaseId, versionId);
+            setCommentsByVersion((prev) => ({ ...prev, [versionId]: comments }));
+        } catch {
+            setCommentsByVersion((prev) => ({ ...prev, [versionId]: [] }));
+        }
+    };
+
+    const toggleComments = (versionId) => {
+        setExpandedComments((prev) => {
+            const next = !prev[versionId];
+            if (next && commentsByVersion[versionId] === undefined) loadComments(versionId);
+            return { ...prev, [versionId]: next };
+        });
+    };
+
+    const submitComment = async (versionId) => {
+        const body = (commentDrafts[versionId] || '').trim();
+        if (!body || commentBusy[versionId]) return;
+        setCommentBusy((prev) => ({ ...prev, [versionId]: true }));
+        try {
+            const comment = await jobsApi.addVersionComment(releaseId, versionId, body);
+            setCommentsByVersion((prev) => ({
+                ...prev,
+                [versionId]: [...(prev[versionId] || []), comment],
+            }));
+            setCommentDrafts((prev) => ({ ...prev, [versionId]: '' }));
+        } catch (err) {
+            setError(err?.message || 'Failed to add comment');
+        } finally {
+            setCommentBusy((prev) => ({ ...prev, [versionId]: false }));
+        }
+    };
 
     useEffect(() => {
         if (!isOpen) return;
@@ -316,43 +389,104 @@ export function PdfVersionHistoryModal({
                         )}
                         {!loading && versions.length > 0 && (
                             <ul className="space-y-3">
-                                {versions.map((v) => (
+                                {versions.map((v) => {
+                                    const comments = commentsByVersion[v.id];
+                                    const expanded = !!expandedComments[v.id];
+                                    return (
                                     <li
                                         key={v.id}
-                                        className="border border-gray-200 rounded-lg p-3 flex items-center gap-3"
+                                        className="border border-gray-200 rounded-lg p-3"
                                     >
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-baseline gap-2 flex-wrap">
-                                                <span className="font-semibold text-gray-900">v{v.version_number}</span>
-                                                <span className="text-xs text-gray-500">{fmtDate(v.uploaded_at)}</span>
-                                                <span className="text-xs text-gray-500">
-                                                    {v.uploaded_by?.name || '—'}
-                                                </span>
-                                                <span className="text-xs text-gray-400 ml-auto">{fmtSize(v.file_size_bytes)}</span>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-baseline gap-2 flex-wrap">
+                                                    <span className="font-semibold text-gray-900">v{v.version_number}</span>
+                                                    <span className="text-xs text-gray-500">{fmtDate(v.uploaded_at)}</span>
+                                                    <span className="text-xs text-gray-500">
+                                                        {v.uploaded_by?.name || '—'}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400 ml-auto">{fmtSize(v.file_size_bytes)}</span>
+                                                </div>
+                                                {v.note && (
+                                                    <p className="text-sm text-gray-700 mt-1 break-words">{v.note}</p>
+                                                )}
+                                                {v.source_version_id != null && (
+                                                    <p className="text-xs text-gray-400 mt-1">from v-id {v.source_version_id}</p>
+                                                )}
                                             </div>
-                                            {v.note && (
-                                                <p className="text-sm text-gray-700 mt-1 break-words">{v.note}</p>
-                                            )}
-                                            {v.source_version_id != null && (
-                                                <p className="text-xs text-gray-400 mt-1">from v-id {v.source_version_id}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => onOpenVersion?.(v.id, 'view')}
+                                                className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                                            >
+                                                View
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => onOpenVersion?.(v.id, 'edit')}
+                                                className="px-3 py-2 text-sm bg-accent-600 text-white rounded-md font-semibold"
+                                            >
+                                                Edit
+                                            </button>
+                                        </div>
+
+                                        {/* Comments / @mentions thread for this version */}
+                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleComments(v.id)}
+                                                className="text-xs font-medium text-accent-600 hover:text-accent-700 flex items-center gap-1"
+                                            >
+                                                <span>{expanded ? '▾' : '▸'}</span>
+                                                <span>
+                                                    Comments
+                                                    {comments?.length ? ` (${comments.length})` : ''}
+                                                </span>
+                                            </button>
+                                            {expanded && (
+                                                <div className="mt-2 space-y-2">
+                                                    {comments === undefined && (
+                                                        <p className="text-xs text-gray-400 italic">Loading…</p>
+                                                    )}
+                                                    {comments?.length === 0 && (
+                                                        <p className="text-xs text-gray-400 italic">No comments yet.</p>
+                                                    )}
+                                                    {comments?.map((c) => (
+                                                        <div key={c.id} className="text-sm">
+                                                            <div className="flex items-baseline gap-2">
+                                                                <span className="font-semibold text-gray-800">{c.author_name}</span>
+                                                                <span className="text-xs text-gray-400">{fmtDate(c.created_at)}</span>
+                                                            </div>
+                                                            <p className="text-gray-700 break-words whitespace-pre-wrap">
+                                                                {renderCommentBody(c.body)}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex items-end gap-2 pt-1">
+                                                        <MentionInput
+                                                            value={commentDrafts[v.id] || ''}
+                                                            onChange={(val) => setCommentDrafts((prev) => ({ ...prev, [v.id]: val }))}
+                                                            onSubmit={() => submitComment(v.id)}
+                                                            users={mentionableUsers}
+                                                            placeholder="Add a comment… use @ to tag a teammate"
+                                                            multiline
+                                                            disabled={!!commentBusy[v.id]}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => submitComment(v.id)}
+                                                            disabled={!!commentBusy[v.id] || !(commentDrafts[v.id] || '').trim()}
+                                                            className="px-3 py-1.5 text-xs bg-accent-600 text-white rounded-md font-semibold disabled:opacity-50 shrink-0"
+                                                        >
+                                                            Post
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => onOpenVersion?.(v.id, 'view')}
-                                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                                        >
-                                            View
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => onOpenVersion?.(v.id, 'edit')}
-                                            className="px-3 py-2 text-sm bg-accent-600 text-white rounded-md font-semibold"
-                                        >
-                                            Edit
-                                        </button>
                                     </li>
-                                ))}
+                                    );
+                                })}
                             </ul>
                         )}
                     </section>

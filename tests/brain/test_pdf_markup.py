@@ -309,3 +309,85 @@ def test_oversize_upload_returns_413(app, storage_root, release_id, drafter_user
         client = app.test_client()
         resp = _post_pdf(client, release_id, b"%PDF-" + b"x" * 4096)
     assert resp.status_code == 413
+
+
+# ---------------------------------------------------------------------------
+# Drawing version comments + @mentions
+# ---------------------------------------------------------------------------
+
+
+def _post_comment(client, release_id, version_id, body):
+    return client.post(
+        f'/brain/releases/{release_id}/drawing/versions/{version_id}/comments',
+        json={'body': body},
+    )
+
+
+def test_comment_with_mention_creates_notification(app, storage_root, release_id, drafter_user):
+    from app.models import DrawingVersionComment, Notification, db
+
+    katie = make_user("katie", first_name="Katie", last_name="Smith")
+
+    with _patch_get_current_user(drafter_user):
+        client = app.test_client()
+        vid = _post_pdf(client, release_id, PDF_MIN).get_json()['id']
+        resp = _post_comment(client, release_id, vid, "Hey @Katie check sheet 3")
+
+    assert resp.status_code == 201, resp.data
+    comment = resp.get_json()
+    assert comment['drawing_version_id'] == vid
+    assert comment['release_id'] == release_id
+
+    rows = DrawingVersionComment.query.filter_by(drawing_version_id=vid).all()
+    assert len(rows) == 1
+
+    notifs = Notification.query.filter_by(user_id=katie.id).all()
+    assert len(notifs) == 1
+    assert notifs[0].drawing_version_comment_id == comment['id']
+    assert notifs[0].type == 'mention'
+    # to_dict surfaces nav fields for the bell click-through.
+    d = notifs[0].to_dict()
+    assert d['release_id'] == release_id
+    assert d['drawing_version_id'] == vid
+    assert d['drawing_version_number'] == 1
+
+
+def test_comment_without_mention_creates_no_notification(app, storage_root, release_id, drafter_user):
+    from app.models import Notification
+
+    make_user("nobody", first_name="Nobody")
+    with _patch_get_current_user(drafter_user):
+        client = app.test_client()
+        vid = _post_pdf(client, release_id, PDF_MIN).get_json()['id']
+        resp = _post_comment(client, release_id, vid, "@Ghost is not a real user")
+
+    assert resp.status_code == 201
+    assert Notification.query.count() == 0
+
+
+def test_list_comments_returns_thread_oldest_first(app, storage_root, release_id, drafter_user):
+    with _patch_get_current_user(drafter_user):
+        client = app.test_client()
+        vid = _post_pdf(client, release_id, PDF_MIN).get_json()['id']
+        _post_comment(client, release_id, vid, "first")
+        _post_comment(client, release_id, vid, "second")
+        resp = client.get(f'/brain/releases/{release_id}/drawing/versions/{vid}/comments')
+
+    assert resp.status_code == 200
+    bodies = [c['body'] for c in resp.get_json()['comments']]
+    assert bodies == ["first", "second"]
+
+
+def test_empty_comment_returns_400(app, storage_root, release_id, drafter_user):
+    with _patch_get_current_user(drafter_user):
+        client = app.test_client()
+        vid = _post_pdf(client, release_id, PDF_MIN).get_json()['id']
+        resp = _post_comment(client, release_id, vid, "   ")
+    assert resp.status_code == 400
+
+
+def test_comment_on_missing_version_returns_404(app, storage_root, release_id, drafter_user):
+    with _patch_get_current_user(drafter_user):
+        client = app.test_client()
+        resp = _post_comment(client, release_id, 999999, "hello")
+    assert resp.status_code == 404

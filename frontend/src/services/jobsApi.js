@@ -227,6 +227,29 @@ class JobsApi {
         }
     }
 
+    async getVersionComments(releaseId, versionId) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/comments`
+            );
+            return response.data.comments || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load comments');
+        }
+    }
+
+    async addVersionComment(releaseId, versionId, body) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/comments`,
+                { body }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to add comment');
+        }
+    }
+
     async clearStartInstallHardDate(job, release) {
         try {
             const response = await axios.patch(
