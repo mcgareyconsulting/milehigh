@@ -26,6 +26,17 @@ def ingest_record(record):
     if not parsed or not parsed.get("lines"):
         return []
 
+    # Surface unparseable orderers in the Render logs so future forward-chain
+    # formats we can't read are visible and can be tuned (rather than failing
+    # silently). The order still ingests; orderer fields are just left null.
+    if not parsed.get("ordered_by"):
+        logger.warning(
+            "material_order_orderer_unparsed",
+            source_record_id=record.id,
+            po_number=parsed.get("po_number"),
+            subject=(record.payload or {}).get("subject"),
+        )
+
     orders = []
     for line in parsed["lines"]:
         existing = MaterialOrder.query.filter_by(
@@ -40,6 +51,8 @@ def ingest_record(record):
             supplier=parsed.get("supplier"),
             supplier_contact=parsed.get("supplier_contact"),
             po_number=parsed.get("po_number"),
+            ordered_by=parsed.get("ordered_by"),
+            ordered_by_email=parsed.get("ordered_by_email"),
             description=line.get("description"),
             quantity=line.get("quantity"),
             profile=line.get("profile"),

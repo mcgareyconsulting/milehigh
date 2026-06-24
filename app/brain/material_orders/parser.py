@@ -19,6 +19,12 @@ import html
 import re
 from datetime import datetime
 
+from dateutil import parser as _dateutil_parser
+
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 # Known supplier email domains -> display name. Extend as new suppliers appear.
 KNOWN_SUPPLIERS = {
     "drexelsupply.com": "Drexel Supply",
@@ -30,6 +36,16 @@ _JOB_RELEASE_RE = re.compile(r"\b(\d{2,5})-(\d{2,5})\b")
 # "Qty (45) 1.5C 18Ga. Galvanized Decking @ 48"" — paren optional, qty then desc.
 _QTY_LINE_RE = re.compile(r"Qty\.?\s*\(?\s*(\d+)\s*\)?\s*[:\-]?\s*(.+)", re.IGNORECASE)
 _CONTACT_TMPL = r'([A-Z][\w.\'-]+(?:\s+[A-Z][\w.\'-]+)*)\s*<\s*([\w.\-+]+@{domain})\s*>'
+
+# Forwarded-chain headers. The orderer is the *innermost* (deepest/last) "From:"
+# block — the MHMW person who actually sent the order to the supplier. Above it
+# sit the forwarders. Each block looks like:
+#     From: Rourke Alvarado <RAlvarado@mhmw.com>
+#     Sent: Monday, 15 June 2026 07:41:28   (Outlook)  -or-
+#     Date: Mon, Jun 15, 2026 at 8:31 AM    (Gmail)
+_FROM_LINE_RE = re.compile(r"^\s*From:\s*(.+?)\s*$", re.IGNORECASE)
+_FROM_NAME_EMAIL_RE = re.compile(r"^(.*?)\s*<\s*([\w.\-+]+@[\w.\-]+)\s*>\s*$")
+_SENT_DATE_RE = re.compile(r"^\s*(?:Sent|Date):\s*(.+?)\s*$", re.IGNORECASE)
 
 _PROFILE_RE = re.compile(r"\b(\d+(?:\.\d+)?[A-Z]{1,2})\b")          # 1.5C
 _GAUGE_RE = re.compile(r"\b(\d{1,2})\s*ga\b\.?", re.IGNORECASE)      # 18Ga / 18 ga
@@ -78,6 +94,53 @@ def _parse_dt(value):
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
     except (ValueError, AttributeError):
         return None
+
+
+def _parse_email_date(value):
+    """Parse a free-form forwarded-header date ('Sent:'/'Date:' value) to a datetime."""
+    if not value:
+        return None
+    # Gmail renders "Mon, Jun 15, 2026 at 8:31 AM" — drop the " at " connector.
+    cleaned = re.sub(r"\s+at\s+", " ", value, flags=re.IGNORECASE).strip()
+    try:
+        return _dateutil_parser.parse(cleaned, fuzzy=True)
+    except (ValueError, OverflowError, TypeError):
+        return None
+
+
+def _parse_orderer(text):
+    """Extract (name, email, ordered_dt) of the original sender from a forwarded body.
+
+    The innermost forwarded "From:" block is the person who actually placed the
+    order with the supplier; the blocks above it are forwarders. We therefore take
+    the *last* "From:" line in the body and read the "Sent:"/"Date:" line that
+    immediately follows it. Returns (None, None, None) when there is no forwarded
+    block to read (caller falls back to the message envelope).
+    """
+    lines = text.splitlines()
+    from_idxs = [i for i, ln in enumerate(lines) if _FROM_LINE_RE.match(ln)]
+    if not from_idxs:
+        return None, None, None
+
+    idx = from_idxs[-1]  # deepest in the quoted chain = original author
+    raw_from = _FROM_LINE_RE.match(lines[idx]).group(1).strip()
+    m = _FROM_NAME_EMAIL_RE.match(raw_from)
+    if m:
+        name = m.group(1).strip().strip('"').strip() or None
+        email = m.group(2).strip().lower()
+    else:
+        name = raw_from or None
+        email = None
+
+    # The date sits in the next few lines (allowing a blank or a "To:" in between).
+    ordered_dt = None
+    for ln in lines[idx + 1: idx + 5]:
+        dm = _SENT_DATE_RE.match(ln)
+        if dm:
+            ordered_dt = _parse_email_date(dm.group(1))
+            break
+
+    return name, email, ordered_dt
 
 
 def _parse_part(description):
@@ -145,7 +208,12 @@ def parse_order_email(payload):
         return None
 
     supplier, supplier_contact = _detect_supplier(haystack)
-    ordered_dt = _parse_dt(payload.get("sent_at")) or _parse_dt(payload.get("received_at"))
+
+    # Orderer + true placement date come from the innermost forwarded header
+    # block. Fall back to the message envelope (the forwarder + forward time) when
+    # the body has no forwarded block to read.
+    ordered_by, ordered_by_email, orderer_dt = _parse_orderer(text)
+    ordered_dt = orderer_dt or _parse_dt(payload.get("sent_at")) or _parse_dt(payload.get("received_at"))
 
     return {
         "supplier": supplier,
@@ -153,6 +221,8 @@ def parse_order_email(payload):
         "po_number": po_number,
         "job": job,
         "release": release,
+        "ordered_by": ordered_by,
+        "ordered_by_email": ordered_by_email,
         "ordered_at": ordered_dt.date() if ordered_dt else None,
         "lines": lines,
     }
