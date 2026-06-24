@@ -115,16 +115,21 @@ def _end_of_week(today=None):
     return today + timedelta(days=(4 - today.weekday()) % 7)  # Mon=0 … Fri=4
 
 
-def _resolve_release(ref):
-    """'480-146' -> (Releases.id, job_number_str); best-effort."""
+def _release_row(ref):
+    """'480-625' -> the Releases row (or None). The single release-token parser; both
+    _resolve_release (id + job label) and drift anchoring read off the row it returns."""
     if not ref:
-        return None, None
+        return None
     m = re.match(r"\s*(\d+)\s*-\s*(\w+)\s*$", str(ref))
     if not m:
-        return None, None
-    job, rel = int(m.group(1)), m.group(2)
-    row = Releases.query.filter_by(job=job, release=rel).first()
-    return (row.id, str(job)) if row else (None, None)
+        return None
+    return Releases.query.filter_by(job=int(m.group(1)), release=m.group(2)).first()
+
+
+def _resolve_release(ref):
+    """'480-146' -> (Releases.id, job_number_str); best-effort."""
+    row = _release_row(ref)
+    return (row.id, str(row.job)) if row else (None, None)
 
 
 def _resolve_submittal(ref):
@@ -132,6 +137,53 @@ def _resolve_submittal(ref):
         return None
     row = Submittals.query.filter_by(submittal_id=str(ref)).first()
     return row.submittal_id if row else None
+
+
+def _detect_and_store_drifts(meeting):
+    """Run the read-only drift pass and persist BrainDrift rows. Regenerate-safe — clears
+    the meeting's prior drifts first. Returns the LLM usage dict. Only drifts that anchor
+    to a real release/submittal are stored; an unanchored one can't be acted on."""
+    from app.brain.meetings import brain_delta
+    from app.models import BrainDrift
+    result = brain_delta.detect_drifts(meeting)
+    BrainDrift.query.filter_by(meeting_id=meeting.id).delete()
+    stored = 0
+    for raw in result["drifts"]:
+        d = brain_delta.sanitize_drift(raw)
+        if not d:
+            continue
+        rel_id = sub_id = None
+        entity_name = None
+        if d["target"] == "release":
+            row = _release_row(d["ref"])
+            if row:
+                rel_id, entity_name = row.id, row.job_name
+        else:
+            row = Submittals.query.filter_by(submittal_id=str(d["ref"])).first()
+            if row:
+                sub_id = row.submittal_id
+                entity_name = row.project_name or row.title
+        if not rel_id and not sub_id:
+            continue  # unanchored to the system of record — drop it
+        db.session.add(BrainDrift(
+            meeting_id=meeting.id,
+            target=d["target"],
+            ref=d["ref"],
+            entity_name=entity_name[:255] if entity_name else None,
+            field=d["field"],
+            stated_value=d["stated_value"],
+            brain_value=d["brain_value"],
+            kind=d["kind"],
+            quote=d["quote"],
+            confidence=d["confidence"],
+            release_id=rel_id,
+            submittal_id=sub_id,
+            status="open",
+        ))
+        stored += 1
+    db.session.commit()
+    logger.info("brain_drifts_stored", meeting_id=meeting.id, drifts=stored)
+    return result["usage"]
 
 
 def extract_into_meeting(meeting, *, regenerate=False, notify=True):
@@ -214,12 +266,24 @@ def extract_into_meeting(meeting, *, regenerate=False, notify=True):
     meeting.summary = sresult["summary"] or None
     summary_usage = sresult["usage"]
 
-    # Blend the three LLM passes (extract + owner-match + summary) into one cost meter.
+    # v3 drift detection (READ-ONLY): record every place the room's spoken reality diverges
+    # from the Brain — status contradictions AND agreed-but-unlanded changes — as BrainDrift
+    # rows for the reviewer. Never writes to the job log; never breaks extraction.
+    from app.brain.meetings import brain_delta
+    drift_usage = brain_delta._stub_usage()
+    try:
+        drift_usage = _detect_and_store_drifts(meeting)
+    except Exception as e:  # noqa: BLE001 — drift detection is additive, never fatal
+        logger.warning("brain_drift_skipped", meeting_id=meeting.id, error=str(e))
+        db.session.rollback()
+
+    # Blend the LLM passes (extract + owner-match + summary + drift) into one cost meter.
     tags = [usage["model"]]
     in_tok = usage["input_tokens"] or 0
     out_tok = usage["output_tokens"] or 0
     cost = usage["cost_usd"] or 0
-    for label, extra in (("match", match_usage), ("summary", summary_usage)):
+    for label, extra in (("match", match_usage), ("summary", summary_usage),
+                         ("drift", drift_usage)):
         if extra.get("cost_usd"):
             in_tok += extra.get("input_tokens") or 0
             out_tok += extra.get("output_tokens") or 0
