@@ -13,7 +13,7 @@ Admin-only, matching the board's posture. Endpoints:
 """
 from datetime import datetime
 
-from flask import request, jsonify
+from flask import request, jsonify, current_app
 
 from app.brain import brain_bp
 from app.auth.utils import admin_required, get_current_user
@@ -83,6 +83,28 @@ def send_meeting_bot():
         created_by_id=user.id if user else None,
     )
     return jsonify(meeting.to_dict()), 201
+
+
+@brain_bp.route('/meetings/calendar/poll', methods=['POST'])
+@admin_required
+def trigger_calendar_poll():
+    """Run the calendar → Recall poll on demand (don't wait for the scheduler).
+
+    Scans the configured mailbox's calendar and schedules/reschedules/cancels Recall
+    bots for upcoming Teams meetings. Optional JSON body {"dry_run": true} classifies
+    what WOULD happen without dispatching anything — use it to verify the live
+    invite→bot flow. Returns the poll summary.
+    """
+    if not current_app.config.get('RECALL_CALENDAR_ENABLED'):
+        return jsonify({'error': 'Calendar→Recall disabled (set RECALL_CALENDAR_ENABLED=1)'}), 503
+    dry_run = bool((request.get_json(silent=True) or {}).get('dry_run'))
+    from app.brain.meetings import calendar
+    try:
+        summary = calendar.poll(dry_run=dry_run)
+    except Exception as exc:  # noqa: BLE001 — surface Graph/Recall failures to the caller
+        logger.error('trigger_calendar_poll_failed', error=str(exc), exc_info=True)
+        return jsonify({'error': 'Calendar poll failed', 'detail': str(exc)}), 502
+    return jsonify({'status': 'ok', **summary}), 200
 
 
 @brain_bp.route('/meetings', methods=['POST'])

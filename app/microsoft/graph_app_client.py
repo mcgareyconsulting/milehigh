@@ -1,7 +1,7 @@
 """Microsoft Graph app-only (client-credentials) client.
 
-App-only access scoped to a single mailbox (bb@mhmw.com) via an Azure
-ApplicationAccessPolicy — the deliberate workaround for not opening Graph
+App-only access scoped to a single mailbox/calendar (e.g. bb@mhmw.com) via an
+Azure ApplicationAccessPolicy — the deliberate workaround for not opening Graph
 across the whole org. No user logs in; we request an application token with the
 existing AZURE_* app registration and call Graph as the application.
 
@@ -65,15 +65,18 @@ def get_app_token(force_refresh=False):
         return _cached_token["access_token"]
 
 
-def graph_get(path, params=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
+def graph_get(path, params=None, headers=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
     """GET a Graph resource and return parsed JSON.
 
     Retries transient connection errors and forces a token refresh once on a
     401. `path` is relative to GRAPH_BASE (e.g. "/users/bb@mhmw.com/messages")
     or an absolute Graph URL (e.g. an @odata.nextLink).
 
+    `headers` are merged over the defaults (Authorization/Accept) — used to add
+    Graph's `Prefer` (e.g. an outlook timezone) on calendar reads.
+
     `token_getter` is a callable(force_refresh=bool) -> access_token. Defaults to
-    the app-only token; the delegated client passes its own (see graph_delegated).
+    the app-only token; a delegated client could pass its own.
     """
     token_getter = token_getter or get_app_token
     url = path if path.startswith("http") else f"{GRAPH_BASE}{path}"
@@ -81,13 +84,11 @@ def graph_get(path, params=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
     last_exc = None
     for attempt in range(MAX_RETRIES):
         token = token_getter(force_refresh=force_refresh)
+        request_headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        if headers:
+            request_headers.update(headers)
         try:
-            resp = requests.get(
-                url,
-                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-                params=params,
-                timeout=timeout,
-            )
+            resp = requests.get(url, headers=request_headers, params=params, timeout=timeout)
         except (requests.ConnectionError, requests.Timeout) as exc:
             last_exc = exc
             logger.warning("graph_get_transient", url=url, attempt=attempt, error=str(exc))

@@ -197,6 +197,34 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    # --- Calendar → Recall scheduling (every RECALL_CALENDAR_POLL_MINUTES) ---
+    # Scans the configured mailbox's calendar for upcoming Teams meetings and
+    # schedules a Recall bot to join each at its start time. Gated by
+    # RECALL_CALENDAR_ENABLED so it stays dormant until the app-only Calendars.Read
+    # access policy is in place.
+    calendar_recall_poll_minutes = app.config.get("RECALL_CALENDAR_POLL_MINUTES", 10)
+
+    def calendar_recall_poll():
+        with app.app_context():
+            if not app.config.get("RECALL_CALENDAR_ENABLED"):
+                return
+            from app.brain.meetings import calendar
+            try:
+                result = calendar.poll()
+                if result.get("scheduled"):
+                    logger.info("Calendar→Recall scheduled bots", **result)
+            except Exception as e:
+                logger.error("Calendar→Recall poll failed", error=str(e), exc_info=True)
+
+    scheduler.add_job(
+        func=calendar_recall_poll,
+        trigger="interval",
+        minutes=calendar_recall_poll_minutes,
+        id="calendar_recall_poll",
+        name="Calendar → Recall Scheduler",
+        replace_existing=True,
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -230,6 +258,12 @@ def init_scheduler(app):
             "name": "Checklist Deadline Notifications",
             "schedule": "Daily at 06:00 America/Denver",
             "description": "Notify owners of accepted post-meeting to-dos that are due soon/overdue",
+        },
+        {
+            "id": "calendar_recall_poll",
+            "name": "Calendar → Recall Scheduler",
+            "schedule": f"Every {calendar_recall_poll_minutes} minutes",
+            "description": "Schedule Recall bots for upcoming Teams meetings on the BB calendar (when enabled)",
         },
     ]
 

@@ -374,6 +374,35 @@ def create_recall_meeting(*, meeting_url, bot_id, title=None, meeting_type=None,
     return meeting
 
 
+def create_scheduled_recall_meeting(*, meeting_url, bot_id, calendar_event_id,
+                                    starts_at, title=None, meeting_type=None,
+                                    agenda_text=None):
+    """Persist a meeting whose bot was SCHEDULED off a calendar invite.
+
+    Unlike create_recall_meeting (immediate-send), the bot is dispatched with a
+    future join_at, so occurred_at is the meeting's scheduled start (not now) and
+    bot_status starts at 'scheduled'. calendar_event_id is the poller's idempotency
+    key — one Graph event schedules exactly one bot across polls.
+    """
+    meeting = Meeting(
+        title=(title or "Scheduled meeting")[:255],
+        meeting_type=meeting_type or "other",
+        source="recall",
+        meeting_url=(meeting_url or "")[:1000] or None,
+        recall_bot_id=bot_id,
+        calendar_event_id=(calendar_event_id or "")[:255] or None,
+        bot_status="scheduled",
+        agenda_text=(agenda_text or None),
+        occurred_at=starts_at,
+        created_by=None,
+    )
+    db.session.add(meeting)
+    db.session.commit()
+    logger.info("scheduled_recall_meeting_created", meeting_id=meeting.id,
+                bot_id=bot_id, calendar_event_id=calendar_event_id)
+    return meeting
+
+
 def update_bot_status(bot_id, status_code):
     """Update the bot_status of the meeting tied to a Recall bot id. Idempotent;
     no-op if the bot id isn't ours or the status is unchanged. Returns the Meeting."""
