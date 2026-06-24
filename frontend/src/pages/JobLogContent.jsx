@@ -11,10 +11,11 @@
  *   - Column-header dropdown UI renders here but mutates layout state via setColumnFilter/setColumnSort from context (the reactive loop recomputes displayJobs/uniqueValuesByColumn upstream).
  *   - effectiveView (mobilecard/cards/table) is device-driven and orthogonal to the Table/Board/Timeline switch.
  */
-import React, { useRef, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useRef, useMemo, useState, useEffect } from 'react';
+import { useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { JobsTableRow } from '../components/JobsTableRow';
+import { PdfVersionHistoryModal } from '../components/PdfVersionHistoryModal';
 import { BananaCodeHeader } from '../components/StageIconRow';
 import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
 import JobLogCardGrid from '../components/JobLogCardGrid';
@@ -54,6 +55,20 @@ function JobLogContent() {
     } = useOutletContext();
 
     const tableScrollRef = useRef(null);
+
+    // Open the drawing hub directly when arriving from a drawing-comment notification.
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [drawingModal, setDrawingModal] = useState(null); // { releaseId, versionId }
+
+    useEffect(() => {
+        const od = location.state?.openDrawing;
+        if (od?.releaseId) {
+            setDrawingModal(od);
+            // Clear nav state so a refresh or back-navigation doesn't reopen the modal.
+            navigate(location.pathname, { replace: true, state: null });
+        }
+    }, [location.state, location.pathname, navigate]);
 
     // On iPad/narrow widths the full table doesn't fit in landscape, so drop the two
     // lowest-frequency columns (BY, Released) and re-normalize the remaining widths to
@@ -290,6 +305,15 @@ function JobLogContent() {
                         </table>
                     </div>
                 </div>
+            )}
+
+            {drawingModal && (
+                <PdfVersionHistoryModal
+                    isOpen={true}
+                    releaseId={drawingModal.releaseId}
+                    initialCommentVersionId={drawingModal.versionId}
+                    onClose={() => setDrawingModal(null)}
+                />
             )}
         </>
     );

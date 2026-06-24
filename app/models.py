@@ -808,6 +808,7 @@ class Notification(db.Model):
     board_activity_id = db.Column(db.Integer, db.ForeignKey('board_activity.id', ondelete='CASCADE'), nullable=True)
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id', ondelete='CASCADE'), nullable=True, index=True)
     checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id', ondelete='CASCADE'), nullable=True, index=True)
+    drawing_version_comment_id = db.Column(db.Integer, db.ForeignKey('drawing_version_comments.id', ondelete='CASCADE'), nullable=True, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -816,8 +817,11 @@ class Notification(db.Model):
     board_activity = db.relationship('BoardActivity', lazy='select')
     submittal = db.relationship('Submittals', lazy='select')
     checklist_item = db.relationship('ChecklistItem', lazy='select')
+    drawing_version_comment = db.relationship('DrawingVersionComment', lazy='select')
 
     def to_dict(self):
+        comment = self.drawing_version_comment
+        version = comment.drawing_version if comment else None
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -827,12 +831,16 @@ class Notification(db.Model):
             'board_activity_id': self.board_activity_id,
             'submittal_id': self.submittal_id,
             'checklist_item_id': self.checklist_item_id,
+            'drawing_version_comment_id': self.drawing_version_comment_id,
             'is_read': self.is_read,
             'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
             'submittal_title': self.submittal.title if self.submittal else None,
             'submittal_project_name': self.submittal.project_name if self.submittal else None,
             'submittal_project_number': self.submittal.project_number if self.submittal else None,
+            'release_id': comment.release_id if comment else None,
+            'drawing_version_id': comment.drawing_version_id if comment else None,
+            'drawing_version_number': version.version_number if version else None,
         }
 
 
@@ -944,6 +952,43 @@ class ReleaseDrawingVersion(db.Model):
             'uploaded_at': _dt(self.uploaded_at),
             'source_version_id': self.source_version_id,
             'note': self.note,
+        }
+
+
+class DrawingVersionComment(db.Model):
+    """A comment on a specific PDF drawing version, mirroring board comments.
+
+    Each comment can `@FirstName`-mention teammates; the comment routes parse the
+    body and create `Notification` rows. `release_id` is denormalized so the
+    notification bell can click through to the drawing without a second join.
+    """
+    __tablename__ = 'drawing_version_comments'
+    id = db.Column(db.Integer, primary_key=True)
+    drawing_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey('release_drawing_versions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    body = db.Column(db.Text, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    author_name = db.Column(db.String(160), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    drawing_version = db.relationship(
+        'ReleaseDrawingVersion',
+        backref=db.backref('comments', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'drawing_version_id': self.drawing_version_id,
+            'release_id': self.release_id,
+            'body': self.body,
+            'author_id': self.author_id,
+            'author_name': self.author_name,
+            'created_at': _dt(self.created_at),
         }
 
 

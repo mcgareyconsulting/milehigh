@@ -22,9 +22,12 @@ from app.auth.utils import (
 from app.models import (
     Releases,
     ReleaseDrawingVersion,
+    DrawingVersionComment,
+    Notification,
     User,
     db,
 )
+from app.brain.mentions import parse_mentions, resolve_mentioned_users
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
 
@@ -160,6 +163,69 @@ def get_release_drawing_file(release_id, version_id):
         as_attachment=False,
         conditional=True,
     )
+
+
+@brain_bp.route(
+    '/releases/<int:release_id>/drawing/versions/<int:version_id>/comments',
+    methods=['GET'],
+)
+@login_required
+def list_drawing_version_comments(release_id, version_id):
+    version = db.session.get(ReleaseDrawingVersion, version_id)
+    if not version or version.release_id != release_id or version.is_deleted:
+        return jsonify({'error': 'Version not found'}), 404
+
+    comments = (version.comments
+                .order_by(DrawingVersionComment.created_at.asc())
+                .all())
+    return jsonify({
+        'version_id': version_id,
+        'comments': [c.to_dict() for c in comments],
+    })
+
+
+@brain_bp.route(
+    '/releases/<int:release_id>/drawing/versions/<int:version_id>/comments',
+    methods=['POST'],
+)
+@login_required
+def add_drawing_version_comment(release_id, version_id):
+    version = db.session.get(ReleaseDrawingVersion, version_id)
+    if not version or version.release_id != release_id or version.is_deleted:
+        return jsonify({'error': 'Version not found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    body = (data.get('body') or '').strip()
+    if not body:
+        return jsonify({'error': 'Comment body is required'}), 400
+
+    user = get_current_user()
+    author_name = _resolve_user_display_name(user)
+
+    comment = DrawingVersionComment(
+        drawing_version_id=version.id,
+        release_id=release_id,
+        body=body,
+        author_id=user.id,
+        author_name=author_name,
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    # Parse @FirstName mentions and create notifications (mirrors board comments).
+    mentioned_users = resolve_mentioned_users(parse_mentions(body))
+    if mentioned_users:
+        for mu in mentioned_users:
+            notif = Notification(
+                user_id=mu.id,
+                type='mention',
+                message=f'{author_name} mentioned you on drawing v{version.version_number}',
+                drawing_version_comment_id=comment.id,
+            )
+            db.session.add(notif)
+        db.session.commit()
+
+    return jsonify(comment.to_dict()), 201
 
 
 @brain_bp.route(

@@ -111,6 +111,11 @@ export default function NotificationBell() {
             navigate('/board', { state: { openItemId: notif.board_item_id } });
         } else if (notif.submittal_id) {
             navigate(`/drafting-work-load?highlight=${encodeURIComponent(notif.submittal_id)}`);
+        } else if (notif.drawing_version_comment_id) {
+            navigate('/job-log', { state: { openDrawing: {
+                releaseId: notif.release_id,
+                versionId: notif.drawing_version_id,
+            } } });
         } else if (notif.checklist_item_id) {
             navigate('/todos');
         }
@@ -195,6 +200,11 @@ export default function NotificationBell() {
                                         {n.submittal_id && (
                                             <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
                                                 {[n.submittal_project_number, n.submittal_project_name, n.submittal_title].filter(Boolean).join(' · ') || `Submittal #${n.submittal_id}`}
+                                            </p>
+                                        )}
+                                        {n.drawing_version_comment_id && (
+                                            <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+                                                {n.drawing_version_number ? `Drawing v${n.drawing_version_number}` : 'Drawing comment'}
                                             </p>
                                         )}
                                         <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{timeAgo(n.created_at)}</p>
