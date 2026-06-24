@@ -9,6 +9,8 @@ import email
 from email import policy
 from email.utils import parsedate_to_datetime
 
+from app.brain.material_orders.attachments import build_attachment
+
 
 def _addr_list(value):
     out = []
@@ -43,6 +45,28 @@ def _best_body(msg):
     return "", "text"
 
 
+def _attachments(msg):
+    """Walk the message for real (PDF) attachments and normalize each one.
+
+    Mirrors the shape m365_mail lands from Graph: a list of
+    {filename, content_type, size, text, storage_key}. Skips inline/non-PDF parts.
+    """
+    out = []
+    if not msg.is_multipart():
+        return out
+    for part in msg.walk():
+        filename = part.get_filename()
+        if not filename and part.get_content_disposition() != "attachment":
+            continue
+        data = part.get_payload(decode=True)
+        if not data:
+            continue
+        attachment = build_attachment(filename, part.get_content_type(), data)
+        if attachment:
+            out.append(attachment)
+    return out
+
+
 def eml_to_payload(path):
     """Parse an .eml file into a RawSourceRecord email payload dict."""
     with open(path, "rb") as fh:
@@ -58,6 +82,7 @@ def eml_to_payload(path):
             return None
 
     from_name, from_addr = email.utils.parseaddr(msg.get("From", ""))
+    attachments = _attachments(msg)
     return {
         "external_id": msg.get("Message-ID") or path,
         "subject": msg.get("Subject", "") or "",
@@ -71,5 +96,6 @@ def eml_to_payload(path):
         "preview": "",
         "body_content_type": content_type,
         "body": body,
-        "has_attachments": False,
+        "has_attachments": bool(attachments),
+        "attachments": attachments,
     }

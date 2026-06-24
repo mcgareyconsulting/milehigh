@@ -12,12 +12,14 @@ bb@mhmw.com forwarding mailbox.
   - an on-demand BB request ("read the email I forwarded you"), optionally with
     a Graph $search query and an explicit mailbox.
 """
+import base64
 import hashlib
 import json
 from datetime import datetime, timedelta
 
 from flask import current_app
 
+from app.brain.material_orders.attachments import build_attachment
 from app.logging_config import get_logger
 from app.microsoft.graph_app_client import graph_get
 from app.models import LakeIngestState, RawSourceRecord, db
@@ -60,14 +62,49 @@ def _content_hash(payload):
     """sha256 over the stable content fields only.
 
     Excludes ingest/display metadata (webLink, previews) so the hash changes
-    only when the message content itself changes.
+    only when the message content itself changes. Attachment filenames+sizes are
+    included so a message whose attachment lands late re-hashes and re-ingests.
     """
     basis = {k: payload.get(k) for k in (
         "external_id", "subject", "from", "to", "cc", "received_at",
         "conversation_id", "internet_message_id", "body",
     )}
+    basis["attachments"] = [
+        (a.get("filename"), a.get("size")) for a in (payload.get("attachments") or [])
+    ]
     blob = json.dumps(basis, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _fetch_attachments(mailbox, message_id):
+    """Pull a message's PDF attachments from Graph as payload attachment dicts.
+
+    Graph returns fileAttachments with their base64 `contentBytes` inline on the
+    attachments collection, so one JSON GET yields the bytes — no per-attachment
+    `/$value` round trip. Non-PDF / reference attachments are skipped by
+    build_attachment. Best-effort: a failure here logs and yields [] so the
+    message still lands (text-only) rather than the whole poll aborting.
+    """
+    try:
+        data = graph_get(f"/users/{mailbox}/messages/{message_id}/attachments")
+    except Exception as exc:  # noqa: BLE001 — attachment fetch must never abort the poll
+        logger.warning("m365_attachments_fetch_failed", message_id=message_id, error=str(exc))
+        return []
+    out = []
+    for att in data.get("value", []) or []:
+        if att.get("@odata.type") != "#microsoft.graph.fileAttachment":
+            continue
+        content_b64 = att.get("contentBytes")
+        if not content_b64:
+            continue
+        try:
+            raw = base64.b64decode(content_b64)
+        except (ValueError, TypeError):
+            continue
+        attachment = build_attachment(att.get("name"), att.get("contentType"), raw)
+        if attachment:
+            out.append(attachment)
+    return out
 
 
 def _normalize(message, mailbox):
@@ -87,6 +124,11 @@ def _normalize(message, mailbox):
         "body_content_type": body.get("contentType"),
         "body": body.get("content"),
         "has_attachments": bool(message.get("hasAttachments")),
+        "attachments": (
+            _fetch_attachments(mailbox, message.get("id"))
+            if message.get("hasAttachments") and message.get("id")
+            else []
+        ),
     }
     external_pointer = {
         "mailbox": mailbox,

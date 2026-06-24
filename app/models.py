@@ -1225,6 +1225,13 @@ class MaterialOrder(db.Model):
     supplier = db.Column(db.String(128), nullable=True)          # e.g. 'Drexel Supply'
     supplier_contact = db.Column(db.String(255), nullable=True)  # rep name/email
     po_number = db.Column(db.String(64), nullable=True)          # e.g. '580-659'
+    # Supplier's own order/confirmation number (e.g. Dencol Order #2296464). Null
+    # for outbound requests; set when a supplier confirm document carries one.
+    supplier_order_no = db.Column(db.String(64), nullable=True)
+    # Which artifact this row came from: 'placed' (we sent the order / drawing) vs
+    # 'confirmed' (supplier acknowledged it). Seeds the future request↔confirm
+    # lifecycle; status stays the ordered/received flag.
+    event_type = db.Column(db.String(16), nullable=True)
 
     # Orderer: the MHMW person who placed the order (the innermost forwarded
     # "From:" sender), NOT the forwarder. Parsed best-effort from the email body.
@@ -1240,6 +1247,9 @@ class MaterialOrder(db.Model):
     gauge = db.Column(db.String(32), nullable=True)             # e.g. '18Ga'
     finish = db.Column(db.String(64), nullable=True)           # e.g. 'Galvanized'
     dimension = db.Column(db.String(64), nullable=True)        # e.g. '48"'
+    # Per-line pricing from a supplier confirm table (null for body/drawing orders).
+    unit_price = db.Column(db.Float, nullable=True)
+    extended_price = db.Column(db.Float, nullable=True)
 
     status = db.Column(db.String(16), nullable=False, default="ordered", server_default="ordered")
     ordered_at = db.Column(db.Date, nullable=True)
@@ -1262,6 +1272,8 @@ class MaterialOrder(db.Model):
             "supplier": self.supplier,
             "supplier_contact": self.supplier_contact,
             "po_number": self.po_number,
+            "supplier_order_no": self.supplier_order_no,
+            "event_type": self.event_type,
             "ordered_by": self.ordered_by,
             "ordered_by_email": self.ordered_by_email,
             "description": self.description,
@@ -1271,6 +1283,8 @@ class MaterialOrder(db.Model):
             "gauge": self.gauge,
             "finish": self.finish,
             "dimension": self.dimension,
+            "unit_price": self.unit_price,
+            "extended_price": self.extended_price,
             "status": self.status,
             "ordered_at": _dt(self.ordered_at),
             "received_at": _dt(self.received_at),

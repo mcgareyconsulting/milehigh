@@ -9,7 +9,7 @@ from datetime import date
 
 from app.logging_config import get_logger
 from app.models import MaterialOrder, RawSourceRecord, db
-from app.brain.material_orders.parser import parse_order_email
+from app.brain.material_orders.extractors.classify import extract_order
 
 logger = get_logger(__name__)
 
@@ -19,10 +19,12 @@ EMAIL_RECORD_TYPE = "email"
 def ingest_record(record):
     """Parse one RawSourceRecord into MaterialOrder rows. Idempotent.
 
-    Returns the list of MaterialOrder rows for this record (created or existing).
-    Skips silently (returns []) when the email isn't a recognizable order.
+    Routes the record through the extractor registry (inline body / Dencol confirm
+    PDF / drawing PDF / LLM fallback). Returns the list of MaterialOrder rows for
+    this record (created or existing). Skips silently (returns []) when nothing can
+    recover order line items.
     """
-    parsed = parse_order_email(record.payload or {})
+    parsed = extract_order(record)
     if not parsed or not parsed.get("lines"):
         return []
 
@@ -51,6 +53,8 @@ def ingest_record(record):
             supplier=parsed.get("supplier"),
             supplier_contact=parsed.get("supplier_contact"),
             po_number=parsed.get("po_number"),
+            supplier_order_no=parsed.get("supplier_order_no"),
+            event_type=parsed.get("event_type"),
             ordered_by=parsed.get("ordered_by"),
             ordered_by_email=parsed.get("ordered_by_email"),
             description=line.get("description"),
@@ -59,6 +63,8 @@ def ingest_record(record):
             gauge=line.get("gauge"),
             finish=line.get("finish"),
             dimension=line.get("dimension"),
+            unit_price=line.get("unit_price"),
+            extended_price=line.get("extended_price"),
             status="ordered",
             ordered_at=parsed.get("ordered_at"),
             source=record.source,

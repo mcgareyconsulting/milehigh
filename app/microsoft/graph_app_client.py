@@ -101,3 +101,36 @@ def graph_get(path, params=None, headers=None, timeout=DEFAULT_TIMEOUT, token_ge
         resp.raise_for_status()
         return resp.json()
     raise last_exc if last_exc else RuntimeError("graph_get exhausted retries")
+
+
+def graph_get_binary(path, params=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
+    """GET a Graph resource and return the raw response bytes (not JSON).
+
+    Same retry/401-refresh behavior as graph_get, but for binary endpoints like an
+    attachment's `/$value` (the order-PDF bytes). Does not send Accept: json.
+    """
+    token_getter = token_getter or get_app_token
+    url = path if path.startswith("http") else f"{GRAPH_BASE}{path}"
+    force_refresh = False
+    last_exc = None
+    for attempt in range(MAX_RETRIES):
+        token = token_getter(force_refresh=force_refresh)
+        try:
+            resp = requests.get(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                params=params,
+                timeout=timeout,
+            )
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exc = exc
+            logger.warning("graph_get_binary_transient", url=url, attempt=attempt, error=str(exc))
+            continue
+        if resp.status_code == 401:
+            logger.warning("graph_get_binary_401", url=url, attempt=attempt)
+            last_exc = requests.HTTPError("401 Unauthorized", response=resp)
+            force_refresh = True
+            continue
+        resp.raise_for_status()
+        return resp.content
+    raise last_exc if last_exc else RuntimeError("graph_get_binary exhausted retries")
