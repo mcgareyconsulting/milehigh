@@ -40,6 +40,43 @@ def test_ingest_creates_order(app):
         assert o.source_record_id == rec.id
 
 
+def test_ingest_persists_orderer(app):
+    with app.app_context():
+        rec = _land_record()
+        o = service.ingest_record(rec)[0]
+        assert o.ordered_by == "Rourke Alvarado"
+        assert o.ordered_by_email == "ralvarado@mhmw.com"
+        assert str(o.ordered_at) == "2026-06-15"
+
+
+def test_ingest_logs_when_orderer_unparsed(app, monkeypatch):
+    """An order with no parseable orderer still ingests but logs a warning."""
+    warnings = []
+    monkeypatch.setattr(
+        service.logger, "warning",
+        lambda event, **kw: warnings.append((event, kw)),
+    )
+    with app.app_context():
+        payload = {
+            "subject": "580-661 Decking Order",
+            "from": {"name": "Someone", "address": "someone@example.com"},
+            "sent_at": "2026-06-16T07:41:28+00:00",
+            "body": "Please use PO# 580-661\nQty (10) 1.5C 18Ga. Galvanized Decking @ 48\"",
+            "body_content_type": "text",
+        }
+        rec = RawSourceRecord(
+            source="m365_mail", record_type="email", source_account="bb@mhmw.com",
+            external_id="no-forward", content_hash="hash-noforward", payload=payload,
+        )
+        db.session.add(rec)
+        db.session.commit()
+
+        orders = service.ingest_record(rec)
+        assert len(orders) == 1
+        assert orders[0].ordered_by is None
+        assert any(e == "material_order_orderer_unparsed" for e, _ in warnings)
+
+
 def test_ingest_is_idempotent(app):
     with app.app_context():
         rec = _land_record()

@@ -1226,6 +1226,11 @@ class MaterialOrder(db.Model):
     supplier_contact = db.Column(db.String(255), nullable=True)  # rep name/email
     po_number = db.Column(db.String(64), nullable=True)          # e.g. '580-659'
 
+    # Orderer: the MHMW person who placed the order (the innermost forwarded
+    # "From:" sender), NOT the forwarder. Parsed best-effort from the email body.
+    ordered_by = db.Column(db.String(128), nullable=True)        # e.g. 'Rourke Alvarado'
+    ordered_by_email = db.Column(db.String(255), nullable=True)  # e.g. 'ralvarado@mhmw.com'
+
     # Order line
     description = db.Column(db.String(512), nullable=True)       # full part text
     quantity = db.Column(db.Float, nullable=True)
@@ -1257,6 +1262,8 @@ class MaterialOrder(db.Model):
             "supplier": self.supplier,
             "supplier_contact": self.supplier_contact,
             "po_number": self.po_number,
+            "ordered_by": self.ordered_by,
+            "ordered_by_email": self.ordered_by_email,
             "description": self.description,
             "quantity": self.quantity,
             "unit": self.unit,

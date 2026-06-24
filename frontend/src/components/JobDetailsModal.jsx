@@ -72,6 +72,18 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
         }
     };
 
+    // Date-only ("2026-06-15") formatter that avoids the UTC-midnight off-by-one
+    // a bare new Date(...) would introduce in negative-offset timezones.
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateString));
+        const date = m
+            ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+            : new Date(dateString);
+        if (isNaN(date)) return dateString;
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
     const formatTimeAgo = (dateString) => {
         if (!dateString) return 'N/A';
         try {
@@ -207,6 +219,12 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                                                 </p>
                                                 {meta && (
                                                     <p className="text-xs text-gray-500 dark:text-slate-400">{meta}</p>
+                                                )}
+                                                {(o.ordered_by || o.ordered_at) && (
+                                                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                                                        {o.ordered_by ? `Ordered by ${o.ordered_by}` : 'Ordered'}
+                                                        {o.ordered_at ? ` · ${formatDate(o.ordered_at)}` : ''}
+                                                    </p>
                                                 )}
                                             </li>
                                         );
