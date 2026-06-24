@@ -8,17 +8,20 @@ from app.brain.material_orders import service
 FIXTURE = os.path.join(
     os.path.dirname(__file__), "fixtures", "drexel_580-659_decking_order.eml"
 )
+DENCOL_CONFIRM = os.path.join(
+    os.path.dirname(__file__), "fixtures", "dencol_390-351_confirm.eml"
+)
 
 
-def _land_record():
-    """Insert the fixture email as a RawSourceRecord and return it."""
-    payload = eml_to_payload(FIXTURE)
+def _land_record(eml_path=FIXTURE, external_id=None, content_hash="hash-fixture"):
+    """Insert a fixture email as a RawSourceRecord and return it."""
+    payload = eml_to_payload(eml_path)
     rec = RawSourceRecord(
         source="m365_mail",
         record_type="email",
         source_account="bb@mhmw.com",
-        external_id=payload["external_id"],
-        content_hash="hash-fixture",
+        external_id=external_id or payload["external_id"],
+        content_hash=content_hash,
         payload=payload,
     )
     db.session.add(rec)
@@ -107,6 +110,24 @@ def test_mark_received(app):
         result = service.mark_received(order.id, received=False)
         assert result["status"] == "ordered"
         assert result["received_at"] is None
+
+
+def test_ingest_dencol_confirm_from_pdf(app):
+    """The Dencol ORDER CONFIRM PDF ingests its 4 priced lines, tagged confirmed."""
+    with app.app_context():
+        rec = _land_record(DENCOL_CONFIRM, external_id="dencol-390-351", content_hash="h1")
+        orders = service.ingest_record(rec)
+        assert len(orders) == 4
+        o = orders[0]
+        assert o.job == 390 and o.release == "351"
+        assert o.supplier == "Dencol"
+        assert o.event_type == "confirmed"
+        assert o.supplier_order_no == "2296464"
+        assert o.ordered_by == "David Servold"  # not the supplier (John Rendon)
+        assert o.unit_price == 30.50 and o.extended_price == 61.00
+        # Idempotent re-ingest.
+        service.ingest_record(rec)
+        assert MaterialOrder.query.filter_by(source_record_id=rec.id).count() == 4
 
 
 def test_ingest_unprocessed_picks_up_new_records(app):

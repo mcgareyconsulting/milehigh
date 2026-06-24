@@ -1,19 +1,15 @@
-"""Parse supplier order emails into structured order line items.
+"""Shared parsing helpers for supplier order emails.
 
-Input is a RawSourceRecord email payload (see app/lake/ingest/m365_mail._normalize):
-{subject, from, to, body, body_content_type, received_at, sent_at, ...}. The
-emails we care about are forwarded supplier orders, e.g.:
+The per-shape logic lives in extractors/ (drexel_inline, dencol_confirm,
+dencol_drawing, llm); this module holds what they share: HTML→text, supplier
+detection, the forwarded-chain orderer parse, and the inline "Qty (n)" body-line
+parse. `extract_header(payload)` returns the email-derived fields every extractor
+needs (supplier, PO, job/release, orderer); the PDF-shape extractors add their own
+line items on top.
 
-    To: Nick Hagenlock <nick@drexelsupply.com>
-    Subject: 580-659 Blue Room House One Decking Order
-    Please use PO# 580-659 Stair Decking
-    Qty (45) 1.5C 18Ga. Galvanized Decking @ 48"
-
-parse_order_email returns a dict {supplier, supplier_contact, po_number, job,
-release, ordered_at, lines: [{quantity, description, profile, gauge, finish,
-dimension, raw_line, line_index}]} or None when the message isn't a recognizable
-order (no PO + no order lines). Best-effort: `description`/`raw_line` are
-authoritative; the parsed sub-fields are conveniences and may be None.
+`parse_order_email` is the back-compat entry point (header + inline body lines);
+extractors/drexel_inline wraps it. Best-effort: `description`/`raw_line` are
+authoritative, parsed sub-fields are conveniences and may be None.
 """
 import html
 import re
@@ -30,6 +26,7 @@ KNOWN_SUPPLIERS = {
     "drexelsupply.com": "Drexel Supply",
     "dencol.com": "Dencol",
 }
+SUPPLIER_DOMAINS = set(KNOWN_SUPPLIERS)
 
 _PO_RE = re.compile(r"PO#?\s*[:\-]?\s*(\d{2,5}-\d{2,5})", re.IGNORECASE)
 _JOB_RELEASE_RE = re.compile(r"\b(\d{2,5})-(\d{2,5})\b")
@@ -37,15 +34,17 @@ _JOB_RELEASE_RE = re.compile(r"\b(\d{2,5})-(\d{2,5})\b")
 _QTY_LINE_RE = re.compile(r"Qty\.?\s*\(?\s*(\d+)\s*\)?\s*[:\-]?\s*(.+)", re.IGNORECASE)
 _CONTACT_TMPL = r'([A-Z][\w.\'-]+(?:\s+[A-Z][\w.\'-]+)*)\s*<\s*([\w.\-+]+@{domain})\s*>'
 
-# Forwarded-chain headers. The orderer is the *innermost* (deepest/last) "From:"
-# block — the MHMW person who actually sent the order to the supplier. Above it
-# sit the forwarders. Each block looks like:
-#     From: Rourke Alvarado <RAlvarado@mhmw.com>
-#     Sent: Monday, 15 June 2026 07:41:28   (Outlook)  -or-
-#     Date: Mon, Jun 15, 2026 at 8:31 AM    (Gmail)
-_FROM_LINE_RE = re.compile(r"^\s*From:\s*(.+?)\s*$", re.IGNORECASE)
-_FROM_NAME_EMAIL_RE = re.compile(r"^(.*?)\s*<\s*([\w.\-+]+@[\w.\-]+)\s*>\s*$")
-_SENT_DATE_RE = re.compile(r"^\s*(?:Sent|Date):\s*(.+?)\s*$", re.IGNORECASE)
+# Forwarded-chain sender blocks. The orderer is the *innermost internal* sender —
+# the MHMW person who actually placed the order — not a forwarder above it and not
+# the supplier who replied below it. Two header formats appear:
+#   Outlook reply : "From: David Servold <DServold@mhmw.com>" + "Sent:"/"Date:"
+#   Outlook quote : 'From "David Servold" <DServold@mhmw.com>' + "Date 4/23/2026"
+#                   (the "------ Original Message ------" block — no colons)
+_FROM_COLON_RE = re.compile(r"^\s*From:\s*(.+?)\s*$", re.IGNORECASE)
+_FROM_NOCOLON_RE = re.compile(r"^\s*From\s+(.+<[^>]*@[^>]*>.*)$", re.IGNORECASE)
+_DATE_COLON_RE = re.compile(r"^\s*(?:Sent|Date):\s*(.+?)\s*$", re.IGNORECASE)
+_DATE_NOCOLON_RE = re.compile(r"^\s*Date\s+(.+?)\s*$", re.IGNORECASE)
+_EMAIL_RE = re.compile(r"[\w.\-+]+@[\w.\-]+")
 
 _PROFILE_RE = re.compile(r"\b(\d+(?:\.\d+)?[A-Z]{1,2})\b")          # 1.5C
 _GAUGE_RE = re.compile(r"\b(\d{1,2})\s*ga\b\.?", re.IGNORECASE)      # 18Ga / 18 ga
@@ -61,13 +60,18 @@ def _html_to_text(body, content_type):
     if not body:
         return ""
     text = body
-    if (content_type or "").lower() == "html" or "<" in text and ">" in text:
+    # Strip tags for HTML bodies. When the content type is explicitly text/plain we
+    # must NOT — a plain-text forward can contain a real '<addr@host>' that the tag
+    # regex would otherwise eat (dropping the sender address we parse the orderer from).
+    ctype = (content_type or "").lower()
+    looks_html = "<" in text and ">" in text
+    if ctype == "html" or (ctype not in ("text", "plain") and looks_html):
         text = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", text)
         text = re.sub(r"(?i)</\s*(p|div|tr|li|h[1-6])\s*>", "\n", text)
         text = re.sub(r"<[^>]+>", "", text)
     text = html.unescape(text).replace("\xa0", " ")  # &nbsp; -> normal space
     # Normalize whitespace per line, drop blank lines.
-    lines = [re.sub(r"[ \t ]+", " ", ln).strip() for ln in text.splitlines()]
+    lines = [re.sub(r"[ \t ]+", " ", ln).strip() for ln in text.splitlines()]
     return "\n".join(ln for ln in lines if ln)
 
 
@@ -108,39 +112,56 @@ def _parse_email_date(value):
         return None
 
 
-def _parse_orderer(text):
-    """Extract (name, email, ordered_dt) of the original sender from a forwarded body.
+def _name_email(raw_from):
+    """A 'From' line's content -> (name, email). email = first @ token in the line."""
+    em = _EMAIL_RE.search(raw_from)
+    email = em.group(0).lower() if em else None
+    name = raw_from.split("<", 1)[0].strip().strip('"').strip() or None
+    return name, email
 
-    The innermost forwarded "From:" block is the person who actually placed the
-    order with the supplier; the blocks above it are forwarders. We therefore take
-    the *last* "From:" line in the body and read the "Sent:"/"Date:" line that
-    immediately follows it. Returns (None, None, None) when there is no forwarded
-    block to read (caller falls back to the message envelope).
+
+def _is_supplier_email(email):
+    return bool(email) and email.split("@")[-1].lower() in SUPPLIER_DOMAINS
+
+
+def _parse_orderer(text):
+    """Extract (name, email, ordered_dt) of the order's original *internal* sender.
+
+    Walks every forwarded "From" block (both the colon "From:" reply format and the
+    no-colon 'From "Name" <addr>' Outlook quote format). The orderer is the deepest
+    block whose address is an MHMW/internal one — never a supplier who replied in
+    the thread, and never a forwarder above the original. ordered_dt is that block's
+    Sent/Date; if no internal block exists, name/email are None and the date falls
+    back to the deepest block (caller then falls back to the envelope).
     """
     lines = text.splitlines()
-    from_idxs = [i for i, ln in enumerate(lines) if _FROM_LINE_RE.match(ln)]
-    if not from_idxs:
+    blocks = []  # list of {name, email, date}
+    for i, line in enumerate(lines):
+        m = _FROM_COLON_RE.match(line) or _FROM_NOCOLON_RE.match(line)
+        if not m:
+            continue
+        name, email = _name_email(m.group(1).strip())
+        date = None
+        for ln in lines[i + 1: i + 7]:
+            dm = _DATE_COLON_RE.match(ln) or _DATE_NOCOLON_RE.match(ln)
+            if dm:
+                date = _parse_email_date(dm.group(1))
+                break
+        blocks.append({"name": name, "email": email, "date": date})
+
+    if not blocks:
         return None, None, None
 
-    idx = from_idxs[-1]  # deepest in the quoted chain = original author
-    raw_from = _FROM_LINE_RE.match(lines[idx]).group(1).strip()
-    m = _FROM_NAME_EMAIL_RE.match(raw_from)
-    if m:
-        name = m.group(1).strip().strip('"').strip() or None
-        email = m.group(2).strip().lower()
-    else:
-        name = raw_from or None
-        email = None
-
-    # The date sits in the next few lines (allowing a blank or a "To:" in between).
-    ordered_dt = None
-    for ln in lines[idx + 1: idx + 5]:
-        dm = _SENT_DATE_RE.match(ln)
-        if dm:
-            ordered_dt = _parse_email_date(dm.group(1))
-            break
-
-    return name, email, ordered_dt
+    # A block is disqualified only when its address is a supplier domain (the
+    # supplier who replied). A name-only block (Outlook dropped the address) is an
+    # outbound MHMW sender — keep it eligible so a forward with no inner address
+    # still yields the orderer's name.
+    internal = [b for b in blocks if not _is_supplier_email(b["email"])]
+    chosen = internal[-1] if internal else None
+    name = chosen["name"] if chosen else None
+    email = chosen["email"] if chosen else None
+    date = (chosen and chosen["date"]) or blocks[-1]["date"]
+    return name, email, date
 
 
 def _parse_part(description):
@@ -163,16 +184,17 @@ def _parse_part(description):
     return profile, gauge, finish, dimension
 
 
-def parse_order_email(payload):
-    """RawSourceRecord email payload -> parsed order dict, or None if not an order."""
-    if not payload:
-        return None
+def extract_header(payload):
+    """Email-derived order fields shared by every extractor.
 
+    {supplier, supplier_contact, po_number, job, release, ordered_by,
+    ordered_by_email, ordered_at}. No line items — PDF-shape extractors add their
+    own. `haystack` (subject + body text) is returned too so callers can reuse it.
+    """
     subject = (payload.get("subject") or "").strip()
     text = _html_to_text(payload.get("body"), payload.get("body_content_type"))
     haystack = f"{subject}\n{text}"
 
-    # PO number (preferred) then a bare job-release token in the subject.
     po_number = None
     m = _PO_RE.search(haystack)
     if m:
@@ -183,7 +205,26 @@ def parse_order_email(payload):
         job = int(jr.group(1))
         release = jr.group(2)
 
-    # Order lines: every "Qty (n) <desc>" we can find.
+    supplier, supplier_contact = _detect_supplier(haystack)
+
+    ordered_by, ordered_by_email, orderer_dt = _parse_orderer(text)
+    ordered_dt = orderer_dt or _parse_dt(payload.get("sent_at")) or _parse_dt(payload.get("received_at"))
+
+    return {
+        "supplier": supplier,
+        "supplier_contact": supplier_contact,
+        "po_number": po_number,
+        "job": job,
+        "release": release,
+        "ordered_by": ordered_by,
+        "ordered_by_email": ordered_by_email,
+        "ordered_at": ordered_dt.date() if ordered_dt else None,
+        "_haystack": haystack,
+    }
+
+
+def parse_inline_lines(haystack):
+    """Every "Qty (n) <desc>" order line typed into an email body."""
     lines = []
     for raw_line in haystack.splitlines():
         lm = _QTY_LINE_RE.search(raw_line)
@@ -199,30 +240,25 @@ def parse_order_email(payload):
             "gauge": gauge,
             "finish": finish,
             "dimension": dimension,
+            "unit_price": None,
+            "extended_price": None,
             "raw_line": raw_line.strip()[:512],
             "line_index": len(lines),
         })
+    return lines
 
-    # Not an order if we found neither a PO nor any order lines.
-    if not lines and not po_number:
+
+def parse_order_email(payload):
+    """RawSourceRecord email payload -> parsed inline order dict, or None.
+
+    Header fields + inline body "Qty (n)" lines (the Drexel shape). Returns None
+    when the message is not a recognizable order (no PO and no order lines).
+    Back-compat entry point; extractors/drexel_inline wraps it.
+    """
+    if not payload:
         return None
-
-    supplier, supplier_contact = _detect_supplier(haystack)
-
-    # Orderer + true placement date come from the innermost forwarded header
-    # block. Fall back to the message envelope (the forwarder + forward time) when
-    # the body has no forwarded block to read.
-    ordered_by, ordered_by_email, orderer_dt = _parse_orderer(text)
-    ordered_dt = orderer_dt or _parse_dt(payload.get("sent_at")) or _parse_dt(payload.get("received_at"))
-
-    return {
-        "supplier": supplier,
-        "supplier_contact": supplier_contact,
-        "po_number": po_number,
-        "job": job,
-        "release": release,
-        "ordered_by": ordered_by,
-        "ordered_by_email": ordered_by_email,
-        "ordered_at": ordered_dt.date() if ordered_dt else None,
-        "lines": lines,
-    }
+    header = extract_header(payload)
+    lines = parse_inline_lines(header.pop("_haystack"))
+    if not lines and not header.get("po_number"):
+        return None
+    return {**header, "event_type": "placed", "supplier_order_no": None, "lines": lines}
