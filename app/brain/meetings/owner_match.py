@@ -29,6 +29,15 @@ logger = get_logger(__name__)
 # synthesis) — Opus by default; downgrade via env var if cost/latency ever matters.
 MATCH_MODEL = os.environ.get("OWNER_MATCH_MODEL", "claude-opus-4-8")
 FUZZY_ACCEPT = 0.6   # ≥60% of a job's distinctive tokens present in the to-do → accept
+# Record-level matching (description-first). A to-do is matched to the record whose
+# description/name best overlaps it; description is weighted 2× because the room talks
+# scope ("roof access ladder"), not project names. ACCEPT is deliberately low — the agent
+# commits a best guess (≥1 distinctive description token, or ≥2 name tokens) and the
+# reviewer corrects drift. Internal/admin to-dos share no record tokens → score 0 → skipped.
+DESC_WEIGHT, NAME_WEIGHT, BIAS_BOOST = 2.0, 1.0, 0.5
+SCOPE_MIN = 2        # ≥2 distinctive scope tokens → link a concrete record
+NAME_MIN = 2         # ≥2 distinctive project-name tokens → job-level determination (no link)
+CONF_SCALE = 6.0     # raw score → 0..1 confidence (a strong scope match scores ~6)
 _STOP = {"the", "and", "for", "to", "of", "on", "at", "in", "a", "an", "with", "by",
          "we", "need", "get", "this", "that"}
 
@@ -170,20 +179,98 @@ def _learned_owner(job_number):
     return resolve_name_to_user(sig.value) if sig and sig.value else None
 
 
-def _best_fuzzy(text, cands):
-    """Best candidate by coverage of its distinctive tokens in the to-do text."""
+def _meeting_bias(meeting):
+    """Which record kind this meeting is mostly about, so matching leans the right way:
+    Thursday standup = production (releases); Monday = drafting (submittals). Read from an
+    explicit meeting_type hint when present, else inferred from the meeting day. A formal
+    per-meeting ruleset will replace the weekday heuristic later."""
+    mt = (getattr(meeting, "meeting_type", "") or "").lower()
+    if "draft" in mt:
+        return "submittal"
+    if "production" in mt:
+        return "release"
+    dt = getattr(meeting, "occurred_at", None) or getattr(meeting, "created_at", None)
+    wd = dt.weekday() if dt is not None else None
+    if wd == 0:       # Monday → drafting
+        return "submittal"
+    if wd == 3:       # Thursday → production
+        return "release"
+    return "release"  # default: most meetings cover mostly releases
+
+
+def build_record_candidates():
+    """Every active release + open submittal as its OWN candidate (record-level), carrying
+    description and name token sets. Matching is description-first, so the description is
+    the primary signal and the project name only a weak cross-job tiebreaker."""
+    cands = []
+    for r in Releases.query.filter(Releases.is_archived.is_(False)).all():
+        name = set(_tokens(_project_part(r.job_name)))
+        cands.append({
+            "kind": "release", "release_id": r.id, "job_number": str(r.job),
+            "label": r.job_name or "", "description": r.description or "",
+            # SCOPE = description minus the project name, so a name that leaks into the
+            # description ("call off the lift at Banyan High Point") isn't counted as scope.
+            "scope_tokens": set(_tokens(r.description or "")) - name,
+            "name_tokens": name, "pm": r.pm,
+        })
+    for s in Submittals.query.filter(~Submittals.status.ilike("%closed%")).all():
+        name = set(_tokens(_project_part(s.project_name or "")))
+        cands.append({
+            "kind": "submittal", "submittal_id": s.submittal_id,
+            "job_number": s.project_number or "",
+            "label": s.project_name or s.title or "", "description": s.title or "",
+            "scope_tokens": set(_tokens(s.title or "")) - name,
+            "name_tokens": name,
+            "bic": s.ball_in_court, "sub_mgr": s.submittal_manager,
+        })
+    return cands
+
+
+def _best_record(text, cands, bias):
+    """Highest-scoring record for the to-do text. Returns (cand, score, scope_count,
+    name_count). SCOPE = description minus project name (4+ char) — the room talks scope,
+    so it's weighted over name and drives concrete record linking; NAME drives a softer
+    job-level determination. Splitting them lets 'call off the lift at Banyan High Point'
+    (name-only) tag the job without mis-linking a release."""
     tt = set(_tokens(text))
     if not tt:
-        return None, 0.0
-    best, best_score = None, 0.0
+        return None, 0.0, 0, 0
+    best, best_score, best_scope, best_name = None, 0.0, 0, 0
     for c in cands:
-        inter = tt & c["tokens"]
-        if not inter or not any(len(t) >= 4 for t in inter):
-            continue  # require ≥1 distinctive (4+ char) shared token
-        score = len(inter) / len(c["tokens"]) + (0.001 if c["kind"] == "release" else 0)
-        if score > best_score:
-            best, best_score = c, score
-    return best, min(best_score, 1.0)
+        scope = tt & {t for t in c["scope_tokens"] if len(t) >= 4}
+        name = tt & {t for t in c["name_tokens"] if len(t) >= 4}
+        if not scope and not name:
+            continue
+        s = DESC_WEIGHT * len(scope) + NAME_WEIGHT * len(name) + (BIAS_BOOST if c["kind"] == bias else 0)
+        if s > best_score:
+            best, best_score, best_scope, best_name = c, s, len(scope), len(name)
+    return best, best_score, best_scope, best_name
+
+
+def _anchor(item, job_number, title, cands, bias, confidence):
+    """Anchor a to-do to a job. The meeting type sets the KIND (Thu→release, Mon→submittal);
+    the title's scope picks WHICH record. Link a concrete record only when the title shares
+    scope with one — otherwise tag the job alone (a determination the reviewer can pin via
+    the picker). Infers the owner when the extractor didn't name one."""
+    sub = [c for c in cands if c["job_number"] == str(job_number)]
+    if not sub:
+        return
+    pool = [c for c in sub if c["kind"] == bias] or sub
+    best, _, scope_count, _ = _best_record(title, pool, bias)
+    rec = best or pool[0]
+    item.matched_job_number = rec.get("job_number") or None
+    item.matched_job_name = _project_part(rec.get("label") or "")[:128] or None
+    item.match_source = rec["kind"]
+    item.confidence = round(float(confidence), 3)
+    if best and scope_count >= 1:   # scope present → link the concrete record
+        if best["kind"] == "release" and best.get("release_id") and not item.release_id:
+            item.release_id = best["release_id"]
+        if best["kind"] == "submittal" and best.get("submittal_id") and not item.submittal_id:
+            item.submittal_id = best["submittal_id"]
+    if not item.proposed_owner_user_id:
+        owner = _learned_owner(rec.get("job_number")) or _candidate_owner(rec)
+        if owner:
+            item.proposed_owner_user_id, item.owner_inferred = owner, True
 
 
 def _haiku_match(items, cands):
@@ -191,7 +278,12 @@ def _haiku_match(items, cands):
     null is correct for out-of-system to-dos. Returns (list[(idx, job_number, conf)], usage)."""
     if not cfg.ANTHROPIC_API_KEY:
         return [], _zero_usage()
-    jobs = [{"job_number": c["job_number"], "name": c["label"]} for c in cands]
+    jobs_map = {}  # record-level cands → one entry per job for the job-level LLM pass
+    for c in cands:
+        jn = c.get("job_number")
+        if jn and jn not in jobs_map:
+            jobs_map[jn] = c.get("label") or ""
+    jobs = [{"job_number": jn, "name": nm} for jn, nm in jobs_map.items()]
     todos = [{"i": i, "text": (it.title or "")[:160]} for i, it in enumerate(items)]
     system = (
         "You match a steel fabricator's internal meeting to-dos to its ACTIVE jobs. "
@@ -219,19 +311,29 @@ def _haiku_match(items, cands):
         return [], _zero_usage()
 
 
-def _apply(item, cand, confidence):
-    """Tag the job + match confidence on the item; set the inferred owner if one resolves."""
-    item.matched_job_number = (cand.get("job_number") or None)
-    item.matched_job_name = _project_part(cand.get("label") or "")[:128] or None
-    item.match_source = cand.get("kind")  # release | submittal
-    item.confidence = round(float(confidence), 3)
-    # Prefer a reviewer-corrected owner learned for this job; fall back to PM / BIC.
-    owner = _learned_owner(cand.get("job_number")) or _candidate_owner(cand)
-    if owner:
-        item.proposed_owner_user_id = owner
-        item.owner_inferred = True
-    if cand.get("submittal_id") and not item.submittal_id:
-        item.submittal_id = cand["submittal_id"]
+def _backfill_match_tags(meeting):
+    """Items the EXTRACTOR linked directly (release_ref/submittal_ref) carry a record id but
+    no matched_* tags, so the badge wouldn't render. Fill the tags (and infer the owner if
+    missing) from the linked record so the link and the badge always agree."""
+    for it in meeting.items.all():
+        if it.matched_job_name or not (it.release_id or it.submittal_id):
+            continue
+        if it.release_id:
+            r = db.session.get(Releases, it.release_id)
+            if not r:
+                continue
+            it.matched_job_number, it.match_source = str(r.job), "release"
+            it.matched_job_name = _project_part(r.job_name or "")[:128] or None
+            owner = _learned_owner(str(r.job)) or resolve_pm_initials(r.pm)
+        else:
+            s = db.session.get(Submittals, it.submittal_id)
+            if not s:
+                continue
+            it.matched_job_number, it.match_source = (s.project_number or None), "submittal"
+            it.matched_job_name = _project_part(s.project_name or s.title or "")[:128] or None
+            owner = _learned_owner(s.project_number) or submittal_owner_user(s)
+        if owner and not it.proposed_owner_user_id:
+            it.proposed_owner_user_id, it.owner_inferred = owner, True
 
 
 def _sum_usage(a, b):
@@ -281,45 +383,52 @@ def _haiku_correct_titles(items):
 
 
 def infer_owners_for_meeting(meeting):
-    """For the meeting's owner-less items, match to an active job (fuzzy → Haiku) and
-    fill the inferred owner + job tag + match confidence. Returns aggregated Haiku usage
-    so the caller can fold it into the meeting's cost meter."""
-    items = [i for i in meeting.items.all() if not i.proposed_owner_user_id]
-    if not items:
-        return _zero_usage()
-    cands = build_candidates()
-    if not cands:
-        return _zero_usage()
+    """Anchor each UNLINKED to-do to its best record and infer the owner.
 
-    # Normalize learned garbled→canonical names before matching so a job the meeting
-    # mangled still resolves up front (instead of only via the post-hoc title fix).
+    Description-first and record-level: every active release / open submittal is a
+    candidate, scored on description overlap with the to-do, biased toward the kind this
+    meeting is about (Thu production → releases, Mon drafting → submittals). The agent
+    commits a best guess (fuzzy → Haiku fallback) and the reviewer corrects drift — we'd
+    rather make a determination than leave a real to-do unanchored. Items the extractor
+    already linked are reconciled (badge ↔ link) but not re-matched. Returns LLM usage."""
+    items = [i for i in meeting.items.all() if not i.release_id and not i.submittal_id]
+    cands = build_record_candidates()
+    bias = _meeting_bias(meeting)
+    # Normalize learned garbled→canonical names before matching so a mangled project still
+    # resolves up front (not only via the post-hoc title fix).
     from app.brain.meetings.context import apply_aliases
+
+    # Fast path: a strong SCOPE match (≥2 description tokens) is committed locally and
+    # record-linked via the meeting's preferred kind. Weaker/name-only and admin to-dos go
+    # to the LLM, which judges whether they're real work (null) and picks the job if so.
+    # Match on the TITLE (the action's subject), not the detail — the detail often mentions
+    # related-but-secondary work ("call off the lift after the balcony rails install") that
+    # would wrongly pull an equipment/admin to-do onto that release. A strong scope OR name
+    # overlap anchors locally; the rest go to the LLM, which judges real-vs-admin (null).
     pending = []
-    for it in items:
-        best, score = _best_fuzzy(apply_aliases(f"{it.title or ''} {it.detail or ''}"), cands)
-        if best and score >= FUZZY_ACCEPT:
-            _apply(it, best, score)
+    for it in (items if cands else []):
+        title = apply_aliases(it.title or "")
+        best, score, scope_count, name_count = _best_record(title, cands, bias)
+        if best and (scope_count >= SCOPE_MIN or name_count >= NAME_MIN):
+            _anchor(it, best["job_number"], title, cands, bias, min(1.0, score / CONF_SCALE))
         else:
             pending.append(it)
 
     usage = _zero_usage()
-    if pending:
+    if pending and cands:
         matches, usage = _haiku_match(pending, cands)
-        by_job = {}
-        for c in cands:  # prefer release over submittal for a given job_number
-            if c["job_number"] and (c["job_number"] not in by_job or c["kind"] == "release"):
-                by_job[c["job_number"]] = c
         for idx, jn, conf in matches:
-            c = by_job.get(str(jn))
-            if c and 0 <= idx < len(pending):
-                _apply(pending[idx], c, conf)
+            if 0 <= idx < len(pending):
+                it = pending[idx]
+                _anchor(it, jn, apply_aliases(it.title or ""), cands, bias, conf or 0.5)
 
-    # Name-check: fix garbled job names in the titles we anchored to a real job. Only
-    # touches matched items (we never "correct" a name we couldn't verify in the DB).
-    matched = [i for i in items if i.matched_job_name]
+    # Reconcile extractor-linked items so the badge shows, then fix garbled project names
+    # in the titles of everything we anchored to a real record.
+    _backfill_match_tags(meeting)
+    matched = [i for i in meeting.items.all() if i.matched_job_name]
     usage = _sum_usage(usage, _haiku_correct_titles(matched))
 
     db.session.commit()
-    logger.info("owner_inference", meeting_id=meeting.id, unowned=len(items),
-                matched=len(matched))
+    logger.info("owner_inference", meeting_id=meeting.id, bias=bias,
+                processed=len(items), matched=len(matched))
     return usage

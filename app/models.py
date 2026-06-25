@@ -1479,6 +1479,9 @@ class ChecklistItem(db.Model):
     owner = db.relationship('User', foreign_keys=[owner_user_id], lazy='joined')
     proposed_owner = db.relationship('User', foreign_keys=[proposed_owner_user_id], lazy='joined')
     reviewer = db.relationship('User', foreign_keys=[reviewed_by])
+    # The concrete linked release (when matched/picked) — surfaces its job-release # and
+    # description to the reviewer. Joined to avoid an N+1 when serializing item lists.
+    release = db.relationship('Releases', foreign_keys=[release_id], lazy='joined')
 
     @staticmethod
     def _name(u):
@@ -1502,6 +1505,9 @@ class ChecklistItem(db.Model):
             'owner_name': self._name(self.owner),
             'due_date': _dt(self.due_date),
             'release_id': self.release_id,
+            'release_job_release': (f"{self.release.job}-{self.release.release}"
+                                    if self.release else None),
+            'release_description': (self.release.description if self.release else None),
             'submittal_id': self.submittal_id,
             'expected_update': self.expected_update,
             'brain_update_pending': self.brain_update_pending,

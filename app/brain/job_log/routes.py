@@ -680,62 +680,117 @@ def _job_prefix_range(job_param):
 @login_required
 def job_search():
     """
-    Search releases and submittals by job number prefix (1–3 digits).
-    GET ?job=4 returns jobs 4xx (400–499).
-    GET ?job=40 returns jobs 40x (400–409).
-    GET ?job=400 returns exact job 400.
+    Search releases and submittals, by job-number prefix OR by free text.
+
+    Numeric lookup (?job= or a 1–3 digit ?q=):
+      ?job=4   returns jobs 4xx (400–499)
+      ?job=40  returns jobs 40x (400–409)
+      ?job=400 returns exact job 400
+
+    Numeric lookup also accepts a full job-release ("290-153"): the job part drives the
+    prefix and the release part ("153") narrows releases to that release.
+
+    Text lookup (?q=sand creek): matches releases on job_name/description and
+    submittals on project_name/title (all words must appear). This is the human
+    entry point — people navigate by project name, not job-rel number.
     """
-    job_param, err_resp = _validate_job_prefix(request.args.get('job', ''))
-    if err_resp:
-        return err_resp[0], err_resp[1]
+    q = (request.args.get('q', '') or '').strip()
+    job_raw = (request.args.get('job', '') or '').strip()
+    # Either param may carry a job number ("290") or a full job-release ("290-153").
+    num = re.match(r'^(\d{1,3})(?:[-\s]+([\w.]*))?$', job_raw or q)
 
     try:
-        min_job, max_job = _job_prefix_range(job_param)
-        releases = (
-            Releases.query
-            .filter(Releases.job >= min_job, Releases.job < max_job)
-            .order_by(Releases.job, Releases.release)
-            .all()
-        )
-        submittals = Submittals.query.filter(
-            Submittals.project_number.like(f"{job_param}%"),
-            Submittals.status == 'Open'
-        ).all()
-
-        release_list = [
-            {
-                'id': r.id,
-                'job_release': f"{r.job}-{r.release}",
-                'job': r.job,
-                'release': r.release,
-                'job_name': serialize_value(r.job_name),
-                'stage': serialize_value(r.stage or 'Released'),
-                'start_install': serialize_value(r.start_install),
-            }
-            for r in releases
-        ]
-
-        submittal_list = []
-        for s in submittals:
-            d = s.to_dict()
-            submittal_list.append({
-                'submittal_id': d.get('submittal_id'),
-                'title': d.get('title'),
-                'status': d.get('status'),
-                'ball_in_court': d.get('ball_in_court'),
-                'submittal_drafting_status': d.get('submittal_drafting_status') or '',
-                'due_date': d.get('due_date'),
-            })
+        if num:
+            releases, submittals = _search_by_number(num.group(1), num.group(2))
+            echo = job_raw or q
+        elif q:
+            releases = _search_releases_text(q)
+            submittals = _search_submittals_text(q)
+            echo = q
+        else:
+            return jsonify({
+                'error': 'Enter a job number (e.g. 290 or 290-153) or a project name',
+                'releases': [], 'submittals': [],
+            }), 400
 
         return jsonify({
-            'releases': release_list,
-            'submittals': submittal_list,
-            'job': job_param,
+            'releases': [_release_search_row(r) for r in releases],
+            'submittals': [_submittal_search_row(s) for s in submittals],
+            'job': echo,
+            'q': echo,
         }), 200
 
     except Exception as e:
         logger.error("Error in /job-search endpoint", error=str(e), exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+
+
+_SEARCH_LIMIT = 30  # cap result rows so a vague query can't return the whole table
+
+
+def _search_by_number(job_digits, rel_token=None):
+    """Active releases (+ open submittals) for a job prefix. When a release token is
+    given (the '153' in '290-153'), narrow releases to that release prefix."""
+    min_job, max_job = _job_prefix_range(job_digits)
+    rq = Releases.query.filter(Releases.is_archived.is_(False),
+                               Releases.job >= min_job, Releases.job < max_job)
+    if rel_token:
+        rq = rq.filter(Releases.release.ilike(f"{rel_token}%"))
+    releases = rq.order_by(Releases.job, Releases.release).limit(_SEARCH_LIMIT).all()
+    submittals = Submittals.query.filter(
+        Submittals.project_number.like(f"{job_digits}%"),
+        ~Submittals.status.ilike('%closed%'),
+    ).limit(_SEARCH_LIMIT).all()
+    return releases, submittals
+
+
+def _search_releases_text(q):
+    """Active releases where every whitespace-separated word in `q` appears in
+    job_name OR description (case-insensitive). Ordered by job-rel."""
+    query = Releases.query.filter(Releases.is_archived.is_(False))
+    for word in q.split():
+        like = f"%{word}%"
+        query = query.filter(db.or_(Releases.job_name.ilike(like),
+                                    Releases.description.ilike(like)))
+    return query.order_by(Releases.job, Releases.release).limit(_SEARCH_LIMIT).all()
+
+
+def _search_submittals_text(q):
+    """Open (non-closed) submittals where every word in `q` appears in
+    project_name OR title (case-insensitive)."""
+    query = Submittals.query.filter(~Submittals.status.ilike('%closed%'))
+    for word in q.split():
+        like = f"%{word}%"
+        query = query.filter(db.or_(Submittals.project_name.ilike(like),
+                                    Submittals.title.ilike(like)))
+    return query.order_by(Submittals.project_number).limit(_SEARCH_LIMIT).all()
+
+
+def _release_search_row(r):
+    return {
+        'id': r.id,
+        'job_release': f"{r.job}-{r.release}",
+        'job': r.job,
+        'release': r.release,
+        'job_name': serialize_value(r.job_name),
+        'description': serialize_value(r.description),
+        'stage': serialize_value(r.stage or 'Released'),
+        'start_install': serialize_value(r.start_install),
+    }
+
+
+def _submittal_search_row(s):
+    d = s.to_dict()
+    return {
+        'submittal_id': d.get('submittal_id'),
+        'title': d.get('title'),
+        'project_number': d.get('project_number'),
+        'project_name': d.get('project_name'),
+        'status': d.get('status'),
+        'ball_in_court': d.get('ball_in_court'),
+        'submittal_drafting_status': d.get('submittal_drafting_status') or '',
+        'due_date': d.get('due_date'),
+    }
 
 
 @brain_bp.route("/get-all-jobs")

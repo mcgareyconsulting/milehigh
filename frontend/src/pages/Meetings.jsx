@@ -14,7 +14,7 @@
  *   - Owner + due date are agent-proposed but the reviewer has final say before accepting.
  *   - Recall meetings carry a live bot_status; the list polls while any bot is mid-flight.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { checkAuth } from '../utils/auth';
 import {
     fetchMeetings, fetchMeeting, generateChecklist,
@@ -80,6 +80,7 @@ const draftFromItem = (it) => ({
     owner_user_id: String(it.owner_user_id ?? it.proposed_owner_user_id ?? ''),
     due_date: it.due_date ?? it.proposed_due_date ?? '',
     release_id: it.release_id != null ? String(it.release_id) : '',
+    submittal_id: it.submittal_id != null ? String(it.submittal_id) : '',
 });
 
 export default function Meetings() {
@@ -293,6 +294,7 @@ export default function Meetings() {
             owner_user_id: d.owner_user_id ? Number(d.owner_user_id) : null,
             due_date: d.due_date || null,
             release_id: d.release_id ? Number(d.release_id) : null,
+            submittal_id: d.submittal_id || null,
         };
         setBusyItem(itemId); setError(null);
         try {
@@ -750,56 +752,106 @@ function ContextLearningPanel({ meeting, onSaveAgenda, onGenerateLearnings, lear
     );
 }
 
-// Anchor a to-do to a job-release by hand: type a 1–3 digit job prefix, pick from the
-// matches. Sets release_id on the draft (committed on Yes). Reuses /brain/job-search.
-function ReleasePicker({ value, matchedLabel, onPick }) {
+// Anchor a to-do to a release OR a submittal by hand. Pick the kind with the toggle,
+// then search by project NAME (how people think) or a 1–3 digit job number (the
+// system's key). Sets release_id XOR submittal_id on the draft (committed on Yes).
+// Reuses /brain/job-search, which returns both kinds for any query.
+function RecordPicker({ releaseId, submittalId, matchSource, matchedLabel, matchedJobNumber, linkedReleaseLabel, onPick }) {
     const [open, setOpen] = useState(false);
+    const [kind, setKind] = useState(matchSource === 'submittal' ? 'submittal' : 'release');
     const [q, setQ] = useState('');
-    const [results, setResults] = useState([]);
+    const [data, setData] = useState({ releases: [], submittals: [] });
     const [searching, setSearching] = useState(false);
+    const ref = useRef(null);
 
-    const run = async (prefix) => {
-        setQ(prefix);
-        if (!/^\d{1,3}$/.test(prefix.trim())) { setResults([]); return; }
+    // Close when clicking anywhere outside the picker (the dropdown lives inside `ref`).
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [open]);
+
+    const run = async (term) => {
+        setQ(term);
+        if (!term.trim()) { setData({ releases: [], submittals: [] }); return; }
         setSearching(true);
-        try { setResults((await searchByJob(prefix.trim())).releases); }
-        catch { setResults([]); }
+        try {
+            const r = await searchByJob(term.trim());
+            setData({ releases: r.releases, submittals: r.submittals });
+        } catch { setData({ releases: [], submittals: [] }); }
         finally { setSearching(false); }
     };
 
-    const label = value
-        ? (results.find(r => String(r.id) === String(value))?.job_release || matchedLabel || `release #${value}`)
-        : (matchedLabel || 'link release');
+    const linked = releaseId || submittalId;
+    const linkedRel = data.releases.find(r => String(r.id) === String(releaseId));
+    const linkedSub = data.submittals.find(s => String(s.submittal_id) === String(submittalId));
+    // Both kinds read as "number · name" so it's clear which record is linked.
+    const label = releaseId
+        ? (linkedRel ? `${linkedRel.job_release} · ${linkedRel.job_name}` : linkedReleaseLabel || matchedLabel || `release #${releaseId}`)
+        : submittalId
+            ? (linkedSub ? `${linkedSub.project_number} · ${linkedSub.project_name || linkedSub.title}` : matchedLabel || (matchedJobNumber ? `${matchedJobNumber} · submittal` : `submittal ${submittalId}`))
+            : (matchedLabel || 'link record');
+
+    const results = kind === 'release' ? data.releases : data.submittals;
+    const tab = (k, text) => (
+        <button type="button" onClick={() => setKind(k)}
+            className={`px-2 py-0.5 text-[11px] rounded-md border ${kind === k
+                ? 'border-indigo-400 text-indigo-700 dark:border-indigo-600 dark:text-indigo-300 font-medium'
+                : 'border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400'}`}>
+            {text}
+        </button>
+    );
+
+    // Opening on a matched-but-unlinked item pre-loads that job's records so the reviewer
+    // can pick the right release (with descriptions) in one click.
+    const toggleOpen = () => {
+        const next = !open;
+        setOpen(next);
+        if (next && !q && matchedJobNumber) run(String(matchedJobNumber));
+    };
 
     return (
-        <div className="relative">
-            <button type="button" onClick={() => setOpen(o => !o)}
-                className={`px-2 py-1 text-xs rounded-md border ${value
+        <div className="relative" ref={ref}>
+            <button type="button" onClick={toggleOpen}
+                className={`px-2 py-1 text-xs rounded-md border ${linked
                     ? 'border-indigo-300 text-indigo-700 dark:border-indigo-700 dark:text-indigo-300'
                     : 'border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300'} bg-white dark:bg-slate-900`}>
                 🔗 {label}
             </button>
             {open && (
-                <div className="absolute z-10 mt-1 w-64 p-2 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg">
-                    <input autoFocus type="text" value={q} placeholder="job # (e.g. 480)"
+                <div className="absolute z-10 mt-1 w-72 p-2 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg">
+                    <div className="flex gap-1 mb-1.5">
+                        {tab('release', 'Release')}
+                        {tab('submittal', 'Submittal')}
+                    </div>
+                    <input autoFocus type="text" value={q} placeholder="project name or job # (e.g. sand creek, 480)"
                         onChange={e => run(e.target.value)}
                         className="w-full px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 mb-1" />
-                    <div className="max-h-40 overflow-y-auto">
+                    <div className="max-h-44 overflow-y-auto">
                         {searching && <p className="text-[11px] text-gray-400 px-1 py-0.5">Searching…</p>}
-                        {!searching && results.map(r => (
+                        {!searching && kind === 'release' && results.map(r => (
                             <button key={r.id} type="button"
-                                onClick={() => { onPick(String(r.id)); setOpen(false); }}
+                                onClick={() => { onPick({ release_id: String(r.id), submittal_id: '' }); setOpen(false); }}
                                 className="block w-full text-left px-1.5 py-1 text-[11px] rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200">
-                                <span className="font-medium">{r.job_release}</span> {r.job_name}
-                                <span className="text-gray-400"> · {r.stage}</span>
+                                <div className="font-medium">{r.job_release} · {r.job_name || `job ${r.job}`}</div>
+                                {r.description && <div className="text-gray-400">{r.description}</div>}
+                            </button>
+                        ))}
+                        {!searching && kind === 'submittal' && results.map(s => (
+                            <button key={s.submittal_id} type="button"
+                                onClick={() => { onPick({ release_id: '', submittal_id: String(s.submittal_id) }); setOpen(false); }}
+                                className="block w-full text-left px-1.5 py-1 text-[11px] rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200">
+                                <div className="font-medium">{s.project_number ? `${s.project_number} · ` : ''}{s.project_name || s.title || `submittal ${s.submittal_id}`}</div>
+                                {s.title && s.title !== s.project_name && <div className="text-gray-400">{s.title}</div>}
                             </button>
                         ))}
                         {!searching && q && results.length === 0 && (
-                            <p className="text-[11px] text-gray-400 px-1 py-0.5">No matches</p>
+                            <p className="text-[11px] text-gray-400 px-1 py-0.5">No matching {kind}s</p>
                         )}
                     </div>
-                    {value && (
-                        <button type="button" onClick={() => { onPick(''); setOpen(false); }}
+                    {linked && (
+                        <button type="button" onClick={() => { onPick({ release_id: '', submittal_id: '' }); setOpen(false); }}
                             className="mt-1 text-[11px] text-rose-600 dark:text-rose-400 hover:underline">
                             Clear link
                         </button>
@@ -829,7 +881,8 @@ function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, o
                 {item.gc_facing && <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">GC-facing</span>}
                 {(item.matched_job_name || item.matched_job_number) && (
                     <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-                        {item.match_source === 'submittal' ? 'Submittal' : 'Release'} · {item.matched_job_name || `job ${item.matched_job_number}`}{item.confidence != null ? ` · ${Math.round(item.confidence * 100)}%` : ''}
+                        {item.match_source === 'submittal' ? 'Submittal' : 'Release'}
+                        {item.release_job_release ? ` · ${item.release_job_release}` : ''} · {item.matched_job_name || `job ${item.matched_job_number}`}{item.confidence != null ? ` · ${Math.round(item.confidence * 100)}%` : ''}
                     </span>
                 )}
                 {item.owner_inferred && <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">owner inferred</span>}
@@ -842,6 +895,11 @@ function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, o
                 )}
                 <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-medium rounded capitalize ${STATUS_PILL[item.status]}`}>{item.status}</span>
             </div>
+            {item.release_description && (
+                <p className="mb-1.5 text-[11px] text-gray-500 dark:text-slate-400">
+                    <span className="text-gray-400">Release scope:</span> {item.release_description}
+                </p>
+            )}
             {item.expected_update && (
                 <p className="mb-1.5 text-[11px] text-gray-500 dark:text-slate-400">
                     Agreed update: <span className="font-medium">{item.expected_update.field}</span>
@@ -871,10 +929,14 @@ function ChecklistRow({ item, users, draft, busy, onDraft, onAccept, onReject, o
                         <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-300">
                             <input type="checkbox" checked={draft.gc_facing} onChange={e => onDraft({ gc_facing: e.target.checked })} /> GC
                         </label>
-                        <ReleasePicker
-                            value={draft.release_id}
+                        <RecordPicker
+                            releaseId={draft.release_id}
+                            submittalId={draft.submittal_id}
+                            matchSource={item.match_source}
                             matchedLabel={item.matched_job_name || (item.matched_job_number ? `job ${item.matched_job_number}` : '')}
-                            onPick={id => onDraft({ release_id: id })}
+                            matchedJobNumber={item.matched_job_number}
+                            linkedReleaseLabel={item.release_job_release ? `${item.release_job_release} · ${item.matched_job_name || ''}`.trim() : ''}
+                            onPick={patch => onDraft(patch)}
                         />
                         <div className="ml-auto flex gap-1.5">
                             <button onClick={onReject} disabled={busy}
