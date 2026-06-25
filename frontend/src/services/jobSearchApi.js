@@ -17,18 +17,22 @@ import { API_BASE_URL } from '../utils/api';
 axios.defaults.withCredentials = true;
 
 /**
- * Search releases and submittals by job number prefix (1–3 digits).
- * @param {string} job - 1–3 digits (e.g. '4' for 4xx, '40' for 40x, '400' exact)
+ * Search releases and submittals by job number prefix (1–3 digits) OR free text.
+ * A 1–3 digit term is sent as a job prefix; anything else (e.g. a project name)
+ * is sent as a text query that matches release/submittal names and descriptions.
+ * @param {string} term - '400' (prefix) or 'sand creek' (project-name search)
  * @returns {Promise<{releases: Array, submittals: Array, job: string}>}
  * @throws Re-throws axios errors; err.response.data.error contains API error message
  */
-export async function searchByJob(job) {
+export async function searchByJob(term) {
+  const t = (term ?? '').trim();
+  const isPrefix = /^\d{1,3}$/.test(t);
   const res = await axios.get(`${API_BASE_URL}/brain/job-search`, {
-    params: { job: job.trim() },
+    params: isPrefix ? { job: t } : { q: t },
   });
   return {
     releases: res.data.releases ?? [],
     submittals: res.data.submittals ?? [],
-    job: res.data.job ?? job,
+    job: res.data.job ?? t,
   };
 }
