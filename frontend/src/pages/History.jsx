@@ -599,6 +599,7 @@ function History() {
             <PdfVersionHistoryModal
                 isOpen={pdfHistoryOpen}
                 releaseId={selectedJobDetails?.id}
+                title={selectedJobDetails ? `${selectedJobDetails.job}-${selectedJobDetails.release}` : ''}
                 onClose={() => setPdfHistoryOpen(false)}
                 onOpenVersion={(vid, mode) => {
                     setPdfHistoryOpen(false);

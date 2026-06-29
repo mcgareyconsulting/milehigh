@@ -369,6 +369,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
             <PdfVersionHistoryModal
                 isOpen={drawingHubOpen}
                 releaseId={releaseId}
+                title={`${job}-${rel}`}
                 viewerUrl={viewerUrl || ''}
                 onClose={() => setDrawingHubOpen(false)}
                 onOpenVersion={(vid, mode) => {

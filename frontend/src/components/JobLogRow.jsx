@@ -136,6 +136,7 @@ export default function JobLogRow({
                     <ReleaseNumberLink
                         value={fmt(job['Release #'])}
                         releaseId={job.id}
+                        jobReleaseLabel={`${jobNum}-${fmt(job['Release #'])}`}
                         hasDrawing={job.has_drawing}
                         viewerUrl={job.viewer_url}
                         canMarkup={isAdmin || isDrafter}

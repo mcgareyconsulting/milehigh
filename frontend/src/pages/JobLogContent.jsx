@@ -16,6 +16,7 @@ import { useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { PdfVersionHistoryModal } from '../components/PdfVersionHistoryModal';
+import { PdfMarkupModal } from '../components/PdfMarkupModal';
 import { BananaCodeHeader } from '../components/StageIconRow';
 import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
 import JobLogCardGrid from '../components/JobLogCardGrid';
@@ -59,7 +60,13 @@ function JobLogContent() {
     // Open the drawing hub directly when arriving from a drawing-comment notification.
     const location = useLocation();
     const navigate = useNavigate();
-    const [drawingModal, setDrawingModal] = useState(null); // { releaseId, versionId }
+    const [drawingModal, setDrawingModal] = useState(null); // { releaseId, versionId, jobReleaseLabel }
+    // Markup modal opened from the notification-driven attachments hub (View/Edit a
+    // version). Mirrors the wiring in JobsTableRow / History so View/Edit works here too.
+    const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
+    const [pdfMarkupVersionId, setPdfMarkupVersionId] = useState(null);
+    const [pdfMarkupMode, setPdfMarkupMode] = useState('view');
+    const [pdfMarkupReleaseId, setPdfMarkupReleaseId] = useState(null);
 
     useEffect(() => {
         const od = location.state?.openDrawing;
@@ -311,10 +318,25 @@ function JobLogContent() {
                 <PdfVersionHistoryModal
                     isOpen={true}
                     releaseId={drawingModal.releaseId}
+                    title={drawingModal.jobReleaseLabel}
                     initialCommentVersionId={drawingModal.versionId}
                     onClose={() => setDrawingModal(null)}
+                    onOpenVersion={(vid, mode) => {
+                        setPdfMarkupReleaseId(drawingModal.releaseId);
+                        setDrawingModal(null);
+                        setPdfMarkupVersionId(vid);
+                        setPdfMarkupMode(mode);
+                        setPdfMarkupOpen(true);
+                    }}
                 />
             )}
+            <PdfMarkupModal
+                isOpen={pdfMarkupOpen}
+                releaseId={pdfMarkupReleaseId}
+                versionId={pdfMarkupVersionId}
+                mode={pdfMarkupMode}
+                onClose={() => setPdfMarkupOpen(false)}
+            />
         </>
     );
 }

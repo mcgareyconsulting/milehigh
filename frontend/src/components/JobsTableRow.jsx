@@ -1393,6 +1393,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             <PdfVersionHistoryModal
                 isOpen={pdfHistoryOpen}
                 releaseId={row.id}
+                title={`${row['Job #']}-${row['Release #']}`}
                 viewerUrl={row.viewer_url}
                 gateStage={gateStage}
                 onConfirmStage={() => {
