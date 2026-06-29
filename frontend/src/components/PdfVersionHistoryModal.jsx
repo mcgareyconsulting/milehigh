@@ -37,6 +37,9 @@ export function PdfVersionHistoryModal({
     releaseId,
     onClose,
     onOpenVersion,
+    // Job-release label (e.g. "170-345") shown in the header so the attachments
+    // hub reads "170-345 Attachments" instead of a bare "Attachments".
+    title = '',
     // When set, that version's comment thread is auto-expanded on open (used by
     // the notification bell to land directly on the mentioned drawing comment).
     initialCommentVersionId = null,
@@ -312,7 +315,7 @@ export function PdfVersionHistoryModal({
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl flex items-center justify-between gap-3">
-                    <h2 className="text-xl font-bold text-white">Attachments</h2>
+                    <h2 className="text-xl font-bold text-white">{title ? `${title} Attachments` : 'Attachments'}</h2>
                     <div className="flex items-center gap-3">
                         {viewerUrl && viewerUrl.trim() !== '' ? (
                             <a

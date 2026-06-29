@@ -115,6 +115,8 @@ export default function NotificationBell() {
             navigate('/job-log', { state: { openDrawing: {
                 releaseId: notif.release_id,
                 versionId: notif.drawing_version_id,
+                jobReleaseLabel: notif.release_job_number != null
+                    ? `${notif.release_job_number}-${notif.release_number}` : null,
             } } });
         } else if (notif.checklist_item_id) {
             navigate('/todos');
@@ -204,7 +206,10 @@ export default function NotificationBell() {
                                         )}
                                         {n.drawing_version_comment_id && (
                                             <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
-                                                {n.drawing_version_number ? `Drawing v${n.drawing_version_number}` : 'Drawing comment'}
+                                                {[
+                                                    n.release_job_number != null ? `${n.release_job_number}-${n.release_number}` : null,
+                                                    n.drawing_version_number ? `Drawing v${n.drawing_version_number}` : 'Drawing comment',
+                                                ].filter(Boolean).join(' · ')}
                                             </p>
                                         )}
                                         <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{timeAgo(n.created_at)}</p>

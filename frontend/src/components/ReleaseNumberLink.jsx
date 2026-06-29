@@ -21,6 +21,7 @@ const linkCls = `${baseCls} text-blue-600 dark:text-blue-400 hover:underline cur
 export default function ReleaseNumberLink({
     value,
     releaseId,
+    jobReleaseLabel = '',
     hasDrawing = false,
     viewerUrl = '',
     canMarkup = false,
@@ -52,6 +53,7 @@ export default function ReleaseNumberLink({
                 <PdfVersionHistoryModal
                     isOpen={historyOpen}
                     releaseId={releaseId}
+                    title={jobReleaseLabel}
                     viewerUrl={viewerUrl}
                     onClose={() => setHistoryOpen(false)}
                     onOpenVersion={(vid, mode) => {

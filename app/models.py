@@ -822,6 +822,7 @@ class Notification(db.Model):
     def to_dict(self):
         comment = self.drawing_version_comment
         version = comment.drawing_version if comment else None
+        release = comment.release if comment else None
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -841,6 +842,8 @@ class Notification(db.Model):
             'release_id': comment.release_id if comment else None,
             'drawing_version_id': comment.drawing_version_id if comment else None,
             'drawing_version_number': version.version_number if version else None,
+            'release_job_number': release.job if release else None,
+            'release_number': release.release if release else None,
         }
 
 
@@ -979,6 +982,7 @@ class DrawingVersionComment(db.Model):
         'ReleaseDrawingVersion',
         backref=db.backref('comments', lazy='dynamic', cascade='all, delete-orphan'),
     )
+    release = db.relationship('Releases', lazy='select')
 
     def to_dict(self):
         return {
