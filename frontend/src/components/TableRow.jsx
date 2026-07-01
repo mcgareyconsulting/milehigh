@@ -606,20 +606,22 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                         );
                     }
 
-                    // START INSTALL: a desired install date set ahead of the release, only on
-                    // DRR submittals with an assigned Rel. Hard date only (no ASAP). Transfers
-                    // to the job-log release at creation time via the Rel.
+                    // START INSTALL: a desired install date set ahead of the release, on any
+                    // DRR submittal -- a Rel is not required. Hard date only (no ASAP). Every
+                    // DRR gets a Rel before it becomes a job-log release, so the date is just a
+                    // DWL-only planning value until then; it transfers via the Rel once one
+                    // exists (see PendingStartInstall / sync_pending_start_install).
                     if (isStartInstall) {
                         const rowRel = row['Rel'] ?? row.rel ?? null;
                         const hasRel = rowRel !== null && rowRel !== undefined && rowRel !== '';
-                        const canEditStartInstall = canEditDrafterFields && isDraftingReleaseReview && hasRel;
+                        const canEditStartInstall = canEditDrafterFields && isDraftingReleaseReview;
                         const siRaw = row['START INSTALL'] ?? row.start_install ?? '';
                         const hasStartInstall = siRaw && siRaw !== '';
 
                         // Same pill as DUE DATE / the Job Log Start Install: green = upcoming,
                         // yellow = past-due, neutral clickable pill when empty. Clicking opens the
-                        // modal (date → proposed due date → confirm). Non-DRR / no-Rel rows have
-                        // nothing to set, so they render a plain muted dash instead.
+                        // modal (date → proposed due date → confirm). Non-DRR rows have nothing
+                        // to set, so they render a plain muted dash instead.
                         return (
                             <td
                                 key={`${row.id}-${column}`}
@@ -645,7 +647,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         onClose={() => setStartInstallModalOpen(false)}
                                         currentStartInstall={siRaw}
                                         currentDueDate={row['DUE DATE'] ?? row.due_date ?? ''}
-                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''} · Rel ${rowRel}${jobNameDesc ? ` · ${jobNameDesc}` : ''}`}
+                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''}${hasRel ? ` · Rel ${rowRel}` : ''}${jobNameDesc ? ` · ${jobNameDesc}` : ''}`}
+                                        hasRel={hasRel}
                                         onConfirm={handleStartInstallConfirm}
                                         onClear={handleStartInstallClear}
                                     />

@@ -29,7 +29,7 @@ from app.brain.drafting_work_load.service import (
     LocationService,
 )
 from app.logging_config import get_logger
-from app.models import Submittals, ProcoreOutbox, Notification, db, is_gc_approval_type
+from app.models import Submittals, ProcoreOutbox, Notification, PendingStartInstall, db, is_gc_approval_type
 from app.auth.utils import login_required, admin_required, drafter_or_admin_required, get_current_user
 from app.brain.mentions import parse_mentions, resolve_mentioned_users
 from app.route_utils import handle_errors, require_json, get_or_404
@@ -614,10 +614,13 @@ def update_submittal_due_date():
 def update_submittal_start_install():
     """Set/clear a desired start-install date for a DRR submittal.
 
-    Only DRR ("Drafting Release Review") submittals that already have a Rel assigned
-    may receive a start install (the Rel is the join key used to hand the date off to
-    the job-log release when it is created). Setting the date also derives the read-only
-    DDD (15 business days earlier) and maintains a PendingStartInstall row keyed by Rel."""
+    Any DRR ("Drafting Release Review") submittal may receive a start install, whether
+    or not it has a Rel yet -- every DRR gets one before it becomes a job-log release, so
+    the date is just a DWL-only planning value until a Rel exists. Setting the date also
+    derives the read-only DDD (15 business days earlier) and, once a Rel is present,
+    maintains a PendingStartInstall row keyed by it (see
+    DraftingWorkLoadService.sync_pending_start_install, also called from
+    update_submittal_rel when a Rel is first assigned or reassigned)."""
     from app.procore.procore import DRR_TYPE
 
     submittal_id = str(g.json_data['submittal_id'])
@@ -630,11 +633,12 @@ def update_submittal_start_install():
     if err:
         return err
 
-    # Gate: DRR + assigned Rel. This guarantees every pending handoff row has a Rel key.
-    if (submittal.type or "").strip() != DRR_TYPE or submittal.rel is None:
+    # Gate: DRR only. A Rel is no longer required -- sync_pending_start_install no-ops
+    # until one exists.
+    if (submittal.type or "").strip() != DRR_TYPE:
         return jsonify({
-            "error": "Start install can only be set on a Drafting Release Review submittal with an assigned Rel.",
-            "code": "drr_rel_required",
+            "error": "Start install can only be set on a Drafting Release Review submittal.",
+            "code": "drr_required",
         }), 400
 
     old_start_install = submittal.start_install.isoformat() if submittal.start_install else None
@@ -697,6 +701,19 @@ def update_submittal_rel():
         new_rel = assign_rel_manual(submittal, rel)
     except RelAssignmentError as e:
         return jsonify({"error": e.message, "code": e.code}), (409 if e.code == "collision" else 400)
+
+    # If this DRR already has a start_install date (set before or without a Rel — see
+    # update_submittal_start_install), keep the PendingStartInstall handoff in sync with
+    # the (possibly new) Rel. On reassignment, move it off the old Rel first so it isn't
+    # left stranded pointing at a number that no longer belongs to this submittal.
+    if submittal.start_install is not None:
+        if old_rel is not None and old_rel != new_rel:
+            stale = PendingStartInstall.query.filter_by(
+                rel=old_rel, submittal_id=submittal.submittal_id, consumed_at=None
+            ).first()
+            if stale is not None:
+                db.session.delete(stale)
+        DraftingWorkLoadService.sync_pending_start_install(submittal)
 
     db.session.commit()
 

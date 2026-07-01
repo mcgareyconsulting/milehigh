@@ -7,7 +7,7 @@
  *   without the hard-date/ASAP/installer machinery — a DRR has no release yet.
  * exports:
  *   StartInstallDwlModal: Props — isOpen, onClose, currentStartInstall, currentDueDate, jobLabel,
- *     onConfirm(startInstall, dueDate), onClear, leadBusinessDays.
+ *     onConfirm(startInstall, dueDate), onClear, leadBusinessDays, hasRel.
  * imports_from: [react, ../utils/formatters]
  * imported_by: [frontend/src/components/TableRow.jsx]
  * invariants:
@@ -27,6 +27,7 @@ export function StartInstallDwlModal({
     onConfirm,
     onClear,
     leadBusinessDays = 15,
+    hasRel = true,
 }) {
     const [startInstall, setStartInstall] = useState('');
     const [dueDate, setDueDate] = useState('');
@@ -71,6 +72,12 @@ export function StartInstallDwlModal({
                 </div>
 
                 <div className="p-6">
+                    {!hasRel && (
+                        <p className="mb-5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                            No Rel assigned yet — this date stays a DWL planning value and transfers
+                            to the job log automatically once a Rel is assigned.
+                        </p>
+                    )}
                     <div className="mb-5">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Start install date</label>
                         <input

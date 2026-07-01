@@ -124,19 +124,29 @@ class TestUpdateStartInstall:
         )
 
         assert resp.status_code == 400
-        assert json.loads(resp.data)["code"] == "drr_rel_required"
+        assert json.loads(resp.data)["code"] == "drr_required"
         assert PendingStartInstall.query.filter_by(rel=203).first() is None
 
-    def test_reject_drr_without_rel(self, app, client):
+    def test_set_without_rel_succeeds_no_pending_row(self, app, client):
+        """A Rel is no longer required -- every DRR gets one before it becomes a
+        release, so the date is a valid DWL planning value on its own. No Rel means
+        no join key yet, so PendingStartInstall must stay untouched (no rel=None row)."""
         _make_submittal("S4", rel=None)
+        si = date(2026, 9, 1)
 
         resp = client.put(
             "/brain/drafting-work-load/start-install",
-            json={"submittal_id": "S4", "start_install": "2026-09-01"},
+            json={"submittal_id": "S4", "start_install": si.isoformat()},
         )
 
-        assert resp.status_code == 400
-        assert json.loads(resp.data)["code"] == "drr_rel_required"
+        assert resp.status_code == 200
+        data = json.loads(resp.data)
+        assert data["start_install"] == si.isoformat()
+        assert data["due_date"] == calculate_business_days_before(si, 15).isoformat()
+
+        s = Submittals.query.filter_by(submittal_id="S4").first()
+        assert s.start_install == si
+        assert PendingStartInstall.query.filter_by(submittal_id="S4").first() is None
 
     def test_resetting_date_reopens_consumed_pending(self, app, client):
         _make_submittal("S5", rel=205)
@@ -226,3 +236,25 @@ class TestReleaseCreationHandoff:
         assert rel_row.start_install is None
         # Pending row for a different (numeric) rel is untouched.
         assert PendingStartInstall.query.filter_by(rel=302).first().consumed_at is None
+
+    def test_job_mismatch_skips_handoff_and_leaves_pending_unconsumed(self, app, client):
+        """A rel that matches but a job_number that doesn't (stale/reused rel) must
+        not stamp the wrong job's release -- and must not silently consume the row."""
+        db.session.add(PendingStartInstall(
+            rel=303, job_number="900", submittal_id="SZ", start_install=date(2026, 9, 1),
+        ))
+        db.session.commit()
+
+        resp = client.post(
+            "/brain/job-log/release",
+            json={"csv_data": _release_csv(703, 303)},  # job 703, not the pending row's job 900
+        )
+
+        assert resp.status_code == 200
+        rel_row = Releases.query.filter_by(job=703, release="303").first()
+        assert rel_row is not None
+        assert rel_row.start_install is None
+
+        pending = PendingStartInstall.query.filter_by(rel=303).first()
+        assert pending.consumed_at is None
+        assert pending.consumed_job is None
