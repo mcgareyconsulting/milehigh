@@ -3408,13 +3408,29 @@ def update_job_fields(job, release):
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
-    JobEventService.create_and_close(
-        job=job,
-        release=release,
+    # Key the event on the record's post-edit job/release, not the pre-edit
+    # URL params — if this request renamed job/release, every later lookup by
+    # (job, release) (outbox processing, undo) must find the row under its new
+    # identity, not the one it no longer has.
+    event = JobEventService.create(
+        job=job_record.job,
+        release=job_record.release,
         action='updated',
         source='Brain',
         payload=payload,
     )
+
+    # Push the change out to the linked Trello card (event closed by
+    # OutboxService on success, same as the fab_order update flow).
+    if event:
+        if job_record.trello_card_id:
+            OutboxService.add(
+                destination='trello',
+                action='update_release_fields',
+                event_id=event.id,
+            )
+        else:
+            JobEventService.close(event.id)
 
     db.session.commit()
 

@@ -1,6 +1,6 @@
 """Tests for app/services/outbox_service.py."""
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -259,6 +259,129 @@ def test_create_card_retry_passes_idempotency_check_true(app):
         db.session.refresh(item)
         assert item.status == "completed"
         assert item.error_message is None
+
+
+# ---------------------------------------------------------------------------
+# update_release_fields (Job Log "Edit row" -> Trello sync)
+# ---------------------------------------------------------------------------
+
+def _make_fields_event(payload, job=1, release="A"):
+    ev = ReleaseEvents(
+        job=job, release=release,
+        action="updated",
+        payload=payload,
+        payload_hash=f"hash-{job}-{release}-updated-{sorted(payload.keys())}",
+        source="Brain",
+    )
+    db.session.add(ev)
+    db.session.flush()
+    return ev
+
+
+def _add_update_release_fields_item(event_id):
+    item = OutboxService.add(destination="trello", action="update_release_fields", event_id=event_id)
+    db.session.commit()
+    return item
+
+
+def test_update_release_fields_regenerates_title_and_description(app):
+    with app.app_context():
+        make_release(
+            1, "A",
+            trello_card_id="card-555", mirror_trello_card_id="mirror-555",
+            job_name="Acme Tower", description="Stair Core",
+            install_hrs=10, paint_color="Black", pm="Bill", by="Dan",
+            released=date(2026, 6, 1), num_guys=2,
+        )
+        ev = _make_fields_event({
+            "pm": {"old_value": "Old PM", "new_value": "Bill"},
+            "job_name": {"old_value": "Old Name", "new_value": "Acme Tower"},
+        })
+        item = _add_update_release_fields_item(ev.id)
+
+        with patch("app.trello.api.update_trello_card_name") as mock_name, \
+             patch("app.trello.api.update_trello_card_description") as mock_desc:
+            assert OutboxService.process_item(item) is True
+
+        # Pushed to the primary card...
+        assert mock_name.call_args_list[0].args == ("card-555", "1-A Acme Tower Stair Core")
+        assert mock_desc.call_args_list[0].args[0] == "card-555"
+        assert "**Team:** PM: Bill / BY: Dan" in mock_desc.call_args_list[0].args[1]
+
+        # ...and mirrored onto the linked mirror card with the same content.
+        assert mock_name.call_args_list[1].args == ("mirror-555", "1-A Acme Tower Stair Core")
+        assert mock_desc.call_args_list[1].args[0] == "mirror-555"
+        assert mock_desc.call_args_list[1].args[1] == mock_desc.call_args_list[0].args[1]
+
+        db.session.refresh(item)
+        db.session.refresh(ev)
+        assert item.status == "completed"
+        assert ev.applied_at is not None
+
+
+def test_update_release_fields_skips_trello_when_only_fab_hrs_changed(app):
+    with app.app_context():
+        make_release(1, "A", trello_card_id="card-555")
+        ev = _make_fields_event({"fab_hrs": {"old_value": 10, "new_value": 12}})
+        item = _add_update_release_fields_item(ev.id)
+
+        with patch("app.trello.api.update_trello_card_name") as mock_name, \
+             patch("app.trello.api.update_trello_card_description") as mock_desc:
+            assert OutboxService.process_item(item) is True
+
+        mock_name.assert_not_called()
+        mock_desc.assert_not_called()
+
+        db.session.refresh(item)
+        db.session.refresh(ev)
+        assert item.status == "completed"
+        assert ev.applied_at is not None
+
+
+def test_update_release_fields_missing_card_id_marks_failed(app):
+    with app.app_context():
+        make_release(1, "A", trello_card_id=None)
+        ev = _make_fields_event({"pm": {"old_value": "Old", "new_value": "New"}})
+        item = _add_update_release_fields_item(ev.id)
+
+        assert OutboxService.process_item(item) is False
+
+        db.session.refresh(item)
+        assert item.status == "failed"
+
+
+def test_update_release_fields_retries_on_failure(app):
+    with app.app_context():
+        make_release(1, "A", trello_card_id="card-555", pm="Old PM")
+        ev = _make_fields_event({"pm": {"old_value": "Old PM", "new_value": "New PM"}})
+        item = _add_update_release_fields_item(ev.id)
+
+        with patch("app.trello.api.update_trello_card_description", side_effect=Exception("boom")):
+            assert OutboxService.process_item(item) is False
+
+        db.session.refresh(item)
+        assert item.status == "pending"
+        assert item.retry_count == 1
+        assert item.error_message == "boom"
+
+
+def test_update_release_fields_mirror_failure_is_best_effort(app):
+    """A mirror-card push failure must not fail the outbox item — the primary
+    card already synced successfully, and the mirror is best-effort."""
+    with app.app_context():
+        make_release(1, "A", trello_card_id="card-555", mirror_trello_card_id="mirror-555", pm="Old PM")
+        ev = _make_fields_event({"pm": {"old_value": "Old PM", "new_value": "New PM"}})
+        item = _add_update_release_fields_item(ev.id)
+
+        with patch("app.trello.api.update_trello_card_description") as mock_desc:
+            mock_desc.side_effect = [None, Exception("mirror unreachable")]
+            assert OutboxService.process_item(item) is True
+
+        assert mock_desc.call_count == 2
+        db.session.refresh(item)
+        db.session.refresh(ev)
+        assert item.status == "completed"
+        assert ev.applied_at is not None
 
 
 def test_create_card_retry_failure_does_not_double_invoke(app):

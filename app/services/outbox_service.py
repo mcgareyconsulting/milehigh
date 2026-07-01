@@ -421,6 +421,119 @@ class OutboxService:
                     db.session.commit()
                     return False
 
+            elif outbox_item.destination == 'trello' and outbox_item.action == 'update_release_fields':
+                # Get card_id from job record
+                card_id = job_record.trello_card_id
+                if not card_id:
+                    logger.warning(f"Outbox {outbox_item.id}: Job {event.job}-{event.release} has no trello_card_id")
+                    outbox_item.status = 'failed'
+                    outbox_item.error_message = "Job has no trello_card_id"
+                    db.session.commit()
+                    return False
+
+                # Determine which parts of the card need regenerating from the
+                # set of Releases fields that changed (event.payload keys).
+                changed_fields = set(event.payload.keys()) if event.payload else set()
+                TITLE_FIELDS = {'job', 'release', 'job_name', 'description'}
+                DESCRIPTION_FIELDS = {'description', 'install_hrs', 'paint_color', 'pm', 'by', 'released'}
+                needs_title = bool(changed_fields & TITLE_FIELDS)
+                needs_description = bool(changed_fields & DESCRIPTION_FIELDS)
+
+                if not needs_title and not needs_description:
+                    # e.g. only fab_hrs changed — nothing on the card needs updating
+                    outbox_item.status = 'completed'
+                    outbox_item.completed_at = datetime.utcnow()
+                    outbox_item.error_message = None
+                    db.session.commit()
+
+                    JobEventService.close(event.id)
+                    db.session.commit()
+
+                    logger.info(f"Outbox {outbox_item.id} completed (no Trello-relevant fields changed)")
+                    return True
+
+                # Execute the Trello API call(s)
+                try:
+                    from app.trello.card_creation import build_card_title, build_card_description
+                    from app.trello.api import (
+                        update_trello_card_name,
+                        update_trello_card_description,
+                        update_mirror_card_content,
+                    )
+
+                    new_title = None
+                    new_description = None
+
+                    if needs_title:
+                        new_title = build_card_title(
+                            job_record.job, job_record.release, job_record.job_name, job_record.description
+                        )
+                        update_trello_card_name(card_id, new_title)
+
+                    if needs_description:
+                        new_description = build_card_description(
+                            description=job_record.description,
+                            install_hrs=job_record.install_hrs,
+                            paint_color=job_record.paint_color,
+                            pm=job_record.pm,
+                            by=job_record.by,
+                            released=job_record.released,
+                            num_guys=job_record.num_guys or 2,
+                        )
+                        update_trello_card_description(card_id, new_description)
+
+                    # Best-effort: keep the mirror card's title/description in sync too
+                    # (it's a full clone of the primary at creation but nothing else
+                    # keeps them aligned afterward). A failure here doesn't fail the
+                    # primary sync, which already succeeded.
+                    try:
+                        update_mirror_card_content(
+                            card_id,
+                            new_title=new_title,
+                            new_description=new_description,
+                            mirror_card_id=job_record.mirror_trello_card_id,
+                        )
+                    except Exception as mirror_error:
+                        logger.warning(
+                            f"Outbox {outbox_item.id}: failed to sync mirror card content: {mirror_error}"
+                        )
+
+                    # Success! Mark outbox item as completed
+                    outbox_item.status = 'completed'
+                    outbox_item.completed_at = datetime.utcnow()
+                    outbox_item.error_message = None
+                    db.session.commit()
+
+                    # Close the associated event now that external API call succeeded
+                    JobEventService.close(event.id)
+                    db.session.commit()
+
+                    logger.info(f"Outbox {outbox_item.id} completed successfully (update_release_fields)")
+                    return True
+
+                except Exception as api_error:
+                    # API call failed - handle retry logic
+                    outbox_item.retry_count += 1
+                    outbox_item.error_message = str(api_error)
+
+                    if outbox_item.retry_count < outbox_item.max_retries:
+                        delay_seconds = 2 ** outbox_item.retry_count
+                        outbox_item.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+                        outbox_item.status = 'pending'
+
+                        logger.warning(
+                            f"Outbox {outbox_item.id} failed, will retry ({outbox_item.retry_count}/{outbox_item.max_retries}): {str(api_error)[:100]}"
+                        )
+                    else:
+                        outbox_item.status = 'failed'
+                        logger.error(
+                            f"Outbox {outbox_item.id} failed after {outbox_item.max_retries} retries: {str(api_error)[:100]}",
+                            exc_info=True
+                        )
+
+                    db.session.commit()
+                    return False
+
             else:
                 # Unsupported destination/action combination
                 logger.error(f"Outbox {outbox_item.id}: Unsupported {outbox_item.destination}/{outbox_item.action}")
