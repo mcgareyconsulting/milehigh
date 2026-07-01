@@ -78,7 +78,7 @@ const dateRangePillClass = (job) => {
     if (job['start_install_asap'] === true) return 'bg-red-500 text-white';
     const installDay = String(job['Start install'] ?? '').split('T')[0];
     if (installDay && installDay < localTodayStr()) return 'bg-yellow-400 text-gray-900';
-    return 'bg-green-500 text-white';
+    return 'bg-green-400 text-gray-900';
 };
 
 // Shared release card used by both the stage columns and the installer columns so
