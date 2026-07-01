@@ -2046,6 +2046,51 @@ def set_mirror_date_range(primary_card_id, start_date, due_date):
     return result
 
 
+def resolve_mirror_card_id(primary_card_id, mirror_card_id_hint=None):
+    """Resolve a release's mirror card id.
+
+    Prefers mirror_card_id_hint (the persisted Releases.mirror_trello_card_id)
+    to avoid an extra API call; falls back to walking the primary card's
+    "Linked card" attachment for rows that predate that column — the same
+    discovery move_mirror_card / set_mirror_date_range use.
+    """
+    if mirror_card_id_hint:
+        return mirror_card_id_hint
+    if not primary_card_id:
+        return None
+
+    attachments_result = get_card_attachments_by_card_id(primary_card_id)
+    if not attachments_result.get("success"):
+        return None
+
+    return _mirror_short_link_from_attachments(attachments_result.get("attachments"))
+
+
+def update_mirror_card_content(primary_card_id, new_title=None, new_description=None, mirror_card_id=None):
+    """Push the primary card's regenerated title/description onto its mirror card.
+
+    The mirror is created as a full clone of the primary (see copy_trello_card's
+    keepFromSource="all"), but nothing keeps their title/description in sync
+    after that — this closes that gap. Best-effort: callers should treat a
+    raised exception here as non-fatal to whatever already synced the primary
+    card successfully. Returns the resolved mirror card id, or None if no
+    mirror is linked or there's nothing to push.
+    """
+    if new_title is None and new_description is None:
+        return None
+
+    target_mirror_id = resolve_mirror_card_id(primary_card_id, mirror_card_id)
+    if not target_mirror_id:
+        return None
+
+    if new_title is not None:
+        update_trello_card_name(target_mirror_id, new_title)
+    if new_description is not None:
+        update_trello_card_description(target_mirror_id, new_description)
+
+    return target_mirror_id
+
+
 def link_cards(primary_id, secondary_id):
     base = "https://trello.com/c/"
     for src, dst in ((primary_id, secondary_id), (secondary_id, primary_id)):

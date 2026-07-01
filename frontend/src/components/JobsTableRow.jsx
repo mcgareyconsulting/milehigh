@@ -49,8 +49,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     const [hasDrawingLocal, setHasDrawingLocal] = useState(Boolean(row.has_drawing));
     const [showActionMenu, setShowActionMenu] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editField, setEditField] = useState('');
-    const [editValue, setEditValue] = useState('');
+    const [fieldValues, setFieldValues] = useState({});
     const [saving, setSaving] = useState(false);
 
     // Keep local has_drawing flag in sync if parent re-renders the row
@@ -276,29 +275,35 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         { label: 'Released', field: 'released', type: 'date' },
     ];
 
-    // Handlers for edit modal
-    const handleEditColumn = (field) => {
-        const col = EDITABLE_COLUMNS.find(c => c.field === field);
-        if (!col) return;
-
-        const displayLabel = col.label;
-        const currentValue = row[displayLabel] || '';
-
-        setEditField(field);
-        setEditValue(currentValue);
+    // Handlers for the full-row edit modal
+    const handleOpenRowEdit = () => {
+        const initialValues = {};
+        EDITABLE_COLUMNS.forEach(col => {
+            initialValues[col.field] = row[col.label] || '';
+        });
+        setFieldValues(initialValues);
         setShowActionMenu(false);
         setShowEditModal(true);
     };
 
     const handleSaveEdit = async () => {
-        if (!editField || editValue === '') {
+        const changed = {};
+        EDITABLE_COLUMNS.forEach(col => {
+            const original = row[col.label] || '';
+            const next = fieldValues[col.field] ?? '';
+            if (next !== original) {
+                changed[col.field] = next;
+            }
+        });
+
+        if (Object.keys(changed).length === 0) {
             setShowEditModal(false);
             return;
         }
 
         setSaving(true);
         try {
-            await jobsApi.updateJobColumn(row['Job #'], row['Release #'], editField, editValue);
+            await jobsApi.updateJobFields(row['Job #'], row['Release #'], changed);
             onUpdate && onUpdate();
             setShowEditModal(false);
         } catch (error) {
@@ -1337,10 +1342,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                                     ) : (
                                         <>
                                             <li
-                                                onClick={() => handleEditColumn('job_name')}
+                                                onClick={handleOpenRowEdit}
                                                 className="px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer whitespace-nowrap"
                                             >
-                                                Edit column…
+                                                Edit row
                                             </li>
                                             <li
                                                 onClick={handleDeleteRow}
@@ -1413,67 +1418,30 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             />
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4">Edit Column</h2>
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                                Column
-                            </label>
-                            <select
-                                value={editField}
-                                onChange={(e) => {
-                                    const field = e.target.value;
-                                    setEditField(field);
-                                    const col = EDITABLE_COLUMNS.find(c => c.field === field);
-                                    if (col) {
-                                        const currentValue = row[col.label] || '';
-                                        setEditValue(currentValue);
-                                    }
-                                }}
-                                className="w-full px-3 py-2 border border-gray-400 dark:border-slate-700 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-                            >
-                                <option value="">Select a column...</option>
-                                {EDITABLE_COLUMNS.map((col) => (
-                                    <option key={col.field} value={col.field}>
+                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 max-w-2xl w-full mx-4">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4">
+                            Edit Row — {row['Job #']}-{row['Release #']}
+                        </h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            {EDITABLE_COLUMNS.map((col) => (
+                                <div key={col.field}>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                                         {col.label}
-                                    </option>
-                                ))}
-                            </select>
+                                    </label>
+                                    <input
+                                        type={col.type === 'date' ? 'date' : col.type === 'number' ? 'number' : 'text'}
+                                        step={col.type === 'number' ? '0.01' : undefined}
+                                        value={fieldValues[col.field] ?? ''}
+                                        onChange={(e) => setFieldValues(prev => ({ ...prev, [col.field]: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-400 dark:border-slate-700 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                                    />
+                                </div>
+                            ))}
                         </div>
-                        {editField && (
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                                    Value
-                                </label>
-                                {EDITABLE_COLUMNS.find(c => c.field === editField)?.type === 'date' ? (
-                                    <input
-                                        type="date"
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-400 dark:border-slate-700 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-                                    />
-                                ) : EDITABLE_COLUMNS.find(c => c.field === editField)?.type === 'number' ? (
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-400 dark:border-slate-700 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-                                    />
-                                ) : (
-                                    <input
-                                        type="text"
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-400 dark:border-slate-700 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-                                    />
-                                )}
-                            </div>
-                        )}
                         <div className="flex gap-2">
                             <button
                                 onClick={handleSaveEdit}
-                                disabled={saving || !editField}
+                                disabled={saving}
                                 className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {saving ? 'Saving...' : 'Save'}
