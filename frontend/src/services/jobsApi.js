@@ -286,6 +286,15 @@ class JobsApi {
         }
     }
 
+    async getNextReleaseNumber() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/brain/job-log/release/next-number`);
+            return response.data.next_release;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch next release number');
+        }
+    }
+
     /**
      * @deprecated The Gantt/Timeline view is now built on the frontend from the
      * shared releases dataset (see the toBar selector in components/GanttChart.jsx).
