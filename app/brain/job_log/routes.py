@@ -302,10 +302,10 @@ def _validate_row(row_values, row_idx, row):
     """Validate row values and return (is_valid, error_dict)."""
     if not row_values['job'] or str(row_values['job']).strip() == '':
         return False, {'row': row_idx, 'error': 'Job # is required', 'data': row}
-    
+
     if not row_values['release'] or str(row_values['release']).strip() == '':
         return False, {'row': row_idx, 'error': 'Release # is required', 'data': row}
-    
+
     try:
         int(row_values['job'])
     except (ValueError, TypeError):
@@ -1866,6 +1866,26 @@ def update_start_install(job, release):
 # CSV Release Route
 # ==============================================================================
 
+@brain_bp.route("/job-log/release/next-number")
+@login_required
+def get_next_release_number():
+    """Suggest the next available release number, used to prefill the Verbal
+    Release form. Uses the same generator as the DWL's manual "assign Rel"
+    popup (next_rel_number), but -- unlike that popup's route -- is open to
+    any logged-in user (not just drafter/admin), since a PM pushing a verbal
+    release through needs it too. The suggestion is editable in the form; the
+    real duplicate guard is the (job, release) collision check the release
+    endpoint already runs on submit.
+    """
+    from app.procore.procore import next_rel_number
+
+    try:
+        suggestion = next_rel_number()
+    except RuntimeError:
+        return jsonify({'next_release': None}), 200
+    return jsonify({'next_release': str(suggestion)}), 200
+
+
 @brain_bp.route("/job-log/release", methods=["POST"])
 @login_required
 def release_job_data():
@@ -1906,7 +1926,7 @@ def release_job_data():
         csv_data = data.get('csv_data')
         if not csv_data or not csv_data.strip():
             return jsonify({'error': 'csv_data cannot be empty'}), 400
-        
+
         # Detect delimiter and parse CSV data
         delimiter = _detect_delimiter(csv_data)
         csv_reader = csv.reader(io.StringIO(csv_data), delimiter=delimiter)
@@ -1942,11 +1962,11 @@ def release_job_data():
                 if not is_valid:
                     errors.append(validation_error)
                     continue
-                
+
                 # Parse validated values
                 job_number = int(row_values['job'])
                 release_number = str(row_values['release']).strip()
-                
+
                 # Check if job-release already exists
                 existing_job = Releases.query.filter_by(job=job_number, release=release_number).first()
                 if existing_job:
