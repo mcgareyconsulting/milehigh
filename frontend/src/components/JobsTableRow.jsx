@@ -1172,7 +1172,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         } else if (isHardDatePast) {
                             startInstallBgClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold';
                         } else if (isHardDate) {
-                            startInstallBgClass = 'bg-green-500 text-white hover:bg-green-600 font-semibold';
+                            startInstallBgClass = 'bg-green-400 text-gray-900 hover:bg-green-500 font-semibold';
                         } else {
                             startInstallBgClass = `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
                         }
