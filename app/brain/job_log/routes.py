@@ -2052,10 +2052,14 @@ def release_job_data():
                 )
 
                 # Start-install handoff: a DRR in the DWL may have pre-set a desired
-                # start install for this Rel before any release existed. The pasted
-                # Release # equals the Rel (see Submittals.rel), so look up an
+                # start install for this job-release before any release existed. The
+                # pasted Release # equals the Rel (see Submittals.rel), so look up an
                 # unconsumed PendingStartInstall row and stamp the date now — the
                 # pasting user does not know it. Non-numeric release #s can't match a Rel.
+                # Rel numbers recycle over time and aren't job-scoped, so also require the
+                # job to match (job_number is stored on the pending row for exactly this
+                # check) -- otherwise a stale/reused rel could silently stamp the wrong
+                # job's release with someone else's date.
                 try:
                     rel_int = int(release_number)
                 except (TypeError, ValueError):
@@ -2064,6 +2068,13 @@ def release_job_data():
                     PendingStartInstall.query.filter_by(rel=rel_int, consumed_at=None).first()
                     if rel_int is not None else None
                 )
+                if pending_si and str(pending_si.job_number or '').strip() != str(job_number):
+                    logger.warning(
+                        "PendingStartInstall rel=%s belongs to job %s, not job %s -- skipping "
+                        "start_install handoff for release %s-%s (stale or reused rel?)",
+                        rel_int, pending_si.job_number, job_number, job_number, release_number,
+                    )
+                    pending_si = None
                 if pending_si and pending_si.start_install:
                     new_job.start_install = pending_si.start_install
                     new_job.start_install_formulaTF = False

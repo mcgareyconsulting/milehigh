@@ -162,30 +162,64 @@ class DraftingWorkLoadService:
         """
         return DraftingWorkLoadEngine.validate_due_date(due_date)
     
+    # When a GC jobsite schedule date is entered (Sub-GC submittals only), the due
+    # date is backdated this many business days from it. Both the anchor and the
+    # computed due_date are persisted.
+    GC_SCHEDULE_LEAD_BUSINESS_DAYS = 60
+
     @staticmethod
-    def update_due_date(submittal, due_date: Optional[str]) -> Tuple[bool, Optional[str]]:
+    def update_due_date(submittal, due_date: Optional[str] = None, gc_jobsite_schedule_date: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """
-        Update submittal due date.
-        
+        Update submittal due date, either directly or by backdating
+        GC_SCHEDULE_LEAD_BUSINESS_DAYS business days from a GC jobsite schedule date
+        anchor. The two are mutually exclusive per call; the caller is responsible for
+        the Sub-GC type gate on gc_jobsite_schedule_date.
+
         Args:
             submittal: The submittal object to update
-            due_date: New due date value (ISO format string or None)
-            
+            due_date: New due date value (ISO format string or None). Only touches
+                due_date -- a previously-stored gc_jobsite_schedule_date is left as-is,
+                since it's tracked independently for longer-term reporting.
+            gc_jobsite_schedule_date: Anchor date (ISO format string) to backdate from.
+                When provided, both it and the computed due_date are persisted; `due_date`
+                is ignored.
+
         Returns:
             (success, error_message)
         """
+        if gc_jobsite_schedule_date:
+            is_valid, normalized_anchor, error = DraftingWorkLoadEngine.validate_due_date(gc_jobsite_schedule_date)
+            if not is_valid or not normalized_anchor:
+                logger.warning(f"Invalid GC jobsite schedule date for submittal {submittal.submittal_id}: {error}")
+                return False, error
+
+            from app.trello.utils import calculate_business_days_before
+
+            anchor_date = datetime.strptime(normalized_anchor, '%Y-%m-%d').date()
+            submittal.gc_jobsite_schedule_date = anchor_date
+            submittal.due_date = calculate_business_days_before(
+                anchor_date, DraftingWorkLoadService.GC_SCHEDULE_LEAD_BUSINESS_DAYS
+            )
+            submittal.last_updated = datetime.utcnow()
+            logger.info(
+                f"Backdated due date for submittal {submittal.submittal_id} to "
+                f"{submittal.due_date} ({DraftingWorkLoadService.GC_SCHEDULE_LEAD_BUSINESS_DAYS} "
+                f"business days before GC jobsite schedule date {normalized_anchor})"
+            )
+            return True, None
+
         is_valid, normalized_date, error = DraftingWorkLoadEngine.validate_due_date(due_date)
-        
+
         if not is_valid:
             logger.warning(f"Invalid due date for submittal {submittal.submittal_id}: {error}")
             return False, error
-        
+
         # Convert string to date object if provided
         if normalized_date:
             submittal.due_date = datetime.strptime(normalized_date, '%Y-%m-%d').date()
         else:
             submittal.due_date = None
-        
+
         submittal.last_updated = datetime.utcnow()
         logger.info(f"Updated due date for submittal {submittal.submittal_id} to '{normalized_date}'")
         return True, None
@@ -195,15 +229,44 @@ class DraftingWorkLoadService:
     DUE_DATE_LEAD_BUSINESS_DAYS = 15
 
     @staticmethod
+    def sync_pending_start_install(submittal):
+        """Keep the PendingStartInstall handoff row in sync with submittal.rel +
+        submittal.start_install. No-ops when submittal.rel is None -- there's no join
+        key yet, so the date just stays a DWL-only planning value. Called from
+        update_start_install (date changed) and from update_submittal_rel (Rel assigned
+        or reassigned while a start_install already exists), so either order of "set the
+        date" / "assign the Rel" ends up in sync.
+        """
+        if submittal.rel is None:
+            return
+
+        pending = PendingStartInstall.query.filter_by(rel=submittal.rel).first()
+        if submittal.start_install is not None:
+            if pending is None:
+                pending = PendingStartInstall(rel=submittal.rel)
+                db.session.add(pending)
+            pending.job_number = submittal.project_number
+            pending.submittal_id = submittal.submittal_id
+            pending.start_install = submittal.start_install
+            # A fresh date re-opens the handoff even if a prior date was already consumed.
+            pending.consumed_at = None
+            pending.consumed_job = None
+            pending.consumed_release = None
+        elif pending is not None:
+            db.session.delete(pending)
+
+    @staticmethod
     def update_start_install(submittal, start_install: Optional[str], due_date: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """Set/clear the DWL start_install on a submittal, set the due date (the Design
         Drawings Due date) when start_install is set, and keep the PendingStartInstall
-        handoff row in sync.
+        handoff row in sync (once a Rel exists -- see sync_pending_start_install).
 
-        The caller is responsible for the DRR + Rel gate and for committing the session.
+        The caller is responsible for the DRR-type gate and for committing the session.
+        A Rel is NOT required: every DRR gets one before it becomes a job-log release, so
+        the date can be set ahead of that and picked up once the Rel is assigned.
 
         Args:
-            submittal: The submittal object to update (must be a DRR with a Rel).
+            submittal: The submittal object to update (must be a DRR).
             start_install: New start install value (ISO date string or None to clear).
             due_date: Drafter-chosen Design Drawings Due date (ISO string). When start_install
                 is set and this is omitted, it defaults to DUE_DATE_LEAD_BUSINESS_DAYS business
@@ -240,22 +303,7 @@ class DraftingWorkLoadService:
             submittal.due_date = None
 
         submittal.last_updated = datetime.utcnow()
-
-        # Keep the handoff queue in sync, keyed by Rel.
-        pending = PendingStartInstall.query.filter_by(rel=submittal.rel).first()
-        if submittal.start_install is not None:
-            if pending is None:
-                pending = PendingStartInstall(rel=submittal.rel)
-                db.session.add(pending)
-            pending.job_number = submittal.project_number
-            pending.submittal_id = submittal.submittal_id
-            pending.start_install = submittal.start_install
-            # A fresh date re-opens the handoff even if a prior date was already consumed.
-            pending.consumed_at = None
-            pending.consumed_job = None
-            pending.consumed_release = None
-        elif pending is not None:
-            db.session.delete(pending)
+        DraftingWorkLoadService.sync_pending_start_install(submittal)
 
         logger.info(
             f"Updated start_install for submittal {submittal.submittal_id} (rel {submittal.rel}) "

@@ -29,7 +29,7 @@ from app.brain.drafting_work_load.service import (
     LocationService,
 )
 from app.logging_config import get_logger
-from app.models import Submittals, ProcoreOutbox, Notification, db
+from app.models import Submittals, ProcoreOutbox, Notification, PendingStartInstall, db, is_gc_approval_type
 from app.auth.utils import login_required, admin_required, drafter_or_admin_required, get_current_user
 from app.brain.mentions import parse_mentions, resolve_mentioned_users
 from app.route_utils import handle_errors, require_json, get_or_404
@@ -550,28 +550,49 @@ def update_submittal_procore_status():
 @handle_errors("update due_date")
 @require_json("submittal_id")
 def update_submittal_due_date():
-    """Update the due_date for a submittal"""
+    """Update the due_date for a submittal, either directly or by backdating 60
+    business days from a GC jobsite schedule date (Sub-GC submittals only). The
+    two are mutually exclusive per call; both the schedule date and the
+    resulting due_date are persisted."""
     submittal_id = str(g.json_data['submittal_id'])
     due_date = g.json_data.get('due_date') or None
+    gc_jobsite_schedule_date = g.json_data.get('gc_jobsite_schedule_date') or None
+
+    if due_date and gc_jobsite_schedule_date:
+        return jsonify({
+            "error": "due_date and gc_jobsite_schedule_date are mutually exclusive.",
+            "code": "mutually_exclusive",
+        }), 400
 
     submittal, err = get_or_404(Submittals, "Submittal not found", submittal_id=submittal_id)
     if err:
         return err
 
+    if gc_jobsite_schedule_date and not is_gc_approval_type(submittal.type):
+        return jsonify({
+            "error": "GC jobsite schedule date can only be set on a Submittal for GC Approval.",
+            "code": "gc_type_required",
+        }), 400
+
     old_due_date = submittal.due_date.isoformat() if submittal.due_date else None
-    success, error_msg = DraftingWorkLoadService.update_due_date(submittal, due_date)
+    old_gc_schedule_date = submittal.gc_jobsite_schedule_date.isoformat() if submittal.gc_jobsite_schedule_date else None
+    success, error_msg = DraftingWorkLoadService.update_due_date(submittal, due_date, gc_jobsite_schedule_date)
 
     if not success:
         return jsonify({"error": error_msg}), 400
 
     new_due_date = submittal.due_date.isoformat() if submittal.due_date else None
+    new_gc_schedule_date = submittal.gc_jobsite_schedule_date.isoformat() if submittal.gc_jobsite_schedule_date else None
 
     db.session.commit()
     user = get_current_user()
     try:
+        event_payload = {"due_date": {"old": old_due_date, "new": new_due_date}}
+        if new_gc_schedule_date != old_gc_schedule_date:
+            event_payload["gc_jobsite_schedule_date"] = {"old": old_gc_schedule_date, "new": new_gc_schedule_date}
         create_submittal_event(
             submittal_id, "updated",
-            {"due_date": {"old": old_due_date, "new": new_due_date}},
+            event_payload,
             webhook_payload=None, source="Brain",
             internal_user_id=user.id if user else None,
         )
@@ -581,7 +602,8 @@ def update_submittal_due_date():
     return jsonify({
         "success": True,
         "submittal_id": submittal_id,
-        "due_date": submittal.due_date.isoformat() if submittal.due_date else None
+        "due_date": submittal.due_date.isoformat() if submittal.due_date else None,
+        "gc_jobsite_schedule_date": new_gc_schedule_date,
     }), 200
 
 
@@ -592,10 +614,13 @@ def update_submittal_due_date():
 def update_submittal_start_install():
     """Set/clear a desired start-install date for a DRR submittal.
 
-    Only DRR ("Drafting Release Review") submittals that already have a Rel assigned
-    may receive a start install (the Rel is the join key used to hand the date off to
-    the job-log release when it is created). Setting the date also derives the read-only
-    DDD (15 business days earlier) and maintains a PendingStartInstall row keyed by Rel."""
+    Any DRR ("Drafting Release Review") submittal may receive a start install, whether
+    or not it has a Rel yet -- every DRR gets one before it becomes a job-log release, so
+    the date is just a DWL-only planning value until a Rel exists. Setting the date also
+    derives the read-only DDD (15 business days earlier) and, once a Rel is present,
+    maintains a PendingStartInstall row keyed by it (see
+    DraftingWorkLoadService.sync_pending_start_install, also called from
+    update_submittal_rel when a Rel is first assigned or reassigned)."""
     from app.procore.procore import DRR_TYPE
 
     submittal_id = str(g.json_data['submittal_id'])
@@ -608,11 +633,12 @@ def update_submittal_start_install():
     if err:
         return err
 
-    # Gate: DRR + assigned Rel. This guarantees every pending handoff row has a Rel key.
-    if (submittal.type or "").strip() != DRR_TYPE or submittal.rel is None:
+    # Gate: DRR only. A Rel is no longer required -- sync_pending_start_install no-ops
+    # until one exists.
+    if (submittal.type or "").strip() != DRR_TYPE:
         return jsonify({
-            "error": "Start install can only be set on a Drafting Release Review submittal with an assigned Rel.",
-            "code": "drr_rel_required",
+            "error": "Start install can only be set on a Drafting Release Review submittal.",
+            "code": "drr_required",
         }), 400
 
     old_start_install = submittal.start_install.isoformat() if submittal.start_install else None
@@ -675,6 +701,19 @@ def update_submittal_rel():
         new_rel = assign_rel_manual(submittal, rel)
     except RelAssignmentError as e:
         return jsonify({"error": e.message, "code": e.code}), (409 if e.code == "collision" else 400)
+
+    # If this DRR already has a start_install date (set before or without a Rel — see
+    # update_submittal_start_install), keep the PendingStartInstall handoff in sync with
+    # the (possibly new) Rel. On reassignment, move it off the old Rel first so it isn't
+    # left stranded pointing at a number that no longer belongs to this submittal.
+    if submittal.start_install is not None:
+        if old_rel is not None and old_rel != new_rel:
+            stale = PendingStartInstall.query.filter_by(
+                rel=old_rel, submittal_id=submittal.submittal_id, consumed_at=None
+            ).first()
+            if stale is not None:
+                db.session.delete(stale)
+        DraftingWorkLoadService.sync_pending_start_install(submittal)
 
     db.session.commit()
 

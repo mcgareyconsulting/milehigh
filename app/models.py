@@ -19,6 +19,7 @@ updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
+import re
 from datetime import datetime, date
 from enum import Enum
 from sqlalchemy import cast, Integer, String
@@ -29,6 +30,14 @@ db = SQLAlchemy()
 def _dt(value):
     """Serialize a datetime/date to ISO format string, or None."""
     return value.isoformat() if value else None
+
+
+def is_gc_approval_type(type_value):
+    """True if `type_value` is a "Submittal for GC Approval", tolerant of the
+    casing/double-space variants Procore/our data actually contains (e.g.
+    "Submittal for GC  Approval", "Submittal for Gc Approval")."""
+    normalized = re.sub(r"\s+", " ", (type_value or "").strip()).lower()
+    return normalized == "submittal for gc approval"
 
 class SyncStatus(Enum):
     PENDING = "pending"
@@ -102,6 +111,12 @@ class Submittals(db.Model):
     notes = db.Column(db.Text)
     submittal_drafting_status = db.Column(db.String(50), nullable=False, default='')
     due_date = db.Column(db.Date, nullable=True)  # Due date for submittal
+    # Optional GC-provided jobsite install schedule date for a Sub-GC-type submittal.
+    # Setting it also backdates due_date 60 business days from it (see
+    # DraftingWorkLoadService.GC_SCHEDULE_LEAD_BUSINESS_DAYS). Tracked as its own column
+    # (not just folded into due_date) so it can be analyzed on its own long-term; currently
+    # only meaningful for Sub-GC submittals but not enforced at the column level.
+    gc_jobsite_schedule_date = db.Column(db.Date, nullable=True)
     # Release identifier (101-998) shown in the DWL Rel column. Suggested as the
     # next highest available value (max-in-use + 1) so assignment is semi-
     # chronological; freed/low numbers are recycled only after REL_MAX is occupied
@@ -171,6 +186,7 @@ class Submittals(db.Model):
             "title": self.title,
             "status": self.status,
             "type": self.type,
+            "is_gc_approval_type": is_gc_approval_type(self.type),
             "ball_in_court": self.ball_in_court,
             "submittal_manager": self.submittal_manager,
             "order_number": self.order_number,
@@ -178,6 +194,7 @@ class Submittals(db.Model):
             "submittal_drafting_status": self.submittal_drafting_status,
             "rel": self.rel,
             "due_date": _dt(self.due_date),
+            "gc_jobsite_schedule_date": _dt(self.gc_jobsite_schedule_date),
             "start_install": _dt(self.start_install),
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),

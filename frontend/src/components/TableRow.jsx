@@ -181,10 +181,15 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
     };
 
     // Due date is edited through a modal (same interaction as Start Install, no coupled logic).
-    const handleDueDateConfirm = (dueDate) => {
+    // On Sub-GC rows the modal also offers a mutually-exclusive "GC jobsite schedule date"
+    // anchor field, which arrives here as an object instead of a plain date string.
+    const handleDueDateConfirm = (value) => {
         setDueDateModalOpen(false);
-        if (submittalId && onDueDateChange) {
-            onDueDateChange(submittalId, dueDate);
+        if (!submittalId || !onDueDateChange) return;
+        if (value && typeof value === 'object') {
+            onDueDateChange(submittalId, value.due_date ?? null, value.gc_jobsite_schedule_date ?? null);
+        } else {
+            onDueDateChange(submittalId, value);
         }
     };
 
@@ -197,7 +202,13 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
 
     const rowType = row.type ?? row['TYPE'] ?? '';
     const isDraftingReleaseReview = rowType === 'Drafting Release Review';
-    
+
+    // Project name + submittal title, for modal headers that need more context than a
+    // bare job number (e.g. "Job 490 · Sandcrete Apartments - Stair Core #3").
+    const rowProjectName = row['NAME'] ?? row.project_name ?? '';
+    const rowTitle = row['TITLE'] ?? row.title ?? '';
+    const jobNameDesc = [rowProjectName, rowTitle].filter(Boolean).join(' - ');
+
     // Check if status is HOLD for yellow background
     const currentStatus = row.submittal_drafting_status ?? row['COMP. STATUS'] ?? '';
     const isHoldStatus = currentStatus === 'HOLD';
@@ -580,31 +591,37 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         isOpen={dueDateModalOpen}
                                         onClose={() => setDueDateModalOpen(false)}
                                         title="Set Due Date"
-                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''}${(row['Rel'] ?? row.rel) ? ` · Rel ${row['Rel'] ?? row.rel}` : ''}`}
+                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''}${(row['Rel'] ?? row.rel) ? ` · Rel ${row['Rel'] ?? row.rel}` : ''}${jobNameDesc ? ` · ${jobNameDesc}` : ''}`}
                                         label="Due date"
                                         currentDate={ddVal}
                                         onConfirm={handleDueDateConfirm}
                                         onClear={handleDueDateClear}
+                                        secondaryLabel={row.is_gc_approval_type ? 'GC jobsite schedule date' : undefined}
+                                        secondaryHelpText={row.is_gc_approval_type ? 'Backdates the due date 60 business days from this date. Both dates are saved.' : undefined}
+                                        secondaryFieldKey="gc_jobsite_schedule_date"
+                                        secondaryCurrentDate={row.is_gc_approval_type ? (row['GC JOBSITE SCHEDULE DATE'] ?? row.gc_jobsite_schedule_date ?? '') : undefined}
                                     />
                                 )}
                             </td>
                         );
                     }
 
-                    // START INSTALL: a desired install date set ahead of the release, only on
-                    // DRR submittals with an assigned Rel. Hard date only (no ASAP). Transfers
-                    // to the job-log release at creation time via the Rel.
+                    // START INSTALL: a desired install date set ahead of the release, on any
+                    // DRR submittal -- a Rel is not required. Hard date only (no ASAP). Every
+                    // DRR gets a Rel before it becomes a job-log release, so the date is just a
+                    // DWL-only planning value until then; it transfers via the Rel once one
+                    // exists (see PendingStartInstall / sync_pending_start_install).
                     if (isStartInstall) {
                         const rowRel = row['Rel'] ?? row.rel ?? null;
                         const hasRel = rowRel !== null && rowRel !== undefined && rowRel !== '';
-                        const canEditStartInstall = canEditDrafterFields && isDraftingReleaseReview && hasRel;
+                        const canEditStartInstall = canEditDrafterFields && isDraftingReleaseReview;
                         const siRaw = row['START INSTALL'] ?? row.start_install ?? '';
                         const hasStartInstall = siRaw && siRaw !== '';
 
                         // Same pill as DUE DATE / the Job Log Start Install: green = upcoming,
                         // yellow = past-due, neutral clickable pill when empty. Clicking opens the
-                        // modal (date → proposed due date → confirm). Non-DRR / no-Rel rows have
-                        // nothing to set, so they render a plain muted dash instead.
+                        // modal (date → proposed due date → confirm). Non-DRR rows have nothing
+                        // to set, so they render a plain muted dash instead.
                         return (
                             <td
                                 key={`${row.id}-${column}`}
@@ -630,7 +647,8 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                         onClose={() => setStartInstallModalOpen(false)}
                                         currentStartInstall={siRaw}
                                         currentDueDate={row['DUE DATE'] ?? row.due_date ?? ''}
-                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''} · Rel ${rowRel}`}
+                                        jobLabel={`Job ${row['Job'] ?? row.project_number ?? ''}${hasRel ? ` · Rel ${rowRel}` : ''}${jobNameDesc ? ` · ${jobNameDesc}` : ''}`}
+                                        hasRel={hasRel}
                                         onConfirm={handleStartInstallConfirm}
                                         onClear={handleStartInstallClear}
                                     />
