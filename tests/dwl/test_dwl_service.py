@@ -4,7 +4,7 @@ These tests verify service methods coordinate with the engine and handle databas
 """
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
+from datetime import datetime, date
 from app.brain.drafting_work_load.service import (
     DraftingWorkLoadService,
     SubmittalOrderingService,
@@ -89,6 +89,40 @@ class TestDraftingWorkLoadService:
         success, error = DraftingWorkLoadService.update_due_date(submittal, '01/15/2024')
         assert success is False
         assert error is not None
+
+    def test_update_due_date_with_gc_schedule_backdates_60_business_days(self):
+        """A GC jobsite schedule date persists itself and backdates due_date 60
+        business days from it (12 weeks, so a Monday anchor lands on a Monday)."""
+        submittal = create_fake_submittal()
+        success, error = DraftingWorkLoadService.update_due_date(
+            submittal, gc_jobsite_schedule_date='2026-11-30'
+        )
+        assert success is True
+        assert error is None
+        assert submittal.gc_jobsite_schedule_date == date(2026, 11, 30)
+        assert submittal.due_date == date(2026, 9, 7)
+        assert isinstance(submittal.last_updated, datetime)
+
+    def test_update_due_date_manual_leaves_gc_schedule_date_untouched(self):
+        """Setting due_date directly doesn't clear a previously-stored GC schedule
+        date -- it's tracked independently for long-term reporting."""
+        submittal = create_fake_submittal()
+        submittal.gc_jobsite_schedule_date = date(2026, 11, 30)
+        success, error = DraftingWorkLoadService.update_due_date(submittal, '2024-01-15')
+        assert success is True
+        assert error is None
+        assert submittal.gc_jobsite_schedule_date == date(2026, 11, 30)
+        assert (submittal.due_date.year, submittal.due_date.month, submittal.due_date.day) == (2024, 1, 15)
+
+    def test_update_due_date_invalid_gc_schedule_date_rejected(self):
+        """Invalid GC schedule date format is rejected without touching either field."""
+        submittal = create_fake_submittal()
+        success, error = DraftingWorkLoadService.update_due_date(
+            submittal, gc_jobsite_schedule_date='11/30/2026'
+        )
+        assert success is False
+        assert error is not None
+        assert submittal.due_date is None
 
     @patch('app.brain.drafting_work_load.service.Submittals')
     def test_get_dwl_submittals_open_tab(self, mock_submittals):

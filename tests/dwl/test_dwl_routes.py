@@ -313,6 +313,59 @@ class TestUpdateSubmittalDueDate:
 
         assert response.status_code == 400
 
+    def test_update_due_date_mutually_exclusive_rejected(self, client):
+        """Sending both due_date and gc_jobsite_schedule_date is rejected before any lookup."""
+        response = client.put(
+            '/brain/drafting-work-load/due-date',
+            json={
+                'submittal_id': 'test_123',
+                'due_date': '2024-01-15',
+                'gc_jobsite_schedule_date': '2026-11-30',
+            },
+            content_type='application/json'
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['code'] == 'mutually_exclusive'
+
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_update_due_date_gc_schedule_wrong_type_rejected(self, mock_submittal_model, client, mock_submittal):
+        """gc_jobsite_schedule_date is rejected on a non-Sub-GC submittal type."""
+        mock_submittal.type = "Drafting Release Review"
+        mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
+
+        response = client.put(
+            '/brain/drafting-work-load/due-date',
+            json={'submittal_id': 'test_submittal_123', 'gc_jobsite_schedule_date': '2026-11-30'},
+            content_type='application/json'
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['code'] == 'gc_type_required'
+
+    @patch('app.brain.drafting_work_load.routes.db')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_update_due_date_gc_schedule_success_persists_both(self, mock_submittal_model, mock_db, client, mock_submittal):
+        """A GC jobsite schedule date on a Sub-GC submittal persists both fields."""
+        mock_submittal.type = "Submittal for GC  Approval"  # real-data double-space variant
+        mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
+
+        response = client.put(
+            '/brain/drafting-work-load/due-date',
+            json={'submittal_id': 'test_submittal_123', 'gc_jobsite_schedule_date': '2026-11-30'},
+            content_type='application/json'
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is True
+        assert data['gc_jobsite_schedule_date'] == '2026-11-30'
+        assert data['due_date'] == '2026-09-07'
+        assert mock_submittal.gc_jobsite_schedule_date == date(2026, 11, 30)
+        assert mock_submittal.due_date == date(2026, 9, 7)
+
 
 # ==============================================================================
 # POST /drafting-work-load/step TESTS

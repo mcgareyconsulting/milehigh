@@ -162,30 +162,64 @@ class DraftingWorkLoadService:
         """
         return DraftingWorkLoadEngine.validate_due_date(due_date)
     
+    # When a GC jobsite schedule date is entered (Sub-GC submittals only), the due
+    # date is backdated this many business days from it. Both the anchor and the
+    # computed due_date are persisted.
+    GC_SCHEDULE_LEAD_BUSINESS_DAYS = 60
+
     @staticmethod
-    def update_due_date(submittal, due_date: Optional[str]) -> Tuple[bool, Optional[str]]:
+    def update_due_date(submittal, due_date: Optional[str] = None, gc_jobsite_schedule_date: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """
-        Update submittal due date.
-        
+        Update submittal due date, either directly or by backdating
+        GC_SCHEDULE_LEAD_BUSINESS_DAYS business days from a GC jobsite schedule date
+        anchor. The two are mutually exclusive per call; the caller is responsible for
+        the Sub-GC type gate on gc_jobsite_schedule_date.
+
         Args:
             submittal: The submittal object to update
-            due_date: New due date value (ISO format string or None)
-            
+            due_date: New due date value (ISO format string or None). Only touches
+                due_date -- a previously-stored gc_jobsite_schedule_date is left as-is,
+                since it's tracked independently for longer-term reporting.
+            gc_jobsite_schedule_date: Anchor date (ISO format string) to backdate from.
+                When provided, both it and the computed due_date are persisted; `due_date`
+                is ignored.
+
         Returns:
             (success, error_message)
         """
+        if gc_jobsite_schedule_date:
+            is_valid, normalized_anchor, error = DraftingWorkLoadEngine.validate_due_date(gc_jobsite_schedule_date)
+            if not is_valid or not normalized_anchor:
+                logger.warning(f"Invalid GC jobsite schedule date for submittal {submittal.submittal_id}: {error}")
+                return False, error
+
+            from app.trello.utils import calculate_business_days_before
+
+            anchor_date = datetime.strptime(normalized_anchor, '%Y-%m-%d').date()
+            submittal.gc_jobsite_schedule_date = anchor_date
+            submittal.due_date = calculate_business_days_before(
+                anchor_date, DraftingWorkLoadService.GC_SCHEDULE_LEAD_BUSINESS_DAYS
+            )
+            submittal.last_updated = datetime.utcnow()
+            logger.info(
+                f"Backdated due date for submittal {submittal.submittal_id} to "
+                f"{submittal.due_date} ({DraftingWorkLoadService.GC_SCHEDULE_LEAD_BUSINESS_DAYS} "
+                f"business days before GC jobsite schedule date {normalized_anchor})"
+            )
+            return True, None
+
         is_valid, normalized_date, error = DraftingWorkLoadEngine.validate_due_date(due_date)
-        
+
         if not is_valid:
             logger.warning(f"Invalid due date for submittal {submittal.submittal_id}: {error}")
             return False, error
-        
+
         # Convert string to date object if provided
         if normalized_date:
             submittal.due_date = datetime.strptime(normalized_date, '%Y-%m-%d').date()
         else:
             submittal.due_date = None
-        
+
         submittal.last_updated = datetime.utcnow()
         logger.info(f"Updated due date for submittal {submittal.submittal_id} to '{normalized_date}'")
         return True, None
