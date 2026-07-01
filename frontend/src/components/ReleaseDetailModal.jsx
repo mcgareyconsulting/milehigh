@@ -64,7 +64,7 @@ function SectionSpinner() {
     );
 }
 
-export function ReleaseDetailModal({ isOpen, onClose, release }) {
+export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
     const [enrichment, setEnrichment] = useState({ todos: [], meetings: [] });
     const [photos, setPhotos] = useState([]);
     const [drawings, setDrawings] = useState([]);
@@ -172,8 +172,12 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
                 className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 flex flex-col max-h-[85vh] transform transition-all"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl shrink-0">
+                {/* Header — tinted to the lane color of the clicked card when provided,
+                    else the default accent gradient. */}
+                <div
+                    className={`px-6 py-4 rounded-t-xl shrink-0 ${accentColor ? '' : 'bg-gradient-to-r from-accent-500 to-accent-600'}`}
+                    style={accentColor ? { backgroundColor: accentColor } : undefined}
+                >
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                             <h2 className="text-xl font-bold text-white truncate">
