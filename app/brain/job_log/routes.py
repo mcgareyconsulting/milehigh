@@ -3338,14 +3338,31 @@ def delete_job(job, release):
     return jsonify({"message": "deleted"}), 200
 
 
+def _coerce_editable_field(field, value):
+    """Coerce a raw request value to the DB type for an EDITABLE_FIELDS entry.
+
+    Raises ValueError/TypeError on bad input; caller turns that into a 400.
+    """
+    db_field, type_converter = EDITABLE_FIELDS[field]
+    if type_converter == "date":
+        converted_value = datetime.strptime(value, "%Y-%m-%d").date() if value else None
+    elif type_converter == int:
+        converted_value = int(value) if value is not None else None
+    elif type_converter == float:
+        converted_value = float(value) if value is not None else None
+    else:
+        converted_value = str(value) if value is not None else None
+    return db_field, converted_value
+
+
 @brain_bp.route("/jobs/<int:job>/<release>", methods=["PATCH"])
 @login_required
 @admin_required
-@handle_errors("update job column", raw_error=True)
-@require_json("field")
-def update_job_column(job, release):
+@handle_errors("update job fields", raw_error=True)
+@require_json("fields")
+def update_job_fields(job, release):
     """
-    Update a specific column for a job record.
+    Update one or more columns for a job record in a single commit.
 
     Parameters:
         job: int - Job number
@@ -3353,43 +3370,41 @@ def update_job_column(job, release):
 
     Request Body:
         {
-            "field": "<field_name>",
-            "value": "<new_value>"
+            "fields": {
+                "<field_name>": "<new_value>",
+                ...
+            }
         }
 
     Returns:
         JSON object with updated job data (200) or error (400, 404, 500)
     """
-    field = g.json_data['field']
-    value = g.json_data.get("value")
-
-    if field not in EDITABLE_FIELDS:
-        return jsonify({"error": f"field '{field}' is not editable"}), 400
-
-    db_field, type_converter = EDITABLE_FIELDS[field]
+    fields = g.json_data['fields']
+    if not isinstance(fields, dict) or not fields:
+        return jsonify({"error": "fields must be a non-empty object"}), 400
 
     job_record, err = get_or_404(Releases, "Job not found", job=job, release=release)
     if err:
         return err
 
-    # Coerce value to proper type
-    try:
-        if type_converter == "date":
-            if value:
-                converted_value = datetime.strptime(value, "%Y-%m-%d").date()
-            else:
-                converted_value = None
-        elif type_converter == int:
-            converted_value = int(value) if value is not None else None
-        elif type_converter == float:
-            converted_value = float(value) if value is not None else None
-        else:
-            converted_value = str(value) if value is not None else None
-    except (ValueError, TypeError) as e:
-        return jsonify({"error": f"Invalid value for field '{field}': {str(e)}"}), 400
+    # Validate and coerce every field before mutating anything, so an invalid
+    # field never causes a partial write.
+    coerced = {}
+    for field, value in fields.items():
+        if field not in EDITABLE_FIELDS:
+            return jsonify({"error": f"field '{field}' is not editable"}), 400
+        try:
+            db_field, converted_value = _coerce_editable_field(field, value)
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": f"Invalid value for field '{field}': {str(e)}"}), 400
+        coerced[field] = (db_field, converted_value)
 
-    old_value = serialize_value(getattr(job_record, db_field, None))
-    setattr(job_record, db_field, converted_value)
+    payload = {}
+    for field, (db_field, converted_value) in coerced.items():
+        old_value = serialize_value(getattr(job_record, db_field, None))
+        setattr(job_record, db_field, converted_value)
+        payload[field] = {'old_value': old_value, 'new_value': serialize_value(converted_value)}
+
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
 
@@ -3398,12 +3413,12 @@ def update_job_column(job, release):
         release=release,
         action='updated',
         source='Brain',
-        payload={'field': field, 'old_value': old_value, 'new_value': serialize_value(converted_value)},
+        payload=payload,
     )
 
     db.session.commit()
 
-    logger.info(f"Updated job {job}-{release} field {field} to {converted_value}")
+    logger.info(f"Updated job {job}-{release} fields: {list(coerced.keys())}")
 
     job_data = {
         'id': serialize_value(job_record.id),

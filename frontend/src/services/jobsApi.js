@@ -314,15 +314,15 @@ class JobsApi {
         }
     }
 
-    async updateJobColumn(job, release, field, value) {
+    async updateJobFields(job, release, fields) {
         try {
             const response = await axios.patch(
                 `${API_BASE_URL}/brain/jobs/${job}/${release}`,
-                { field, value }
+                { fields }
             );
             return response.data;
         } catch (error) {
-            throw this._handleError(error, 'Failed to update job column');
+            throw this._handleError(error, 'Failed to update job fields');
         }
     }
 
