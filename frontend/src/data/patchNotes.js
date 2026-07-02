@@ -26,11 +26,12 @@ export const PATCH_NOTES = [
         type: 'new',
         title: 'Log a verbal release',
         detail:
-          'A quick-entry form on the Releases page for releases that come in verbally. It suggests the next release number for you (still editable), and any logged-in user can push one through — no need to wait for a drafter.',
+          'A quick-entry form on the Releases page for releases that come in verbally.',
       },
       {
         type: 'new',
         title: 'Edit a whole Job Log row inline',
+        adminOnly: true,
         detail:
           'You can now edit every non-locked field on a Job Log row right inline. Your changes sync straight to the Trello card and its mirror card, so the boards stay in step.',
       },
