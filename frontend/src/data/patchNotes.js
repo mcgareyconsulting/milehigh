@@ -17,6 +17,44 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.278',
+    date: 'July 1, 2026',
+    summary:
+      'Log a verbal release in seconds, edit any Job Log row inline, schedule Sub-GC drafting from the GC\'s jobsite date, and easier-to-read green dates.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Log a verbal release',
+        detail:
+          'A quick-entry form on the Releases page for releases that come in verbally. It suggests the next release number for you (still editable), and any logged-in user can push one through — no need to wait for a drafter.',
+      },
+      {
+        type: 'new',
+        title: 'Edit a whole Job Log row inline',
+        detail:
+          'You can now edit every non-locked field on a Job Log row right inline. Your changes sync straight to the Trello card and its mirror card, so the boards stay in step.',
+      },
+      {
+        type: 'new',
+        title: 'Schedule Sub-GC drafting from the GC\'s jobsite date',
+        detail:
+          'On a Sub-GC submittal you can enter the GC\'s jobsite install schedule date and the drafting due date is set automatically to 60 business days before it. Both dates are kept, so the schedule date can be tracked on its own.',
+      },
+      {
+        type: 'improved',
+        title: 'Clearer release numbering on drafting submittals',
+        detail:
+          'Release numbers and dates on DRR-type drafting submittals are now assigned and displayed more consistently across the Drafting Work Load.',
+      },
+      {
+        type: 'fixed',
+        title: 'Readable dates on green backgrounds',
+        detail:
+          'On-track (green) date pills now use black text on the green highlight, so they\'re easy to read across the Job Log, PM board, and Start Install editor.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.268',
     date: 'June 23, 2026',
     summary:
