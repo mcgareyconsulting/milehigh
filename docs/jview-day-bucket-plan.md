@@ -114,20 +114,59 @@ transition, 0 overlaps in week mode, whole-column snap. schema_version 6.
 heat-chip mode and adaptive header. Click-heat-chip → Z3 + jump.
 *Verify:* at Z0 a ~3-month span fits on screen; at Z4 cards show all detail lines.
 
-**Phase 3 — Cell affordances.** `+N more` popover with full card list; in-cell sort comparator;
-duration badge; (optional) occupation underline for installer cards.
+**Phase 3 — Cell affordances.** `+N more` popover with full card list (still inert); in-cell sort
+comparator ✅; duration badge (TODO); (optional) occupation underline for installer cards.
+
+**Phase 3.1 — Cover photo thumbnails on cards. ✅ BUILT (2026-07-02), unverified visually (no sandbox
+photos).** Trello-card style: at close zoom ("weekly and sooner" = 7/4/2-day levels, `imgH` 66/96/128)
+a card shows its cover photo (manifest/cover-sheet) as a thumbnail above the text, with a `📎 N`
+count badge. Cover = the release's NEWEST non-deleted `ReleasePhoto` (v1 heuristic). Backend: batched
+`_release_cover_photos()` in job_log/routes.py (mirrors `_release_ids_with_drawings`), patched into
+BOTH serializers (`/brain/jobs` + `/brain/get-all-jobs`) → emits `cover_photo_id` + `photo_count`;
+verified present in the API response. Frontend: `<img>` from `/brain/releases/{id}/photos/{coverId}/file`
+(same URL pattern ReleaseDetailModal uses). NOT visually confirmed — sandbox has 0 release photos.
+Cover heuristic (user-confirmed 2026-07-02): the manifest routes through the EXISTING photo upload
+(`POST /brain/releases/<id>/photos` → `ReleasePhoto`) — no separate path. Cover = "most recent photo
+once in the shipping stage", which in practice = the release's newest photo (shipping is the last
+thing photographed), so the current newest-photo rule already surfaces the manifest. Robustness
+refinement (cheap, available now): prefer the newest photo whose `ReleasePhoto.stage` is a shipping
+stage, fall back to newest overall — guards against a later non-manifest upload stealing the cover.
+FUTURE ("scan for the manifest"): actively detect the cover-sheet photo (OCR / filename-note hint like
+"manifest"/"worksheet"/"shipped" / aspect ratio) and prioritize it. Integration idea: the 5b
+"mark shipped" drag could open the existing photo uploader so Jay adds the manifest at completion,
+which then auto-becomes the cover.
+
+**Phase 5 — Drag interactions. ✅ v1 BUILT (2026-07-02), write path untested live.** Native HTML5 DnD
+in GanttChart. (5a) installer-lane card dragged to another DAY column → `updateStartInstall`; (5b)
+Shipping Planning card dragged into Shipping Completed → `updateStage('Ship Complete')`, one-way.
+Optimistic `overrides` state (card jumps immediately), reconciled against the poll, reverted on error;
+drop-target lane highlight; `refetch()` on success. Installer-to-installer moves NOT handled. The
+photo-prompt-on-complete and reverse-drag questions remain OPEN (deferred). NOT tested end-to-end
+because a real drop writes to the sandbox DB (stage/date change on a live release) — pending a live
+test with user okay.
 
 **Phase 4 — Polish.** Weekend handling const (render dimmed vs collapse Sat/Sun — decide by
 feel), memoization pass, empty-lane collapse option.
 
-**Phase 5 — Drag-to-reschedule (separate slice, do NOT bundle).** Native HTML5 DnD (matches
-DWL's `useDWLDragAndDrop` pattern; dnd-kit only if needed). Drop target = lane×day cell
-(the grid gives these for free). V1: same-lane drops only → calls the existing start-install
-mutation in `jobsApi` (same endpoint `StartInstallDateModal` uses,
-`/brain/update-start-install/<job>/<release>` → `UpdateStartInstallCommand`, which already
-handles comp_eta recompute, events/undo, Trello outbox). Optimistic UI; the 30s
-`ReleasesContext` cursor poll reconciles. Cross-lane drops (stage/installer changes) are a
-later slice.
+**Phase 5 — Drag interactions (separate slice, do NOT bundle).** Native HTML5 DnD (matches
+DWL's `useDWLDragAndDrop` pattern; dnd-kit only if needed). Drop target = lane×column cell
+(the grid gives these for free). Drag MEANING depends on lane type — two distinct behaviors:
+
+- **5a. Installer lanes — horizontal date drag.** Drop a card in a different day/week column →
+  reschedule `start_install`. Calls the same endpoint `StartInstallDateModal` uses,
+  `/brain/update-start-install/<job>/<release>` → `UpdateStartInstallCommand` (recomputes
+  comp_eta, events/undo, Trello outbox). Optimistic UI; the 30s `ReleasesContext` poll reconciles.
+- **5b. Shipping lanes — vertical stage drag (Jay's flow).** Probably NO horizontal (date) drag
+  here. Instead Jay slides a card from **Shipping Planning → Shipping Completed**, which is a STAGE
+  change (`Ship Planning` → `Ship Complete`) via `PATCH /brain/update-stage/<job>/<release>` →
+  `UpdateStageCommand` (already handles Trello move, ASAP-drop cascade, events/undo). The card keeps
+  its date column — only the lane/stage changes. Mirrors the original §6 flow: "works only in the
+  list, adds photos, moves to Shipping Complete."
+  - OPEN: does completion prompt/require a **photo** on drop (Jay's documented flow adds photos
+    before completing) or just flip the stage? — pending user decision.
+  - OPEN: is the reverse drag (Completed → Planning) allowed (undo), or one-way?
+  - Note: Ship Complete does NOT neutralize the install date or touch job_comp (only Complete/
+    Install Complete do); ASAP is dropped. So the stage flip is comparatively clean.
 
 **Backlog / later slices:**
 - **Departure board panel** — big-type "TODAY / THIS WEEK" ship list beside/above the board;

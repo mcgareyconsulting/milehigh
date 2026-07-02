@@ -26,7 +26,7 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User, PendingStartInstall
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, ReleasePhoto, Submittals, User, PendingStartInstall
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
 from app.api.helpers import DEFAULT_FAB_ORDER
@@ -337,6 +337,35 @@ def _release_ids_with_drawings(release_ids):
     return {row[0] for row in rows}
 
 
+def _release_cover_photos(release_ids):
+    """One-shot batched lookup of each release's cover photo (its newest non-deleted photo)
+    and total photo count. Returns {release_id: {'cover_photo_id': int, 'photo_count': int}}.
+    Used by the timeline day-bucket cards to show a manifest/cover thumbnail."""
+    if not release_ids:
+        return {}
+    rows = (
+        db.session.query(ReleasePhoto.release_id, ReleasePhoto.id, ReleasePhoto.uploaded_at)
+        .filter(
+            ReleasePhoto.release_id.in_(release_ids),
+            ReleasePhoto.is_deleted.is_(False),
+        )
+        .all()
+    )
+    out = {}
+    for rid, pid, uploaded_at in rows:
+        entry = out.get(rid)
+        if entry is None:
+            out[rid] = {'cover_photo_id': pid, 'photo_count': 1, '_ts': uploaded_at}
+        else:
+            entry['photo_count'] += 1
+            if uploaded_at is not None and (entry['_ts'] is None or uploaded_at > entry['_ts']):
+                entry['cover_photo_id'] = pid
+                entry['_ts'] = uploaded_at
+    for entry in out.values():
+        entry.pop('_ts', None)
+    return out
+
+
 _VIEWER_PROJECT_ID_RE = re.compile(r"/projects/(\d+)")
 
 
@@ -547,6 +576,8 @@ def get_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'has_drawing': False,  # patched in batch below
+                    'cover_photo_id': None,  # patched in batch below
+                    'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -576,6 +607,20 @@ def get_jobs():
         except Exception as drawing_lookup_error:
             logger.warning(
                 f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
+        # Patch cover_photo_id + photo_count in one batched query (avoids N+1). Powers the
+        # timeline day-bucket card thumbnails (manifest/cover sheet at close zoom).
+        try:
+            covers = _release_cover_photos([j['id'] for j in job_list])
+            for j in job_list:
+                cover = covers.get(j['id'])
+                j['cover_photo_id'] = cover['cover_photo_id'] if cover else None
+                j['photo_count'] = cover['photo_count'] if cover else 0
+        except Exception as cover_lookup_error:
+            logger.warning(
+                f"Error batching cover photos: {cover_lookup_error}",
                 exc_info=True,
             )
 
@@ -901,6 +946,8 @@ def get_all_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'has_drawing': False,  # patched in batch below
+                    'cover_photo_id': None,  # patched in batch below
+                    'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -930,6 +977,20 @@ def get_all_jobs():
         except Exception as drawing_lookup_error:
             logger.warning(
                 f"Error batching has_drawing flags: {drawing_lookup_error}",
+                exc_info=True,
+            )
+
+        # Patch cover_photo_id + photo_count in one batched query (avoids N+1). Powers the
+        # timeline day-bucket card thumbnails (manifest/cover sheet at close zoom).
+        try:
+            covers = _release_cover_photos([j['id'] for j in job_list])
+            for j in job_list:
+                cover = covers.get(j['id'])
+                j['cover_photo_id'] = cover['cover_photo_id'] if cover else None
+                j['photo_count'] = cover['photo_count'] if cover else 0
+        except Exception as cover_lookup_error:
+            logger.warning(
+                f"Error batching cover photos: {cover_lookup_error}",
                 exc_info=True,
             )
 

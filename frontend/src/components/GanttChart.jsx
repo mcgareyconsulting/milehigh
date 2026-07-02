@@ -14,8 +14,12 @@
  * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
- *   - READ-ONLY: cards cannot be dragged, resized, or reassigned. The Timeline never writes; only Job Log does.
- *     Cards are clickable to open a read-only detail modal (ReleaseDetailModal); clicking never edits.
+ *   - MOSTLY READ-ONLY: clicking a card opens a read-only detail modal (ReleaseDetailModal); clicking
+ *     never edits. The ONLY writes are two drag interactions (Phase 5), each via an existing Job Log
+ *     command: (a) dragging an installer-lane card to another DAY column reschedules Start install
+ *     (updateStartInstall); (b) dragging a card between the two shipping lanes (Planning ↔ Completed,
+ *     both directions) changes its stage (updateStage). Drags apply optimistically via `overrides`,
+ *     then reconcile against the polled data. Installer-to-installer moves are not handled yet.
  *   - Lanes = two fixed shipping-stage lanes (DB stage 'Ship Planning' → "Shipping Planning",
  *     'Ship Complete' → "Shipping Completed"), then the installer roster from /brain/installer-teams,
  *     then any off-roster installer present in the data (so no card is silently dropped).
@@ -43,6 +47,7 @@ import { jobsApi } from '../services/jobsApi';
 import { useReleases } from '../context/ReleasesContext';
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { localTodayStr as todayIso } from '../utils/formatters';
+import { API_BASE_URL } from '../utils/api';
 import ReleaseDetailModal from './ReleaseDetailModal';
 
 const addDays = (isoDate, days) => {
@@ -85,14 +90,16 @@ const CELL_PAD_TOP = 5;   // top padding inside a lane before the first card
 // screen. Zooming out past 3 weeks (index 2) collapses days into week columns so you can see a
 // quarter without microscopic days. Also scales card min-height, the per-cell cap (before a
 // "+N more" chip), text wrap on/off, and `detail`. Default (index 4) is exactly one week.
+// `imgH` = cover-photo thumbnail height on cards (0 = no thumbnail). Only the close/"weekly and
+// sooner" levels show the manifest/cover-sheet photo (Trello-card style).
 const ZOOM_LEVELS = [
-    { unit: 'week', cols: 12, minCardH: 20, cap: 4, detail: 'min', wrap: false },  // ~a quarter
-    { unit: 'week', cols: 6, minCardH: 22, cap: 5, detail: 'low', wrap: false },   // 6 weeks
-    { unit: 'day', cols: 21, minCardH: 24, cap: 5, detail: 'low', wrap: false },   // 3 weeks
-    { unit: 'day', cols: 14, minCardH: 40, cap: 6, detail: 'med', wrap: true },    // 2 weeks
-    { unit: 'day', cols: 7, minCardH: 52, cap: 7, detail: 'high', wrap: true },    // 1 week (default)
-    { unit: 'day', cols: 4, minCardH: 72, cap: 8, detail: 'full', wrap: true },
-    { unit: 'day', cols: 2, minCardH: 96, cap: 9, detail: 'full', wrap: true },
+    { unit: 'week', cols: 12, minCardH: 20, cap: 4, detail: 'min', wrap: false, imgH: 0 },  // ~a quarter
+    { unit: 'week', cols: 6, minCardH: 22, cap: 5, detail: 'low', wrap: false, imgH: 0 },   // 6 weeks
+    { unit: 'day', cols: 21, minCardH: 24, cap: 5, detail: 'low', wrap: false, imgH: 0 },   // 3 weeks
+    { unit: 'day', cols: 14, minCardH: 40, cap: 6, detail: 'med', wrap: true, imgH: 0 },    // 2 weeks
+    { unit: 'day', cols: 7, minCardH: 52, cap: 7, detail: 'high', wrap: true, imgH: 66 },   // 1 week (default)
+    { unit: 'day', cols: 4, minCardH: 72, cap: 8, detail: 'full', wrap: true, imgH: 96 },
+    { unit: 'day', cols: 2, minCardH: 96, cap: 9, detail: 'full', wrap: true, imgH: 128 },
 ];
 const DEFAULT_ZOOM = 4;
 const MIN_COL_PX = 40;    // floor so columns never collapse on a narrow screen (then it scrolls)
@@ -104,6 +111,8 @@ const SHIP_LANES = [
     { lane: 'Shipping Completed', stage: 'Ship Complete', color: 'rgb(139 92 246)' },
 ];
 const STAGE_TO_SHIP_LANE = new Map(SHIP_LANES.map((s) => [s.stage, s.lane]));
+const SHIP_LANE_TO_STAGE = new Map(SHIP_LANES.map((s) => [s.lane, s.stage]));
+const SHIP_STAGES = new Set(SHIP_LANES.map((s) => s.stage));
 
 const ELIGIBLE_STAGE_GROUPS = new Set(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE']);
 
@@ -217,7 +226,7 @@ function CardBody({ release, detail, wrap }) {
 }
 
 function GanttChart({ filterComplete = false }) {
-    const { jobs, loading } = useReleases();
+    const { jobs, loading, refetch } = useReleases();
     const [installerTeams, setInstallerTeams] = useState([]);
     const [teamsLoaded, setTeamsLoaded] = useState(false);
     const [hoveredItem, setHoveredItem] = useState(null);
@@ -231,6 +240,9 @@ function GanttChart({ filterComplete = false }) {
     const [datePickerValue, setDatePickerValue] = useState('');
     const [zoomIdx, setZoomIdx] = useState(DEFAULT_ZOOM);
     const [laneHeights, setLaneHeights] = useState({});   // measured px height per lane
+    const [overrides, setOverrides] = useState({});       // id → optimistic patch {startDate?, stage?, lane?, isShip?}
+    const [dragOverLane, setDragOverLane] = useState(null);
+    const dragItemRef = useRef(null);                     // the bar currently being dragged
     const scrollContainerRef = useRef(null);
     const bodyRef = useRef(null);
     const laneChartRefs = useRef({});      // lane name → chart-area DOM node, for height measurement
@@ -243,7 +255,7 @@ function GanttChart({ filterComplete = false }) {
     const scrollIntentRef = useRef(null);
 
     const zoom = ZOOM_LEVELS[zoomIdx];
-    const { minCardH, cap, detail, wrap } = zoom;
+    const { minCardH, cap, detail, wrap, imgH } = zoom;
     const colDays = zoom.unit === 'week' ? 7 : 1;   // calendar days spanned by one column
     // Column width is derived from the live viewport so exactly `cols` columns fill the chart area
     // (viewport minus the sticky lane sidebar). Falls back to a sane width pre-measure.
@@ -285,11 +297,35 @@ function GanttChart({ filterComplete = false }) {
         };
     }, []);
 
-    // Eligible release cards, selected client-side from the shared dataset.
-    const releases = useMemo(
-        () => jobs.map((j) => toBar(j, filterComplete)).filter(Boolean),
-        [jobs, filterComplete]
-    );
+    // Eligible release cards, selected client-side from the shared dataset. Optimistic drag
+    // overrides (see the drag handlers) are patched on so a moved card jumps immediately, before
+    // the server poll confirms.
+    const releases = useMemo(() => {
+        const base = jobs.map((j) => toBar(j, filterComplete)).filter(Boolean);
+        if (Object.keys(overrides).length === 0) return base;
+        return base.map((b) => (overrides[b.id] ? { ...b, ...overrides[b.id] } : b));
+    }, [jobs, filterComplete, overrides]);
+
+    // Reconcile optimistic overrides: once the polled data reflects a drag's write, drop the
+    // override so the card follows the source of truth again (and stale overrides self-heal).
+    useEffect(() => {
+        setOverrides((prev) => {
+            const keys = Object.keys(prev);
+            if (keys.length === 0) return prev;
+            const byId = new Map(jobs.map((j) => [String(j.id), j]));
+            let changed = false;
+            const next = { ...prev };
+            keys.forEach((id) => {
+                const j = byId.get(id);
+                if (!j) return;
+                const ov = prev[id];
+                const startOk = !ov.startDate || dayPart(j['Start install']) === ov.startDate;
+                const stageOk = !ov.stage || j['Stage'] === ov.stage;
+                if (startOk && stageOk) { delete next[id]; changed = true; }
+            });
+            return changed ? next : prev;
+        });
+    }, [jobs]);
 
     // Lane order: the two shipping lanes first, then the configured installer roster,
     // then any off-roster installer present in the data (so no eligible card is silently
@@ -461,6 +497,72 @@ function GanttChart({ filterComplete = false }) {
 
     const handleMouseLeave = () => {
         setHoveredItem(null);
+    };
+
+    // ── Drag interactions (Phase 5) ─────────────────────────────────────────────────────────
+    // Two behaviors by lane type: (a) installer lanes in DAY mode — drag a card to another day
+    // column to reschedule Start install; (b) Shipping Planning → Shipping Completed — drag down
+    // to mark shipped (stage change). One-way for shipping; installer-to-installer moves are not
+    // handled yet (a later slice).
+    const revertOverride = (id) => setOverrides((o) => {
+        if (!o[id]) return o;
+        const next = { ...o }; delete next[id]; return next;
+    });
+
+    const canDrop = (bar, toLane) => {
+        if (!bar) return false;
+        const toStage = SHIP_LANE_TO_STAGE.get(toLane);
+        if (toStage && SHIP_STAGES.has(bar.stage) && bar.stage !== toStage) return true;      // (b) shipping ↔ (both ways)
+        if (!bar.isShip && toLane === bar.lane && colDays === 1) return true;                 // (a) installer reschedule
+        return false;
+    };
+
+    const onCardDragStart = (e, bar) => {
+        dragItemRef.current = bar;
+        setHoveredItem(null);
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', `${bar.job}-${bar.release}`); } catch { /* ignore */ }
+    };
+    const onCardDragEnd = () => { dragItemRef.current = null; setDragOverLane(null); };
+
+    const onLaneDragOver = (e, toLane) => {
+        if (canDrop(dragItemRef.current, toLane)) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (dragOverLane !== toLane) setDragOverLane(toLane);
+        }
+    };
+
+    const changeShipStage = (bar, toLane, toStage) => {
+        setOverrides((o) => ({ ...o, [bar.id]: { ...(o[bar.id] || {}), lane: toLane, stage: toStage, isShip: true } }));
+        jobsApi.updateStage(bar.job, bar.release, toStage)
+            .then(() => refetch && refetch(true))
+            .catch((err) => { console.error('stage change failed', err); revertOverride(bar.id); window.alert(`Failed to move ${bar.job}-${bar.release} to ${toLane}: ${err.message || err}`); });
+    };
+    const rescheduleTo = (bar, targetDate) => {
+        setOverrides((o) => ({ ...o, [bar.id]: { ...(o[bar.id] || {}), startDate: targetDate } }));
+        jobsApi.updateStartInstall(bar.job, bar.release, targetDate)
+            .then(() => refetch && refetch(true))
+            .catch((err) => { console.error('reschedule failed', err); revertOverride(bar.id); window.alert(`Failed to reschedule ${bar.job}-${bar.release}: ${err.message || err}`); });
+    };
+
+    const onLaneDrop = (e, toLane) => {
+        e.preventDefault();
+        const bar = dragItemRef.current;
+        const chartEl = e.currentTarget;
+        dragItemRef.current = null;
+        setDragOverLane(null);
+        if (!canDrop(bar, toLane)) return;
+        const toStage = SHIP_LANE_TO_STAGE.get(toLane);
+        if (toStage && SHIP_STAGES.has(bar.stage) && bar.stage !== toStage) {
+            changeShipStage(bar, toLane, toStage);
+            return;
+        }
+        // Installer-lane reschedule: target column comes from the drop x within the chart content.
+        const rect = chartEl.getBoundingClientRect();
+        const col = Math.max(0, Math.floor((e.clientX - rect.left) / colPx));
+        const targetDate = addDays(chartRange.firstDay, col * colDays);
+        if (targetDate !== bar.startDate) rescheduleTo(bar, targetDate);
     };
 
     const weekLabel = useMemo(() => {
@@ -653,12 +755,19 @@ function GanttChart({ filterComplete = false }) {
                                             ref={(el) => { laneChartRefs.current[band.lane] = el; }}
                                             className="relative flex-shrink-0 bg-white"
                                             style={{ width: totalPx, height: laneH, ...colGridStyle }}
+                                            onDragOver={(e) => onLaneDragOver(e, band.lane)}
+                                            onDragLeave={() => setDragOverLane((l) => (l === band.lane ? null : l))}
+                                            onDrop={(e) => onLaneDrop(e, band.lane)}
                                         >
                                             {/* Snapped-week tint */}
                                             <div
                                                 className="absolute top-0 bottom-0 bg-accent-50/40 pointer-events-none"
                                                 style={{ left: viewStartLeftPx, width: viewWindowWidthPx }}
                                             />
+                                            {/* Drop-target highlight while dragging a droppable card over this lane */}
+                                            {dragOverLane === band.lane && (
+                                                <div className="absolute inset-0 bg-accent-400/10 ring-2 ring-inset ring-accent-400 pointer-events-none" />
+                                            )}
                                             {band.cells.map((cell) => (
                                                 <div
                                                     key={cell.key}
@@ -669,7 +778,10 @@ function GanttChart({ filterComplete = false }) {
                                                     {cell.shown.map((release) => (
                                                         <div
                                                             key={`${release.job}-${release.release}`}
-                                                            className="rounded shadow-sm px-1.5 py-1 overflow-hidden select-none cursor-pointer text-center hover:opacity-100"
+                                                            draggable
+                                                            onDragStart={(e) => onCardDragStart(e, release)}
+                                                            onDragEnd={onCardDragEnd}
+                                                            className="rounded shadow-sm px-1.5 py-1 overflow-hidden select-none cursor-grab active:cursor-grabbing text-center hover:opacity-100"
                                                             style={{ backgroundColor: band.color, opacity: 0.9, minHeight: minCardH }}
                                                             onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); }}
                                                             onMouseMove={(e) => handleMouseMove(e, {
@@ -687,6 +799,23 @@ function GanttChart({ filterComplete = false }) {
                                                             })}
                                                             onMouseLeave={handleMouseLeave}
                                                         >
+                                                            {imgH > 0 && release.raw && release.raw.cover_photo_id && (
+                                                                <div className="relative mb-1 -mx-0.5">
+                                                                    <img
+                                                                        src={`${API_BASE_URL}/brain/releases/${release.id}/photos/${release.raw.cover_photo_id}/file`}
+                                                                        alt=""
+                                                                        loading="lazy"
+                                                                        draggable={false}
+                                                                        className="w-full object-cover rounded bg-black/10"
+                                                                        style={{ height: imgH }}
+                                                                    />
+                                                                    {release.raw.photo_count > 1 && (
+                                                                        <span className="absolute top-0.5 right-0.5 px-1 rounded bg-black/60 text-white text-[9px] font-semibold leading-tight">
+                                                                            📎 {release.raw.photo_count}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                             <CardBody release={release} detail={detail} wrap={wrap} />
                                                         </div>
                                                     ))}
