@@ -92,13 +92,18 @@ export default function JobLogRow({
         duplicateFabOrders,
     };
 
-    // Row background mirrors the desktop table (JobsTableRow): complete rows gray out,
-    // otherwise alternate white / blue. Jump-to highlight wins over the base tone.
+    // Row background mirrors the desktop table (JobsTableRow — keep in sync): complete rows
+    // are muted + receding (pale slab in light, DARKER than active rows in dark), otherwise
+    // alternate white / blue. Jump-to highlight wins over the base tone.
     const rowBgClass = isJumpToHighlight
         ? 'bg-amber-50 dark:bg-amber-900/20'
         : complete
-            ? 'bg-gray-300 dark:bg-slate-600'
-            : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-200 dark:bg-slate-700');
+            ? 'bg-gray-200 dark:bg-slate-950'
+            : (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-300 dark:bg-slate-600');
+    // Complete rows dim their primary text to recede alongside the muted slab.
+    const primaryTextClass = complete
+        ? 'text-gray-600 dark:text-slate-400'
+        : 'text-gray-900 dark:text-slate-100';
 
     // Collapsed rows read as a tight list (bottom border only). Expanded rows lift
     // into a distinct card — margin + border + shadow — so adjacent open cards
@@ -130,7 +135,7 @@ export default function JobLogRow({
             >
                 {/* Job # · Release # — single inline group so both share one baseline.
                     Release # opens the FC drawing / version hub; the rest toggles the row. */}
-                <span className="shrink-0 font-mono text-sm font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap">
+                <span className={`shrink-0 font-mono text-sm font-semibold ${primaryTextClass} whitespace-nowrap`}>
                     {jobNum}
                     <span className="text-gray-400 dark:text-slate-500"> · </span>
                     <ReleaseNumberLink
@@ -143,7 +148,7 @@ export default function JobLogRow({
                     />
                 </span>
 
-                <span className="flex-1 min-w-0 truncate text-sm text-gray-900 dark:text-slate-100">
+                <span className={`flex-1 min-w-0 truncate text-sm ${primaryTextClass}`}>
                     <span className="font-semibold">{jobName}</span>
                     {description ? (
                         <span className="text-gray-500 dark:text-slate-400 ml-1">— {description}</span>
