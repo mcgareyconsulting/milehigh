@@ -300,9 +300,24 @@ def create_app():
 
     # Log the environment being used
     logger.info(f"Starting application in {config_class.ENV} environment")
-    logger.info(
-        f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}..."
-    )
+    # Log only the DB host — never the username, password, or the raw URI
+    # (even truncated), which would leak Postgres credentials into Render
+    # stdout and logs/app.log.
+    from urllib.parse import urlsplit
+
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+    if db_uri:
+        try:
+            parsed = urlsplit(db_uri)
+            db_host = parsed.hostname or "unknown"
+            db_name = parsed.path.lstrip("/") or "unknown"
+        except ValueError:
+            db_host = "unparseable"
+            db_name = "unparseable"
+    else:
+        db_host = "not set"
+        db_name = "not set"
+    logger.info(f"Database host: {db_host} (db: {db_name})")
     if app.config.get("TRELLO_MOCK"):
         logger.info("TRELLO_MOCK enabled — outbound move_card calls will be simulated and inbound webhooks dropped")
 
