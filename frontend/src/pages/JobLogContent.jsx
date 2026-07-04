@@ -4,7 +4,7 @@
  * purpose: Table/cards content for the Job Log (Table view). Renders the filtered releases provided by the persistent ReleasesLayout via Outlet context — device breakpoint picks the mobile card / tablet card / desktop table layout. Holds only table-render-local state (scroll ref, disabled drag stubs).
  * exports:
  *   JobLogContent: Child route element for /job-log; consumes useOutletContext() from ReleasesLayout.
- * imports_from: [react, react-router-dom, ../components/ColumnHeaderFilter, ../components/JobsTableRow, ../components/StageIconRow, ../components/AsapPropagationTag, ../components/JobLogCardGrid, ../components/JobLogRowList, ../utils/formatters, ../utils/jobLogColumns, ../constants/columnHeaders]
+ * imports_from: [react, react-router-dom, ../components/ColumnHeaderFilter, ../components/JobsTableRow, ../components/StageIconRow, ../components/AsapPropagationTag, ../components/JobLogCardGrid, ../utils/formatters, ../utils/jobLogColumns, ../constants/columnHeaders]
  * imported_by: [../App.jsx]
  * invariants:
  *   - All filter state + filtered rows come from ReleasesLayout via context; this component never calls useJobsFilters.
@@ -20,7 +20,6 @@ import { PdfMarkupModal } from '../components/PdfMarkupModal';
 import { BananaCodeHeader } from '../components/StageIconRow';
 import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
 import JobLogCardGrid from '../components/JobLogCardGrid';
-import JobLogRowList from '../components/JobLogRowList';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
 import { FILTERABLE_COLUMNS, DATE_COLUMNS } from '../utils/jobLogColumns';
 import { HEADER_OVERRIDES } from '../constants/columnHeaders';
@@ -127,8 +126,13 @@ function JobLogContent() {
                 </div>
             )}
 
-            {!loading && !fetchError && effectiveView === 'mobilecard' && (
+            {/* Cards = single-column Kanban-style feed (JobLogCard) everywhere cards show:
+                phones + portrait tablets (enforced) and Cards-toggled landscape/desktop.
+                Replaced the old dense expandable-row list (JobLogRowList), which read as
+                "the table but slightly different" rather than a genuinely distinct view. */}
+            {!loading && !fetchError && (effectiveView === 'mobilecard' || effectiveView === 'cards') && (
                 <JobLogCardGrid
+                    layout="column"
                     jobs={renderRows}
                     secondaryResults={secondarySearchResults}
                     search={search}
@@ -139,33 +143,9 @@ function JobLogContent() {
                     duplicateFabOrders={duplicateFabOrders}
                     hasJobsData={hasJobsData}
                     onUpdate={() => refetch(true)}
+                    isAdmin={isAdmin}
+                    isDrafter={isDrafter}
                 />
-            )}
-
-            {!loading && !fetchError && effectiveView === 'cards' && (
-                // Outer frame uses the same translucent ink as the grid dividers so the
-                // table edge reads as part of the lattice, not a separate lighter band.
-                <div className="bg-white dark:bg-slate-800 border border-black/[0.18] dark:border-white/[0.12] rounded-xl shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                    <JobLogRowList
-                        jobs={renderRows}
-                        secondaryResults={secondarySearchResults}
-                        search={search}
-                        jumpToTarget={jumpToTarget}
-                        columns={columnHeaders}
-                        formatCellValue={formatCellValue}
-                        formatDate={formatDateShort}
-                        onUpdate={() => refetch(true)}
-                        onCascadeRecalculating={handleCascadeRecalculating}
-                        stageToGroup={stageToGroup}
-                        stageGroupColors={stageGroupColors}
-                        stageGroupDupColors={stageGroupDupColors}
-                        isAdmin={isAdmin}
-                        isDrafter={isDrafter}
-                        onDelete={handleDeleteJob}
-                        duplicateFabOrders={duplicateFabOrders}
-                        hasJobsData={hasJobsData}
-                    />
-                </div>
             )}
 
             {!loading && !fetchError && effectiveView === 'table' && (

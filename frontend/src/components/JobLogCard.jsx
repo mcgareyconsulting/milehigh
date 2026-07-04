@@ -1,22 +1,32 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Trello-style card rendering a single job release for the iPad/touch-friendly card view of Job Log and Archive.
+ * purpose: Card rendering a single job release for the card view of Job Log and Archive — a stage-colored header strip (FO / job-rel / Stage corners, name — desc below) over a bordered body holding a grid of the remaining table fields + Notes. Dense, no tap-anywhere, full table info.
  * exports:
- *   default JobLogCard: Card component. Props: job, onOpen (tap handler), onUpdate (refetch after edit), stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders, isHighlighted, iconSize.
- * imports_from: [react, ./StageIconRow, ./StartInstallEditor, ./JobsTableRow, ../utils/stageProgress, ../utils/formatters]
+ *   default JobLogCard: Card component. Props: job, onOpen (Details-button handler), onUpdate (refetch after edit), stageToGroup, stageGroupColors, stageGroupDupColors, duplicateFabOrders, isHighlighted, isAdmin, isDrafter, rowIndex, banded.
+ * imports_from: [react, ./StartInstallEditor, ./JobsTableRow, ./ReleaseNumberLink, ../utils/stageProgress, ../utils/formatters]
  * imported_by: [frontend/src/components/JobLogCardGrid.jsx]
  * invariants:
- *   - When onUpdate is provided (Job Log), Stage / Fab Order / Notes / Start Install are inline-editable by
+ *   - When onUpdate is provided (Job Log), Stage / Fab Order / Notes are inline-editable by
  *     embedding single-column JobsTableRow editors so cascade, collision, and notes-history logic match the table.
  *     Without onUpdate (Archive) the card is fully read-only.
- *   - Inline editors stop click propagation; tapping anywhere else on the card opens the parent's onOpen callback.
- *   - Banana code (StageIconRow) is hidden below md (phones) for this card layout.
+ *   - No tap-anywhere: the release number opens the FC drawing hub (ReleaseNumberLink) and the
+ *     explicit Details button opens the parent's onOpen modal. Job Comp / Invoiced are read-only
+ *     stats here — the table (or Details modal) is the edit surface for those.
+ *   - Layout: header strip tinted with the release's own stage-group color (`stageColorStyle`,
+ *     same source as the table's Stage pill) — Fab Order upper-left, job-rel upper-middle,
+ *     Stage upper-right, name — description centered below. The header has no border of its
+ *     own (color is the separator); the body below it DOES have a border (`border-t-0` so it
+ *     reads as one continuous box with the header) holding a 5-col grid of Start Install, Comp.
+ *     ETA, PM, BY, Rel'd, Fab hrs, Install hrs, Paint, Prog, Inv, then Notes + Details.
+ *   - Body background alternates white/blue exactly like the table's rows (rowIndex/banded
+ *     props, kept in sync with JobsTableRow's rowBgClass); complete/install-complete rows get
+ *     the same muted, receding treatment (header still shows the Complete stage's own color).
  */
 import React from 'react';
-import { StageIconRow } from './StageIconRow';
 import StartInstallEditor from './StartInstallEditor';
 import { JobsTableRow } from './JobsTableRow';
+import ReleaseNumberLink from './ReleaseNumberLink';
 import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { isCompleteStage } from '../utils/stageProgress';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
@@ -43,32 +53,30 @@ const fmtHrs = (v) => {
     return Number.isFinite(n) ? n.toFixed(2) : '—';
 };
 
-function stagePillStyle(stage, stageToGroup, stageGroupColors) {
+// The stage-group color, shared with the table's Stage pill — used here as the whole header's tint.
+function stageColorStyle(stage, stageToGroup, stageGroupColors) {
     const group = stageToGroup?.[stage];
     const c = stageGroupColors?.[group];
     if (!c) return null;
-    return {
-        backgroundColor: c.light,
-        color: c.text,
-        borderColor: c.border,
-        borderWidth: '1px',
-        borderStyle: 'solid',
-    };
+    return { backgroundColor: c.light, color: c.text };
 }
 
-function progressChip(value, label) {
-    const v = (value == null ? '' : String(value)).trim();
-    if (!v) return null;
-    const isX = v.toLowerCase() === 'x';
-    const cls = isX
-        ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700'
-        : 'bg-blue-50 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700';
+// Label-over-value grid cell — the density workhorse of the body grid.
+function GridCell({ label, children, title }) {
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cls}`}>
-            <span className="opacity-70">{label}</span>
-            <span>{isX ? '✓' : v}</span>
-        </span>
+        <div className="min-w-0" title={title || label}>
+            <div className="text-[9px] font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500 truncate">{label}</div>
+            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate">{children}</div>
+        </div>
     );
+}
+
+// Job Comp / Invoiced read as a ✓ when 'X', the raw value otherwise, muted em-dash when blank.
+function progressValue(value) {
+    const v = (value == null ? '' : String(value)).trim();
+    if (!v) return <span className="text-gray-400 dark:text-slate-500 font-normal">—</span>;
+    if (v.toLowerCase() === 'x') return <span className="text-emerald-600 dark:text-emerald-400">✓</span>;
+    return v;
 }
 
 export default function JobLogCard({
@@ -80,16 +88,28 @@ export default function JobLogCard({
     stageGroupDupColors = null,
     duplicateFabOrders = null,
     isHighlighted = false,
-    iconSize = 20,
+    isAdmin = false,
+    isDrafter = false,
+    rowIndex = 0,
+    banded = false,
 }) {
     const jobNum = fmt(job['Job #']);
     const release = fmt(job['Release #']);
     const jobName = fmt(job['Job']);
-    const description = fmt(job['Description']);
+    const description = (job['Description'] || '').toString().trim();
     const stage = job['Stage'] || 'Released';
     const compEta = formatDateShort(job['Comp. ETA']);
+    const released = formatDateShort(job['Released']);
     const notes = (job['Notes'] || '').toString().trim();
     const complete = isCompleteStage(stage);
+    // Same background rule as the table (JobsTableRow's rowBgClass — keep in sync): complete
+    // rows are muted + receding, otherwise alternate white/blue banding. Applies to the BODY
+    // only — the header strip is tinted by the stage color instead (see stageColorStyle).
+    const bodyBgClass = complete
+        ? 'bg-gray-200 dark:bg-slate-950'
+        : (banded ? (rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-blue-300 dark:bg-slate-600') : 'bg-white dark:bg-slate-800');
+    const bodyTextClass = complete ? 'text-gray-500 dark:text-slate-500' : 'text-gray-800 dark:text-slate-200';
+    const headerStyle = stageColorStyle(stage, stageToGroup, stageGroupColors);
 
     // Editing is enabled only when the parent passes onUpdate (Job Log). Archive cards stay read-only.
     const editable = !!onUpdate;
@@ -117,114 +137,106 @@ export default function JobLogCard({
         duplicateFabOrders,
     };
 
-    const open = () => onOpen?.(job);
-    const handleKey = (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            open();
-        }
-    };
-
     return (
         <div
-            role="button"
-            tabIndex={0}
-            onClick={open}
-            onKeyDown={handleKey}
-            className={`group relative text-left w-full h-full flex flex-col rounded-xl border transition-all overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-500 ${
+            className={`relative w-full rounded-lg overflow-hidden transition-all ${
                 isHighlighted
-                    ? 'border-amber-400 dark:border-amber-500 shadow-lg ring-2 ring-amber-300/50'
-                    : 'border-gray-200 dark:border-slate-600 hover:border-accent-400 dark:hover:border-accent-500 hover:shadow-md'
-            } bg-white dark:bg-slate-800 ${complete ? 'opacity-90' : ''} ${job._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''}`}
-            title="Tap for full details"
+                    ? 'shadow-lg ring-2 ring-amber-400 dark:ring-amber-500'
+                    : 'shadow-sm'
+            } ${job._asapPropagated ? ASAP_PROPAGATED_ROW_CLASS : ''}`}
         >
-            {/* Header strip */}
-            <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/60 border-b border-gray-200 dark:border-slate-600">
-                <div className="flex items-baseline gap-1.5 font-mono">
-                    <span className="text-base font-bold text-gray-900 dark:text-slate-100">{jobNum}</span>
-                    <span className="text-gray-400 dark:text-slate-500">·</span>
-                    <span className="text-sm text-gray-700 dark:text-slate-200">{release}</span>
-                </div>
-                {editable ? (
-                    <InlineEditor>
-                        <JobsTableRow {...sharedRowProps} columns={['Stage']} compact />
-                    </InlineEditor>
-                ) : (
-                    <span
-                        className="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap truncate max-w-[14rem] bg-gray-200 dark:bg-slate-600 text-gray-800 dark:text-slate-100"
-                        style={stagePillStyle(stage, stageToGroup, stageGroupColors) || undefined}
-                        title={`Stage: ${stage}`}
-                    >
-                        {stage}
+            {/* Header strip — tinted with the stage's own color (no border of its own; the
+                color IS the separator from the body below). FO upper-left, job-rel upper-
+                middle, Stage upper-right; name — description centered below. */}
+            <div
+                className="px-3 pt-1.5 pb-2 bg-gray-100 dark:bg-slate-700"
+                style={headerStyle || undefined}
+            >
+                <div className="flex items-start justify-between gap-2">
+                    <span className="shrink-0">
+                        {editable ? (
+                            <InlineEditor>
+                                <JobsTableRow {...sharedRowProps} columns={['Fab Order']} compact />
+                            </InlineEditor>
+                        ) : (
+                            <span className="text-xs font-semibold opacity-80" title="Fab Order">{fmt(job['Fab Order'])}</span>
+                        )}
                     </span>
-                )}
+                    <span className="font-mono text-sm font-bold whitespace-nowrap" title={`${jobNum}-${release}`}>
+                        {jobNum}
+                        <span className="opacity-50">-</span>
+                        <ReleaseNumberLink
+                            value={release}
+                            releaseId={job.id}
+                            jobReleaseLabel={`${jobNum}-${release}`}
+                            hasDrawing={job.has_drawing}
+                            viewerUrl={job.viewer_url}
+                            canMarkup={isAdmin || isDrafter}
+                        />
+                    </span>
+                    <span className="shrink-0">
+                        {editable ? (
+                            <InlineEditor>
+                                <JobsTableRow {...sharedRowProps} columns={['Stage']} compact />
+                            </InlineEditor>
+                        ) : (
+                            <span className="text-xs font-bold whitespace-nowrap" title={`Stage: ${stage}`}>{stage}</span>
+                        )}
+                    </span>
+                </div>
+                <div className="mt-0.5 text-center text-sm truncate" title={description ? `${jobName} — ${description}` : jobName}>
+                    <span className="font-bold">{jobName}</span>
+                    {description && <span className="opacity-70"> — {description}</span>}
+                </div>
             </div>
 
-            {/* Body */}
-            <div className="flex-1 min-h-0 px-3 py-2.5 space-y-2">
-                <div>
-                    <div className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate" title={jobName}>{jobName}</div>
-                    <div className="text-xs text-gray-600 dark:text-slate-400 truncate" title={description}>{description}</div>
-                </div>
-
-                {/* Banana code (urgency) — hidden on phones for this card layout */}
-                <div className="hidden md:flex items-center justify-center py-1">
-                    <StageIconRow stage={stage} iconSize={iconSize} />
-                </div>
-
-                {/* Date pair — Start Install is tap-to-edit (hard date / ASAP) */}
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                    <StartInstallEditor row={job} onUpdate={onUpdate} variant="tile" />
-                    <div className="rounded bg-gray-50 dark:bg-slate-700/50 px-2 py-1">
-                        <div className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-slate-400">Comp ETA</div>
-                        <div className="font-semibold text-gray-900 dark:text-slate-100">{compEta || '—'}</div>
+            {/* Body — bordered box (the header's color is its own separator, so no border-top
+                here) holding the remaining table fields as a real grid, then Notes + Details. */}
+            <div className={`px-3 py-2 border border-t-0 border-gray-200 dark:border-slate-600 rounded-b-lg ${bodyBgClass}`}>
+                <div className={`grid grid-cols-3 sm:grid-cols-5 gap-x-2 gap-y-1.5 ${bodyTextClass}`}>
+                    <div className="col-span-1">
+                        <StartInstallEditor row={job} onUpdate={onUpdate} variant="tile" />
                     </div>
+                    <GridCell label="ETA" title="Comp. ETA">{compEta || '—'}</GridCell>
+                    <GridCell label="PM">{fmt(job['PM'])}</GridCell>
+                    <GridCell label="BY">{fmt(job['BY'])}</GridCell>
+                    <GridCell label="Rel'd" title="Released">{released || '—'}</GridCell>
+                    <GridCell label="Fab Hrs" title="Fab hours">{fmtHrs(job['Fab Hrs'])}</GridCell>
+                    <GridCell label="Inst Hrs" title="Install hours">{fmtHrs(job['Install HRS'])}</GridCell>
+                    <GridCell label="Paint" title="Paint color">{fmt(job['Paint color'])}</GridCell>
+                    <GridCell label="Prog" title="Install progress (Job Comp)">{progressValue(job['Job Comp'])}</GridCell>
+                    <GridCell label="Inv" title="Invoiced">{progressValue(job['Invoiced'])}</GridCell>
                 </div>
 
-                {/* Fab Order — inline editable (collision detection cascades like the table) */}
-                {editable && (
-                    <div className="flex items-center gap-2 text-xs">
-                        <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-slate-400">Fab Order</span>
-                        <InlineEditor>
-                            <JobsTableRow {...sharedRowProps} columns={['Fab Order']} compact />
-                        </InlineEditor>
-                    </div>
-                )}
-
-                {/* Footer chips — fixed-position row so it stays aligned across cards regardless of notes length */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                    {progressChip(job['Job Comp'], 'Install')}
-                    {progressChip(job['Invoiced'], 'Invoiced')}
-                    {(job['Fab Hrs'] || job['Install HRS']) && (
-                        <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-600"
-                            title="Fab / Install hours"
-                        >
-                            <span className="opacity-70">Hrs</span>
-                            <span>{fmtHrs(job['Fab Hrs'])} / {fmtHrs(job['Install HRS'])}</span>
-                        </span>
-                    )}
-                    <span className="ml-auto text-[10px] text-gray-400 dark:text-slate-500 group-hover:text-accent-500 dark:group-hover:text-accent-400">
-                        Tap for details →
-                    </span>
-                </div>
-
-                {/* Notes — inline editable when editable; otherwise read-only at the bottom */}
-                {editable ? (
-                    <div className="pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
-                        <div className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-1">Notes</div>
-                        <InlineEditor fullWidth>
-                            <JobsTableRow {...sharedRowProps} columns={['Notes']} />
-                        </InlineEditor>
-                    </div>
-                ) : (
-                    notes && (
-                        <div className="pt-1.5 border-t border-gray-100 dark:border-slate-700/60 text-xs text-gray-700 dark:text-slate-300">
-                            <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-slate-400 mr-1">Notes:</span>
-                            <span className="line-clamp-2">{notes}</span>
+                {/* Notes — inline editable when editable; read-only otherwise; hidden when empty+read-only — + Details link */}
+                <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-slate-700/60 flex items-start justify-between gap-2">
+                    {editable ? (
+                        <div className="flex-1 min-w-0">
+                            <InlineEditor fullWidth>
+                                <JobsTableRow {...sharedRowProps} columns={['Notes']} />
+                            </InlineEditor>
                         </div>
-                    )
-                )}
+                    ) : (
+                        <div className="flex-1 min-w-0 text-xs text-gray-700 dark:text-slate-300">
+                            {notes && (
+                                <>
+                                    <span className="text-gray-400 dark:text-slate-500 mr-1">Notes</span>
+                                    <span className="line-clamp-2">{notes}</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {onOpen && (
+                        <button
+                            type="button"
+                            onClick={() => onOpen(job)}
+                            className="shrink-0 text-[11px] font-semibold text-accent-600 dark:text-accent-400 hover:underline whitespace-nowrap"
+                            title="Open full details"
+                        >
+                            Details →
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );

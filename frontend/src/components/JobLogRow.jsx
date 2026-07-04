@@ -7,7 +7,7 @@
  * imports_from: [react, ./JobsTableRow, ./ReleaseNumberLink, ./StageEditor, ./FabOrderEditor, ./StartInstallEditor, ../utils/stageProgress, ../utils/formatters]
  * imported_by: [frontend/src/components/JobLogRowList.jsx]
  * invariants:
- *   - Critical (collapsed) fields: Job # / Release #, Job name + Description subtext, Stage (editable), Fab Order (editable), Start install. None embed JobsTableRow — each is a self-contained editor that writes via jobsApi and refetches through onUpdate (so the backend Complete-zone cascade is reflected).
+ *   - Critical (collapsed) fields: Job # / Release #, Job name + Description subtext, Fab Order (editable), Stage (editable), Start install, Comp. ETA (read-only). None embed JobsTableRow — each is a self-contained editor that writes via jobsApi and refetches through onUpdate (so the backend Complete-zone cascade is reflected). Everything else (hours, Released, BY, Notes, …) lives in the expansion.
  *   - Release # opens the FC drawing: version-history hub for drafters/admins, latest markup (view) or Procore link otherwise.
  *   - Expanded section embeds JobsTableRow restricted to the remaining columns (showActions={false}); those edit handlers route through the same JobsTableRow APIs as the desktop table.
  */
@@ -31,6 +31,7 @@ const CRITICAL_COLUMNS = new Set([
     'Stage',
     'Fab Order',
     'Start install',
+    'Comp. ETA',
 ]);
 
 export default function JobLogRow({
@@ -180,6 +181,15 @@ export default function JobLogRow({
                 <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                     <StartInstallEditor row={job} onUpdate={onUpdate} formatDate={formatDate} variant="pill" />
                 </div>
+
+                {/* Comp. ETA — read-only date, sized to match the Start-install pill */}
+                <span
+                    className={`shrink-0 inline-flex items-center justify-center min-w-[72px] rounded px-2 py-0.5 text-xs font-semibold tabular-nums leading-none ${complete ? 'text-gray-500 dark:text-slate-500' : 'text-gray-700 dark:text-slate-300'}`}
+                    title="Comp. ETA"
+                >
+                    <span className="mr-1 text-[9px] font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500">ETA</span>
+                    {formatDate(job['Comp. ETA']) || '—'}
+                </span>
 
                 <span
                     className={`shrink-0 inline-block transition-transform text-gray-500 dark:text-slate-400 ${expanded ? 'rotate-90' : ''}`}

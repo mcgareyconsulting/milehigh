@@ -19,16 +19,37 @@ Job Log toolbar, persisted as `jl_view`) into `effectiveView`:
 
 | Name | Breakpoint | ViewToggle | Renders |
 |---|---|---|---|
-| **Laptop Table** | ≥1280px | any | `JobsTableRow` full table, `showAdminActions` (⚙) visible |
-| **Landscape-Tablet Table** | 768–1279 | **Table** (explicit) | `JobsTableRow`, Banana Code/BY/Released columns dropped, ⚙ hidden |
-| **Landscape-Tablet Cards** | 768–1279 | Auto (default) or **Cards** | `JobLogRow` dense expandable rows (`JobLogRowList`) |
-| **Portrait-Tablet Cards** | 768–1279, narrow | same as above | same component, just less horizontal room |
-| **Phone Tiles** | <768 | any (Auto/Cards force mobilecard) | `JobLogCardGrid` |
+| **Laptop Table** | ≥1280px | Table or Auto | `JobsTableRow` full table, `showAdminActions` (⚙) visible |
+| **Landscape-Tablet Table** | 1024–1279 | **Table** (explicit) | `JobsTableRow`, Banana Code/BY/Released columns dropped, ⚙ hidden |
+| **Landscape-Tablet Cards** | 1024–1279 | Auto (default) or **Cards** | `JobLogRow` dense expandable rows (`JobLogRowList`) |
+| **Portrait-Tablet Cards** | 768–1023 | **ENFORCED** (toggle hidden) | `JobLogRow` dense expandable rows |
+| **Phone Tiles** | <768 | **ENFORCED** (toggle hidden) | `JobLogCardGrid` |
 
-**Key nuance:** in **Auto** mode (the default), tablet-width always gets Cards — Table view
-only appears on tablet if the user explicitly selects it via the ViewToggle. Both Table and
-Cards are reachable on landscape tablet via that toggle, which is the intended UX per Daniel's
-2026-07-03 note: tune both, not just one.
+**Enforcement (2026-07-03):** card mode is forced below `lg` (1024px) — phones get tiles,
+portrait tablets get the dense rows; the Table pick only applies from tablet-landscape up and
+the ViewToggle is hidden where it's moot (`cardsEnforced = isBelowLg` in `ReleasesLayout`;
+`isBelowLg` bucket added to `useBreakpoint`). On landscape tablet both Table and Cards remain
+reachable via the toggle — tune both, per Daniel's note.
+
+**Cards view = stage-colored header + bordered grid body (2026-07-03, v5):** `JobLogCard`
+rebuilt again per Daniel's explicit spec (after v4 "ticket stub" also didn't land). Two zones:
+- **Header strip** — tinted with the release's own stage-group color (`stageColorStyle`, same
+  color source as the table's Stage pill; falls back to `bg-gray-100 dark:bg-slate-700` when a
+  stage has no group color). No border of its own — the color change IS the separator. Corner
+  layout: Fab Order upper-left (editable), job-rel upper-middle (`ReleaseNumberLink` → FC
+  drawing hub/Procore), Stage upper-right (editable); name — description centered below.
+- **Body** — `border border-t-0` (reads as one continuous box with the header above),
+  background alternates white/blue like the table (`rowIndex`/`banded` → JobsTableRow's
+  `rowBgClass`, keep in sync; complete rows keep the muted/receding `bg-gray-200
+  dark:bg-slate-950`, text dimmed via `bodyTextClass`). Contains a real `grid grid-cols-3
+  sm:grid-cols-5` (not flex-wrap/dot-separated) of: Start Install (`StartInstallEditor
+  variant="tile"`, label-over-value to match `GridCell`), Comp. ETA, PM, BY, Rel'd, Fab/Inst
+  hrs, Paint, Prog, Inv. Below the grid: Notes (editable) + **Details →** button.
+Replaced `MetaLine`/`MetaItem`/`stagePillStyle` from v4 with `GridCell`/`stageColorStyle`. NO
+banana code, NO tap-anywhere. `banded` only applies in `layout='column'` (Job Log); Archive's
+`layout='grid'` stays plain. `JobLogRow.jsx` + `JobLogRowList.jsx` remain ORPHANED — delete
+when confident. If this version also misses, consider screenshotting before another rewrite —
+four structural attempts blind is a signal to get eyes on the actual render.
 
 **Reporting convention:** name the view from this table (e.g. "in Landscape-Tablet Table, ⚙
 column..." or "in Landscape-Tablet Cards, the Stage pill...") so there's no re-discovery per

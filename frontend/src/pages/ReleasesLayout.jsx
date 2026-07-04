@@ -50,7 +50,7 @@ function ReleasesLayout() {
     const location = useLocation();
     const { jobs, columns, loading, error: fetchError, lastUpdated, refetch, fetchAll } = useReleases();
     const { isOldMan } = useTheme();
-    const { isMobile, isTablet, isDesktop } = useBreakpoint();
+    const { isMobile, isTablet, isBelowLg, isDesktop } = useBreakpoint();
 
     // Which child view is active — the Board ignores column-header filters, so the
     // toolbar's record count must follow boardJobs there; table-only memos (e.g.
@@ -59,13 +59,19 @@ function ReleasesLayout() {
 
     // User-selectable view (persisted), reconciled with the device width:
     //  - 'auto'  → phone: big card, tablet: expandable rows, desktop: table (default)
-    //  - 'table' → full table on every screen (iPad landscape drops a couple columns)
+    //  - 'table' → full table (honored from tablet-landscape width up; see enforcement below)
     //  - 'cards' → tiles on phone, dense expandable rows on tablet/desktop
+    // ENFORCED below lg (< 1024px — phones and portrait tablets): card mode always. The full
+    // table can't render usefully at those widths, so the ViewToggle's Table pick only
+    // applies from tablet-landscape up (and the toggle is hidden where it's moot).
     const [viewMode, setViewMode] = useViewMode('jl_view', 'auto');
+    const cardsEnforced = isBelowLg; // phones + portrait tablets
     const effectiveView =
-        viewMode === 'table' ? 'table'
-        : viewMode === 'cards' ? (isMobile ? 'mobilecard' : 'cards')
-        : (isMobile ? 'mobilecard' : isTablet ? 'cards' : 'table');
+        isMobile ? 'mobilecard'
+        : cardsEnforced ? 'cards'
+        : viewMode === 'table' ? 'table'
+        : viewMode === 'cards' ? 'cards'
+        : (isTablet ? 'cards' : 'table');
 
     const [showReleaseModal, setShowReleaseModal] = useState(false);
     const [csvData, setCsvData] = useState('');
@@ -569,8 +575,9 @@ function ReleasesLayout() {
 
                                 {/* Row 2: primary CTA + Actions/Projects + quick filters + view switcher + project chevron */}
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                    {/* Table | Cards | Auto — how the Table view renders (left-aligned to mirror DWL); irrelevant on Board/Timeline */}
-                                    {!onBoardRoute && (
+                                    {/* Table | Cards | Auto — how the Table view renders (left-aligned to mirror DWL);
+                                        irrelevant on Board/Timeline and hidden below lg where card mode is enforced */}
+                                    {!onBoardRoute && !cardsEnforced && (
                                         <ViewToggle value={viewMode} onChange={setViewMode} />
                                     )}
 
