@@ -41,7 +41,7 @@ from app.models import db
 from app.logging_config import configure_logging, get_logger
 
 # Configure logging
-logger = configure_logging(log_level="INFO", log_file="logs/app.log")
+logger = configure_logging(log_level=os.environ.get("LOG_LEVEL", "INFO"), log_file="logs/app.log")
 
 
 def init_scheduler(app):

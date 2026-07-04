@@ -67,7 +67,7 @@ def procore_webhook():
         resource_type = payload.get("resource_type") or "unknown"
         external_user_id, internal_user_id = resolve_webhook_user_ids(payload)
         if external_user_id is not None:
-            current_app.logger.info(
+            current_app.logger.debug(
                 "Procore webhook user: external_user_id=%s, internal_user_id=%s",
                 external_user_id, internal_user_id
             )
@@ -94,7 +94,7 @@ def procore_webhook():
             current_app.logger.warning(f"Invalid project_id format: {project_id_raw}")
             return jsonify({"status": "ignored"}), 200
 
-        current_app.logger.info(
+        current_app.logger.debug(
             "Received Procore webhook: resource=%s, event_type=%s, id=%s, project=%s",
             resource_type, event_type, resource_id, project_id
         )
@@ -109,7 +109,7 @@ def procore_webhook():
         # Burst dedup: Procore sends 2-5 identical deliveries within ~7 seconds per update.
         # Write a receipt row for the first delivery in the 15s window; reject the rest.
         if is_duplicate_webhook(resource_id, project_id, event_type):
-            current_app.logger.info(
+            current_app.logger.debug(
                 "Duplicate webhook delivery rejected (burst dedup): id=%s, event=%s",
                 resource_id, event_type,
             )
@@ -125,7 +125,7 @@ def procore_webhook():
             and str(external_user_id) == str(cfg.PROCORE_CONNECTOR_USER_ID)
         )
         if is_connector:
-            current_app.logger.info(
+            current_app.logger.debug(
                 "Procore webhook from connector account (user %s); id=%s, project=%s — processing for side-effect diffs",
                 external_user_id, resource_id, project_id,
             )
@@ -133,7 +133,7 @@ def procore_webhook():
         # Process submittal create or update
         try:
             if event_type == "create":
-                current_app.logger.info(
+                current_app.logger.debug(
                     f"Processing create event for submittal {resource_id} in project {project_id}"
                 )
                 try:
@@ -303,7 +303,7 @@ def procore_webhook():
 
                 # Log when webhook resulted in no updates (DB already in sync)
                 if not (ball_updated or status_updated or title_updated or manager_updated):
-                    current_app.logger.info(
+                    current_app.logger.debug(
                         "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync%s)",
                         resource_id, project_id,
                         ", connector" if is_connector else "",

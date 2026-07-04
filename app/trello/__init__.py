@@ -97,7 +97,7 @@ def trello_webhook():
         # Skip unhandled webhooks
         if not event_info.get("handled"):
             action_type = event_info.get("action_type", "unknown")
-            app.logger.info(f"Skipping unhandled webhook: {action_type}")
+            app.logger.debug(f"Skipping unhandled webhook: {action_type}")
             return "", 200
 
         # If locked, enqueue the event for later processing and return 202
@@ -136,9 +136,9 @@ def trello_webhook():
                     # Try to acquire the sync lock in the thread
                     try:
                         with sync_lock_manager.acquire_sync_lock("Trello-Hook"):
-                            app.logger.info("Trello sync started with lock acquired")
+                            app.logger.debug("Trello sync started with lock acquired")
                             sync_from_trello(event_info)
-                            app.logger.info("Trello sync completed successfully")
+                            app.logger.debug("Trello sync completed successfully")
 
                         duration = thread_tracker.thread_completed(
                             thread_id, success=True
@@ -168,7 +168,7 @@ def trello_webhook():
             except Exception as e:
                 app.logger.error(f"Trello sync task failed: {e}")
         future.add_done_callback(_log_future)
-        app.logger.info("Trello webhook submitted to thread pool")
+        app.logger.debug("Trello webhook submitted to thread pool")
 
     return "", 200
 

@@ -479,7 +479,7 @@ def get_jobs():
             try:
                 since_timestamp = datetime.fromisoformat(since_param.replace('Z', '+00:00'))
                 query = query.filter(Releases.last_updated_at > since_timestamp)
-                logger.info(f"[CURSOR] Filtering jobs updated after: {since_timestamp}")
+                logger.debug(f"[CURSOR] Filtering jobs updated after: {since_timestamp}")
                 # Cursor polls skip the archive filter so soft-deleted rows always propagate
             except (ValueError, TypeError) as e:
                 logger.warning(f"[CURSOR] Invalid since parameter: {since_param}, error: {e}. Fetching all jobs.")
@@ -500,7 +500,7 @@ def get_jobs():
         # Order by last_updated_at, id for deterministic results
         query = query.order_by(Releases.last_updated_at.asc(), Releases.id.asc())
         jobs = query.limit(limit).all()
-        logger.info(f"[CURSOR] Query returned {len(jobs)} jobs (limit={limit})")
+        logger.debug(f"[CURSOR] Query returned {len(jobs)} jobs (limit={limit})")
 
         job_list = []
         warnings = []
@@ -635,7 +635,12 @@ def get_jobs():
         if jobs:
             latest_job = jobs[-1]
             latest_timestamp = latest_job.last_updated_at.isoformat() if latest_job.last_updated_at else None
-            logger.info(f"[CURSOR] Latest job timestamp: {latest_timestamp}")
+            logger.debug(f"[CURSOR] Latest job timestamp: {latest_timestamp}")
+
+        # Delta polls that returned rows leave exactly one INFO breadcrumb; zero-row
+        # delta polls stay silent so steady-state polling doesn't flood the logs.
+        if since_param and len(jobs) > 0:
+            logger.info(f"[CURSOR] Delta poll returned {len(jobs)} changed jobs (latest={latest_timestamp})")
 
         # Build response
         response_data = {

@@ -47,7 +47,7 @@ def handle_errors(operation_name, raw_error=False):
                         "error_type": type(exc).__name__
                     }), 500
                 else:
-                    logger.error(f"Error in {operation_name}", error=str(exc))
+                    logger.error(f"Error in {operation_name}", error=str(exc), exc_info=True)
                     db.session.rollback()
                     return jsonify({
                         "error": f"Failed to {operation_name}",
