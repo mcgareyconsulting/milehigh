@@ -14,11 +14,10 @@ updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 # Package
 import os
-import json
 from datetime import datetime
 from typing import Optional
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify
 from app.models import db, Submittals
 
 from app.procore.procore import (
@@ -67,36 +66,60 @@ def procore_webhook():
         resource_type = payload.get("resource_type") or "unknown"
         external_user_id, internal_user_id = resolve_webhook_user_ids(payload)
         if external_user_id is not None:
-            current_app.logger.debug(
-                "Procore webhook user: external_user_id=%s, internal_user_id=%s",
-                external_user_id, internal_user_id
+            logger.debug(
+                "procore_webhook_user_resolved",
+                external_user_id=external_user_id,
+                user_id=internal_user_id,
             )
-        current_app.logger.debug("Procore webhook payload: %s", json.dumps(payload) if payload else "{}")
+        logger.debug(
+            "procore_webhook_payload_received",
+            payload_keys=sorted(payload.keys()) if payload else [],
+        )
 
         # Validate and convert to int
         if not resource_id_raw:
-            current_app.logger.warning("Webhook payload missing 'id' or 'resource_id'")
+            logger.warning(
+                "procore_webhook_missing_resource_id",
+                resource_type=resource_type,
+                event_type=event_type,
+            )
             return jsonify({"status": "ignored"}), 200
-        
+
         try:
             resource_id = int(resource_id_raw)
         except (ValueError, TypeError):
-            current_app.logger.warning(f"Invalid resource_id format: {resource_id_raw}")
+            logger.warning(
+                "procore_webhook_invalid_resource_id",
+                submittal_id=resource_id_raw,
+                event_type=event_type,
+            )
             return jsonify({"status": "ignored"}), 200
-        
+
         if not project_id_raw:
-            current_app.logger.warning("Webhook payload missing 'project_id'")
+            logger.warning(
+                "procore_webhook_missing_project_id",
+                submittal_id=resource_id,
+                event_type=event_type,
+            )
             return jsonify({"status": "ignored"}), 200
-        
+
         try:
             project_id = int(project_id_raw)
         except (ValueError, TypeError):
-            current_app.logger.warning(f"Invalid project_id format: {project_id_raw}")
+            logger.warning(
+                "procore_webhook_invalid_project_id",
+                project_id=project_id_raw,
+                submittal_id=resource_id,
+                event_type=event_type,
+            )
             return jsonify({"status": "ignored"}), 200
 
-        current_app.logger.debug(
-            "Received Procore webhook: resource=%s, event_type=%s, id=%s, project=%s",
-            resource_type, event_type, resource_id, project_id
+        logger.debug(
+            "procore_webhook_received",
+            resource_type=resource_type,
+            event_type=event_type,
+            submittal_id=resource_id,
+            project_id=project_id,
         )
 
         # Schedule a delayed reconcile re-fetch (~60s out) BEFORE the dedup check, so a
@@ -109,9 +132,11 @@ def procore_webhook():
         # Burst dedup: Procore sends 2-5 identical deliveries within ~7 seconds per update.
         # Write a receipt row for the first delivery in the 15s window; reject the rest.
         if is_duplicate_webhook(resource_id, project_id, event_type):
-            current_app.logger.debug(
-                "Duplicate webhook delivery rejected (burst dedup): id=%s, event=%s",
-                resource_id, event_type,
+            logger.debug(
+                "procore_webhook_dedup_rejected",
+                submittal_id=resource_id,
+                project_id=project_id,
+                event_type=event_type,
             )
             return jsonify({"status": "deduplicated"}), 200
 
@@ -125,16 +150,20 @@ def procore_webhook():
             and str(external_user_id) == str(cfg.PROCORE_CONNECTOR_USER_ID)
         )
         if is_connector:
-            current_app.logger.debug(
-                "Procore webhook from connector account (user %s); id=%s, project=%s — processing for side-effect diffs",
-                external_user_id, resource_id, project_id,
+            logger.debug(
+                "procore_webhook_connector_detected",
+                external_user_id=external_user_id,
+                submittal_id=resource_id,
+                project_id=project_id,
             )
 
         # Process submittal create or update
         try:
             if event_type == "create":
-                current_app.logger.debug(
-                    f"Processing create event for submittal {resource_id} in project {project_id}"
+                logger.debug(
+                    "procore_webhook_create_processing",
+                    submittal_id=resource_id,
+                    project_id=project_id,
                 )
                 try:
                     created, record, error_msg = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
@@ -155,29 +184,47 @@ def procore_webhook():
                                     submittal_title=record.title if record else None,
                                     project_name=record.project_name if record else None
                                 )
-                        current_app.logger.info(
-                            f"✓ Successfully created new submittal {resource_id} from webhook create event"
+                        logger.info(
+                            "submittal_created",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            source="procore_webhook",
                         )
                     elif error_msg:
-                        current_app.logger.error(
-                            f"✗ Failed to create submittal {resource_id}: {error_msg}",
-                            exc_info=True
+                        logger.error(
+                            "submittal_create_failed",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            error=error_msg,
+                            exc_info=True,
                         )
                     elif record:
-                        current_app.logger.info(
-                            f"Submittal {resource_id} already exists in database, skipped creation"
+                        logger.info(
+                            "submittal_create_skipped",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            status="skipped",
+                            reason="already_exists",
                         )
                     else:
                         # This case: created=False, record=None, error_msg=None
                         # Should not happen, but log it
-                        current_app.logger.warning(
-                            f"Create submittal returned unexpected state: created={created}, "
-                            f"record={'exists' if record else 'None'}, error_msg={error_msg}"
+                        logger.warning(
+                            "submittal_create_unexpected_state",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            created=created,
+                            record_exists=record is not None,
+                            error=error_msg,
                         )
                 except Exception as create_exception:
-                    current_app.logger.error(
-                        f"✗ Exception while processing create event for submittal {resource_id}: {create_exception}",
-                        exc_info=True
+                    logger.error(
+                        "submittal_create_failed",
+                        submittal_id=resource_id,
+                        project_id=project_id,
+                        error=str(create_exception),
+                        error_type=type(create_exception).__name__,
+                        exc_info=True,
                     )
             
             # Handle update events - update existing submittal
@@ -188,25 +235,38 @@ def procore_webhook():
                 # If record doesn't exist, try to create it (fallback for race conditions)
                 # This handles the case where update events arrive before create events
                 if not old_record:
-                    current_app.logger.warning(
-                        f"Update event received for submittal {resource_id} but record doesn't exist. "
-                        f"Attempting to create it first (fallback for race conditions)..."
+                    logger.warning(
+                        "submittal_update_record_missing",
+                        submittal_id=resource_id,
+                        project_id=project_id,
                     )
                     created, new_record, create_error = create_submittal_from_webhook(project_id, resource_id, webhook_payload=payload, source='Procore')
                     if created and new_record:
-                        current_app.logger.info(
-                            f"Successfully created missing submittal {resource_id} from update event fallback"
+                        logger.info(
+                            "submittal_created",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            source="procore_webhook",
+                            fallback=True,
                         )
                         old_record = new_record
                     elif new_record:  # Record exists but wasn't newly created (already existed)
-                        current_app.logger.info(
-                            f"Submittal {resource_id} was already created by another process (likely create event), "
-                            f"using existing record"
+                        logger.info(
+                            "submittal_create_skipped",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            status="skipped",
+                            reason="created_by_concurrent_process",
                         )
                         old_record = new_record
                     elif create_error:
-                        current_app.logger.error(
-                            f"Failed to create missing submittal {resource_id} from update event: {create_error}"
+                        logger.error(
+                            "submittal_create_failed",
+                            submittal_id=resource_id,
+                            project_id=project_id,
+                            error=create_error,
+                            fallback=True,
+                            exc_info=True,
                         )
                 
                 old_ball_in_court = old_record.ball_in_court if old_record else None
@@ -303,20 +363,29 @@ def procore_webhook():
 
                 # Log when webhook resulted in no updates (DB already in sync)
                 if not (ball_updated or status_updated or title_updated or manager_updated):
-                    current_app.logger.debug(
-                        "Procore webhook update for submittal id=%s project=%s: no changes applied (DB already in sync%s)",
-                        resource_id, project_id,
-                        ", connector" if is_connector else "",
+                    logger.debug(
+                        "submittal_update_skipped",
+                        submittal_id=resource_id,
+                        project_id=project_id,
+                        status="skipped",
+                        reason="no_changes",
+                        connector=is_connector,
                     )
             else:
-                current_app.logger.warning(
-                    f"Unhandled event type '{event_type}' for submittal {resource_id}, ignoring. "
-                    f"Expected 'create' or 'update'"
+                logger.warning(
+                    "procore_webhook_unhandled_event_type",
+                    event_type=event_type,
+                    submittal_id=resource_id,
+                    project_id=project_id,
                 )
         except Exception as e:
-            current_app.logger.error(
-                f"Error processing submittal {resource_id}: {e}",
-                exc_info=True
+            logger.error(
+                "procore_webhook_processing_failed",
+                submittal_id=resource_id,
+                project_id=project_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
             )
 
         return jsonify({"status": "processed"}), 200
@@ -408,7 +477,13 @@ def webhook_deliveries():
             }), 200
             
         except Exception as e:
-            logger.error(f"Error getting webhook deliveries: {str(e)}", exc_info=True)
+            logger.error(
+                "procore_webhook_deliveries_fetch_failed",
+                project_id=project_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             return jsonify({
                 "status": "error",
                 "error": str(e),
@@ -416,9 +491,14 @@ def webhook_deliveries():
                 "project_id": project_id,
                 "hook_id": hook_id
             }), 500
-        
+
     except Exception as e:
-        logger.error(f"Error retrieving webhook deliveries: {str(e)}", exc_info=True)
+        logger.error(
+            "procore_webhook_deliveries_request_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return jsonify({
             "status": "error",
             "error": str(e)
@@ -536,14 +616,22 @@ def webhook_test():
             }
 
             logger.info(
-                f"Webhook test endpoint received: resource_type={resource_type}, "
-                f"event_type={event_type}, resource_id={resource_id}, project_id={project_id}"
+                "procore_webhook_test_received",
+                resource_type=resource_type,
+                event_type=event_type,
+                submittal_id=resource_id,
+                project_id=project_id,
             )
-            
+
             return jsonify(response), 200
-            
+
         except Exception as e:
-            logger.error(f"Error in webhook test endpoint: {str(e)}", exc_info=True)
+            logger.error(
+                "procore_webhook_test_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             return jsonify({
                 "status": "error",
                 "error": str(e),
@@ -565,7 +653,7 @@ def health_scan():
             - webhook_status: Webhook health for orphaned projects
     """
     try:
-        logger.info("Starting comprehensive health scan via API")
+        logger.info("health_scan_started", source="user")
         result = comprehensive_health_scan(skip_user_prompt=True)
         
         # Convert result to JSON-serializable format
@@ -598,7 +686,12 @@ def health_scan():
         return jsonify(response_data), 200
         
     except Exception as exc:
-        logger.error(f"Error running health scan: {exc}", exc_info=True)
+        logger.error(
+            "health_scan_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            exc_info=True,
+        )
         return jsonify({
             "error": "Failed to run health scan",
             "details": str(exc)
@@ -625,7 +718,7 @@ def health_scan_update():
         submittal_ids = data.get('submittal_ids', [])
         
         # Run health scan to get current sync issues
-        logger.info("Running health scan to identify sync issues for update")
+        logger.info("health_scan_update_started", source="user")
         result = comprehensive_health_scan(skip_user_prompt=True)
         sync_issues = result['differences']['sync_issues']
         
@@ -690,7 +783,13 @@ def health_scan_update():
                             source='HealthScan',
                         )
                     except Exception as event_error:
-                        logger.warning(f"Failed to create SubmittalEvent for submittal {issue['submittal_id']} from health scan: {event_error}", exc_info=True)
+                        logger.warning(
+                            "submittal_event_create_failed",
+                            submittal_id=issue['submittal_id'],
+                            error=str(event_error),
+                            error_type=type(event_error).__name__,
+                            exc_info=True,
+                        )
                 
                 updated_submittals.append({
                     'submittal_id': issue['submittal_id'],
@@ -701,7 +800,14 @@ def health_scan_update():
                 updated_count += 1
                 
             except Exception as e:
-                logger.error(f"Error updating submittal {issue['submittal_id']}: {e}")
+                logger.error(
+                    "submittal_update_failed",
+                    submittal_id=issue['submittal_id'],
+                    project_id=issue['project_id'],
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True,
+                )
                 errors.append({
                     'submittal_id': issue['submittal_id'],
                     'error': str(e)
@@ -710,7 +816,7 @@ def health_scan_update():
         # Commit all changes
         try:
             db.session.commit()
-            logger.info(f"Successfully updated {updated_count} submittal records in database")
+            logger.info("health_scan_updates_committed", count=updated_count)
             
             return jsonify({
                 "success": True,
@@ -721,14 +827,25 @@ def health_scan_update():
             
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Error committing updates to database: {e}")
+            logger.error(
+                "health_scan_commit_failed",
+                count=updated_count,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             return jsonify({
                 "error": "Failed to commit updates to database",
                 "details": str(e)
             }), 500
-        
+
     except Exception as exc:
-        logger.error(f"Error updating records from health scan: {exc}", exc_info=True)
+        logger.error(
+            "health_scan_update_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            exc_info=True,
+        )
         db.session.rollback()
         return jsonify({
             "error": "Failed to update records",
@@ -766,7 +883,12 @@ def verify_admin_pin():
             }), 401
             
     except Exception as exc:
-        logger.error(f"Error verifying admin PIN: {exc}", exc_info=True)
+        logger.error(
+            "admin_pin_verify_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            exc_info=True,
+        )
         return jsonify({
             "error": "Failed to verify PIN",
             "details": str(exc)

@@ -36,6 +36,10 @@ from datetime import datetime
 import pandas as pd
 import math
 
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 # Main function for updating trello card information
 def update_trello_card(
@@ -70,8 +74,14 @@ def update_trello_card(
     # If neither new_due_date nor clear_due_date, don't include 'due' parameter at all
 
     try:
-        # Log the payload for debugging
-        print(f"[TRELLO API] Updating card {card_id} with payload: {payload}")
+        # Log the update parameters for debugging (never the payload itself — it carries credentials)
+        logger.debug(
+            "card_update_requested",
+            card_id=card_id,
+            new_list_id=new_list_id,
+            due=payload.get("due"),
+            clear_due_date=clear_due_date,
+        )
 
         # Use JSON when clearing due dates (null values), otherwise use URL params
         if clear_due_date and payload.get("due") is None:
@@ -87,15 +97,27 @@ def update_trello_card(
 
         response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
 
-        print(f"[TRELLO API] Card {card_id} updated successfully")
+        logger.debug("card_updated", card_id=card_id)
         return response.json()
 
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error updating card {card_id}: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
+        logger.error(
+            "card_update_failed",
+            card_id=card_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
+        logger.debug("card_update_error_response", card_id=card_id, body=response.text)
         raise
     except Exception as err:
-        print(f"[TRELLO API] Other error updating card {card_id}: {err}")
+        logger.error(
+            "card_update_failed",
+            card_id=card_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         raise
 
 
@@ -129,7 +151,12 @@ def _refresh_board_lists_cache():
         response.raise_for_status()
         lists = response.json()
     except Exception as e:
-        print(f"[TRELLO API] Error refreshing board lists cache: {e}")
+        logger.error(
+            "board_lists_cache_refresh_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return
 
     by_name = {}
@@ -178,7 +205,8 @@ def get_list_name_by_id(list_id):
             _board_lists_by_name[name] = new_entry
         return name
     else:
-        print(f"Trello API error: {response.status_code} {response.text}")
+        logger.warning("list_fetch_failed", list_id=list_id, status=response.status_code)
+        logger.debug("list_fetch_error_response", list_id=list_id, body=response.text)
         return None
 
 
@@ -207,7 +235,12 @@ def get_board_info(board_id=None):
         data = response.json()
         return {"id": data.get("id"), "name": data.get("name"), "url": data.get("url")}
     except Exception as e:
-        print(f"Trello API error fetching board: {e}")
+        logger.error(
+            "board_fetch_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return None
 
 
@@ -229,7 +262,8 @@ def get_trello_card_by_id(card_id):
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Trello API error: {response.status_code} {response.text}")
+        logger.warning("card_fetch_failed", card_id=card_id, status=response.status_code)
+        logger.debug("card_fetch_error_response", card_id=card_id, body=response.text)
         return None
 
 
@@ -380,45 +414,56 @@ def check_job_exists_in_db(job_number, release_number):
         Exception: For debugging purposes - will be caught and logged by caller
     """
     try:
-        print(f"[DEBUG] Checking for job: {job_number}-{release_number}")
+        logger.debug("job_lookup_started", job=str(job_number), release=str(release_number))
 
         # Convert job_number to int, keep release_number as string to preserve format like "v862"
         try:
             job_int = int(job_number)
         except (ValueError, TypeError):
             error_msg = f"Invalid job number: {job_number} - cannot convert to integer"
-            print(f"[ERROR] {error_msg}")
+            logger.error("job_number_invalid", job=str(job_number), error=error_msg, exc_info=True)
             raise Exception(error_msg)
 
         release_str = str(release_number)
 
-        print(
-            f"[DEBUG] Converted identifiers - job_int: {job_int}, release_str: {release_str}"
-        )
+        logger.debug("job_identifiers_converted", job=str(job_int), release=release_str)
 
         # Use Flask application context for database access
         existing_job = Releases.query.filter_by(
             job=job_int, release=release_str
         ).one_or_none()
-        print(
-            f"[DEBUG] Database query completed, found job: {existing_job is not None}"
+        logger.debug(
+            "job_lookup_completed",
+            job=str(job_int),
+            release=release_str,
+            found=existing_job is not None,
         )
 
         return existing_job
 
     except (ValueError, TypeError) as e:
         error_msg = f"Invalid job or release identifiers: job={job_number}, release={release_number}, error={str(e)}"
-        print(f"[ERROR] {error_msg}")
+        logger.error(
+            "job_lookup_invalid_identifiers",
+            job=str(job_number),
+            release=str(release_number),
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         raise Exception(error_msg)
     except Exception as e:
         error_msg = (
             f"Database error checking for job {job_number}-{release_number}: {str(e)}"
         )
-        print(f"[ERROR] {error_msg}")
-        print(f"[ERROR] Exception type: {type(e).__name__}")
-        import traceback
-
-        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        logger.error(
+            "job_lookup_failed",
+            job=str(job_number),
+            release=str(release_number),
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         raise Exception(error_msg)
 
 
@@ -468,7 +513,12 @@ def create_job_record_from_excel_data(excel_data):
         try:
             job_number = int(job_val) if job_val is not None else 0
         except (ValueError, TypeError):
-            print(f"[ERROR] Invalid Job # value: {job_val} - cannot convert to integer")
+            logger.error(
+                "job_number_invalid",
+                job=str(job_val),
+                error="Invalid Job # value - cannot convert to integer",
+                exc_info=True,
+            )
             return None
 
         release_number = str(excel_data.get("Release #", ""))
@@ -515,16 +565,21 @@ def create_job_record_from_excel_data(excel_data):
         db.session.add(new_job)
         db.session.commit()
 
-        print(
-            f"[DEBUG] Created Job record: {job_number}-{release_number} (ID: {new_job.id})"
+        logger.info(
+            "release_record_created",
+            job=str(job_number),
+            release=release_number,
+            release_id=new_job.id,
         )
         return new_job
 
     except Exception as e:
-        print(f"[ERROR] Failed to create Job record: {str(e)}")
-        import traceback
-
-        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        logger.error(
+            "release_record_create_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         db.session.rollback()
         return None
 
@@ -572,14 +627,16 @@ def update_job_record_with_trello_data(job_record, card_data):
         db.session.commit()
 
         # Use the stored ID instead of accessing the expired object
-        print(f"[DEBUG] Updated Job record {job_id} with Trello data")
+        logger.debug("release_record_trello_data_updated", release_id=job_id)
         return True
 
     except Exception as e:
-        print(f"[ERROR] Failed to update Job record with Trello data: {str(e)}")
-        import traceback
-
-        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        logger.error(
+            "release_record_trello_update_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         db.session.rollback()
         return False
 
@@ -597,27 +654,39 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         Dictionary with card creation result
     """
     try:
-        print(f"[DEBUG] Starting card creation with data: {excel_data}")
+        logger.debug("card_creation_started", payload=excel_data)
 
         # Check for duplicate job in database first
         job_number = excel_data.get("Job #")
         release_number = excel_data.get("Release #")
 
-        print(
-            f"[DEBUG] Extracted identifiers - Job #: {job_number}, Release #: {release_number}"
+        logger.debug(
+            "card_creation_identifiers_extracted",
+            job=str(job_number),
+            release=str(release_number),
         )
 
         if not job_number or not release_number:
             error_msg = "Missing Job # or Release # in Excel data"
-            print(f"[ERROR] {error_msg}")
+            logger.warning(
+                "card_creation_missing_identifiers",
+                job=str(job_number),
+                release=str(release_number),
+            )
             return {"success": False, "error": error_msg}
 
-        print(f"[DEBUG] Checking for duplicate job in database...")
+        logger.debug("duplicate_job_check_started", job=str(job_number), release=str(release_number))
         existing_job = check_job_exists_in_db(job_number, release_number)
 
         if existing_job:
             error_msg = f"Job {job_number}-{release_number} already exists in database"
-            print(f"[DEBUG] {error_msg}")
+            logger.debug(
+                "card_creation_skipped_duplicate",
+                job=str(job_number),
+                release=str(release_number),
+                release_id=existing_job.id,
+                card_id=existing_job.trello_card_id,
+            )
             return {
                 "success": False,
                 "error": error_msg,
@@ -625,16 +694,16 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
                 "existing_trello_card_id": existing_job.trello_card_id,
             }
 
-        print(f"[DEBUG] No duplicate found, proceeding with card creation...")
+        logger.debug("duplicate_job_check_passed", job=str(job_number), release=str(release_number))
 
         # Create database record with Excel data first
-        print(f"[DEBUG] Creating database record with Excel data...")
+        logger.debug("release_record_create_started", job=str(job_number), release=str(release_number))
         new_job = create_job_record_from_excel_data(excel_data)
 
         if not new_job:
             return {"success": False, "error": "Failed to create database record"}
 
-        print(f"[DEBUG] Database record created: Job {new_job.id}")
+        logger.debug("release_record_ready", release_id=new_job.id)
 
         # Determine Trello list to create the card in
         if list_name:
@@ -708,22 +777,37 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             "pos": "top",  # Add to top of list
         }
 
-        print(f"[TRELLO API] Creating card with payload: {payload}")
+        logger.debug(
+            "trello_card_create_requested",
+            job=str(job_number),
+            release=str(release_number),
+            list_id=list_id,
+        )
 
         response = requests.post(url, params=payload)
         response.raise_for_status()
 
         card_data = response.json()
-        print(f"[TRELLO API] Card created successfully: {card_data['id']}")
+        logger.info(
+            "trello_card_created",
+            card_id=card_data["id"],
+            job=str(job_number),
+            release=str(release_number),
+            list_id=list_id,
+        )
 
         # Update the existing database record with Trello card data
-        print(f"[DEBUG] Updating database record with Trello card data...")
+        logger.debug("release_record_trello_update_started", release_id=new_job.id)
         success = update_job_record_with_trello_data(new_job, card_data)
 
         if success:
-            print(f"[DEBUG] Successfully updated database record with Trello data")
+            logger.debug("release_record_trello_data_saved", release_id=new_job.id)
         else:
-            print(f"[ERROR] Failed to update database record with Trello data")
+            logger.warning(
+                "release_record_trello_update_incomplete",
+                release_id=new_job.id,
+                card_id=card_data["id"],
+            )
 
         # Handle Fab Order custom field - set if value exists in Excel
         fab_order_value = excel_data.get("Fab Order")
@@ -741,8 +825,10 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
                         card_data["id"], cfg.FAB_ORDER_FIELD_ID, fab_order_int
                     )
                     if fab_order_success:
-                        print(
-                            f"[DEBUG] Successfully set Fab Order custom field to {fab_order_int}"
+                        logger.debug(
+                            "fab_order_field_set",
+                            card_id=card_data["id"],
+                            fab_order=fab_order_int,
                         )
 
                         # Sort the list if it's one of the target lists
@@ -755,14 +841,25 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
                             "list",
                         )
                     else:
-                        print(f"[ERROR] Failed to set Fab Order custom field")
+                        logger.warning(
+                            "fab_order_field_set_failed",
+                            card_id=card_data["id"],
+                            fab_order=fab_order_int,
+                        )
                 else:
-                    print(
-                        f"[WARNING] FAB_ORDER_FIELD_ID not configured, skipping Fab Order custom field"
+                    logger.warning(
+                        "fab_order_field_skipped",
+                        card_id=card_data["id"],
+                        reason="FAB_ORDER_FIELD_ID not configured",
                     )
             except (ValueError, TypeError) as e:
-                print(
-                    f"[ERROR] Could not convert Fab Order '{fab_order_value}' to int: {e}"
+                logger.error(
+                    "fab_order_conversion_failed",
+                    card_id=card_data["id"],
+                    fab_order_value=str(fab_order_value),
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True,
                 )
 
         # Handle notes field - append as comment if not empty
@@ -774,19 +871,19 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
             and str(notes_value).strip()
             and str(notes_value).strip().lower() not in ["nan", "none"]
         ):
-            print(
-                f"[DEBUG] Notes field found, appending as comment to Trello card: {notes_value}"
-            )
+            logger.debug("notes_comment_add_started", card_id=card_data["id"])
             comment_success = add_comment_to_trello_card(
                 card_data["id"], str(notes_value).strip()
             )
             if comment_success:
-                print(f"[DEBUG] Successfully added notes as comment to Trello card")
+                logger.debug("notes_comment_added", card_id=card_data["id"])
             else:
-                print(f"[ERROR] Failed to add notes as comment to Trello card")
+                logger.warning("notes_comment_add_failed", card_id=card_data["id"])
         else:
-            print(
-                f"[DEBUG] No notes field, empty notes, NaN value, or 'nan'/'none' string, skipping comment addition"
+            logger.debug(
+                "notes_comment_skipped",
+                card_id=card_data["id"],
+                reason="empty or missing notes",
             )
 
         # Add FC Drawing link if viewer_url exists on the job
@@ -796,13 +893,20 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
                     card_data["id"], new_job.viewer_url, link_name="FC Drawing"
                 )
                 if link_result.get("success"):
-                    print(f"[DEBUG] Added FC Drawing link to card {card_data['id']}")
+                    logger.debug("fc_drawing_link_added", card_id=card_data["id"])
                 else:
-                    print(
-                        f"[WARNING] Failed to add FC Drawing link: {link_result.get('error')}"
+                    logger.warning(
+                        "fc_drawing_link_add_failed",
+                        card_id=card_data["id"],
+                        error=link_result.get("error"),
                     )
             except Exception as link_err:
-                print(f"[WARNING] Error adding FC Drawing link: {link_err}")
+                logger.warning(
+                    "fc_drawing_link_add_failed",
+                    card_id=card_data["id"],
+                    error=str(link_err),
+                    error_type=type(link_err).__name__,
+                )
 
         return {
             "success": True,
@@ -813,23 +917,37 @@ def create_trello_card_from_excel_data(excel_data, list_name=None):
         }
 
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error creating card: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
+        logger.error(
+            "trello_card_create_failed",
+            job=str(job_number),
+            release=str(release_number),
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
+        logger.debug("trello_card_create_error_response", body=response.text)
         return {
             "success": False,
             "error": f"HTTP error: {http_err}",
             "response": response.text,
         }
     except Exception as err:
-        print(f"[TRELLO API] Other error creating card: {err}")
+        logger.error(
+            "trello_card_create_failed",
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": str(err)}
 
     except Exception as e:
         error_msg = f"Unexpected error in create_trello_card_from_excel_data: {str(e)}"
-        print(f"[ERROR] {error_msg}")
-        import traceback
-
-        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        logger.error(
+            "card_creation_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {
             "success": False,
             "error": error_msg,
@@ -855,13 +973,21 @@ def get_card_custom_field_items(card_id):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as http_err:
-        print(
-            f"[TRELLO API] HTTP error getting custom field items for card {card_id}: {http_err}"
+        logger.error(
+            "custom_field_items_fetch_failed",
+            card_id=card_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
         )
         return None
     except Exception as err:
-        print(
-            f"[TRELLO API] Error getting custom field items for card {card_id}: {err}"
+        logger.error(
+            "custom_field_items_fetch_failed",
+            card_id=card_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
         )
         return None
 
@@ -883,19 +1009,39 @@ def update_card_custom_field(card_id, custom_field_id, text_value):
     data = {"value": {"text": text_value}}
 
     try:
-        print(
-            f"[TRELLO API] Updating custom field {custom_field_id} on card {card_id} with value: {text_value[:100]}..."
+        logger.debug(
+            "custom_field_update_requested",
+            card_id=card_id,
+            custom_field_id=custom_field_id,
         )
         response = requests.put(url, params=params, json=data)
         response.raise_for_status()
-        print(f"[TRELLO API] Custom field updated successfully")
+        logger.debug("custom_field_updated", card_id=card_id, custom_field_id=custom_field_id)
         return True
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error updating custom field: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
+        logger.error(
+            "custom_field_update_failed",
+            card_id=card_id,
+            custom_field_id=custom_field_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
+        logger.debug(
+            "custom_field_update_error_response",
+            card_id=card_id,
+            body=response.text,
+        )
         return False
     except Exception as err:
-        print(f"[TRELLO API] Error updating custom field: {err}")
+        logger.error(
+            "custom_field_update_failed",
+            card_id=card_id,
+            custom_field_id=custom_field_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return False
 
 
@@ -917,11 +1063,21 @@ def get_board_custom_fields(board_id):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error getting custom fields: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
+        logger.error(
+            "board_custom_fields_fetch_failed",
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
+        logger.debug("board_custom_fields_error_response", body=response.text)
         return None
     except Exception as err:
-        print(f"[TRELLO API] Error getting custom fields: {err}")
+        logger.error(
+            "board_custom_fields_fetch_failed",
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return None
 
 
@@ -964,19 +1120,40 @@ def update_card_custom_field_number(card_id, custom_field_id, number_value):
     }
 
     try:
-        print(
-            f"[TRELLO API] Updating custom field {custom_field_id} on card {card_id} with value: {number_value}"
+        logger.debug(
+            "custom_field_update_requested",
+            card_id=card_id,
+            custom_field_id=custom_field_id,
+            value=number_value,
         )
         response = requests.put(url, params=params, json=data)
         response.raise_for_status()
-        print(f"[TRELLO API] Custom field updated successfully")
+        logger.debug("custom_field_updated", card_id=card_id, custom_field_id=custom_field_id)
         return True
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error updating custom field: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
+        logger.error(
+            "custom_field_update_failed",
+            card_id=card_id,
+            custom_field_id=custom_field_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
+        logger.debug(
+            "custom_field_update_error_response",
+            card_id=card_id,
+            body=response.text,
+        )
         return False
     except Exception as err:
-        print(f"[TRELLO API] Error updating custom field: {err}")
+        logger.error(
+            "custom_field_update_failed",
+            card_id=card_id,
+            custom_field_id=custom_field_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return False
 
 
@@ -1012,7 +1189,7 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
         cards = response.json()
 
         if not cards:
-            print(f"[TRELLO API] List {list_id} is empty, nothing to sort")
+            logger.debug("list_sort_skipped", list_id=list_id, reason="empty list")
             return {
                 "success": True,
                 "cards_sorted": 0,
@@ -1096,24 +1273,33 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
                 update_response.raise_for_status()
                 updated_count += 1
             except requests.exceptions.HTTPError as http_err:
-                print(
-                    f"[TRELLO API] HTTP error updating card {update['card_id']} position: {http_err}"
+                logger.error(
+                    "card_position_update_failed",
+                    card_id=update["card_id"],
+                    error=str(http_err),
+                    error_type=type(http_err).__name__,
+                    exc_info=True,
                 )
                 failed_count += 1
             except Exception as err:
-                print(
-                    f"[TRELLO API] Error updating card {update['card_id']} position: {err}"
+                logger.error(
+                    "card_position_update_failed",
+                    card_id=update["card_id"],
+                    error=str(err),
+                    error_type=type(err).__name__,
+                    exc_info=True,
                 )
                 failed_count += 1
 
         if failed_count > 0:
-            print(
-                f"[TRELLO API] Sort completed with {failed_count} failures out of {len(position_updates)} cards"
+            logger.warning(
+                "list_sort_completed_with_failures",
+                list_id=list_id,
+                cards_failed=failed_count,
+                count=len(position_updates),
             )
         else:
-            print(
-                f"[TRELLO API] Successfully sorted list {list_id} ({updated_count} cards)"
-            )
+            logger.debug("list_sorted", list_id=list_id, count=updated_count)
 
         return {
             "success": True,
@@ -1124,9 +1310,19 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
 
     except requests.exceptions.HTTPError as http_err:
         error_msg = f"HTTP error sorting list {list_id}: {http_err}"
-        print(f"[TRELLO API] {error_msg}")
+        logger.error(
+            "list_sort_failed",
+            list_id=list_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
         if hasattr(http_err.response, "text"):
-            print(f"[TRELLO API] Response: {http_err.response.text}")
+            logger.debug(
+                "list_sort_error_response",
+                list_id=list_id,
+                body=http_err.response.text,
+            )
         return {
             "success": False,
             "error": error_msg,
@@ -1136,7 +1332,13 @@ def sort_list_by_fab_order(list_id, fab_order_field_id):
         }
     except Exception as err:
         error_msg = f"Error sorting list {list_id}: {err}"
-        print(f"[TRELLO API] {error_msg}")
+        logger.error(
+            "list_sort_failed",
+            list_id=list_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return {
             "success": False,
             "error": error_msg,
@@ -1160,7 +1362,7 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None, sender_
         True if successful, False otherwise
     """
     if not comment_text or not comment_text.strip():
-        print(f"[TRELLO API] Skipping empty comment for card {card_id}")
+        logger.debug("comment_skipped", card_id=card_id, reason="empty comment")
         return True
 
     # Format comment with timestamp and sender initials
@@ -1176,21 +1378,34 @@ def add_comment_to_trello_card(card_id, comment_text, operation_id=None, sender_
     }
 
     try:
-        print(
-            f"[TRELLO API] Adding comment to card {card_id}: {formatted_comment[:100]}..."
+        logger.debug(
+            "comment_add_requested",
+            card_id=card_id,
+            operation_id=operation_id,
+            comment_length=len(formatted_comment),
         )
         response = requests.post(url, params=params)
         response.raise_for_status()
-        print(f"[TRELLO API] Comment added successfully")
-        if operation_id:
-            print(f"[TRELLO API] Operation ID: {operation_id}")
+        logger.debug("comment_added", card_id=card_id, operation_id=operation_id)
         return True
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error adding comment: {http_err}")
-        print("[TRELLO API] Response content:", response.text)
+        logger.error(
+            "comment_add_failed",
+            card_id=card_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
+        logger.debug("comment_add_error_response", card_id=card_id, body=response.text)
         return False
     except Exception as err:
-        print(f"[TRELLO API] Error adding comment: {err}")
+        logger.error(
+            "comment_add_failed",
+            card_id=card_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return False
 
 
@@ -1211,12 +1426,12 @@ def get_card_attachments_by_job_release(job_number, release_number):
             job_int = int(job_number)
         except (ValueError, TypeError):
             error_msg = f"Invalid job number: {job_number} - cannot convert to integer"
-            print(f"[TRELLO API] {error_msg}")
+            logger.warning("attachments_lookup_invalid_job", job=str(job_number), error=error_msg)
             return {"success": False, "error": error_msg, "attachments": []}
 
         release_str = str(release_number)
 
-        print(f"[TRELLO API] Looking up attachments for job: {job_int}-{release_str}")
+        logger.debug("attachments_lookup_started", job=str(job_int), release=release_str)
 
         # Find the job record in the database
         job_record = Releases.query.filter_by(
@@ -1248,8 +1463,11 @@ def get_card_attachments_by_job_release(job_number, release_number):
 
         if response.status_code == 200:
             attachments = response.json()
-            print(
-                f"[TRELLO API] Found {len(attachments)} attachments for job {job_int}-{release_str}"
+            logger.debug(
+                "attachments_fetched",
+                job=str(job_int),
+                release=release_str,
+                count=len(attachments),
             )
             return {
                 "success": True,
@@ -1260,8 +1478,15 @@ def get_card_attachments_by_job_release(job_number, release_number):
                 "attachments": attachments,
             }
         else:
-            print(
-                f"[TRELLO API] Error getting attachments: {response.status_code} {response.text}"
+            logger.warning(
+                "attachments_fetch_failed",
+                card_id=job_record.trello_card_id,
+                status=response.status_code,
+            )
+            logger.debug(
+                "attachments_fetch_error_response",
+                card_id=job_record.trello_card_id,
+                body=response.text,
             )
             return {
                 "success": False,
@@ -1271,13 +1496,27 @@ def get_card_attachments_by_job_release(job_number, release_number):
 
     except (ValueError, TypeError) as e:
         error_msg = f"Invalid job or release identifiers: job={job_number}, release={release_number}, error={str(e)}"
-        print(f"[TRELLO API] {error_msg}")
+        logger.error(
+            "attachments_lookup_failed",
+            job=str(job_number),
+            release=str(release_number),
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": error_msg, "attachments": []}
     except Exception as e:
         error_msg = (
             f"Error getting attachments for job {job_number}-{release_number}: {str(e)}"
         )
-        print(f"[TRELLO API] {error_msg}")
+        logger.error(
+            "attachments_fetch_failed",
+            job=str(job_number),
+            release=str(release_number),
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": error_msg, "attachments": []}
 
 
@@ -1309,8 +1548,10 @@ def update_mirror_card_date_range(trello_card_id, start_date, install_hrs):
         if len(attachments) == 0:
             return {"success": False, "error": "No attachments found for this card"}
         elif len(attachments) > 1:
-            print(
-                f"[TRELLO API] Warning: Found {len(attachments)} attachments, expected 1 mirror card"
+            logger.warning(
+                "mirror_card_multiple_attachments",
+                card_id=trello_card_id,
+                count=len(attachments),
             )
             # Continue anyway, but log the warning
 
@@ -1338,7 +1579,13 @@ def update_mirror_card_date_range(trello_card_id, start_date, install_hrs):
 
     except Exception as e:
         error_msg = f"Error updating mirror card date range: {str(e)}"
-        print(f"[TRELLO API] {error_msg}")
+        logger.error(
+            "mirror_card_date_range_update_failed",
+            card_id=trello_card_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": error_msg}
 
 
@@ -1353,7 +1600,7 @@ def get_card_attachments_by_card_id(trello_card_id):
         dict: Dictionary containing success status and attachments data
     """
     try:
-        print(f"[TRELLO API] Looking up attachments for card: {trello_card_id}")
+        logger.debug("attachments_lookup_started", card_id=trello_card_id)
 
         # Get attachments from Trello API
         url = f"https://api.trello.com/1/cards/{trello_card_id}/attachments"
@@ -1366,8 +1613,10 @@ def get_card_attachments_by_card_id(trello_card_id):
 
         if response.status_code == 200:
             attachments = response.json()
-            print(
-                f"[TRELLO API] Found {len(attachments)} attachments for card {trello_card_id}"
+            logger.debug(
+                "attachments_fetched",
+                card_id=trello_card_id,
+                count=len(attachments),
             )
             return {
                 "success": True,
@@ -1375,8 +1624,15 @@ def get_card_attachments_by_card_id(trello_card_id):
                 "attachments": attachments,
             }
         else:
-            print(
-                f"[TRELLO API] Error getting attachments: {response.status_code} {response.text}"
+            logger.warning(
+                "attachments_fetch_failed",
+                card_id=trello_card_id,
+                status=response.status_code,
+            )
+            logger.debug(
+                "attachments_fetch_error_response",
+                card_id=trello_card_id,
+                body=response.text,
             )
             return {
                 "success": False,
@@ -1386,7 +1642,13 @@ def get_card_attachments_by_card_id(trello_card_id):
 
     except Exception as e:
         error_msg = f"Error getting attachments for card {trello_card_id}: {str(e)}"
-        print(f"[TRELLO API] {error_msg}")
+        logger.error(
+            "attachments_fetch_failed",
+            card_id=trello_card_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": error_msg, "attachments": []}
 
 
@@ -1406,7 +1668,7 @@ def calculate_installation_duration(install_hrs, num_guys=2):
     """
     try:
         if install_hrs is None or str(install_hrs).lower() in ["nan", "none", ""]:
-            print(f"[DEBUG] Install HRS is empty/None: {install_hrs}")
+            logger.debug("install_hrs_empty", install_hrs=str(install_hrs))
             return None
 
         install_hrs_float = float(install_hrs)
@@ -1415,24 +1677,39 @@ def calculate_installation_duration(install_hrs, num_guys=2):
             installation_duration = math.ceil(
                 (install_hrs_float / float(num_guys)) / 8.0
             )
-            print(
-                f"[DEBUG] Install HRS: {install_hrs} / Num Guys: {num_guys} / 8hrs/day -> Duration: {installation_duration} days"
+            logger.debug(
+                "installation_duration_calculated",
+                install_hrs=install_hrs_float,
+                num_guys=num_guys,
+                duration_days=installation_duration,
             )
             return installation_duration
         else:
-            print(
-                f"[DEBUG] Install HRS is zero or negative: {install_hrs_float}, or num_guys is zero: {num_guys}"
+            logger.debug(
+                "installation_duration_skipped",
+                install_hrs=install_hrs_float,
+                num_guys=num_guys,
+                reason="non-positive install_hrs or num_guys",
             )
             return None
 
     except (ValueError, TypeError) as e:
-        print(
-            f"[DEBUG] Error calculating installation duration: {e}, Install HRS: {install_hrs} (type: {type(install_hrs)}), Num Guys: {num_guys}"
+        logger.debug(
+            "installation_duration_calc_failed",
+            install_hrs=str(install_hrs),
+            num_guys=num_guys,
+            error=str(e),
+            error_type=type(e).__name__,
         )
         return None
     except Exception as e:
-        print(
-            f"[DEBUG] Unexpected error calculating installation duration: {e}, Install HRS: {install_hrs}"
+        logger.warning(
+            "installation_duration_calc_failed",
+            install_hrs=str(install_hrs),
+            num_guys=num_guys,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
         )
         return None
 
@@ -1498,7 +1775,12 @@ def sync_num_guys_on_card(card_id, install_hrs, num_guys):
     try:
         card = get_trello_card_by_id(card_id)
     except Exception as e:
-        print(f"[TRELLO API] sync_num_guys_on_card: fetch failed for {card_id}: {e}")
+        logger.warning(
+            "num_guys_sync_card_fetch_failed",
+            card_id=card_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         return False
     if not card:
         return False
@@ -1527,22 +1809,25 @@ def update_installation_duration_in_description(description, install_hrs, num_gu
         str: Updated description with new installation duration, or original if update fails
     """
     if not description or not install_hrs or not num_guys:
-        print(
-            f"[DEBUG] update_installation_duration_in_description: Missing required input - desc={bool(description)}, install_hrs={install_hrs}, num_guys={num_guys}"
+        logger.debug(
+            "installation_duration_update_skipped",
+            reason="missing required input",
+            has_description=bool(description),
+            install_hrs=install_hrs,
+            num_guys=num_guys,
         )
         return description
 
     # Calculate new installation duration
     installation_duration = calculate_installation_duration(install_hrs, num_guys)
     if installation_duration is None:
-        print(
-            f"[DEBUG] update_installation_duration_in_description: Could not calculate duration"
+        logger.debug(
+            "installation_duration_update_skipped",
+            reason="could not calculate duration",
         )
         return description
 
-    print(
-        f"[DEBUG] update_installation_duration_in_description: Target duration = {installation_duration} days"
-    )
+    logger.debug("installation_duration_target", duration_days=installation_duration)
 
     # Pattern to match "**Installation Duration:** X days"
     pattern = r"(\*\*Installation\s+Duration:\*\*\s*)(\d+)\s*days"
@@ -1550,9 +1835,7 @@ def update_installation_duration_in_description(description, install_hrs, num_gu
     match = re.search(pattern, description, re.IGNORECASE)
     if match:
         current_duration = int(match.group(2))
-        print(
-            f"[DEBUG] update_installation_duration_in_description: Found existing duration = {current_duration} days"
-        )
+        logger.debug("installation_duration_existing_found", duration_days=current_duration)
 
         # Only update if duration has actually changed
         if current_duration != installation_duration:
@@ -1563,18 +1846,21 @@ def update_installation_duration_in_description(description, install_hrs, num_gu
             updated_description = re.sub(
                 pattern, replace_duration, description, flags=re.IGNORECASE
             )
-            print(
-                f"[DEBUG] update_installation_duration_in_description: Updated {current_duration} -> {installation_duration} days"
+            logger.debug(
+                "installation_duration_updated",
+                from_days=current_duration,
+                to_days=installation_duration,
             )
             return updated_description
         else:
-            print(
-                f"[DEBUG] update_installation_duration_in_description: Duration unchanged ({current_duration} days)"
+            logger.debug(
+                "installation_duration_unchanged", duration_days=current_duration
             )
             return description
     else:
-        print(
-            f"[DEBUG] update_installation_duration_in_description: No existing Installation Duration found, attempting to add"
+        logger.debug(
+            "installation_duration_add_attempted",
+            reason="no existing Installation Duration line",
         )
         # If no installation duration line exists, add it after Number of Guys
         num_guys_pattern = r"(\*\*Number\s+of\s+Guys:\*\*\s*\d+(?:\.\d+)?)"
@@ -1587,13 +1873,14 @@ def update_installation_duration_in_description(description, install_hrs, num_gu
             updated_description = re.sub(
                 num_guys_pattern, add_duration, description, flags=re.IGNORECASE
             )
-            print(
-                f"[DEBUG] update_installation_duration_in_description: Added new Installation Duration line"
+            logger.debug(
+                "installation_duration_line_added", duration_days=installation_duration
             )
             return updated_description
         else:
-            print(
-                f"[DEBUG] update_installation_duration_in_description: Could not find Number of Guys line to add duration after"
+            logger.debug(
+                "installation_duration_add_skipped",
+                reason="Number of Guys line not found",
             )
 
     return description
@@ -1640,9 +1927,7 @@ def update_num_guys_in_description(description, install_hrs, default_num_guys=2)
             updated_description = re.sub(
                 num_guys_pattern, replace_num_guys, description, flags=re.IGNORECASE
             )
-            print(
-                f"[DEBUG] update_num_guys_in_description: Fixed invalid Number of Guys format"
-            )
+            logger.debug("num_guys_format_fixed", num_guys=default_num_guys)
             return updated_description
     else:
         # Number of Guys doesn't exist - add it after Install HRS
@@ -1657,15 +1942,11 @@ def update_num_guys_in_description(description, install_hrs, default_num_guys=2)
             updated_description = re.sub(
                 install_hrs_pattern, add_num_guys, description, flags=re.IGNORECASE
             )
-            print(
-                f"[DEBUG] update_num_guys_in_description: Added Number of Guys field with value {default_num_guys}"
-            )
+            logger.debug("num_guys_line_added", num_guys=default_num_guys)
             return updated_description
         else:
             # Install HRS not found, can't determine where to add Number of Guys
-            print(
-                f"[DEBUG] update_num_guys_in_description: Install HRS not found, cannot add Number of Guys"
-            )
+            logger.debug("num_guys_add_skipped", reason="Install HRS line not found")
             return description
 
 
@@ -1706,22 +1987,36 @@ def update_trello_card_description(card_id, new_description):
     }
 
     try:
-        print(f"[TRELLO API] Updating description for card {card_id}")
+        logger.debug("card_description_update_requested", card_id=card_id)
         response = requests.put(url, params=params)
         response.raise_for_status()
 
-        print(f"[TRELLO API] Card {card_id} description updated successfully")
+        logger.debug("card_description_updated", card_id=card_id)
         return response.json()
 
     except requests.exceptions.HTTPError as http_err:
-        print(
-            f"[TRELLO API] HTTP error updating card {card_id} description: {http_err}"
+        logger.error(
+            "card_description_update_failed",
+            card_id=card_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
         )
         if hasattr(http_err.response, "text"):
-            print("[TRELLO API] Response content:", http_err.response.text)
+            logger.debug(
+                "card_description_update_error_response",
+                card_id=card_id,
+                body=http_err.response.text,
+            )
         raise
     except Exception as err:
-        print(f"[TRELLO API] Other error updating card {card_id} description: {err}")
+        logger.error(
+            "card_description_update_failed",
+            card_id=card_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         raise
 
 
@@ -1741,20 +2036,36 @@ def update_trello_card_name(card_id, new_name):
     params = {"key": cfg.TRELLO_API_KEY, "token": cfg.TRELLO_TOKEN, "name": new_name}
 
     try:
-        print(f"[TRELLO API] Updating name for card {card_id}")
+        logger.debug("card_name_update_requested", card_id=card_id)
         response = requests.put(url, params=params)
         response.raise_for_status()
 
-        print(f"[TRELLO API] Card {card_id} name updated successfully")
+        logger.debug("card_name_updated", card_id=card_id)
         return response.json()
 
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error updating card {card_id} name: {http_err}")
+        logger.error(
+            "card_name_update_failed",
+            card_id=card_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
         if hasattr(http_err.response, "text"):
-            print("[TRELLO API] Response content:", http_err.response.text)
+            logger.debug(
+                "card_name_update_error_response",
+                card_id=card_id,
+                body=http_err.response.text,
+            )
         raise
     except Exception as err:
-        print(f"[TRELLO API] Other error updating card {card_id} name: {err}")
+        logger.error(
+            "card_name_update_failed",
+            card_id=card_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         raise
 
 
@@ -1830,14 +2141,17 @@ def update_card_date_range(card_short_link, start_date, due_date):
             "due": due_date_str,
         }
 
-        print(
-            f"[TRELLO API] Updating mirror card {card_short_link} with start: {start_date_str}, due: {due_date_str}"
+        logger.debug(
+            "mirror_card_date_range_update_requested",
+            card_id=card_short_link,
+            start_date=start_date_str,
+            due_date=due_date_str,
         )
 
         response = requests.put(url, params=payload)
 
         if response.status_code == 200:
-            print(f"[TRELLO API] Successfully updated mirror card {card_short_link}")
+            logger.debug("mirror_card_date_range_updated", card_id=card_short_link)
             return {
                 "success": True,
                 "card_short_link": card_short_link,
@@ -1845,8 +2159,15 @@ def update_card_date_range(card_short_link, start_date, due_date):
                 "due_date": due_date_str,
             }
         else:
-            print(
-                f"[TRELLO API] Error updating mirror card: {response.status_code} {response.text}"
+            logger.warning(
+                "mirror_card_date_range_update_failed",
+                card_id=card_short_link,
+                status=response.status_code,
+            )
+            logger.debug(
+                "mirror_card_date_range_error_response",
+                card_id=card_short_link,
+                body=response.text,
             )
             return {
                 "success": False,
@@ -1855,7 +2176,13 @@ def update_card_date_range(card_short_link, start_date, due_date):
 
     except Exception as e:
         error_msg = f"Error updating card date range: {str(e)}"
-        print(f"[TRELLO API] {error_msg}")
+        logger.error(
+            "card_date_range_update_failed",
+            card_id=card_short_link,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": error_msg}
 
 
@@ -1872,7 +2199,7 @@ def add_procore_link(card_id, procore_url, link_name=None):
         dict: Dictionary containing success status and attachment data, or error message
     """
     if not procore_url or not procore_url.strip():
-        print(f"[TRELLO API] Skipping empty Procore URL for card {card_id}")
+        logger.debug("procore_link_skipped", card_id=card_id, reason="empty url")
         return {"success": False, "error": "Procore URL is required"}
 
     url = f"https://api.trello.com/1/cards/{card_id}/attachments"
@@ -1889,15 +2216,15 @@ def add_procore_link(card_id, procore_url, link_name=None):
         params["name"] = link_name
 
     try:
-        print(
-            f"[TRELLO API] Adding Procore link to card {card_id}: {procore_url[:100]}..."
-        )
+        logger.debug("procore_link_add_requested", card_id=card_id)
         response = requests.post(url, params=params)
         response.raise_for_status()
 
         attachment_data = response.json()
-        print(
-            f"[TRELLO API] Procore link added successfully (attachment ID: {attachment_data.get('id')})"
+        logger.debug(
+            "procore_link_added",
+            card_id=card_id,
+            attachment_id=attachment_data.get("id"),
         )
 
         return {
@@ -1909,9 +2236,19 @@ def add_procore_link(card_id, procore_url, link_name=None):
         }
 
     except requests.exceptions.HTTPError as http_err:
-        print(f"[TRELLO API] HTTP error adding Procore link: {http_err}")
+        logger.error(
+            "procore_link_add_failed",
+            card_id=card_id,
+            error=str(http_err),
+            error_type=type(http_err).__name__,
+            exc_info=True,
+        )
         if hasattr(http_err.response, "text"):
-            print("[TRELLO API] Response content:", http_err.response.text)
+            logger.debug(
+                "procore_link_add_error_response",
+                card_id=card_id,
+                body=http_err.response.text,
+            )
         return {
             "success": False,
             "error": f"HTTP error: {http_err}",
@@ -1920,7 +2257,13 @@ def add_procore_link(card_id, procore_url, link_name=None):
             ),
         }
     except Exception as err:
-        print(f"[TRELLO API] Error adding Procore link: {err}")
+        logger.error(
+            "procore_link_add_failed",
+            card_id=card_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": str(err)}
 
 
@@ -1977,17 +2320,30 @@ def move_mirror_card(primary_card_id, target_list_id):
     linked mirror or no target list is available.
     """
     if not primary_card_id or not target_list_id:
-        print(f"[TRELLO API] move_mirror_card skipped: card={primary_card_id} list={target_list_id}")
+        logger.warning(
+            "mirror_card_move_skipped",
+            card_id=primary_card_id,
+            list_id=target_list_id,
+            reason="missing card or list id",
+        )
         return None
 
     result = get_card_attachments_by_card_id(primary_card_id)
     if not result.get("success"):
-        print(f"[TRELLO API] move_mirror_card: failed to read attachments for {primary_card_id}")
+        logger.warning(
+            "mirror_card_move_failed",
+            card_id=primary_card_id,
+            reason="failed to read attachments",
+        )
         return None
 
     mirror_short_link = _mirror_short_link_from_attachments(result.get("attachments"))
     if not mirror_short_link:
-        print(f"[TRELLO API] move_mirror_card: no linked mirror card for {primary_card_id}")
+        logger.warning(
+            "mirror_card_move_skipped",
+            card_id=primary_card_id,
+            reason="no linked mirror card",
+        )
         return None
 
     return update_trello_card(card_id=mirror_short_link, new_list_id=target_list_id)
@@ -2021,14 +2377,22 @@ def set_mirror_date_range(primary_card_id, start_date, due_date):
     try:
         mirror_card = get_trello_card_by_id(mirror_short_link)
     except Exception as e:
-        print(f"[TRELLO API] set_mirror_date_range: could not resolve mirror card: {e}")
+        logger.error(
+            "mirror_card_resolve_failed",
+            card_id=primary_card_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
         return {"success": False, "error": f"could not resolve mirror card: {e}"}
     if not mirror_card:
         return {"success": False, "error": "mirror card not found"}
     if mirror_card.get("idBoard") != cfg.TRELLO_BOARD_ID:
-        print(
-            f"[TRELLO API] set_mirror_date_range: linked card {mirror_card.get('id')} is on board "
-            f"{mirror_card.get('idBoard')}, not {cfg.TRELLO_BOARD_ID}; refusing cross-board push"
+        logger.warning(
+            "mirror_card_cross_board_refused",
+            card_id=mirror_card.get("id"),
+            mirror_board_id=mirror_card.get("idBoard"),
+            expected_board_id=cfg.TRELLO_BOARD_ID,
         )
         return {
             "success": False,

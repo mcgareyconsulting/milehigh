@@ -21,11 +21,14 @@ from flask import Blueprint, request, current_app, jsonify
 from app.trello.utils import parse_webhook_data
 from app.trello.sync import sync_from_trello
 from app.sync_lock import sync_lock_manager
+from app.logging_config import get_logger
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from queue import Queue, Full, Empty
 import time
+
+logger = get_logger(__name__)
 
 
 class ThreadTracker:
@@ -87,7 +90,7 @@ def trello_webhook():
 
     if request.method == "POST":
         if current_app.config.get("TRELLO_MOCK"):
-            current_app.logger.info("[TRELLO_MOCK] inbound webhook dropped")
+            logger.info("trello_mock_webhook_dropped", source="trello")
             return "", 200
 
         data = request.json
@@ -97,7 +100,7 @@ def trello_webhook():
         # Skip unhandled webhooks
         if not event_info.get("handled"):
             action_type = event_info.get("action_type", "unknown")
-            app.logger.debug(f"Skipping unhandled webhook: {action_type}")
+            logger.debug("trello_webhook_skipped", action_type=action_type, source="trello")
             return "", 200
 
         # If locked, enqueue the event for later processing and return 202
@@ -106,11 +109,22 @@ def trello_webhook():
             try:
                 trello_event_queue.put_nowait(event_info)
                 thread_tracker.thread_rejected()
-                app.logger.info(f"Trello webhook queued due to active lock: {current_op}")
+                logger.info(
+                    "trello_webhook_queued",
+                    lock_holder=current_op,
+                    card_id=event_info.get("card_id"),
+                    source="trello",
+                    status="queued",
+                )
                 return jsonify({"status": "queued", "reason": f"lock_held_by_{current_op}"}), 202
             except Full:
                 thread_tracker.thread_rejected()
-                app.logger.warning("Trello event queue is full; dropping event")
+                logger.warning(
+                    "trello_queue_full",
+                    card_id=event_info.get("card_id"),
+                    source="trello",
+                    status="skipped",
+                )
                 return jsonify({"status": "overloaded"}), 429
 
         def run_sync():
@@ -124,11 +138,22 @@ def trello_webhook():
                     # between the initial check and thread execution
                     if sync_lock_manager.is_locked():
                         current_op = sync_lock_manager.get_current_operation()
-                        app.logger.info(f"Lock acquired by {current_op} before thread execution - queuing event")
+                        logger.info(
+                            "trello_webhook_requeued",
+                            lock_holder=current_op,
+                            card_id=event_info.get("card_id"),
+                            source="trello",
+                            status="queued",
+                        )
                         try:
                             trello_event_queue.put_nowait(event_info)
                         except Full:
-                            app.logger.warning("Queue full while requeuing - dropping event")
+                            logger.warning(
+                                "trello_event_requeue_failed",
+                                reason="queue_full",
+                                card_id=event_info.get("card_id"),
+                                source="trello",
+                            )
                         duration = thread_tracker.thread_completed(thread_id, success=False)
                         thread_tracker.thread_rejected()
                         return
@@ -136,20 +161,30 @@ def trello_webhook():
                     # Try to acquire the sync lock in the thread
                     try:
                         with sync_lock_manager.acquire_sync_lock("Trello-Hook"):
-                            app.logger.debug("Trello sync started with lock acquired")
+                            logger.debug("trello_sync_started", card_id=event_info.get("card_id"), source="trello")
                             sync_from_trello(event_info)
-                            app.logger.debug("Trello sync completed successfully")
+                            logger.debug("trello_sync_finished", card_id=event_info.get("card_id"), source="trello")
 
                         duration = thread_tracker.thread_completed(
                             thread_id, success=True
                         )
-                        app.logger.info(f"Sync completed in {duration:.2f}s")
+                        logger.info(
+                            "trello_sync_completed",
+                            duration_ms=int(duration * 1000),
+                            card_id=event_info.get("card_id"),
+                            source="trello",
+                            status="ok",
+                        )
 
                     except RuntimeError as lock_error:
                         # Lock acquisition failed - this shouldn't happen since we checked above
                         # but it's possible another sync started between the check and thread execution
-                        app.logger.warning(
-                            f"Trello sync lock acquisition failed in thread: {lock_error}"
+                        logger.warning(
+                            "trello_sync_lock_failed",
+                            error=str(lock_error),
+                            error_type=type(lock_error).__name__,
+                            card_id=event_info.get("card_id"),
+                            source="trello",
                         )
                         duration = thread_tracker.thread_completed(
                             thread_id, success=False
@@ -158,7 +193,16 @@ def trello_webhook():
 
             except Exception as e:
                 duration = thread_tracker.thread_completed(thread_id, success=False)
-                app.logger.error(f"Sync failed after {duration:.2f}s: {e}")
+                logger.error(
+                    "trello_sync_failed",
+                    duration_ms=int(duration * 1000) if duration is not None else None,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    card_id=event_info.get("card_id"),
+                    source="trello",
+                    status="error",
+                    exc_info=True,
+                )
 
         # Submit to thread pool and attach error callback
         future = executor.submit(run_sync)
@@ -166,9 +210,16 @@ def trello_webhook():
             try:
                 _ = f.result()
             except Exception as e:
-                app.logger.error(f"Trello sync task failed: {e}")
+                logger.error(
+                    "trello_sync_task_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    source="trello",
+                    status="error",
+                    exc_info=True,
+                )
         future.add_done_callback(_log_future)
-        app.logger.debug("Trello webhook submitted to thread pool")
+        logger.debug("trello_webhook_submitted", card_id=event_info.get("card_id"), source="trello")
 
     return "", 200
 
@@ -204,23 +255,50 @@ def drain_trello_queue(max_items: int = 5):
                 with app.app_context():
                     try:
                         with sync_lock_manager.acquire_sync_lock("Trello-Queue"):
-                            app.logger.info("Drained Trello event started with lock acquired")
+                            logger.info("trello_drain_sync_started", card_id=evt.get("card_id"), source="trello")
                             sync_from_trello(evt)
-                            app.logger.info("Drained Trello event completed successfully")
+                            logger.info("trello_drain_sync_finished", card_id=evt.get("card_id"), source="trello")
                         duration = thread_tracker.thread_completed(thread_id, success=True)
-                        app.logger.info(f"Drained sync completed in {duration:.2f}s")
+                        logger.info(
+                            "trello_drain_sync_completed",
+                            duration_ms=int(duration * 1000),
+                            card_id=evt.get("card_id"),
+                            source="trello",
+                            status="ok",
+                        )
                     except RuntimeError as lock_error:
                         # Could not acquire (race); requeue and stop draining
-                        app.logger.info(f"Queue drain lock contention: {lock_error}")
+                        logger.info(
+                            "trello_drain_lock_contention",
+                            error=str(lock_error),
+                            error_type=type(lock_error).__name__,
+                            card_id=evt.get("card_id"),
+                            source="trello",
+                            status="queued",
+                        )
                         try:
                             trello_event_queue.put_nowait(evt)
                         except Full:
-                            app.logger.warning("Queue full while requeuing drained event; dropping")
+                            logger.warning(
+                                "trello_drain_requeue_failed",
+                                reason="queue_full",
+                                card_id=evt.get("card_id"),
+                                source="trello",
+                            )
                         thread_tracker.thread_completed(thread_id, success=False)
                         return False
             except Exception as e:
                 duration = thread_tracker.thread_completed(thread_id, success=False)
-                app.logger.error(f"Drained sync failed after {duration:.2f}s: {e}")
+                logger.error(
+                    "trello_drain_sync_failed",
+                    duration_ms=int(duration * 1000) if duration is not None else None,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    card_id=evt.get("card_id"),
+                    source="trello",
+                    status="error",
+                    exc_info=True,
+                )
                 return True
             return True
 
