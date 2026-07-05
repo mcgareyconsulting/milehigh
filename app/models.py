@@ -1147,6 +1147,11 @@ class RawSourceRecord(db.Model):
     ingested_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     payload = db.Column(db.JSON, nullable=False)              # normalized record
     external_pointer = db.Column(db.JSON, nullable=True)      # refs kept in M365 (webLink, attachments)
+    # Processing metadata (not content): set once the material-order extractor has
+    # attempted this record, regardless of outcome, so a non-order email is never
+    # re-sent to the LLM on every poll. Reset to NULL when content_hash changes
+    # (re-pull with a late attachment) so the changed record is scanned once more.
+    material_order_scanned_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
         return {
