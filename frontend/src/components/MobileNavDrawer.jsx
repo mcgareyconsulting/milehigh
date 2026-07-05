@@ -26,6 +26,7 @@ const ADMIN_ITEMS = [
     { label: 'Rentals', path: '/rental-reports' },
     { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
+    { label: 'T&M', path: '/tm-tickets' },
 ];
 
 export default function MobileNavDrawer({

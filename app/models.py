@@ -1789,3 +1789,101 @@ class SunbeltRental(db.Model):
             'matched_project_name': self.matched_project_name,
             'match_method': self.match_method,
         }
+
+
+class TMTicket(db.Model):
+    """A Time & Material field ticket, ingested from a legacy paper scan/photo/PDF.
+
+    v1 is the legacy-paper pipeline: an uploaded document is read by Claude vision,
+    the raw extraction is held on the row, and a human reviews/corrects the fields
+    in a modal before confirming. Deny does NOT delete — the row moves to
+    'rejected' so nothing is ever lost. The original document bytes live in
+    app/brain/tm/storage.py (content-addressed, same pattern as material-order
+    attachments); `raw_extraction` keeps the model's verbatim JSON (including
+    per-field confidence) so human corrections stay diffable against it.
+
+    Line items (labor/materials/equipment) are JSON lists for v1 — they normalize
+    into child tables when employee/material master data exists. Costs, rates and
+    markups (the hidden financial layer) are deliberately absent from v1.
+
+    `release_id` is a real (nullable) FK to Releases — a ticket may reference no
+    release. `job` holds the extracted job number even when no release is linked,
+    so unmatched tickets stay findable by job.
+    """
+    __tablename__ = "tm_tickets"
+    __table_args__ = (
+        db.Index("ix_tm_tickets_status", "status"),
+        db.Index("ix_tm_tickets_release_id", "release_id"),
+        db.Index("ix_tm_tickets_job", "job"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.String(16), nullable=False, default="pending_review",
+                       server_default="pending_review")  # pending_review | confirmed | rejected
+
+    # Ticket fields (extracted, then human-corrected on confirm)
+    release_id = db.Column(db.Integer, db.ForeignKey("releases.id"), nullable=True)
+    job = db.Column(db.Integer, nullable=True)            # extracted job number (kept even if unlinked)
+    date_of_work = db.Column(db.Date, nullable=True)
+    customer = db.Column(db.String(128), nullable=True)
+    work_description = db.Column(db.Text, nullable=True)
+    labor = db.Column(db.JSON, nullable=True)             # [{name, company, classification, hours_reg, hours_ot, hours_dt, notes}]
+    materials = db.Column(db.JSON, nullable=True)         # [{description, quantity, unit, length, notes}]
+    equipment = db.Column(db.JSON, nullable=True)         # [{description, quantity, hours, operator, notes}]
+    signature_present = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    signature_name = db.Column(db.String(128), nullable=True)
+
+    # Extraction provenance
+    raw_extraction = db.Column(db.JSON, nullable=True)    # verbatim model output incl. per-field confidence
+    extract_model = db.Column(db.String(64), nullable=True)
+    extract_error = db.Column(db.String(512), nullable=True)  # set when extraction failed and fields start blank
+
+    # Source document provenance
+    source_storage_key = db.Column(db.String(128), nullable=True)  # content-addressed key in tm storage
+    source_filename = db.Column(db.String(255), nullable=True)
+    source_media_type = db.Column(db.String(64), nullable=True)
+    source_record_id = db.Column(db.Integer, nullable=True)        # raw_source_records.id (loose link)
+
+    # Review trail
+    uploaded_by = db.Column(db.String(80), nullable=True)          # username
+    reviewed_by = db.Column(db.String(80), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    release = db.relationship("Releases", foreign_keys=[release_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "status": self.status,
+            "release_id": self.release_id,
+            "release": {
+                "id": self.release.id,
+                "job": self.release.job,
+                "release": self.release.release,
+                "job_name": self.release.job_name,
+                "description": self.release.description,
+            } if self.release else None,
+            "job": self.job,
+            "date_of_work": _dt(self.date_of_work),
+            "customer": self.customer,
+            "work_description": self.work_description,
+            "labor": self.labor or [],
+            "materials": self.materials or [],
+            "equipment": self.equipment or [],
+            "signature_present": self.signature_present,
+            "signature_name": self.signature_name,
+            "raw_extraction": self.raw_extraction,
+            "extract_model": self.extract_model,
+            "extract_error": self.extract_error,
+            "source_filename": self.source_filename,
+            "source_media_type": self.source_media_type,
+            "source_record_id": self.source_record_id,
+            "uploaded_by": self.uploaded_by,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": _dt(self.reviewed_at),
+            "created_at": _dt(self.created_at),
+            "updated_at": _dt(self.updated_at),
+        }

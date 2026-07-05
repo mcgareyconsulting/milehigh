@@ -28,6 +28,7 @@ import JobsiteMap from './pages/maps/JobsiteMap';
 import Board from './pages/Board';
 import Meetings from './pages/Meetings';
 import ToDos from './pages/ToDos';
+import TMTickets from './pages/TMTickets';
 import FcCollection from './pages/FcCollection';
 import InvoicingReport from './pages/InvoicingReport';
 import RentalReports from './pages/RentalReports';
@@ -79,6 +80,7 @@ function AppContent() {
               <Route path="board" element={<Board />} />
               <Route path="meetings" element={<Meetings />} />
               <Route path="todos" element={<ToDos />} />
+              <Route path="tm-tickets" element={<TMTickets />} />
               <Route path="invoicing-report" element={<InvoicingReport />} />
               <Route path="rental-reports" element={<RentalReports />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
