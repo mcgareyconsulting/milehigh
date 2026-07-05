@@ -15,12 +15,13 @@ invariants:
 updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
 """
 import threading
-import logging
 from contextlib import contextmanager
 from typing import Optional
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class SyncLockManager:
@@ -71,12 +72,13 @@ class SyncLockManager:
                     current_op = self._current_operation
                     # If the same thread holds it, allow reentrancy without error
                     if self._holder_thread_id == current_thread_id:
-                        logger.info(f"Re-entrant sync lock for operation: {operation_name}")
+                        logger.debug("sync_lock_reentered", operation=operation_name,
+                                     thread_id=current_thread_id)
                     else:
-                        logger.warning(
-                            f"Sync lock already held by '{current_op}' (thread {self._holder_thread_id}). "
-                            f"Cannot acquire for '{operation_name}' (thread {current_thread_id})"
-                        )
+                        logger.warning("sync_lock_contended", operation=operation_name,
+                                       held_by=current_op,
+                                       holder_thread_id=self._holder_thread_id,
+                                       thread_id=current_thread_id)
                         raise RuntimeError(f"Sync already in progress: {current_op}")
 
                 self._is_syncing = True
@@ -84,7 +86,8 @@ class SyncLockManager:
                 self._holder_thread_id = current_thread_id
                 self._acquired_at = datetime.now()
                 acquired = True
-                logger.info(f"Sync lock acquired for operation: {operation_name} (thread {current_thread_id})")
+                logger.debug("sync_lock_acquired", operation=operation_name,
+                             thread_id=current_thread_id)
             finally:
                 # Release the manager mutex so work can happen while state is busy
                 self._lock.release()
@@ -98,7 +101,7 @@ class SyncLockManager:
                     self._current_operation = None
                     self._holder_thread_id = None
                     self._acquired_at = None
-                    logger.info(f"Sync lock released for operation: {operation_name}")
+                    logger.debug("sync_lock_released", operation=operation_name)
 
     def get_status(self) -> dict:
         """Get current status of the lock manager"""
@@ -131,7 +134,7 @@ def synchronized_sync(operation_name: str):
                 with sync_lock_manager.acquire_sync_lock(operation_name):
                     return func(*args, **kwargs)
             except RuntimeError as e:
-                logger.warning(f"Cannot execute {operation_name}: {e}")
+                logger.warning("sync_lock_unavailable", operation=operation_name, error=str(e))
                 raise
 
         return wrapper
