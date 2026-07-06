@@ -46,7 +46,24 @@ RETRY_BASE_SECONDS = 3
 # Pilot users granted access at migration time. Usernames are stored lowercased.
 SEED_USERS = ["boneill@mhmw.com", "mcgareyconsulting@gmail.com"]
 
-load_dotenv()
+
+def _bootstrap_env():
+    """Populate os.environ the SAME way the running app does.
+
+    app/config.py loads the (absolute-path) .env at import, so importing it makes this
+    migration target the exact database the app uses — instead of silently falling back to a
+    throwaway local sqlite when run from a git worktree with no local .env. When the app
+    isn't importable (CI / truly standalone), fall back to a plain .env search; either way an
+    explicit --database-url or *_DATABASE_URL env var still wins.
+    """
+    sys.path.insert(0, ROOT_DIR)
+    try:
+        import app.config  # noqa: F401  (side effect: loads the app's .env into os.environ)
+    except Exception:
+        load_dotenv()
+
+
+_bootstrap_env()
 
 
 def normalize_sqlite_path(path: str) -> str:
@@ -101,6 +118,14 @@ def infer_database_url(cli_url: str = None) -> str:
             return _coerce_url(value)
 
     return normalize_sqlite_path(DEFAULT_SQLITE_PATH)
+
+
+def _ensure_sqlite_dir(db_url: str) -> None:
+    """Create the parent directory for a sqlite file so the connection can't fail on a
+    missing folder (e.g. a fresh worktree with no instance/ dir)."""
+    path = db_url[len("sqlite:///"):]
+    if path and path != ":memory:":
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
 
 def _mask(url: str) -> str:
@@ -263,7 +288,11 @@ def _migrate_sqlite(engine) -> bool:
 
 def migrate(database_url: str = None) -> bool:
     db_url = infer_database_url(database_url)
+    env = (os.environ.get("FLASK_ENV") or os.environ.get("ENVIRONMENT") or "local").lower()
+    print(f"Environment: {env}")
     print(f"Connecting to database: {_mask(db_url)}")
+    if db_url.startswith("sqlite:///"):
+        _ensure_sqlite_dir(db_url)
 
     engine = create_engine(db_url)
     try:
