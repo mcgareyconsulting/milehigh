@@ -68,7 +68,7 @@ class UpdateNotesCommand:
             job=self.job_id, release=self.release
         ).first()
         if not job_record:
-            logger.warning(f"Job not found: {self.job_id}-{self.release}")
+            logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         old_notes = job_record.notes
@@ -85,8 +85,10 @@ class UpdateNotesCommand:
             payload=event_payload,
         )
         if event is None:
-            logger.info(
-                f"Event already exists for job {self.job_id}-{self.release} notes update"
+            logger.debug(
+                "notes_update_deduplicated",
+                job=self.job_id,
+                release=self.release,
             )
             raise ValueError("Event already exists")
 
@@ -103,26 +105,34 @@ class UpdateNotesCommand:
                     event_id=event.id,
                 )
                 outbox_item_created = True
-                logger.info(
-                    f"Outbox item created for Trello notes update "
-                    f"(job {self.job_id}-{self.release})"
+                logger.debug(
+                    "notes_outbox_queued",
+                    job=self.job_id,
+                    release=self.release,
+                    event_id=event.id,
                 )
             except Exception as outbox_error:
                 logger.error(
-                    f"Failed to create outbox for event {event.id}: {outbox_error}",
+                    "notes_outbox_failed",
+                    job=self.job_id,
+                    release=self.release,
+                    event_id=event.id,
+                    error=str(outbox_error),
+                    error_type=type(outbox_error).__name__,
                     exc_info=True,
                 )
         else:
             if not job_record.trello_card_id:
-                logger.warning(
-                    f"Job {self.job_id}-{self.release} has no trello_card_id, "
-                    f"skipping Trello update",
-                    extra={'job': self.job_id, 'release': self.release},
+                logger.debug(
+                    "trello_push_skipped_no_card",
+                    job=self.job_id,
+                    release=self.release,
                 )
             elif not notes:
-                logger.info(
-                    f"Notes is empty for job {self.job_id}-{self.release}, "
-                    f"skipping Trello comment"
+                logger.debug(
+                    "notes_trello_skipped_empty",
+                    job=self.job_id,
+                    release=self.release,
                 )
 
         if not outbox_item_created:
@@ -131,8 +141,11 @@ class UpdateNotesCommand:
         db.session.commit()
 
         logger.info(
-            "update_notes completed successfully",
-            extra={'job': self.job_id, 'release': self.release, 'event_id': event.id},
+            "notes_updated",
+            release_id=job_record.id,
+            job=self.job_id,
+            release=self.release,
+            event_id=event.id,
         )
 
         return NotesUpdateResult(

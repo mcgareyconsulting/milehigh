@@ -59,7 +59,7 @@ class AssignInstallerCommand:
             job=self.job_id, release=self.release
         ).first()
         if not job_record:
-            logger.warning(f"Job not found: {self.job_id}-{self.release}")
+            logger.debug("job_not_found", job=self.job_id, release=self.release)
             raise ValueError(f"Job {self.job_id}-{self.release} not found")
 
         new_installer = self.installer.strip() if self.installer and self.installer.strip() else None
@@ -77,8 +77,10 @@ class AssignInstallerCommand:
             payload=event_payload,
         )
         if event is None:
-            logger.info(
-                f"Event already exists for job {self.job_id}-{self.release} installer update"
+            logger.debug(
+                "installer_update_deduplicated",
+                job=self.job_id,
+                release=self.release,
             )
             raise ValueError("Event already exists")
 
@@ -92,8 +94,10 @@ class AssignInstallerCommand:
             target_list_id = entry["id"] if entry else None
             if not target_list_id:
                 logger.warning(
-                    f"No Trello list found matching installer '{new_installer}'; "
-                    f"skipping mirror move for job {self.job_id}-{self.release}"
+                    "installer_list_not_found",
+                    installer=new_installer,
+                    job=self.job_id,
+                    release=self.release,
                 )
         else:
             target_list_id = Config.UNASSIGNED_CARDS_LIST_ID
@@ -101,19 +105,26 @@ class AssignInstallerCommand:
         if job_record.trello_card_id and target_list_id:
             try:
                 move_mirror_card(job_record.trello_card_id, target_list_id)
-                logger.info(
-                    f"Mirror card moved for job {self.job_id}-{self.release} "
-                    f"(installer={new_installer or 'Unassigned'})"
+                logger.debug(
+                    "mirror_card_moved",
+                    job=self.job_id,
+                    release=self.release,
+                    installer=new_installer or 'Unassigned',
                 )
             except Exception as trello_error:
                 logger.error(
-                    f"Failed to move mirror card for job {self.job_id}-{self.release}: {trello_error}",
+                    "mirror_card_move_failed",
+                    job=self.job_id,
+                    release=self.release,
+                    error=str(trello_error),
+                    error_type=type(trello_error).__name__,
                     exc_info=True,
                 )
         elif not job_record.trello_card_id:
-            logger.warning(
-                f"Job {self.job_id}-{self.release} has no trello_card_id, skipping mirror move",
-                extra={'job': self.job_id, 'release': self.release},
+            logger.debug(
+                "mirror_move_skipped_no_card",
+                job=self.job_id,
+                release=self.release,
             )
 
         # When assigning to a team (not clearing), seed the mirror card's date bar to
@@ -132,18 +143,27 @@ class AssignInstallerCommand:
                     mirror_id = range_result.get("mirror_card_id")
                     if mirror_id:
                         job_record.mirror_trello_card_id = mirror_id
-                    logger.info(
-                        f"Mirror date range set for job {self.job_id}-{self.release} "
-                        f"[{job_record.start_install} -> {comp_eta}]"
+                    logger.debug(
+                        "mirror_date_range_set",
+                        job=self.job_id,
+                        release=self.release,
+                        start_install=job_record.start_install.isoformat() if job_record.start_install else None,
+                        comp_eta=comp_eta.isoformat() if comp_eta else None,
                     )
                 else:
                     logger.warning(
-                        f"Could not set mirror date range for job {self.job_id}-{self.release}: "
-                        f"{range_result.get('error')}"
+                        "mirror_date_range_failed",
+                        job=self.job_id,
+                        release=self.release,
+                        error=range_result.get('error'),
                     )
             except Exception as range_error:
                 logger.error(
-                    f"Failed to set mirror date range for job {self.job_id}-{self.release}: {range_error}",
+                    "mirror_date_range_error",
+                    job=self.job_id,
+                    release=self.release,
+                    error=str(range_error),
+                    error_type=type(range_error).__name__,
                     exc_info=True,
                 )
 
@@ -151,8 +171,12 @@ class AssignInstallerCommand:
         db.session.commit()
 
         logger.info(
-            "update_installer completed successfully",
-            extra={'job': self.job_id, 'release': self.release, 'event_id': event.id},
+            "installer_assigned",
+            release_id=job_record.id,
+            job=self.job_id,
+            release=self.release,
+            event_id=event.id,
+            installer=new_installer,
         )
 
         return AssignInstallerResult(
