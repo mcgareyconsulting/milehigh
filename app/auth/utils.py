@@ -177,3 +177,24 @@ def invoicing_report_access_required(f):
         return jsonify({'error': 'Access denied'}), 403
     return decorated_function
 
+
+def bb_chat_required(f):
+    """
+    Decorator restricting a route to users with the BB chat access flag (or any admin).
+
+    Gates the phase-1 rollout of the read-only BB chat assistant so access can be
+    granted per-user from the admin UI without a redeploy.
+
+    Returns 401 if not logged in, 403 if the user lacks the is_bb_chat flag.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        if user.is_admin or getattr(user, 'is_bb_chat', False):
+            return f(*args, **kwargs)
+        logger.warning(f"User {user.username} attempted to access BB chat without access")
+        return jsonify({'error': 'Access denied'}), 403
+    return decorated_function
+
