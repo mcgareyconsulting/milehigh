@@ -17,6 +17,35 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.281',
+    date: 'July 5, 2026',
+    summary:
+      'Ask BB about any release or submittal, cheaper and more reliable supplier-order capture, and a behind-the-scenes logging and security cleanup.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Ask BB about a release or submittal',
+        adminOnly: true,
+        detail:
+          'A new read-only BB chat: type a release or submittal number and BB assembles its full lifecycle — status, submittals, a merged event timeline, and open to-dos — into one grounded summary. Read-only for now; every answer is drawn straight from the Brain.',
+      },
+      {
+        type: 'improved',
+        title: 'Cheaper, more reliable supplier-order capture',
+        adminOnly: true,
+        detail:
+          'Supplier-order emails forwarded to the Banana Boy mailbox are now scanned exactly once instead of being re-checked on every poll, and re-scanned only when a late attachment lands. This removes a large silent AI cost and speeds up ingestion.',
+      },
+      {
+        type: 'fixed',
+        title: 'Logging and security hardening',
+        adminOnly: true,
+        detail:
+          'A ground-up cleanup of application logs: closed two spots where credentials could reach the logs, cut steady-state log noise, and made every log line consistent and parseable. No change to how the app behaves.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.278',
     date: 'July 1, 2026',
     summary:
