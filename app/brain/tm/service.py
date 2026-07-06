@@ -89,7 +89,8 @@ def create_from_upload(data: bytes, media_type: str, filename: str, username: st
         ticket.raw_extraction = result["raw"]
     except Exception as e:  # noqa: BLE001 — any failure → blank ticket for manual entry
         ticket.extract_error = str(e)[:512]
-        logger.warning("tm_ticket_extraction_failed", filename=filename, error=str(e))
+        logger.error("tm_ticket_extraction_failed", filename=filename, error=str(e),
+                     error_type=type(e).__name__, exc_info=True)
 
     db.session.add(ticket)
     db.session.commit()
