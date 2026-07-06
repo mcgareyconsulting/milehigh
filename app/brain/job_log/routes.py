@@ -68,7 +68,7 @@ def get_list_id_by_stage(stage):
 
     trello_list_name = TrelloListMapper.get_trello_list_for_stage(stage)
     if trello_list_name is None:
-        logger.info(f"Stage '{stage}' has no Trello list mapping, skipping outbox creation")
+        logger.debug("trello_outbox_creation_skipped", stage=stage, reason="no_list_mapping")
         return None
 
     from flask import current_app
@@ -83,20 +83,20 @@ def get_list_id_by_stage(stage):
         if list_info and 'id' in list_info:
             return list_info['id']
         else:
-            logger.warning(f"Could not get list ID for stage '{stage}' → list '{trello_list_name}' (list_info: {list_info})")
+            logger.warning("trello_list_id_missing", stage=stage, trello_list=trello_list_name, list_info=list_info)
             return None
     except Exception as e:
-        logger.error(f"Error getting list ID for stage '{stage}': {e}", exc_info=True)
+        logger.error("trello_list_id_lookup_failed", stage=stage, error=str(e), error_type=type(e).__name__, exc_info=True)
         return None
 
 def update_job_stage_fields(job_record, stage):
     """Apply stage update to job record - sets the stage field directly and updates stage_group."""
     from app.api.helpers import get_stage_group_from_stage
     
-    logger.info(f"Updating job {job_record.job}-{job_record.release} stage to: {stage}")
+    logger.info("stage_fields_updated", job=job_record.job, release=job_record.release, stage=stage)
     job_record.stage = stage
     job_record.stage_group = get_stage_group_from_stage(stage)
-    logger.debug(f"Job stage updated to: {stage}, stage_group updated to: {job_record.stage_group}")
+    logger.debug("stage_group_recalculated", stage=stage, stage_group=job_record.stage_group)
 
 def create_trello_card_for_job(job, excel_data_dict, idempotency_check=False):
     """
@@ -118,7 +118,7 @@ def create_trello_card_for_job(job, excel_data_dict, idempotency_check=False):
     try:
         # Skip if job already has a Trello card
         if job.trello_card_id:
-            logger.info(f"Job {job.job}-{job.release} already has Trello card {job.trello_card_id}, skipping creation")
+            logger.debug("trello_card_creation_skipped", job=job.job, release=job.release, card_id=job.trello_card_id, reason="card_exists")
             return None
         
         # Import Trello functions
@@ -137,7 +137,7 @@ def create_trello_card_for_job(job, excel_data_dict, idempotency_check=False):
         if not target_list:
             # Fall back to configured new-card list
             list_id = cfg.NEW_TRELLO_CARD_LIST_ID
-            logger.warning(f"List '{list_name}' not found, using default list")
+            logger.warning("trello_list_not_found", trello_list=list_name, fallback="default_list")
         else:
             list_id = target_list["id"]
         
@@ -199,18 +199,15 @@ def create_trello_card_for_job(job, excel_data_dict, idempotency_check=False):
         success = update_job_record_with_trello_data(job, card_data)
 
         if success:
-            logger.info(f"Successfully updated database record with Trello data")
+            logger.info("release_trello_fields_updated", job=job.job, release=job.release, card_id=card_id)
         else:
-            logger.error(f"Failed to update database record with Trello data")
+            logger.error("release_trello_fields_update_failed", job=job.job, release=job.release, card_id=card_id)
 
         if adopted:
             # Skip Fab Order / FC Drawing / notes / mirror — these aren't
             # idempotent and were applied by the original attempt that
             # produced this card.
-            logger.warning(
-                f"Adopted existing Trello card {card_id} for job {job.job}-{job.release}; "
-                f"skipping post-creation features"
-            )
+            logger.warning("trello_card_adopted", job=job.job, release=job.release, card_id=card_id)
             mirror_card_id = None
         else:
             fab_order_value = excel_data_dict.get('Fab Order') or job.fab_order
@@ -237,7 +234,7 @@ def create_trello_card_for_job(job, excel_data_dict, idempotency_check=False):
         }
         
     except Exception as e:
-        logger.error(f"Error creating Trello card for job {job.job}-{job.release}: {str(e)}", exc_info=True)
+        logger.error("trello_card_creation_failed", job=job.job, release=job.release, error=str(e), error_type=type(e).__name__, exc_info=True)
         return {
             "success": False,
             "error": str(e)
@@ -479,28 +476,28 @@ def get_jobs():
             try:
                 since_timestamp = datetime.fromisoformat(since_param.replace('Z', '+00:00'))
                 query = query.filter(Releases.last_updated_at > since_timestamp)
-                logger.info(f"[CURSOR] Filtering jobs updated after: {since_timestamp}")
+                logger.debug("cursor_filter_applied", since=str(since_timestamp))
                 # Cursor polls skip the archive filter so soft-deleted rows always propagate
             except (ValueError, TypeError) as e:
-                logger.warning(f"[CURSOR] Invalid since parameter: {since_param}, error: {e}. Fetching all jobs.")
+                logger.warning("cursor_since_param_invalid", since=since_param, error=str(e), error_type=type(e).__name__)
                 since_param = None  # fall through to full-load path
 
         if not since_param:
-            logger.info(f"[CURSOR] No since parameter provided - fetching all jobs (initial load)")
+            logger.debug("cursor_full_load", archived=archived)
             # Apply archive filter only on full loads
             if archived:
                 query = query.filter(Releases.is_archived == True)
-                logger.info("[ARCHIVE] Filtering to archived jobs (is_archived=True)")
+                logger.info("archive_filter_applied", archived=True)
             else:
                 query = query.filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))
-                logger.info("[ARCHIVE] Excluding archived jobs")
+                logger.info("archive_filter_applied", archived=False)
             # Exclude soft-deleted rows on full loads
             query = query.filter(db.or_(Releases.is_active == True, Releases.is_active == None))
 
         # Order by last_updated_at, id for deterministic results
         query = query.order_by(Releases.last_updated_at.asc(), Releases.id.asc())
         jobs = query.limit(limit).all()
-        logger.info(f"[CURSOR] Query returned {len(jobs)} jobs (limit={limit})")
+        logger.debug("cursor_query_returned", count=len(jobs), limit=limit)
 
         job_list = []
         warnings = []
@@ -558,14 +555,13 @@ def get_jobs():
             except Exception as record_error:
                 # Log the problematic record but continue processing
                 job_id = f"{job.job}-{job.release}" if hasattr(job, 'job') else f"id:{job.id}"
-                error_msg = f"Error serializing record {idx} ({job_id}): {str(record_error)}"
                 warnings.append({
                     'record_index': idx,
                     'job_id': job_id,
                     'error': str(record_error),
                     'error_type': type(record_error).__name__
                 })
-                logger.warning(error_msg, exc_info=True)
+                logger.warning("release_serialize_failed", record_index=idx, job_release=job_id, error=str(record_error), error_type=type(record_error).__name__, exc_info=True)
                 continue
 
         # Patch has_drawing in one batched query (avoids N+1)
@@ -575,7 +571,9 @@ def get_jobs():
                 j['has_drawing'] = j['id'] in ids_with_drawings
         except Exception as drawing_lookup_error:
             logger.warning(
-                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                "has_drawing_batch_failed",
+                error=str(drawing_lookup_error),
+                error_type=type(drawing_lookup_error).__name__,
                 exc_info=True,
             )
 
@@ -594,7 +592,9 @@ def get_jobs():
                 j['procore_project_id'] = ref['procore_project_id'] if ref else None
         except Exception as procore_ref_error:
             logger.warning(
-                f"Error batching procore submittal refs: {procore_ref_error}",
+                "procore_submittal_refs_batch_failed",
+                error=str(procore_ref_error),
+                error_type=type(procore_ref_error).__name__,
                 exc_info=True,
             )
 
@@ -625,7 +625,9 @@ def get_jobs():
                     job['Start install'] = job['install_start_date']
         except Exception as scheduling_error:
             logger.warning(
-                f"Error calculating scheduling fields: {scheduling_error}",
+                "scheduling_fields_calc_failed",
+                error=str(scheduling_error),
+                error_type=type(scheduling_error).__name__,
                 exc_info=True
             )
             # Continue without scheduling fields if calculation fails
@@ -635,7 +637,12 @@ def get_jobs():
         if jobs:
             latest_job = jobs[-1]
             latest_timestamp = latest_job.last_updated_at.isoformat() if latest_job.last_updated_at else None
-            logger.info(f"[CURSOR] Latest job timestamp: {latest_timestamp}")
+            logger.debug("cursor_latest_timestamp", latest=latest_timestamp)
+
+        # Delta polls that returned rows leave exactly one INFO breadcrumb; zero-row
+        # delta polls stay silent so steady-state polling doesn't flood the logs.
+        if since_param and len(jobs) > 0:
+            logger.info("cursor_delta_returned", count=len(jobs), latest=latest_timestamp)
 
         # Build response
         response_data = {
@@ -649,7 +656,7 @@ def get_jobs():
         return jsonify(response_data), 200
         
     except Exception as e:
-        logger.error("Error in /jobs endpoint", error=str(e), exc_info=True)
+        logger.error("jobs_fetch_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 
@@ -721,7 +728,7 @@ def job_search():
         }), 200
 
     except Exception as e:
-        logger.error("Error in /job-search endpoint", error=str(e), exc_info=True)
+        logger.error("job_search_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 
@@ -840,10 +847,10 @@ def get_all_jobs():
         # Apply archive filter
         if archived:
             query = query.filter(Releases.is_archived == True)
-            logger.info("[ARCHIVE] Filtering to archived jobs (is_archived=True)")
+            logger.info("archive_filter_applied", archived=True)
         else:
             query = query.filter(db.or_(Releases.is_archived == False, Releases.is_archived == None))
-            logger.info("[ARCHIVE] Excluding archived jobs")
+            logger.info("archive_filter_applied", archived=False)
 
         # Exclude soft-deleted rows
         query = query.filter(db.or_(Releases.is_active == True, Releases.is_active == None))
@@ -912,14 +919,13 @@ def get_all_jobs():
             except Exception as record_error:
                 # Log the problematic record but continue processing
                 job_id = f"{job.job}-{job.release}" if hasattr(job, 'job') else f"id:{job.id}"
-                error_msg = f"Error serializing record {idx} ({job_id}): {str(record_error)}"
                 warnings.append({
                     'record_index': idx,
                     'job_id': job_id,
                     'error': str(record_error),
                     'error_type': type(record_error).__name__
                 })
-                logger.warning(error_msg, exc_info=True)
+                logger.warning("release_serialize_failed", record_index=idx, job_release=job_id, error=str(record_error), error_type=type(record_error).__name__, exc_info=True)
                 continue
 
         # Patch has_drawing in one batched query (avoids N+1)
@@ -929,7 +935,9 @@ def get_all_jobs():
                 j['has_drawing'] = j['id'] in ids_with_drawings
         except Exception as drawing_lookup_error:
             logger.warning(
-                f"Error batching has_drawing flags: {drawing_lookup_error}",
+                "has_drawing_batch_failed",
+                error=str(drawing_lookup_error),
+                error_type=type(drawing_lookup_error).__name__,
                 exc_info=True,
             )
 
@@ -948,7 +956,9 @@ def get_all_jobs():
                 j['procore_project_id'] = ref['procore_project_id'] if ref else None
         except Exception as procore_ref_error:
             logger.warning(
-                f"Error batching procore submittal refs: {procore_ref_error}",
+                "procore_submittal_refs_batch_failed",
+                error=str(procore_ref_error),
+                error_type=type(procore_ref_error).__name__,
                 exc_info=True,
             )
 
@@ -987,7 +997,9 @@ def get_all_jobs():
                     job['Start install'] = job['install_start_date']
         except Exception as scheduling_error:
             logger.warning(
-                f"Error calculating scheduling fields: {scheduling_error}",
+                "scheduling_fields_calc_failed",
+                error=str(scheduling_error),
+                error_type=type(scheduling_error).__name__,
                 exc_info=True
             )
             # Continue without scheduling fields if calculation fails
@@ -1009,7 +1021,7 @@ def get_all_jobs():
         return jsonify(response_data), 200
         
     except Exception as e:
-        logger.error("Error in /get-all-jobs endpoint", error=str(e), exc_info=True)
+        logger.error("all_jobs_fetch_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/gantt-data")
@@ -1138,7 +1150,7 @@ def get_gantt_data():
         }), 200
         
     except Exception as e:
-        logger.error("Error in /gantt-data endpoint", error=str(e), exc_info=True)
+        logger.error("gantt_data_fetch_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/update-stage/<int:job>/<release>", methods=["PATCH"])
@@ -1157,9 +1169,7 @@ def update_stage(job, release):
         StagePhotoRequiredError,
     )
 
-    logger.info("update_stage called", extra={
-        'job': job, 'release': release, 'stage': request.json.get('stage'),
-    })
+    logger.debug("stage_update_received", job=job, release=release, stage=request.json.get('stage'))
 
     try:
         stage = request.json.get('stage')
@@ -1190,10 +1200,8 @@ def update_stage(job, release):
         return jsonify({'error': msg}), 400
 
     except Exception as e:
-        logger.error("update_stage failed catastrophically", exc_info=True, extra={
-            'job': job, 'release': release,
-            'error': str(e), 'error_type': type(e).__name__,
-        })
+        logger.error("stage_update_failed", job=job, release=release,
+                     error=str(e), error_type=type(e).__name__, exc_info=True)
         try:
             from app.services.system_log_service import SystemLogService
             SystemLogService.log_error(
@@ -1230,11 +1238,8 @@ def update_fab_order(job, release):
     from app.services.system_log_service import SystemLogService
     from app.models import db
     
-    logger.info(f"update_fab_order called", extra={
-        'job': job,
-        'release': release,
-        'fab_order': request.json.get('fab_order')
-    })
+    logger.debug("fab_order_update_received", job=job, release=release,
+                 fab_order=request.json.get('fab_order'))
 
     try:
         # Extract and validate fab_order from request
@@ -1269,10 +1274,7 @@ def update_fab_order(job, release):
         error_msg = str(e)
         status_code = 404 if 'not found' in error_msg.lower() else 400
         
-        logger.warning(f"update_fab_order validation error: {error_msg}", extra={
-            'job': job,
-            'release': release
-        })
+        logger.warning("fab_order_update_rejected", job=job, release=release, error=error_msg)
         
         return jsonify({
             'error': error_msg,
@@ -1280,12 +1282,8 @@ def update_fab_order(job, release):
         }), status_code
         
     except Exception as e:
-        logger.error(f"update_fab_order failed", exc_info=True, extra={
-            'job': job,
-            'release': release,
-            'error': str(e),
-            'error_type': type(e).__name__
-        })
+        logger.error("fab_order_update_failed", job=job, release=release,
+                     error=str(e), error_type=type(e).__name__, exc_info=True)
         
         try:
             SystemLogService.log_error(
@@ -1329,11 +1327,8 @@ def update_notes(job, release):
     from app.models import db
     from app.brain.job_log.features.notes.command import UpdateNotesCommand
 
-    logger.info(f"update_notes called", extra={
-        'job': job,
-        'release': release,
-        'has_notes': bool(request.json.get('notes'))
-    })
+    logger.debug("notes_update_received", job=job, release=release,
+                 has_notes=bool(request.json.get('notes')))
 
     try:
         notes = request.json.get('notes', '')
@@ -1341,7 +1336,7 @@ def update_notes(job, release):
         # Pre-flight: 404 vs 400 distinction matches the original route contract.
         from app.models import Releases
         if not Releases.query.filter_by(job=job, release=release).first():
-            logger.warning(f"Job not found: {job}-{release}")
+            logger.warning("release_not_found", job=job, release=release)
             return jsonify({'error': 'Job not found'}), 404
 
         try:
@@ -1358,12 +1353,8 @@ def update_notes(job, release):
             'event_id': result.event_id,
         }), 200
     except Exception as e:
-        logger.error(f"update_notes failed", exc_info=True, extra={
-            'job': job,
-            'release': release,
-            'error': str(e),
-            'error_type': type(e).__name__
-        })
+        logger.error("notes_update_failed", job=job, release=release,
+                     error=str(e), error_type=type(e).__name__, exc_info=True)
 
         try:
             from app.services.system_log_service import SystemLogService
@@ -1578,11 +1569,8 @@ def update_start_install(job, release):
     from app.models import Releases, db
     from datetime import datetime, date
     
-    logger.info(f"update_start_install called", extra={
-        'job': job,
-        'release': release,
-        'start_install': request.json.get('start_install')
-    })
+    logger.debug("start_install_update_received", job=job, release=release,
+                 start_install=request.json.get('start_install'))
 
     try:
         start_install_str = request.json.get('start_install')
@@ -1672,7 +1660,12 @@ def update_start_install(job, release):
                         )
                     except Exception as trello_error:
                         logger.error(
-                            f"Failed to push ASAP start_install to Trello due for job {job}-{release}: {trello_error}",
+                            "trello_due_push_failed",
+                            job=job,
+                            release=release,
+                            card_id=job_record.trello_card_id,
+                            error=str(trello_error),
+                            error_type=type(trello_error).__name__,
                             exc_info=True,
                         )
             job_record.last_updated_at = datetime.utcnow()
@@ -1689,11 +1682,13 @@ def update_start_install(job, release):
                     from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
                     recalculate_all_jobs_scheduling(stage_group='FABRICATION')
                 except Exception as cascade_error:
-                    logger.error(f"Scheduling cascade failed after ASAP set: {cascade_error}", exc_info=True)
+                    logger.error("scheduling_cascade_failed", trigger="asap_set", error=str(cascade_error), error_type=type(cascade_error).__name__, exc_info=True)
 
             logger.info(
-                f"ASAP {'set' if new_asap else 'cleared'} for job {job}-{release}",
-                extra={'event_id': event.id},
+                "asap_set" if new_asap else "asap_cleared",
+                job=job,
+                release=release,
+                event_id=event.id,
             )
             return jsonify({
                 'status': 'success',
@@ -1726,7 +1721,7 @@ def update_start_install(job, release):
             if event is None:
                 # Clearing is idempotent — a duplicate within the 30s dedup window means
                 # a prior clear already applied the state change, so report success.
-                logger.info(f"Duplicate clear_hard_date for job {job}-{release}; returning success")
+                logger.debug("clear_hard_date_deduplicated", job=job, release=release)
                 return jsonify({'status': 'success', 'deduplicated': True}), 200
 
             job_record.start_install_formulaTF = True
@@ -1745,7 +1740,7 @@ def update_start_install(job, release):
                         clear_due_date=True
                     )
                 except Exception as trello_error:
-                    logger.error(f"Failed to clear Trello due date for job {job}-{release}: {trello_error}", exc_info=True)
+                    logger.error("trello_due_clear_failed", job=job, release=release, card_id=job_record.trello_card_id, error=str(trello_error), error_type=type(trello_error).__name__, exc_info=True)
 
             JobEventService.close(event.id)
             db.session.commit()
@@ -1755,9 +1750,9 @@ def update_start_install(job, release):
                 from app.brain.job_log.scheduling.service import recalculate_all_jobs_scheduling
                 recalculate_all_jobs_scheduling(stage_group='FABRICATION')
             except Exception as cascade_error:
-                logger.error(f"Scheduling cascade failed after clear hard date: {cascade_error}", exc_info=True)
+                logger.error("scheduling_cascade_failed", trigger="clear_hard_date", error=str(cascade_error), error_type=type(cascade_error).__name__, exc_info=True)
 
-            logger.info(f"Cleared hard date for job {job}-{release}", extra={'event_id': event.id})
+            logger.info("hard_date_cleared", job=job, release=release, event_id=event.id)
             return jsonify({'status': 'success', 'event_id': event.id}), 200
 
         # Parse date string if provided
@@ -1770,7 +1765,7 @@ def update_start_install(job, release):
 
         # Only proceed if it's a hard date
         if not is_hard_date:
-            logger.info(f"Skipping update for job {job}-{release} - not a hard date")
+            logger.debug("start_install_update_skipped", job=job, release=release, reason="not_hard_date")
             return jsonify({
                 'status': 'skipped',
                 'message': 'Not a hard date - formula-driven dates are not updated manually'
@@ -1779,7 +1774,7 @@ def update_start_install(job, release):
         # Pre-flight 404 check — preserves the route's original 404 vs 400 distinction
         # before we delegate to the command.
         if not Releases.query.filter_by(job=job, release=release).first():
-            logger.warning(f"Job not found: {job}-{release}")
+            logger.warning("release_not_found", job=job, release=release)
             return jsonify({'error': 'Job not found'}), 404
 
         has_date = bool(start_install_str and start_install_str.strip())
@@ -1834,12 +1829,8 @@ def update_start_install(job, release):
         }), 200
         
     except Exception as e:
-        logger.error(f"update_start_install failed", exc_info=True, extra={
-            'job': job,
-            'release': release,
-            'error': str(e),
-            'error_type': type(e).__name__
-        })
+        logger.error("start_install_update_failed", job=job, release=release,
+                     error=str(e), error_type=type(e).__name__, exc_info=True)
         
         try:
             from app.services.system_log_service import SystemLogService
@@ -2070,9 +2061,11 @@ def release_job_data():
                 )
                 if pending_si and str(pending_si.job_number or '').strip() != str(job_number):
                     logger.warning(
-                        "PendingStartInstall rel=%s belongs to job %s, not job %s -- skipping "
-                        "start_install handoff for release %s-%s (stale or reused rel?)",
-                        rel_int, pending_si.job_number, job_number, job_number, release_number,
+                        "pending_start_install_job_mismatch",
+                        rel=rel_int,
+                        pending_job=pending_si.job_number,
+                        job=job_number,
+                        release=release_number,
                     )
                     pending_si = None
                 if pending_si and pending_si.start_install:
@@ -2106,8 +2099,11 @@ def release_job_data():
                             JobEventService.close(si_event.id)
                     except Exception as si_event_err:
                         logger.warning(
-                            "Failed to record start_install transfer event for %s-%s: %s",
-                            job_number, release_number, si_event_err,
+                            "start_install_transfer_event_failed",
+                            job=job_number,
+                            release=release_number,
+                            error=str(si_event_err),
+                            error_type=type(si_event_err).__name__,
                         )
                     pending_si.consumed_at = datetime.utcnow()
                     pending_si.consumed_job = job_number
@@ -2132,7 +2128,7 @@ def release_job_data():
                 processed.append(processed_record)
                 
             except Exception as e:
-                logger.error(f"Error processing row {row_idx}: {str(e)}", exc_info=True)
+                logger.error("release_row_process_failed", row=row_idx, error=str(e), error_type=type(e).__name__, exc_info=True)
                 errors.append({
                     'row': row_idx,
                     'error': f'Unexpected error: {str(e)}',
@@ -2152,7 +2148,7 @@ def release_job_data():
         }), 200
         
     except Exception as e:
-        logger.error("Error in /job-log/release endpoint", error=str(e), exc_info=True)
+        logger.error("release_paste_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         db.session.rollback()
         return jsonify({
             'error': str(e),
@@ -2193,7 +2189,7 @@ def get_operation_filters():
 
         return jsonify({'dates': dates, 'types': types, 'total': len(dates)}), 200
     except Exception as e:
-        logger.error("Error in /operations/filters endpoint", error=str(e), exc_info=True)
+        logger.error("operation_filters_fetch_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/operations/types")
@@ -2215,7 +2211,7 @@ def get_operation_types():
         
         return jsonify({'types': types, 'total': len(types)}), 200
     except Exception as e:
-        logger.error("Error in /operations/types endpoint", error=str(e), exc_info=True)
+        logger.error("operation_types_fetch_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @brain_bp.route("/operations")
@@ -2263,7 +2259,7 @@ def sync_operations():
                 }
             }), 200
         except Exception as e:
-            logger.error("Error getting sync operations", error=str(e))
+            logger.error("sync_operations_query_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
             return jsonify({"error": str(e)}), 500
 
 @brain_bp.route("/operations/<operation_id>/logs")
@@ -2287,7 +2283,7 @@ def sync_operation_logs(operation_id):
             }), 200
             
         except Exception as e:
-            logger.error("Error getting sync operation logs", operation_id=operation_id, error=str(e))
+            logger.error("sync_operation_logs_query_failed", operation_id=operation_id, error=str(e), error_type=type(e).__name__, exc_info=True)
             return jsonify({"error": str(e)}), 500
 
 # ==============================================================================
@@ -2370,7 +2366,7 @@ def get_event_filters():
 
         return jsonify({'dates': dates, 'sources': sources, 'users': users, 'total': len(dates)}), 200
     except Exception as e:
-        logger.error("Error in /events/filters endpoint", error=str(e), exc_info=True)
+        logger.error("event_filters_fetch_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 def _resolve_event_user_names(all_events):
@@ -2623,7 +2619,7 @@ def get_events():
             }
         }), 200
     except Exception as e:
-        logger.error("Error getting job events", error=str(e))
+        logger.error("job_events_query_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -2742,7 +2738,7 @@ def _dispatch_undo(event, *, source, defer_cascade):
                         clear_due_date=(job_record.start_install is None),
                     )
                 except Exception:
-                    logger.error("Failed to realign Trello due on set_asap undo", exc_info=True)
+                    logger.error("trello_due_realign_failed", trigger="set_asap_undo", card_id=job_record.trello_card_id, exc_info=True)
         job_record.last_updated_at = _dt.utcnow()
         job_record.source_of_update = source
         JobEventService.close(new_event.id)
@@ -2858,7 +2854,7 @@ def undo_event(event_id):
             child_result = _dispatch_undo(child, source=source, defer_cascade=True)
             linked_event_ids.append(child_result.event_id)
     except ValueError as ve:
-        logger.warning(f"Undo failed for event {event_id}: {ve}")
+        logger.warning("undo_failed", event_id=event_id, error=str(ve))
         return jsonify({'error': str(ve)}), 400
 
     if has_children:
@@ -2867,7 +2863,11 @@ def undo_event(event_id):
             recalculate_all_jobs_scheduling(stage_group='FABRICATION')
         except Exception as cascade_err:
             logger.error(
-                f"Scheduling cascade failed after bundled undo of event {event_id}: {cascade_err}",
+                "scheduling_cascade_failed",
+                trigger="bundled_undo",
+                event_id=event_id,
+                error=str(cascade_err),
+                error_type=type(cascade_err).__name__,
                 exc_info=True,
             )
 
@@ -3115,12 +3115,12 @@ def trello_scanner():
     try:
         from app.trello.scanner import scan_trello_db_comparison
         
-        logger.info("Trello scanner endpoint called")
+        logger.debug("trello_scan_requested")
         results = scan_trello_db_comparison()
-        
+
         return jsonify(results), 200
     except Exception as e:
-        logger.error(f"Error in Trello scanner: {e}", exc_info=True)
+        logger.error("trello_scan_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @brain_bp.route("/preview-scheduling", methods=["GET"])
@@ -3160,9 +3160,9 @@ def preview_scheduling():
             try:
                 reference_date = datetime.fromisoformat(reference_date_str.replace('Z', '+00:00')).date()
             except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid reference_date parameter: {reference_date_str}, using today")
-        
-        logger.info(f"Preview scheduling endpoint called (reference_date={reference_date}, show_all={show_all})")
+                logger.warning("reference_date_param_invalid", reference_date=reference_date_str, error=str(e), error_type=type(e).__name__)
+
+        logger.debug("preview_scheduling_requested", reference_date=str(reference_date) if reference_date else None, show_all=show_all)
         
         preview_results = preview_scheduling_changes(
             reference_date=reference_date,
@@ -3182,7 +3182,7 @@ def preview_scheduling():
         return jsonify(preview_results), 200
         
     except Exception as e:
-        logger.error(f"Error in preview scheduling: {e}", exc_info=True)
+        logger.error("preview_scheduling_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
 
 @brain_bp.route("/trello-sync", methods=["POST"])
@@ -3210,12 +3210,12 @@ def trello_sync():
         # Check for dry_run parameter
         dry_run = request.args.get('dry_run', 'false').lower() == 'true'
         
-        logger.info(f"Trello sync endpoint called (dry_run={dry_run})")
+        logger.debug("trello_sync_requested", dry_run=dry_run)
         results = sync_trello_with_db(dry_run=dry_run)
-        
+
         return jsonify(results), 200
     except Exception as e:
-        logger.error(f"Error in Trello sync: {e}", exc_info=True)
+        logger.error("trello_sync_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @brain_bp.route("/renumber-fab-orders", methods=["POST"])
@@ -3234,12 +3234,12 @@ def renumber_fab_orders_route():
         from app.brain.job_log.features.fab_order.migrate_unified import renumber_fab_orders
 
         dry_run = request.args.get('dry_run', 'false').lower() == 'true'
-        logger.info(f"Renumber fab_orders endpoint called (dry_run={dry_run})")
+        logger.debug("fab_order_renumber_requested", dry_run=dry_run)
 
         stats = renumber_fab_orders(dry_run=dry_run)
         return jsonify({"status": "success", "stats": stats, "dry_run": dry_run}), 200
     except Exception as e:
-        logger.error(f"Error in renumber fab_orders: {e}", exc_info=True)
+        logger.error("fab_order_renumber_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -3262,12 +3262,12 @@ def renumber_fabrication_fab_orders_route():
         )
 
         dry_run = request.args.get('dry_run', 'false').lower() == 'true'
-        logger.info(f"Renumber fabrication fab_orders endpoint called (dry_run={dry_run})")
+        logger.debug("fabrication_fab_order_renumber_requested", dry_run=dry_run)
 
         result = renumber_fabrication_fab_orders(dry_run=dry_run)
         return jsonify({"status": "success", "dry_run": dry_run, **result}), 200
     except Exception as e:
-        logger.error(f"Error in renumber fabrication fab_orders: {e}", exc_info=True)
+        logger.error("fabrication_fab_order_renumber_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -3304,12 +3304,12 @@ def trello_scan_create():
         # Check for limit parameter
         limit = request.args.get('limit', type=int)
         
-        logger.info(f"Trello scan and create endpoint called (dry_run={dry_run}, limit={limit})")
+        logger.debug("trello_scan_create_requested", dry_run=dry_run, limit=limit)
         results = scan_and_create_cards_for_all_jobs(dry_run=dry_run, limit=limit)
-        
+
         return jsonify(results), 200
     except Exception as e:
-        logger.error(f"Error in Trello scan and create: {e}", exc_info=True)
+        logger.error("trello_scan_create_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -3351,7 +3351,7 @@ def delete_job(job, release):
     if err:
         return err
 
-    logger.info(f"Soft-deleting job {job}-{release}")
+    logger.info("release_soft_deleted", job=job, release=release)
     job_record.is_active = False
     job_record.last_updated_at = datetime.utcnow()
     job_record.source_of_update = 'Admin'
@@ -3465,7 +3465,7 @@ def update_job_fields(job, release):
 
     db.session.commit()
 
-    logger.info(f"Updated job {job}-{release} fields: {list(coerced.keys())}")
+    logger.info("release_fields_updated", job=job, release=release, fields=list(coerced.keys()), count=len(coerced))
 
     job_data = {
         'id': serialize_value(job_record.id),
@@ -3517,7 +3517,7 @@ def archive_preview():
             })
         return jsonify({'count': len(items), 'releases': items}), 200
     except Exception as e:
-        logger.error("archive_preview failed", exc_info=True)
+        logger.error("archive_preview_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 
@@ -3544,7 +3544,7 @@ def unarchive_release(job, release):
         payload={'reason': 'admin_unarchive'},
     )
     db.session.commit()
-    logger.info(f"Unarchived release {job}-{release} via admin action")
+    logger.info("release_unarchived", job=job, release=release, source="user")
     return jsonify({'status': 'success'}), 200
 
 
@@ -3571,7 +3571,7 @@ def archive_confirm():
         )
         count += 1
     db.session.commit()
-    logger.info(f"Archived {count} releases via admin action")
+    logger.info("releases_archived", count=count, source="user")
     return jsonify({'status': 'success', 'count': count}), 200
 
 
@@ -3656,5 +3656,5 @@ def sync_health():
             },
         }), 200
     except Exception as e:
-        logger.error("sync_health failed", exc_info=True)
+        logger.error("sync_health_check_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': str(e)}), 500

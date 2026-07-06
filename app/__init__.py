@@ -41,7 +41,7 @@ from app.models import db
 from app.logging_config import configure_logging, get_logger
 
 # Configure logging
-logger = configure_logging(log_level="INFO", log_file="logs/app.log")
+logger = configure_logging(log_level=os.environ.get("LOG_LEVEL", "INFO"), log_file="logs/app.log")
 
 
 def init_scheduler(app):
@@ -86,7 +86,7 @@ def init_scheduler(app):
 
     # --- Optional heartbeat job to confirm scheduler alive ---
     scheduler.add_job(
-        func=lambda: logger.info("Scheduler heartbeat: alive"),
+        func=lambda: logger.info("scheduler_heartbeat"),
         trigger="interval",
         minutes=30,
         id="heartbeat",
@@ -299,10 +299,25 @@ def create_app():
     configure_database(app)
 
     # Log the environment being used
-    logger.info(f"Starting application in {config_class.ENV} environment")
-    logger.info(
-        f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}..."
-    )
+    logger.info("app_starting", environment=config_class.ENV)
+    # Log only the DB host — never the username, password, or the raw URI
+    # (even truncated), which would leak Postgres credentials into Render
+    # stdout and logs/app.log.
+    from urllib.parse import urlsplit
+
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+    if db_uri:
+        try:
+            parsed = urlsplit(db_uri)
+            db_host = parsed.hostname or "unknown"
+            db_name = parsed.path.lstrip("/") or "unknown"
+        except ValueError:
+            db_host = "unparseable"
+            db_name = "unparseable"
+    else:
+        db_host = "not set"
+        db_name = "not set"
+    logger.info("database_configured", host=db_host, database=db_name)
     if app.config.get("TRELLO_MOCK"):
         logger.info("TRELLO_MOCK enabled — outbound move_card calls will be simulated and inbound webhooks dropped")
 
@@ -403,7 +418,12 @@ def create_app():
                             # Processed some items, check again soon for more
                             time.sleep(0.5)
                 except Exception as e:
-                    logger.error(f"Error in outbox retry worker: {e}", exc_info=True)
+                    logger.error(
+                        "outbox_retry_worker_failed",
+                        error=str(e),
+                        error_type=type(e).__name__,
+                        exc_info=True,
+                    )
                     # Wait longer on error before retrying
                     time.sleep(5)
 

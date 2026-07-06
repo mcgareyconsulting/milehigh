@@ -133,7 +133,16 @@ The `/brain/events/<id>/undo` endpoint (in `app/brain/job_log/routes.py`) revers
 `/brain/renumber-fabrication-fab-orders` (admin-only POST) compresses FABRICATION-group `fab_order` values to a contiguous block starting at 3, preserving relative order. Supports `?dry_run=true`. Implementation: `app/brain/job_log/features/fab_order/renumber_fabrication.py`. `DEFAULT_FAB_ORDER` (80.555) rows are preserved as-is. Rows sharing the same current fab_order share the same new value.
 
 ### Logging
-Structured logging via `structlog` (`app/logging_config.py`). Use `get_logger(__name__)` in every module. `SyncContext` context manager wraps sync operations with correlation IDs and timing. Output is JSON-structured; also writes to rotating file (`logs/app.log`, 10MB max, 5 backups).
+The full emission standard is `docs/logging-standard.md` — read it before adding any logging. The hard rules, always in force:
+
+- One idiom: `get_logger(__name__)` from `app/logging_config.py`. Never stdlib `logging.getLogger`, never `app.logger`/`current_app.logger`, never `print()` on a runtime path (CLI scripts under `scripts/` may print), never `logging.basicConfig()`.
+- Events, not sentences: `logger.info("stage_updated", release_id=rid, from_stage=a, to_stage=b)`. F-strings are banned in logger calls; data goes in kwargs using the canonical field names from the standard's registry (`request_id`, `user_id`, `job`, `release`, `submittal_id`, `duration_ms`, `status`, `error`, `error_type`, …).
+- Levels: DEBUG = narrative; INFO = a state actually changed (one line, owned by the layer making the change — reads/polls/no-ops never log at INFO); WARNING = unexpected but handled; ERROR = always with `exc_info=True`, never sampled or swallowed. Every external call (Trello/Procore/Graph/Anthropic) and background-job entry must emit an ERROR with traceback on failure. A lost outbound update (outbox delivery exhausted) is an ERROR, not a warning.
+- Prefer one wide completion event per unit of work (request/webhook/job) over many thin progress lines; play-by-play is DEBUG.
+- Durability rule: if losing the record would matter next week it's a DB event row (`ReleaseEvents`/`SubmittalEvents`/ledger), not a log line. Never log secrets, tokens, or connection strings (log the host, never the URI).
+- Migration is a ratchet: new code complies fully; migrate logging in any file you touch; never mass-rewrite cold paths for style.
+
+Output is single-rendered JSON via structlog on both stdout and the rotating file (`logs/app.log`, 10MB max, 5 backups); level is set by the `LOG_LEVEL` env var (default INFO). Note: `SyncContext` in `logging_config.py` is currently dead code (never called) — don't model new work on it; correlation is a planned follow-up (bind `request_id` via `structlog.contextvars`).
 
 ### Frontend structure
 React pages under `frontend/src/pages/`, reusable components under `frontend/src/components/`, API calls in `frontend/src/services/`, custom hooks in `frontend/src/hooks/`. Uses Tailwind CSS, react-router-dom, axios, @dnd-kit for drag-drop, maplibre-gl for maps.

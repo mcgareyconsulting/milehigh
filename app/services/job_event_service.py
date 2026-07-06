@@ -63,14 +63,15 @@ class JobEventService:
         payload_hash = hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
 
         # Create event
-        logger.info(f"Creating job event", extra={
-            'job': job,
-            'release': release,
-            'action': action,
-            'source': source,
-            'external_user_id': external_user_id,
-            'internal_user_id': internal_user_id,
-        })
+        logger.debug(
+            "release_event_creating",
+            job=job,
+            release=release,
+            action=action,
+            source=source,
+            external_user_id=external_user_id,
+            user_id=internal_user_id,
+        )
 
         event = ReleaseEvents(
             job=job,
@@ -89,15 +90,25 @@ class JobEventService:
                 db.session.add(event)
                 db.session.flush()
         except IntegrityError:
-            logger.info("Duplicate event detected (DB constraint)", extra={
-                'job': job,
-                'release': release,
-                'action': action,
-                'payload_hash': payload_hash,
-            })
+            logger.debug(
+                "release_event_deduplicated",
+                job=job,
+                release=release,
+                action=action,
+                payload_hash=payload_hash,
+                status="skipped",
+            )
             return None
 
-        logger.info(f"Job event created: {event.id}")
+        logger.info(
+            "release_event_created",
+            event_id=event.id,
+            job=job,
+            release=release,
+            action=action,
+            source=source,
+            user_id=internal_user_id,
+        )
         return event
 
     @staticmethod
@@ -108,9 +119,9 @@ class JobEventService:
         event = db.session.get(ReleaseEvents, event_id)
         if event:
             event.applied_at = datetime.utcnow()
-            logger.debug(f"Event {event_id} marked as applied")
+            logger.debug("release_event_closed", event_id=event_id)
         else:
-            logger.warning(f"Attempted to close non-existent event {event_id}")
+            logger.warning("release_event_close_missing", event_id=event_id)
 
     @staticmethod
     def create_and_close(job, release, action, source, payload, external_user_id=None):
