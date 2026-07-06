@@ -58,6 +58,10 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_drafter = db.Column(db.Boolean, default=False, nullable=False)
+    # Phase-1 access flag for the read-only BB (Banana Boy) chat assistant. Toggled
+    # per-user from the admin UI so we can roll the feature out incrementally without
+    # a redeploy. server_default keeps the ADD COLUMN metadata-only on Postgres.
+    is_bb_chat = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     procore_id = db.Column(db.String(255), unique=True, nullable=True)
     trello_id = db.Column(db.String(255), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -1793,4 +1797,99 @@ class SunbeltRental(db.Model):
             'matched_job_number': self.matched_job_number,
             'matched_project_name': self.matched_project_name,
             'match_method': self.match_method,
+        }
+
+
+class BBChatConversation(db.Model):
+    """A single BB (Banana Boy) chat thread owned by one user.
+
+    Phase-1 chat is read-only — no message ever mutates app data. We persist the
+    thread so we have a durable audit trail and an in-app spend ledger keyed to
+    the Anthropic request-ids on each assistant turn.
+    """
+    __tablename__ = "bb_chat_conversations"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    title = db.Column(db.String(255), nullable=True)
+    # The release/submittal this thread is centered on. Set when the user names an entity;
+    # every turn re-assembles the lifecycle bundle from this anchor so follow-ups see fresh
+    # data. Re-anchored when the user names a different entity mid-thread.
+    anchor_kind = db.Column(db.String(16), nullable=True)  # 'release' | 'submittal' | None
+    anchor_job = db.Column(db.Integer, nullable=True)
+    anchor_release = db.Column(db.String(16), nullable=True)
+    anchor_submittal_id = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = db.relationship(
+        "BBChatMessage", backref="conversation", lazy="dynamic",
+        cascade="all, delete-orphan", order_by="BBChatMessage.id",
+    )
+
+    def to_dict(self, with_messages=False):
+        d = {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "anchor": {
+                "kind": self.anchor_kind,
+                "job": self.anchor_job,
+                "release": self.anchor_release,
+                "submittal_id": self.anchor_submittal_id,
+            } if self.anchor_kind else None,
+            "created_at": _dt(self.created_at),
+            "updated_at": _dt(self.updated_at),
+        }
+        if with_messages:
+            d["messages"] = [m.to_dict() for m in self.messages]
+        return d
+
+
+class BBChatMessage(db.Model):
+    """One turn in a BB chat thread.
+
+    Assistant turns carry the spend telemetry (model, per-turn token counts,
+    computed USD cost, wall-clock duration) plus the Anthropic ``request_id`` so a
+    ledger row can be reconciled against the Anthropic dashboard. User turns leave
+    those columns null.
+    """
+    __tablename__ = "bb_chat_messages"
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(
+        db.Integer, db.ForeignKey("bb_chat_conversations.id"), nullable=False, index=True
+    )
+    role = db.Column(db.String(16), nullable=False)  # 'user' | 'assistant'
+    content = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    # Spend telemetry — assistant turns only.
+    anthropic_request_id = db.Column(db.String(64), nullable=True, index=True)
+    model = db.Column(db.String(64), nullable=True)
+    input_tokens = db.Column(db.Integer, nullable=True)
+    output_tokens = db.Column(db.Integer, nullable=True)
+    cache_read_tokens = db.Column(db.Integer, nullable=True)
+    cache_write_tokens = db.Column(db.Integer, nullable=True)
+    cost_usd = db.Column(db.Float, nullable=True)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    # How many read-only SQL queries the agent ran for this turn (visibility only).
+    tool_calls = db.Column(db.Integer, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "conversation_id": self.conversation_id,
+            "role": self.role,
+            "content": self.content,
+            "created_at": _dt(self.created_at),
+            "metrics": {
+                "request_id": self.anthropic_request_id,
+                "model": self.model,
+                "input_tokens": self.input_tokens,
+                "output_tokens": self.output_tokens,
+                "cache_read_tokens": self.cache_read_tokens,
+                "cache_write_tokens": self.cache_write_tokens,
+                "cost_usd": self.cost_usd,
+                "duration_ms": self.duration_ms,
+                "tool_calls": self.tool_calls,
+            } if self.role == "assistant" else None,
         }

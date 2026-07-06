@@ -110,6 +110,7 @@ def get_current_user_info():
             'username': user.username,
             'is_admin': user.is_admin,
             'is_drafter': user.is_drafter,
+            'is_bb_chat': bool(getattr(user, 'is_bb_chat', False)),
             'is_active': user.is_active,
             'last_login': user.last_login.isoformat() if user.last_login else None
         }), 200

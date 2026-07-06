@@ -20,6 +20,7 @@ import { ReleasesProvider } from '../context/ReleasesContext';
 import QuickSearch from './QuickSearch';
 import NotificationBell from './NotificationBell';
 import MobileNavDrawer from './MobileNavDrawer';
+import BBChatWidget from './BBChatWidget';
 import PatchNotesModal from './PatchNotesModal';
 import { CURRENT_VERSION } from '../data/patchNotes';
 
@@ -32,6 +33,7 @@ function AppShellInner({ isAuthenticated }) {
   const { locationEnabled, locationRequesting, handleLocationToggle } = useLocationContext();
   const [isAdmin, setIsAdmin] = useState(false);
   const [canSeeReport, setCanSeeReport] = useState(false);
+  const [canUseBBChat, setCanUseBBChat] = useState(false);
   const [showPatchNotes, setShowPatchNotes] = useState(false);
 
   useEffect(() => {
@@ -39,6 +41,8 @@ function AppShellInner({ isAuthenticated }) {
       checkAuth().then(user => {
         setIsAdmin(user?.is_admin || false);
         setCanSeeReport(userCanAccessInvoicing(user));
+        // Admins always have BB-chat access; others need the per-user flag.
+        setCanUseBBChat(!!user && (user.is_admin || user.is_bb_chat));
       });
     }
   }, [isAuthenticated]);
@@ -239,6 +243,9 @@ function AppShellInner({ isAuthenticated }) {
       <main className="flex-1 w-full min-h-0 flex flex-col">
         <Outlet />
       </main>
+
+      {/* Floating read-only data assistant — flag-gated per user */}
+      {isAuthenticated && <BBChatWidget enabled={canUseBBChat} isAdmin={isAdmin} />}
     </div>
   );
 }
