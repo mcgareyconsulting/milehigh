@@ -5,7 +5,7 @@ rows (idempotent via the (source_record_id, line_index) unique key); the bb mail
 poll calls ingest_unprocessed() after landing new mail, and the fixture loader
 calls it directly. list_for_release / mark_received back the modal.
 """
-from datetime import date
+from datetime import date, datetime
 
 from app.logging_config import get_logger
 from app.models import MaterialOrder, RawSourceRecord, db
@@ -88,10 +88,15 @@ def ingest_record(record):
 
 
 def ingest_unprocessed(limit=200):
-    """Scan recent email RawSourceRecords with no MaterialOrder yet; ingest them.
+    """Scan not-yet-scanned email RawSourceRecords once each; ingest any orders.
 
-    Returns the count of orders created. Idempotent — records already turned into
-    orders are skipped via a NOT-EXISTS check on source_record_id.
+    Returns the count of orders created. Each record is attempted AT MOST ONCE:
+    `material_order_scanned_at` is stamped after the attempt regardless of outcome,
+    so a non-order email (which yields no MaterialOrder rows) is not re-sent to the
+    LLM extractor on every poll — the previous "skip only records that produced an
+    order" logic re-ran the Opus fallback on all non-order mail every 15 minutes.
+    The marker is reset to NULL by the mail connector when a record's content
+    changes (late-arriving attachment), so a changed record is scanned once more.
     """
     already = {
         rid for (rid,) in db.session.query(MaterialOrder.source_record_id)
@@ -100,14 +105,19 @@ def ingest_unprocessed(limit=200):
     q = (
         RawSourceRecord.query
         .filter_by(record_type=EMAIL_RECORD_TYPE)
+        .filter(RawSourceRecord.material_order_scanned_at.is_(None))
         .order_by(RawSourceRecord.id.desc())
         .limit(limit)
     )
     created = 0
+    scanned_at = datetime.utcnow()
     for record in q:
-        if record.id in already:
-            continue
-        created += len(ingest_record(record))
+        # Records that already produced orders (e.g. before this column existed)
+        # are complete — mark them scanned without re-running the extractor.
+        if record.id not in already:
+            created += len(ingest_record(record))
+        record.material_order_scanned_at = scanned_at
+    db.session.commit()
     if created:
         logger.info("material_orders_backfill", created=created)
     return created
