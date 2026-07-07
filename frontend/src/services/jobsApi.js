@@ -250,6 +250,42 @@ class JobsApi {
         }
     }
 
+    // Banana Boy code-compliance review of a drawing version (admin-only).
+    async getBBReview(releaseId, versionId) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/bb-review`
+            );
+            return response.data.review || null;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load BB review');
+        }
+    }
+
+    async requestBBReview(releaseId, versionId) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/bb-review`
+            );
+            return response.data;   // the pending (or already-running) review row
+        } catch (error) {
+            throw this._handleError(error, 'Failed to start BB review');
+        }
+    }
+
+    // Release-scoped PM report: latest complete review, ranked by urgency.
+    // Visible to an admin OR the release's PM (403 otherwise).
+    async getBBReviewReport(releaseId) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/releases/${releaseId}/bb-review/report`
+            );
+            return response.data.report || null;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load BB review report');
+        }
+    }
+
     async clearStartInstallHardDate(job, release) {
         try {
             const response = await axios.patch(

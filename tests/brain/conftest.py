@@ -15,6 +15,7 @@ _BRAIN_PATCH_TARGETS = (
     'app.brain.job_log.routes.get_current_user',
     'app.brain.job_log.pdf_markup_routes.get_current_user',
     'app.brain.board.routes.get_current_user',
+    'app.brain.pdf_review.routes.get_current_user',
 )
 
 

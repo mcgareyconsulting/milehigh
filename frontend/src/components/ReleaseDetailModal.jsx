@@ -27,6 +27,7 @@ import { checkAuth } from '../utils/auth';
 import { Badge } from './Badge';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { PdfMarkupModal } from './PdfMarkupModal';
+import { BBReviewReport } from './bbReview/report';
 
 // item_type → Badge tint (mirrors the checklist item_type vocabulary).
 const ITEM_TYPE_TINT = {
@@ -68,6 +69,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
     const [enrichment, setEnrichment] = useState({ todos: [], meetings: [] });
     const [photos, setPhotos] = useState([]);
     const [drawings, setDrawings] = useState([]);
+    const [bbReport, setBbReport] = useState(null);   // PM-facing BB review report, or null
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -114,11 +116,14 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
         setEnrichment({ todos: [], meetings: [] });
         setPhotos([]);
         setDrawings([]);
+        setBbReport(null);
         Promise.allSettled([
             jobsApi.getReleaseChecklist(releaseId),
             jobsApi.getReleasePhotos(releaseId),
             jobsApi.getReleaseDrawings(releaseId),
-        ]).then(([checklist, photoList, drawingList]) => {
+            // 403 (not admin/PM for this release) or no review → null; never blocks the modal.
+            jobsApi.getBBReviewReport(releaseId).catch(() => null),
+        ]).then(([checklist, photoList, drawingList, bbReviewReport]) => {
             if (cancelled) return;
             if (checklist.status === 'fulfilled') {
                 setEnrichment({
@@ -128,6 +133,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
             }
             if (photoList.status === 'fulfilled') setPhotos(photoList.value || []);
             if (drawingList.status === 'fulfilled') setDrawings(drawingList.value || []);
+            if (bbReviewReport.status === 'fulfilled') setBbReport(bbReviewReport.value || null);
             if (checklist.status === 'rejected' && photoList.status === 'rejected' && drawingList.status === 'rejected') {
                 setError('Failed to load release details.');
             }
@@ -322,6 +328,16 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
                             </>
                         )}
                     </section>
+
+                    {/* Banana Boy code-compliance review (PM-facing; only when a report exists) */}
+                    {bbReport && (
+                        <section>
+                            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">
+                                🍌 BB Review
+                            </h3>
+                            <BBReviewReport report={bbReport} />
+                        </section>
+                    )}
                 </div>
 
                 {/* Footer links */}
