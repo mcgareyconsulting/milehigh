@@ -19,7 +19,11 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv(Path('/Users/danielmcgarey/Desktop/MHMW/milehigh/.env'))
+# Load the .env sitting at the repo root (app/config.py -> parents[1] is the repo root),
+# so every checkout / git worktree / developer machine loads its OWN .env instead of a
+# path hardcoded to one person's machine. Missing file is a harmless no-op (e.g. on
+# Render, where env vars come from the platform, not a .env file).
+load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
 # Define frontend build directory
 FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
