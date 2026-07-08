@@ -1,8 +1,11 @@
-"""T&M ticket ingestion — the first document type through the Brain's ingestion path.
+"""T&M tickets — native mobile creation of Time & Material field tickets.
 
-v1 is the legacy-paper pipeline: upload a scan/photo/PDF of a handwritten T&M
-ticket, Claude vision extracts structured fields with per-field confidence, a
-human reviews/corrects in a modal, then confirms (optionally linking a release)
-or rejects. Everything defaults to AI vision — tickets are 1-2 pages, so no
-text-layer routing is needed at this volume.
+The live path is native digital creation: a foreman keys a ticket on a device
+(labor/materials/equipment, location, work description), saved as a draft that
+moves through the create→sign→approve→CO lifecycle in later phases. See
+service.py for the lifecycle and routes.py for the HTTP surface.
+
+The legacy-paper vision-ingestion path (extract.py + service.create_from_upload)
+is PARKED — retained for a future "photograph a paper ticket" import, with no
+HTTP route exposing it.
 """

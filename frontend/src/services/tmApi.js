@@ -1,18 +1,21 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: HTTP calls for the T&M ticket ingestion feature — upload a scanned/photographed
- *          ticket, list/inspect extracted tickets, and confirm or reject the extraction.
+ * purpose: HTTP calls for native T&M ticket creation — create/edit a draft ticket,
+ *          list/inspect tickets, void a draft, and resolve release candidates for the picker.
  * exports:
- *   listTickets: List tickets, optionally filtered by status (pending_review|confirmed|rejected).
+ *   listTickets: List tickets, optionally filtered by status (draft|submitted|…|void).
  *   getTicket: Fetch one ticket plus its release_candidates.
- *   uploadTicket: Multipart upload of the source document; kicks off AI extraction.
- *   confirmTicket: Persist reviewer-edited fields (and release link) on a ticket.
- *   rejectTicket: Mark a ticket rejected.
- *   getReleaseCandidates: Release options for a given job number, for the review modal's picker.
- *   ticketFileUrl: Build the streaming URL for a ticket's original document bytes.
+ *   createTicket: Create a new draft ticket from form JSON.
+ *   updateTicket: Persist edits to a draft ticket (PUT).
+ *   voidTicket: Discard a ticket (kept as 'void', never deleted).
+ *   getReleaseCandidates: Release options for a given job number, for the form's picker.
+ *   ticketFileUrl: Streaming URL for a parked legacy upload's original document.
+ *   listTicketAttachments/uploadTicketAttachment/deleteTicketAttachment: Photo/video
+ *     field-evidence attachments (draft-only add/remove; always listable).
+ *   ticketAttachmentFileUrl: Streaming URL for one attachment's bytes.
  * imports_from: [axios, ../utils/api]
- * imported_by: [pages/TMTickets.jsx, components/TMReviewModal.jsx]
+ * imported_by: [pages/TMTickets.jsx, components/TMTicketFormModal.jsx, components/TMTicketAttachments.jsx]
  * invariants:
  *   - withCredentials sends the session cookie; admin-only mutations are enforced server-side.
  */
@@ -34,22 +37,18 @@ export async function getTicket(id) {
     return data; // { ticket, release_candidates }
 }
 
-export async function uploadTicket(file) {
-    const fd = new FormData();
-    fd.append('file', file);
-    const { data } = await axios.post(BASE, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    });
+export async function createTicket(body) {
+    const { data } = await axios.post(BASE, body);
     return data; // { ticket, release_candidates }
 }
 
-export async function confirmTicket(id, body) {
-    const { data } = await axios.post(`${BASE}/${id}/confirm`, body);
+export async function updateTicket(id, body) {
+    const { data } = await axios.put(`${BASE}/${id}`, body);
     return data; // { ticket }
 }
 
-export async function rejectTicket(id) {
-    const { data } = await axios.post(`${BASE}/${id}/reject`);
+export async function voidTicket(id) {
+    const { data } = await axios.post(`${BASE}/${id}/void`);
     return data; // { ticket }
 }
 
@@ -60,4 +59,27 @@ export async function getReleaseCandidates(job) {
 
 export function ticketFileUrl(id) {
     return `${BASE}/${id}/file`;
+}
+
+export async function listTicketAttachments(ticketId) {
+    const { data } = await axios.get(`${BASE}/${ticketId}/attachments`);
+    return data; // { tm_ticket_id, attachments }
+}
+
+export async function uploadTicketAttachment(ticketId, file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await axios.post(`${BASE}/${ticketId}/attachments`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data; // the attachment
+}
+
+export async function deleteTicketAttachment(ticketId, attachmentId) {
+    const { data } = await axios.delete(`${BASE}/${ticketId}/attachments/${attachmentId}`);
+    return data; // { status, attachment_id }
+}
+
+export function ticketAttachmentFileUrl(ticketId, attachmentId) {
+    return `${BASE}/${ticketId}/attachments/${attachmentId}/file`;
 }

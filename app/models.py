@@ -1792,23 +1792,32 @@ class SunbeltRental(db.Model):
 
 
 class TMTicket(db.Model):
-    """A Time & Material field ticket, ingested from a legacy paper scan/photo/PDF.
+    """A Time & Material field ticket, created natively in the mobile workflow.
 
-    v1 is the legacy-paper pipeline: an uploaded document is read by Claude vision,
-    the raw extraction is held on the row, and a human reviews/corrects the fields
-    in a modal before confirming. Deny does NOT delete — the row moves to
-    'rejected' so nothing is ever lost. The original document bytes live in
-    app/brain/tm/storage.py (content-addressed, same pattern as material-order
-    attachments); `raw_extraction` keeps the model's verbatim JSON (including
-    per-field confidence) so human corrections stay diffable against it.
+    The live path is native digital creation: a foreman opens a ticket on a device,
+    keys the date/location/labor/materials/equipment and (later phases) captures an
+    on-site GC signature, and the ticket moves through the lifecycle
+    draft → submitted → pending_approval → approved → co_generated → co_sent →
+    co_approved → invoiced (plus 'rejected' / 'void'). Nothing is ever deleted — a
+    discarded draft moves to 'void'.
 
-    Line items (labor/materials/equipment) are JSON lists for v1 — they normalize
-    into child tables when employee/material master data exists. Costs, rates and
-    markups (the hidden financial layer) are deliberately absent from v1.
+    Line items (labor/materials/equipment) are JSON lists — they normalize into
+    child tables when employee/material master data exists (Phase 3). Costs, rates,
+    markups and O&P (the hidden financial layer) are added in Phase 3.
 
     `release_id` is a real (nullable) FK to Releases — a ticket may reference no
-    release. `job` holds the extracted job number even when no release is linked,
-    so unmatched tickets stay findable by job.
+    release. `job` holds the job number even when no release is linked, so
+    unmatched tickets stay findable by job.
+
+    Photo/video field evidence lives in `TMTicketAttachment` (a normalized child
+    table, not a JSON column) — mirrors `BoardItemPhoto`/`ReleasePhoto` for
+    audit fields (uploader, size, timestamp) and soft-delete. Fetched separately
+    via GET /tm-tickets/<id>/attachments, not embedded in to_dict().
+
+    The `*_extraction` / `source_*` columns are VESTIGIAL: they belong to the
+    parked legacy-paper vision-ingestion path (app/brain/tm/extract.py, reachable
+    only via service.create_from_upload) kept for a future "photograph a paper
+    ticket" import. Native tickets leave them null.
     """
     __tablename__ = "tm_tickets"
     __table_args__ = (
@@ -1818,12 +1827,14 @@ class TMTicket(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    status = db.Column(db.String(16), nullable=False, default="pending_review",
-                       server_default="pending_review")  # pending_review | confirmed | rejected
+    # Lifecycle: draft|submitted|pending_approval|approved|co_generated|co_sent|
+    # co_approved|invoiced|rejected|void. Native tickets start as 'draft'.
+    status = db.Column(db.String(16), nullable=False, default="draft",
+                       server_default="draft")
 
-    # Ticket fields (extracted, then human-corrected on confirm)
+    # Ticket fields
     release_id = db.Column(db.Integer, db.ForeignKey("releases.id"), nullable=True)
-    job = db.Column(db.Integer, nullable=True)            # extracted job number (kept even if unlinked)
+    job = db.Column(db.Integer, nullable=True)            # job number (kept even if unlinked)
     date_of_work = db.Column(db.Date, nullable=True)
     customer = db.Column(db.String(128), nullable=True)
     work_description = db.Column(db.Text, nullable=True)
@@ -1833,19 +1844,26 @@ class TMTicket(db.Model):
     signature_present = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     signature_name = db.Column(db.String(128), nullable=True)
 
-    # Extraction provenance
+    # Native-creation header (auto-populated on the client from project context)
+    location = db.Column(db.String(255), nullable=True)          # area/location of work
+    gc_company = db.Column(db.String(128), nullable=True)
+    gc_contact_name = db.Column(db.String(128), nullable=True)
+    foreman_name = db.Column(db.String(128), nullable=True)
+    created_by = db.Column(db.String(80), nullable=True)         # username of the field creator
+
+    # Extraction provenance (VESTIGIAL — parked legacy-paper vision path only)
     raw_extraction = db.Column(db.JSON, nullable=True)    # verbatim model output incl. per-field confidence
     extract_model = db.Column(db.String(64), nullable=True)
     extract_error = db.Column(db.String(512), nullable=True)  # set when extraction failed and fields start blank
 
-    # Source document provenance
+    # Source document provenance (VESTIGIAL — parked legacy-paper vision path only)
     source_storage_key = db.Column(db.String(128), nullable=True)  # content-addressed key in tm storage
     source_filename = db.Column(db.String(255), nullable=True)
     source_media_type = db.Column(db.String(64), nullable=True)
     source_record_id = db.Column(db.Integer, nullable=True)        # raw_source_records.id (loose link)
 
-    # Review trail
-    uploaded_by = db.Column(db.String(80), nullable=True)          # username
+    # Trail
+    uploaded_by = db.Column(db.String(80), nullable=True)          # username (vestigial: legacy upload path)
     reviewed_by = db.Column(db.String(80), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
@@ -1875,6 +1893,11 @@ class TMTicket(db.Model):
             "equipment": self.equipment or [],
             "signature_present": self.signature_present,
             "signature_name": self.signature_name,
+            "location": self.location,
+            "gc_company": self.gc_company,
+            "gc_contact_name": self.gc_contact_name,
+            "foreman_name": self.foreman_name,
+            "created_by": self.created_by,
             "raw_extraction": self.raw_extraction,
             "extract_model": self.extract_model,
             "extract_error": self.extract_error,
@@ -1886,4 +1909,58 @@ class TMTicket(db.Model):
             "reviewed_at": _dt(self.reviewed_at),
             "created_at": _dt(self.created_at),
             "updated_at": _dt(self.updated_at),
+        }
+
+
+class TMTicketAttachment(db.Model):
+    """A photo or video attached to a T&M ticket as field evidence of work performed.
+
+    Mirrors `BoardItemPhoto` (storage_key/mime/size/uploader/soft-delete) but is
+    scoped to a `TMTicket` and accepts video as well as images, per the native
+    T&M build doc ("Photos and videos of the work are attached directly from
+    the device"). Only addable/removable while the parent ticket is a draft
+    (see app/brain/tm/photos/command.py); always viewable regardless of status.
+    """
+    __tablename__ = "tm_ticket_attachments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tm_ticket_id = db.Column(db.Integer, db.ForeignKey("tm_tickets.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    storage_key = db.Column(db.String(512), nullable=False)
+    original_filename = db.Column(db.String(256), nullable=True)
+    mime_type = db.Column(db.String(64), nullable=False, default="image/jpeg")
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+
+    ticket = db.relationship("TMTicket", backref=db.backref(
+        "attachments", lazy="dynamic", cascade="all, delete-orphan"))
+    uploaded_by = db.relationship("User", foreign_keys=[uploaded_by_user_id])
+
+    @staticmethod
+    def _display_name(user):
+        if not user:
+            return None
+        first = (user.first_name or "").strip()
+        last = (user.last_name or "").strip()
+        return (f"{first} {last}".strip()) or user.username
+
+    @property
+    def is_video(self):
+        return (self.mime_type or "").startswith("video/")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tm_ticket_id": self.tm_ticket_id,
+            "original_filename": self.original_filename,
+            "mime_type": self.mime_type,
+            "is_video": self.is_video,
+            "file_size_bytes": self.file_size_bytes,
+            "uploaded_by": {
+                "id": self.uploaded_by_user_id,
+                "name": self._display_name(self.uploaded_by),
+            },
+            "uploaded_at": _dt(self.uploaded_at),
         }

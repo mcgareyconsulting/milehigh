@@ -1,22 +1,20 @@
-"""HTTP tests for T&M ticket ingestion routes (app/brain/tm/routes.py).
+"""HTTP tests for native T&M ticket routes (app/brain/tm/routes.py).
 
-Integration layer: real test_client + in-memory DB. The extraction call
-(service.tm_extract.extract) is patched so no network call is made.
+Integration layer: real test_client + in-memory DB. The native creation path does
+no external calls, so nothing is patched. (The parked vision extractor is covered
+by tests/tm/test_tm_extract.py.)
 """
-import io
-from unittest.mock import patch
-
-import pytest
-
-from app.models import RawSourceRecord, TMTicket, db
+from app.models import TMTicket, db
 from tests.conftest import make_release
 
-PDF_BYTES = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\nfake pdf content\n%%EOF\n"
-
-CANNED_EXTRACTION = {
+TICKET_BODY = {
     "job": 580,
     "date_of_work": "2026-06-18",
     "customer": "Alta Metro",
+    "location": "Level 3 stair core",
+    "gc_company": "Alta Construction",
+    "gc_contact_name": "Jane Roe",
+    "foreman_name": "Joe Smith",
     "work_description": "Installed misc railings",
     "labor": [{"name": "Joe Smith", "company": "MHMW", "classification": "Welder",
                "hours_reg": 8.0, "hours_ot": 2.0, "hours_dt": None, "notes": None}],
@@ -24,62 +22,45 @@ CANNED_EXTRACTION = {
                    "length": "10ft", "notes": None}],
     "equipment": [{"description": "Man lift", "quantity": 1.0, "hours": 4.5,
                    "operator": "Joe Smith", "notes": None}],
-    "signature_present": True,
-    "signature_name": "John Doe",
-    "confidence": {"job_number": 1.0},
-    "raw": {"job_number": 580, "customer": "Alta Metro"},
+    "signature_present": False,
+    "signature_name": None,
 }
 
 
-def _upload(client, data=PDF_BYTES, filename="ticket.pdf", mimetype="application/pdf"):
-    payload = {}
-    if data is not None:
-        payload["file"] = (io.BytesIO(data), filename, mimetype)
-    return client.post("/brain/tm-tickets", data=payload, content_type="multipart/form-data")
-
-
-def _patched_extract(return_value=None, side_effect=None):
-    if side_effect is not None:
-        return patch("app.brain.tm.service.tm_extract.extract", side_effect=side_effect)
-    return patch("app.brain.tm.service.tm_extract.extract", return_value=return_value)
+def _create(client, body=None):
+    return client.post("/brain/tm-tickets", json=body if body is not None else TICKET_BODY)
 
 
 # ---------------------------------------------------------------------------
-# Upload — happy path
+# Create
 # ---------------------------------------------------------------------------
 
 
-def test_upload_happy_path_creates_ticket(app, admin_client):
+def test_create_happy_path_makes_draft(app, admin_client):
     make_release(job=580, release="659", job_name="Alta Metro Job")
     db.session.commit()
 
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-
+    resp = _create(admin_client)
     assert resp.status_code == 201
     body = resp.get_json()
     ticket = body["ticket"]
-    assert ticket["status"] == "pending_review"
+    assert ticket["status"] == "draft"
     assert ticket["job"] == 580
     assert ticket["date_of_work"] == "2026-06-18"
     assert ticket["customer"] == "Alta Metro"
+    assert ticket["location"] == "Level 3 stair core"
+    assert ticket["gc_company"] == "Alta Construction"
+    assert ticket["gc_contact_name"] == "Jane Roe"
+    assert ticket["foreman_name"] == "Joe Smith"
     assert ticket["work_description"] == "Installed misc railings"
-    assert ticket["labor"] == CANNED_EXTRACTION["labor"]
-    assert ticket["materials"] == CANNED_EXTRACTION["materials"]
-    assert ticket["equipment"] == CANNED_EXTRACTION["equipment"]
-    assert ticket["signature_present"] is True
-    assert ticket["signature_name"] == "John Doe"
-    assert ticket["raw_extraction"] == CANNED_EXTRACTION["raw"]
-    assert ticket["extract_error"] is None
+    assert ticket["labor"] == TICKET_BODY["labor"]
+    assert ticket["materials"] == TICKET_BODY["materials"]
+    assert ticket["equipment"] == TICKET_BODY["equipment"]
+    assert ticket["created_by"] == "test_admin"
 
     row = db.session.get(TMTicket, ticket["id"])
     assert row is not None
-    assert row.status == "pending_review"
-
-    records = RawSourceRecord.query.all()
-    assert len(records) == 1
-    assert records[0].source == "upload"
-    assert records[0].record_type == "tm_ticket_scan"
+    assert row.status == "draft"
 
     candidates = body["release_candidates"]
     assert len(candidates) == 1
@@ -87,82 +68,72 @@ def test_upload_happy_path_creates_ticket(app, admin_client):
     assert candidates[0]["release"] == "659"
 
 
-def test_upload_extraction_failure_still_creates_ticket(app, admin_client):
-    with _patched_extract(side_effect=RuntimeError("boom")):
-        resp = _upload(admin_client)
-
+def test_create_empty_body_makes_blank_draft(app, admin_client):
+    resp = _create(admin_client, body={})
     assert resp.status_code == 201
     ticket = resp.get_json()["ticket"]
-    assert ticket["extract_error"] == "boom"
+    assert ticket["status"] == "draft"
     assert ticket["job"] is None
-    assert ticket["customer"] is None
     assert ticket["labor"] == []
-    assert ticket["materials"] == []
-    assert ticket["equipment"] == []
-
-    row = db.session.get(TMTicket, ticket["id"])
-    assert row.status == "pending_review"
 
 
-def test_upload_same_bytes_twice_creates_two_tickets_one_raw_source_record(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp1 = _upload(admin_client)
-        resp2 = _upload(admin_client)
+def test_create_with_release_id_links_release(app, admin_client):
+    release = make_release(job=580, release="659")
+    db.session.commit()
 
-    assert resp1.status_code == 201
-    assert resp2.status_code == 201
-    assert resp1.get_json()["ticket"]["id"] != resp2.get_json()["ticket"]["id"]
-    assert TMTicket.query.count() == 2
-    assert RawSourceRecord.query.count() == 1
+    resp = _create(admin_client, body={**TICKET_BODY, "release_id": release.id})
+    assert resp.status_code == 201
+    ticket = resp.get_json()["ticket"]
+    assert ticket["release_id"] == release.id
+    assert ticket["release"]["id"] == release.id
 
 
-def test_upload_unsupported_mimetype_returns_400(app, admin_client):
-    resp = _upload(admin_client, data=b"plain text", filename="notes.txt", mimetype="text/plain")
+def test_create_with_unknown_release_id_returns_400(app, admin_client):
+    resp = _create(admin_client, body={**TICKET_BODY, "release_id": 999999})
     assert resp.status_code == 400
-    assert "error" in resp.get_json()
+    assert TMTicket.query.count() == 0
 
 
-def test_upload_missing_file_returns_400(app, admin_client):
-    resp = _upload(admin_client, data=None)
+def test_create_with_bad_date_returns_400(app, admin_client):
+    resp = _create(admin_client, body={"date_of_work": "06/18/2026"})
+    assert resp.status_code == 400
+    assert TMTicket.query.count() == 0
+
+
+def test_create_with_bad_job_returns_400(app, admin_client):
+    resp = _create(admin_client, body={"job": "not-a-number"})
     assert resp.status_code == 400
 
 
-def test_upload_empty_file_returns_400(app, admin_client):
-    resp = _upload(admin_client, data=b"")
+def test_create_with_non_list_labor_returns_400(app, admin_client):
+    resp = _create(admin_client, body={"labor": "eight hours"})
     assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------
-# List / detail / file
+# List / detail
 # ---------------------------------------------------------------------------
 
 
 def test_list_tm_tickets(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        _upload(admin_client)
-    with _patched_extract(side_effect=RuntimeError("boom")):
-        _upload(admin_client, data=PDF_BYTES + b"more", filename="t2.pdf")
+    _create(admin_client)
+    _create(admin_client, body={"customer": "Second"})
 
     resp = admin_client.get("/brain/tm-tickets")
     assert resp.status_code == 200
-    tickets = resp.get_json()["tickets"]
-    assert len(tickets) == 2
+    assert len(resp.get_json()["tickets"]) == 2
 
 
 def test_list_tm_tickets_filtered_by_status(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
+    resp = _create(admin_client)
     ticket_id = resp.get_json()["ticket"]["id"]
+    _create(admin_client, body={"customer": "Second"})
 
-    with _patched_extract(side_effect=RuntimeError("boom")):
-        _upload(admin_client, data=PDF_BYTES + b"more", filename="t2.pdf")
+    resp = admin_client.get("/brain/tm-tickets?status=draft")
+    assert len(resp.get_json()["tickets"]) == 2
 
-    resp = admin_client.get("/brain/tm-tickets?status=pending_review")
-    tickets = resp.get_json()["tickets"]
-    assert len(tickets) == 2
-
-    admin_client.post(f"/brain/tm-tickets/{ticket_id}/reject")
-    resp = admin_client.get("/brain/tm-tickets?status=rejected")
+    admin_client.post(f"/brain/tm-tickets/{ticket_id}/void")
+    resp = admin_client.get("/brain/tm-tickets?status=void")
     tickets = resp.get_json()["tickets"]
     assert len(tickets) == 1
     assert tickets[0]["id"] == ticket_id
@@ -172,10 +143,7 @@ def test_get_tm_ticket_detail_includes_release_candidates(app, admin_client):
     make_release(job=580, release="659")
     db.session.commit()
 
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-    ticket_id = resp.get_json()["ticket"]["id"]
-
+    ticket_id = _create(admin_client).get_json()["ticket"]["id"]
     resp = admin_client.get(f"/brain/tm-tickets/{ticket_id}")
     assert resp.status_code == 200
     body = resp.get_json()
@@ -188,20 +156,63 @@ def test_get_tm_ticket_detail_404_for_missing(app, admin_client):
     assert resp.status_code == 404
 
 
-def test_get_tm_ticket_file_returns_original_bytes(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-    ticket_id = resp.get_json()["ticket"]["id"]
+# ---------------------------------------------------------------------------
+# Update (draft-only)
+# ---------------------------------------------------------------------------
 
-    resp = admin_client.get(f"/brain/tm-tickets/{ticket_id}/file")
+
+def test_update_draft_applies_edits(app, admin_client):
+    release = make_release(job=580, release="659")
+    db.session.commit()
+    ticket_id = _create(admin_client).get_json()["ticket"]["id"]
+
+    resp = admin_client.put(
+        f"/brain/tm-tickets/{ticket_id}",
+        json={"customer": "Corrected Customer", "date_of_work": "2026-06-19",
+              "release_id": release.id},
+    )
     assert resp.status_code == 200
-    assert resp.data == PDF_BYTES
-    assert resp.mimetype == "application/pdf"
+    ticket = resp.get_json()["ticket"]
+    assert ticket["customer"] == "Corrected Customer"
+    assert ticket["date_of_work"] == "2026-06-19"
+    assert ticket["release_id"] == release.id
 
 
-def test_get_tm_ticket_file_404_for_missing_ticket(app, admin_client):
-    resp = admin_client.get("/brain/tm-tickets/999999/file")
+def test_update_voided_ticket_returns_400(app, admin_client):
+    ticket_id = _create(admin_client).get_json()["ticket"]["id"]
+    admin_client.post(f"/brain/tm-tickets/{ticket_id}/void")
+
+    resp = admin_client.put(f"/brain/tm-tickets/{ticket_id}", json={"customer": "X"})
+    assert resp.status_code == 400
+
+
+def test_update_unknown_release_id_returns_400(app, admin_client):
+    ticket_id = _create(admin_client).get_json()["ticket"]["id"]
+    resp = admin_client.put(f"/brain/tm-tickets/{ticket_id}", json={"release_id": 999999})
+    assert resp.status_code == 400
+
+
+def test_update_missing_ticket_returns_404(app, admin_client):
+    resp = admin_client.put("/brain/tm-tickets/999999", json={"customer": "X"})
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Void
+# ---------------------------------------------------------------------------
+
+
+def test_void_keeps_row_never_deletes(app, admin_client):
+    ticket_id = _create(admin_client).get_json()["ticket"]["id"]
+
+    resp = admin_client.post(f"/brain/tm-tickets/{ticket_id}/void")
+    assert resp.status_code == 200
+    assert resp.get_json()["ticket"]["status"] == "void"
+
+    row = db.session.get(TMTicket, ticket_id)
+    assert row is not None
+    assert row.status == "void"
+    assert row.reviewed_by == "test_admin"
 
 
 # ---------------------------------------------------------------------------
@@ -223,115 +234,30 @@ def test_release_candidates_only_active_non_archived_matching_job(app, admin_cli
 
 
 # ---------------------------------------------------------------------------
-# Confirm / reject
-# ---------------------------------------------------------------------------
-
-
-def test_confirm_with_edited_fields_and_release_id(app, admin_client):
-    release = make_release(job=580, release="659")
-    db.session.commit()
-
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-    ticket_id = resp.get_json()["ticket"]["id"]
-
-    resp = admin_client.post(
-        f"/brain/tm-tickets/{ticket_id}/confirm",
-        json={
-            "release_id": release.id,
-            "customer": "Corrected Customer",
-            "date_of_work": "2026-06-19",
-        },
-    )
-    assert resp.status_code == 200
-    ticket = resp.get_json()["ticket"]
-    assert ticket["status"] == "confirmed"
-    assert ticket["customer"] == "Corrected Customer"
-    assert ticket["date_of_work"] == "2026-06-19"
-    assert ticket["reviewed_by"] == "test_admin"
-    assert ticket["release_id"] == release.id
-    assert ticket["release"]["id"] == release.id
-
-
-def test_confirm_with_unknown_release_id_returns_400(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-    ticket_id = resp.get_json()["ticket"]["id"]
-
-    resp = admin_client.post(
-        f"/brain/tm-tickets/{ticket_id}/confirm",
-        json={"release_id": 999999},
-    )
-    assert resp.status_code == 400
-
-
-def test_confirm_on_rejected_ticket_returns_400(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-    ticket_id = resp.get_json()["ticket"]["id"]
-
-    admin_client.post(f"/brain/tm-tickets/{ticket_id}/reject")
-    resp = admin_client.post(f"/brain/tm-tickets/{ticket_id}/confirm", json={"customer": "X"})
-    assert resp.status_code == 400
-
-
-def test_confirm_with_bad_date_string_returns_400(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-    ticket_id = resp.get_json()["ticket"]["id"]
-
-    resp = admin_client.post(
-        f"/brain/tm-tickets/{ticket_id}/confirm",
-        json={"date_of_work": "06/19/2026"},
-    )
-    assert resp.status_code == 400
-
-
-def test_reject_keeps_row_never_deletes(app, admin_client):
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        resp = _upload(admin_client)
-    ticket_id = resp.get_json()["ticket"]["id"]
-
-    resp = admin_client.post(f"/brain/tm-tickets/{ticket_id}/reject")
-    assert resp.status_code == 200
-    assert resp.get_json()["ticket"]["status"] == "rejected"
-
-    row = db.session.get(TMTicket, ticket_id)
-    assert row is not None
-    assert row.status == "rejected"
-
-
-# ---------------------------------------------------------------------------
 # Permissions
 # ---------------------------------------------------------------------------
 
 
-def test_non_admin_cannot_upload(app, non_admin_client):
-    resp = _upload(non_admin_client)
+def test_non_admin_cannot_create(app, non_admin_client):
+    resp = _create(non_admin_client)
     assert resp.status_code == 403
 
 
-def test_non_admin_cannot_confirm(app, non_admin_client):
-    # Create the ticket directly through the service layer so the fixture setup
-    # doesn't need a second, conflicting auth patch active in the same test
-    # (admin_client and non_admin_client both patch the same get_current_user
-    # targets, so only one can be "active" at a time).
+def test_non_admin_cannot_update(app, non_admin_client):
     from app.brain.tm import service
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        ticket = service.create_from_upload(PDF_BYTES, "application/pdf", "ticket.pdf", "test_admin")
+    ticket, _ = service.create_ticket(dict(TICKET_BODY), "test_admin")
     db.session.commit()
 
-    resp = non_admin_client.post(f"/brain/tm-tickets/{ticket.id}/confirm", json={})
+    resp = non_admin_client.put(f"/brain/tm-tickets/{ticket.id}", json={"customer": "X"})
     assert resp.status_code == 403
 
 
-def test_non_admin_cannot_reject(app, non_admin_client):
+def test_non_admin_cannot_void(app, non_admin_client):
     from app.brain.tm import service
-    with _patched_extract(return_value=CANNED_EXTRACTION):
-        ticket = service.create_from_upload(PDF_BYTES, "application/pdf", "ticket.pdf", "test_admin")
+    ticket, _ = service.create_ticket(dict(TICKET_BODY), "test_admin")
     db.session.commit()
 
-    resp = non_admin_client.post(f"/brain/tm-tickets/{ticket.id}/reject")
+    resp = non_admin_client.post(f"/brain/tm-tickets/{ticket.id}/void")
     assert resp.status_code == 403
 
 
