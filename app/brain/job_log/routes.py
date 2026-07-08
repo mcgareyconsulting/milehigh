@@ -29,7 +29,7 @@ from app.logging_config import get_logger
 from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User, PendingStartInstall
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
-from app.api.helpers import DEFAULT_FAB_ORDER
+from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
@@ -309,6 +309,35 @@ def _validate_row(row_values, row_idx, row):
         return False, {'row': row_idx, 'error': f'Invalid Job # value: {row_values["job"]}', 'data': row}
     
     return True, None
+
+def _find_near_duplicate(job_number, release_number, row_values):
+    """Find an existing active release for the same job that looks like the
+    same content under a different release number (e.g. a verbal release
+    entered now, then the real paperwork pasted in later with its own #).
+
+    Matches only when both job_name and description are non-empty and equal
+    after normalization -- avoids flagging two rows that both simply have
+    blank descriptions. Returns the matched Releases row, or None.
+    """
+    job_name = str(row_values.get('job_name') or '').strip().casefold()
+    description = str(row_values.get('description') or '').strip().casefold()
+    if not job_name or not description:
+        return None
+
+    candidates = Releases.query.filter(
+        active_releases_filter(),
+        Releases.job == job_number,
+        Releases.release != release_number,
+    ).all()
+
+    for candidate in candidates:
+        candidate_job_name = str(candidate.job_name or '').strip().casefold()
+        candidate_description = str(candidate.description or '').strip().casefold()
+        if candidate_job_name == job_name and candidate_description == description:
+            return candidate
+
+    return None
+
 
 def _create_payload_hash(action, job_number, release_number, excel_data_dict):
     """Create a hash for the payload."""
@@ -1918,6 +1947,8 @@ def release_job_data():
         if not csv_data or not csv_data.strip():
             return jsonify({'error': 'csv_data cannot be empty'}), 400
 
+        confirm_duplicates = bool(data.get('confirm_duplicates'))
+
         # Detect delimiter and parse CSV data
         delimiter = _detect_delimiter(csv_data)
         csv_reader = csv.reader(io.StringIO(csv_data), delimiter=delimiter)
@@ -1938,6 +1969,7 @@ def release_job_data():
         processed = []
         errors = []
         collisions = []
+        near_duplicates = []
         created_count = 0
 
         
@@ -1991,7 +2023,25 @@ def release_job_data():
                         'suggested_next': suggested
                     })
                     continue
-                
+
+                # Soft duplicate guard: same job with matching job name +
+                # description under a different release # usually means the
+                # same release was entered twice (e.g. a verbal release now,
+                # the real paperwork later) rather than two distinct releases.
+                # Unlike the hard collision above, this can be overridden.
+                if not confirm_duplicates:
+                    near_dup = _find_near_duplicate(job_number, release_number, row_values)
+                    if near_dup:
+                        near_duplicates.append({
+                            'row': row_idx,
+                            'job': job_number,
+                            'attempted_release': release_number,
+                            'matched_release': near_dup.release,
+                            'job_name': str(row_values['job_name']).strip(),
+                            'description': str(row_values['description']).strip(),
+                        })
+                        continue
+
                 # Prepare Excel format dictionary for Trello card creation
                 excel_data_dict = {
                     'Job #': job_number,
@@ -2142,9 +2192,11 @@ def release_job_data():
             'created_count': created_count,
             'error_count': len(errors),
             'collision_count': len(collisions),
+            'near_duplicate_count': len(near_duplicates),
             'processed': processed,
             'errors': errors if errors else None,
-            'collisions': collisions if collisions else None
+            'collisions': collisions if collisions else None,
+            'near_duplicates': near_duplicates if near_duplicates else None
         }), 200
         
     except Exception as e:
