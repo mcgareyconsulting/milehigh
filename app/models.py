@@ -830,6 +830,7 @@ class Notification(db.Model):
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id', ondelete='CASCADE'), nullable=True, index=True)
     checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id', ondelete='CASCADE'), nullable=True, index=True)
     drawing_version_comment_id = db.Column(db.Integer, db.ForeignKey('drawing_version_comments.id', ondelete='CASCADE'), nullable=True, index=True)
+    bb_drawing_review_id = db.Column(db.Integer, db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'), nullable=True, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -839,11 +840,13 @@ class Notification(db.Model):
     submittal = db.relationship('Submittals', lazy='select')
     checklist_item = db.relationship('ChecklistItem', lazy='select')
     drawing_version_comment = db.relationship('DrawingVersionComment', lazy='select')
+    bb_drawing_review = db.relationship('BBDrawingReview', lazy='select')
 
     def to_dict(self):
         comment = self.drawing_version_comment
         version = comment.drawing_version if comment else None
         release = comment.release if comment else None
+        review = self.bb_drawing_review
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -854,14 +857,19 @@ class Notification(db.Model):
             'submittal_id': self.submittal_id,
             'checklist_item_id': self.checklist_item_id,
             'drawing_version_comment_id': self.drawing_version_comment_id,
+            'bb_drawing_review_id': self.bb_drawing_review_id,
             'is_read': self.is_read,
             'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
             'submittal_title': self.submittal.title if self.submittal else None,
             'submittal_project_name': self.submittal.project_name if self.submittal else None,
             'submittal_project_number': self.submittal.project_number if self.submittal else None,
-            'release_id': comment.release_id if comment else None,
-            'drawing_version_id': comment.drawing_version_id if comment else None,
+            # A bb_review notification deep-links to the release report; fall back to the
+            # comment's release when this is a drawing-comment mention.
+            'release_id': (comment.release_id if comment else None)
+                          or (review.release_id if review else None),
+            'drawing_version_id': (comment.drawing_version_id if comment else None)
+                          or (review.drawing_version_id if review else None),
             'drawing_version_number': version.version_number if version else None,
             'release_job_number': release.job if release else None,
             'release_number': release.release if release else None,
@@ -1797,6 +1805,113 @@ class SunbeltRental(db.Model):
             'matched_job_number': self.matched_job_number,
             'matched_project_name': self.matched_project_name,
             'match_method': self.match_method,
+        }
+
+
+class BBDrawingReview(db.Model):
+    """A Banana Boy code-compliance review of one PDF drawing version.
+
+    Kicked off from the PDF-mentions surface (admin-only). The review runs on a
+    background thread (app/brain/pdf_review/worker.py) because the Claude call
+    takes minutes; the row moves `pending` -> `complete` | `error` and stores the
+    strict-JSON findings plus token usage for cost tracking.
+    """
+    __tablename__ = 'bb_drawing_reviews'
+
+    id = db.Column(db.Integer, primary_key=True)
+    drawing_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey('release_drawing_versions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    status = db.Column(db.String(16), nullable=False, default='pending')  # pending|complete|error
+    findings = db.Column(db.JSON, nullable=True)   # list of finding dicts when complete
+    model = db.Column(db.String(64), nullable=True)
+    input_tokens = db.Column(db.Integer, nullable=True)
+    output_tokens = db.Column(db.Integer, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    requested_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    drawing_version = db.relationship(
+        'ReleaseDrawingVersion',
+        backref=db.backref('bb_reviews', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+    requested_by = db.relationship('User', foreign_keys=[requested_by_user_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'drawing_version_id': self.drawing_version_id,
+            'release_id': self.release_id,
+            'status': self.status,
+            'findings': self.findings if self.findings is not None else [],
+            'model': self.model,
+            'input_tokens': self.input_tokens,
+            'output_tokens': self.output_tokens,
+            'error': self.error,
+            'requested_by_user_id': self.requested_by_user_id,
+            'created_at': _dt(self.created_at),
+            'completed_at': _dt(self.completed_at),
+        }
+
+
+class BBReviewFeedback(db.Model):
+    """A PM's accept/deny (+ optional notes) on ONE finding of a Banana Boy review.
+
+    The training loop: as a PM works a BB report they mark each suggestion accepted or
+    rejected and can leave a note ("BB is right, this rise is 8\"" / "false alarm, that
+    flight pours into a topping slab"). We just land these to the DB with enough context
+    (the finding snapshot + review/release/version + rule_id) to ingest later into the
+    rule library. One row per (review, finding); re-submitting a finding upserts it.
+
+    `finding_index` is the position of the finding in the ranked report list the PM sees
+    (app/brain/pdf_review/report.build_report -> findings[]); it's stable for a given
+    review because the report sort is deterministic. `finding_snapshot` freezes the whole
+    finding dict so the feedback stays meaningful even if the rule text later changes.
+    """
+    __tablename__ = 'bb_review_feedback'
+    __table_args__ = (
+        db.UniqueConstraint('review_id', 'finding_index', name='_bb_review_feedback_finding_uc'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    review_id = db.Column(
+        db.Integer,
+        db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    drawing_version_id = db.Column(db.Integer, nullable=True)
+    finding_index = db.Column(db.Integer, nullable=False)
+    rule_id = db.Column(db.String(64), nullable=True)
+    decision = db.Column(db.String(16), nullable=False)  # accepted | rejected
+    notes = db.Column(db.Text, nullable=True)
+    finding_snapshot = db.Column(db.JSON, nullable=True)  # the finding dict at feedback time
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow,
+    )
+
+    review = db.relationship('BBDrawingReview', lazy='select')
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'review_id': self.review_id,
+            'release_id': self.release_id,
+            'drawing_version_id': self.drawing_version_id,
+            'finding_index': self.finding_index,
+            'rule_id': self.rule_id,
+            'decision': self.decision,
+            'notes': self.notes,
+            'user_id': self.user_id,
+            'created_at': _dt(self.created_at),
+            'updated_at': _dt(self.updated_at),
         }
 
 
