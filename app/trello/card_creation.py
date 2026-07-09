@@ -141,8 +141,10 @@ def create_trello_card_core(
                 existing = find_card_in_list_by_name(list_id, card_title)
                 if existing:
                     logger.warning(
-                        f"Idempotency: adopting existing Trello card {existing['id']} "
-                        f"with matching title in list {list_id} (skipping POST)"
+                        "trello_card_adopted",
+                        card_id=existing["id"],
+                        list_id=list_id,
+                        status="skipped",
                     )
                     return {
                         "success": True,
@@ -153,7 +155,12 @@ def create_trello_card_core(
             except Exception as scan_err:
                 # If the lookup fails we fall through to the create path; better
                 # to risk a duplicate than to block the retry entirely.
-                logger.warning(f"Idempotency scan failed, proceeding with create: {scan_err}")
+                logger.warning(
+                    "trello_idempotency_scan_failed",
+                    list_id=list_id,
+                    error=str(scan_err),
+                    error_type=type(scan_err).__name__,
+                )
 
         url = "https://api.trello.com/1/cards"
         payload = {
@@ -165,12 +172,12 @@ def create_trello_card_core(
             "pos": position
         }
 
-        logger.info(f"Creating Trello card in list {list_id}")
+        logger.debug("trello_card_create_started", list_id=list_id)
         response = requests.post(url, params=payload)
         response.raise_for_status()
 
         card_data = response.json()
-        logger.info(f"Trello card created successfully: {card_data['id']}")
+        logger.info("trello_card_created", card_id=card_data["id"], list_id=list_id)
 
         return {
             "success": True,
@@ -181,7 +188,13 @@ def create_trello_card_core(
 
     except Exception as err:
         error_msg = f"Error creating Trello card: {str(err)}"
-        logger.error(error_msg, exc_info=True)
+        logger.error(
+            "trello_card_create_failed",
+            list_id=list_id,
+            error=str(err),
+            error_type=type(err).__name__,
+            exc_info=True,
+        )
         return {
             "success": False,
             "error": error_msg
@@ -261,12 +274,30 @@ def apply_card_post_creation_features(
                     # Commit the viewer_url update
                     try:
                         db.session.commit()
-                        logger.info(f"Fetched and saved viewer_url from Procore for {job_record.job}-{job_record.release}")
+                        logger.info(
+                            "viewer_url_saved",
+                            job=job_record.job,
+                            release=job_record.release,
+                            card_id=card_id,
+                        )
                     except Exception as commit_err:
-                        logger.warning(f"Failed to commit viewer_url: {commit_err}")
+                        logger.warning(
+                            "viewer_url_commit_failed",
+                            job=job_record.job,
+                            release=job_record.release,
+                            error=str(commit_err),
+                            error_type=type(commit_err).__name__,
+                        )
                         db.session.rollback()
         except Exception as procore_err:
-            logger.warning(f"Failed to fetch viewer_url from Procore: {procore_err}")
+            logger.warning(
+                "viewer_url_fetch_failed",
+                job=job_record.job,
+                release=job_record.release,
+                card_id=card_id,
+                error=str(procore_err),
+                error_type=type(procore_err).__name__,
+            )
     
     # Get fab_order from job_record if not provided
     if fab_order is None and job_record and hasattr(job_record, 'fab_order'):
@@ -289,7 +320,7 @@ def apply_card_post_creation_features(
                 )
                 if fab_order_success:
                     results["fab_order_set"] = True
-                    logger.info(f"Successfully set Fab Order custom field to {fab_order_int}")
+                    logger.info("fab_order_field_set", card_id=card_id, fab_order=fab_order_int)
                     
                     # Sort the list if it's one of the target lists
                     sort_success = sort_list_if_needed(
@@ -301,11 +332,18 @@ def apply_card_post_creation_features(
                     if sort_success:
                         results["fab_order_sorted"] = True
                 else:
-                    logger.error(f"Failed to set Fab Order custom field")
+                    logger.warning("fab_order_field_set_failed", card_id=card_id, fab_order=fab_order_int)
             else:
-                logger.debug("FAB_ORDER_FIELD_ID not configured, skipping Fab Order custom field")
+                logger.debug("fab_order_field_skipped", card_id=card_id)
         except (ValueError, TypeError) as e:
-            logger.error(f"Could not convert Fab Order '{fab_order}' to int: {e}")
+            logger.error(
+                "fab_order_conversion_failed",
+                card_id=card_id,
+                fab_order=fab_order,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
     
     # Add FC Drawing link if viewer_url exists
     if viewer_url:
@@ -313,11 +351,20 @@ def apply_card_post_creation_features(
             link_result = add_procore_link(card_id, viewer_url, link_name="FC Drawing")
             if link_result.get("success"):
                 results["fc_drawing_added"] = True
-                logger.info(f"Added FC Drawing link to card {card_id}")
+                logger.info("fc_drawing_link_added", card_id=card_id)
             else:
-                logger.warning(f"Failed to add FC Drawing link: {link_result.get('error')}")
+                logger.warning(
+                    "fc_drawing_link_add_failed",
+                    card_id=card_id,
+                    error=link_result.get("error"),
+                )
         except Exception as link_err:
-            logger.warning(f"Error adding FC Drawing link: {link_err}")
+            logger.warning(
+                "fc_drawing_link_add_failed",
+                card_id=card_id,
+                error=str(link_err),
+                error_type=type(link_err).__name__,
+            )
     
     # Handle notes field - append as comment if not empty
     if notes is not None:
@@ -329,16 +376,21 @@ def apply_card_post_creation_features(
                 comment_success = add_comment_to_trello_card(card_id, str(notes).strip())
                 if comment_success:
                     results["notes_added"] = True
-                    logger.info(f"Successfully added notes as comment to Trello card")
+                    logger.info("notes_comment_added", card_id=card_id)
             except Exception as comment_err:
-                logger.warning(f"Error adding notes comment: {comment_err}")
+                logger.warning(
+                    "notes_comment_add_failed",
+                    card_id=card_id,
+                    error=str(comment_err),
+                    error_type=type(comment_err).__name__,
+                )
     
     # Create mirror card in unassigned list if configured
     if create_mirror and cfg.UNASSIGNED_CARDS_LIST_ID:
         try:
             # Check if card already has a link (to avoid duplicates)
             if not card_has_link_to(card_id):
-                logger.info(f"Creating mirror card in unassigned list for card {card_id}")
+                logger.debug("mirror_card_create_started", card_id=card_id)
                 cloned = copy_trello_card(card_id, cfg.UNASSIGNED_CARDS_LIST_ID, pos="bottom")
                 mirror_card_id = cloned["id"]
                 link_cards(card_id, mirror_card_id)
@@ -346,7 +398,7 @@ def apply_card_post_creation_features(
                 update_trello_card(card_id, clear_due_date=True)
                 update_trello_card(mirror_card_id, clear_due_date=True)
                 results["mirror_card_id"] = mirror_card_id
-                logger.info(f"Mirror card created and linked: {mirror_card_id}")
+                logger.info("mirror_card_created", card_id=card_id, mirror_card_id=mirror_card_id)
 
                 # Persist the mirror id on the release so inbound mirror webhooks resolve
                 # directly (no attachment walk). The clone is same-board by construction
@@ -357,12 +409,23 @@ def apply_card_post_creation_features(
                         job_record.mirror_trello_card_id = mirror_card_id
                         db.session.commit()
                     except Exception as persist_err:
-                        logger.warning(f"Failed to persist mirror_trello_card_id: {persist_err}")
+                        logger.warning(
+                            "mirror_card_id_persist_failed",
+                            card_id=card_id,
+                            mirror_card_id=mirror_card_id,
+                            error=str(persist_err),
+                            error_type=type(persist_err).__name__,
+                        )
                         db.session.rollback()
             else:
-                logger.info(f"Card {card_id} already has a link, skipping mirror card creation")
+                logger.debug("mirror_card_create_skipped", card_id=card_id)
         except Exception as mirror_err:
-            logger.warning(f"Failed to create mirror card: {mirror_err}")
+            logger.warning(
+                "mirror_card_create_failed",
+                card_id=card_id,
+                error=str(mirror_err),
+                error_type=type(mirror_err).__name__,
+            )
     
     return results
 

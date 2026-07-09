@@ -23,7 +23,14 @@ class SystemLogService:
         from app.models import SystemLogs, db
         import traceback
         
-        logger.error(f"System error: {category} in {operation}", exc_info=True)
+        logger.error(
+            "system_error_logged",
+            category=category,
+            operation=operation,
+            error=str(error),
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
         
         system_log = SystemLogs(
             timestamp=datetime.utcnow(),

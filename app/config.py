@@ -139,6 +139,19 @@ class Config:
     # Falls back to a deterministic stub extractor when unset (tests / no key).
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+    # BB (Banana Boy) chat — read-only Q&A assistant over the app database.
+    # Phase 1 runs on Sonnet 5 with adaptive thinking; effort "medium" balances
+    # chat latency against cost. max_tokens stays under the 16k non-streaming
+    # timeout guard. All read-only; no data is ever mutated by the chat.
+    BB_CHAT_MODEL = os.environ.get("BB_CHAT_MODEL", "claude-sonnet-5")
+    BB_CHAT_MAX_TOKENS = int(os.environ.get("BB_CHAT_MAX_TOKENS", "8192"))
+    BB_CHAT_EFFORT = os.environ.get("BB_CHAT_EFFORT", "medium")
+    # Hard caps for the read-only SQL tool so a bad query can't melt the DB.
+    BB_CHAT_SQL_TIMEOUT_MS = int(os.environ.get("BB_CHAT_SQL_TIMEOUT_MS", "8000"))
+    BB_CHAT_SQL_ROW_LIMIT = int(os.environ.get("BB_CHAT_SQL_ROW_LIMIT", "500"))
+    # Max agent tool-loop iterations before we force a final answer.
+    BB_CHAT_MAX_STEPS = int(os.environ.get("BB_CHAT_MAX_STEPS", "12"))
+
     # Recall.ai — dispatches a notetaker bot to a meeting URL (Teams/Zoom/Meet) and
     # produces an async transcript we PULL down post-meeting (no webhook/data-lake
     # dependency yet). The API host is region-pinned; set RECALL_REGION to match the

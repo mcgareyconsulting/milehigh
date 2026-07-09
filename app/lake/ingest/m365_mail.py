@@ -171,6 +171,9 @@ def _land(message, mailbox):
         existing.occurred_at = occurred_at
         existing.payload = payload
         existing.external_pointer = external_pointer
+        # Content changed (e.g. a late-arriving attachment) — let the material-order
+        # extractor look at it once more rather than trusting the prior scan.
+        existing.material_order_scanned_at = None
         return "updated"
 
     return "unchanged"

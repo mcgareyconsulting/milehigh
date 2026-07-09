@@ -95,3 +95,71 @@ class TestVerbalReleaseDuplicateGuard:
         body = json.loads(resp.data)
         assert body["created_count"] == 1
         assert Releases.query.filter_by(job=911, release="501").first() is not None
+
+
+class TestNearDuplicateGuard:
+    """Same job with matching job name & description under a different release #
+    is a soft warning, not a hard block like the (job, release) collision above --
+    the row is withheld until the user confirms via confirm_duplicates=true."""
+
+    def test_matching_job_name_and_description_is_flagged_not_created(self, app, non_admin_client):
+        with app.app_context():
+            db.session.add(Releases(
+                job=920, release="600", job_name="Test Job", description="Desc",
+                is_active=True, is_archived=False,
+            ))
+            db.session.commit()
+
+        resp = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": _release_csv(920, 601)},
+        )
+
+        assert resp.status_code == 200
+        body = json.loads(resp.data)
+        assert body["created_count"] == 0
+        assert body["near_duplicate_count"] == 1
+        dup = body["near_duplicates"][0]
+        assert dup["job"] == 920
+        assert dup["attempted_release"] == "601"
+        assert dup["matched_release"] == "600"
+        assert Releases.query.filter_by(job=920, release="601").first() is None
+
+    def test_confirm_duplicates_bypasses_and_creates(self, app, non_admin_client):
+        with app.app_context():
+            db.session.add(Releases(
+                job=921, release="600", job_name="Test Job", description="Desc",
+                is_active=True, is_archived=False,
+            ))
+            db.session.commit()
+
+        resp = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": _release_csv(921, 601), "confirm_duplicates": True},
+        )
+
+        assert resp.status_code == 200
+        body = json.loads(resp.data)
+        assert body["created_count"] == 1
+        assert body["near_duplicate_count"] == 0
+        assert Releases.query.filter_by(job=921, release="601").first() is not None
+
+    def test_blank_job_name_and_description_does_not_false_positive(self, non_admin_client):
+        blank_row = (
+            "Job #,Release #,Job,Description,Fab Hrs,Install HRS,Paint color,PM,BY,Released,Fab Order\n"
+            "922,{release},,,40,8,Black,PM1,BY1,,10"
+        )
+
+        first = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": blank_row.format(release=600)},
+        )
+        assert json.loads(first.data)["created_count"] == 1
+
+        second = non_admin_client.post(
+            "/brain/job-log/release",
+            json={"csv_data": blank_row.format(release=601)},
+        )
+        body = json.loads(second.data)
+        assert body["created_count"] == 1
+        assert body["near_duplicate_count"] == 0

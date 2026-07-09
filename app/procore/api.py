@@ -25,6 +25,8 @@ from app.config import Config as cfg
 from app.procore.procore_auth import get_access_token, get_access_token_force_refresh
 from app.logging_config import get_logger
 
+logger = get_logger(__name__)
+
 # Coded mapping of company submittal statuses (id -> name). Update when company adds new statuses.
 SUBMITTAL_STATUSES = [
     {"id": 203239, "name": "Closed", "status": "Closed", "is_default": True},
@@ -176,7 +178,6 @@ class ProcoreAPI:
         The v2.0 API returns paginated responses in the format:
         {"data": [...], "total": N, "per_page": M, "page": P}
         """
-        logger = get_logger(__name__)
         all_submittals = []
         page = 1
         per_page = 100  # Max items per page
@@ -205,7 +206,9 @@ class ProcoreAPI:
                 else:
                     # Unexpected dict format, log and return empty list
                     logger.error(
-                        f"Unexpected response format from get_submittals: {response}"
+                        "submittals_response_unexpected_format",
+                        project_id=project_id,
+                        response_keys=sorted(response.keys()),
                     )
                     return []
             elif isinstance(response, list):
@@ -215,7 +218,9 @@ class ProcoreAPI:
             else:
                 # Unexpected response type
                 logger.error(
-                    f"Unexpected response type from get_submittals: {type(response)}"
+                    "submittals_response_unexpected_type",
+                    project_id=project_id,
+                    response_type=type(response).__name__,
                 )
                 return []
 
@@ -365,4 +370,5 @@ if __name__ == "__main__":
             cfg.PROD_PROCORE_CLIENT_SECRET,
             cfg.PROCORE_DEV_WEBHOOK_URL,
         )
-        print(procore_client.get_company_users())
+        users = procore_client.get_company_users()
+        logger.info("company_users_fetched", count=len(users) if users else 0)

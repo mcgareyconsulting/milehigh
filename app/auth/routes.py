@@ -45,16 +45,16 @@ def login():
         user = User.query.filter_by(username=username).first()
         
         if not user:
-            logger.warning(f"Login attempt with non-existent username: {username}")
+            logger.warning("login_failed", username=username, reason="user_not_found")
             return jsonify({'error': 'Invalid username or password'}), 401
-        
+
         if not user.is_active:
-            logger.warning(f"Login attempt for inactive user: {username}")
+            logger.warning("login_failed", username=username, reason="account_inactive")
             return jsonify({'error': 'Account is inactive'}), 403
-        
+
         # Verify password
         if not verify_password(user.password_hash, password):
-            logger.warning(f"Failed login attempt for user: {username}")
+            logger.warning("login_failed", username=username, reason="invalid_password")
             return jsonify({'error': 'Invalid username or password'}), 401
         
         # Update last login
@@ -66,7 +66,7 @@ def login():
         session['username'] = user.username
         session.permanent = True
         
-        logger.info(f"User {username} logged in successfully")
+        logger.info("user_logged_in", user_id=user.id, username=user.username)
         
         return jsonify({
             'status': 'success',
@@ -79,7 +79,7 @@ def login():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error during login: {e}", exc_info=True)
+        logger.error("login_request_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': 'An error occurred during login'}), 500
 
 
@@ -88,11 +88,12 @@ def logout():
     """Logout endpoint that clears the session."""
     try:
         username = session.get('username', 'Unknown')
+        user_id = session.get('user_id')
         session.clear()
-        logger.info(f"User {username} logged out")
+        logger.info("user_logged_out", user_id=user_id, username=username)
         return jsonify({'status': 'success', 'message': 'Logged out successfully'}), 200
     except Exception as e:
-        logger.error(f"Error during logout: {e}", exc_info=True)
+        logger.error("logout_request_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': 'An error occurred during logout'}), 500
 
 
@@ -109,11 +110,12 @@ def get_current_user_info():
             'username': user.username,
             'is_admin': user.is_admin,
             'is_drafter': user.is_drafter,
+            'is_bb_chat': bool(getattr(user, 'is_bb_chat', False)),
             'is_active': user.is_active,
             'last_login': user.last_login.isoformat() if user.last_login else None
         }), 200
     except Exception as e:
-        logger.error(f"Error getting current user info: {e}", exc_info=True)
+        logger.error("current_user_info_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': 'An error occurred'}), 500
 
 
@@ -138,15 +140,15 @@ def check_user():
         user = User.query.filter_by(username=username).first()
 
         if not user:
-            logger.info(f"Check user: account not found for {username}")
+            logger.debug("user_check_not_found", username=username)
             return jsonify({'exists': False}), 200
 
         if not user.is_active:
-            logger.info(f"Check user: account inactive for {username}")
+            logger.debug("user_check_inactive", username=username)
             return jsonify({'exists': True, 'needs_password_setup': False}), 200
 
         needs_setup = not user.password_set
-        logger.info(f"Check user: {username} exists, needs_password_setup={needs_setup}")
+        logger.debug("user_checked", username=username, needs_password_setup=needs_setup)
 
         return jsonify({
             'exists': True,
@@ -154,7 +156,7 @@ def check_user():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error during check user: {e}", exc_info=True)
+        logger.error("user_check_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': 'An error occurred'}), 500
 
 
@@ -193,16 +195,16 @@ def set_password():
         user = User.query.filter_by(username=username).first()
 
         if not user:
-            logger.warning(f"Set password attempt for non-existent user: {username}")
+            logger.warning("password_set_denied", username=username, reason="user_not_found")
             return jsonify({'error': 'User not found'}), 404
 
         if not user.is_active:
-            logger.warning(f"Set password attempt for inactive user: {username}")
+            logger.warning("password_set_denied", username=username, reason="account_inactive")
             return jsonify({'error': 'Account is inactive'}), 403
 
         # Check if password has already been set
         if user.password_set:
-            logger.warning(f"Set password attempt for user with password already set: {username}")
+            logger.warning("password_set_denied", username=username, reason="already_set")
             return jsonify({'error': 'Password has already been set for this account'}), 400
 
         # Validate password match
@@ -224,7 +226,7 @@ def set_password():
         session['username'] = user.username
         session.permanent = True
 
-        logger.info(f"User {username} set password and logged in successfully")
+        logger.info("password_set", user_id=user.id, username=user.username)
 
         return jsonify({
             'status': 'success',
@@ -237,7 +239,7 @@ def set_password():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error during set password: {e}", exc_info=True)
+        logger.error("password_set_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return jsonify({'error': 'An error occurred'}), 500
 
 

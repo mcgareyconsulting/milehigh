@@ -62,7 +62,7 @@ def get_current_user():
             return user
         return None
     except Exception as e:
-        logger.error(f"Error getting current user: {e}", exc_info=True)
+        logger.error("current_user_lookup_failed", error=str(e), error_type=type(e).__name__, exc_info=True)
         return None
 
 
@@ -129,7 +129,7 @@ def admin_required(f):
         if not user:
             return jsonify({'error': 'Authentication required'}), 401
         if not user.is_admin:
-            logger.warning(f"Non-admin user {user.username} attempted to access admin-only route")
+            logger.warning("admin_access_denied", user_id=user.id, username=user.username)
             return jsonify({'error': 'Admin privileges required'}), 403
         return f(*args, **kwargs)
     return decorated_function
@@ -148,7 +148,7 @@ def drafter_or_admin_required(f):
         if not user:
             return jsonify({'error': 'Authentication required'}), 401
         if not user.is_admin and not user.is_drafter:
-            logger.warning(f"User {user.username} attempted to access drafter/admin route without privileges")
+            logger.warning("drafter_or_admin_access_denied", user_id=user.id, username=user.username)
             return jsonify({'error': 'Drafter or admin privileges required'}), 403
         return f(*args, **kwargs)
     return decorated_function
@@ -173,7 +173,28 @@ def invoicing_report_access_required(f):
             return jsonify({'error': 'Authentication required'}), 401
         if user.is_admin or (user.username or '').lower() == INVOICING_REPORT_USER:
             return f(*args, **kwargs)
-        logger.warning(f"User {user.username} attempted to access the invoicing report without privileges")
+        logger.warning("invoicing_report_access_denied", user_id=user.id, username=user.username)
+        return jsonify({'error': 'Access denied'}), 403
+    return decorated_function
+
+
+def bb_chat_required(f):
+    """
+    Decorator restricting a route to users with the BB chat access flag (or any admin).
+
+    Gates the phase-1 rollout of the read-only BB chat assistant so access can be
+    granted per-user from the admin UI without a redeploy.
+
+    Returns 401 if not logged in, 403 if the user lacks the is_bb_chat flag.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        if user.is_admin or getattr(user, 'is_bb_chat', False):
+            return f(*args, **kwargs)
+        logger.warning(f"User {user.username} attempted to access BB chat without access")
         return jsonify({'error': 'Access denied'}), 403
     return decorated_function
 
