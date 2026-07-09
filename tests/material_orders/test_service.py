@@ -11,6 +11,12 @@ FIXTURE = os.path.join(
 DENCOL_CONFIRM = os.path.join(
     os.path.dirname(__file__), "fixtures", "dencol_390-351_confirm.eml"
 )
+AZZ_GALV = os.path.join(
+    os.path.dirname(__file__), "fixtures", "azz_480-913_ready_to_ship.eml"
+)
+DENCOL_STOCK = os.path.join(
+    os.path.dirname(__file__), "fixtures", "dencol_stock_pickup.eml"
+)
 
 
 def _land_record(eml_path=FIXTURE, external_id=None, content_hash="hash-fixture"):
@@ -128,6 +134,65 @@ def test_ingest_dencol_confirm_from_pdf(app):
         # Idempotent re-ingest.
         service.ingest_record(rec)
         assert MaterialOrder.query.filter_by(source_record_id=rec.id).count() == 4
+
+
+def test_ingest_galv_status_notification(app):
+    """An AZZ galv notification lands one status row keyed to the linked release."""
+    with app.app_context():
+        rec = _land_record(AZZ_GALV, external_id="azz-1", content_hash="hg1")
+        orders = service.ingest_record(rec)
+        assert len(orders) == 1
+        o = orders[0]
+        assert o.order_kind == "galvanizing"
+        assert o.supplier == "AZZ Galvanizing"
+        assert o.supplier_order_no == "26070025"
+        assert o.job == 480 and o.release == "913"
+        assert o.shipping_status == "planning"
+        assert o.quantity is None
+
+
+def test_galv_upserts_single_row_across_notifications(app):
+    """A second notification for the same AZZ Job # advances the same row."""
+    with app.app_context():
+        rec1 = _land_record(AZZ_GALV, external_id="azz-1", content_hash="hg1")
+        first = service.ingest_record(rec1)[0]
+        assert first.shipping_status == "planning"
+
+        # A later "Shipped" notification — different email, same AZZ Job #.
+        shipped = eml_to_payload(AZZ_GALV)
+        shipped["subject"] = "AZZDEN: MILE HIGH METAL WORK, 26070025, Shipped"
+        shipped["body"] = shipped["body"].replace("Ready to Ship", "Shipped")
+        rec2 = RawSourceRecord(
+            source="m365_mail", record_type="email", source_account="bb@mhmw.com",
+            external_id="azz-2", content_hash="hg2", payload=shipped,
+        )
+        db.session.add(rec2)
+        db.session.commit()
+
+        second = service.ingest_record(rec2)[0]
+        # Same row, advanced to complete, re-pointed at the latest record.
+        assert MaterialOrder.query.filter_by(order_kind="galvanizing").count() == 1
+        assert second.id == first.id
+        assert second.shipping_status == "complete"
+        assert second.source_record_id == rec2.id
+
+
+def test_ingest_stock_order_has_no_release(app):
+    """A DenCol stock restock lands one release-less status row for shipping planning."""
+    with app.app_context():
+        rec = _land_record(DENCOL_STOCK, external_id="stock-1", content_hash="hs1")
+        orders = service.ingest_record(rec)
+        assert len(orders) == 1
+        o = orders[0]
+        assert o.order_kind == "stock"
+        assert o.supplier == "Dencol"
+        assert o.job is None and o.release is None
+        assert o.po_number == "Stock 7/7/26"
+        assert o.shipping_status == "planning"
+        assert o.ordered_by == "Luis Solano"
+        # ordered_at = Luis's order (7/7); ready_at = DenCol's ready-for-pickup reply (7/9).
+        assert str(o.ordered_at) == "2026-07-07"
+        assert str(o.ready_at) == "2026-07-09"
 
 
 def test_ingest_unprocessed_picks_up_new_records(app):

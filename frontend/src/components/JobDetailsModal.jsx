@@ -196,23 +196,33 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                             ) : (
                                 <ul className="space-y-2">
                                     {materialOrders.map((o) => {
+                                        // Status orders (galvanizing / stock) track a planning→complete
+                                        // shipping lifecycle, not the itemized ordered/received toggle.
+                                        const isStatusOrder = Boolean(o.shipping_status);
                                         const received = o.status === 'received';
+                                        const complete = o.shipping_status === 'complete';
+                                        const badgeLabel = isStatusOrder
+                                            ? (complete ? 'Complete' : 'Planning')
+                                            : (received ? 'Received' : 'Ordered');
+                                        const badgeGreen = isStatusOrder ? complete : received;
                                         const meta = [o.supplier, o.po_number ? `PO ${o.po_number}` : null]
                                             .filter(Boolean).join(' · ');
                                         return (
                                             <li key={o.id} className="border-l-2 border-accent-500 pl-3">
                                                 <div className="flex items-center justify-between gap-2">
-                                                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${received
+                                                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${badgeGreen
                                                         ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                                         : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
-                                                        {received ? 'Received' : 'Ordered'}
+                                                        {badgeLabel}
                                                     </span>
-                                                    <button
-                                                        onClick={() => handleToggleReceived(o)}
-                                                        className="text-xs text-accent-600 dark:text-accent-400 hover:underline"
-                                                    >
-                                                        {received ? 'Mark ordered' : 'Mark received'}
-                                                    </button>
+                                                    {!isStatusOrder && (
+                                                        <button
+                                                            onClick={() => handleToggleReceived(o)}
+                                                            className="text-xs text-accent-600 dark:text-accent-400 hover:underline"
+                                                        >
+                                                            {received ? 'Mark ordered' : 'Mark received'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <p className="text-sm text-gray-900 dark:text-slate-100 mt-0.5">
                                                     {o.quantity != null ? `(${o.quantity}) ` : ''}{o.description}
@@ -224,6 +234,11 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                                                     <p className="text-xs text-gray-500 dark:text-slate-400">
                                                         {o.ordered_by ? `Ordered by ${o.ordered_by}` : 'Ordered'}
                                                         {o.ordered_at ? ` · ${formatDate(o.ordered_at)}` : ''}
+                                                    </p>
+                                                )}
+                                                {isStatusOrder && o.ready_at && (
+                                                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                                                        Ready · {formatDate(o.ready_at)}
                                                     </p>
                                                 )}
                                             </li>
