@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 KNOWN_SUPPLIERS = {
     "drexelsupply.com": "Drexel Supply",
     "dencol.com": "Dencol",
+    "azz.com": "AZZ Galvanizing",
 }
 SUPPLIER_DOMAINS = set(KNOWN_SUPPLIERS)
 
@@ -124,18 +125,15 @@ def _is_supplier_email(email):
     return bool(email) and email.split("@")[-1].lower() in SUPPLIER_DOMAINS
 
 
-def _parse_orderer(text):
-    """Extract (name, email, ordered_dt) of the order's original *internal* sender.
+def _forwarded_blocks(text):
+    """Every forwarded sender block in a quoted chain: [{name, email, date}, ...].
 
-    Walks every forwarded "From" block (both the colon "From:" reply format and the
-    no-colon 'From "Name" <addr>' Outlook quote format). The orderer is the deepest
-    block whose address is an MHMW/internal one — never a supplier who replied in
-    the thread, and never a forwarder above the original. ordered_dt is that block's
-    Sent/Date; if no internal block exists, name/email are None and the date falls
-    back to the deepest block (caller then falls back to the envelope).
+    Handles both the colon "From:" reply format and the no-colon 'From "Name" <addr>'
+    Outlook quote format, pairing each with the nearest following Sent/Date. Reading
+    order is newest-first (top of the quote is the most recent message).
     """
     lines = text.splitlines()
-    blocks = []  # list of {name, email, date}
+    blocks = []
     for i, line in enumerate(lines):
         m = _FROM_COLON_RE.match(line) or _FROM_NOCOLON_RE.match(line)
         if not m:
@@ -148,6 +146,32 @@ def _parse_orderer(text):
                 date = _parse_email_date(dm.group(1))
                 break
         blocks.append({"name": name, "email": email, "date": date})
+    return blocks
+
+
+def supplier_reply_date(text, domains=SUPPLIER_DOMAINS):
+    """Date the supplier replied in a forwarded chain (their status/ready message).
+
+    The most recent forwarded "From" block whose address is a supplier domain — e.g.
+    the @dencol.com "complete and ready for pick up" reply. Returns a date or None.
+    """
+    for b in _forwarded_blocks(text):
+        email = b.get("email")
+        if email and email.split("@")[-1].lower() in domains and b.get("date"):
+            return b["date"].date()
+    return None
+
+
+def _parse_orderer(text):
+    """Extract (name, email, ordered_dt) of the order's original *internal* sender.
+
+    Walks every forwarded "From" block. The orderer is the deepest block whose address
+    is an MHMW/internal one — never a supplier who replied in the thread, and never a
+    forwarder above the original. ordered_dt is that block's Sent/Date; if no internal
+    block exists, name/email are None and the date falls back to the deepest block
+    (caller then falls back to the envelope).
+    """
+    blocks = _forwarded_blocks(text)
 
     if not blocks:
         return None, None, None

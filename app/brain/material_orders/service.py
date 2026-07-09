@@ -31,13 +31,21 @@ def ingest_record(record):
     # Surface unparseable orderers in the Render logs so future forward-chain
     # formats we can't read are visible and can be tuned (rather than failing
     # silently). The order still ingests; orderer fields are just left null.
-    if not parsed.get("ordered_by"):
+    # Skipped for supplier status notifications (galv/stock), which have no
+    # internal orderer to parse — a null there is expected, not a miss.
+    if parsed.get("order_kind") in (None, "material") and not parsed.get("ordered_by"):
         logger.warning(
             "material_order_orderer_unparsed",
             source_record_id=record.id,
             po_number=parsed.get("po_number"),
             subject=(record.payload or {}).get("subject"),
         )
+
+    # A galvanizing notification advances a SINGLE row per AZZ Job # — each new
+    # status email (a different source record) upserts onto the same row rather
+    # than piling up, so the shipping lane shows one galv job, not one per email.
+    if parsed.get("order_kind") == "galvanizing" and parsed.get("supplier_order_no"):
+        return [_upsert_galv(record, parsed)]
 
     orders = []
     for line in parsed["lines"]:
@@ -55,6 +63,8 @@ def ingest_record(record):
             po_number=parsed.get("po_number"),
             supplier_order_no=parsed.get("supplier_order_no"),
             event_type=parsed.get("event_type"),
+            order_kind=parsed.get("order_kind") or "material",
+            shipping_status=parsed.get("shipping_status"),
             ordered_by=parsed.get("ordered_by"),
             ordered_by_email=parsed.get("ordered_by_email"),
             description=line.get("description"),
@@ -67,6 +77,7 @@ def ingest_record(record):
             extended_price=line.get("extended_price"),
             status="ordered",
             ordered_at=parsed.get("ordered_at"),
+            ready_at=parsed.get("ready_at"),
             source=record.source,
             source_record_id=record.id,
             line_index=line["line_index"],
@@ -85,6 +96,66 @@ def ingest_record(record):
         lines=len(parsed["lines"]),
     )
     return orders
+
+
+def _upsert_galv(record, parsed):
+    """Upsert the single MaterialOrder row for a galvanizing job (keyed on AZZ Job #).
+
+    Successive AZZ status notifications ('Received' → 'Ready to Ship' → 'Shipped')
+    advance the same row: we update the mutable status fields and re-point the row
+    at the latest source record, rather than inserting one row per email.
+    """
+    line = parsed["lines"][0]
+    existing = MaterialOrder.query.filter_by(
+        supplier=parsed.get("supplier"), supplier_order_no=parsed.get("supplier_order_no")
+    ).order_by(MaterialOrder.id.asc()).first()
+    if existing is not None:
+        existing.event_type = parsed.get("event_type")
+        existing.shipping_status = parsed.get("shipping_status")
+        existing.job = parsed.get("job")
+        existing.release = parsed.get("release")
+        existing.po_number = parsed.get("po_number")
+        existing.supplier_contact = parsed.get("supplier_contact")
+        existing.description = line.get("description")
+        existing.finish = line.get("finish")
+        existing.raw_line = line.get("raw_line")
+        existing.ordered_at = parsed.get("ordered_at")
+        existing.ready_at = parsed.get("ready_at")
+        existing.source_record_id = record.id
+        db.session.commit()
+        logger.info("material_order_galv_updated", source_record_id=record.id,
+                    supplier_order_no=parsed.get("supplier_order_no"),
+                    shipping_status=parsed.get("shipping_status"))
+        return existing
+
+    order = MaterialOrder(
+        job=parsed.get("job"),
+        release=parsed.get("release"),
+        supplier=parsed.get("supplier"),
+        supplier_contact=parsed.get("supplier_contact"),
+        po_number=parsed.get("po_number"),
+        supplier_order_no=parsed.get("supplier_order_no"),
+        event_type=parsed.get("event_type"),
+        order_kind="galvanizing",
+        shipping_status=parsed.get("shipping_status"),
+        ordered_by=parsed.get("ordered_by"),
+        ordered_by_email=parsed.get("ordered_by_email"),
+        description=line.get("description"),
+        finish=line.get("finish"),
+        status="ordered",
+        ordered_at=parsed.get("ordered_at"),
+        ready_at=parsed.get("ready_at"),
+        source=record.source,
+        source_record_id=record.id,
+        line_index=0,
+        raw_line=line.get("raw_line"),
+    )
+    db.session.add(order)
+    db.session.commit()
+    logger.info("material_order_galv_created", source_record_id=record.id,
+                supplier_order_no=parsed.get("supplier_order_no"),
+                shipping_status=parsed.get("shipping_status"))
+    return order
 
 
 def ingest_unprocessed(limit=200):
