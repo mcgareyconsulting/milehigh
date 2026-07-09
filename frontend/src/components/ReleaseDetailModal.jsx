@@ -18,7 +18,7 @@
  *   - Core fields render from the `release` prop with no fetch; enrichment fetches fill in async.
  * updated_by_agent: 2026-06-17 (new: timeline detail modal)
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { jobsApi } from '../services/jobsApi';
@@ -73,6 +73,10 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    const [isAdmin, setIsAdmin] = useState(false);   // gates the BB re-run button
+    const [rerunning, setRerunning] = useState(false);
+    const rerunPollRef = useRef(null);
+
     // Internal drawing hub (version history → markup), mirroring ReleaseNumberLink.
     const [canMarkup, setCanMarkup] = useState(false);
     const [drawingHubOpen, setDrawingHubOpen] = useState(false);
@@ -96,10 +100,47 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
         if (!isOpen) return;
         let cancelled = false;
         checkAuth()
-            .then((u) => { if (!cancelled) setCanMarkup(!!(u?.is_admin || u?.is_drafter)); })
+            .then((u) => {
+                if (cancelled) return;
+                setCanMarkup(!!(u?.is_admin || u?.is_drafter));
+                setIsAdmin(!!u?.is_admin);
+            })
             .catch(() => {});
         return () => { cancelled = true; };
     }, [isOpen]);
+
+    // Stop any in-flight re-run poll when the modal closes/unmounts.
+    const clearRerunPoll = () => {
+        if (rerunPollRef.current) { clearInterval(rerunPollRef.current); rerunPollRef.current = null; }
+    };
+    useEffect(() => clearRerunPoll, []);
+    useEffect(() => { if (!isOpen) { clearRerunPoll(); setRerunning(false); } }, [isOpen]);
+
+    // Admin re-run of the BB review (for tuning verbosity/rules). Kicks off a fresh review
+    // on the report's drawing version, polls until it finishes, then swaps in the new report.
+    const rerunBBReview = async () => {
+        const versionId = bbReport?.drawing_version_id;
+        if (!versionId || rerunning) return;
+        setRerunning(true);
+        clearRerunPoll();
+        try {
+            await jobsApi.requestBBReview(releaseId, versionId);
+            rerunPollRef.current = setInterval(async () => {
+                try {
+                    const r = await jobsApi.getBBReview(releaseId, versionId);
+                    if (!r || r.status !== 'pending') {
+                        clearRerunPoll();
+                        const report = await jobsApi.getBBReviewReport(releaseId).catch(() => null);
+                        setBbReport(report || null);
+                        setRerunning(false);
+                    }
+                } catch { /* transient; keep polling */ }
+            }, 5000);
+        } catch {
+            clearRerunPoll();
+            setRerunning(false);
+        }
+    };
 
     // Seed the local has-drawing flag from the release row (the modal can flip it true
     // after an upload via PdfMarkupModal.onSaved).
@@ -335,7 +376,13 @@ export function ReleaseDetailModal({ isOpen, onClose, release }) {
                             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">
                                 🍌 BB Review
                             </h3>
-                            <BBReviewReport report={bbReport} />
+                            <BBReviewReport
+                                report={bbReport}
+                                releaseId={releaseId}
+                                canRerun={isAdmin}
+                                rerunning={rerunning}
+                                onRerun={rerunBBReview}
+                            />
                         </section>
                     )}
                 </div>

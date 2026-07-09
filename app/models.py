@@ -1847,3 +1847,60 @@ class BBDrawingReview(db.Model):
             'created_at': _dt(self.created_at),
             'completed_at': _dt(self.completed_at),
         }
+
+
+class BBReviewFeedback(db.Model):
+    """A PM's accept/deny (+ optional notes) on ONE finding of a Banana Boy review.
+
+    The training loop: as a PM works a BB report they mark each suggestion accepted or
+    rejected and can leave a note ("BB is right, this rise is 8\"" / "false alarm, that
+    flight pours into a topping slab"). We just land these to the DB with enough context
+    (the finding snapshot + review/release/version + rule_id) to ingest later into the
+    rule library. One row per (review, finding); re-submitting a finding upserts it.
+
+    `finding_index` is the position of the finding in the ranked report list the PM sees
+    (app/brain/pdf_review/report.build_report -> findings[]); it's stable for a given
+    review because the report sort is deterministic. `finding_snapshot` freezes the whole
+    finding dict so the feedback stays meaningful even if the rule text later changes.
+    """
+    __tablename__ = 'bb_review_feedback'
+    __table_args__ = (
+        db.UniqueConstraint('review_id', 'finding_index', name='_bb_review_feedback_finding_uc'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    review_id = db.Column(
+        db.Integer,
+        db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    drawing_version_id = db.Column(db.Integer, nullable=True)
+    finding_index = db.Column(db.Integer, nullable=False)
+    rule_id = db.Column(db.String(64), nullable=True)
+    decision = db.Column(db.String(16), nullable=False)  # accepted | rejected
+    notes = db.Column(db.Text, nullable=True)
+    finding_snapshot = db.Column(db.JSON, nullable=True)  # the finding dict at feedback time
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow,
+    )
+
+    review = db.relationship('BBDrawingReview', lazy='select')
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'review_id': self.review_id,
+            'release_id': self.release_id,
+            'drawing_version_id': self.drawing_version_id,
+            'finding_index': self.finding_index,
+            'rule_id': self.rule_id,
+            'decision': self.decision,
+            'notes': self.notes,
+            'user_id': self.user_id,
+            'created_at': _dt(self.created_at),
+            'updated_at': _dt(self.updated_at),
+        }

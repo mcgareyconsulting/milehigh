@@ -232,16 +232,23 @@ SYSTEM_PROMPT_HEADER = (
     "schedule or callout is not authoritative and must be independently verified. Do not "
     "invent unrelated issues.\n"
     "For every concern: cite the sheet label (e.g. 'F1') and the exact dimension text for "
-    "each value used, show the arithmetic, and state a verdict.\n"
+    "each value used, show the arithmetic concisely, and state a verdict.\n"
 )
 
 SYSTEM_PROMPT_FOOTER = (
-    "\nReturn STRICT JSON only, no prose, no markdown:\n"
+    "\nBE CONCISE — this goes to a busy PM, not a plan checker:\n"
+    "- Emit a finding only where a rule has something to say. Report every 'violation' and "
+    "'needs_field_verification'. Do NOT narrate rules that clearly pass — include at most a "
+    "few 'ok' entries for borderline checks you actually computed, and give those only a "
+    "rule_id and a one-clause issue (no computation, no values_used).\n"
+    "- For actionable findings keep 'issue' to ONE sentence and 'computation' to ONE line of "
+    "arithmetic (the numbers, not a paragraph). Don't restate the rule text back.\n"
+    "Return STRICT JSON only, no prose, no markdown:\n"
     '{"findings":[{"rule_id":str,"issue":str,'
     '"verdict":"violation"|"ok"|"needs_field_verification",'
     '"severity":"high"|"medium"|"low","computation":str,'
     '"values_used":[{"name":str,"value":str,"sheet":str}],'
-    '"evidence":str,"location":str}]}'
+    '"location":str}]}'
 )
 
 

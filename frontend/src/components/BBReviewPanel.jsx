@@ -9,7 +9,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import { jobsApi } from '../services/jobsApi';
-import { Finding } from './bbReview/shared';
+import { Finding, FeedbackControls } from './bbReview/shared';
 import { actionableCount } from './bbReview/urgency';
 
 const POLL_MS = 5000;
@@ -119,7 +119,19 @@ export function BBReviewPanel({ releaseId, versionId, enabled }) {
                         <p className="text-xs text-green-700">No issues found against BB's known failure modes.</p>
                     )}
 
-                    {review?.status === 'complete' && findings.map((f, i) => <Finding key={i} f={f} />)}
+                    {review?.status === 'complete' && findings.map((f, i) => (
+                        <div key={i}>
+                            <Finding f={f} />
+                            {/* Accept/deny/notes training loop, keyed by raw finding index. */}
+                            <FeedbackControls
+                                releaseId={releaseId}
+                                reviewId={review.id}
+                                findingIndex={i}
+                                finding={f}
+                                initial={review.feedback?.[i]}
+                            />
+                        </div>
+                    ))}
 
                     {error && <p className="text-xs text-red-600">{error}</p>}
 

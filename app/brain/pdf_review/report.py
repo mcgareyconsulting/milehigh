@@ -73,13 +73,16 @@ def build_report(findings, job_release: str) -> dict:
     ranked = []
     cleared = []
 
-    for f in findings:
+    for idx, f in enumerate(findings):
         urgency = urgency_for(f.get("verdict"), f.get("severity"))
         tally[urgency] += 1
         if urgency == "cleared":
             cleared.append(f)
         else:
-            ranked.append({**f, "urgency": urgency, "urgency_rank": _RANK[urgency]})
+            # orig_index = slot in the raw findings list, so PM feedback keyed off the
+            # report matches feedback keyed off the drawing panel (which sees raw order).
+            ranked.append({**f, "urgency": urgency, "urgency_rank": _RANK[urgency],
+                           "orig_index": idx})
 
     # Stable sort by rank keeps the model's within-bucket ordering.
     ranked.sort(key=lambda f: f["urgency_rank"])

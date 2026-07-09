@@ -286,6 +286,20 @@ class JobsApi {
         }
     }
 
+    // Upsert a PM's accept/deny (+ notes) for one BB finding. Body:
+    // { finding_index, decision:'accepted'|'rejected', rule_id?, notes?, finding? }.
+    async saveBBReviewFeedback(releaseId, reviewId, payload) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/releases/${releaseId}/bb-review/${reviewId}/feedback`,
+                payload
+            );
+            return response.data.feedback;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to save BB feedback');
+        }
+    }
+
     async clearStartInstallHardDate(job, release) {
         try {
             const response = await axios.patch(
