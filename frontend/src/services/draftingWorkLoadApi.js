@@ -280,6 +280,32 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Pull a submittal's drawing PDF from Procore and (optionally) run a BB compliance
+     * review on it. Track B v1 — keyed to the Procore submittal id.
+     * @param {string} submittalId - Procore submittal id
+     * @param {{ pullOnly?: boolean }} [opts] - pullOnly returns the pulled-file metadata
+     *   only (fast); otherwise the review runs inline and can take several minutes.
+     */
+    async runProcoreBBReview(submittalId, { pullOnly = false, model = null } = {}) {
+        try {
+            const params = {};
+            if (pullOnly) params.pull_only = true;
+            if (model) params.model = model;
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/bb-review`,
+                null,
+                {
+                    params,
+                    timeout: 0, // review can take minutes; don't let axios abort it
+                }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'BB review failed');
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

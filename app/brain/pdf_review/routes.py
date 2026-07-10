@@ -15,13 +15,18 @@ from app.auth.utils import admin_required, login_required, get_current_user
 from flask import request
 
 from app.models import (
-    ReleaseDrawingVersion, BBDrawingReview, BBReviewFeedback, Releases, db,
+    ReleaseDrawingVersion, BBDrawingReview, BBReviewFeedback, Releases, Submittals, db,
 )
 from app.logging_config import get_logger
 
+from app.brain.pdf_review import service
 from app.brain.pdf_review.worker import start_review
 from app.brain.pdf_review.report import build_report
 from app.brain.meetings.owner_match import release_owner_user
+from app.procore.attachments import (
+    find_submittal_drawing_refs, download_submittal_drawing, download_markup_pdf,
+)
+from app.brain.job_log.features.pdf_markup.command import UploadInitialDrawingCommand
 
 logger = get_logger(__name__)
 
@@ -202,3 +207,130 @@ def save_bb_review_feedback(release_id, review_id):
     logger.info("bb_review_feedback_saved", review_id=review_id, release_id=release_id,
                 finding_index=finding_index, decision=decision)
     return jsonify({'feedback': fb.to_dict()}), 200
+
+
+def _truthy(v):
+    return str(v).lower() in ("1", "true", "yes", "on")
+
+
+@brain_bp.route('/procore-submittals/<submittal_id>/bb-review', methods=['POST'])
+@admin_required
+def bb_review_procore_submittal(submittal_id):
+    """Pull a submittal's drawing PDF from Procore and run a BB review on it (Track B v1).
+
+    Test/manual endpoint for the "continuous compliance via Procore ingestion" work — keyed
+    to the submittal (no release link required). `submittal_id` is the **Procore** submittal
+    id (what the DWL submittal popup has), matched against `Submittals.submittal_id`.
+
+    Query params:
+      pull_only=true                 — download the PDF and return metadata only (fast; skips
+                                       the multi-minute review). Use this first to confirm the
+                                       Procore pull works before waiting on a review.
+      model=sonnet|opus              — reviewing model: 'sonnet' for a lighter/faster pass,
+                                       'opus' for the deep review (omit for the default).
+      attach_to_release=<id>         — persist the pulled drawing as a ReleaseDrawingVersion
+                                       on that release, so it shows in the release's
+                                       attachments and is reviewable by the per-version flow
+                                       (v1 only; errors if the release already has a drawing).
+      item_id / item_type / attachment_id — target a specific attachment (bypasses auto-select),
+                                       for probing which attachment kind find_or_create serves.
+
+    NOTE: without pull_only the review runs INLINE and blocks for several minutes (the known
+    Phase-0 latency). Fine for a manual sandbox test; the production path will background it.
+    """
+    submittal = (Submittals.query
+                 .filter_by(submittal_id=str(submittal_id))
+                 .first())
+    if not submittal:
+        return jsonify({'error': 'Submittal not found'}), 404
+
+    project_id = submittal.procore_project_id
+    procore_submittal_id = submittal.submittal_id
+    if not project_id or not procore_submittal_id:
+        return jsonify({'error': 'Submittal has no Procore project/submittal id'}), 400
+
+    pull_only = _truthy(request.args.get('pull_only'))
+
+    # Optional explicit attachment targeting (helps probe which attachment kind works).
+    override = None
+    if all(request.args.get(k) for k in ('item_id', 'item_type', 'attachment_id')):
+        override = {
+            'source': 'override',
+            'name': None,
+            'item_id': int(request.args['item_id']),
+            'item_type': request.args['item_type'],
+            'attachment_id': int(request.args['attachment_id']),
+            'project_id': int(project_id),
+            'company_id': None,
+        }
+
+    refs = find_submittal_drawing_refs(project_id, procore_submittal_id)
+    if not refs and not override:
+        return jsonify({'error': 'No drawing attachment found on this submittal',
+                        'candidates': []}), 404
+
+    pdf_bytes, filename, ref = download_submittal_drawing(
+        project_id, procore_submittal_id, ref=override or refs[0],
+    )
+    if not pdf_bytes:
+        return jsonify({
+            'error': 'Could not download the drawing PDF from Procore',
+            'tried': ref,
+            'candidates': refs,
+        }), 502
+
+    logger.info("bb_review_procore_pulled", submittal_id=procore_submittal_id,
+                project_id=project_id, filename=filename, size=len(pdf_bytes),
+                source=(ref or {}).get('source'))
+
+    # Optionally persist the pulled drawing as a release's drawing version, so it shows in
+    # the release's attachments and becomes reviewable by the existing per-version BB flow.
+    # v1 only for now (release has no drawing yet) — the common "pull the FC into the JL" case.
+    attached = None
+    attach_release_id = request.args.get('attach_to_release', type=int)
+    if attach_release_id:
+        user = get_current_user()
+        try:
+            version = UploadInitialDrawingCommand(
+                release_id=attach_release_id,
+                file_bytes=pdf_bytes,
+                filename=filename or f"procore-{procore_submittal_id}.pdf",
+                mime_type='application/pdf',
+                uploaded_by_user_id=user.id if user else None,
+                note=f"Pulled from Procore submittal {procore_submittal_id}",
+            ).execute()
+            attached = {'release_id': attach_release_id, 'version_id': version.id,
+                        'version_number': version.version_number}
+            logger.info("bb_review_procore_attached", submittal_id=procore_submittal_id,
+                        release_id=attach_release_id, version_id=version.id)
+        except ValueError as e:
+            attached = {'error': str(e)}
+
+    if pull_only:
+        return jsonify({
+            'ok': True,
+            'pulled': {'filename': filename, 'size_bytes': len(pdf_bytes),
+                       'ref': ref},
+            'attached': attached,
+            'candidates': refs,
+        }), 200
+
+    job_release = f"{submittal.project_number or ''}-{submittal.rel or ''}".strip('-') \
+        or (submittal.title or 'unknown')
+    # model: 'sonnet' (lighter/faster) | 'opus' (deep) | raw id | omit for the default.
+    result = service.review(pdf_bytes, job_release, model=request.args.get('model'))
+    if result is None:
+        return jsonify({'error': 'Review call failed (see logs)',
+                        'pulled': {'filename': filename, 'size_bytes': len(pdf_bytes)}}), 502
+
+    return jsonify({
+        'ok': True,
+        'job_release': job_release,
+        'pulled': {'filename': filename, 'size_bytes': len(pdf_bytes),
+                   'source': (ref or {}).get('source')},
+        'attached': attached,
+        'findings': result['findings'],
+        'model': result.get('model'),
+        'input_tokens': result.get('input_tokens'),
+        'output_tokens': result.get('output_tokens'),
+    }), 200
