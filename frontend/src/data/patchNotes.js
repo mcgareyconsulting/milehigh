@@ -17,6 +17,34 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.284',
+    date: 'July 9, 2026',
+    summary:
+      'BB can now review a drawing set for code compliance, supplier galvanizing and stock status shows up on job details, and verbal releases are easier and safer to enter.',
+    changes: [
+      {
+        type: 'new',
+        title: 'BB code-compliance review for drawings',
+        adminOnly: true,
+        detail:
+          'Banana Boy can now review a release\'s full For-Construction drawing set against a library of fabrication and structural code rules, flagging issues by severity with the sheet citations it used to reach each finding. PMs can accept or deny each flag to help BB improve.',
+      },
+      {
+        type: 'new',
+        title: 'Galvanizing & stock order status tracking',
+        adminOnly: true,
+        detail:
+          'Supplier-order capture now also picks up galvanizing "ready to ship" and stock "ready for pickup" notifications forwarded to the mailbox, showing them on the job details panel with their own Planning → Complete status alongside itemized material orders.',
+      },
+      {
+        type: 'improved',
+        title: 'Paste-in verbal releases, plus duplicate protection',
+        detail:
+          'The Verbal Release modal now has a Paste mode — paste one row from a spreadsheet and it fills the form for you. Both verbal and bulk release entry also now catch likely duplicates (same job, name, and description under a different release number) and ask you to confirm before creating them.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.281',
     date: 'July 5, 2026',
     summary:
