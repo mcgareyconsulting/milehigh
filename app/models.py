@@ -1819,12 +1819,21 @@ class BBDrawingReview(db.Model):
     __tablename__ = 'bb_drawing_reviews'
 
     id = db.Column(db.Integer, primary_key=True)
+    # drawing_version_id/release_id are the release-keyed path (a review of a
+    # ReleaseDrawingVersion). They are nullable because a submittal-keyed review
+    # (pulled straight from Procore, no job-log release) omits them and instead sets
+    # submittal_id + attachment_id below.
     drawing_version_id = db.Column(
         db.Integer,
         db.ForeignKey('release_drawing_versions.id', ondelete='CASCADE'),
-        nullable=False, index=True,
+        nullable=True, index=True,
     )
-    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True, index=True)
+    # Submittal-keyed path: the Procore submittal id and the prostore attachment id of
+    # the reviewed drawing. Set together (release/version null) when the review is run
+    # directly off a Procore submittal drawing.
+    submittal_id = db.Column(db.String(64), nullable=True, index=True)
+    attachment_id = db.Column(db.BigInteger, nullable=True, index=True)
     status = db.Column(db.String(16), nullable=False, default='pending')  # pending|complete|error
     findings = db.Column(db.JSON, nullable=True)   # list of finding dicts when complete
     model = db.Column(db.String(64), nullable=True)
@@ -1846,6 +1855,8 @@ class BBDrawingReview(db.Model):
             'id': self.id,
             'drawing_version_id': self.drawing_version_id,
             'release_id': self.release_id,
+            'submittal_id': self.submittal_id,
+            'attachment_id': self.attachment_id,
             'status': self.status,
             'findings': self.findings if self.findings is not None else [],
             'model': self.model,
@@ -1883,8 +1894,13 @@ class BBReviewFeedback(db.Model):
         db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'),
         nullable=False, index=True,
     )
-    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=False, index=True)
+    # Release-keyed context (nullable so submittal-keyed feedback can leave them null).
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True, index=True)
     drawing_version_id = db.Column(db.Integer, nullable=True)
+    # Submittal-keyed context: mirrors BBDrawingReview's submittal_id/attachment_id so
+    # feedback on a submittal-keyed review carries the same anchor for the training loop.
+    submittal_id = db.Column(db.String(64), nullable=True, index=True)
+    attachment_id = db.Column(db.BigInteger, nullable=True, index=True)
     finding_index = db.Column(db.Integer, nullable=False)
     rule_id = db.Column(db.String(64), nullable=True)
     decision = db.Column(db.String(16), nullable=False)  # accepted | rejected
@@ -1905,6 +1921,8 @@ class BBReviewFeedback(db.Model):
             'review_id': self.review_id,
             'release_id': self.release_id,
             'drawing_version_id': self.drawing_version_id,
+            'submittal_id': self.submittal_id,
+            'attachment_id': self.attachment_id,
             'finding_index': self.finding_index,
             'rule_id': self.rule_id,
             'decision': self.decision,

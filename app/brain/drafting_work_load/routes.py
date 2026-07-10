@@ -29,7 +29,8 @@ from app.brain.drafting_work_load.service import (
     LocationService,
 )
 from app.logging_config import get_logger
-from app.models import Submittals, ProcoreOutbox, Notification, PendingStartInstall, db, is_gc_approval_type
+from app.models import Submittals, ProcoreOutbox, Notification, PendingStartInstall, BBDrawingReview, db, is_gc_approval_type
+from app.brain.pdf_review.report import build_report
 from app.auth.utils import login_required, admin_required, drafter_or_admin_required, get_current_user
 from app.brain.mentions import parse_mentions, resolve_mentioned_users
 from app.route_utils import handle_errors, require_json, get_or_404
@@ -72,9 +73,57 @@ def drafting_work_load():
         submittals = open_submittals + draft_submittals
     else:
         submittals = DraftingWorkLoadService.get_dwl_submittals(job_numbers_filter, tab=tab)
-    return jsonify({
-        "submittals": [submittal.to_dict() for submittal in submittals]
-    }), 200
+
+    # BB review rollup badge per submittal (one grouped query; no Procore/filesystem calls).
+    bb_status = _bb_status_by_submittal(submittals)
+    serialized = []
+    for submittal in submittals:
+        payload = submittal.to_dict()
+        payload["bb_status"] = bb_status.get(submittal.submittal_id)
+        serialized.append(payload)
+    return jsonify({"submittals": serialized}), 200
+
+
+def _bb_status_by_submittal(submittals):
+    """Roll each submittal's BB reviews up to one badge status, in a single query.
+
+    Priority: 'reviewing' (any pending) > 'violation' (any complete with a critical) >
+    'needs_verify' (any complete with actionable high/moderate/low findings) > 'clear'
+    (a complete review with nothing actionable) > None (no reviews / only errored).
+    """
+    ids = [str(s.submittal_id) for s in submittals if s.submittal_id]
+    if not ids:
+        return {}
+    reviews = (BBDrawingReview.query
+               .filter(BBDrawingReview.submittal_id.in_(ids))
+               .all())
+    grouped = {}
+    for r in reviews:
+        grouped.setdefault(r.submittal_id, []).append(r)
+
+    status = {}
+    for sid, rows in grouped.items():
+        if any(r.status == 'pending' for r in rows):
+            status[sid] = 'reviewing'
+            continue
+        complete = [r for r in rows if r.status == 'complete']
+        if not complete:
+            status[sid] = None
+            continue
+        has_violation = has_actionable = False
+        for r in complete:
+            tally = build_report(r.findings or [], '').get('tally', {})
+            if tally.get('critical', 0) > 0:
+                has_violation = True
+            if (tally.get('high', 0) + tally.get('moderate', 0) + tally.get('low', 0)) > 0:
+                has_actionable = True
+        if has_violation:
+            status[sid] = 'violation'
+        elif has_actionable:
+            status[sid] = 'needs_verify'
+        else:
+            status[sid] = 'clear'
+    return status
 
 @brain_bp.route("/drafting-work-load/order", methods=["PUT"])
 @admin_required

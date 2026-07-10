@@ -14,15 +14,16 @@
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { formatDate, formatDateShort } from '../utils/formatters';
+import { formatDateShort } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import MentionInput from './shared/MentionInput';
 import { SubmittalDetailsModal } from './SubmittalDetailsModal';
 import DateCellPill from './DateCellPill';
 import { StartInstallDwlModal } from './StartInstallDwlModal';
 import { DateFieldModal } from './DateFieldModal';
+import { BBStatusBadge } from './bbReview/BBStatusBadge';
 
-export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStartInstallChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
+export function TableRow({ row, columns, formatCellValue, onOrderNumberChange, onNotesChange, onStatusChange, onProcoreStatusChange, procoreStatusOptions, selectedTab, onBump, onDueDateChange, onStartInstallChange, onStepOrder, allRows, rowIndex, isAdmin = false, isDrafter = false, onRelAssigned, isJumpToHighlight, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, isDragOver, dragOverHalf, mentionableUsers = [] }) {
     const [editingOrderNumber, setEditingOrderNumber] = useState(false);
     const [orderNumberValue, setOrderNumberValue] = useState('');
     const [editingNotes, setEditingNotes] = useState(false);
@@ -147,7 +148,7 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                 const day = String(date.getUTCDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             }
-        } catch (e) {
+        } catch {
             // Invalid date, fall through to empty
         }
         return '';
@@ -676,20 +677,23 @@ export function TableRow({ row, columns, formatCellValue, formatDate, onOrderNum
                                 style={{ maxWidth: '280px' }}
                                 title={fullProjectName ? `${fullProjectName} — Click to view details` : ''}
                             >
-                                {submittalId ? (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setDetailsOpen(true);
-                                        }}
-                                        className={`${linkAccent} underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-medium`}
-                                    >
-                                        {truncatedProjectName}
-                                    </button>
-                                ) : (
-                                    <span className="text-gray-900 dark:text-slate-100">{truncatedProjectName}</span>
-                                )}
+                                <span className="inline-flex items-center justify-center gap-1">
+                                    {submittalId ? (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDetailsOpen(true);
+                                            }}
+                                            className={`${linkAccent} underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-medium`}
+                                        >
+                                            {truncatedProjectName}
+                                        </button>
+                                    ) : (
+                                        <span className="text-gray-900 dark:text-slate-100">{truncatedProjectName}</span>
+                                    )}
+                                    <BBStatusBadge status={row.bb_status} />
+                                </span>
                             </td>
                         );
                     }
