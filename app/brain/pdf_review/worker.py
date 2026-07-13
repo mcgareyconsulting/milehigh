@@ -69,6 +69,19 @@ def _run_review_job(app, review_id: int) -> None:
             logger.info("bb_review_complete", review_id=review_id,
                         findings=len(result["findings"]))
 
+            # Ledger the review spend (cost computed from tokens — the review row
+            # stores no cost column). Own transaction, post-commit.
+            from app.services import ai_usage
+            ai_usage.record(
+                "pdf_review",
+                model=result.get("model"),
+                input_tokens=result.get("input_tokens") or 0,
+                output_tokens=result.get("output_tokens") or 0,
+                user_id=review.requested_by_user_id,
+                entity_type="drawing_review",
+                entity_id=review.id,
+            )
+
             _notify_pm(review, release, result["findings"])
         except Exception as e:  # noqa: BLE001 — record + log, never crash the worker
             logger.error("bb_review_job_failed", review_id=review_id, error=str(e), exc_info=True)

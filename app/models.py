@@ -2036,3 +2036,56 @@ class BBChatMessage(db.Model):
                 "tool_calls": self.tool_calls,
             } if self.role == "assistant" else None,
         }
+
+
+class AiUsage(db.Model):
+    """Unified ledger of every LLM call, across all features — the single source of
+    truth for system-wide AI spend that app/brain/metrics reads.
+
+    Each AI call site (bb_chat, meetings, meeting_learning, pdf_review,
+    material_orders) appends ONE row here via app/services/ai_usage.record(),
+    alongside its own feature-specific writes. Costs are computed once, at write
+    time, from the shared pricing table. `entity_type`/`entity_id` are a loose
+    (non-FK) back-reference to the row the call produced, used to dedupe the
+    one-time backfill against live writes.
+    """
+    __tablename__ = "ai_usage"
+    __table_args__ = (
+        db.Index("ix_ai_usage_feature_created", "feature", "created_at"),
+        db.Index("ix_ai_usage_user_created", "user_id", "created_at"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    feature = db.Column(db.String(40), nullable=False)  # bb_chat|meetings|meeting_learning|pdf_review|material_orders|...
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    model = db.Column(db.String(64), nullable=True)
+    anthropic_request_id = db.Column(db.String(64), nullable=True, index=True)
+    input_tokens = db.Column(db.Integer, nullable=False, default=0)
+    output_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_read_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_write_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cost_usd = db.Column(db.Float, nullable=False, default=0.0)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    # Loose (non-FK) reference to the produced row, e.g. ('bb_chat_message', 42),
+    # ('meeting', 7), ('drawing_review', 3). Kept as a string so heterogeneous ids
+    # (job-release, uuid) fit; used only for backfill dedup and drill-down.
+    entity_type = db.Column(db.String(24), nullable=True)
+    entity_id = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "feature": self.feature,
+            "user_id": self.user_id,
+            "model": self.model,
+            "anthropic_request_id": self.anthropic_request_id,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cache_read_tokens": self.cache_read_tokens,
+            "cache_write_tokens": self.cache_write_tokens,
+            "cost_usd": self.cost_usd,
+            "duration_ms": self.duration_ms,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "created_at": _dt(self.created_at),
+        }

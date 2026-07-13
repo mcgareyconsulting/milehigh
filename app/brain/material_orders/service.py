@@ -28,6 +28,10 @@ def ingest_record(record):
     if not parsed or not parsed.get("lines"):
         return []
 
+    # The LLM fallback attaches its token usage here (deterministic extractors don't);
+    # pop it now and ledger it after the order commits below.
+    ai_usage_meter = parsed.pop("_ai_usage", None)
+
     # Surface unparseable orderers in the Render logs so future forward-chain
     # formats we can't read are visible and can be tuned (rather than failing
     # silently). The order still ingests; orderer fields are just left null.
@@ -95,6 +99,19 @@ def ingest_record(record):
         supplier=parsed.get("supplier"),
         lines=len(parsed["lines"]),
     )
+
+    # Ledger the LLM-fallback spend (previously dropped). Own transaction, post-commit.
+    if ai_usage_meter:
+        from app.services import ai_usage
+        ai_usage.record(
+            "material_orders",
+            model=ai_usage_meter.get("model"),
+            input_tokens=ai_usage_meter.get("input_tokens") or 0,
+            output_tokens=ai_usage_meter.get("output_tokens") or 0,
+            entity_type="raw_source_record",
+            entity_id=record.id,
+        )
+
     return orders
 
 

@@ -76,6 +76,23 @@ def send_message(user_id: int, conversation_id, user_text: str) -> dict:
     db.session.add(assistant_msg)
     db.session.commit()
 
+    # Ledger the spend (own transaction, post-commit — never breaks the chat turn).
+    from app.services import ai_usage
+    ai_usage.record(
+        "bb_chat",
+        model=m.get("model"),
+        input_tokens=m.get("input_tokens") or 0,
+        output_tokens=m.get("output_tokens") or 0,
+        cache_read_tokens=m.get("cache_read_tokens") or 0,
+        cache_write_tokens=m.get("cache_write_tokens") or 0,
+        cost_usd=m.get("cost_usd"),
+        duration_ms=m.get("duration_ms"),
+        user_id=user_id,
+        request_id=(m.get("request_ids") or [None])[-1],
+        entity_type="bb_chat_message",
+        entity_id=assistant_msg.id,
+    )
+
     return {
         "conversation_id": convo.id,
         "user_message": user_msg.to_dict(),
