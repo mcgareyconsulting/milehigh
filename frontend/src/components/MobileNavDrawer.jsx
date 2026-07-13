@@ -26,6 +26,7 @@ const NAV_ITEMS = [
 const ADMIN_ITEMS = [
     { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
+    { label: 'Submittal Matching', path: '/admin/submittal-matching' },
 ];
 
 export default function MobileNavDrawer({

@@ -140,6 +140,7 @@ function AppShellInner({ isAuthenticated }) {
             {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
             {isAdmin && navBtn('/meetings', 'Meetings')}
             {isAdmin && navBtn('/board', 'Bug Tracker')}
+            {isAdmin && navBtn('/admin/submittal-matching', 'Matching')}
           </div>
 
           {/* Notification bell (always visible if authenticated) */}
