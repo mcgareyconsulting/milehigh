@@ -133,6 +133,14 @@ class Submittals(db.Model):
     # Setting it also overwrites due_date with the drawings-due date (15 business days
     # before), so the due date doubles as the Design Drawings Due date.
     start_install = db.Column(db.Date, nullable=True)
+    # Admin-confirmed link from this (DRR) submittal to its job-log release, set via the
+    # Submittal Matching review tool (/brain/submittal-matching). linked_release_id is a
+    # loose reference to releases.id — deliberately NOT a FK constraint, because the link
+    # must survive the release being archived or soft-deleted (historical matching is the
+    # whole point). link_status: '' = unreviewed, 'linked' = confirmed by an admin,
+    # 'no_match' = reviewed and confirmed to have no job-log release.
+    linked_release_id = db.Column(db.Integer, nullable=True, index=True)
+    link_status = db.Column(db.String(16), nullable=False, default='', server_default='')
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -200,6 +208,8 @@ class Submittals(db.Model):
             "due_date": _dt(self.due_date),
             "gc_jobsite_schedule_date": _dt(self.gc_jobsite_schedule_date),
             "start_install": _dt(self.start_install),
+            "linked_release_id": self.linked_release_id,
+            "link_status": self.link_status or "",
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
             "created_at": _dt(self.created_at),
