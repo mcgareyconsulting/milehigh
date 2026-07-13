@@ -41,3 +41,4 @@ from app.brain import notification_routes
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
 from app.brain.material_orders import routes as material_orders_routes  # noqa: F401  (registers /material-orders endpoints)
 from app.brain.submittal_matching import routes as submittal_matching_routes  # noqa: F401  (registers /submittal-matching endpoints)
+from app.brain.metrics import routes as metrics_routes  # noqa: F401  (registers /metrics endpoints)

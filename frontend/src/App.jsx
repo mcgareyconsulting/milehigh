@@ -32,6 +32,7 @@ import FcCollection from './pages/FcCollection';
 import SubmittalMatching from './pages/SubmittalMatching';
 import InvoicingReport from './pages/InvoicingReport';
 import RentalReports from './pages/RentalReports';
+import Metrics from './pages/Metrics';
 import { checkAuth } from './utils/auth';
 import './App.css';
 
@@ -84,6 +85,7 @@ function AppContent() {
               <Route path="rental-reports" element={<RentalReports />} />
               <Route path="admin/fc-collection" element={<FcCollection />} />
               <Route path="admin/submittal-matching" element={<SubmittalMatching />} />
+              <Route path="admin/metrics" element={<Metrics />} />
               <Route path="*" element={<Navigate to="/job-log" replace />} />
             </>
           ) : (

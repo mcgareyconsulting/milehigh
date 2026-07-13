@@ -226,6 +226,20 @@ def synthesize_learnings(meeting):
     db.session.add(learning)
     meeting.learned_at = datetime.utcnow()
     db.session.commit()
+
+    # Ledger the synthesis spend (skip the stub path that made no API call).
+    if usage["model"] != "stub" and (usage["input_tokens"] or usage["output_tokens"]):
+        from app.services import ai_usage
+        ai_usage.record(
+            "meeting_learning",
+            model=usage["model"],
+            input_tokens=usage["input_tokens"] or 0,
+            output_tokens=usage["output_tokens"] or 0,
+            cost_usd=usage["cost_usd"],
+            entity_type="meeting_learning",
+            entity_id=learning.id,
+        )
+
     logger.info("meeting_learned", meeting_id=meeting.id, owner_maps=owner_maps,
                 aliases=alias_n, patterns=pattern_n, model=usage["model"])
     return learning
