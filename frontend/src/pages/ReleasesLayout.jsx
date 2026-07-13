@@ -241,7 +241,7 @@ function ReleasesLayout() {
 
     // Filter and order columns based on the defined order
     const columnHeaders = useMemo(
-        () => columnOrder.filter(col => columns.includes(col) || col === 'Urgency'),
+        () => columnOrder.filter(col => columns.includes(col)),
         [columns]
     );
 

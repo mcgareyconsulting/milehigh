@@ -1130,6 +1130,10 @@ class RawSourceRecord(db.Model):
     ingested_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     payload = db.Column(db.JSON, nullable=False)              # normalized record
     external_pointer = db.Column(db.JSON, nullable=True)      # refs kept in M365 (webLink, attachments)
+    # Once-only marker for the material-order scan: stamped after each email record is
+    # attempted (regardless of outcome) so non-order mail isn't re-sent to the LLM every
+    # poll. Reset to NULL by the mail connector when a record's content changes.
+    material_order_scanned_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
         return {
@@ -1233,9 +1237,15 @@ class MaterialOrder(db.Model):
     # for outbound requests; set when a supplier confirm document carries one.
     supplier_order_no = db.Column(db.String(64), nullable=True)
     # Which artifact this row came from: 'placed' (we sent the order / drawing) vs
-    # 'confirmed' (supplier acknowledged it). Seeds the future request↔confirm
-    # lifecycle; status stays the ordered/received flag.
+    # 'confirmed' (supplier acknowledged it), or 'status' for a supplier status
+    # notification (galvanizing "Ready to Ship", stock "ready for pickup") that
+    # carries no itemized parts. status stays the ordered/received flag.
     event_type = db.Column(db.String(16), nullable=True)
+    # What kind of order this row represents, so the shipping-planning lane can
+    # source and style it: 'material' (itemized parts — the default/original shape),
+    # 'galvanizing' (AZZ galv-job status notification, one row upserted per AZZ Job #),
+    # or 'stock' (a DenCol stock pickup — a "PU"/pickup — not tied to any release).
+    order_kind = db.Column(db.String(16), nullable=True, default="material", server_default="material")
 
     # Orderer: the MHMW person who placed the order (the innermost forwarded
     # "From:" sender), NOT the forwarder. Parsed best-effort from the email body.
@@ -1256,7 +1266,15 @@ class MaterialOrder(db.Model):
     extended_price = db.Column(db.Float, nullable=True)
 
     status = db.Column(db.String(16), nullable=False, default="ordered", server_default="ordered")
+    # Shipping-planning lifecycle for the shipping lane: 'planning' (out at the
+    # supplier / ready to ship / ready for pickup — a thing to still bring in) vs
+    # 'complete' (received / picked up / shipped). Null for plain 'material' rows,
+    # whose lifecycle is the ordered/received `status` above.
+    shipping_status = db.Column(db.String(16), nullable=True)
     ordered_at = db.Column(db.Date, nullable=True)
+    # When the supplier said it was ready (galv "Ready to Ship" / stock "ready for
+    # pickup") — the shipping-lane milestone distinct from ordered_at/received_at.
+    ready_at = db.Column(db.Date, nullable=True)
     received_at = db.Column(db.Date, nullable=True)
 
     # Provenance: which raw lake record + which line of it this came from
@@ -1278,6 +1296,7 @@ class MaterialOrder(db.Model):
             "po_number": self.po_number,
             "supplier_order_no": self.supplier_order_no,
             "event_type": self.event_type,
+            "order_kind": self.order_kind,
             "ordered_by": self.ordered_by,
             "ordered_by_email": self.ordered_by_email,
             "description": self.description,
@@ -1290,7 +1309,9 @@ class MaterialOrder(db.Model):
             "unit_price": self.unit_price,
             "extended_price": self.extended_price,
             "status": self.status,
+            "shipping_status": self.shipping_status,
             "ordered_at": _dt(self.ordered_at),
+            "ready_at": _dt(self.ready_at),
             "received_at": _dt(self.received_at),
             "source": self.source,
             "source_record_id": self.source_record_id,

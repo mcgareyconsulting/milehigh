@@ -14,12 +14,10 @@
  * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
- *   - MOSTLY READ-ONLY: clicking a card opens a read-only detail modal (ReleaseDetailModal); clicking
- *     never edits. The ONLY writes are two drag interactions (Phase 5), each via an existing Job Log
- *     command: (a) dragging an installer-lane card to another DAY column reschedules Start install
- *     (updateStartInstall); (b) dragging a card between the two shipping lanes (Planning ↔ Completed,
- *     both directions) changes its stage (updateStage). Drags apply optimistically via `overrides`,
- *     then reconcile against the polled data. Installer-to-installer moves are not handled yet.
+ *   - READ-ONLY: clicking a card opens a read-only detail modal (ReleaseDetailModal); the timeline
+ *     never writes. (The Phase-5 drag interactions — installer-day reschedule and shipping-lane stage
+ *     change — were REMOVED 2026-07-12 for the prod-stability release: native HTML5 drag was dead on
+ *     iPad anyway. Edits happen in the Job Log.)
  *   - Lanes = two fixed shipping-stage lanes (DB stage 'Ship Planning' → "Shipping Planning",
  *     'Ship Complete' → "Shipping Completed"), then the installer roster from /brain/installer-teams,
  *     then any off-roster installer present in the data (so no card is silently dropped).
@@ -83,6 +81,10 @@ const SIDEBAR_PX = 192;
 const CARD_GUTTER = 5;    // horizontal inset within a column
 const CARD_VGAP = 3;      // vertical gap between stacked cards in a cell
 const CELL_PAD_TOP = 5;   // top padding inside a lane before the first card
+const ORDER_ROW_PX = 20;  // height reserved at the bottom of the Shipping Planning lane for the PU/order overlay strip
+const SHIP_PLANNING_LANE = 'Shipping Planning';
+// Short badge + tooltip prefix per material-order kind for the shipping-lane overlay.
+const ORDER_KIND_BADGE = { stock: 'PU', galvanizing: 'GALV', material: 'MAT' };
 
 // Zoom presets, far-out → zoomed-in. Each level targets a whole number of VISIBLE COLUMNS
 // (`cols`) at a granularity (`unit`): 'day' = one day per column, 'week' = one week per column.
@@ -111,8 +113,6 @@ const SHIP_LANES = [
     { lane: 'Shipping Completed', stage: 'Ship Complete', color: 'rgb(139 92 246)' },
 ];
 const STAGE_TO_SHIP_LANE = new Map(SHIP_LANES.map((s) => [s.stage, s.lane]));
-const SHIP_LANE_TO_STAGE = new Map(SHIP_LANES.map((s) => [s.lane, s.stage]));
-const SHIP_STAGES = new Set(SHIP_LANES.map((s) => s.stage));
 
 const ELIGIBLE_STAGE_GROUPS = new Set(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE']);
 
@@ -226,9 +226,10 @@ function CardBody({ release, detail, wrap }) {
 }
 
 function GanttChart({ filterComplete = false }) {
-    const { jobs, loading, refetch } = useReleases();
+    const { jobs, loading } = useReleases();
     const [installerTeams, setInstallerTeams] = useState([]);
     const [teamsLoaded, setTeamsLoaded] = useState(false);
+    const [planningOrders, setPlanningOrders] = useState([]);  // PU/stock/galv orders still to bring in
     const [hoveredItem, setHoveredItem] = useState(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const [selectedRelease, setSelectedRelease] = useState(null);   // full job row for the detail modal
@@ -240,9 +241,6 @@ function GanttChart({ filterComplete = false }) {
     const [datePickerValue, setDatePickerValue] = useState('');
     const [zoomIdx, setZoomIdx] = useState(DEFAULT_ZOOM);
     const [laneHeights, setLaneHeights] = useState({});   // measured px height per lane
-    const [overrides, setOverrides] = useState({});       // id → optimistic patch {startDate?, stage?, lane?, isShip?}
-    const [dragOverLane, setDragOverLane] = useState(null);
-    const dragItemRef = useRef(null);                     // the bar currently being dragged
     const scrollContainerRef = useRef(null);
     const bodyRef = useRef(null);
     const laneChartRefs = useRef({});      // lane name → chart-area DOM node, for height measurement
@@ -278,6 +276,18 @@ function GanttChart({ filterComplete = false }) {
         return () => { cancelled = true; };
     }, []);
 
+    // Shipping-planning material orders (PU/pickup, stock, galvanizing "ready to ship") —
+    // a READ-ONLY overlay on the Shipping Planning lane, unioned in from the material-orders
+    // read-model. Never touches Releases rows. One fetch on mount.
+    useEffect(() => {
+        let cancelled = false;
+        fetch(`${API_BASE_URL}/brain/material-orders/shipping-planning`, { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : { orders: [] }))
+            .then((d) => { if (!cancelled) setPlanningOrders(Array.isArray(d.orders) ? d.orders : []); })
+            .catch(() => { if (!cancelled) setPlanningOrders([]); });
+        return () => { cancelled = true; };
+    }, []);
+
     // Track the scroll-viewport width so columns can be sized to fit a whole number of them.
     // Re-measures on resize (ResizeObserver + window resize as a fallback).
     useLayoutEffect(() => {
@@ -297,35 +307,11 @@ function GanttChart({ filterComplete = false }) {
         };
     }, []);
 
-    // Eligible release cards, selected client-side from the shared dataset. Optimistic drag
-    // overrides (see the drag handlers) are patched on so a moved card jumps immediately, before
-    // the server poll confirms.
-    const releases = useMemo(() => {
-        const base = jobs.map((j) => toBar(j, filterComplete)).filter(Boolean);
-        if (Object.keys(overrides).length === 0) return base;
-        return base.map((b) => (overrides[b.id] ? { ...b, ...overrides[b.id] } : b));
-    }, [jobs, filterComplete, overrides]);
-
-    // Reconcile optimistic overrides: once the polled data reflects a drag's write, drop the
-    // override so the card follows the source of truth again (and stale overrides self-heal).
-    useEffect(() => {
-        setOverrides((prev) => {
-            const keys = Object.keys(prev);
-            if (keys.length === 0) return prev;
-            const byId = new Map(jobs.map((j) => [String(j.id), j]));
-            let changed = false;
-            const next = { ...prev };
-            keys.forEach((id) => {
-                const j = byId.get(id);
-                if (!j) return;
-                const ov = prev[id];
-                const startOk = !ov.startDate || dayPart(j['Start install']) === ov.startDate;
-                const stageOk = !ov.stage || j['Stage'] === ov.stage;
-                if (startOk && stageOk) { delete next[id]; changed = true; }
-            });
-            return changed ? next : prev;
-        });
-    }, [jobs]);
+    // Eligible release cards, selected client-side from the shared dataset.
+    const releases = useMemo(
+        () => jobs.map((j) => toBar(j, filterComplete)).filter(Boolean),
+        [jobs, filterComplete]
+    );
 
     // Lane order: the two shipping lanes first, then the configured installer roster,
     // then any off-roster installer present in the data (so no eligible card is silently
@@ -368,6 +354,16 @@ function GanttChart({ filterComplete = false }) {
     const totalPx = totalCols * colPx;
     // Left px of a date (fractional within its column) — used for scroll/highlight positioning.
     const xOfDate = (iso) => (daysBetween(chartRange.firstDay, iso) / colDays) * colPx;
+
+    // Planning orders placed on the Shipping Planning lane by date (ready_at → ordered_at).
+    // Undated orders can't be positioned, so they're dropped from the overlay (rare).
+    const placedOrders = useMemo(
+        () => planningOrders
+            .filter((o) => o.date)
+            .map((o) => ({ ...o, left: xOfDate(o.date) })),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [planningOrders, colPx, colDays, chartRange.firstDay],
+    );
 
     // When the chart origin (firstDay) shifts — e.g. a polled update introduces an earlier release
     // and grows the chart on the left — every card's pixel position moves with it. Restore the same
@@ -497,72 +493,6 @@ function GanttChart({ filterComplete = false }) {
 
     const handleMouseLeave = () => {
         setHoveredItem(null);
-    };
-
-    // ── Drag interactions (Phase 5) ─────────────────────────────────────────────────────────
-    // Two behaviors by lane type: (a) installer lanes in DAY mode — drag a card to another day
-    // column to reschedule Start install; (b) Shipping Planning → Shipping Completed — drag down
-    // to mark shipped (stage change). One-way for shipping; installer-to-installer moves are not
-    // handled yet (a later slice).
-    const revertOverride = (id) => setOverrides((o) => {
-        if (!o[id]) return o;
-        const next = { ...o }; delete next[id]; return next;
-    });
-
-    const canDrop = (bar, toLane) => {
-        if (!bar) return false;
-        const toStage = SHIP_LANE_TO_STAGE.get(toLane);
-        if (toStage && SHIP_STAGES.has(bar.stage) && bar.stage !== toStage) return true;      // (b) shipping ↔ (both ways)
-        if (!bar.isShip && toLane === bar.lane && colDays === 1) return true;                 // (a) installer reschedule
-        return false;
-    };
-
-    const onCardDragStart = (e, bar) => {
-        dragItemRef.current = bar;
-        setHoveredItem(null);
-        e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', `${bar.job}-${bar.release}`); } catch { /* ignore */ }
-    };
-    const onCardDragEnd = () => { dragItemRef.current = null; setDragOverLane(null); };
-
-    const onLaneDragOver = (e, toLane) => {
-        if (canDrop(dragItemRef.current, toLane)) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            if (dragOverLane !== toLane) setDragOverLane(toLane);
-        }
-    };
-
-    const changeShipStage = (bar, toLane, toStage) => {
-        setOverrides((o) => ({ ...o, [bar.id]: { ...(o[bar.id] || {}), lane: toLane, stage: toStage, isShip: true } }));
-        jobsApi.updateStage(bar.job, bar.release, toStage)
-            .then(() => refetch && refetch(true))
-            .catch((err) => { console.error('stage change failed', err); revertOverride(bar.id); window.alert(`Failed to move ${bar.job}-${bar.release} to ${toLane}: ${err.message || err}`); });
-    };
-    const rescheduleTo = (bar, targetDate) => {
-        setOverrides((o) => ({ ...o, [bar.id]: { ...(o[bar.id] || {}), startDate: targetDate } }));
-        jobsApi.updateStartInstall(bar.job, bar.release, targetDate)
-            .then(() => refetch && refetch(true))
-            .catch((err) => { console.error('reschedule failed', err); revertOverride(bar.id); window.alert(`Failed to reschedule ${bar.job}-${bar.release}: ${err.message || err}`); });
-    };
-
-    const onLaneDrop = (e, toLane) => {
-        e.preventDefault();
-        const bar = dragItemRef.current;
-        const chartEl = e.currentTarget;
-        dragItemRef.current = null;
-        setDragOverLane(null);
-        if (!canDrop(bar, toLane)) return;
-        const toStage = SHIP_LANE_TO_STAGE.get(toLane);
-        if (toStage && SHIP_STAGES.has(bar.stage) && bar.stage !== toStage) {
-            changeShipStage(bar, toLane, toStage);
-            return;
-        }
-        // Installer-lane reschedule: target column comes from the drop x within the chart content.
-        const rect = chartEl.getBoundingClientRect();
-        const col = Math.max(0, Math.floor((e.clientX - rect.left) / colPx));
-        const targetDate = addDays(chartRange.firstDay, col * colDays);
-        if (targetDate !== bar.startDate) rescheduleTo(bar, targetDate);
     };
 
     const weekLabel = useMemo(() => {
@@ -733,7 +663,10 @@ function GanttChart({ filterComplete = false }) {
                             vertically. Lanes never shrink (would clip stacks). */}
                         <div ref={bodyRef} className="flex-1 flex flex-col">
                             {bands.map((band) => {
-                                const laneH = laneHeights[band.lane] || fallbackLaneH;
+                                // Reserve a bottom strip on the Shipping Planning lane for the PU/order overlay.
+                                const laneOrders = band.lane === SHIP_PLANNING_LANE ? placedOrders : [];
+                                const laneH = (laneHeights[band.lane] || fallbackLaneH)
+                                    + (laneOrders.length ? ORDER_ROW_PX + CARD_VGAP : 0);
                                 return (
                                     <div
                                         key={band.lane}
@@ -755,19 +688,30 @@ function GanttChart({ filterComplete = false }) {
                                             ref={(el) => { laneChartRefs.current[band.lane] = el; }}
                                             className="relative flex-shrink-0 bg-white"
                                             style={{ width: totalPx, height: laneH, ...colGridStyle }}
-                                            onDragOver={(e) => onLaneDragOver(e, band.lane)}
-                                            onDragLeave={() => setDragOverLane((l) => (l === band.lane ? null : l))}
-                                            onDrop={(e) => onLaneDrop(e, band.lane)}
                                         >
                                             {/* Snapped-week tint */}
                                             <div
                                                 className="absolute top-0 bottom-0 bg-accent-50/40 pointer-events-none"
                                                 style={{ left: viewStartLeftPx, width: viewWindowWidthPx }}
                                             />
-                                            {/* Drop-target highlight while dragging a droppable card over this lane */}
-                                            {dragOverLane === band.lane && (
-                                                <div className="absolute inset-0 bg-accent-400/10 ring-2 ring-inset ring-accent-400 pointer-events-none" />
-                                            )}
+                                            {/* PU / material-order overlay — read-only cards pinned to the bottom
+                                                strip of the Shipping Planning lane, positioned by ready/ordered date.
+                                                Dashed outline distinguishes an incoming order from a solid release card. */}
+                                            {laneOrders.map((o) => {
+                                                const label = o.po_number || o.supplier || (o.job ? `${o.job}-${o.release ?? ''}` : 'Order');
+                                                const badge = ORDER_KIND_BADGE[o.order_kind] || 'ORD';
+                                                return (
+                                                    <div
+                                                        key={`ord-${o.id}`}
+                                                        className="absolute rounded border border-dashed border-amber-500 bg-amber-50/95 text-amber-900 text-[10px] leading-none px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap shadow-sm cursor-default"
+                                                        style={{ left: o.left + CARD_GUTTER, bottom: 3, height: ORDER_ROW_PX, maxWidth: Math.max(colPx * 1.6, 96) }}
+                                                        title={`${badge}: ${o.supplier || ''} ${o.po_number || ''}${o.description ? ' — ' + o.description : ''}${o.date ? ' (' + o.date + ')' : ''}`.trim()}
+                                                    >
+                                                        <span className="font-extrabold">{badge}</span>
+                                                        <span className="truncate">{label}</span>
+                                                    </div>
+                                                );
+                                            })}
                                             {band.cells.map((cell) => (
                                                 <div
                                                     key={cell.key}
@@ -778,10 +722,7 @@ function GanttChart({ filterComplete = false }) {
                                                     {cell.shown.map((release) => (
                                                         <div
                                                             key={`${release.job}-${release.release}`}
-                                                            draggable
-                                                            onDragStart={(e) => onCardDragStart(e, release)}
-                                                            onDragEnd={onCardDragEnd}
-                                                            className="rounded shadow-sm px-1.5 py-1 overflow-hidden select-none cursor-grab active:cursor-grabbing text-center hover:opacity-100"
+                                                            className="rounded shadow-sm px-1.5 py-1 overflow-hidden select-none cursor-pointer text-center hover:opacity-100"
                                                             style={{ backgroundColor: band.color, opacity: 0.9, minHeight: minCardH }}
                                                             onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); }}
                                                             onMouseMove={(e) => handleMouseMove(e, {

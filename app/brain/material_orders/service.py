@@ -5,7 +5,7 @@ rows (idempotent via the (source_record_id, line_index) unique key); the bb mail
 poll calls ingest_unprocessed() after landing new mail, and the fixture loader
 calls it directly. list_for_release / mark_received back the modal.
 """
-from datetime import date
+from datetime import date, datetime
 
 from app.logging_config import get_logger
 from app.models import MaterialOrder, RawSourceRecord, db
@@ -31,13 +31,21 @@ def ingest_record(record):
     # Surface unparseable orderers in the Render logs so future forward-chain
     # formats we can't read are visible and can be tuned (rather than failing
     # silently). The order still ingests; orderer fields are just left null.
-    if not parsed.get("ordered_by"):
+    # Skipped for supplier status notifications (galv/stock), which have no
+    # internal orderer to parse — a null there is expected, not a miss.
+    if parsed.get("order_kind") in (None, "material") and not parsed.get("ordered_by"):
         logger.warning(
             "material_order_orderer_unparsed",
             source_record_id=record.id,
             po_number=parsed.get("po_number"),
             subject=(record.payload or {}).get("subject"),
         )
+
+    # A galvanizing notification advances a SINGLE row per AZZ Job # — each new
+    # status email (a different source record) upserts onto the same row rather
+    # than piling up, so the shipping lane shows one galv job, not one per email.
+    if parsed.get("order_kind") == "galvanizing" and parsed.get("supplier_order_no"):
+        return [_upsert_galv(record, parsed)]
 
     orders = []
     for line in parsed["lines"]:
@@ -55,6 +63,8 @@ def ingest_record(record):
             po_number=parsed.get("po_number"),
             supplier_order_no=parsed.get("supplier_order_no"),
             event_type=parsed.get("event_type"),
+            order_kind=parsed.get("order_kind") or "material",
+            shipping_status=parsed.get("shipping_status"),
             ordered_by=parsed.get("ordered_by"),
             ordered_by_email=parsed.get("ordered_by_email"),
             description=line.get("description"),
@@ -67,6 +77,7 @@ def ingest_record(record):
             extended_price=line.get("extended_price"),
             status="ordered",
             ordered_at=parsed.get("ordered_at"),
+            ready_at=parsed.get("ready_at"),
             source=record.source,
             source_record_id=record.id,
             line_index=line["line_index"],
@@ -87,11 +98,76 @@ def ingest_record(record):
     return orders
 
 
-def ingest_unprocessed(limit=200):
-    """Scan recent email RawSourceRecords with no MaterialOrder yet; ingest them.
+def _upsert_galv(record, parsed):
+    """Upsert the single MaterialOrder row for a galvanizing job (keyed on AZZ Job #).
 
-    Returns the count of orders created. Idempotent — records already turned into
-    orders are skipped via a NOT-EXISTS check on source_record_id.
+    Successive AZZ status notifications ('Received' → 'Ready to Ship' → 'Shipped')
+    advance the same row: we update the mutable status fields and re-point the row
+    at the latest source record, rather than inserting one row per email.
+    """
+    line = parsed["lines"][0]
+    existing = MaterialOrder.query.filter_by(
+        supplier=parsed.get("supplier"), supplier_order_no=parsed.get("supplier_order_no")
+    ).order_by(MaterialOrder.id.asc()).first()
+    if existing is not None:
+        existing.event_type = parsed.get("event_type")
+        existing.shipping_status = parsed.get("shipping_status")
+        existing.job = parsed.get("job")
+        existing.release = parsed.get("release")
+        existing.po_number = parsed.get("po_number")
+        existing.supplier_contact = parsed.get("supplier_contact")
+        existing.description = line.get("description")
+        existing.finish = line.get("finish")
+        existing.raw_line = line.get("raw_line")
+        existing.ordered_at = parsed.get("ordered_at")
+        existing.ready_at = parsed.get("ready_at")
+        existing.source_record_id = record.id
+        db.session.commit()
+        logger.info("material_order_galv_updated", source_record_id=record.id,
+                    supplier_order_no=parsed.get("supplier_order_no"),
+                    shipping_status=parsed.get("shipping_status"))
+        return existing
+
+    order = MaterialOrder(
+        job=parsed.get("job"),
+        release=parsed.get("release"),
+        supplier=parsed.get("supplier"),
+        supplier_contact=parsed.get("supplier_contact"),
+        po_number=parsed.get("po_number"),
+        supplier_order_no=parsed.get("supplier_order_no"),
+        event_type=parsed.get("event_type"),
+        order_kind="galvanizing",
+        shipping_status=parsed.get("shipping_status"),
+        ordered_by=parsed.get("ordered_by"),
+        ordered_by_email=parsed.get("ordered_by_email"),
+        description=line.get("description"),
+        finish=line.get("finish"),
+        status="ordered",
+        ordered_at=parsed.get("ordered_at"),
+        ready_at=parsed.get("ready_at"),
+        source=record.source,
+        source_record_id=record.id,
+        line_index=0,
+        raw_line=line.get("raw_line"),
+    )
+    db.session.add(order)
+    db.session.commit()
+    logger.info("material_order_galv_created", source_record_id=record.id,
+                supplier_order_no=parsed.get("supplier_order_no"),
+                shipping_status=parsed.get("shipping_status"))
+    return order
+
+
+def ingest_unprocessed(limit=200):
+    """Scan not-yet-scanned email RawSourceRecords once each; ingest any orders.
+
+    Returns the count of orders created. Each record is attempted AT MOST ONCE:
+    `material_order_scanned_at` is stamped after the attempt regardless of outcome,
+    so a non-order email (which yields no MaterialOrder rows) is not re-sent to the
+    LLM extractor on every poll — the previous "skip only records that produced an
+    order" logic re-ran the Opus fallback on all non-order mail every 15 minutes.
+    The marker is reset to NULL by the mail connector when a record's content
+    changes (late-arriving attachment), so a changed record is scanned once more.
     """
     already = {
         rid for (rid,) in db.session.query(MaterialOrder.source_record_id)
@@ -100,14 +176,19 @@ def ingest_unprocessed(limit=200):
     q = (
         RawSourceRecord.query
         .filter_by(record_type=EMAIL_RECORD_TYPE)
+        .filter(RawSourceRecord.material_order_scanned_at.is_(None))
         .order_by(RawSourceRecord.id.desc())
         .limit(limit)
     )
     created = 0
+    scanned_at = datetime.utcnow()
     for record in q:
-        if record.id in already:
-            continue
-        created += len(ingest_record(record))
+        # Records that already produced orders (e.g. before this column existed)
+        # are complete — mark them scanned without re-running the extractor.
+        if record.id not in already:
+            created += len(ingest_record(record))
+        record.material_order_scanned_at = scanned_at
+    db.session.commit()
     if created:
         logger.info("material_orders_backfill", created=created)
     return created
@@ -121,6 +202,44 @@ def list_for_release(job, release=None):
     if release:
         q = q.filter(MaterialOrder.release == str(release))
     return [o.to_dict() for o in q.order_by(MaterialOrder.id.desc()).all()]
+
+
+def list_shipping_planning():
+    """Read-model for the Timeline's Shipping Planning lane: orders still to bring in.
+
+    An order is 'in planning' when shipping_status == 'planning' — set by the supplier-
+    status extractors (DenCol stock "ready for pickup" = a PU, AZZ galv "Ready to Ship").
+    This is a pure READ overlay: it never touches Releases rows; the timeline unions these
+    cards onto the shipping lane alongside the release ship milestones.
+
+    Each card carries the fields the lane needs to place + label it:
+      - date: ready_at (when the supplier said it's ready) → ordered_at fallback → None
+      - a short label (supplier + PO / description) and order_kind for styling.
+    Sorted by date (nulls last), then id.
+    """
+    rows = (
+        MaterialOrder.query
+        .filter(MaterialOrder.shipping_status == "planning")
+        .all()
+    )
+    cards = []
+    for o in rows:
+        date = o.ready_at or o.ordered_at
+        cards.append({
+            "id": o.id,
+            "job": o.job,
+            "release": o.release,
+            "order_kind": o.order_kind,          # 'material' | 'galvanizing' | 'stock' (PU)
+            "supplier": o.supplier,
+            "po_number": o.po_number,
+            "supplier_order_no": o.supplier_order_no,
+            "description": o.description,
+            "date": date.isoformat() if date else None,
+            "ready_at": o.ready_at.isoformat() if o.ready_at else None,
+            "ordered_at": o.ordered_at.isoformat() if o.ordered_at else None,
+        })
+    cards.sort(key=lambda c: (c["date"] is None, c["date"] or "", c["id"]))
+    return cards
 
 
 def mark_received(order_id, received=True):

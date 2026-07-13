@@ -133,7 +133,7 @@ function AppShellInner({ isAuthenticated }) {
             {navBtn('/events', 'Events')}
             {navBtn('/todos', 'To-Dos')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
-            {isAdmin && navBtn('/rental-reports', 'Rentals')}
+            {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
             {isAdmin && navBtn('/meetings', 'Meetings')}
             {isAdmin && navBtn('/board', 'Bug Tracker')}
           </div>

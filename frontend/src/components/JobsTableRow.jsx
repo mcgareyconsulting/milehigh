@@ -7,7 +7,7 @@
  * imports_from: [react, ../services/jobsApi, ../constants/jumpToHighlight, ./JobDetailsModal, ./StartInstallDateModal, ./StageIconRow]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx]
  * invariants:
- *   - Stage dropdown options must stay in sync with PMBoardList stage definitions
+ *   - Stage dropdown options must stay in sync with constants/stages.js definitions
  *   - Admin-only actions (delete, unarchive, field edit) are gated on the isAdmin prop
  *   - Duplicate fab order detection relies on the duplicateFabOrders set passed from parent
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)

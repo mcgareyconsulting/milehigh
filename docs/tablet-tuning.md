@@ -1,5 +1,42 @@
 # Tablet Tuning Tracker
 
+## Prod-prep status (2026-07-12)
+
+Verified for production: full test suite 37/37 green · `npm run build` passes clean (3.7s) ·
+all branch-touched files lint-clean (repo has ~40 PRE-EXISTING lint errors — eslint config
+gaps like `global` in tests / `process` in vite.config, not from this branch). Device-mode
+tooling (`dev:ipad`, `VITE_PROXY_API`, vite `deviceProxy`) is dev-server-only — the prod build
+path (`api.js` non-DEV branch → same-origin '') is untouched.
+
+Shipped in this pass: **Rentals nav removed** (AppShell + MobileNavDrawer; /rental-reports
+route + backend intact for direct URL / re-enable) · **Banana Code (Urgency column) removed
+globally** — columnOrder, widths, JobLogContent + Archive header special-cases,
+`BananaCodeHeader` imports; print PDF + CSV fell out automatically since they read
+columnHeaders (the PDF's urgencyIdx=-1 path is guarded); DWL "urgency slots" (fab-order
+0.1–0.9) and login FloatingBananas are unrelated and untouched · **columns resized** — Notes
+8→16 (Job Log) and 12→18 (Archive), small bumps to Stage/Start/ETA · **orphaned
+JobLogRow.jsx + JobLogRowList.jsx deleted**.
+
+**Board removal + read-only Timeline (2026-07-12, same prod-prep pass):** the app's release
+views are now **Job Log and Timeline only**. PM Board removed completely: `PMBoardList.jsx` +
+`PMBoardCardModal.jsx` deleted; `PMBoardContent` is Timeline-only (route `/pm-board` kept so
+old bookmarks and `?view=timeline` deep links both land on the timeline);
+`ReleasesViewSwitcher` is a two-segment Table|Timeline control (tests rewritten, 6/6);
+MobileNavDrawer 'PM Board' → 'Timeline'. **GanttChart is now fully READ-ONLY** — the Phase-5
+drag interactions (installer-day reschedule via updateStartInstall + shipping-lane stage
+change via updateStage), the optimistic `overrides` machinery, and the drop-target UI were all
+removed (they were native HTML5 drag = dead on Jay's iPad anyway). This RESOLVES former prod
+holes #1 and #2's board part by removal rather than fix. Edits happen in the Job Log.
+
+KNOWN HOLES going to prod (functional, not blockers for a UI-stability release):
+1. DWL title-cell reorder + Board(bug-tracker) photo/file drop — native-drag on touch
+   (desktop unaffected).
+2. Bug-tracker Board.jsx dnd-kit PointerSensor never verified on the physical iPad (A2).
+3. JobLogCard v5 (stage-colored header + grid body) not yet visually confirmed by Daniel.
+4. Main JS chunk 2.5MB (pre-existing; consider code-splitting later, not a correctness issue).
+5. If timeline editing is ever wanted back, rebuild it touch-first (dnd-kit TouchSensor or
+   tap-to-move) — the removed implementation is in git history (see commit history pre-2026-07-12).
+
 Cross-application iPad/tablet-view tuning, run in tandem with the `feature/jay-view`
 timeline work. Client released a physical iPad to Daniel's desk for on-device verification.
 

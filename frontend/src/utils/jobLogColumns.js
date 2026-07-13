@@ -69,7 +69,8 @@ export const reviewSort = (jobs) => {
     return sorted;
 };
 
-// Explicit table column order.
+// Explicit table column order. (Urgency / Banana Code was removed globally 2026-07-12;
+// print + CSV read this list, so it fell out of those too.)
 export const columnOrder = [
     'Job #',
     'Release #',
@@ -83,7 +84,6 @@ export const columnOrder = [
     'Released',
     'Fab Order',
     'Stage',
-    'Urgency',
     'Start install',
     'Comp. ETA',
     'Job Comp',
@@ -107,15 +107,14 @@ export const COLUMN_WIDTH_PERCENT = {
     'Paint color': 5,
     'PM': 2.5,
     'BY': 3,
-    'Released': 4,
+    'Released': 5,
     'Fab Order': 4,
-    'Stage': 6,
-    'Urgency': 14,
-    'Start install': 5,
-    'Comp. ETA': 4.5,
+    'Stage': 6.5,
+    'Start install': 5.5,
+    'Comp. ETA': 5,
     'Job Comp': 4.5,
     'Invoiced': 4.5,
-    'Notes': 8,
+    'Notes': 15,
     'Actions': 5,
 };
 

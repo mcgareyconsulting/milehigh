@@ -17,7 +17,6 @@ import ColumnHeaderFilter from '../components/ColumnHeaderFilter';
 import { JobsTableRow } from '../components/JobsTableRow';
 import { PdfVersionHistoryModal } from '../components/PdfVersionHistoryModal';
 import { PdfMarkupModal } from '../components/PdfMarkupModal';
-import { BananaCodeHeader } from '../components/StageIconRow';
 import { AsapDividerLabel, ASAP_DIVIDER_BOX_CLASS } from '../components/AsapPropagationTag';
 import JobLogCardGrid from '../components/JobLogCardGrid';
 import { formatDateShort, formatCellValue } from '../utils/formatters';
@@ -77,13 +76,12 @@ function JobLogContent() {
     }, [location.state, location.pathname, navigate]);
 
     // On iPad/narrow widths the full table doesn't fit in landscape, so drop the two
-    // lowest-frequency columns (BY, Released) plus the wide Urgency/Banana Code column
-    // and re-normalize the remaining widths to 100% (fixed-layout table). Desktop keeps
-    // every column; CSV/PDF export are unaffected (they read the full columnHeaders from
-    // ReleasesLayout).
+    // lowest-frequency columns (BY, Released) and re-normalize the remaining widths to
+    // 100% (fixed-layout table). Desktop keeps every column; CSV/PDF export are
+    // unaffected (they read the full columnHeaders from ReleasesLayout).
     const { tableColumns, tableWidthPercents } = useMemo(() => {
         if (isDesktop) return { tableColumns: columnHeaders, tableWidthPercents: columnWidthPercents };
-        const NARROW_HIDDEN = new Set(['BY', 'Released', 'Urgency']);
+        const NARROW_HIDDEN = new Set(['BY', 'Released']);
         const cols = columnHeaders.filter((c) => !NARROW_HIDDEN.has(c));
         const sum = cols.reduce((acc, c) => acc + (columnWidthPercents[c] ?? 0), 0) || 1;
         const widths = Object.fromEntries(cols.map((c) => [c, ((columnWidthPercents[c] ?? 0) / sum) * 100]));
@@ -166,7 +164,6 @@ function JobLogContent() {
                                         const isFilterable = FILTERABLE_COLUMNS.has(column);
                                         const colInfo = isFilterable ? uniqueValuesByColumn[column] : null;
                                         const colSelected = columnFilters[column] ?? [];
-                                        const isUrgency = column === 'Urgency';
                                         // Last visible column (no trailing gear column) gets no vertical divider,
                                         // just the thin bottom rule shared by every header cell. Both dividers use
                                         // box-shadow, not a real border, so the vertical one lines up pixel-for-pixel
@@ -188,9 +185,7 @@ function JobLogContent() {
                                                 className={`${isReleaseNumber ? 'px-1' : 'px-2'} ${isOldMan ? 'py-2 text-[13px]' : 'py-0.5 text-[11px]'} align-middle text-center font-bold tracking-wide text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-900 ${headerDividerShadow}`}
                                                 style={colWidthPct != null ? { width: `${colWidthPct}%` } : undefined}
                                             >
-                                                {isUrgency ? (
-                                                    <BananaCodeHeader />
-                                                ) : isFilterable ? (
+                                                {isFilterable ? (
                                                     <ColumnHeaderFilter
                                                         column={column}
                                                         values={colInfo?.values ?? []}
