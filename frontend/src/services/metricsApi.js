@@ -27,4 +27,7 @@ export const getAi = (period = 'week') => _get('ai', period);
 export const getContent = (period = 'week') => _get('content', period);
 export const getActivity = (period = 'week') => _get('activity', period);
 export const getSystem = (period = 'week') => _get('system', period);
+export const getEngagement = (period = 'week') => _get('engagement', period);
+export const getQuality = (period = 'week') => _get('quality', period);
+export const getThroughput = (period = 'week') => _get('throughput', period);
 export const getDigest = (period = 'week') => _get('digest', period);

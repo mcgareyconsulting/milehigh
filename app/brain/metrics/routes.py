@@ -52,7 +52,34 @@ def metrics_summary():
 @handle_errors("load AI usage metrics")
 def metrics_ai():
     label, start, end = _window()
-    return _envelope(label, start, end, queries.ai_usage(start, end))
+    return _envelope(label, start, end, {
+        **queries.ai_usage(start, end),
+        "reliability": queries.ai_reliability(start, end),
+    })
+
+
+@brain_bp.route("/metrics/engagement", methods=["GET"])
+@admin_required
+@handle_errors("load engagement metrics")
+def metrics_engagement():
+    label, start, end = _window()
+    return _envelope(label, start, end, queries.engagement(start, end))
+
+
+@brain_bp.route("/metrics/quality", methods=["GET"])
+@admin_required
+@handle_errors("load quality metrics")
+def metrics_quality():
+    label, start, end = _window()
+    return _envelope(label, start, end, queries.quality(start, end))
+
+
+@brain_bp.route("/metrics/throughput", methods=["GET"])
+@admin_required
+@handle_errors("load throughput metrics")
+def metrics_throughput():
+    label, start, end = _window()
+    return _envelope(label, start, end, queries.throughput(start, end))
 
 
 @brain_bp.route("/metrics/content", methods=["GET"])
