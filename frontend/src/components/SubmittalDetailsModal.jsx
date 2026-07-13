@@ -181,7 +181,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
             onClick={onClose}
         >
             <div
-                className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-h-[85vh] flex flex-col transform transition-all ${cite ? 'max-w-6xl' : 'max-w-2xl'}`}
+                className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col transform transition-all ${cite ? 'w-[96vw] max-w-[96vw] h-[92vh] max-h-[92vh]' : 'w-full max-w-2xl max-h-[85vh]'}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}

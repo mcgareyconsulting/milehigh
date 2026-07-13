@@ -215,9 +215,10 @@ export function PdfMarkupModal({
                 linkService.setViewer(pdfViewer);
 
                 eventBus.on('pagesinit', () => {
-                    // 'page-fit' shows the whole page; 'auto' / 'page-width' often
-                    // over-zoom wide FC drawings on big screens.
-                    pdfViewer.currentScaleValue = 'page-fit';
+                    // Inline review pane: fit width so the sheet fills the column and
+                    // dimensions are legible (fit-page leaves it tiny in a tall pane).
+                    // Fullscreen markup: 'page-fit' shows the whole sheet to work on.
+                    pdfViewer.currentScaleValue = inline ? 'page-width' : 'page-fit';
                 });
                 eventBus.on('annotationeditorstateschanged', (e) => {
                     setDirty(true);
@@ -375,7 +376,7 @@ export function PdfMarkupModal({
             try { state.pdfDocument?.destroy?.(); } catch { /* noop */ }
             viewerStateRef.current = { pdfDocument: null, pdfViewer: null, eventBus: null, loadingTask: null, uiManager: null };
         };
-    }, [isOpen, releaseId, versionId, fileUrl]);
+    }, [isOpen, releaseId, versionId, fileUrl, inline]);
 
     // Jump-to-page on command: react to initialPage / citeNonce changes when the
     // doc is already loaded (NOT via the init effect's deps — reloading the whole
@@ -946,6 +947,12 @@ export function PdfMarkupModal({
                         {ticks.map((t) => {
                             const tickColor = t.type === 'FreeText' ? '#FFD500' : (t.type === 'Ink' ? '#FF3B30' : '#1F77B4');
                             const versionLabel = t.versionNumber != null ? `v${t.versionNumber}` : '';
+                            // Fallback tag when there's no version (e.g. Procore-pulled
+                            // markups): show a glyph for the markup kind, not a bare dot.
+                            const typeGlyph = t.type === 'FreeText' ? 'T' : (t.type === 'Ink' ? '✎' : '▢');
+                            const typeLabel = t.type === 'FreeText' ? 'Text note' : (t.type === 'Ink' ? 'Pen markup' : 'Shape markup');
+                            const tickLabel = [versionLabel, typeLabel, t.page != null ? `page ${t.page}` : '']
+                                .filter(Boolean).join(' · ');
                             return (
                                 <button
                                     key={t.id}
@@ -967,10 +974,10 @@ export function PdfMarkupModal({
                                         lineHeight: 1,
                                         border: '1.5px solid rgba(0,0,0,0.65)',
                                     }}
-                                    title={`${versionLabel} — Page ${t.page} — ${t.type}`}
-                                    aria-label={`Jump to ${t.type} on page ${t.page}, ${versionLabel}`}
+                                    title={tickLabel}
+                                    aria-label={`Jump to ${tickLabel}`}
                                 >
-                                    {versionLabel || '·'}
+                                    {versionLabel || typeGlyph}
                                 </button>
                             );
                         })}

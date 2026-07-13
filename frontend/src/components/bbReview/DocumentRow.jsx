@@ -337,7 +337,10 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
         <div className={`p-3 ${reviewing ? 'opacity-70' : ''} ${isActive ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''}`}>
             {/* Row top: filename + source badge + size */}
             <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-gray-900 dark:text-white truncate min-w-0">
+                <span
+                    className="text-sm font-medium text-gray-900 dark:text-white break-words min-w-0"
+                    title={doc.name || 'drawing.pdf'}
+                >
                     📄 {doc.name || 'drawing.pdf'}
                 </span>
                 <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${source.cls}`}>{source.label}</span>
