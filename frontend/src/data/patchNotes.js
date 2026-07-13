@@ -17,6 +17,33 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.288',
+    date: 'July 12, 2026',
+    summary:
+      'A redesigned Timeline that reads like the board on its side, incoming material orders you can now open right from it, and a new tool for matching submittals to their releases.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'Redesigned Timeline, and a much better tablet view',
+        detail:
+          'The Timeline is now a day/week bucket board — the Trello board turned on its side — with a Shipping Planning and a Shipping Completed lane on top of the installer-team lanes. Zoom scales the columns from single days out to whole weeks, cards sit on their exact Start-install date, and the whole view was reworked to look and behave far better on an iPad in landscape.',
+      },
+      {
+        type: 'new',
+        title: 'Incoming material orders on the Timeline',
+        detail:
+          'PU / pickup, stock, and galvanizing "ready to ship" orders now appear as chips on the Timeline\'s Shipping Planning lane, positioned by their ready or ordered date so you can see what still has to come in. The chips are now larger and clickable — click one to open that release\'s job details scrolled straight to its Materials Ordered list.',
+      },
+      {
+        type: 'new',
+        title: 'Match submittals to releases',
+        adminOnly: true,
+        detail:
+          'A new admin tool suggests which release each drafting submittal belongs to, scoring every suggestion as Confident, Pick-one, or Weak. You confirm, pick between candidates, or mark no match — tightening the submittal-to-release link that the rest of the Brain relies on.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.284',
     date: 'July 9, 2026',
     summary:

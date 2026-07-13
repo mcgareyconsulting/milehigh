@@ -5,21 +5,22 @@
  * exports:
  *   JobDetailsModal: Portal modal showing all fields of a single job/release record
  * imports_from: [react, react-dom, react-router-dom]
- * imported_by: [frontend/src/components/JobsTableRow.jsx]
+ * imported_by: [frontend/src/components/JobsTableRow.jsx, frontend/src/components/GanttChart.jsx]
  * invariants:
  *   - Renders via createPortal to document.body to escape table overflow clipping
  * updated_by_agent: 2026-04-14T00:00:00Z (commit e133a47)
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { jobsApi } from '../services/jobsApi';
 import { EventsModal } from './EventsModal';
 
-export function JobDetailsModal({ isOpen, onClose, job }) {
+export function JobDetailsModal({ isOpen, onClose, job, scrollToMaterials = false }) {
     const [eventsOpen, setEventsOpen] = useState(false);
     const [materialOrders, setMaterialOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
+    const materialsRef = useRef(null);
 
     // Identifiers derived before any early return so the effect's deps are stable.
     const jobId = job ? (job['Job #'] || job.job) : null;
@@ -35,6 +36,14 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
             .finally(() => { if (!cancelled) setOrdersLoading(false); });
         return () => { cancelled = true; };
     }, [isOpen, jobId, relId]);
+
+    // When opened from the Timeline's material-order chip, bring the Materials
+    // Ordered section into view once its data has settled.
+    useEffect(() => {
+        if (!isOpen || !scrollToMaterials || ordersLoading) return;
+        const el = materialsRef.current;
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, [isOpen, scrollToMaterials, ordersLoading]);
 
     const handleToggleReceived = async (order) => {
         const next = order.status !== 'received';
@@ -183,7 +192,7 @@ export function JobDetailsModal({ isOpen, onClose, job }) {
                         </div>
                     </div>
 
-                    <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
+                    <div ref={materialsRef} className="border-t border-gray-200 dark:border-slate-600 pt-4">
                             <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
                                 Materials Ordered
                             </h4>

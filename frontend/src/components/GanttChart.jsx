@@ -11,13 +11,14 @@
  * exports:
  *   GanttChart: Day/week-bucket board with zoom that scales column granularity (day↔week), width,
  *     card size, per-cell cap, and card detail; whole-column zoom snapping, week-snap nav, jump-to-date.
- * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal]
+ * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal, ./JobDetailsModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
- *   - READ-ONLY: clicking a card opens a read-only detail modal (ReleaseDetailModal); the timeline
- *     never writes. (The Phase-5 drag interactions — installer-day reschedule and shipping-lane stage
- *     change — were REMOVED 2026-07-12 for the prod-stability release: native HTML5 drag was dead on
- *     iPad anyway. Edits happen in the Job Log.)
+ *   - READ-ONLY: clicking a card opens a read-only detail modal (ReleaseDetailModal); clicking a
+ *     material-order chip on the Shipping Planning lane opens JobDetailsModal scrolled to that
+ *     release's Materials Ordered section. The timeline never writes. (The Phase-5 drag interactions —
+ *     installer-day reschedule and shipping-lane stage change — were REMOVED 2026-07-12 for the
+ *     prod-stability release: native HTML5 drag was dead on iPad anyway. Edits happen in the Job Log.)
  *   - Lanes = two fixed shipping-stage lanes (DB stage 'Ship Planning' → "Shipping Planning",
  *     'Ship Complete' → "Shipping Completed"), then the installer roster from /brain/installer-teams,
  *     then any off-roster installer present in the data (so no card is silently dropped).
@@ -47,6 +48,7 @@ import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { localTodayStr as todayIso } from '../utils/formatters';
 import { API_BASE_URL } from '../utils/api';
 import ReleaseDetailModal from './ReleaseDetailModal';
+import { JobDetailsModal } from './JobDetailsModal';
 
 const addDays = (isoDate, days) => {
     const d = new Date(isoDate + 'T00:00:00');
@@ -81,7 +83,7 @@ const SIDEBAR_PX = 192;
 const CARD_GUTTER = 5;    // horizontal inset within a column
 const CARD_VGAP = 3;      // vertical gap between stacked cards in a cell
 const CELL_PAD_TOP = 5;   // top padding inside a lane before the first card
-const ORDER_ROW_PX = 20;  // height reserved at the bottom of the Shipping Planning lane for the PU/order overlay strip
+const ORDER_ROW_PX = 26;  // height reserved at the bottom of the Shipping Planning lane for the PU/order overlay strip
 const SHIP_PLANNING_LANE = 'Shipping Planning';
 // Short badge + tooltip prefix per material-order kind for the shipping-lane overlay.
 const ORDER_KIND_BADGE = { stock: 'PU', galvanizing: 'GALV', material: 'MAT' };
@@ -233,6 +235,7 @@ function GanttChart({ filterComplete = false }) {
     const [hoveredItem, setHoveredItem] = useState(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const [selectedRelease, setSelectedRelease] = useState(null);   // full job row for the detail modal
+    const [orderJob, setOrderJob] = useState(null);                 // {job, release} for a clicked material-order chip
     const [selectedColor, setSelectedColor] = useState(null);       // lane color of the clicked card → modal accent
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
@@ -703,8 +706,17 @@ function GanttChart({ filterComplete = false }) {
                                                 return (
                                                     <div
                                                         key={`ord-${o.id}`}
-                                                        className="absolute rounded border border-dashed border-amber-500 bg-amber-50/95 text-amber-900 text-[10px] leading-none px-1 flex items-center gap-1 overflow-hidden whitespace-nowrap shadow-sm cursor-default"
-                                                        style={{ left: o.left + CARD_GUTTER, bottom: 3, height: ORDER_ROW_PX, maxWidth: Math.max(colPx * 1.6, 96) }}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onClick={() => o.job && setOrderJob({ job: o.job, release: o.release })}
+                                                        onKeyDown={(e) => {
+                                                            if ((e.key === 'Enter' || e.key === ' ') && o.job) {
+                                                                e.preventDefault();
+                                                                setOrderJob({ job: o.job, release: o.release });
+                                                            }
+                                                        }}
+                                                        className="absolute rounded border border-dashed border-amber-500 bg-amber-50/95 hover:bg-amber-100 text-amber-900 text-[11px] leading-none px-1.5 flex items-center gap-1 overflow-hidden whitespace-nowrap shadow-sm cursor-pointer"
+                                                        style={{ left: o.left + CARD_GUTTER, bottom: 3, height: ORDER_ROW_PX, maxWidth: Math.max(colPx * 1.6, 110) }}
                                                         title={`${badge}: ${o.supplier || ''} ${o.po_number || ''}${o.description ? ' — ' + o.description : ''}${o.date ? ' (' + o.date + ')' : ''}`.trim()}
                                                     >
                                                         <span className="font-extrabold">{badge}</span>
@@ -847,6 +859,12 @@ function GanttChart({ filterComplete = false }) {
                 release={selectedRelease}
                 accentColor={selectedColor}
                 onClose={() => setSelectedRelease(null)}
+            />
+            <JobDetailsModal
+                isOpen={!!orderJob}
+                job={orderJob}
+                scrollToMaterials
+                onClose={() => setOrderJob(null)}
             />
         </>
     );
