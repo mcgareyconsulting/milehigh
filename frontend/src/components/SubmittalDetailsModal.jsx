@@ -18,10 +18,12 @@ import { createPortal } from 'react-dom';
 
 import { EventsModal } from './EventsModal';
 import DocumentRow from './bbReview/DocumentRow';
+import { PdfMarkupModal } from './PdfMarkupModal';
 import { draftingWorkLoadApi } from '../services/draftingWorkLoadApi';
+import { API_BASE_URL } from '../utils/api';
 
 const DRR_TYPE = 'Drafting Release Review';
-const PHASES = ['DRR', 'GC', 'FC'];
+const PHASES = ['GC', 'DRR', 'FC'];
 
 // Model choice is sticky for the browser session (survives modal open/close), default sonnet.
 let sessionModel = 'sonnet';
@@ -60,6 +62,8 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
     const [model, setModel] = useState(sessionModel);
     const [detailsOpen, setDetailsOpen] = useState(false);
 
+    const [cite, setCite] = useState(null); // { doc, page, nonce } — active drawing shown in the right pane
+    const openCite = (doc, page = 1) => setCite({ doc, page: page || 1, nonce: Date.now() });
     const [docs, setDocs] = useState(null);        // array | null (null = not loaded)
     const [meta, setMeta] = useState(null);        // documents.submittal (enriched metadata)
     const [docsLoading, setDocsLoading] = useState(false);
@@ -177,7 +181,7 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
             onClick={onClose}
         >
             <div
-                className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col transform transition-all"
+                className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-h-[85vh] flex flex-col transform transition-all ${cite ? 'max-w-6xl' : 'max-w-2xl'}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -224,8 +228,9 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                     </div>
                 </div>
 
-                {/* Body (internal scroll region) */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {/* Body (internal scroll region) — splits into a two-pane layout when a cite is active */}
+                <div className={cite ? 'flex-1 min-h-0 flex flex-row' : 'flex-1 overflow-y-auto'}>
+                    <div className={cite ? 'md:w-[440px] md:flex-none w-full overflow-y-auto p-6 space-y-4 min-w-0' : 'p-6 space-y-4'}>
                     {bbEnabled ? (
                         <div>
                             <div className="flex items-center justify-between gap-2 mb-2">
@@ -260,6 +265,9 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                                             doc={d}
                                             model={model}
                                             onUpdate={patchDoc}
+                                            onView={(doc) => openCite(doc, 1)}
+                                            onCiteSource={(doc, finding) => openCite(doc, finding?.page)}
+                                            activeAttachmentId={cite?.doc?.attachment_id}
                                         />
                                     ))}
                                 </div>
@@ -353,6 +361,21 @@ export function SubmittalDetailsModal({ isOpen, onClose, submittal, canEditRel =
                             </div>
                         )}
                     </div>
+                    </div>
+                    {cite && (
+                        <div className="flex-1 min-w-0 min-h-0 border-l border-gray-200 dark:border-slate-600 flex flex-col">
+                            <PdfMarkupModal
+                                isOpen
+                                inline
+                                mode="view"
+                                title={cite.doc?.name || 'Drawing'}
+                                fileUrl={`${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(cite.doc.attachment_id)}/file`}
+                                initialPage={cite.page}
+                                citeNonce={cite.nonce}
+                                onClose={() => setCite(null)}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

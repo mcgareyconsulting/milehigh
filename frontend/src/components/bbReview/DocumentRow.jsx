@@ -91,12 +91,21 @@ function TallyChips({ tally, hold }) {
     );
 }
 
-function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initial }) {
+function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initial, onCite }) {
     const bucket = urgencyOf(finding);
     const style = URGENCY_STYLES[bucket] || URGENCY_STYLES.low;
     const [decision, setDecision] = useState(initial?.decision || null);
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState(null);
+
+    const canCite = finding?.page != null && typeof onCite === 'function';
+    const citeProps = canCite
+        ? {
+            onClick: onCite,
+            role: 'button',
+            className: 'cursor-pointer rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors',
+        }
+        : {};
 
     const choose = async (value) => {
         if (busy) return;
@@ -121,16 +130,21 @@ function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initi
 
     return (
         <div className={`rounded-md border border-gray-200 dark:border-slate-600 border-l-4 ${style.stripe} bg-white dark:bg-slate-800 p-2 text-sm`}>
-            <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${style.chip}`}>{style.label}</span>
-                {finding?.location && (
-                    <span className="text-xs text-gray-500 dark:text-slate-400">{finding.location}</span>
-                )}
-                {finding?.rule_id && (
-                    <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">{finding.rule_id}</span>
-                )}
+            <div {...citeProps}>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${style.chip}`}>{style.label}</span>
+                    {finding?.location && (
+                        <span className="text-xs text-gray-500 dark:text-slate-400">{finding.location}</span>
+                    )}
+                    {finding?.page != null && (
+                        <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">p{finding.page} · jump ↵</span>
+                    )}
+                    {finding?.rule_id && (
+                        <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">{finding.rule_id}</span>
+                    )}
+                </div>
+                {finding?.issue && <p className="text-gray-800 dark:text-slate-100 mt-1">{finding.issue}</p>}
             </div>
-            {finding?.issue && <p className="text-gray-800 dark:text-slate-100 mt-1">{finding.issue}</p>}
             {finding?.computation && (
                 <p className="text-xs text-gray-600 dark:text-slate-400 mt-1 font-mono whitespace-pre-wrap break-words">
                     {finding.computation}
@@ -170,7 +184,7 @@ function FindingRow({ finding, index, submittalId, attachmentId, reviewId, initi
     );
 }
 
-export default function DocumentRow({ submittalId, doc, model, onUpdate }) {
+export default function DocumentRow({ submittalId, doc, model, onUpdate, onView, onCiteSource, activeAttachmentId }) {
     const [pulling, setPulling] = useState(false);
     const [reviewing, setReviewing] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -185,6 +199,7 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate }) {
     const review = doc.review || null;
     const reviewId = review?.review_id ?? null;
     const source = SOURCE_BADGE[doc.source] || SOURCE_BADGE.originating;
+    const isActive = activeAttachmentId != null && activeAttachmentId === attachmentId;
 
     const clearError = () => { setError(null); setErrorDebug(null); setShowDebug(false); };
 
@@ -319,7 +334,7 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate }) {
     }
 
     return (
-        <div className={`p-3 ${reviewing ? 'opacity-70' : ''}`}>
+        <div className={`p-3 ${reviewing ? 'opacity-70' : ''} ${isActive ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''}`}>
             {/* Row top: filename + source badge + size */}
             <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-gray-900 dark:text-white truncate min-w-0">
@@ -331,10 +346,21 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate }) {
                 ) : null}
             </div>
 
-            {/* Row status + primary action */}
+            {/* Row status + actions */}
             <div className="mt-2 flex items-start justify-between gap-3">
                 {statusEl}
-                {actionEl}
+                <div className="flex items-center gap-2 shrink-0">
+                    {doc.downloaded && onView ? (
+                        <button
+                            onClick={() => onView(doc)}
+                            className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                            title="Open the downloaded drawing in the viewer"
+                        >
+                            View
+                        </button>
+                    ) : null}
+                    {actionEl}
+                </div>
             </div>
 
             {/* Inline error with a debug disclosure */}
@@ -374,6 +400,8 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate }) {
                                 attachmentId={attachmentId}
                                 reviewId={reviewId}
                                 initial={feedbackMap[i]}
+                                doc={doc}
+                                onCite={() => onCiteSource && onCiteSource(doc, f)}
                             />
                         ))
                     ) : null}

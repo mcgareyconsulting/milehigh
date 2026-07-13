@@ -8,9 +8,10 @@ Admin-only, matching the "admin-only Banana Boy" decision. The POST returns imme
 (202) with a `pending` row; the review runs on a background thread (worker.py). The
 frontend panel polls the GET until status is `complete` or `error`.
 """
+import io
 from datetime import datetime
 
-from flask import jsonify, current_app
+from flask import jsonify, current_app, send_file
 
 from app.brain import brain_bp
 from app.auth.utils import admin_required, login_required, get_current_user
@@ -716,3 +717,25 @@ def save_submittal_document_feedback(submittal_id, attachment_id, review_id):
                 submittal_id=submittal.submittal_id, attachment_id=attachment_id_int,
                 finding_index=finding_index, decision=decision)
     return jsonify({'feedback': fb.to_dict()}), 200
+
+
+@brain_bp.route(
+    '/procore-submittals/<submittal_id>/documents/<attachment_id>/file',
+    methods=['GET'],
+)
+@admin_required
+def get_submittal_document_file(submittal_id, attachment_id):
+    """Stream the cached PDF for a downloaded submittal drawing (read-only viewer).
+
+    Serves the bytes already pulled to the per-attachment cache; 404 when the drawing
+    hasn't been downloaded yet (the UI only offers View on a downloaded row).
+    """
+    aid = _coerce_attachment_id(attachment_id)
+    data = procore_pdf_cache.read(str(submittal_id), aid)
+    if data is None:
+        return jsonify({'error': 'Drawing not downloaded'}), 404
+    return send_file(
+        io.BytesIO(data),
+        mimetype='application/pdf',
+        download_name=f"{submittal_id}-{aid}.pdf",
+    )

@@ -13,6 +13,8 @@ from pathlib import Path
 
 from flask import current_app
 
+from app.brain.pdf_review.stamp import stamp_pdf_pages
+
 
 def _root() -> Path:
     override = current_app.config.get("PDF_STORAGE_ROOT")
@@ -24,8 +26,10 @@ def _path(submittal_id, attachment_id) -> Path:
     return _root() / str(submittal_id) / f"{str(attachment_id)}.pdf"
 
 
-def save(submittal_id, attachment_id, data: bytes) -> None:
+def save(submittal_id, attachment_id, data: bytes, *, stamp: bool = True) -> None:
     """Atomically cache the pulled PDF for one (submittal, attachment)."""
+    if stamp:
+        data = stamp_pdf_pages(data)
     path = _path(submittal_id, attachment_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".pdf.tmp")

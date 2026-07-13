@@ -233,6 +233,13 @@ SYSTEM_PROMPT_HEADER = (
     "invent unrelated issues.\n"
     "For every concern: cite the sheet label (e.g. 'F1') and the exact dimension text for "
     "each value used, show the arithmetic concisely, and state a verdict.\n"
+    "Every page carries a small plain-black 'BB-N/X' stamp in its UPPER-LEFT corner, where "
+    "N is that page's 1-based position in this PDF and X is the total page count. For every "
+    "finding, read the BB-N/X stamp on the page whose drawing the finding concerns and return "
+    "that integer N as the `page` field. `page` is only a machine anchor for jumping the "
+    "viewer — it does NOT replace the sheet label; still cite the sheet label (e.g. 'F1') in "
+    "`location` and each `values_used[].sheet`. If a finding spans multiple sheets, return the "
+    "page of the sheet most central to the issue.\n"
 )
 
 SYSTEM_PROMPT_FOOTER = (
@@ -244,7 +251,7 @@ SYSTEM_PROMPT_FOOTER = (
     "- For actionable findings keep 'issue' to ONE sentence and 'computation' to ONE line of "
     "arithmetic (the numbers, not a paragraph). Don't restate the rule text back.\n"
     "Return STRICT JSON only, no prose, no markdown:\n"
-    '{"findings":[{"rule_id":str,"issue":str,'
+    '{"findings":[{"rule_id":str,"page":int,"issue":str,'
     '"verdict":"violation"|"ok"|"needs_field_verification",'
     '"severity":"high"|"medium"|"low","computation":str,'
     '"values_used":[{"name":str,"value":str,"sheet":str}],'
