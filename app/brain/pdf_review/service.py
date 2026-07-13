@@ -25,6 +25,22 @@ logger = get_logger(__name__)
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 REVIEW_MODEL = os.environ.get("BB_PDF_REVIEW_MODEL", "claude-opus-4-8")
+# Friendly names → model ids so callers (endpoint/UI) can ask for a lighter Sonnet review
+# vs the deep Opus one. Both take the same request shape (adaptive thinking + PDF blocks).
+MODEL_ALIASES = {
+    "sonnet": "claude-sonnet-5",
+    "opus": "claude-opus-4-8",
+}
+
+
+def resolve_model(name):
+    """Map a friendly alias ('sonnet'/'opus') or a raw model id to a model id.
+    Falls back to the configured REVIEW_MODEL when name is empty/unknown-but-blank."""
+    if not name:
+        return REVIEW_MODEL
+    return MODEL_ALIASES.get(str(name).strip().lower(), str(name).strip())
+
+
 MAX_PDF_BYTES = 32 * 1024 * 1024  # Anthropic document-block ceiling
 # The set is large and the reasoning is deep; adaptive thinking consumes most of the
 # budget (observed ~25k output on a 24-page set), so give generous headroom.
@@ -46,7 +62,7 @@ def _content_blocks(pdf_bytes: bytes, job_release: str) -> list:
     ]
 
 
-def _call_anthropic(pdf_bytes: bytes, job_release: str) -> dict:
+def _call_anthropic(pdf_bytes: bytes, job_release: str, model: str = None) -> dict:
     key = cfg.ANTHROPIC_API_KEY
     if not key:
         raise RuntimeError("no ANTHROPIC_API_KEY")
@@ -58,7 +74,7 @@ def _call_anthropic(pdf_bytes: bytes, job_release: str) -> dict:
             "content-type": "application/json",
         },
         json={
-            "model": REVIEW_MODEL,
+            "model": model or REVIEW_MODEL,
             "max_tokens": MAX_TOKENS,
             "thinking": {"type": "adaptive"},
             "system": build_system_prompt(),
@@ -82,9 +98,11 @@ def _call_anthropic(pdf_bytes: bytes, job_release: str) -> dict:
     }
 
 
-def review(pdf_bytes: bytes, job_release: str):
+def review(pdf_bytes: bytes, job_release: str, model: str = None):
     """Return {findings, model, input_tokens, output_tokens}, or None on no key / any failure.
 
+    `model` selects the reviewing model — a friendly alias ('sonnet' for a lighter/faster
+    review, 'opus' for the deep one) or a raw model id; None uses the configured default.
     `findings` is a list of dicts (rule_id, issue, verdict, severity, computation,
     values_used, evidence, location). Empty list means BB reviewed and found nothing.
     """
@@ -92,12 +110,13 @@ def review(pdf_bytes: bytes, job_release: str):
         logger.info("bb_pdf_review_skipped", reason="empty or over size ceiling",
                     size=len(pdf_bytes) if pdf_bytes else 0)
         return None
+    resolved = resolve_model(model)
     try:
-        result = _call_anthropic(pdf_bytes, job_release)
+        result = _call_anthropic(pdf_bytes, job_release, model=resolved)
     except Exception as e:  # noqa: BLE001 — any failure → no result; caller records the error
-        logger.info("bb_pdf_review_failed", error=str(e))
+        logger.info("bb_pdf_review_failed", error=str(e), model=resolved)
         return None
-    logger.info("bb_pdf_review_complete", job_release=job_release,
+    logger.info("bb_pdf_review_complete", job_release=job_release, model=resolved,
                 findings=len(result["findings"]),
                 input_tokens=result.get("input_tokens"), output_tokens=result.get("output_tokens"))
     return result

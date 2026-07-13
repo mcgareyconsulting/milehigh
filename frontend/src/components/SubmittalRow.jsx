@@ -12,6 +12,7 @@
  */
 import React, { useState } from 'react';
 import { formatDate } from '../utils/formatters';
+import { BBStatusBadge } from './bbReview/BBStatusBadge';
 
 const fmt = (v) => (v == null || v === '' ? '—' : String(v));
 
@@ -62,6 +63,8 @@ export default function SubmittalRow({ submittal, isHighlighted = false, onOpenD
                 <span className="shrink-0 font-mono text-sm font-semibold text-gray-900 dark:text-slate-100">
                     #{orderNum}
                 </span>
+
+                <BBStatusBadge status={submittal.bb_status} />
 
                 <span className="flex-1 min-w-0 truncate text-sm text-gray-900 dark:text-slate-100">
                     <span className="font-semibold">{projName}</span>

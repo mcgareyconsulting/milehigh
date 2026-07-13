@@ -136,11 +136,20 @@ export function PdfMarkupModal({
     isOpen,
     releaseId,
     versionId,
+    fileUrl,           // read-only: load this PDF URL directly (bypasses release/version)
+    title = 'Drawing markup',
     mode = 'edit',
+    inline = false,
+    initialPage = null,
+    citeNonce = null,
     onClose,
     onSaved,
 }) {
     const containerRef = useRef(null);
+    // Always holds the latest requested page so the pdf.js 'pagesloaded'
+    // listener (created once inside init) can jump without a stale closure.
+    const initialPageRef = useRef(initialPage);
+    initialPageRef.current = initialPage;
     const overlayRef = useRef(null);
     const shapeStartRef = useRef(null);  // { x, y } client coords of the in-progress shape
     const viewerStateRef = useRef({
@@ -168,7 +177,7 @@ export function PdfMarkupModal({
 
     // Load PDF + initialize viewer
     useEffect(() => {
-        if (!isOpen || !releaseId) return;
+        if (!isOpen || (!releaseId && !fileUrl)) return;
         let cancelled = false;
         const container = containerRef.current;
         if (!container) return;
@@ -185,10 +194,11 @@ export function PdfMarkupModal({
 
         const init = async () => {
             try {
-                const filePath = versionId
-                    ? `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/file`
-                    : null;
-                const url = filePath ?? `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/latest/file`;
+                const url = fileUrl
+                    ? fileUrl
+                    : (versionId
+                        ? `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/${versionId}/file`
+                        : `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions/latest/file`);
                 const resp = await fetch(url, { credentials: 'include' });
                 if (!resp.ok) throw new Error(`HTTP ${resp.status} loading PDF`);
                 const data = new Uint8Array(await resp.arrayBuffer());
@@ -205,9 +215,10 @@ export function PdfMarkupModal({
                 linkService.setViewer(pdfViewer);
 
                 eventBus.on('pagesinit', () => {
-                    // 'page-fit' shows the whole page; 'auto' / 'page-width' often
-                    // over-zoom wide FC drawings on big screens.
-                    pdfViewer.currentScaleValue = 'page-fit';
+                    // Inline review pane: fit width so the sheet fills the column and
+                    // dimensions are legible (fit-page leaves it tiny in a tall pane).
+                    // Fullscreen markup: 'page-fit' shows the whole sheet to work on.
+                    pdfViewer.currentScaleValue = inline ? 'page-width' : 'page-fit';
                 });
                 eventBus.on('annotationeditorstateschanged', (e) => {
                     setDirty(true);
@@ -262,7 +273,14 @@ export function PdfMarkupModal({
                     })));
                 };
 
-                eventBus.on('pagesloaded', () => { refreshTicks(); });
+                eventBus.on('pagesloaded', () => {
+                    const p = initialPageRef.current;
+                    if (p && pdfViewer.pagesCount) {
+                        const clamped = Math.max(1, Math.min(pdfViewer.pagesCount, p));
+                        pdfViewer.scrollPageIntoView({ pageNumber: clamped });
+                    }
+                    refreshTicks();
+                });
                 // Recompute after a zoom change once the new scale's pages are laid out
                 eventBus.on('scalechanging', () => { setTimeout(refreshTicks, 100); });
 
@@ -271,7 +289,7 @@ export function PdfMarkupModal({
                 viewerStateRef.current.originByFingerprint = new Map();
                 viewerStateRef.current.currentVersionNumber = null;
                 let lineageChain = [];
-                try {
+                if (!fileUrl) try {
                     const versionsResp = await fetch(
                         `${API_BASE_URL}/brain/releases/${releaseId}/drawing/versions`,
                         { credentials: 'include' },
@@ -358,7 +376,19 @@ export function PdfMarkupModal({
             try { state.pdfDocument?.destroy?.(); } catch { /* noop */ }
             viewerStateRef.current = { pdfDocument: null, pdfViewer: null, eventBus: null, loadingTask: null, uiManager: null };
         };
-    }, [isOpen, releaseId, versionId]);
+    }, [isOpen, releaseId, versionId, fileUrl, inline]);
+
+    // Jump-to-page on command: react to initialPage / citeNonce changes when the
+    // doc is already loaded (NOT via the init effect's deps — reloading the whole
+    // doc would flash). citeNonce forces a re-jump when two findings cite the
+    // same page number.
+    useEffect(() => {
+        if (!isOpen || loading || !initialPage) return;
+        const v = viewerStateRef.current.pdfViewer;
+        if (!v || !v.pagesCount) return;
+        const clamped = Math.max(1, Math.min(v.pagesCount, initialPage));
+        v.scrollPageIntoView({ pageNumber: clamped });
+    }, [initialPage, citeNonce, isOpen, loading]);
 
     // Apply tool changes to the viewer
     useEffect(() => {
@@ -656,8 +686,12 @@ export function PdfMarkupModal({
         </button>
     );
 
-    return createPortal(
-        <div className="fixed inset-0 z-50 flex flex-col bg-gray-900 bg-opacity-95">
+    const rootClass = inline
+        ? 'relative w-full h-full flex flex-col bg-gray-900'
+        : 'fixed inset-0 z-50 flex flex-col bg-gray-900 bg-opacity-95';
+
+    const tree = (
+        <div className={rootClass}>
             {/* Hide pdf.js's floating per-editor delete/altText buttons — they
                 land in odd spots; users delete annotations with Backspace/Delete. */}
             <style>{`
@@ -701,7 +735,7 @@ export function PdfMarkupModal({
                 }
             `}</style>
             <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-gray-200 shadow-sm flex-wrap">
-                <span className="font-semibold text-gray-800 mr-2">Drawing markup</span>
+                <span className="font-semibold text-gray-800 mr-2">{title}</span>
                 <div className="flex items-center gap-1 mr-2">
                     <button
                         type="button"
@@ -913,6 +947,12 @@ export function PdfMarkupModal({
                         {ticks.map((t) => {
                             const tickColor = t.type === 'FreeText' ? '#FFD500' : (t.type === 'Ink' ? '#FF3B30' : '#1F77B4');
                             const versionLabel = t.versionNumber != null ? `v${t.versionNumber}` : '';
+                            // Fallback tag when there's no version (e.g. Procore-pulled
+                            // markups): show a glyph for the markup kind, not a bare dot.
+                            const typeGlyph = t.type === 'FreeText' ? 'T' : (t.type === 'Ink' ? '✎' : '▢');
+                            const typeLabel = t.type === 'FreeText' ? 'Text note' : (t.type === 'Ink' ? 'Pen markup' : 'Shape markup');
+                            const tickLabel = [versionLabel, typeLabel, t.page != null ? `page ${t.page}` : '']
+                                .filter(Boolean).join(' · ');
                             return (
                                 <button
                                     key={t.id}
@@ -934,10 +974,10 @@ export function PdfMarkupModal({
                                         lineHeight: 1,
                                         border: '1.5px solid rgba(0,0,0,0.65)',
                                     }}
-                                    title={`${versionLabel} — Page ${t.page} — ${t.type}`}
-                                    aria-label={`Jump to ${t.type} on page ${t.page}, ${versionLabel}`}
+                                    title={tickLabel}
+                                    aria-label={`Jump to ${tickLabel}`}
                                 >
-                                    {versionLabel || '·'}
+                                    {versionLabel || typeGlyph}
                                 </button>
                             );
                         })}
@@ -950,9 +990,10 @@ export function PdfMarkupModal({
                     </div>
                 )}
             </div>
-        </div>,
-        document.body,
+        </div>
     );
+
+    return inline ? tree : createPortal(tree, document.body);
 }
 
 export default PdfMarkupModal;
