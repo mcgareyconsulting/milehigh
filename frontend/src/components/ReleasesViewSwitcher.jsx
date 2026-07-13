@@ -1,9 +1,9 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Segmented Table/Board/Timeline switcher for the three release views (Job Log table, PM Board, Gantt timeline) — sits in the shared ReleasesLayout toolbar for instant switching over the shared ReleasesProvider dataset.
+ * purpose: Segmented Table/Timeline switcher for the two release views (Job Log table, Gantt timeline) — sits in the shared ReleasesLayout toolbar for instant switching over the shared ReleasesProvider dataset. (The PM Board view was removed 2026-07-12; /pm-board is now Timeline-only.)
  * exports:
- *   ReleasesViewSwitcher: Router-aware segmented control. Table → /job-log, Board → /pm-board, Timeline → /pm-board?view=timeline.
+ *   ReleasesViewSwitcher: Router-aware segmented control. Table → /job-log, Timeline → /pm-board.
  * imports_from: [react-router-dom]
  * imported_by: [frontend/src/pages/ReleasesLayout.jsx]
  * invariants:
@@ -37,22 +37,9 @@ const VIEWS = [
         ),
     },
     {
-        key: 'board',
-        label: 'Board',
-        to: '/pm-board',
-        title: 'PM Board',
-        icon: (
-            <svg {...ICON_PROPS}>
-                <rect x="1.5" y="2" width="3" height="10" rx="0.75" />
-                <rect x="5.5" y="2" width="3" height="7" rx="0.75" />
-                <rect x="9.5" y="2" width="3" height="4.5" rx="0.75" />
-            </svg>
-        ),
-    },
-    {
         key: 'timeline',
         label: 'Timeline',
-        to: '/pm-board?view=timeline',
+        to: '/pm-board',
         title: 'Install timeline (Gantt)',
         icon: (
             <svg {...ICON_PROPS}>
@@ -64,10 +51,8 @@ const VIEWS = [
 
 function activeViewFor(location) {
     if (location.pathname.startsWith('/job-log')) return 'table';
-    if (location.pathname.startsWith('/pm-board')) {
-        const view = new URLSearchParams(location.search).get('view');
-        return view === 'timeline' ? 'timeline' : 'board';
-    }
+    // /pm-board is Timeline-only now (old ?view=timeline deep links land in the same place).
+    if (location.pathname.startsWith('/pm-board')) return 'timeline';
     return null;
 }
 

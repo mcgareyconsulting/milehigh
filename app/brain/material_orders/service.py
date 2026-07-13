@@ -204,6 +204,44 @@ def list_for_release(job, release=None):
     return [o.to_dict() for o in q.order_by(MaterialOrder.id.desc()).all()]
 
 
+def list_shipping_planning():
+    """Read-model for the Timeline's Shipping Planning lane: orders still to bring in.
+
+    An order is 'in planning' when shipping_status == 'planning' — set by the supplier-
+    status extractors (DenCol stock "ready for pickup" = a PU, AZZ galv "Ready to Ship").
+    This is a pure READ overlay: it never touches Releases rows; the timeline unions these
+    cards onto the shipping lane alongside the release ship milestones.
+
+    Each card carries the fields the lane needs to place + label it:
+      - date: ready_at (when the supplier said it's ready) → ordered_at fallback → None
+      - a short label (supplier + PO / description) and order_kind for styling.
+    Sorted by date (nulls last), then id.
+    """
+    rows = (
+        MaterialOrder.query
+        .filter(MaterialOrder.shipping_status == "planning")
+        .all()
+    )
+    cards = []
+    for o in rows:
+        date = o.ready_at or o.ordered_at
+        cards.append({
+            "id": o.id,
+            "job": o.job,
+            "release": o.release,
+            "order_kind": o.order_kind,          # 'material' | 'galvanizing' | 'stock' (PU)
+            "supplier": o.supplier,
+            "po_number": o.po_number,
+            "supplier_order_no": o.supplier_order_no,
+            "description": o.description,
+            "date": date.isoformat() if date else None,
+            "ready_at": o.ready_at.isoformat() if o.ready_at else None,
+            "ordered_at": o.ordered_at.isoformat() if o.ordered_at else None,
+        })
+    cards.sort(key=lambda c: (c["date"] is None, c["date"] or "", c["id"]))
+    return cards
+
+
 def mark_received(order_id, received=True):
     """Flip an order between ordered/received. Returns the dict or None if missing."""
     order = MaterialOrder.query.get(order_id)

@@ -1,6 +1,7 @@
 """HTTP routes for supplier material orders (registered on brain_bp).
 
 GET  /brain/material-orders?job=&release=   list orders for a release (modal)
+GET  /brain/material-orders/shipping-planning  planning-status orders for the Timeline lane
 POST /brain/material-orders/<id>/received    mark received / un-receive (drafter+)
 POST /brain/material-orders/ingest           backfill orders from lake emails (admin)
 """
@@ -26,6 +27,13 @@ def list_material_orders():
     except (TypeError, ValueError):
         return jsonify({"error": "job must be an integer"}), 400
     return jsonify({"orders": orders}), 200
+
+
+@brain_bp.route("/material-orders/shipping-planning", methods=["GET"])
+@login_required
+def list_shipping_planning_orders():
+    """Read-model for the Timeline Shipping Planning lane (planning-status orders, incl. PU)."""
+    return jsonify({"orders": service.list_shipping_planning()}), 200
 
 
 @brain_bp.route("/material-orders/<int:order_id>/received", methods=["POST"])

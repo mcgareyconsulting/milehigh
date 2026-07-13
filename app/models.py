@@ -1274,7 +1274,7 @@ class MaterialOrder(db.Model):
     # What kind of order this row represents, so the shipping-planning lane can
     # source and style it: 'material' (itemized parts — the default/original shape),
     # 'galvanizing' (AZZ galv-job status notification, one row upserted per AZZ Job #),
-    # or 'stock' (a DenCol stock pickup not tied to any release).
+    # or 'stock' (a DenCol stock pickup — a "PU"/pickup — not tied to any release).
     order_kind = db.Column(db.String(16), nullable=True, default="material", server_default="material")
 
     # Orderer: the MHMW person who placed the order (the innermost forwarded
@@ -1340,6 +1340,7 @@ class MaterialOrder(db.Model):
             "unit_price": self.unit_price,
             "extended_price": self.extended_price,
             "status": self.status,
+            "shipping_status": self.shipping_status,
             "ordered_at": _dt(self.ordered_at),
             "ready_at": _dt(self.ready_at),
             "received_at": _dt(self.received_at),

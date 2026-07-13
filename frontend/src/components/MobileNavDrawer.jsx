@@ -17,13 +17,13 @@ const NAV_ITEMS = [
     { label: 'Map', path: '/jobsite-map' },
     { label: 'Job Log', path: '/job-log' },
     { label: 'Drafting WL', path: '/drafting-work-load' },
-    { label: 'PM Board', path: '/pm-board' },
+    { label: 'Timeline', path: '/pm-board' },
     { label: 'Events', path: '/events' },
     { label: 'To-Dos', path: '/todos' },
 ];
 
+// Rentals nav removed 2026-07-12 (company change) — route + backend intact.
 const ADMIN_ITEMS = [
-    { label: 'Rentals', path: '/rental-reports' },
     { label: 'Meetings', path: '/meetings' },
     { label: 'Bug Tracker', path: '/board' },
 ];
