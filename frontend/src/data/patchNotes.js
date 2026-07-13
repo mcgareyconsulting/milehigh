@@ -17,6 +17,102 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.284',
+    date: 'July 9, 2026',
+    summary:
+      'BB can now review a drawing set for code compliance, supplier galvanizing and stock status shows up on job details, and verbal releases are easier and safer to enter.',
+    changes: [
+      {
+        type: 'new',
+        title: 'BB code-compliance review for drawings',
+        adminOnly: true,
+        detail:
+          'Banana Boy can now review a release\'s full For-Construction drawing set against a library of fabrication and structural code rules, flagging issues by severity with the sheet citations it used to reach each finding. PMs can accept or deny each flag to help BB improve.',
+      },
+      {
+        type: 'new',
+        title: 'Galvanizing & stock order status tracking',
+        adminOnly: true,
+        detail:
+          'Supplier-order capture now also picks up galvanizing "ready to ship" and stock "ready for pickup" notifications forwarded to the mailbox, showing them on the job details panel with their own Planning → Complete status alongside itemized material orders.',
+      },
+      {
+        type: 'improved',
+        title: 'Paste-in verbal releases, plus duplicate protection',
+        detail:
+          'The Verbal Release modal now has a Paste mode — paste one row from a spreadsheet and it fills the form for you. Both verbal and bulk release entry also now catch likely duplicates (same job, name, and description under a different release number) and ask you to confirm before creating them.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.281',
+    date: 'July 5, 2026',
+    summary:
+      'Ask BB about any release or submittal, cheaper and more reliable supplier-order capture, and a behind-the-scenes logging and security cleanup.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Ask BB about a release or submittal',
+        adminOnly: true,
+        detail:
+          'A new read-only BB chat: type a release or submittal number and BB assembles its full lifecycle — status, submittals, a merged event timeline, and open to-dos — into one grounded summary. Read-only for now; every answer is drawn straight from the Brain.',
+      },
+      {
+        type: 'improved',
+        title: 'Cheaper, more reliable supplier-order capture',
+        adminOnly: true,
+        detail:
+          'Supplier-order emails forwarded to the Banana Boy mailbox are now scanned exactly once instead of being re-checked on every poll, and re-scanned only when a late attachment lands. This removes a large silent AI cost and speeds up ingestion.',
+      },
+      {
+        type: 'fixed',
+        title: 'Logging and security hardening',
+        adminOnly: true,
+        detail:
+          'A ground-up cleanup of application logs: closed two spots where credentials could reach the logs, cut steady-state log noise, and made every log line consistent and parseable. No change to how the app behaves.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.278',
+    date: 'July 1, 2026',
+    summary:
+      'Log a verbal release in seconds, edit any Job Log row inline, schedule Sub-GC drafting from the GC\'s jobsite date, and easier-to-read green dates.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Log a verbal release',
+        detail:
+          'A quick-entry form on the Releases page for releases that come in verbally.',
+      },
+      {
+        type: 'new',
+        title: 'Edit a whole Job Log row inline',
+        adminOnly: true,
+        detail:
+          'You can now edit every non-locked field on a Job Log row right inline. Your changes sync straight to the Trello card and its mirror card, so the boards stay in step.',
+      },
+      {
+        type: 'new',
+        title: 'Schedule Sub-GC drafting from the GC\'s jobsite date',
+        detail:
+          'On a Sub-GC submittal you can enter the GC\'s jobsite install schedule date and the drafting due date is set automatically to 60 business days before it. Both dates are kept, so the schedule date can be tracked on its own.',
+      },
+      {
+        type: 'improved',
+        title: 'Clearer release numbering on drafting submittals',
+        detail:
+          'Release numbers and dates on DRR-type drafting submittals are now assigned and displayed more consistently across the Drafting Work Load.',
+      },
+      {
+        type: 'fixed',
+        title: 'Readable dates on green backgrounds',
+        detail:
+          'On-track (green) date pills now use black text on the green highlight, so they\'re easy to read across the Job Log, PM board, and Start Install editor.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.268',
     date: 'June 23, 2026',
     summary:

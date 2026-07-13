@@ -62,9 +62,11 @@ def main(eml_path):
 
         print(f"✓ {len(orders)} material order line(s):")
         for o in orders:
+            qty = f"{o.quantity:g} " if o.quantity is not None else ""
+            state = o.shipping_status or o.status
             print(
                 f"    job {o.job}-{o.release} | {o.supplier} | PO {o.po_number} | "
-                f"qty {o.quantity:g} {o.description} | {o.status}"
+                f"qty {qty}{o.description} | {state}"
             )
 
         # Is there a matching release to tag?

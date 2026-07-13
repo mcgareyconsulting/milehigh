@@ -69,7 +69,14 @@ def renumber_fab_orders(dry_run=False):
     complete_releases = Releases.query.filter(active_filter, Releases.stage.in_(complete_variants)).all()
     for r in complete_releases:
         if r.fab_order is not None:
-            logger.info(f"Complete: {r.job}-{r.release} ({r.stage}) fab_order {r.fab_order} -> NULL")
+            logger.debug(
+                "fab_order_cleared",
+                job=r.job,
+                release=r.release,
+                stage=r.stage,
+                from_fab_order=r.fab_order,
+                to_fab_order=None,
+            )
             r.fab_order = None
             stats['complete_cleared'] += 1
 
@@ -79,7 +86,15 @@ def renumber_fab_orders(dry_run=False):
     tier_0_releases = Releases.query.filter(active_filter, Releases.stage.in_(tier_0_variants)).all()
     for r in tier_0_releases:
         if r.fab_order != 0:
-            logger.info(f"Tier 0: {r.job}-{r.release} ({r.stage}) fab_order {r.fab_order} -> 0")
+            logger.debug(
+                "fab_order_assigned",
+                tier=0,
+                job=r.job,
+                release=r.release,
+                stage=r.stage,
+                from_fab_order=r.fab_order,
+                to_fab_order=0,
+            )
             r.fab_order = 0
             stats['fixed_tier_0'] += 1
 
@@ -89,7 +104,15 @@ def renumber_fab_orders(dry_run=False):
     tier_1_releases = Releases.query.filter(active_filter, Releases.stage.in_(tier_1_variants)).all()
     for r in tier_1_releases:
         if r.fab_order != 1:
-            logger.info(f"Tier 1: {r.job}-{r.release} ({r.stage}) fab_order {r.fab_order} -> 1")
+            logger.debug(
+                "fab_order_assigned",
+                tier=1,
+                job=r.job,
+                release=r.release,
+                stage=r.stage,
+                from_fab_order=r.fab_order,
+                to_fab_order=1,
+            )
             r.fab_order = 1
             stats['fixed_tier_1'] += 1
 
@@ -99,7 +122,15 @@ def renumber_fab_orders(dry_run=False):
     tier_2_releases = Releases.query.filter(active_filter, Releases.stage.in_(tier_2_variants)).all()
     for r in tier_2_releases:
         if r.fab_order != 2:
-            logger.info(f"Tier 2: {r.job}-{r.release} ({r.stage}) fab_order {r.fab_order} -> 2")
+            logger.debug(
+                "fab_order_assigned",
+                tier=2,
+                job=r.job,
+                release=r.release,
+                stage=r.stage,
+                from_fab_order=r.fab_order,
+                to_fab_order=2,
+            )
             r.fab_order = 2
             stats['fixed_tier_2'] += 1
 
@@ -115,9 +146,13 @@ def renumber_fab_orders(dry_run=False):
 
         for r in stage_releases:
             if r.fab_order != next_fab_order:
-                logger.info(
-                    f"Dynamic: {r.job}-{r.release} ({r.stage}) "
-                    f"fab_order {r.fab_order} -> {next_fab_order}"
+                logger.debug(
+                    "fab_order_assigned",
+                    job=r.job,
+                    release=r.release,
+                    stage=r.stage,
+                    from_fab_order=r.fab_order,
+                    to_fab_order=next_fab_order,
                 )
                 r.fab_order = next_fab_order
                 stats['dynamic'] += 1
@@ -132,10 +167,26 @@ def renumber_fab_orders(dry_run=False):
     )
 
     if dry_run:
-        logger.info(f"DRY RUN — rolling back. Stats: {stats}")
+        logger.debug(
+            "fab_order_migration_dry_run",
+            count=stats['total'],
+            complete_cleared=stats['complete_cleared'],
+            fixed_tier_0=stats['fixed_tier_0'],
+            fixed_tier_1=stats['fixed_tier_1'],
+            fixed_tier_2=stats['fixed_tier_2'],
+            dynamic=stats['dynamic'],
+        )
         db.session.rollback()
     else:
         db.session.commit()
-        logger.info(f"Migration complete. Stats: {stats}")
+        logger.info(
+            "fab_order_migration_complete",
+            count=stats['total'],
+            complete_cleared=stats['complete_cleared'],
+            fixed_tier_0=stats['fixed_tier_0'],
+            fixed_tier_1=stats['fixed_tier_1'],
+            fixed_tier_2=stats['fixed_tier_2'],
+            dynamic=stats['dynamic'],
+        )
 
     return stats

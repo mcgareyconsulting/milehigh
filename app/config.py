@@ -19,7 +19,11 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv(Path('/Users/danielmcgarey/Desktop/MHMW/milehigh/.env'))
+# Load the .env sitting at the repo root (app/config.py -> parents[1] is the repo root),
+# so every checkout / git worktree / developer machine loads its OWN .env instead of a
+# path hardcoded to one person's machine. Missing file is a harmless no-op (e.g. on
+# Render, where env vars come from the platform, not a .env file).
+load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
 # Define frontend build directory
 FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
@@ -134,6 +138,19 @@ class Config:
     # Anthropic — used to extract checklist items from meeting transcripts.
     # Falls back to a deterministic stub extractor when unset (tests / no key).
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+    # BB (Banana Boy) chat — read-only Q&A assistant over the app database.
+    # Phase 1 runs on Sonnet 5 with adaptive thinking; effort "medium" balances
+    # chat latency against cost. max_tokens stays under the 16k non-streaming
+    # timeout guard. All read-only; no data is ever mutated by the chat.
+    BB_CHAT_MODEL = os.environ.get("BB_CHAT_MODEL", "claude-sonnet-5")
+    BB_CHAT_MAX_TOKENS = int(os.environ.get("BB_CHAT_MAX_TOKENS", "8192"))
+    BB_CHAT_EFFORT = os.environ.get("BB_CHAT_EFFORT", "medium")
+    # Hard caps for the read-only SQL tool so a bad query can't melt the DB.
+    BB_CHAT_SQL_TIMEOUT_MS = int(os.environ.get("BB_CHAT_SQL_TIMEOUT_MS", "8000"))
+    BB_CHAT_SQL_ROW_LIMIT = int(os.environ.get("BB_CHAT_SQL_ROW_LIMIT", "500"))
+    # Max agent tool-loop iterations before we force a final answer.
+    BB_CHAT_MAX_STEPS = int(os.environ.get("BB_CHAT_MAX_STEPS", "12"))
 
     # Recall.ai — dispatches a notetaker bot to a meeting URL (Teams/Zoom/Meet) and
     # produces an async transcript we PULL down post-meeting (no webhook/data-lake

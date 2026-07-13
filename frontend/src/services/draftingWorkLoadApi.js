@@ -156,13 +156,16 @@ class DraftingWorkLoadApi {
     }
 
     /**
-     * Update due date for a submittal
+     * Update due date for a submittal, either directly or (Sub-GC submittals only) by
+     * backdating 60 business days from a GC jobsite schedule date. The two are mutually
+     * exclusive; only pass one.
      */
-    async updateDueDate(submittalId, dueDate) {
+    async updateDueDate(submittalId, dueDate, gcJobsiteScheduleDate) {
         try {
             const response = await axios.put(`${API_BASE_URL}/brain/drafting-work-load/due-date`, {
                 submittal_id: submittalId,
-                due_date: dueDate
+                due_date: dueDate,
+                gc_jobsite_schedule_date: gcJobsiteScheduleDate,
             });
             return response.data;
         } catch (error) {

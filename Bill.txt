@@ -1,0 +1,972 @@
+yeah um
+dad he's already got that do you have more filters on it no no so
+so flats at sandcrete here yep we had it as individual stairs or one we had one release
+and there were two stair cores in it well what we used to do in the past was just pull two
+and submit them together in the same Procore.
+Yep.
+It's not going to work now that we have these pulling the numbers here.
+So now what we're having to do is break out.
+So if somebody decides later that they need to break it out,
+how is that going to screw things up?
+I see what you're saying.
+Like if you're doing a balcony rail project
+and you just needed to only do level one.
+Yep.
+And two and three would come later,
+balcony rails was how it was originated and then we need to be able to splice it apart
+into smaller chunks yeah is effectively what happened at those stairs instead of releasing
+one full building of stairs it's the west core and the east core and how does this happen in
+pro core you would just like change the current name create two more submittals yeah got it a lot
+of times that i would do is actually just open another one as a duplicate change the name of
+the duplicate make the other you know change one to west the original one to west and then make a
+new one that says east okay or whatever got it i don't know if that's a problem it kind of created
+an issue in flats when we switched to this getting the job numbers here or the release numbers here
+but i think that's just more maybe on the pm side to do diligence of hey this one might need to get
+broke out in the future we could i don't know if there's a to me i think that's a good case for
+like as an example of there's available release numbers and we would want to
+have a function in here like hey split this like splitting a check i split this three ways
+right stair core one stair core two stair core three and it'll automatically assign the other
+two release numbers or just be a function where you could split it yep
+yeah I'm not sure how that connects back to Procore in this case but okay can I
+come see whatever that is sure absolutely
+Oh, what did I just sign myself up for?
+For eye protection, you can keep seeing clearly.
+I was at a town for a general, and we were at this, like, the hotel we were at, had this
+huge, like, sedentary style.
+We were watching the World Cup game.
+And we're like 50 yards away.
+Like here for the...
+
+What the hell is this school?
+I'm like, you are kidding.
+You are kidding.
+Ha! Are you going in?
+So I'm going to the IDOT over here
+to get some gas.
+Maybe I'll see the golf ball a little bit.
+So what am I looking at here?
+So this is like support for the staircase?
+Yeah, we had a little naked in here.
+It's a burby that we really talked about.
+We're good.
+My question is how we put your book.
+You just drove the kitchen?
+Yeah.
+Bad day when the fridge is on, huh?
+Yeah.
+Now we go to the kitchen on Monday.
+Now I should know about the kitchen on Monday.
+So what happened on this?
+The bottom rise, that's the middle, so that last bit is too long.
+That's the first design, that it says the level, that it's too long in the rise.
+And after that, the use, where this is going is slow.
+You set the base point for the flat, and it never adjusts until it gets hot.
+Look at that. It's like, you're well wrong.
+You just cut them off.
+here's the top
+before we get another
+I've got
+I've got
+I've got
+I've got
+coming to the trailer so long
+the total
+I've got
+I've got
+I've got
+the trailer
+the trailer itself
+is not a level
+There's no closer to one of these.
+I know.
+I'm just getting to see what it would look like once you cut that off.
+Once you're a long run, you can put up a few niggas.
+You can put up a few niggas.
+You can put up a few niggas.
+You can put up a few niggas.
+You can put up a few niggas.
+You can put up a few niggas.
+You can put up a few niggas.
+Oh
+So is there a compliance test opportunity for that?
+Yeah.
+Huh?
+Yeah.
+That's AI-wise.
+I should be adding a few times.
+If you open the car, you can see the car on the bottom of the car.
+It's fairly small.
+It's not a wall.
+99% of the time.
+99% of the time, the first step is shorter, and then when you get to the second level,
+it should be longer because it's really enlightening.
+So that one needs to grow a little bit.
+Yeah.
+Yeah, we found the same thing with the back. Remember that one where we had the back, the spacing was off?
+It's always 99 again, the second time it's an inch of three seconds.
+We just missed it and that was a big one. That was like 12 stairs or something. That was a lot of stairs.
+It's short because it gets too long or something.
+But, you know, it's not a dimension I normally look at because my program does it right every time.
+So I kind of ignored that one.
+And now we know that it's a different one.
+But that's why I'm doing 100%.
+I don't think it's going to be a problem.
+Did they just cut 10 to half out of that?
+10 to three quarters?
+That was only a quarter on that one?
+I don't think it's...
+That one might be the only one that's actually...
+That one, you couldn't see it.
+It was within the bubble.
+So, I don't think you're going to have a problem.
+That larger one might be one that they're like,
+oh, it'll be like, well, I don't know.
+Just your concrete's a little warm.
+Right, right.
+Add a tread.
+I mean, if you can avoid adding the tread and tip them to absorb that little bit of extra elevation,
+like tip them a sixteenth of an inch, you're going to gain an inch of rise at a sixteenth of an inch per tread,
+and then you can still maintain the tread, so you actually just tip the tread.
+Yeah, you leave your stringer where it's supposed to be, and you just tip the treads.
+Correct.
+It's kind of a pain, but we've got it.
+It's better than adding a tread.
+because you're probably going to bump into new grass issues is usually what ends up happening.
+But also just extra costs, like one whole rise rail, stringer, tread,
+I don't know what you're looking at, probably $180, $200, potentially more.
+Hey, why is this one different than that one?
+Yep, yep.
+So yeah, if you can just tip the tread.
+And actually you can technically make the treads a 7 inch rise, but if you tip it a 16th,
+it's now 6 and 15 sixteenths.
+If you tip the tread itself, right?
+So you're actually getting 7 inches out of it completely every time, because that's what
+you said, it was going to end up being a 7.
+So you could tip them to that, and then you would be in code, and you would actually still
+be at a 7 inch rise.
+If the limit's three inches, is that one, because that was the short one, is going to
+be right at seven, so you may have to add a check on the other one.
+Okay, let's look at it.
+With that three inch, or once that one.
+Yes.
+We just got to make sure we're in egress, and that would be my biggest concern, and then
+just the extra cost, and we can avoid it at the best.
+Yeah.
+Cool.
+back to like what you're asking about there too daniel i think that one
+way that we could feed that type of information in for like training regimen i guess is we would
+have our drawings on the job log we could mark that up and then submit it for like
+future submitted to banana boy yes exactly be like hey this is an error that we found in this set
+you know we need to make sure this is not a legacy error going forward and you know at least flag it
+this type of stuff yeah exactly that you could flag it you know in this case hey all of your
+stringers have this over six inch or over seven inch space at the last clip is that really what
+right yeah i mean over time and that's the thing like we've made this mistake before yeah yeah it's
+been a long time yeah so it just like those types of things just kind of seem to slip through just
+because of the variables of like what do you send me or do you know which what the job release is
+for that drawing and i can pull it from pro core yeah i know it's flat
+So you're in old man mode too, huh?
+I just changed it for David.
+He's nice like that.
+One thing that came up is that green, in the green,
+I think we need to change the text to black.
+Yeah.
+On the green, especially on the drafting workload,
+it was real hard to see in the meeting yesterday.
+The green date?
+Yeah.
+Yeah, yeah, yeah.
+Green background, black text.
+Oh, also the meeting yesterday.
+I don't know if you looked at the meeting in the meetings thing.
+Yeah.
+The notes.
+We ran out of AI dollars.
+That's what happened.
+Oh, okay.
+Because I just like threw 10 bucks in there.
+Okay.
+And we ran out of AI dollars.
+The job log did that too.
+Yeah, the job log last week.
+Oh, really?
+We only did one thing.
+No more AI dollars.
+I'll reload that and include it on next month's invoice.
+I don't know.
+I just put it in there.
+It was working so good.
+Now it's just like broken saying Louie's not in the meeting.
+Yeah.
+What?
+AI dollars.
+Okay.
+Yeah.
+Yeah.
+Okay.
+Yeah, that was something I was going to bring up.
+Like, the meeting is broken, man.
+Okay, good.
+I got an email and I was like, oh, shit.
+Yeah.
+This worked better than I thought.
+I didn't think we were going to go through $10 so fast.
+So, $596.74 is probably fine.
+I'm sure that'll show up.
+I have a question while we're on the job log.
+Yep.
+Let me get back.
+I just want to double check.
+Yeah.
+So that 6 and 9 16s right there plus a 2 and a quarter inch tread makes it over 7 inches, which is the max rise.
+And the max rise is from the walking surface to the top of the tread.
+So you actually can have a match.
+So this dimension right here is your...
+That's the rise.
+Your rise.
+So this dimension here should be...
+This should not be over this plus 2 1⁄4.
+2 1⁄4 is...
+The tread thickness.
+Yep.
+So the precast treads that we use,
+see if it calls it out anywhere in here.
+I'll catch that.
+Or maybe...
+It should be down.
+Keep going.
+Where's this?
+This right here.
+Yep.
+So it calls out the tread here.
+So it would have all the information to like intuitively figure out.
+And what was the page or the drawing number on the original where the issue actually is?
+F1.
+F1.
+Yep.
+Okay.
+That's awesome.
+Yep.
+And then, so like, and then F2, you see this is seven and five eighths, and that's because
+it's buried underneath the lightweight concrete.
+So if we go into the e-drawings, we should have, yep, so it calls out two and a quarter inch lightweight pour.
+So the stair is embedded in the concrete two and a half inches in the lightweight.
+So the footer on the second to third floor is actually longer to compensate for being under the lightweight.
+Got it.
+And then getting to that tread.
+Got it.
+But at the bottom, when you're landing on concrete, which normally our stairs do,
+it should be shorter yeah what were you saying in here so if you click the adjust the three dots
+to adjust anything is there a way to do multiple adjustments at the same time without having to go
+back in oh yeah because i had to update what was it the release numbers for that one oh yeah the
+release number the install hours in the fab hours it was kind of annoying having to go okay out and
+I'll just surface the full row.
+Yeah.
+Yeah.
+Adjust what you want.
+Just adjust what you want.
+Yeah.
+That would be easy.
+Okay.
+Okay.
+Oh, this?
+Still broken.
+Okay.
+I figured it out, but I didn't.
+The change will deploy this evening.
+Okay.
+And we can push that forward in the future.
+So if you go to...
+Also, I'm adding it so the attachments thing will give you the job and the release number
+because now it just says attachments and you're like, what the hell is this too?
+I also found that problem yesterday.
+Yeah, okay.
+It's like, what the...
+And I actually don't remember.
+But if you...
+So now, is this tag, that's only in this comment?
+It's not actually in the drawing itself, right?
+No.
+But it is on that specific version.
+Okay.
+yep we can put it on the actual pdf that's a bigger lift and a little trickier to manage okay
+because it's embedded in the document i think this is plenty to start for easy like start and
+make sure this is something that's like functional and we don't waste a ton of time getting to the
+a spot that it's like this just never gets used got it um so i i think that this is going to be
+used. Hi. Good morning. Good morning. Good morning. I just need, maybe I'll ask Danny if you can help me. I need someone to help me lift that thing off of Andrea's desk so she can work. She's sitting on her desk. Oh. Yeah. I'll see if Danny can help him. Okay. They put the side table. It's just sitting in the middle of her desk. On her desk. It's too big for me to do. A piece of wood? Yeah. Okay. There's somebody out there that can help.
+Yeah, say the word and we'll update it to PDF mentions.
+I think it's fine on the front end, yeah.
+I just was curious how that was functioning.
+So, yeah, I think that's fine there.
+Because as long as the people are getting notified, they're like, hey, there's something here.
+And then they can go inside there and look.
+I think that's fine.
+Okay.
+can we go over a few and if you have other things let's go through those first
+um i think i'm clear on the start install and release number on the drafting workload
+okay the other thing i had um is the j view on trello i know we spoke about that yeah the last
+we were on the phone bill but i wanted to go over that with you guys i don't have a demo up for that
+or anything like that i wanted a little more clarification on what exactly that should be
+that was important yeah
+oh no i need timeline right timeline
+I know.
+I just wanted to give you a reminder if you hadn't just had a SMI or a flat someone.
+Because we were talking about board and timeline coming together a little bit.
+Right.
+And then where exactly does JVU show up?
+Shipping planning, right?
+Right.
+planning but effectively what i see here this is exactly what we need right six digits job
+description and then we need to see it in the timeline here so i i know we can hover over it
+but this needs to be able to like zoom in and zoom out okay and then we can see that so then i can
+grab like jay's cards and just and move these around as needed so then it's like move them left
+to right in terms of this leaves this day this leaves this day yep so you want bigger cards on
+the timeline yep so it's a little easier to see what is what yep do you want like the trello card
+has because i am looking through a couple of the releases yesterday
+I saw that there are starting to be some photos uploaded
+Yeah
+Which is awesome
+Yep
+Do you want like the Trello where you see the photo
+Yep
+If there's a photo
+Which would be the shipping manifest
+Yep
+Is that the right word for it?
+Yes, yes
+Build materials
+Yeah
+Shipping manifest
+Yeah
+Shipping, just cover sheet
+Yeah
+Shipping cover sheet
+Yeah
+Jay used that new load list
+Oh yeah
+He was like, he came back to me and she was like, I love this thing
+Thank you.
+Awesome.
+Okay.
+It was that good, but he liked it.
+It's good.
+So, yeah, I mean, effectively, you know, what we're doing inside of Trello with the photos inside of the cards, we need to have that exposed in here.
+Yep.
+And it's just taking it and putting it into the timeline, you know.
+And I love when we open this that it's like we get this big, beautiful value of information in here.
+or the photos could be in here.
+You could scroll down through them and see those photos.
+Notes as well.
+Notes and photos.
+Yep.
+Notes and photos.
+I guess notes are on the bottom already.
+Photos and notes.
+
+And I mean, I don't mind this kind of like timeline view
+of like this is how it all went through
+where it's like, you know, the events effectively
+and the photos are merged into the events.
+Got it.
+So you can see when that event happened.
+Yep.
+That's so nice.
+Yep.
+Yeah, I think that part is super, is very beneficial.
+And then we need to wait for the card to be marked as shipped complete.
+So he needs to be able to take it out of his assignments and make it shipped complete.
+And that'll backtrack to the job log.
+Yeah.
+And is he primarily on the timeline or is he primarily in the list?
+He only works in the list.
+Got it.
+Yep, he only works in this list, and he just has it like, you can minimize all these, so when he opens it, it's just that, just this.
+And then he just looks at what's on the top, oh, whoops, wrong one, but shipping planning.
+He probably is looking at both.
+Is he moving things to shipping complete?
+Yep, so he'll grab these and slide them into shipping complete.
+That's Jay's, he adds photos to the cards and moves them to shipping complete.
+Those are like his primary functions inside Trello.
+Got it.
+Yep, he doesn't really.
+So you want a board view like this?
+Collapse bullshit.
+Yep.
+And then you want a timeline view for the shipping planning list and the shipping completed list.
+Honestly, I don't think the board view, like, I think it can go away.
+I think the timeline is way more effective.
+You want to turn the timeline into this, basically.
+You want to merge it.
+Well, I want to be able to see, like, this card, but on a timeline.
+Because, like, when you go to the timeline here...
+Do you want that for Jay as well?
+Yeah.
+Everything in the shipping.
+And so.
+Yeah, so anything in the, I guess, in the timeline here.
+We'll add shipping planning, shipping complete.
+Yep.
+And then the installers.
+And maybe we can add some filters so you can turn off installers.
+Absolutely.
+You can turn on fab department.
+You can turn on drawing department.
+Yeah, because it would be, I think that there's some benefit in having this timeline view for what we have with the dates.
+taking the trello board and doing that yep yep that's calling it one thing and then taking the
+days that we're creating inside of the job log inside of the drafting workload and then tagging
+it to a view that you can then zoom in and zoom out yeah you know and as we zoom out obviously
+you're going to lose data because you're just not going to be able to see all the information but
+when you're looking at a week yeah you should be able to you know even two weeks you should be able
+pretty clearly see and you just have to scroll or filter so by department if you need the installers
+fine that's one sheet not a big deal if you need the fab one sheet you want to see the whole thing
+then you're gonna have to scroll it's fine okay that's a lot of data on there yeah much more
+clarity thank you yeah yeah i really think that the board functionality like as much as it worked
+for what it was with trello like the timeline is a superior viewing opportunity for us to be able
+use it for planning so i think that's that's see the date for easier yep yeah and we see clashes
+and overlaps like if we see so much you know same thing as like what i was talking about how you
+could see here with the money you could also see it with the labor planning as well we have a
+massive overload somewhere we can be like hey guys we got to go in overtime because we're fucked
+okay so then we can see that projections a little bit better sweet and do you want it
+we'll drop board you'll have table and you'll have timeline yep on the right side yep go from there
+yep okay freaking awesome yeah that's good on that uh can i schedule a day in the next two weeks
+to come down here sit somewhere for as many hours as it takes and get an ipad and fix the ipad
+styling once and for all yeah just so i've got my hands on it and i can test yep a to b i might
+I have an extra iPad you can take if you want.
+If that's easier for you guys, I'm fine.
+I don't know if Katie set it up yet or not, but there's one more.
+Is there?
+I think there was one extra.
+She probably set it up pretty quick.
+If I can get Safari, I can solve all my problems.
+Yeah.
+Yeah.
+And then I'll just test with that for the company.
+Because I know we've kind of been...
+Anyway, that's just been bleeding out slowly.
+Between Augie and Tiny, I guess the bananas showed up on Tiny's and not Augie's.
+I don't know how they were looking at it.
+weird sometimes on the iPads like the banana code it like stretches past yeah yeah yeah
+tiny came to me that with that yesterday but I was like he was on the um table view and I was like
+well it's not going to work on the table view because yeah it's too much data you have to
+switch it and he was like oh you just put it to cards and I was like better yet put it on auto
+do you want it to be except for your admin view do you want it to be auto do you know what i mean
+because i know we spoke about it one time no i don't think so because like louis was like
+kind of pushing that he wanted to be able to see the same on his computer same on his ipad
+i was like that's fine but this is the compromise is like there's going to be some
+overlap data. Crunchy, yeah.
+The
+silver bullet
+for table looking the same on the iPad
+is banana code dyes.
+How critical is banana code for the iPad?
+I don't know that it's actually that critical
+overall, to be honest.
+As much as I think it's fun
+and entertaining, I don't know
+that it actually serves much function.
+I don't know how many people are using it.
+I know it came from
+That was like a transfer from the old job log.
+Yeah, I don't know that it's...
+And maybe it just needs to be exposed to the current stage.
+Like instead of seeing all of these,
+it would be like you would see this one,
+you'd see that one, that one,
+or you would see this one because it started there.
+You lose the tiling effect though,
+which is like complete to less and less and less and less and less complete as you go down i know
+but you also then it's basically just the stage i know if you're doing that it's the same thing
+as the text on the stage i know well i don't want to i don't want to lose the the tiling thing i
+know that was a cool part of the old job log yeah i don't know but also anyway if that has as much
+function
+if it was as much as it was like
+it felt familiar so we wanted it
+then when we realized that
+it didn't really
+get used in the way that we thought it would
+that it became less
+important
+that it
+I don't know that it like
+maybe you can add a button
+in there for now on the admins or something to say like
+remove code and see
+how it works without the code
+you know what I mean
+effectively well and on a screen this big right yeah you've got room for it yeah we're talking
+probably just about the ipad mode in the short term yeah and i think the cards are fine i mean
+they're they're they're functioning inside of this and primarily if you're on your ipad working on
+this you're filtering it by your department yeah yeah so it's like it doesn't really matter what
+stage it's in because it's it's in your department it's just that stage can you have it just take
+of the iPad mode yeah you know just have you can just know banana code in the iPads well but then
+the problem is you when it foot when it pushes into the phone then it's then you're you couldn't
+have that much data so like if you have a table yeah phone is its own monkey to wrangle but right
+if you have a table and you don't have the banana code it would work it would likely work on the
+ipad you probably have enough space to make that work because you just can get as much as you need
+yeah when it gets to the phone it's like impossible but the cards on the phone works great
+it functions so are you trying to get rid of cards and trying to just find one cohesive spot
+no no i don't think that's possible that's what i was wondering mobile view desktop view those are
+those are the differences yeah um you know effectively that we'll be able to see that
+I mean, I think there's probably a scenario where the banana code goes away or evolves into something different.
+I don't know that it's the idea of what we thought it would be with the cascading view for understanding quickly what the process is.
+I just don't know if it transfers the same way that the X's and the O's did previously.
+but now that it's like things are everyone's filtering by department and you move it out
+it seems like it's even less important to understand where everything's at because
+they're just working so granularly inside their area that the rest of it just can fodder doesn't
+fucking matter yeah yeah so it might not it might be something that goes goes away gives you more
+room for other activities lots more room yeah for sure for sure for notes
+yeah yeah lots more space for notes yeah so um we'll check with katie
+do they not install the desk over there they just fucking put it over there and left it
+Well, I think because we got to get Andrea's computer and everything off of it.
+So they didn't, you know, they didn't do that.
+Does she need a filing cabinet then?
+I don't think we have an extra little one.
+She's losing all her drawers.
+Oh, I also saw that you have the new rental thing.
+Yep.
+Is that the same report, Paul?
+No, it's a little bit different report that comes through it.
+I actually have a meeting here today with our Sunbelt.
+Currently, we're negotiating our rates and equipment share.
+So by this time next week, we should have a definitive answer on who we're going forward with for the next year.
+Oh, you started a battle?
+It's very likely it's going to be equipment share.
+Cool.
+And so it's going to be a whole new system.
+Mostly because they have the codes, right?
+They have codes on all the equipment?
+huge, huge advantage.
+Yeah.
+Yep.
+So.
+Yeah.
+So, yeah, that is going to change,
+but I like what we have in place.
+It's pretty slick.
+Negotiate for API access.
+Okay.
+Done.
+I'm pretty sure it's in that program.
+Sweet.
+That would be even better.
+I'm pretty sure I can
+I thought I read something in here
+about the API in here
+it's kind of a nice dashboard
+yeah
+nicer than Sunbelt
+yeah
+and it'll punch everything out that we need for it too
+Geofencing.
+I thought there was a way to get that out.
+Information out.
+I'll ask him about it.
+E-logs?
+That probably doesn't let us.
+Okay, so we can definitely get reports out of it.
+so this is like a report that we could just have automatically just get punched in like daily
+because even the email thing is a solved problem yeah if we just have to get it from a new source
+i'll ask them about it where have we gotten on the banana boy reading emails and doing the like
+what's up um did you not talk to them about that yet about
+orders, kid reading, John's emails and stuff like that.
+What's the...
+Let me show you.
+I thought you'd already gone over that with him.
+Oh, yeah, we did.
+Oh, okay.
+Yeah.
+It's...
+Sorry.
+Cool.
+It's done.
+Where's it at?
+Let me show you.
+I don't want it, no.
+Yeah.
+When do we get Banana Boy, by the way?
+When do you want Banana Boy?
+So that was an order.
+Okay.
+Dencol should be handled.
+Dencol's a little different from what you sent.
+So I'm...
+Oh, that's right.
+So forward, like the next Dencol that comes through, forward to Banana Boy.
+Okay.
+Could totally not work because it's different than like the Drexel supply a little bit.
+Yep.
+But I've got it pretty closely wrangled.
+And then we'll need to figure out where you guys want to see it.
+Are we going to have to create an app that we can embed into Outlook?
+that reads our emails banana boy just sits there and reads our emails well
+to answer the question the perm the permissions are set up in such a way for that banana boy is
+the only email where that happens so they don't always auto they don't always reply all so i'm
+afraid banana boy is not going to get those messages yeah i think that that's um which it
+was just on your own
+as to then forward it
+to Bananaboy.
+Yeah.
+It's the only thing.
+I don't know if I'm ready
+for like a full scanning
+of everyone's emails.
+I feel like it's like
+a little bit
+I mean in the end
+it's a company email.
+Yeah.
+Do company work
+on your company email?
+Yeah.
+It's fine.
+But also
+like I want
+people's
+anonymity
+to like
+exist.
+But if you set it up right
+and they know that it's set up
+I mean I know they
+know you can
+scan their emails no matter what anyway like you know you can pull anybody's emails but if we set
+up banana boy just to look for we know that he's only looking for den call or you know i don't know
+i think for the time being we'll probably just if it's in there we just forward it
+um to banana boy we can just copy them in all of the emails too and then once a reply comes back
+that it's not good
+and
+as long as it's
+supply all
+um
+with the meetings
+for banana boy
+yep
+is there a way
+when you're set up
+your team meeting
+can I just put him in there
+should be able to do that
+now as well
+oh okay
+and not
+so it's like a reoccurring
+and not have to do
+the link thing
+should be
+have you seen this
+little feature
+uh no
+what is this
+patch notes
+no
+so if you click the
+oh yes
+the version number
+yeah
+this will give you
+the updated patch notes
+okay
+And you see the admin patch notes, so I don't release all the information to everybody.
+Auto-schedule the meeting bot from your calendar.
+Invite BB to a Teams meeting, and then note-taker bot schedules itself to join at the start time.
+Okay, cool.
+So you don't have to go through two different steps.
+So we need to just set up a recurring meeting.
+Yep.
+what are your
+feelings or thoughts on
+having Banana Boy join our
+job site meetings
+your call
+I mean it's just going to show
+an additional user in the meeting
+and at the lowest level
+we'll just collect the transcript
+tune in our hands
+with our hands
+hey this is what it spit out
+and then work toward
+it just
+Like, hey, they asked about stair five.
+Here's what the status is.
+You know, pull that data back through.
+So if the calendar works, and it should work, just invite it.
+Okay.
+And it'll schedule itself.
+Yep.
+And the transcripts will go somewhere.
+Okay.
+Honestly, it'll go in the meetings is where it'll go.
+Right.
+And then it'll auto-extract and you'll see what it gets.
+We can forward it to Banana Boy as like an invite.
+It will just automatically.
+Automatically just join the meeting.
+Yep.
+Cool.
+And if you want to just text me or email me and confirm, and then I'll check the BB account.
+Yep.
+Make sure it's on the calendar, and then I'll go check the other bots and make sure they all have dollars.
+Yep.
+The meeting system is built, so it should pull a separate meeting name, and you can extract it and see what to do as it builds.
+Yeah.
+Nice.
+Awesome.
+As a start.
+I mean.
+That fucking bird, dude.
+He's just.
+He's numbered.
+His days are numbered.
+Yeah.
+Yeah, do you have any meetings this week that you want to roll that on?
+Because I'll just want to double check.
+I mean, that's something you could run tomorrow.
+I don't, but the PMs will, so we'll get one set up, and I'll keep you in on it.
+Yeah, let me know.
+Okay.
+J view
+that also covers
+meetings
+that's all the
+notes I had
+cool
+yeah
+I think that's
+everything I had
+too
+I didn't have much
+huh
+I didn't have much
+cool
+color was the
+biggest for me
+colors
+and the release
+numbers
+yeah
+thanks for
+clearing that up
+yeah
+appreciate it
+yeah I think
+it's gonna work
+pretty well
+actually
+the ability to
+go get it
+off of there
+yeah
+working pretty well. Awesome.
+Biggest thing
+trying to remember to
+this week I forgot to
+print my PDFs on both sides.
+Because as you click
+on there you know
+print both sides.
+then later I'll go to print something else that I don't want on both sides and it's print
+on both sides.
+That's not you probably.
+I don't know if there's anything I can do about that.
+That's an Adobe, an Adobe and me problem.
+One of my, but Bill, you'll think this is, well, you will think this is funny.
+One of my buddies, he like hates the job he has currently.
+He's like, so what do you really do?
+I'm like, I don't even know how to describe what I do.
+well can I see and I was like come meet me on Saturday and I'll show you what I do
+and it was like the final fix for the job log print I was like here's my login and I'll help
+you walk through fixing this and I he just like sat in the corner for an hour and like finally
+fixed it you know because I was like it needs to do exactly this yeah and don't come back to me
+until it does exactly this I don't care how you freaking figure out how to do it yeah the job
+like this the print needs to look exactly the same way and there are three rules double-sided
+leave a blank page go sit in the corner you have unlimited ai bucks go see what you can do
+so like the final fix was like one of my buddies who doesn't know shit and i was like
+fucking fix it because whatever reason i can't it's beat me love that it's beat me
+seems like the simplest thing yeah i know it's probably the simplest thing in the whole system
+yeah
+I think you
+printed off
+what's existing
+what was it
+drafting workload
+only took a couple
+of revisions
+before you had
+that one done
+but what it was
+was the
+freaking
+I don't know why
+but like the
+AI model
+hey Gary
+do you have a
+job site meeting
+coming up
+here
+in the next
+few hours
+six minutes
+six minutes
+maybe not
+enough time
+but
+to forward the invite to bb at mhmw.com.
+Metro, also Metro tomorrow afternoon.
+Love it.
+What time?
+1.30 or something like that.
+Okay.
+Yeah.
+Yeah.
+If you can get the meeting invite and just forward it, we're just going to test it.
+Just forward it right to bb at mhmw.com.
+And then Daniel can check on it and make sure.
+It should then give us an opportunity for that to automatically add it to the calendar
+and do is transcribe tasks
+and hopefully we'll be able to connect it
+to where they're like, hey, where's this?
+And then be able to connect those dots for you.
+So after the meeting, you could get a summary
+that's like, here's all the things.
+Did you want me to try and forward those logs right now?
+Or are they still not?
+Let's run it tomorrow, I think is probably better.
+That way Daniel has time to prepare,
+make sure that it joins the meet,
+adds it to its calendar,
+knows that it's repeating,
+And does all those types of things to give us a little time.
+Yeah.
+Cool.
+One other note.
+It may not join automatically depending upon who owns the meeting.
+So you just got to ask, hey, let my note take her in the meeting.
+Yeah.
+And they may object.
+And then it's your call to kick it out.
+Yeah, because they got to accept the person coming in.
+Like somebody's trying to join the meeting.
+Yeah, lobby.
+So it'll probably be in the lobby.
+And as long as they don't put up a fuss, it's all good.
+bibble bag and still worry about it to my assistant yeah that's my assistant yeah all right let me
+send that over to you cool thanks man sweet so i did a little bit of research and it's a shit show
+but you can get an avatar on it but it's only like in organization meetings okay but it's
+completely different so i'd have to like set up one flow for everything and then one setup for
+banana guy and i was like pretty close to like yeah do both and i was like this is so overkill
+yeah it's not worth it right now we'll just keep the circle with bb in it that's fine
+yeah yeah okay awesome stoked about that yeah um do you want admin only banana boy
+sometime this week sure like just in the chat window just playing with it see what you can do
+yeah and if you do something that doesn't work and you want it to do that yep add it to the list
+Love it.
+Okay.
+Yeah.
+I'm going to do this.
+Create long-term goal.
+Development stops.
+The system service becomes a slight markup on the AI tokens that the system uses.
+Five years, ten years down the line.
+Does that make sense?
+Yep.
+That's where I think this goes.
+Yep.
+Do you want a pricing document for what that looks like?
+Yeah.
+Yeah.
+In the short term?
+Sure.
+So like system, like we run the server in the database and the meeting thing and the AI thing.
+And we throw a little markup on that.
+Yep.
+And that long term becomes.
+It wouldn't mark anything up in the short term probably because we're already building.
+Sure.
+Long term.
+Yep.
+Yep.
+Yeah.
+Let's take a look at it.
+Okay.
+And I'm talking like.
+Yeah.
+Not massive.
+No.
+Yeah.
+like 100% or 150% of whatever your AI token budget is.
+Perfect.
+Unlimited.
+Is that fine?
+Yeah.
+I feel like that's a good.
+Yeah.
+Sorry, I just kind of sprung that on you.
+Yeah, no, that's fine.
+But I'm trying to figure out.
+You need to know what those things are.
+Like what's an appropriate,
+we build what we needed to build.
+If we want to add something,
+we can scope that specifically.
+Yep.
+And how do we run it?
+Because hopefully it provides value every month.
+Mm-hmm.
+and I get a little piece of that,
+and you just know what it costs to run this tool.
+Yep, yep.
+I think it's important to understand that
+because I keep thinking about that too,
+like what does it look like five years from now,
+like how does this still function?
+Yeah.
+You know.
+Yeah.
+And obviously like the on-premises
+provides additional cost offloading.
+Yeah.
+To continue to run it.
+Yep, yep.
+So.
+Yeah, I like it.
+Appreciate you.
+Thank you for it on that.
+Okay.
+Just got the calendar meeting.
+Sorry to spring that on you with me.
+Yeah, it's okay.
+I didn't know.
+I was talking and I was like, I don't know if this is appropriate or not.
+Yeah.
+So I'm sorry about that.
+Oh, no, that's fine.
+That's fine.
+Yeah.
+Okay.
+It's a pretty open book, so it's not a big deal.
+Well, I am sorry about that.
+No, that's fine.
+That was bad business for him.
+Still learning.
+I just get excited.
+You know, I have these ideas.
+Yeah, right.
+And obviously, I'm not trying to grind you on cost.
+Sure, sure, sure.
+Bad timing.
+Kia, it'll be just a minute.
+You're good.
+Yeah, thanks.
+I'll hang out.
+All right.
+Catching up on emails.
+Great.
+I think it checks every hour.
+So it should check at 9.
+If I can wait for one more minute.
+I got the email so I can do it right now.
+Okay, cool.
+Thanks again.
+Check with Katie on the way out.
+Okay, she'll do it.
+Oh yeah, she does.

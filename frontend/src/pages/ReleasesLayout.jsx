@@ -44,6 +44,91 @@ const JL_FILTER_LABELS = {
 };
 const JL_FILTER_CHIP_ORDER = ['Job #', 'Release #', 'Job', 'PM', 'BY', 'Stage', 'Fab Order', 'Paint color', 'Job Comp', 'Invoiced'];
 
+// Verbal Release form fields — same set the "+ Release" CSV paste expects, minus the
+// bulk-paste mechanic. Release # is prefilled from the server but stays editable.
+// Order matches the backend's fixed 11-column parser exactly -- Fab Order is kept in
+// this list (as `hidden`) so the CSV row still has 11 columns and lines up positionally;
+// it's just never rendered, so it's always sent blank and the server defaults it to
+// DEFAULT_FAB_ORDER (80.555), same as every release starts on the "Released" stage.
+const VERBAL_RELEASE_FIELDS = [
+    { key: 'job', label: 'Job #', type: 'number', required: true },
+    { key: 'release', label: 'Release #', type: 'text', required: true },
+    { key: 'jobName', label: 'Job', type: 'text' },
+    { key: 'description', label: 'Description', type: 'text' },
+    { key: 'fabHrs', label: 'Fab Hrs', type: 'number' },
+    { key: 'installHrs', label: 'Install HRS', type: 'number' },
+    { key: 'paintColor', label: 'Paint color', type: 'text' },
+    { key: 'pm', label: 'PM', type: 'text' },
+    { key: 'by', label: 'BY', type: 'text' },
+    { key: 'released', label: 'Released', type: 'date' },
+    { key: 'fabOrder', label: 'Fab Order', type: 'number', hidden: true },
+];
+const emptyVerbalForm = () => Object.fromEntries(VERBAL_RELEASE_FIELDS.map(f => [f.key, '']));
+
+function csvEscapeCell(value) {
+    const str = value === null || value === undefined ? '' : String(value);
+    return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+// The release endpoint parses a fixed 11-column CSV row -- reuse it for a single
+// form submission instead of duplicating its release/event/outbox logic.
+function buildVerbalCsvRow(form) {
+    const header = VERBAL_RELEASE_FIELDS.map(f => f.label).join(',');
+    const row = VERBAL_RELEASE_FIELDS.map(f => csvEscapeCell(form[f.key])).join(',');
+    return `${header}\n${row}`;
+}
+
+// Parse a single pasted row for the Verbal Release modal's Paste mode -- same
+// delimiter/header-row detection as the "+ Release" preview parser, but keeps
+// only the first data row since verbal paste is one row at a time. Returns
+// field keys matching VERBAL_RELEASE_FIELDS so the result maps straight onto
+// verbalForm.
+function parseVerbalPasteRow(data) {
+    if (!data || !data.trim()) {
+        return { fields: null, extraRows: false };
+    }
+
+    const lines = data.split('\n').filter(line => line.trim());
+    if (lines.length === 0) {
+        return { fields: null, extraRows: false };
+    }
+
+    const expectedColumns = VERBAL_RELEASE_FIELDS.map(f => f.label);
+    const delimiter = lines[0].includes('\t') ? '\t' : ',';
+
+    // Job # is always numeric for real data (the backend requires int(job)) --
+    // a non-numeric first cell is a much more reliable header signal than
+    // fuzzy keyword matching across every column, which false-positives on
+    // blank cells (e.g. a blank Release #) and on pasted values that happen
+    // to contain a column's label as a substring (e.g. a job name with "Job"
+    // in it matching the "Job" column).
+    let startIdx = 0;
+    const firstRow = lines[0].split(delimiter);
+    if (firstRow.length === expectedColumns.length) {
+        const firstCell = (firstRow[0] || '').trim();
+        if (firstCell && Number.isNaN(parseInt(firstCell, 10))) {
+            startIdx = 1;
+        }
+    }
+
+    const dataLines = lines.slice(startIdx).filter(line => line.trim());
+    if (dataLines.length === 0) {
+        return { fields: null, extraRows: false };
+    }
+
+    const cells = dataLines[0].split(delimiter);
+    while (cells.length < expectedColumns.length) {
+        cells.push('');
+    }
+
+    const fields = {};
+    VERBAL_RELEASE_FIELDS.forEach((f, idx) => {
+        fields[f.key] = cells[idx] ? cells[idx].trim() : '';
+    });
+
+    return { fields, extraRows: dataLines.length > 1 };
+}
+
 function ReleasesLayout() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -79,6 +164,17 @@ function ReleasesLayout() {
     const [releasing, setReleasing] = useState(false);
     const [releaseError, setReleaseError] = useState(null);
     const [releaseSuccess, setReleaseSuccess] = useState(null);
+    const [showVerbalModal, setShowVerbalModal] = useState(false);
+    const [verbalForm, setVerbalForm] = useState(emptyVerbalForm);
+    const [verbalSubmitting, setVerbalSubmitting] = useState(false);
+    const [verbalFetchingNumber, setVerbalFetchingNumber] = useState(false);
+    const [verbalError, setVerbalError] = useState(null);
+    const [verbalCollision, setVerbalCollision] = useState(null);
+    const [verbalSuccess, setVerbalSuccess] = useState(null);
+    const [verbalEntryMode, setVerbalEntryMode] = useState('paste'); // 'fields' | 'paste'
+    const [verbalPasteText, setVerbalPasteText] = useState('');
+    const [verbalPasteNote, setVerbalPasteNote] = useState(null);
+    const [verbalNearDuplicate, setVerbalNearDuplicate] = useState(null);
     const [cascadeStatus, setCascadeStatus] = useState(null); // null | 'recalculating' | 'done'
     const [printing, setPrinting] = useState(false);
     const cascadeTimeoutRef = useRef(null);
@@ -337,15 +433,15 @@ function ReleasesLayout() {
                 'Install HRS', 'Paint color', 'PM', 'BY', 'Released', 'Fab Order'
             ];
 
+            // Job # is always numeric for real data -- a non-numeric first cell
+            // is a much more reliable header signal than fuzzy keyword matching
+            // across every column, which false-positives on blank cells and on
+            // pasted values that happen to contain a column's label.
             let startIdx = 0;
             const firstRow = lines[0].split(delimiter);
             if (firstRow.length === expectedColumns.length) {
-                const firstRowLower = firstRow.map(cell => cell.toLowerCase().trim());
-                const hasHeaderKeywords = expectedColumns.some((col, idx) =>
-                    col.toLowerCase().includes(firstRowLower[idx]) ||
-                    firstRowLower[idx].includes(col.toLowerCase().split(' ')[0])
-                );
-                if (hasHeaderKeywords) {
+                const firstCell = (firstRow[0] || '').trim();
+                if (firstCell && Number.isNaN(parseInt(firstCell, 10))) {
                     startIdx = 1;
                 }
             }
@@ -379,7 +475,7 @@ function ReleasesLayout() {
         parsePreviewData(value);
     };
 
-    const handleReleaseSubmit = async () => {
+    const handleReleaseSubmit = async (confirmDuplicates = false) => {
         if (!csvData.trim()) {
             setReleaseError('Please paste CSV data');
             return;
@@ -390,14 +486,16 @@ function ReleasesLayout() {
         setReleaseSuccess(null);
 
         try {
-            const result = await jobsApi.releaseJobData(csvData);
+            const result = await jobsApi.releaseJobData(csvData, confirmDuplicates);
             setReleaseSuccess({
                 processed: result.processed_count || 0,
                 created: result.created_count || 0,
                 updated: result.updated_count || 0,
                 errors: result.error_count || 0,
                 collisions: result.collisions || [],
-                collision_count: result.collision_count || 0
+                collision_count: result.collision_count || 0,
+                near_duplicates: result.near_duplicates || [],
+                near_duplicate_count: result.near_duplicate_count || 0
             });
 
             setReleasing(false);
@@ -406,7 +504,8 @@ function ReleasesLayout() {
                 fetchAll();
             }
 
-            if (!result.collisions || result.collisions.length === 0) {
+            if ((!result.collisions || result.collisions.length === 0) &&
+                (!result.near_duplicates || result.near_duplicates.length === 0)) {
                 setTimeout(() => {
                     handleCloseModal();
                 }, 3000);
@@ -414,6 +513,140 @@ function ReleasesLayout() {
         } catch (error) {
             setReleaseError(error.message || 'Failed to release job data');
             setReleasing(false);
+        }
+    };
+
+    const openVerbalModal = async () => {
+        setShowVerbalModal(true);
+        setVerbalForm(emptyVerbalForm());
+        setVerbalError(null);
+        setVerbalCollision(null);
+        setVerbalSuccess(null);
+        setVerbalEntryMode('paste');
+        setVerbalPasteText('');
+        setVerbalPasteNote(null);
+        setVerbalNearDuplicate(null);
+        setVerbalFetchingNumber(true);
+        try {
+            const nextRelease = await jobsApi.getNextReleaseNumber();
+            setVerbalForm(prev => ({ ...prev, release: nextRelease || '' }));
+        } catch (error) {
+            setVerbalError(error.message || 'Could not fetch the next release number — enter one manually.');
+        } finally {
+            setVerbalFetchingNumber(false);
+        }
+    };
+
+    const closeVerbalModal = () => {
+        setShowVerbalModal(false);
+        setVerbalForm(emptyVerbalForm());
+        setVerbalError(null);
+        setVerbalCollision(null);
+        setVerbalSuccess(null);
+        setVerbalEntryMode('paste');
+        setVerbalPasteText('');
+        setVerbalPasteNote(null);
+        setVerbalNearDuplicate(null);
+    };
+
+    const setVerbalMode = (mode) => {
+        setVerbalEntryMode(mode);
+        setVerbalError(null);
+        setVerbalCollision(null);
+        setVerbalNearDuplicate(null);
+    };
+
+    const handleVerbalFieldChange = (key, value) => {
+        setVerbalForm(prev => ({ ...prev, [key]: value }));
+        setVerbalCollision(null);
+        setVerbalNearDuplicate(null);
+    };
+
+    // Paste mode: parse the pasted row straight onto verbalForm (same fields
+    // the grid below renders, so the parsed values stay visible/editable). A
+    // blank Release # gets the same next-available suggestion openVerbalModal
+    // prefills with; a non-blank one is left as pasted.
+    const handleVerbalPasteChange = async (e) => {
+        const value = e.target.value;
+        setVerbalPasteText(value);
+        setVerbalCollision(null);
+        setVerbalNearDuplicate(null);
+
+        const { fields, extraRows } = parseVerbalPasteRow(value);
+        setVerbalPasteNote(extraRows
+            ? 'Only the first row is used — paste additional rows one at a time, or use + Release for bulk.'
+            : null);
+        if (!fields) return;
+
+        setVerbalForm(fields);
+
+        if (!fields.release) {
+            setVerbalFetchingNumber(true);
+            try {
+                const nextRelease = await jobsApi.getNextReleaseNumber();
+                setVerbalForm(prev => ({ ...prev, release: nextRelease || '' }));
+            } catch (error) {
+                setVerbalError(error.message || 'Could not fetch the next release number — enter one manually.');
+            } finally {
+                setVerbalFetchingNumber(false);
+            }
+        }
+    };
+
+    const useSuggestedRelease = () => {
+        if (verbalCollision?.suggested_next) {
+            setVerbalForm(prev => ({ ...prev, release: verbalCollision.suggested_next }));
+            setVerbalCollision(null);
+        }
+    };
+
+    const handleVerbalSubmit = async (confirmDuplicates = false) => {
+        if (!verbalForm.job.trim() || !verbalForm.release.trim()) {
+            setVerbalError('Job # and Release # are required');
+            return;
+        }
+
+        setVerbalSubmitting(true);
+        setVerbalError(null);
+        setVerbalCollision(null);
+        setVerbalNearDuplicate(null);
+        setVerbalSuccess(null);
+
+        try {
+            const result = await jobsApi.releaseJobData(buildVerbalCsvRow(verbalForm), confirmDuplicates);
+
+            if (result.collisions && result.collisions.length > 0) {
+                // Same (job, release) combo already exists -- block the create and
+                // let the user pick a different number (or accept the suggestion).
+                setVerbalCollision(result.collisions[0]);
+                setVerbalSubmitting(false);
+                return;
+            }
+
+            if (result.near_duplicates && result.near_duplicates.length > 0) {
+                // Soft warning -- same job name & description under a different
+                // release # already exists. Let the user confirm instead of
+                // silently creating a probable duplicate.
+                setVerbalNearDuplicate(result.near_duplicates[0]);
+                setVerbalSubmitting(false);
+                return;
+            }
+
+            if (!result.created_count) {
+                setVerbalError((result.errors && result.errors[0]?.error) || 'Failed to create release');
+                setVerbalSubmitting(false);
+                return;
+            }
+
+            setVerbalSuccess({ job: verbalForm.job, release: verbalForm.release });
+            setVerbalSubmitting(false);
+            fetchAll();
+            setTimeout(() => {
+                closeVerbalModal();
+            }, 2000);
+        } catch (error) {
+            setVerbalError(error.message || 'Failed to create release');
+            setVerbalSubmitting(false);
         }
     };
 
@@ -587,6 +820,14 @@ function ReleasesLayout() {
                                         title="Create new releases from a CSV paste"
                                     >
                                         <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>New Release
+                                    </button>
+
+                                    <button
+                                        onClick={openVerbalModal}
+                                        className="px-3 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1 bg-amber-600 text-white border border-amber-600 hover:bg-amber-700"
+                                        title="Quick-capture a release before drafting is done — release # is prefilled but editable"
+                                    >
+                                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10" /></svg>Verbal Release
                                     </button>
 
                                     <Dropdown label="Actions">
@@ -1043,6 +1284,27 @@ function ReleasesLayout() {
                                         </ul>
                                     </div>
                                 )}
+
+                                {releaseSuccess && releaseSuccess.near_duplicates && releaseSuccess.near_duplicates.length > 0 && (
+                                    <div className="mb-4 bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 px-4 py-3 rounded">
+                                        <p className="font-semibold">Possible Duplicates</p>
+                                        <ul className="text-sm mt-2 space-y-1">
+                                            {releaseSuccess.near_duplicates.map((dup, idx) => (
+                                                <li key={idx}>
+                                                    <span className="font-medium">{dup.job}-{dup.attempted_release}</span> ({dup.job_name}) looks like existing Release{' '}
+                                                    <span className="font-semibold">{dup.matched_release}</span> — same job name & description, only the release number differs.
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleReleaseSubmit(true)}
+                                            className="mt-2 text-sm font-semibold underline hover:no-underline"
+                                        >
+                                            Create Anyway
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="px-6 py-4 bg-gray-50 dark:bg-slate-700 rounded-b-xl flex justify-end gap-3">
@@ -1053,7 +1315,7 @@ function ReleasesLayout() {
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={handleReleaseSubmit}
+                                    onClick={() => handleReleaseSubmit(false)}
                                     disabled={releasing || !csvData.trim()}
                                     className={`px-4 py-2 rounded-lg font-medium transition-all ${releasing || !csvData.trim()
                                         ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
@@ -1067,6 +1329,187 @@ function ReleasesLayout() {
                                         </>
                                     ) : (
                                         'Release'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Verbal Release Modal — same fields as "+ Release". Fields mode enters
+                    them one at a time; Paste mode parses one pasted row onto the same
+                    fields. Either way, Release # is prefilled but user-editable. */}
+                {showVerbalModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+                            <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 rounded-t-xl">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-bold text-white">Verbal Release</h2>
+                                    <button
+                                        onClick={closeVerbalModal}
+                                        className="text-white hover:text-gray-200 dark:hover:text-slate-200 text-2xl font-bold"
+                                        disabled={verbalSubmitting}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="p-6 flex-1 overflow-y-auto">
+                                <div className="flex items-start justify-between gap-4 mb-4">
+                                    <p className="text-xs text-gray-600 dark:text-slate-400">
+                                        Quick-capture a release before drafting is done. Release # is prefilled
+                                        with the next available number — change it if you need a different one.
+                                    </p>
+                                    <div className="flex rounded-lg border border-gray-300 dark:border-slate-500 overflow-hidden shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setVerbalMode('fields')}
+                                            className={`px-3 py-1.5 text-xs font-medium transition-colors ${verbalEntryMode === 'fields'
+                                                ? 'bg-amber-500 text-white'
+                                                : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                                                }`}
+                                        >
+                                            Fields
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setVerbalMode('paste')}
+                                            className={`px-3 py-1.5 text-xs font-medium transition-colors ${verbalEntryMode === 'paste'
+                                                ? 'bg-amber-500 text-white'
+                                                : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                                                }`}
+                                        >
+                                            Paste
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {verbalEntryMode === 'paste' && (
+                                    <div className="mb-4">
+                                        <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1">
+                                            Paste one row (CSV or tab-separated from Google Sheets)
+                                        </label>
+                                        <p className="text-xs text-gray-600 dark:text-slate-400 mb-2">
+                                            Same columns as + Release. Leave Release # blank to get the next available number.
+                                        </p>
+                                        <textarea
+                                            value={verbalPasteText}
+                                            onChange={handleVerbalPasteChange}
+                                            placeholder="Paste a row here..."
+                                            className="w-full h-20 px-3 py-2 border border-gray-300 dark:border-slate-500 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                                            disabled={verbalSubmitting}
+                                        />
+                                        {verbalPasteNote && (
+                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{verbalPasteNote}</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    {VERBAL_RELEASE_FIELDS.filter((field) => !field.hidden).map((field) => (
+                                        <div key={field.key} className={field.key === 'description' ? 'col-span-2' : ''}>
+                                            <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1">
+                                                {field.label}{field.required && ' *'}
+                                            </label>
+                                            <input
+                                                type={field.type}
+                                                value={verbalForm[field.key]}
+                                                onChange={(e) => handleVerbalFieldChange(field.key, e.target.value)}
+                                                disabled={verbalSubmitting || (field.key === 'release' && verbalFetchingNumber)}
+                                                placeholder={field.key === 'release' && verbalFetchingNumber ? 'Fetching…' : ''}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-500 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {verbalError && (
+                                    <div className="mt-4 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-200 px-4 py-3 rounded">
+                                        <p className="text-sm">{verbalError}</p>
+                                    </div>
+                                )}
+
+                                {verbalCollision && (
+                                    <div className="mt-4 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-200 px-4 py-3 rounded">
+                                        <p className="font-semibold">Release # already used</p>
+                                        <p className="text-sm">
+                                            <span className="font-medium">{verbalCollision.job}-{verbalCollision.release}</span> ({verbalCollision.job_name}) already exists.
+                                            {verbalCollision.suggested_next && (
+                                                <>
+                                                    {' '}
+                                                    <button
+                                                        type="button"
+                                                        onClick={useSuggestedRelease}
+                                                        className="underline font-semibold hover:no-underline"
+                                                    >
+                                                        Use {verbalCollision.suggested_next}
+                                                    </button>
+                                                </>
+                                            )}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {verbalNearDuplicate && (
+                                    <div className="mt-4 bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 px-4 py-3 rounded">
+                                        <p className="font-semibold">Looks like a possible duplicate</p>
+                                        <p className="text-sm">
+                                            Job <span className="font-medium">{verbalNearDuplicate.job}</span> already has Release{' '}
+                                            <span className="font-semibold">{verbalNearDuplicate.matched_release}</span> with the same job
+                                            name & description ({verbalNearDuplicate.job_name}) — only the release number differs.
+                                        </p>
+                                        <div className="flex gap-4 mt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setVerbalNearDuplicate(null)}
+                                                className="text-sm underline hover:no-underline"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleVerbalSubmit(true)}
+                                                className="text-sm font-semibold underline hover:no-underline"
+                                            >
+                                                Create Anyway
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {verbalSuccess && (
+                                    <div className="mt-4 bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500 text-green-700 dark:text-green-200 px-4 py-3 rounded">
+                                        <p className="font-semibold">Created!</p>
+                                        <p className="text-sm">
+                                            Job <span className="font-semibold">{verbalSuccess.job}</span> → Release <span className="font-semibold">{verbalSuccess.release}</span>
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-700 rounded-b-xl flex justify-end gap-3">
+                                <button
+                                    onClick={closeVerbalModal}
+                                    className="px-4 py-2 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 text-gray-700 dark:text-slate-200 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-slate-500 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => handleVerbalSubmit(false)}
+                                    disabled={verbalSubmitting || !verbalForm.job.trim() || !verbalForm.release.trim()}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all ${verbalSubmitting || !verbalForm.job.trim() || !verbalForm.release.trim()
+                                        ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
+                                        : 'bg-amber-600 text-white hover:bg-amber-700'
+                                        }`}
+                                >
+                                    {verbalSubmitting ? (
+                                        <>
+                                            <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                                            Creating...
+                                        </>
+                                    ) : (
+                                        'Create Verbal Release'
                                     )}
                                 </button>
                             </div>

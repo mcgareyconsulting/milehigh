@@ -48,7 +48,7 @@ export default function StartInstallEditor({
     let colorClass;
     if (isAsap) colorClass = 'bg-red-500 text-white hover:bg-red-600';
     else if (isHardDatePast) colorClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500';
-    else if (isHardDate) colorClass = 'bg-green-500 text-white hover:bg-green-600';
+    else if (isHardDate) colorClass = 'bg-green-400 text-gray-900 hover:bg-green-500';
     else colorClass = 'bg-gray-50 dark:bg-slate-700/50 text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600';
 
     const colored = isAsap || isHardDate || isHardDatePast;

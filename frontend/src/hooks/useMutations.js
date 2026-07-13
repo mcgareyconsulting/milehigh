@@ -112,9 +112,9 @@ export function useMutations(refetch) {
         );
     }, [executeMutation]);
 
-    const updateDueDate = useCallback(async (submittalId, dueDate) => {
+    const updateDueDate = useCallback(async (submittalId, dueDate, gcJobsiteScheduleDate) => {
         await executeMutation(
-            () => draftingWorkLoadApi.updateDueDate(submittalId, dueDate),
+            () => draftingWorkLoadApi.updateDueDate(submittalId, dueDate, gcJobsiteScheduleDate),
             `Failed to update due date for submittal ${submittalId}`
         );
     }, [executeMutation]);

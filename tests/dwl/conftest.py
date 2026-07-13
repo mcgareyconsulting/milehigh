@@ -24,11 +24,13 @@ def mock_submittal():
     submittal = Mock(spec=Submittals)
     submittal.submittal_id = "test_submittal_123"
     submittal.status = "Open"
+    submittal.type = "Drafting Release Review"
     submittal.notes = None
     submittal.submittal_drafting_status = ""
     submittal.order_number = 1.0
     submittal.ball_in_court = "Drafter A"
     submittal.due_date = None
+    submittal.gc_jobsite_schedule_date = None
     submittal.last_updated = None
 
     def to_dict():
@@ -40,6 +42,7 @@ def mock_submittal():
             'order_number': submittal.order_number,
             'ball_in_court': submittal.ball_in_court,
             'due_date': submittal.due_date.isoformat() if submittal.due_date else None,
+            'gc_jobsite_schedule_date': submittal.gc_jobsite_schedule_date.isoformat() if submittal.gc_jobsite_schedule_date else None,
         }
 
     submittal.to_dict = to_dict

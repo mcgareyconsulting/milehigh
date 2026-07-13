@@ -13,6 +13,8 @@ import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '../utils/api';
 import { jobsApi } from '../services/jobsApi';
 import { fetchMentionableUsers } from '../services/notificationApi';
+import { checkAuth } from '../utils/auth';
+import { BBReviewPanel } from './BBReviewPanel';
 import MentionInput from './shared/MentionInput';
 
 const isPdfFile = (file) =>
@@ -64,6 +66,8 @@ export function PdfVersionHistoryModal({
     const [commentDrafts, setCommentDrafts] = useState({});            // versionId -> string
     const [commentBusy, setCommentBusy] = useState({});               // versionId -> bool
     const [mentionableUsers, setMentionableUsers] = useState([]);
+    // BB review is admin-only (backend also enforces @admin_required); gate the panel UX.
+    const [isAdmin, setIsAdmin] = useState(false);
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
 
@@ -116,6 +120,12 @@ export function PdfVersionHistoryModal({
         if (!isOpen || mentionableUsers.length > 0) return;
         fetchMentionableUsers().then(setMentionableUsers).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
+
+    // Admin gate for the BB review panel — resolved once when the modal opens.
+    useEffect(() => {
+        if (!isOpen) return;
+        checkAuth().then((u) => setIsAdmin(!!u?.is_admin)).catch(() => setIsAdmin(false));
     }, [isOpen]);
 
     // Auto-expand the version a notification pointed at, once it appears.
@@ -487,6 +497,13 @@ export function PdfVersionHistoryModal({
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Banana Boy code-compliance review (admin-only) */}
+                                        <BBReviewPanel
+                                            releaseId={releaseId}
+                                            versionId={v.id}
+                                            enabled={isAdmin}
+                                        />
                                     </li>
                                     );
                                 })}

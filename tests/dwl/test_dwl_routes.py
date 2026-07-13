@@ -313,6 +313,59 @@ class TestUpdateSubmittalDueDate:
 
         assert response.status_code == 400
 
+    def test_update_due_date_mutually_exclusive_rejected(self, client):
+        """Sending both due_date and gc_jobsite_schedule_date is rejected before any lookup."""
+        response = client.put(
+            '/brain/drafting-work-load/due-date',
+            json={
+                'submittal_id': 'test_123',
+                'due_date': '2024-01-15',
+                'gc_jobsite_schedule_date': '2026-11-30',
+            },
+            content_type='application/json'
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['code'] == 'mutually_exclusive'
+
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_update_due_date_gc_schedule_wrong_type_rejected(self, mock_submittal_model, client, mock_submittal):
+        """gc_jobsite_schedule_date is rejected on a non-Sub-GC submittal type."""
+        mock_submittal.type = "Drafting Release Review"
+        mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
+
+        response = client.put(
+            '/brain/drafting-work-load/due-date',
+            json={'submittal_id': 'test_submittal_123', 'gc_jobsite_schedule_date': '2026-11-30'},
+            content_type='application/json'
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['code'] == 'gc_type_required'
+
+    @patch('app.brain.drafting_work_load.routes.db')
+    @patch('app.brain.drafting_work_load.routes.Submittals')
+    def test_update_due_date_gc_schedule_success_persists_both(self, mock_submittal_model, mock_db, client, mock_submittal):
+        """A GC jobsite schedule date on a Sub-GC submittal persists both fields."""
+        mock_submittal.type = "Submittal for GC  Approval"  # real-data double-space variant
+        mock_submittal_model.query.filter_by.return_value.first.return_value = mock_submittal
+
+        response = client.put(
+            '/brain/drafting-work-load/due-date',
+            json={'submittal_id': 'test_submittal_123', 'gc_jobsite_schedule_date': '2026-11-30'},
+            content_type='application/json'
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is True
+        assert data['gc_jobsite_schedule_date'] == '2026-11-30'
+        assert data['due_date'] == '2026-09-07'
+        assert mock_submittal.gc_jobsite_schedule_date == date(2026, 11, 30)
+        assert mock_submittal.due_date == date(2026, 9, 7)
+
 
 # ==============================================================================
 # POST /drafting-work-load/step TESTS
@@ -471,16 +524,17 @@ class TestGetSubmittalStatuses:
 DRR_TYPE = "Drafting Release Review"
 
 
-def _seed_submittal(submittal_id, type_=DRR_TYPE, status="Open", rel=None):
+def _seed_submittal(submittal_id, type_=DRR_TYPE, status="Open", rel=None, start_install=None, project_number="100"):
     """Commit a real Submittals row so the rel endpoints' DB queries see it."""
     s = Submittals(
         submittal_id=str(submittal_id),
         procore_project_id="1",
-        project_number="100",
+        project_number=project_number,
         type=type_,
         status=status,
         rel=rel,
         rel_assigned_at=datetime.utcnow() if rel is not None else None,
+        start_install=start_install,
     )
     db.session.add(s)
     db.session.commit()
@@ -595,6 +649,64 @@ class TestUpdateSubmittalRel:
             response = client.put('/brain/drafting-work-load/rel',
                                   json={'submittal_id': 'rel-10', 'rel': 200})
         assert response.status_code == 403
+
+    def test_assign_rel_with_existing_start_install_creates_pending(self, client):
+        """A start_install set before any Rel existed (see test_start_install.py) gets
+        picked up into PendingStartInstall the moment a Rel is first assigned."""
+        from app.models import PendingStartInstall
+        _seed_submittal("rel-11", project_number="500", start_install=date(2026, 9, 1))
+        response = client.put('/brain/drafting-work-load/rel',
+                              json={'submittal_id': 'rel-11', 'rel': 220})
+        assert response.status_code == 200
+
+        pending = PendingStartInstall.query.filter_by(rel=220).first()
+        assert pending is not None
+        assert pending.job_number == "500"
+        assert pending.submittal_id == "rel-11"
+        assert pending.start_install == date(2026, 9, 1)
+        assert pending.consumed_at is None
+
+    def test_reassign_rel_moves_pending_row_off_old_rel(self, client):
+        """Reassigning a Rel on a submittal that already has a pending handoff must not
+        strand the old row -- it should move to the new Rel, not linger at the old one."""
+        from app.models import PendingStartInstall
+        _seed_submittal("rel-12", project_number="501", rel=221, start_install=date(2026, 9, 1))
+        # Seed the pending row exactly as update-start-install would have.
+        db.session.add(PendingStartInstall(
+            rel=221, job_number="501", submittal_id="rel-12", start_install=date(2026, 9, 1),
+        ))
+        db.session.commit()
+
+        response = client.put('/brain/drafting-work-load/rel',
+                              json={'submittal_id': 'rel-12', 'rel': 222})
+        assert response.status_code == 200
+
+        assert PendingStartInstall.query.filter_by(rel=221).first() is None
+        moved = PendingStartInstall.query.filter_by(rel=222).first()
+        assert moved is not None
+        assert moved.job_number == "501"
+        assert moved.submittal_id == "rel-12"
+        assert moved.start_install == date(2026, 9, 1)
+        assert moved.consumed_at is None
+
+    def test_reassign_rel_does_not_move_a_consumed_pending_row(self, client):
+        """A pending row that already handed off its date (consumed) belongs to a real
+        release now -- reassigning the submittal's Rel afterward must leave it alone."""
+        from app.models import PendingStartInstall
+        _seed_submittal("rel-13", project_number="502", rel=223, start_install=date(2026, 9, 1))
+        db.session.add(PendingStartInstall(
+            rel=223, job_number="502", submittal_id="rel-13", start_install=date(2026, 9, 1),
+            consumed_at=datetime(2026, 6, 1), consumed_job=502, consumed_release="223",
+        ))
+        db.session.commit()
+
+        response = client.put('/brain/drafting-work-load/rel',
+                              json={'submittal_id': 'rel-13', 'rel': 224})
+        assert response.status_code == 200
+
+        untouched = PendingStartInstall.query.filter_by(rel=223).first()
+        assert untouched is not None
+        assert untouched.consumed_at is not None
 
 
 class TestGetNextRel:
