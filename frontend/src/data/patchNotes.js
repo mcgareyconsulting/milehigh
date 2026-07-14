@@ -17,6 +17,28 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.289',
+    date: 'July 13, 2026',
+    summary:
+      'A system-usage dashboard with real AI cost and reliability tracking, and BB drawing review moved onto the submittal itself — pulling For-Construction sets straight from Procore.',
+    changes: [
+      {
+        type: 'new',
+        title: 'System-usage & AI dashboard',
+        adminOnly: true,
+        detail:
+          'A new Metrics page shows how the app is actually being used — engagement and adoption, content and activity, release throughput, and system health — over a Day / Week / Month window. Every AI call across the Brain (BB chat, drawing review, supplier-order capture, meeting notes) is now metered, so the dashboard reports real AI spend, reliability, and quality instead of guesswork.',
+      },
+      {
+        type: 'improved',
+        title: 'BB drawing review on the submittal, straight from Procore',
+        adminOnly: true,
+        detail:
+          'Banana Boy\'s code-compliance review now lives on the submittal itself: open a submittal and pull its For-Construction drawings directly from Procore, then review each document in place. Every document runs its own review with a verdict tally and an in-line findings list, you can choose a deep (Opus) or lighter, faster (Sonnet) pass, and re-run any document as the set changes.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.288',
     date: 'July 12, 2026',
     summary:
