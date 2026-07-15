@@ -175,6 +175,36 @@ def init_scheduler(app):
         ),
     )
 
+    # --- Graph subscription renewal (BB mail push webhook) ---
+    # Keeps the Graph change-notification subscription alive: mailbox message
+    # subscriptions expire in ~70h, so this ensures/renews it well inside that
+    # window (and re-creates it if lapsed). Gated by BB_MAIL_WEBHOOK_ENABLED so it
+    # stays dormant until GRAPH_NOTIFICATION_URL + client-state are configured. A
+    # lapsed subscription fails silently — the poll floor is the safety net, but
+    # this job is what keeps the fast path fast.
+    graph_sub_renew_minutes = app.config.get("GRAPH_SUBSCRIPTION_RENEW_MINUTES", 720)
+
+    def graph_subscription_renew():
+        with app.app_context():
+            if not app.config.get("BB_MAIL_WEBHOOK_ENABLED"):
+                return
+            from app.lake.ingest import graph_subscription
+            try:
+                result = graph_subscription.ensure()
+                if result.get("action") in ("created", "renewed"):
+                    logger.info("Graph subscription ensured", **result)
+            except Exception as e:
+                logger.error("Graph subscription renewal failed", error=str(e), exc_info=True)
+
+    scheduler.add_job(
+        func=graph_subscription_renew,
+        trigger="interval",
+        minutes=graph_sub_renew_minutes,
+        id="graph_subscription_renew",
+        name="Graph Subscription Renewal",
+        replace_existing=True,
+    )
+
     # --- Checklist deadline notifications (daily 6:00 AM Mountain Time) ---
     # Pings the owner of each accepted post-meeting to-do whose due date is near
     # or overdue (deduped via ChecklistItem.last_notified_at).
@@ -252,6 +282,12 @@ def init_scheduler(app):
             "name": "BB Mailbox Poll",
             "schedule": f"Every {bb_mail_poll_minutes} minutes",
             "description": "Pull forwarded emails from bb@mhmw.com into the data lake (when enabled)",
+        },
+        {
+            "id": "graph_subscription_renew",
+            "name": "Graph Subscription Renewal",
+            "schedule": f"Every {graph_sub_renew_minutes} minutes",
+            "description": "Ensure/renew the BB-mail Graph change-notification subscription (when enabled)",
         },
         {
             "id": "checklist_due_scan",

@@ -1221,6 +1221,48 @@ class LakeIngestState(db.Model):
         return row
 
 
+class GraphSubscription(db.Model):
+    """A live Microsoft Graph change-notification subscription (the push webhook).
+
+    One row per (source, resource) we watch — for BB mail, the bb@mhmw.com Inbox.
+    Graph subscriptions expire in ~70h, so this row tracks the Graph-assigned
+    `subscription_id`, when it `expires_at`, and the `client_state` secret echoed
+    back in every notification (verified in the handler). The ensure/renew job
+    reads this to decide create-vs-renew-vs-skip, mirroring the idempotent Procore
+    `ensure_webhooks` pattern. Correctness never depends on this table — the poll
+    is the durable floor; this is only the fast path's bookkeeping.
+    """
+    __tablename__ = "graph_subscriptions"
+    __table_args__ = (
+        db.UniqueConstraint("source", "resource", name="uq_graph_sub_source_resource"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(64), nullable=False)          # e.g. 'm365_mail'
+    resource = db.Column(db.String(512), nullable=False)       # Graph resource path watched
+    mailbox = db.Column(db.String(255), nullable=True)         # e.g. 'bb@mhmw.com'
+    subscription_id = db.Column(db.String(255), nullable=True, index=True)  # Graph-assigned id
+    client_state = db.Column(db.String(128), nullable=True)    # secret echoed in notifications
+    notification_url = db.Column(db.String(1024), nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)         # subscription expirationDateTime (UTC)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @classmethod
+    def get(cls, source, resource):
+        return cls.query.filter_by(source=source, resource=resource).first()
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "source": self.source,
+            "resource": self.resource,
+            "mailbox": self.mailbox,
+            "subscription_id": self.subscription_id,
+            "notification_url": self.notification_url,
+            "expires_at": _dt(self.expires_at),
+        }
+
+
 class MicrosoftDelegatedToken(db.Model):
     """Stored delegated OAuth token for a single mailbox identity (device-code flow).
 
