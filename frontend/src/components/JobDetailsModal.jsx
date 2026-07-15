@@ -203,7 +203,7 @@ export function JobDetailsModal({ isOpen, onClose, job, scrollToMaterials = fals
                                     No materials ordered for this release.
                                 </p>
                             ) : (
-                                <ul className="space-y-2">
+                                <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
                                     {materialOrders.map((o) => {
                                         // Status orders (galvanizing / stock) track a planning→complete
                                         // shipping lifecycle, not the itemized ordered/received toggle.
