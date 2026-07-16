@@ -1,8 +1,9 @@
 """BB review workspace — per-submittal-document endpoints (Track B).
 
 Covers the /procore-submittals/<id>/documents surface: the merged document listing, the
-inline review that persists a submittal-keyed BBDrawingReview (release/version null), the
-review_only cache gate, and submittal-keyed feedback. Procore + the Claude call are mocked.
+enqueue-and-background review (202 + pending row) plus the worker job that persists a
+submittal-keyed BBDrawingReview (release/version null), the review_only cache gate, and
+submittal-keyed feedback. Procore + the Claude call are mocked.
 """
 from unittest.mock import patch
 
@@ -73,34 +74,110 @@ def test_documents_lists_refs_with_cache_and_review(app, admin_client, tmp_path)
     assert docs[5002]["review"] is None  # no review for the approver markup
 
 
-def test_bb_review_persists_submittal_keyed_row(app, admin_client, tmp_path):
+def test_bb_review_enqueues_pending_row_and_backgrounds(app, admin_client, tmp_path):
+    """POST returns 202 with a pending submittal-keyed row and hands the (multi-minute)
+    Claude call to the background worker — it never runs inline (that tripped the gunicorn
+    worker timeout in prod). The endpoint still pulls + caches the drawing synchronously."""
     app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
     sid = _seed_submittal(app)
 
     with patch("app.brain.pdf_review.routes.find_submittal_drawing_refs", return_value=REFS), \
          patch("app.brain.pdf_review.routes.download_markup_pdf", return_value=b"%PDF-1.7 fake"), \
-         patch("app.brain.pdf_review.service.review", return_value={
-             "findings": VIOLATION_FINDINGS, "model": "claude-test",
-             "input_tokens": 10, "output_tokens": 20,
-         }) as mock_review:
+         patch("app.brain.pdf_review.routes.start_submittal_review") as mock_start, \
+         patch("app.brain.pdf_review.service.review") as mock_review:
         resp = admin_client.post(
             f"/brain/procore-submittals/{sid}/documents/5001/bb-review?model=sonnet")
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     body = resp.get_json()
     assert body["ok"] is True
-    assert body["tally"]["critical"] == 1
-    assert body["hold_recommended"] is True
-    assert body["model"] == "claude-test"
-    mock_review.assert_called_once()
+    assert body["status"] == "pending"
+    # The review call is NOT made inline — the worker makes it off-request.
+    mock_review.assert_not_called()
+    mock_start.assert_called_once()
 
     with app.app_context():
         rows = BBDrawingReview.query.filter_by(submittal_id=sid, attachment_id=5001).all()
         assert len(rows) == 1
-        r = rows[0]
+        assert rows[0].status == "pending"
+        assert rows[0].id == body["review_id"]
+
+
+def test_bb_review_returns_existing_pending_row(app, admin_client, tmp_path):
+    """A second POST while a review is running returns the existing pending row (202)
+    instead of stacking a second Claude call (mirrors the per-version dedup gate)."""
+    from app.brain.pdf_review import cache as procore_pdf_cache
+
+    app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
+    sid = _seed_submittal(app)
+    with app.app_context():
+        pending = BBDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
+        db.session.add(pending)
+        db.session.commit()
+        pending_id = pending.id
+        procore_pdf_cache.save(sid, 5001, b"%PDF-1.7 fake")
+
+    with patch("app.brain.pdf_review.routes.start_submittal_review") as mock_start:
+        resp = admin_client.post(
+            f"/brain/procore-submittals/{sid}/documents/5001/bb-review?review_only=true")
+    assert resp.status_code == 202
+    assert resp.get_json()["review_id"] == pending_id
+    mock_start.assert_not_called()
+
+    with app.app_context():
+        assert BBDrawingReview.query.filter_by(submittal_id=sid, attachment_id=5001).count() == 1
+
+
+def test_worker_completes_submittal_review(app, admin_client, tmp_path):
+    """The background job reads the cached drawing, runs the review, and flips the row to
+    complete with findings + token usage."""
+    from app.brain.pdf_review import cache as procore_pdf_cache
+    from app.brain.pdf_review.worker import _run_submittal_review_job
+
+    app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
+    sid = _seed_submittal(app)
+    with app.app_context():
+        review = BBDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
+        db.session.add(review)
+        db.session.commit()
+        review_id = review.id
+        procore_pdf_cache.save(sid, 5001, b"%PDF-1.7 fake")
+
+    with patch("app.brain.pdf_review.service.review", return_value={
+            "findings": VIOLATION_FINDINGS, "model": "claude-test",
+            "input_tokens": 10, "output_tokens": 20,
+    }) as mock_review:
+        _run_submittal_review_job(app, review_id, sid, 5001, "590-674", "sonnet")
+    mock_review.assert_called_once()
+
+    with app.app_context():
+        r = db.session.get(BBDrawingReview, review_id)
         assert r.status == "complete"
         assert r.release_id is None
         assert r.drawing_version_id is None
+        assert r.model == "claude-test"
         assert r.input_tokens == 10 and r.output_tokens == 20
+
+
+def test_worker_records_error_when_review_fails(app, tmp_path):
+    """A None result (no key / API error) flips the pending row to error, not a crash."""
+    from app.brain.pdf_review import cache as procore_pdf_cache
+    from app.brain.pdf_review.worker import _run_submittal_review_job
+
+    app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
+    sid = _seed_submittal(app)
+    with app.app_context():
+        review = BBDrawingReview(submittal_id=sid, attachment_id=5001, status="pending")
+        db.session.add(review)
+        db.session.commit()
+        review_id = review.id
+        procore_pdf_cache.save(sid, 5001, b"%PDF-1.7 fake")
+
+    with patch("app.brain.pdf_review.service.review", return_value=None):
+        _run_submittal_review_job(app, review_id, sid, 5001, "590-674", None)
+
+    with app.app_context():
+        r = db.session.get(BBDrawingReview, review_id)
+        assert r is not None and r.status == "error"
 
 
 def test_review_only_409_when_not_cached(app, admin_client, tmp_path):
@@ -109,20 +186,6 @@ def test_review_only_409_when_not_cached(app, admin_client, tmp_path):
     resp = admin_client.post(
         f"/brain/procore-submittals/{sid}/documents/5001/bb-review?review_only=true")
     assert resp.status_code == 409
-
-
-def test_review_call_none_persists_error_and_502(app, admin_client, tmp_path):
-    app.config["PDF_STORAGE_ROOT"] = str(tmp_path)
-    sid = _seed_submittal(app)
-    with patch("app.brain.pdf_review.routes.find_submittal_drawing_refs", return_value=REFS), \
-         patch("app.brain.pdf_review.routes.download_markup_pdf", return_value=b"%PDF-1.7 fake"), \
-         patch("app.brain.pdf_review.service.review", return_value=None):
-        resp = admin_client.post(
-            f"/brain/procore-submittals/{sid}/documents/5001/bb-review")
-    assert resp.status_code == 502
-    with app.app_context():
-        r = BBDrawingReview.query.filter_by(submittal_id=sid, attachment_id=5001).first()
-        assert r is not None and r.status == "error"
 
 
 def test_get_review_and_feedback_roundtrip(app, admin_client, tmp_path):

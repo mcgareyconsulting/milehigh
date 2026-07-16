@@ -114,7 +114,7 @@ def review(pdf_bytes: bytes, job_release: str, model: str = None):
     try:
         result = _call_anthropic(pdf_bytes, job_release, model=resolved)
     except Exception as e:  # noqa: BLE001 — any failure → no result; caller records the error
-        logger.info("bb_pdf_review_failed", error=str(e), model=resolved)
+        logger.error("bb_pdf_review_failed", error=str(e), model=resolved, exc_info=True)
         return None
     logger.info("bb_pdf_review_complete", job_release=job_release, model=resolved,
                 findings=len(result["findings"]),

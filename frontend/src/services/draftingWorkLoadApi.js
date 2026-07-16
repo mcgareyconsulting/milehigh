@@ -360,12 +360,14 @@ class DraftingWorkLoadApi {
     }
 
     /**
-     * Run (or re-run) a BB compliance review on a single already-downloaded document.
-     * The review runs inline and can take several minutes, so the request never times out.
+     * Kick off (or re-run) a BB compliance review on a single already-downloaded document.
+     * Returns immediately (202) with a pending row; the review runs on a background thread
+     * server-side (the Claude call takes minutes) and the caller polls
+     * fetchProcoreDocumentReview until status is 'complete' or 'error'.
      * @param {string} submittalId - Procore submittal id
      * @param {string|number} attachmentId - the document's attachment id
      * @param {{ model?: string, reviewOnly?: boolean }} [opts]
-     * @returns {Promise<{ok, review_id, findings, tally, hold_recommended, model}>}
+     * @returns {Promise<{ok, review_id, status}>}
      */
     async runProcoreDocumentReview(submittalId, attachmentId, { model = null, reviewOnly = true } = {}) {
         try {
@@ -375,10 +377,7 @@ class DraftingWorkLoadApi {
             const response = await axios.post(
                 `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/bb-review`,
                 null,
-                {
-                    params,
-                    timeout: 0, // review can take minutes; don't let axios abort it
-                }
+                { params }
             );
             return response.data;
         } catch (error) {

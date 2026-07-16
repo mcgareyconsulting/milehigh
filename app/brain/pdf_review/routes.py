@@ -9,7 +9,6 @@ Admin-only, matching the "admin-only Banana Boy" decision. The POST returns imme
 frontend panel polls the GET until status is `complete` or `error`.
 """
 import io
-from datetime import datetime
 
 from flask import jsonify, current_app, send_file
 
@@ -25,7 +24,7 @@ from app.logging_config import get_logger
 
 from app.brain.pdf_review import service
 from app.brain.pdf_review import cache as procore_pdf_cache
-from app.brain.pdf_review.worker import start_review
+from app.brain.pdf_review.worker import start_review, start_submittal_review
 from app.brain.pdf_review.report import build_report
 from app.brain.meetings.owner_match import release_owner_user
 from app.procore.attachments import (
@@ -552,11 +551,14 @@ def pull_submittal_document(submittal_id, attachment_id):
 )
 @admin_required
 def bb_review_submittal_document(submittal_id, attachment_id):
-    """Run a BB review on one submittal drawing and persist the result.
+    """Kick off a BB review on one submittal drawing and return a pending row (202).
 
     review_only=true reviews the already-cached drawing (409 if nothing cached); otherwise
-    the drawing is pulled-if-not-cached first. model=sonnet|opus selects the reviewing model.
-    Runs inline (v1) and persists a submittal-keyed BBDrawingReview row.
+    the drawing is pulled-if-not-cached first (cheap; seconds). model=sonnet|opus selects the
+    reviewing model. The Claude call takes minutes, so it runs on a background thread
+    (worker.py) — blocking the request inline tripped the gunicorn worker timeout in prod,
+    killing the worker mid-DB-op and cascading SSL errors. The row moves pending -> complete
+    | error; the frontend polls the GET endpoint. Persists a submittal-keyed BBDrawingReview.
     """
     submittal, err = _load_submittal_or_404(submittal_id)
     if err:
@@ -587,48 +589,36 @@ def bb_review_submittal_document(submittal_id, attachment_id):
 
     job_release = _submittal_job_release(submittal)
     user = get_current_user()
-    result = service.review(pdf_bytes, job_release, model=request.args.get('model'))
 
-    if result is None:
-        review = BBDrawingReview(
-            submittal_id=str(procore_submittal_id), attachment_id=attachment_id_int,
-            drawing_version_id=None, release_id=None, status='error',
-            error='Review call failed (see logs)',
-            requested_by_user_id=user.id if user else None,
-            completed_at=datetime.utcnow(),
-        )
-        db.session.add(review)
-        db.session.commit()
-        logger.info("bb_submittal_document_review_failed", submittal_id=procore_submittal_id,
-                    attachment_id=attachment_id_int, review_id=review.id)
-        return jsonify({'ok': False, 'error': 'Review call failed (see logs)',
-                        'review_id': review.id}), 502
+    # Don't stack duplicate work (mirrors request_bb_review): if a review is already
+    # running for this drawing, return it instead of kicking off a second Claude call.
+    pending = (BBDrawingReview.query
+               .filter(BBDrawingReview.submittal_id == str(procore_submittal_id),
+                       BBDrawingReview.attachment_id == attachment_id_int,
+                       BBDrawingReview.status == 'pending')
+               .order_by(BBDrawingReview.created_at.desc())
+               .first())
+    if pending:
+        return jsonify({'ok': True, 'review_id': pending.id, 'status': 'pending'}), 202
 
     review = BBDrawingReview(
         submittal_id=str(procore_submittal_id), attachment_id=attachment_id_int,
-        drawing_version_id=None, release_id=None, status='complete',
-        findings=result['findings'], model=result.get('model'),
-        input_tokens=result.get('input_tokens'), output_tokens=result.get('output_tokens'),
+        drawing_version_id=None, release_id=None, status='pending',
         requested_by_user_id=user.id if user else None,
-        completed_at=datetime.utcnow(),
     )
     db.session.add(review)
     db.session.commit()
 
-    report = build_report(result['findings'], job_release)
-    logger.info("bb_submittal_document_reviewed", submittal_id=procore_submittal_id,
-                attachment_id=attachment_id_int, review_id=review.id,
-                findings=len(result['findings']), model=result.get('model'))
-    return jsonify({
-        'ok': True,
-        'review_id': review.id,
-        'findings': result['findings'],
-        'tally': report['tally'],
-        'hold_recommended': report['hold_recommended'],
-        'model': result.get('model'),
-        'input_tokens': result.get('input_tokens'),
-        'output_tokens': result.get('output_tokens'),
-    }), 200
+    start_submittal_review(
+        current_app._get_current_object(), review.id,
+        procore_submittal_id=str(procore_submittal_id),
+        attachment_id=attachment_id_int,
+        job_release=job_release,
+        model=request.args.get('model'),
+    )
+    logger.info("bb_submittal_document_review_queued", submittal_id=procore_submittal_id,
+                attachment_id=attachment_id_int, review_id=review.id)
+    return jsonify({'ok': True, 'review_id': review.id, 'status': 'pending'}), 202
 
 
 @brain_bp.route(
@@ -656,6 +646,7 @@ def get_bb_review_submittal_document(submittal_id, attachment_id):
         'review_id': review.id,
         'status': review.status,
         'model': review.model,
+        'error': review.error,
         'completed_at': review.to_dict().get('completed_at'),
         'findings': review.findings if review.findings is not None else [],
         'tally': report['tally'],

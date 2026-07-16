@@ -11,10 +11,14 @@
  * accept/reject feedback are row-local UI. Severity colors come from ./urgency.js — the
  * app's one finding-severity vocabulary — never invented here.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { draftingWorkLoadApi } from '../../services/draftingWorkLoadApi';
 import { URGENCY_STYLES, urgencyOf } from './urgency';
+
+// The review runs on a background thread server-side (the Claude call takes minutes),
+// so we enqueue it and poll the GET endpoint until it lands.
+const POLL_MS = 5000;
 
 const SOURCE_BADGE = {
     originating: { label: 'originating', cls: 'bg-accent-50 text-accent-600 dark:bg-accent-500/20 dark:text-accent-200' },
@@ -194,6 +198,11 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
     const [error, setError] = useState(null);
     const [errorDebug, setErrorDebug] = useState(null);
     const [showDebug, setShowDebug] = useState(false);
+    const pollRef = useRef(null);
+
+    const clearPoll = () => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
 
     const attachmentId = doc.attachment_id;
     const review = doc.review || null;
@@ -222,29 +231,67 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
         }
     };
 
+    // Fold a landed review (complete or error) from the GET endpoint into row + parent state.
+    const applyReview = (r) => {
+        onUpdate(attachmentId, {
+            review: {
+                review_id: r.review_id,
+                status: r.status,
+                model: r.model || model,
+                completed_at: r.completed_at || new Date().toISOString(),
+                tally: r.tally || {},
+                hold_recommended: !!r.hold_recommended,
+            },
+        });
+        setFindings(Array.isArray(r.findings) ? r.findings : []);
+        setFeedbackMap(normalizeFeedback(r.feedback));
+        setExpanded(true);
+    };
+
+    // Poll the GET endpoint until the background review lands (server runs it off-request).
+    const startPolling = () => {
+        clearPoll();
+        setReviewing(true);
+        pollRef.current = setInterval(async () => {
+            try {
+                const { review: r } = await draftingWorkLoadApi.fetchProcoreDocumentReview(submittalId, attachmentId);
+                if (!r || r.status === 'pending') return;
+                clearPoll();
+                setReviewing(false);
+                if (r.status === 'error') {
+                    setError(r.error || 'Review failed');
+                    // Lift the error status too, so the parent row doesn't stay stale/pending.
+                    onUpdate(attachmentId, {
+                        review: { review_id: r.review_id, status: 'error', model: r.model || model },
+                    });
+                } else {
+                    applyReview(r);
+                }
+            } catch { /* transient network blip — keep polling */ }
+        }, POLL_MS);
+    };
+
+    // Resume polling if the row mounts with a review already running server-side, and always
+    // stop polling on unmount (e.g. the modal closes mid-review).
+    useEffect(() => {
+        if (doc.review?.status === 'pending') startPolling();
+        return clearPoll;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleReview = async () => {
         clearError();
+        clearPoll();
         setReviewing(true);
         try {
-            const res = await draftingWorkLoadApi.runProcoreDocumentReview(submittalId, attachmentId, { model, reviewOnly: true });
-            onUpdate(attachmentId, {
-                review: {
-                    review_id: res.review_id,
-                    status: res.status || 'complete',
-                    model: res.model || model,
-                    completed_at: res.completed_at || new Date().toISOString(),
-                    tally: res.tally || {},
-                    hold_recommended: !!res.hold_recommended,
-                },
-            });
-            setFindings(Array.isArray(res.findings) ? res.findings : []);
-            setFeedbackMap({});
-            setExpanded(true);
+            // Returns 202 with a pending row; the review itself runs on a background thread.
+            await draftingWorkLoadApi.runProcoreDocumentReview(submittalId, attachmentId, { model, reviewOnly: true });
+            startPolling();
         } catch (e) {
+            clearPoll();
+            setReviewing(false);
             setError(e?.message || 'Review failed');
             setErrorDebug(debugFrom(e));
-        } finally {
-            setReviewing(false);
         }
     };
 
@@ -281,6 +328,19 @@ export default function DocumentRow({ submittalId, doc, model, onUpdate, onView,
                     <div className="h-full w-1/3 rounded bg-indigo-500 animate-pulse" />
                 </div>
             </div>
+        );
+    } else if (review && review.status === 'error') {
+        // A failed review renders as a failure, not "Reviewed · 0 clear".
+        statusEl = (
+            <span className="text-sm text-red-600 dark:text-red-400">🍌 Review failed</span>
+        );
+        actionEl = (
+            <button
+                onClick={handleReview}
+                className="px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors shrink-0"
+            >
+                Retry review
+            </button>
         );
     } else if (review) {
         statusEl = (
