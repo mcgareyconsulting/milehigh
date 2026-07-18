@@ -5,7 +5,7 @@ seam Banana Boy will call when a user says "read the email I forwarded you"
 (the BB tool wiring lands in a later increment); for now it is exercisable
 directly for testing/operations.
 """
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from app.auth.utils import admin_required
 from app.logging_config import get_logger
@@ -51,3 +51,37 @@ def ingest_mail_pull():
 
     result.pop("max_occurred_at", None)  # datetime; internal-only
     return jsonify({"status": "ok", **result}), 200
+
+
+@lake_bp.route("/graph/notifications", methods=["POST"])
+def graph_notifications():
+    """Receive Microsoft Graph change notifications for the BB mailbox (PUSH path).
+
+    Unauthenticated from Flask's side — Graph doesn't carry a session; authenticity
+    is proven by the per-notification `clientState` secret, verified downstream in
+    handle_notification. Two request shapes arrive here:
+
+    1. Validation handshake: on subscription create/renew, Graph POSTs with a
+       `?validationToken=...` query param and expects it echoed back verbatim as
+       text/plain 200 within ~10s. This branch MUST stay first and trivial — any
+       work before the echo risks blowing the window and failing the create.
+    2. Real notification: a JSON body {"value": [ ... ]}. We land each message and
+       return 202 promptly (Graph retries/kills subscriptions on slow acks).
+    """
+    validation_token = request.args.get("validationToken")
+    if validation_token is not None:
+        return Response(validation_token, mimetype="text/plain", status=200)
+
+    payload = request.get_json(silent=True) or {}
+    from app.lake.ingest import graph_subscription
+
+    try:
+        summary = graph_subscription.handle_notification(payload)
+    except Exception:
+        # Never fail the ack — a 5xx makes Graph retry then drop the subscription.
+        # The poll floor still catches anything we miss here.
+        logger.error("graph_notifications_handler_failed", exc_info=True)
+        return "", 202
+
+    logger.info("graph_notifications_processed", **summary)
+    return "", 202
