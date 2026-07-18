@@ -1,7 +1,9 @@
 """Service tests — ingest a RawSourceRecord into MaterialOrders (in-memory DB)."""
 import os
+from datetime import date, timedelta
+from types import SimpleNamespace
 
-from app.models import MaterialOrder, RawSourceRecord, db
+from app.models import MaterialOrder, RawSourceRecord, Releases, db
 from app.brain.material_orders.eml_adapter import eml_to_payload
 from app.brain.material_orders import service
 
@@ -202,3 +204,100 @@ def test_ingest_unprocessed_picks_up_new_records(app):
         assert created == 1
         # Running again finds nothing new.
         assert service.ingest_unprocessed() == 0
+
+
+# --- rollup_status (pure) --------------------------------------------------
+
+def _stub(status="ordered", shipping_status=None):
+    return SimpleNamespace(status=status, shipping_status=shipping_status)
+
+
+def test_rollup_status_no_orders_is_none():
+    assert service.rollup_status([]) is None
+
+
+def test_rollup_status_all_received_is_received():
+    orders = [_stub(status="received"), _stub(shipping_status="complete")]
+    assert service.rollup_status(orders) == "received"
+
+
+def test_rollup_status_outstanding_is_pending():
+    orders = [_stub(status="received"), _stub(status="ordered")]
+    assert service.rollup_status(orders) == "pending"
+
+
+def test_rollup_status_outstanding_and_overdue_is_overdue():
+    orders = [_stub(status="ordered")]
+    assert service.rollup_status(orders, overdue=True) == "overdue"
+
+
+def test_rollup_status_galv_planning_is_outstanding():
+    # A galv row still in planning is not done even though its `status` is 'ordered'.
+    assert service.rollup_status([_stub(shipping_status="planning")]) == "pending"
+
+
+# --- status_summary (DB) ---------------------------------------------------
+
+def _release(job, release, start_install=None, formulaTF=False,
+             no_color=False, asap=False):
+    r = Releases(job=job, release=release, job_name=f"Job {job}",
+                 start_install=start_install,
+                 start_install_formulaTF=formulaTF,
+                 start_install_no_color=no_color, start_install_asap=asap)
+    db.session.add(r)
+    return r
+
+
+def _order(job, release, status="ordered", shipping_status=None):
+    o = MaterialOrder(job=job, release=release, status=status,
+                      shipping_status=shipping_status, line_index=0)
+    db.session.add(o)
+    return o
+
+
+def test_status_summary_empty(app):
+    with app.app_context():
+        assert service.status_summary() == []
+
+
+def test_status_summary_rolls_up_each_release(app):
+    with app.app_context():
+        yesterday = date.today() - timedelta(days=1)
+        tomorrow = date.today() + timedelta(days=1)
+        # received: all done
+        _release(100, "1", start_install=tomorrow)
+        _order(100, "1", status="received")
+        # pending: outstanding, install in the future
+        _release(200, "1", start_install=tomorrow)
+        _order(200, "1", status="ordered")
+        # overdue: outstanding, hard install date in the past
+        _release(300, "1", start_install=yesterday)
+        _order(300, "1", status="ordered")
+        db.session.commit()
+
+        summary = {(s["job"], s["release"]): s["status"]
+                   for s in service.status_summary()}
+        assert summary == {
+            (100, "1"): "received",
+            (200, "1"): "pending",
+            (300, "1"): "overdue",
+        }
+
+
+def test_status_summary_formula_date_not_overdue(app):
+    with app.app_context():
+        yesterday = date.today() - timedelta(days=1)
+        # A past date that is formula-driven is an estimate, not a commitment —
+        # outstanding orders read as pending, not overdue.
+        _release(400, "1", start_install=yesterday, formulaTF=True)
+        _order(400, "1", status="ordered")
+        db.session.commit()
+        summary = service.status_summary()
+        assert summary == [{"job": 400, "release": "1", "status": "pending"}]
+
+
+def test_status_summary_skips_releaseless_stock_orders(app):
+    with app.app_context():
+        _order(None, None, status="ordered", shipping_status="planning")
+        db.session.commit()
+        assert service.status_summary() == []

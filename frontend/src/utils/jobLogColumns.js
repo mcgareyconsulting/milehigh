@@ -88,6 +88,7 @@ export const columnOrder = [
     'Comp. ETA',
     'Job Comp',
     'Invoiced',
+    'Mat. Ord.',
     'Notes',
 ];
 
@@ -114,6 +115,7 @@ export const COLUMN_WIDTH_PERCENT = {
     'Comp. ETA': 5,
     'Job Comp': 4.5,
     'Invoiced': 4.5,
+    'Mat. Ord.': 3,
     'Notes': 15,
     'Actions': 5,
 };
@@ -123,7 +125,7 @@ export const COLUMN_WIDTH_PERCENT = {
 export const FILTERABLE_COLUMNS = new Set([
     'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS',
     'Paint color', 'PM', 'BY', 'Released', 'Fab Order', 'Stage',
-    'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced',
+    'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced', 'Mat. Ord.',
 ]);
 
 // Date-valued columns: their header dropdown sorts chronologically and shows
