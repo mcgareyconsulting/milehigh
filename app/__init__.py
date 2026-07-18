@@ -427,12 +427,18 @@ def create_app():
                     # Wait longer on error before retrying
                     time.sleep(5)
 
-        # Start the background thread as a daemon (will stop when main process stops)
-        outbox_thread = threading.Thread(
-            target=outbox_retry_worker, daemon=True, name="outbox-retry-worker"
-        )
-        outbox_thread.start()
-        logger.info("Outbox retry worker thread started successfully")
+        # Start the background thread as a daemon (will stop when main process stops).
+        # Skipped under TESTING: a live retry loop races the test suite (it processes
+        # outbox rows out from under tests that assert on pending counts) and floods
+        # logs querying tables the in-memory test DB doesn't have.
+        if os.environ.get("TESTING"):
+            logger.info("Skipping outbox retry worker thread under TESTING")
+        else:
+            outbox_thread = threading.Thread(
+                target=outbox_retry_worker, daemon=True, name="outbox-retry-worker"
+            )
+            outbox_thread.start()
+            logger.info("Outbox retry worker thread started successfully")
 
         # Initialize the scheduler for Trello queue drainer + heartbeat
         init_scheduler(app)
