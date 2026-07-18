@@ -136,6 +136,7 @@ function AppShellInner({ isAuthenticated }) {
             {navBtn('/drafting-work-load', 'Drafting WL')}
             {navBtn('/events', 'Events')}
             {navBtn('/todos', 'To-Dos')}
+            {navBtn('/install-schedule', 'Install Schedule')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
             {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
             {isAdmin && navBtn('/meetings', 'Meetings')}

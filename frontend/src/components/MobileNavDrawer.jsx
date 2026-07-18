@@ -20,6 +20,7 @@ const NAV_ITEMS = [
     { label: 'Timeline', path: '/pm-board' },
     { label: 'Events', path: '/events' },
     { label: 'To-Dos', path: '/todos' },
+    { label: 'Install Schedule', path: '/install-schedule' },
 ];
 
 // Rentals nav removed 2026-07-12 (company change) — route + backend intact.
