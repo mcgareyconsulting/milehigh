@@ -31,8 +31,8 @@ export const PROJECT_STATUS = {
 const projects = [
   {
     id: 1,
-    job_number: '290',
-    project_name: 'Confluence Station Parking Garage',
+    job_number: '440',
+    project_name: 'Outlook Green Valley Ranch',
     customer_project_number: 'MORT-2024-0413',
     contract_number: 'C-290153',
     status: 'active',
@@ -160,8 +160,8 @@ const projects = [
 
   {
     id: 2,
-    job_number: '580',
-    project_name: 'RiNo Art District Mixed-Use',
+    job_number: '170',
+    project_name: 'Banyan High Point',
     customer_project_number: 'SAUN-25-118',
     contract_number: 'C-580659',
     status: 'active',
@@ -282,8 +282,8 @@ const projects = [
 
   {
     id: 3,
-    job_number: '610',
-    project_name: 'Belleview Station Tower 3',
+    job_number: '410',
+    project_name: 'Columbine Square',
     customer_project_number: 'PCL-6620',
     contract_number: 'C-610204',
     status: 'on_hold',
@@ -388,8 +388,8 @@ const projects = [
 
   {
     id: 4,
-    job_number: '445',
-    project_name: 'Cherry Creek Medical Pavilion',
+    job_number: '480',
+    project_name: 'Alta Flatirons',
     customer_project_number: 'GHP-44521',
     contract_number: 'C-445088',
     status: 'active',
@@ -508,8 +508,8 @@ const projects = [
 
   {
     id: 5,
-    job_number: '720',
-    project_name: 'DIA Concourse B Expansion',
+    job_number: '370',
+    project_name: 'Vista Highlands',
     customer_project_number: 'HP-DEN-7203',
     contract_number: 'C-720311',
     status: 'active',
@@ -623,8 +623,8 @@ const projects = [
 
   {
     id: 6,
-    job_number: '355',
-    project_name: 'Union Station Retail Buildout',
+    job_number: '330',
+    project_name: 'Aspendale (Headwaters) Littleton Senior',
     customer_project_number: 'SWIN-3390',
     contract_number: 'C-355020',
     status: 'complete',

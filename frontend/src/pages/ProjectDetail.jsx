@@ -11,15 +11,20 @@
  * imports_from: [react, react-router-dom, ../data/projectsDemo, ../components/projects/projectsShared]
  * imported_by: [frontend/src/App.jsx]
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getDemoProject } from '../data/projectsDemo';
+import { fetchProjectLive } from '../services/projectsApi';
 import {
   StatusPill, HealthTile, SectionCard, ProgressBar, MetaRow,
 } from '../components/projects/projectsShared';
 import { fmtMoney, fmtPct } from '../components/projects/projectsFormat';
 
 const TABS = ['Overview', 'Releases', 'Submittals', 'Schedule', 'Financials', 'Contacts & Docs', 'Activity'];
+
+// Tabs whose data comes from the live /brain/projects endpoint once a real project
+// row matches this job_number. The rest stay on demo data (no backend source yet).
+const LIVE_TABS = new Set(['Releases', 'Submittals', 'Activity']);
 
 const RISK_TONE = {
   Low: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
@@ -178,8 +183,8 @@ function TabPanel({ tab, project }) {
               <tr><Th>Release</Th><Th>Description</Th><Th>Stage</Th><Th className="text-right">Hrs</Th><Th>Install</Th><Th className="w-32">Progress</Th></tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
-              {project.releases.map(r => (
-                <tr key={r.release}>
+              {project.releases.map((r, i) => (
+                <tr key={r.release ?? i}>
                   <Td className="font-mono text-xs font-semibold text-accent-600 dark:text-accent-300">{r.release}</Td>
                   <Td>{r.description}</Td>
                   <Td><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">{r.stage}</span></Td>
@@ -204,9 +209,9 @@ function TabPanel({ tab, project }) {
               <tr><Th>Rel</Th><Th>Title</Th><Th>Type</Th><Th>Status</Th><Th>Ball in Court</Th><Th>Due</Th></tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
-              {project.submittals.map(s => (
-                <tr key={s.rel}>
-                  <Td className="font-mono text-xs font-semibold text-accent-600 dark:text-accent-300">{s.rel}</Td>
+              {project.submittals.map((s, i) => (
+                <tr key={s.rel ?? i}>
+                  <Td className="font-mono text-xs font-semibold text-accent-600 dark:text-accent-300">{s.rel ?? '—'}</Td>
                   <Td>{s.title}</Td>
                   <Td className="text-gray-500 dark:text-slate-400">{s.type}</Td>
                   <Td><span className={`font-medium ${SUBMITTAL_TONE[s.status] || 'text-gray-600'}`}>{s.status}</span></Td>
@@ -358,11 +363,86 @@ function ScheduleList({ items }) {
   );
 }
 
+// Non-blocking banner communicating where the data on screen comes from.
+function DataSourceBanner({ status, jobNumber, health }) {
+  if (status === 'loading') {
+    return (
+      <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-gray-500 dark:text-slate-400 flex items-center gap-2">
+        <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-slate-500 animate-pulse" />
+        Checking the production database for live data on job {jobNumber}…
+      </div>
+    );
+  }
+  if (status === 'live') {
+    return (
+      <div className="rounded-lg border border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-green-900/20 px-3 py-2 text-xs text-green-800 dark:text-green-300 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+        <span className="font-semibold">Live data</span>
+        <span className="text-green-700/80 dark:text-green-300/80">
+          — Releases, Submittals, Activity & Health are pulled from the production database
+          {health != null && ` (${health.releaseCount} releases · ${health.submittalCount} submittals)`}.
+          Financials & Contract stay on demo data until ingestion lands.
+        </span>
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div className="rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+        <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
+        Couldn’t reach the live endpoint — showing demo data.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-gray-500 dark:text-slate-400 flex items-center gap-2">
+      <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-slate-500" />
+      No live project matches job {jobNumber} yet — showing demo data.
+    </div>
+  );
+}
+
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [tab, setTab] = useState('Overview');
-  const project = getDemoProject(id);
+  const demoProject = getDemoProject(id);
+
+  // Live overlay: fetch the real rollup by job_number and merge the sections that have
+  // a backend source over the demo scaffold. Demo sections (financials/contract/etc.)
+  // are untouched. status: 'loading' | 'live' | 'none' | 'error'.
+  const [live, setLive] = useState(null);
+  const [status, setStatus] = useState('loading');
+
+  useEffect(() => {
+    if (!demoProject) { setStatus('none'); return; }
+    let cancelled = false;
+    setStatus('loading');
+    fetchProjectLive(demoProject.job_number)
+      .then(data => {
+        if (cancelled) return;
+        if (data) { setLive(data); setStatus('live'); }
+        else { setStatus('none'); }
+      })
+      .catch(() => { if (!cancelled) setStatus('error'); });
+    return () => { cancelled = true; };
+  }, [demoProject]);
+
+  // Overlay live sections onto the demo scaffold when available.
+  const project = (demoProject && live)
+    ? {
+        ...demoProject,
+        percent_complete: live.percent_complete,
+        releases: live.releases,
+        submittals: live.submittals,
+        activity: live.activity,
+        health: live.health,
+      }
+    : demoProject;
+
+  const liveMeta = live
+    ? { releaseCount: live.releases.length, submittalCount: live.submittals.length }
+    : null;
 
   if (!project) {
     return (
@@ -405,6 +485,9 @@ export default function ProjectDetail() {
           </div>
         </div>
 
+        {/* Where the data comes from */}
+        <DataSourceBanner status={status} jobNumber={project.job_number} health={liveMeta} />
+
         {/* Project Brief */}
         <ProjectBrief brief={project.brief} />
 
@@ -419,20 +502,26 @@ export default function ProjectDetail() {
         {/* Tabs */}
         <div>
           <div className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-slate-700 mb-4">
-            {TABS.map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
-                  tab === t
-                    ? 'border-accent-500 text-accent-600 dark:text-accent-300'
-                    : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+            {TABS.map(t => {
+              const isLive = status === 'live' && LIVE_TABS.has(t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+                    tab === t
+                      ? 'border-accent-500 text-accent-600 dark:text-accent-300'
+                      : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {t}
+                  {isLive && (
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" title="Live data" />
+                  )}
+                </button>
+              );
+            })}
           </div>
           <TabPanel tab={tab} project={project} />
         </div>
