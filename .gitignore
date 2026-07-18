@@ -5,11 +5,6 @@ venv
 instance/
 .vscode/
 
-#Codex
-.agents/
-.codex/
-Agents.md
-
 # Test / coverage artifacts
 .pytest_cache/
 .coverage
@@ -17,6 +12,11 @@ Agents.md
 coverage.xml
 htmlcov/
 test-results.xml
+
+#Codex
+.agents/
+.codex/
+AGENTS.md
 
 # Log files
 logs/

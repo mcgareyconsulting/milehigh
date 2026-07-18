@@ -17,6 +17,27 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.291',
+    date: 'July 18, 2026',
+    summary:
+      'BB drawing review on a submittal is now reliable on large sets, and the Materials Ordered list scrolls when it gets long.',
+    changes: [
+      {
+        type: 'fixed',
+        title: 'BB submittal review no longer times out',
+        adminOnly: true,
+        detail:
+          'Reviewing a For-Construction drawing on a submittal now runs in the background instead of blocking the request. The Claude call takes minutes, which was tripping the server\'s request timeout and killing the worker mid-review; the review now moves from pending to complete (or error) on its own and the panel polls for the result, so large or slow reviews finish cleanly and surface a real error message if the call fails.',
+      },
+      {
+        type: 'improved',
+        title: 'Materials Ordered list scrolls when long',
+        detail:
+          'On a release with a lot of ordered material, the Materials Ordered section in Job Details now scrolls within its own area instead of overflowing the modal.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.289',
     date: 'July 13, 2026',
     summary:
