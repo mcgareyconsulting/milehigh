@@ -4,6 +4,7 @@ from datetime import datetime
 from app.brain.bb_chat import assembler
 from app.models import (
     ChecklistItem,
+    MaterialOrder,
     Meeting,
     ReleaseEvents,
     Submittals,
@@ -64,6 +65,26 @@ def test_assembles_release_bundle(app):
 
         # To-do surfaced from the linked meeting item.
         assert bundle["todos"][0]["title"] == "Order the steel"
+
+
+def test_material_orders_surface_in_bundle(app):
+    with app.app_context():
+        _seed_lifecycle()
+        db.session.add(MaterialOrder(
+            job=290, release="153", supplier="Drexel Supply", po_number="290-153",
+            order_kind="material", event_type="placed", description="1.5C 18Ga Decking",
+            quantity=45.0, status="ordered", line_index=0))
+        db.session.commit()
+
+        bundle = assembler.assemble({"kind": "release", "job": 290, "release": "153",
+                                     "submittal_id": None, "label": "release 290-153"})
+
+        assert bundle["counts"]["material_orders"] == 1
+        mo = bundle["material_orders"][0]
+        assert mo["supplier"] == "Drexel Supply"
+        assert mo["done"] is False
+        # Outstanding order, no past hard install date → pending rollup.
+        assert bundle["material_order_status"]["153"] == "pending"
 
 
 def test_submittal_anchor_pulls_job_context(app):

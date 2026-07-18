@@ -95,9 +95,11 @@ TOOL_DEFINITIONS = [
         "description": (
             "Assemble the WHOLE lifecycle of a release in one call: its current state, the "
             "job's submittals, a merged chronological event timeline (releases + submittals), "
-            "and related to-dos. Use this when the user asks to 'summarize' a release or job, "
-            "or wants the full picture / where it stands / its lifecycle. Prefer this over "
-            "calling search + history separately for a summary."
+            "related to-dos, and its supplier material orders (parts/decking/galvanizing — with a "
+            "per-release received/pending/overdue rollup in material_order_status). Use this when "
+            "the user asks to 'summarize' a release or job, wants the full picture / where it "
+            "stands / its lifecycle, or asks what material is on order. Prefer this over calling "
+            "search + history separately for a summary."
         ),
         "input_schema": {
             "type": "object",
