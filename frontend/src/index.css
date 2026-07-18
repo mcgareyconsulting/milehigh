@@ -115,6 +115,38 @@ body>#root>div>div {
   -webkit-overflow-scrolling: touch; /* Momentum scroll on iOS Safari */
 }
 
+/* Job Log completed rows (Complete stage / install-complete) recede: dim text and
+   embedded editors. `tr.jl-done td` (0,1,2) out-specifies Tailwind text utilities
+   (0,1,0), so per-cell text colors dim without touching every cell class; elements
+   with inline styles (e.g. the Stage pill) keep their own colors. */
+tr.jl-done td,
+tr.jl-done td input,
+tr.jl-done td textarea {
+  color: rgb(75 85 99); /* gray-600 — receded but clearly legible */
+}
+tr.jl-done td a,
+tr.jl-done td .text-blue-600 {
+  color: rgb(78 116 176); /* muted link blue */
+}
+.dark tr.jl-done td,
+.dark tr.jl-done td input,
+.dark tr.jl-done td textarea {
+  color: rgb(148 163 184); /* slate-400 — receded but clearly legible */
+}
+.dark tr.jl-done td a,
+.dark tr.jl-done td .text-blue-600 {
+  color: rgb(110 145 200);
+}
+/* The white editor boxes glow against the muted slab — soften them on done rows. */
+tr.jl-done td input,
+tr.jl-done td textarea {
+  background-color: rgb(255 255 255 / 0.7);
+}
+.dark tr.jl-done td input,
+.dark tr.jl-done td textarea {
+  background-color: rgb(51 65 85 / 0.55); /* slate-700 @ 55% */
+}
+
 /* Board slide-over animation */
 @keyframes slideInRight {
   from { transform: translateX(100%); }

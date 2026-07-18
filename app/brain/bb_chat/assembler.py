@@ -11,6 +11,7 @@ Event-payload shapes mirror app/history/__init__.py (releases: {'field','old_val
 from app.logging_config import get_logger
 from app.models import (
     ChecklistItem,
+    MaterialOrder,
     Meeting,
     Releases,
     ReleaseEvents,
@@ -18,12 +19,14 @@ from app.models import (
     SubmittalEvents,
     User,
 )
+from app.brain.material_orders import service as material_orders_service
 
 logger = get_logger(__name__)
 
 _MAX_SUBMITTALS = 20
 _MAX_TIMELINE = 80
 _MAX_TODOS = 40
+_MAX_MATERIAL_ORDERS = 40
 _TODO_STATUSES = ("proposed", "accepted", "done")  # exclude 'rejected'
 
 
@@ -72,6 +75,56 @@ def _submittal_view(s: Submittals) -> dict:
         "start_install": _d(s.start_install),
         "notes": s.notes,
     }
+
+
+def _material_order_view(o: MaterialOrder) -> dict:
+    return {
+        "supplier": o.supplier,
+        "po_number": o.po_number,
+        "supplier_order_no": o.supplier_order_no,
+        "order_kind": o.order_kind,        # 'material' | 'galvanizing' | 'stock'
+        "event_type": o.event_type,        # 'placed' | 'confirmed' | 'status'
+        "description": o.description,
+        "quantity": o.quantity,
+        "unit": o.unit,
+        "status": o.status,                # 'ordered' | 'received'
+        "shipping_status": o.shipping_status,  # 'planning' | 'complete' | None
+        "done": material_orders_service.order_done(o),
+        "ordered_by": o.ordered_by,
+        "ordered_at": _d(o.ordered_at),
+        "ready_at": _d(o.ready_at),
+        "received_at": _d(o.received_at),
+        "release": o.release,
+    }
+
+
+def _material_orders(job, release, releases):
+    """Material orders for the anchored job (narrowed to a release when given).
+
+    Returns (orders_list, rollup_by_release). The rollup mirrors the Job Log
+    Mat. Ord. column ('received' | 'pending' | 'overdue' | None) so BB chat and
+    the table describe an order the same way.
+    """
+    if job is None:
+        return [], {}
+    q = MaterialOrder.query.filter(MaterialOrder.job == job)
+    if release:
+        q = q.filter(MaterialOrder.release == str(release))
+    orders = q.order_by(MaterialOrder.id.desc()).limit(_MAX_MATERIAL_ORDERS).all()
+    if not orders:
+        return [], {}
+
+    releases_by_release = {r.release: r for r in releases}
+    grouped = {}
+    for o in orders:
+        grouped.setdefault(o.release, []).append(o)
+    rollup = {}
+    for rel, group in grouped.items():
+        overdue = material_orders_service.start_install_overdue(
+            releases_by_release.get(rel)
+        )
+        rollup[rel] = material_orders_service.rollup_status(group, overdue=overdue)
+    return [_material_order_view(o) for o in orders], rollup
 
 
 def _release_change(action: str, payload) -> str:
@@ -216,6 +269,7 @@ def assemble(anchor: dict) -> dict:
 
     timeline, omitted = _timeline(release_keys, submittal_ids)
     todos = _todos(release_ids, submittal_ids, job)
+    material_orders, material_status = _material_orders(job, anchor.get("release"), releases)
 
     return {
         "anchor": {"kind": anchor["kind"], "label": anchor.get("label"),
@@ -226,11 +280,17 @@ def assemble(anchor: dict) -> dict:
         "timeline": timeline,
         "timeline_omitted_older": omitted,
         "todos": todos,
+        # Material orders have no event table, so they're their own section (not
+        # folded into the timeline). material_order_status is the per-release
+        # rollup that mirrors the Job Log Mat. Ord. column.
+        "material_orders": material_orders,
+        "material_order_status": material_status,
         "counts": {
             "releases": len(releases),
             "submittals": len(submittals),
             "events": len(timeline) + omitted,
             "todos": len(todos),
+            "material_orders": len(material_orders),
         },
         "found": bool(releases or submittals),
     }

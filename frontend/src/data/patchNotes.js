@@ -17,6 +17,104 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.291',
+    date: 'July 18, 2026',
+    summary:
+      'BB drawing review on a submittal is now reliable on large sets, and the Materials Ordered list scrolls when it gets long.',
+    changes: [
+      {
+        type: 'fixed',
+        title: 'BB submittal review no longer times out',
+        adminOnly: true,
+        detail:
+          'Reviewing a For-Construction drawing on a submittal now runs in the background instead of blocking the request. The Claude call takes minutes, which was tripping the server\'s request timeout and killing the worker mid-review; the review now moves from pending to complete (or error) on its own and the panel polls for the result, so large or slow reviews finish cleanly and surface a real error message if the call fails.',
+      },
+      {
+        type: 'improved',
+        title: 'Materials Ordered list scrolls when long',
+        detail:
+          'On a release with a lot of ordered material, the Materials Ordered section in Job Details now scrolls within its own area instead of overflowing the modal.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.289',
+    date: 'July 13, 2026',
+    summary:
+      'A system-usage dashboard with real AI cost and reliability tracking, and BB drawing review moved onto the submittal itself — pulling For-Construction sets straight from Procore.',
+    changes: [
+      {
+        type: 'new',
+        title: 'System-usage & AI dashboard',
+        adminOnly: true,
+        detail:
+          'A new Metrics page shows how the app is actually being used — engagement and adoption, content and activity, release throughput, and system health — over a Day / Week / Month window. Every AI call across the Brain (BB chat, drawing review, supplier-order capture, meeting notes) is now metered, so the dashboard reports real AI spend, reliability, and quality instead of guesswork.',
+      },
+      {
+        type: 'improved',
+        title: 'BB drawing review on the submittal, straight from Procore',
+        adminOnly: true,
+        detail:
+          'Banana Boy\'s code-compliance review now lives on the submittal itself: open a submittal and pull its For-Construction drawings directly from Procore, then review each document in place. Every document runs its own review with a verdict tally and an in-line findings list, you can choose a deep (Opus) or lighter, faster (Sonnet) pass, and re-run any document as the set changes.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.288',
+    date: 'July 12, 2026',
+    summary:
+      'A redesigned Timeline that reads like the board on its side, incoming material orders you can now open right from it, and a new tool for matching submittals to their releases.',
+    changes: [
+      {
+        type: 'improved',
+        title: 'Redesigned Timeline, and a much better tablet view',
+        detail:
+          'The Timeline is now a day/week bucket board — the Trello board turned on its side — with a Shipping Planning and a Shipping Completed lane on top of the installer-team lanes. Zoom scales the columns from single days out to whole weeks, cards sit on their exact Start-install date, and the whole view was reworked to look and behave far better on an iPad in landscape.',
+      },
+      {
+        type: 'new',
+        title: 'Incoming material orders on the Timeline',
+        detail:
+          'PU / pickup, stock, and galvanizing "ready to ship" orders now appear as chips on the Timeline\'s Shipping Planning lane, positioned by their ready or ordered date so you can see what still has to come in. The chips are now larger and clickable — click one to open that release\'s job details scrolled straight to its Materials Ordered list.',
+      },
+      {
+        type: 'new',
+        title: 'Match submittals to releases',
+        adminOnly: true,
+        detail:
+          'A new admin tool suggests which release each drafting submittal belongs to, scoring every suggestion as Confident, Pick-one, or Weak. You confirm, pick between candidates, or mark no match — tightening the submittal-to-release link that the rest of the Brain relies on.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.284',
+    date: 'July 9, 2026',
+    summary:
+      'BB can now review a drawing set for code compliance, supplier galvanizing and stock status shows up on job details, and verbal releases are easier and safer to enter.',
+    changes: [
+      {
+        type: 'new',
+        title: 'BB code-compliance review for drawings',
+        adminOnly: true,
+        detail:
+          'Banana Boy can now review a release\'s full For-Construction drawing set against a library of fabrication and structural code rules, flagging issues by severity with the sheet citations it used to reach each finding. PMs can accept or deny each flag to help BB improve.',
+      },
+      {
+        type: 'new',
+        title: 'Galvanizing & stock order status tracking',
+        adminOnly: true,
+        detail:
+          'Supplier-order capture now also picks up galvanizing "ready to ship" and stock "ready for pickup" notifications forwarded to the mailbox, showing them on the job details panel with their own Planning → Complete status alongside itemized material orders.',
+      },
+      {
+        type: 'improved',
+        title: 'Paste-in verbal releases, plus duplicate protection',
+        detail:
+          'The Verbal Release modal now has a Paste mode — paste one row from a spreadsheet and it fills the form for you. Both verbal and bulk release entry also now catch likely duplicates (same job, name, and description under a different release number) and ask you to confirm before creating them.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.281',
     date: 'July 5, 2026',
     summary:

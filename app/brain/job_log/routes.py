@@ -26,10 +26,10 @@ from app.trello.api import get_list_by_name, update_trello_card
 from app.services.outbox_service import OutboxService
 from app.services.job_event_service import JobEventService
 from app.logging_config import get_logger
-from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, Submittals, User, PendingStartInstall
+from app.models import Releases, db, ReleaseEvents, ReleaseDrawingVersion, ReleasePhoto, Submittals, User, PendingStartInstall
 from app.auth.utils import login_required, get_current_user, admin_required
 from app.route_utils import handle_errors, require_json, get_or_404
-from app.api.helpers import DEFAULT_FAB_ORDER
+from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
@@ -310,6 +310,35 @@ def _validate_row(row_values, row_idx, row):
     
     return True, None
 
+def _find_near_duplicate(job_number, release_number, row_values):
+    """Find an existing active release for the same job that looks like the
+    same content under a different release number (e.g. a verbal release
+    entered now, then the real paperwork pasted in later with its own #).
+
+    Matches only when both job_name and description are non-empty and equal
+    after normalization -- avoids flagging two rows that both simply have
+    blank descriptions. Returns the matched Releases row, or None.
+    """
+    job_name = str(row_values.get('job_name') or '').strip().casefold()
+    description = str(row_values.get('description') or '').strip().casefold()
+    if not job_name or not description:
+        return None
+
+    candidates = Releases.query.filter(
+        active_releases_filter(),
+        Releases.job == job_number,
+        Releases.release != release_number,
+    ).all()
+
+    for candidate in candidates:
+        candidate_job_name = str(candidate.job_name or '').strip().casefold()
+        candidate_description = str(candidate.description or '').strip().casefold()
+        if candidate_job_name == job_name and candidate_description == description:
+            return candidate
+
+    return None
+
+
 def _create_payload_hash(action, job_number, release_number, excel_data_dict):
     """Create a hash for the payload."""
     payload = {"data": excel_data_dict}
@@ -332,6 +361,35 @@ def _release_ids_with_drawings(release_ids):
         .all()
     )
     return {row[0] for row in rows}
+
+
+def _release_cover_photos(release_ids):
+    """One-shot batched lookup of each release's cover photo (its newest non-deleted photo)
+    and total photo count. Returns {release_id: {'cover_photo_id': int, 'photo_count': int}}.
+    Used by the timeline day-bucket cards to show a manifest/cover thumbnail."""
+    if not release_ids:
+        return {}
+    rows = (
+        db.session.query(ReleasePhoto.release_id, ReleasePhoto.id, ReleasePhoto.uploaded_at)
+        .filter(
+            ReleasePhoto.release_id.in_(release_ids),
+            ReleasePhoto.is_deleted.is_(False),
+        )
+        .all()
+    )
+    out = {}
+    for rid, pid, uploaded_at in rows:
+        entry = out.get(rid)
+        if entry is None:
+            out[rid] = {'cover_photo_id': pid, 'photo_count': 1, '_ts': uploaded_at}
+        else:
+            entry['photo_count'] += 1
+            if uploaded_at is not None and (entry['_ts'] is None or uploaded_at > entry['_ts']):
+                entry['cover_photo_id'] = pid
+                entry['_ts'] = uploaded_at
+    for entry in out.values():
+        entry.pop('_ts', None)
+    return out
 
 
 _VIEWER_PROJECT_ID_RE = re.compile(r"/projects/(\d+)")
@@ -544,6 +602,8 @@ def get_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'has_drawing': False,  # patched in batch below
+                    'cover_photo_id': None,  # patched in batch below
+                    'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -574,6 +634,20 @@ def get_jobs():
                 "has_drawing_batch_failed",
                 error=str(drawing_lookup_error),
                 error_type=type(drawing_lookup_error).__name__,
+                exc_info=True,
+            )
+
+        # Patch cover_photo_id + photo_count in one batched query (avoids N+1). Powers the
+        # timeline day-bucket card thumbnails (manifest/cover sheet at close zoom).
+        try:
+            covers = _release_cover_photos([j['id'] for j in job_list])
+            for j in job_list:
+                cover = covers.get(j['id'])
+                j['cover_photo_id'] = cover['cover_photo_id'] if cover else None
+                j['photo_count'] = cover['photo_count'] if cover else 0
+        except Exception as cover_lookup_error:
+            logger.warning(
+                f"Error batching cover photos: {cover_lookup_error}",
                 exc_info=True,
             )
 
@@ -908,6 +982,8 @@ def get_all_jobs():
                     'source_of_update': serialize_value(job.source_of_update),
                     'viewer_url': serialize_value(job.viewer_url),
                     'has_drawing': False,  # patched in batch below
+                    'cover_photo_id': None,  # patched in batch below
+                    'photo_count': 0,        # patched in batch below
                     'trello_card_id': serialize_value(job.trello_card_id),
                     'is_active': serialize_value(job.is_active),
                     'is_archived': serialize_value(job.is_archived),
@@ -938,6 +1014,20 @@ def get_all_jobs():
                 "has_drawing_batch_failed",
                 error=str(drawing_lookup_error),
                 error_type=type(drawing_lookup_error).__name__,
+                exc_info=True,
+            )
+
+        # Patch cover_photo_id + photo_count in one batched query (avoids N+1). Powers the
+        # timeline day-bucket card thumbnails (manifest/cover sheet at close zoom).
+        try:
+            covers = _release_cover_photos([j['id'] for j in job_list])
+            for j in job_list:
+                cover = covers.get(j['id'])
+                j['cover_photo_id'] = cover['cover_photo_id'] if cover else None
+                j['photo_count'] = cover['photo_count'] if cover else 0
+        except Exception as cover_lookup_error:
+            logger.warning(
+                f"Error batching cover photos: {cover_lookup_error}",
                 exc_info=True,
             )
 
@@ -1918,6 +2008,8 @@ def release_job_data():
         if not csv_data or not csv_data.strip():
             return jsonify({'error': 'csv_data cannot be empty'}), 400
 
+        confirm_duplicates = bool(data.get('confirm_duplicates'))
+
         # Detect delimiter and parse CSV data
         delimiter = _detect_delimiter(csv_data)
         csv_reader = csv.reader(io.StringIO(csv_data), delimiter=delimiter)
@@ -1938,6 +2030,7 @@ def release_job_data():
         processed = []
         errors = []
         collisions = []
+        near_duplicates = []
         created_count = 0
 
         
@@ -1991,7 +2084,25 @@ def release_job_data():
                         'suggested_next': suggested
                     })
                     continue
-                
+
+                # Soft duplicate guard: same job with matching job name +
+                # description under a different release # usually means the
+                # same release was entered twice (e.g. a verbal release now,
+                # the real paperwork later) rather than two distinct releases.
+                # Unlike the hard collision above, this can be overridden.
+                if not confirm_duplicates:
+                    near_dup = _find_near_duplicate(job_number, release_number, row_values)
+                    if near_dup:
+                        near_duplicates.append({
+                            'row': row_idx,
+                            'job': job_number,
+                            'attempted_release': release_number,
+                            'matched_release': near_dup.release,
+                            'job_name': str(row_values['job_name']).strip(),
+                            'description': str(row_values['description']).strip(),
+                        })
+                        continue
+
                 # Prepare Excel format dictionary for Trello card creation
                 excel_data_dict = {
                     'Job #': job_number,
@@ -2142,9 +2253,11 @@ def release_job_data():
             'created_count': created_count,
             'error_count': len(errors),
             'collision_count': len(collisions),
+            'near_duplicate_count': len(near_duplicates),
             'processed': processed,
             'errors': errors if errors else None,
-            'collisions': collisions if collisions else None
+            'collisions': collisions if collisions else None,
+            'near_duplicates': near_duplicates if near_duplicates else None
         }), 200
         
     except Exception as e:

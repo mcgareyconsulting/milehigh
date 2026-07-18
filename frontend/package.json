@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:ipad": "VITE_PROXY_API=1 vite --host",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -22,7 +23,8 @@
     "pdfjs-dist": "^4.10.38",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.5"
+    "react-router-dom": "^7.9.5",
+    "recharts": "^3.9.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

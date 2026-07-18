@@ -1,6 +1,7 @@
 venv
 .venv
 .env
+.env.*
 instance/
 .vscode/
 
@@ -11,6 +12,11 @@ instance/
 coverage.xml
 htmlcov/
 test-results.xml
+
+#Codex
+.agents/
+.codex/
+AGENTS.md
 
 # Log files
 logs/

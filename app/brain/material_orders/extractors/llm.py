@@ -103,13 +103,27 @@ def _call_anthropic(record):
     body = resp.json()
     text = "".join(b.get("text", "") for b in body.get("content", []))
     m = re.search(r"\{.*\}", text, re.DOTALL)
-    return json.loads(m.group(0) if m else text)
+    return json.loads(m.group(0) if m else text), body
+
+
+def _usage_from_body(body):
+    """Token usage + model from the Messages API response, for the AI ledger."""
+    u = (body or {}).get("usage") or {}
+    return {
+        "model": (body or {}).get("model") or EXTRACT_MODEL,
+        "input_tokens": int(u.get("input_tokens") or 0),
+        "output_tokens": int(u.get("output_tokens") or 0),
+    }
 
 
 def extract(record):
-    """Return a normalized order dict, or None on no key / any failure / no lines."""
+    """Return a normalized order dict, or None on no key / any failure / no lines.
+
+    On the LLM path the returned dict carries an ``_ai_usage`` key (token counts +
+    model) so the caller can ledger the spend — previously this usage was dropped.
+    """
     try:
-        data = _call_anthropic(record)
+        data, body = _call_anthropic(record)
     except Exception as e:  # noqa: BLE001 — any failure → no LLM result, deterministic path stands
         logger.info("material_order_llm_fallback_skipped", error=str(e))
         return None
@@ -140,9 +154,13 @@ def extract(record):
 
     header = parser.extract_header(record.payload or {})
     event_type = data.get("event_type") if data.get("event_type") in ("placed", "confirmed") else "placed"
-    return base.order(
+    order = base.order(
         header,
         event_type=event_type,
         lines=lines,
         supplier_order_no=data.get("supplier_order_no") or None,
     )
+    if order is not None:
+        # Carry the spend to the caller so it lands in the AI ledger post-persist.
+        order["_ai_usage"] = _usage_from_body(body)
+    return order

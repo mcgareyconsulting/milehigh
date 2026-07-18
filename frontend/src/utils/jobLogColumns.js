@@ -69,7 +69,8 @@ export const reviewSort = (jobs) => {
     return sorted;
 };
 
-// Explicit table column order.
+// Explicit table column order. (Urgency / Banana Code was removed globally 2026-07-12;
+// print + CSV read this list, so it fell out of those too.)
 export const columnOrder = [
     'Job #',
     'Release #',
@@ -83,11 +84,11 @@ export const columnOrder = [
     'Released',
     'Fab Order',
     'Stage',
-    'Urgency',
     'Start install',
     'Comp. ETA',
     'Job Comp',
     'Invoiced',
+    'Mat. Ord.',
     'Notes',
 ];
 
@@ -98,24 +99,24 @@ export const columnOrder = [
  * detailed viewport-tuning notes that previously lived in JobLog.jsx.
  */
 export const COLUMN_WIDTH_PERCENT = {
-    'Job #': 3,
-    'Release #': 3,
-    'Job': 9,
+    'Job #': 2.5,
+    'Release #': 2.5,
+    'Job': 8,
     'Description': 8,
-    'Fab Hrs': 3,
-    'Install HRS': 3,
+    'Fab Hrs': 3.5,
+    'Install HRS': 3.5,
     'Paint color': 5,
-    'PM': 3,
+    'PM': 2.5,
     'BY': 3,
-    'Released': 4,
+    'Released': 5,
     'Fab Order': 4,
-    'Stage': 6,
-    'Urgency': 14,
-    'Start install': 4,
-    'Comp. ETA': 4,
-    'Job Comp': 4,
-    'Invoiced': 4,
-    'Notes': 9,
+    'Stage': 6.5,
+    'Start install': 5.5,
+    'Comp. ETA': 5,
+    'Job Comp': 4.5,
+    'Invoiced': 4.5,
+    'Mat. Ord.': 3,
+    'Notes': 15,
     'Actions': 5,
 };
 
@@ -124,7 +125,7 @@ export const COLUMN_WIDTH_PERCENT = {
 export const FILTERABLE_COLUMNS = new Set([
     'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS',
     'Paint color', 'PM', 'BY', 'Released', 'Fab Order', 'Stage',
-    'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced',
+    'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced', 'Mat. Ord.',
 ]);
 
 // Date-valued columns: their header dropdown sorts chronologically and shows

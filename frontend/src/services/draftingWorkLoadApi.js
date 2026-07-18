@@ -280,6 +280,148 @@ class DraftingWorkLoadApi {
     }
 
     /**
+     * Pull a submittal's drawing PDF from Procore and (optionally) run a BB compliance
+     * review on it. Track B v1 — keyed to the Procore submittal id.
+     * @param {string} submittalId - Procore submittal id
+     * @param {{ pullOnly?: boolean }} [opts] - pullOnly returns the pulled-file metadata
+     *   only (fast); otherwise the review runs inline and can take several minutes.
+     */
+    async runProcoreBBReview(submittalId, { pullOnly = false, reviewOnly = false, model = null } = {}) {
+        try {
+            const params = {};
+            if (pullOnly) params.pull_only = true;
+            if (reviewOnly) params.review_only = true;
+            if (model) params.model = model;
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/bb-review`,
+                null,
+                {
+                    params,
+                    timeout: 0, // review can take minutes; don't let axios abort it
+                }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'BB review failed');
+        }
+    }
+
+    /**
+     * Whether a drawing for this submittal has already been pulled/cached server-side
+     * (so the UI can offer a "Review downloaded" button that skips the Procore pull).
+     * @returns {Promise<{cached: boolean, size_bytes: number|null}>}
+     */
+    async getProcoreBBReviewStatus(submittalId) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/bb-review`
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch BB review status');
+        }
+    }
+
+    /**
+     * BB review workspace — per-document API (Track B v2).
+     * List the drawing documents attached to a Procore submittal, along with each
+     * document's download state and any completed BB review summary.
+     * @param {string} submittalId - Procore submittal id
+     * @returns {Promise<{submittal: object, documents: Array}>}
+     */
+    async fetchProcoreDocuments(submittalId) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents`
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load submittal documents');
+        }
+    }
+
+    /**
+     * Pull a single document's PDF from Procore into local storage (may take a few seconds).
+     * @param {string} submittalId - Procore submittal id
+     * @param {string|number} attachmentId - the document's attachment id
+     * @returns {Promise<{ok: boolean, downloaded: boolean, size_bytes: number, name: string, source: string}>}
+     */
+    async pullProcoreDocument(submittalId, attachmentId) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/pull`,
+                null,
+                { timeout: 0 } // the Procore download can take a few seconds
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to pull document from Procore');
+        }
+    }
+
+    /**
+     * Kick off (or re-run) a BB compliance review on a single already-downloaded document.
+     * Returns immediately (202) with a pending row; the review runs on a background thread
+     * server-side (the Claude call takes minutes) and the caller polls
+     * fetchProcoreDocumentReview until status is 'complete' or 'error'.
+     * @param {string} submittalId - Procore submittal id
+     * @param {string|number} attachmentId - the document's attachment id
+     * @param {{ model?: string, reviewOnly?: boolean }} [opts]
+     * @returns {Promise<{ok, review_id, status}>}
+     */
+    async runProcoreDocumentReview(submittalId, attachmentId, { model = null, reviewOnly = true } = {}) {
+        try {
+            const params = {};
+            if (model) params.model = model;
+            if (reviewOnly) params.review_only = true;
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/bb-review`,
+                null,
+                { params }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'BB review failed');
+        }
+    }
+
+    /**
+     * Fetch the stored BB review (findings + feedback) for a single document.
+     * @param {string} submittalId - Procore submittal id
+     * @param {string|number} attachmentId - the document's attachment id
+     * @returns {Promise<{review: null | object}>}
+     */
+    async fetchProcoreDocumentReview(submittalId, attachmentId) {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/bb-review`
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to load document review');
+        }
+    }
+
+    /**
+     * Record accept/reject feedback on a single finding within a document's BB review.
+     * @param {string} submittalId - Procore submittal id
+     * @param {string|number} attachmentId - the document's attachment id
+     * @param {string|number} reviewId - the review id
+     * @param {{ finding_index: number, decision: 'accepted'|'rejected', rule_id?: string, notes?: string, finding?: object }} payload
+     */
+    async saveProcoreDocumentReviewFeedback(submittalId, attachmentId, reviewId, payload) {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/brain/procore-submittals/${encodeURIComponent(submittalId)}/documents/${encodeURIComponent(attachmentId)}/bb-review/${encodeURIComponent(reviewId)}/feedback`,
+                payload
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to save review feedback');
+        }
+    }
+
+    /**
      * Handle API errors
      */
     _handleError(error, defaultMessage) {

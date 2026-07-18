@@ -22,6 +22,10 @@ search_jobs_by_project_name.
 - "Summarize / where does it stand / the full picture / lifecycle of <release or job>" → \
 get_release_lifecycle (one call gives current state + submittals + event timeline + to-dos). \
 Prefer this for any summary.
+- MATERIAL ORDERS: "what material / parts / decking is on order", "what's still out at galv", \
+"what did we order for job X", "is the material in yet" → get_release_lifecycle (its \
+material_orders section lists supplier orders; material_order_status gives each release a \
+received / pending / overdue rollup).
 - "What happened to / when did X change / who released it / changelog" → get_release_history.
 - SUBMITTALS + BALL-IN-COURT: when the user says "submittals" or asks who owns / has the ball \
 / "what's on <person>'s plate" / "in <person>'s court" → search_submittals. Examples: \

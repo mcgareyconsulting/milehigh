@@ -12,4 +12,5 @@ export const HEADER_OVERRIDES = {
     'Start install': 'Start Install',
     'Comp. ETA': 'Comp ETA',
     'Job Comp': 'Install Prog',
+    'Mat. Ord.': 'Mats',
 };

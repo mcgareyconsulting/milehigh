@@ -3,8 +3,9 @@
  * schema_version: 1
  * purpose: Reactive viewport breakpoint hook mirroring Tailwind's screens config (sm/md/lg/xl/2xl/3xl) for components that need to branch on width.
  * exports:
- *   useBreakpoint: Returns { width, isMobile, isTablet, isDesktop, is3xl }. Re-renders only when a
- *     breakpoint bucket changes, not on every resize pixel — keeps drag-resize smooth on heavy pages.
+ *   useBreakpoint: Returns { width, isMobile, isTablet, isBelowLg, isDesktop, is3xl }. Re-renders only
+ *     when a breakpoint bucket changes, not on every resize pixel — keeps drag-resize smooth on heavy
+ *     pages. isBelowLg (< 1024px) separates portrait tablets + phones from landscape tablets.
  *   useIsTabletOrSmaller: Boolean alias — true at iPad-sized screens and below (< xl, i.e. < 1280px).
  * imports_from: [react]
  * imported_by: [frontend/src/pages/JobLog.jsx, frontend/src/pages/Archive.jsx, frontend/src/pages/DraftingWorkLoad.jsx]
@@ -34,6 +35,7 @@ function snapshot(width) {
         width,
         isMobile: width < BREAKPOINTS.md,                            // < 768px (phone)
         isTablet: width >= BREAKPOINTS.md && width < BREAKPOINTS.xl, // 768–1279 (iPad-ish)
+        isBelowLg: width < BREAKPOINTS.lg,                           // < 1024 (phone + portrait tablet)
         isDesktop: width >= BREAKPOINTS.xl,                          // >= 1280
         is3xl: width >= BREAKPOINTS['3xl'],                          // >= 1920 (27"+ / TV)
     };
@@ -43,6 +45,7 @@ function sameBuckets(a, b) {
     return (
         a.isMobile === b.isMobile &&
         a.isTablet === b.isTablet &&
+        a.isBelowLg === b.isBelowLg &&
         a.isDesktop === b.isDesktop &&
         a.is3xl === b.is3xl
     );

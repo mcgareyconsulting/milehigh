@@ -133,6 +133,14 @@ class Submittals(db.Model):
     # Setting it also overwrites due_date with the drawings-due date (15 business days
     # before), so the due date doubles as the Design Drawings Due date.
     start_install = db.Column(db.Date, nullable=True)
+    # Admin-confirmed link from this (DRR) submittal to its job-log release, set via the
+    # Submittal Matching review tool (/brain/submittal-matching). linked_release_id is a
+    # loose reference to releases.id — deliberately NOT a FK constraint, because the link
+    # must survive the release being archived or soft-deleted (historical matching is the
+    # whole point). link_status: '' = unreviewed, 'linked' = confirmed by an admin,
+    # 'no_match' = reviewed and confirmed to have no job-log release.
+    linked_release_id = db.Column(db.Integer, nullable=True, index=True)
+    link_status = db.Column(db.String(16), nullable=False, default='', server_default='')
     was_multiple_assignees = db.Column(db.Boolean, default=False)  # Track if submittal was previously in multiple-assignee state
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -200,6 +208,8 @@ class Submittals(db.Model):
             "due_date": _dt(self.due_date),
             "gc_jobsite_schedule_date": _dt(self.gc_jobsite_schedule_date),
             "start_install": _dt(self.start_install),
+            "linked_release_id": self.linked_release_id,
+            "link_status": self.link_status or "",
             "was_multiple_assignees": self.was_multiple_assignees,
             "last_updated": _dt(self.last_updated),
             "created_at": _dt(self.created_at),
@@ -830,6 +840,7 @@ class Notification(db.Model):
     submittal_id = db.Column(db.String(255), db.ForeignKey('submittals.submittal_id', ondelete='CASCADE'), nullable=True, index=True)
     checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id', ondelete='CASCADE'), nullable=True, index=True)
     drawing_version_comment_id = db.Column(db.Integer, db.ForeignKey('drawing_version_comments.id', ondelete='CASCADE'), nullable=True, index=True)
+    bb_drawing_review_id = db.Column(db.Integer, db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'), nullable=True, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -839,11 +850,13 @@ class Notification(db.Model):
     submittal = db.relationship('Submittals', lazy='select')
     checklist_item = db.relationship('ChecklistItem', lazy='select')
     drawing_version_comment = db.relationship('DrawingVersionComment', lazy='select')
+    bb_drawing_review = db.relationship('BBDrawingReview', lazy='select')
 
     def to_dict(self):
         comment = self.drawing_version_comment
         version = comment.drawing_version if comment else None
         release = comment.release if comment else None
+        review = self.bb_drawing_review
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -854,14 +867,19 @@ class Notification(db.Model):
             'submittal_id': self.submittal_id,
             'checklist_item_id': self.checklist_item_id,
             'drawing_version_comment_id': self.drawing_version_comment_id,
+            'bb_drawing_review_id': self.bb_drawing_review_id,
             'is_read': self.is_read,
             'created_at': _dt(self.created_at),
             'board_item_title': self.board_item.title if self.board_item else None,
             'submittal_title': self.submittal.title if self.submittal else None,
             'submittal_project_name': self.submittal.project_name if self.submittal else None,
             'submittal_project_number': self.submittal.project_number if self.submittal else None,
-            'release_id': comment.release_id if comment else None,
-            'drawing_version_id': comment.drawing_version_id if comment else None,
+            # A bb_review notification deep-links to the release report; fall back to the
+            # comment's release when this is a drawing-comment mention.
+            'release_id': (comment.release_id if comment else None)
+                          or (review.release_id if review else None),
+            'drawing_version_id': (comment.drawing_version_id if comment else None)
+                          or (review.drawing_version_id if review else None),
             'drawing_version_number': version.version_number if version else None,
             'release_job_number': release.job if release else None,
             'release_number': release.release if release else None,
@@ -1203,6 +1221,48 @@ class LakeIngestState(db.Model):
         return row
 
 
+class GraphSubscription(db.Model):
+    """A live Microsoft Graph change-notification subscription (the push webhook).
+
+    One row per (source, resource) we watch — for BB mail, the bb@mhmw.com Inbox.
+    Graph subscriptions expire in ~70h, so this row tracks the Graph-assigned
+    `subscription_id`, when it `expires_at`, and the `client_state` secret echoed
+    back in every notification (verified in the handler). The ensure/renew job
+    reads this to decide create-vs-renew-vs-skip, mirroring the idempotent Procore
+    `ensure_webhooks` pattern. Correctness never depends on this table — the poll
+    is the durable floor; this is only the fast path's bookkeeping.
+    """
+    __tablename__ = "graph_subscriptions"
+    __table_args__ = (
+        db.UniqueConstraint("source", "resource", name="uq_graph_sub_source_resource"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(64), nullable=False)          # e.g. 'm365_mail'
+    resource = db.Column(db.String(512), nullable=False)       # Graph resource path watched
+    mailbox = db.Column(db.String(255), nullable=True)         # e.g. 'bb@mhmw.com'
+    subscription_id = db.Column(db.String(255), nullable=True, index=True)  # Graph-assigned id
+    client_state = db.Column(db.String(128), nullable=True)    # secret echoed in notifications
+    notification_url = db.Column(db.String(1024), nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)         # subscription expirationDateTime (UTC)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @classmethod
+    def get(cls, source, resource):
+        return cls.query.filter_by(source=source, resource=resource).first()
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "source": self.source,
+            "resource": self.resource,
+            "mailbox": self.mailbox,
+            "subscription_id": self.subscription_id,
+            "notification_url": self.notification_url,
+            "expires_at": _dt(self.expires_at),
+        }
+
+
 class MicrosoftDelegatedToken(db.Model):
     """Stored delegated OAuth token for a single mailbox identity (device-code flow).
 
@@ -1259,9 +1319,15 @@ class MaterialOrder(db.Model):
     # for outbound requests; set when a supplier confirm document carries one.
     supplier_order_no = db.Column(db.String(64), nullable=True)
     # Which artifact this row came from: 'placed' (we sent the order / drawing) vs
-    # 'confirmed' (supplier acknowledged it). Seeds the future request↔confirm
-    # lifecycle; status stays the ordered/received flag.
+    # 'confirmed' (supplier acknowledged it), or 'status' for a supplier status
+    # notification (galvanizing "Ready to Ship", stock "ready for pickup") that
+    # carries no itemized parts. status stays the ordered/received flag.
     event_type = db.Column(db.String(16), nullable=True)
+    # What kind of order this row represents, so the shipping-planning lane can
+    # source and style it: 'material' (itemized parts — the default/original shape),
+    # 'galvanizing' (AZZ galv-job status notification, one row upserted per AZZ Job #),
+    # or 'stock' (a DenCol stock pickup — a "PU"/pickup — not tied to any release).
+    order_kind = db.Column(db.String(16), nullable=True, default="material", server_default="material")
 
     # Orderer: the MHMW person who placed the order (the innermost forwarded
     # "From:" sender), NOT the forwarder. Parsed best-effort from the email body.
@@ -1282,7 +1348,15 @@ class MaterialOrder(db.Model):
     extended_price = db.Column(db.Float, nullable=True)
 
     status = db.Column(db.String(16), nullable=False, default="ordered", server_default="ordered")
+    # Shipping-planning lifecycle for the shipping lane: 'planning' (out at the
+    # supplier / ready to ship / ready for pickup — a thing to still bring in) vs
+    # 'complete' (received / picked up / shipped). Null for plain 'material' rows,
+    # whose lifecycle is the ordered/received `status` above.
+    shipping_status = db.Column(db.String(16), nullable=True)
     ordered_at = db.Column(db.Date, nullable=True)
+    # When the supplier said it was ready (galv "Ready to Ship" / stock "ready for
+    # pickup") — the shipping-lane milestone distinct from ordered_at/received_at.
+    ready_at = db.Column(db.Date, nullable=True)
     received_at = db.Column(db.Date, nullable=True)
 
     # Provenance: which raw lake record + which line of it this came from
@@ -1304,6 +1378,8 @@ class MaterialOrder(db.Model):
             "po_number": self.po_number,
             "supplier_order_no": self.supplier_order_no,
             "event_type": self.event_type,
+            "order_kind": self.order_kind,
+            "shipping_status": self.shipping_status,
             "ordered_by": self.ordered_by,
             "ordered_by_email": self.ordered_by_email,
             "description": self.description,
@@ -1316,7 +1392,9 @@ class MaterialOrder(db.Model):
             "unit_price": self.unit_price,
             "extended_price": self.extended_price,
             "status": self.status,
+            "shipping_status": self.shipping_status,
             "ordered_at": _dt(self.ordered_at),
+            "ready_at": _dt(self.ready_at),
             "received_at": _dt(self.received_at),
             "source": self.source,
             "source_record_id": self.source_record_id,
@@ -1800,6 +1878,131 @@ class SunbeltRental(db.Model):
         }
 
 
+class BBDrawingReview(db.Model):
+    """A Banana Boy code-compliance review of one PDF drawing version.
+
+    Kicked off from the PDF-mentions surface (admin-only). The review runs on a
+    background thread (app/brain/pdf_review/worker.py) because the Claude call
+    takes minutes; the row moves `pending` -> `complete` | `error` and stores the
+    strict-JSON findings plus token usage for cost tracking.
+    """
+    __tablename__ = 'bb_drawing_reviews'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # drawing_version_id/release_id are the release-keyed path (a review of a
+    # ReleaseDrawingVersion). They are nullable because a submittal-keyed review
+    # (pulled straight from Procore, no job-log release) omits them and instead sets
+    # submittal_id + attachment_id below.
+    drawing_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey('release_drawing_versions.id', ondelete='CASCADE'),
+        nullable=True, index=True,
+    )
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True, index=True)
+    # Submittal-keyed path: the Procore submittal id and the prostore attachment id of
+    # the reviewed drawing. Set together (release/version null) when the review is run
+    # directly off a Procore submittal drawing.
+    submittal_id = db.Column(db.String(64), nullable=True, index=True)
+    attachment_id = db.Column(db.BigInteger, nullable=True, index=True)
+    status = db.Column(db.String(16), nullable=False, default='pending')  # pending|complete|error
+    findings = db.Column(db.JSON, nullable=True)   # list of finding dicts when complete
+    model = db.Column(db.String(64), nullable=True)
+    input_tokens = db.Column(db.Integer, nullable=True)
+    output_tokens = db.Column(db.Integer, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    requested_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    drawing_version = db.relationship(
+        'ReleaseDrawingVersion',
+        backref=db.backref('bb_reviews', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+    requested_by = db.relationship('User', foreign_keys=[requested_by_user_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'drawing_version_id': self.drawing_version_id,
+            'release_id': self.release_id,
+            'submittal_id': self.submittal_id,
+            'attachment_id': self.attachment_id,
+            'status': self.status,
+            'findings': self.findings if self.findings is not None else [],
+            'model': self.model,
+            'input_tokens': self.input_tokens,
+            'output_tokens': self.output_tokens,
+            'error': self.error,
+            'requested_by_user_id': self.requested_by_user_id,
+            'created_at': _dt(self.created_at),
+            'completed_at': _dt(self.completed_at),
+        }
+
+
+class BBReviewFeedback(db.Model):
+    """A PM's accept/deny (+ optional notes) on ONE finding of a Banana Boy review.
+
+    The training loop: as a PM works a BB report they mark each suggestion accepted or
+    rejected and can leave a note ("BB is right, this rise is 8\"" / "false alarm, that
+    flight pours into a topping slab"). We just land these to the DB with enough context
+    (the finding snapshot + review/release/version + rule_id) to ingest later into the
+    rule library. One row per (review, finding); re-submitting a finding upserts it.
+
+    `finding_index` is the position of the finding in the ranked report list the PM sees
+    (app/brain/pdf_review/report.build_report -> findings[]); it's stable for a given
+    review because the report sort is deterministic. `finding_snapshot` freezes the whole
+    finding dict so the feedback stays meaningful even if the rule text later changes.
+    """
+    __tablename__ = 'bb_review_feedback'
+    __table_args__ = (
+        db.UniqueConstraint('review_id', 'finding_index', name='_bb_review_feedback_finding_uc'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    review_id = db.Column(
+        db.Integer,
+        db.ForeignKey('bb_drawing_reviews.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    # Release-keyed context (nullable so submittal-keyed feedback can leave them null).
+    release_id = db.Column(db.Integer, db.ForeignKey('releases.id'), nullable=True, index=True)
+    drawing_version_id = db.Column(db.Integer, nullable=True)
+    # Submittal-keyed context: mirrors BBDrawingReview's submittal_id/attachment_id so
+    # feedback on a submittal-keyed review carries the same anchor for the training loop.
+    submittal_id = db.Column(db.String(64), nullable=True, index=True)
+    attachment_id = db.Column(db.BigInteger, nullable=True, index=True)
+    finding_index = db.Column(db.Integer, nullable=False)
+    rule_id = db.Column(db.String(64), nullable=True)
+    decision = db.Column(db.String(16), nullable=False)  # accepted | rejected
+    notes = db.Column(db.Text, nullable=True)
+    finding_snapshot = db.Column(db.JSON, nullable=True)  # the finding dict at feedback time
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow,
+    )
+
+    review = db.relationship('BBDrawingReview', lazy='select')
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'review_id': self.review_id,
+            'release_id': self.release_id,
+            'drawing_version_id': self.drawing_version_id,
+            'submittal_id': self.submittal_id,
+            'attachment_id': self.attachment_id,
+            'finding_index': self.finding_index,
+            'rule_id': self.rule_id,
+            'decision': self.decision,
+            'notes': self.notes,
+            'user_id': self.user_id,
+            'created_at': _dt(self.created_at),
+            'updated_at': _dt(self.updated_at),
+        }
+
+
 class BBChatConversation(db.Model):
     """A single BB (Banana Boy) chat thread owned by one user.
 
@@ -1892,4 +2095,57 @@ class BBChatMessage(db.Model):
                 "duration_ms": self.duration_ms,
                 "tool_calls": self.tool_calls,
             } if self.role == "assistant" else None,
+        }
+
+
+class AiUsage(db.Model):
+    """Unified ledger of every LLM call, across all features — the single source of
+    truth for system-wide AI spend that app/brain/metrics reads.
+
+    Each AI call site (bb_chat, meetings, meeting_learning, pdf_review,
+    material_orders) appends ONE row here via app/services/ai_usage.record(),
+    alongside its own feature-specific writes. Costs are computed once, at write
+    time, from the shared pricing table. `entity_type`/`entity_id` are a loose
+    (non-FK) back-reference to the row the call produced, used to dedupe the
+    one-time backfill against live writes.
+    """
+    __tablename__ = "ai_usage"
+    __table_args__ = (
+        db.Index("ix_ai_usage_feature_created", "feature", "created_at"),
+        db.Index("ix_ai_usage_user_created", "user_id", "created_at"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    feature = db.Column(db.String(40), nullable=False)  # bb_chat|meetings|meeting_learning|pdf_review|material_orders|...
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    model = db.Column(db.String(64), nullable=True)
+    anthropic_request_id = db.Column(db.String(64), nullable=True, index=True)
+    input_tokens = db.Column(db.Integer, nullable=False, default=0)
+    output_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_read_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_write_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cost_usd = db.Column(db.Float, nullable=False, default=0.0)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    # Loose (non-FK) reference to the produced row, e.g. ('bb_chat_message', 42),
+    # ('meeting', 7), ('drawing_review', 3). Kept as a string so heterogeneous ids
+    # (job-release, uuid) fit; used only for backfill dedup and drill-down.
+    entity_type = db.Column(db.String(24), nullable=True)
+    entity_id = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "feature": self.feature,
+            "user_id": self.user_id,
+            "model": self.model,
+            "anthropic_request_id": self.anthropic_request_id,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cache_read_tokens": self.cache_read_tokens,
+            "cache_write_tokens": self.cache_write_tokens,
+            "cost_usd": self.cost_usd,
+            "duration_ms": self.duration_ms,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "created_at": _dt(self.created_at),
         }

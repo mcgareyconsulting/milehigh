@@ -25,12 +25,21 @@ def raw_text(attachment):
     return attachment.get("text") or ""
 
 
-def order(header, *, event_type, lines, supplier_order_no=None):
-    """Assemble a normalized order dict from a header + extracted lines."""
+def order(header, *, event_type, lines, supplier_order_no=None,
+          order_kind="material", shipping_status=None):
+    """Assemble a normalized order dict from a header + extracted lines.
+
+    order_kind/shipping_status are order-level and stamped onto every line row by
+    the service: 'material' rows leave shipping_status null (their lifecycle is the
+    ordered/received status), while 'galvanizing'/'stock' status notifications carry
+    a planning→complete shipping_status for the shipping-planning lane.
+    """
     header.pop("_haystack", None)
     return {
         **header,
         "event_type": event_type,
         "supplier_order_no": supplier_order_no,
+        "order_kind": order_kind,
+        "shipping_status": shipping_status,
         "lines": lines,
     }
