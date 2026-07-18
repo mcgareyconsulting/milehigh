@@ -25,6 +25,70 @@ def start_review(app, review_id: int) -> None:
     _REVIEW_POOL.submit(_run_review_job, app, review_id)
 
 
+def start_submittal_review(app, review_id: int, *, procore_submittal_id: str,
+                           attachment_id, job_release: str, model=None) -> None:
+    """Queue a background BB review for a submittal-keyed (Procore drawing) review row.
+
+    The drawing bytes must already be in the per-attachment pull cache (the endpoint
+    pulls-if-needed before enqueuing). Mirrors start_review but for the submittal path,
+    which has no release/PM so it skips the PM notification.
+    """
+    _REVIEW_POOL.submit(_run_submittal_review_job, app, review_id,
+                        procore_submittal_id, attachment_id, job_release, model)
+
+
+def _run_submittal_review_job(app, review_id, procore_submittal_id, attachment_id,
+                              job_release, model) -> None:
+    with app.app_context():
+        try:
+            review = db.session.get(BBDrawingReview, review_id)
+            if not review:
+                logger.error("bb_review_row_missing", review_id=review_id)
+                return
+
+            from app.brain.pdf_review import cache as procore_pdf_cache
+            pdf_bytes = procore_pdf_cache.read(procore_submittal_id, attachment_id)
+            if not pdf_bytes:
+                _fail(review, "drawing missing from cache — pull it again")
+                return
+
+            result = service.review(pdf_bytes, job_release, model=model)
+            if result is None:
+                _fail(review, "review call failed (no API key or request error) — see logs")
+                return
+
+            review.status = "complete"
+            review.findings = result["findings"]
+            review.model = result.get("model")
+            review.input_tokens = result.get("input_tokens")
+            review.output_tokens = result.get("output_tokens")
+            review.completed_at = datetime.utcnow()
+            db.session.commit()
+            logger.info("bb_submittal_document_reviewed", review_id=review_id,
+                        submittal_id=procore_submittal_id, attachment_id=attachment_id,
+                        findings=len(result["findings"]), model=result.get("model"))
+
+            # Ledger the review spend (own transaction, post-commit). No PM notification:
+            # the submittal path is release-less, so there's no owner to notify.
+            from app.services import ai_usage
+            ai_usage.record(
+                "pdf_review",
+                model=result.get("model"),
+                input_tokens=result.get("input_tokens") or 0,
+                output_tokens=result.get("output_tokens") or 0,
+                user_id=review.requested_by_user_id,
+                entity_type="drawing_review",
+                entity_id=review.id,
+            )
+        except Exception as e:  # noqa: BLE001 — record + log, never crash the worker
+            logger.error("bb_submittal_review_job_failed", review_id=review_id,
+                         error=str(e), exc_info=True)
+            db.session.rollback()
+            _safe_fail(review_id, str(e))
+        finally:
+            db.session.remove()
+
+
 def _job_release(release: Releases) -> str:
     if not release:
         return "unknown"
