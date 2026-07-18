@@ -16,6 +16,13 @@ Usage:
     python -m app.lake.scripts.create_subscription --mailbox bb@mhmw.com
 """
 import argparse
+import os
+
+# This one-off may run in a prod shell where IS_RENDER_SCHEDULER is set; never let
+# create_app() boot a second background scheduler against prod (mirrors
+# app/procore/scripts/reconcile_bic.py).
+os.environ.pop("IS_RENDER_SCHEDULER", None)
+os.environ.pop("WERKZEUG_RUN_MAIN", None)
 
 from app import create_app
 from app.lake.ingest import graph_subscription
