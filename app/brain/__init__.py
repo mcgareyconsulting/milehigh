@@ -40,6 +40,7 @@ from app.brain.bb_chat import routes as bb_chat_routes  # noqa: F401  (registers
 from app.brain import notification_routes
 from app.brain import todos_routes  # noqa: F401  (registers /todos endpoints)
 from app.brain.material_orders import routes as material_orders_routes  # noqa: F401  (registers /material-orders endpoints)
+from app.brain.projects import routes as projects_routes  # noqa: F401  (registers /projects read endpoints)
 from app.brain.submittal_matching import routes as submittal_matching_routes  # noqa: F401  (registers /submittal-matching endpoints)
 from app.brain.metrics import routes as metrics_routes  # noqa: F401  (registers /metrics endpoints)
 from app.brain.install_schedule import routes as install_schedule_routes  # noqa: F401  (registers /install-schedule endpoints)

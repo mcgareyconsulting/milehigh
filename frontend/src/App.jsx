@@ -21,6 +21,8 @@ import DraftingWorkLoadAdmin from './pages/DraftingWorkLoadAdmin';
 import Events from './pages/Events';
 import ReleasesLayout from './pages/ReleasesLayout';
 import JobLogContent from './pages/JobLogContent';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 import Archive from './pages/Archive';
 import PMBoardContent from './pages/PMBoardContent';
 import Login from './pages/Login';
@@ -74,6 +76,8 @@ function AppContent() {
                 <Route path="job-log" element={<JobLogContent />} />
                 <Route path="pm-board" element={<PMBoardContent />} />
               </Route>
+              <Route path="projects" element={<Projects />} />
+              <Route path="projects/:id" element={<ProjectDetail />} />
               <Route path="archive" element={<Archive />} />
               <Route path="events" element={<Events />} />
               <Route path="drafting-work-load" element={<DraftingWorkLoad />} />

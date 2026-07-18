@@ -14,6 +14,7 @@ import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
+    { label: 'Projects', path: '/projects' },
     { label: 'Map', path: '/jobsite-map' },
     { label: 'Job Log', path: '/job-log' },
     { label: 'Drafting WL', path: '/drafting-work-load' },

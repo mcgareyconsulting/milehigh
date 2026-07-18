@@ -132,6 +132,7 @@ function AppShellInner({ isAuthenticated }) {
 
           {/* Inline nav buttons — 2xl+ only */}
           <div className="hidden min-[1440px]:flex items-center gap-2">
+            {navBtn('/projects', 'Projects')}
             {navBtn('/job-log', 'Job Log')}
             {navBtn('/drafting-work-load', 'Drafting WL')}
             {navBtn('/events', 'Events')}
