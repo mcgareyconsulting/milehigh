@@ -16,8 +16,9 @@
  * imports_from: [react, ../services/jobsApi, ../context/ReleasesContext, ../constants/installerPalette, ../utils/formatters, ./ReleaseDetailModal, ./JobDetailsModal]
  * imported_by: [frontend/src/pages/PMBoardContent.jsx]
  * invariants:
- *   - READ-ONLY: clicking a card opens a read-only detail modal (ReleaseDetailModal); clicking a
- *     material-order chip on the Shipping Planning lane opens JobDetailsModal scrolled to that
+ *   - READ-ONLY: clicking a card opens a read-only detail modal — admins get ReleaseCockpitModal
+ *     (a what-if schedule sandbox that still never writes), everyone else ReleaseDetailModal; clicking
+ *     a material-order chip on the Shipping Planning lane opens JobDetailsModal scrolled to that
  *     release's Materials Ordered section. The timeline never writes. (The Phase-5 drag interactions —
  *     installer-day reschedule and shipping-lane stage change — were REMOVED 2026-07-12 for the
  *     prod-stability release: native HTML5 drag was dead on iPad anyway. Edits happen in the Job Log.)
@@ -55,7 +56,9 @@ import { INSTALLER_PALETTE } from '../constants/installerPalette';
 import { localTodayStr as todayIso, subtractBusinessDays } from '../utils/formatters';
 import { API_BASE_URL } from '../utils/api';
 import ReleaseDetailModal from './ReleaseDetailModal';
+import ReleaseCockpitModal from './ReleaseCockpitModal';
 import { JobDetailsModal } from './JobDetailsModal';
+import { checkAuth } from '../utils/auth';
 
 const addDays = (isoDate, days) => {
     const d = new Date(isoDate + 'T00:00:00');
@@ -275,6 +278,7 @@ function GanttChart({ filterComplete = false }) {
     const [hoveredItem, setHoveredItem] = useState(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const [selectedRelease, setSelectedRelease] = useState(null);   // full job row for the detail modal
+    const [isAdmin, setIsAdmin] = useState(false);                  // admins get the schedule cockpit; others the read-only detail modal
     const [orderJob, setOrderJob] = useState(null);                 // {job, release} for a clicked material-order chip
     const [selectedColor, setSelectedColor] = useState(null);       // lane color of the clicked card → modal accent
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
@@ -308,6 +312,14 @@ function GanttChart({ filterComplete = false }) {
         backgroundSize: `${colPx}px 100%`,
         backgroundRepeat: 'repeat'
     };
+
+    // Who's viewing → which detail modal a clicked card opens. Admins get the read-only schedule
+    // cockpit (crew/date what-if); everyone else keeps the existing ReleaseDetailModal. One fetch.
+    useEffect(() => {
+        let cancelled = false;
+        checkAuth().then((u) => { if (!cancelled) setIsAdmin(!!u?.is_admin); }).catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
 
     // Installer team roster → lane order. Read-only config; one fetch.
     useEffect(() => {
@@ -447,7 +459,12 @@ function GanttChart({ filterComplete = false }) {
         const firstDay = chartRange.firstDay;
         const cardWidth = Math.max(colPx - CARD_GUTTER * 2, 8);
         const pxOfDate = (iso) => (daysBetween(firstDay, iso) / colDays) * colPx;
-        const barH = Math.max(22, Math.min(minCardH, 34));
+        // At readable zooms (med and closer) a range bar is tall enough for a second line
+        // (the release description); far zooms stay a single slim line.
+        const barTwoLine = detail === 'med' || detail === 'high' || detail === 'full';
+        const barH = barTwoLine
+            ? Math.max(34, Math.min(minCardH, 46))
+            : Math.max(22, Math.min(minCardH, 28));
 
         return lanesMeta.map(({ lane, color, isShip }) => {
             const laneReleases = releases.filter((r) => r.lane === lane);
@@ -473,7 +490,7 @@ function GanttChart({ filterComplete = false }) {
                     });
                 });
 
-                return { lane, color, isShip, cells, bars: null, barH, contentH: null, count: laneReleases.length };
+                return { lane, color, isShip, cells, bars: null, barH, twoLine: barTwoLine, contentH: null, count: laneReleases.length };
             }
 
             // Installer lane: one range bar per release, packed into non-overlapping rows.
@@ -503,9 +520,9 @@ function GanttChart({ filterComplete = false }) {
                 fallbackLaneH,
             );
 
-            return { lane, color, isShip, cells: null, bars, barH, contentH, count: laneReleases.length };
+            return { lane, color, isShip, cells: null, bars, barH, twoLine: barTwoLine, contentH, count: laneReleases.length };
         });
-    }, [lanesMeta, releases, colPx, colDays, cap, chartRange.firstDay, minCardH, fallbackLaneH]);
+    }, [lanesMeta, releases, colPx, colDays, cap, chartRange.firstDay, minCardH, detail, fallbackLaneH]);
 
     // Set each lane's height. Installer lanes carry a precomputed `contentH` (row-packed bars).
     // Shipping lanes are measured: their tallest cell of natural-height point cards fixes the height.
@@ -895,10 +912,15 @@ function GanttChart({ filterComplete = false }) {
                                                     })}
                                                     onMouseLeave={handleMouseLeave}
                                                 >
-                                                    <span className="block text-white text-[11px] font-semibold leading-none truncate">
-                                                        <span className="font-bold">{release.job}-{release.release}</span>
-                                                        {release.jobName ? ` · ${release.jobName}` : ''}
-                                                    </span>
+                                                    <div className="min-w-0 w-full text-center leading-tight">
+                                                        <span className="block text-white text-[11px] font-semibold truncate">
+                                                            <span className="font-bold">{release.job}-{release.release}</span>
+                                                            {release.jobName ? ` · ${release.jobName}` : ''}
+                                                        </span>
+                                                        {band.twoLine && release.description && (
+                                                            <span className="block text-white/90 text-[10px] truncate">{release.description}</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -989,12 +1011,21 @@ function GanttChart({ filterComplete = false }) {
                     </div>
                 </div>
             )}
-            <ReleaseDetailModal
-                isOpen={!!selectedRelease}
-                release={selectedRelease}
-                accentColor={selectedColor}
-                onClose={() => setSelectedRelease(null)}
-            />
+            {isAdmin ? (
+                <ReleaseCockpitModal
+                    isOpen={!!selectedRelease}
+                    release={selectedRelease}
+                    accentColor={selectedColor}
+                    onClose={() => setSelectedRelease(null)}
+                />
+            ) : (
+                <ReleaseDetailModal
+                    isOpen={!!selectedRelease}
+                    release={selectedRelease}
+                    accentColor={selectedColor}
+                    onClose={() => setSelectedRelease(null)}
+                />
+            )}
             <JobDetailsModal
                 isOpen={!!orderJob}
                 job={orderJob}
