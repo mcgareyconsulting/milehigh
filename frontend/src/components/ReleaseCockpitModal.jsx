@@ -99,7 +99,10 @@ function DateFlow({ ship, start, comp, days, startAccent = false, compAccent = f
     );
 }
 
-export function ReleaseCockpitModal({ isOpen, onClose, release, accentColor }) {
+// showInstallWindow gates the drag-to-simulate install-window cockpit. It only makes
+// sense for installer/mirror cards (Timeline installer lanes); shipping planning/completed
+// cards pass false so the cockpit is hidden and the modal shows facts/enrichment only.
+export function ReleaseCockpitModal({ isOpen, onClose, release, accentColor, showInstallWindow = true }) {
     const releaseId = release?.id;
     const accent = accentColor || '#6d4aff';
 
@@ -349,7 +352,8 @@ export function ReleaseCockpitModal({ isOpen, onClose, release, accentColor }) {
                 {/* ---- scrollable body ---- */}
                 <div className="p-5 space-y-5 overflow-y-auto">
 
-                    {/* cockpit */}
+                    {/* cockpit — install-window simulation; installer/mirror cards only */}
+                    {showInstallWindow && (
                     <section className="rounded-2xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/40 p-4">
                         <div className="flex items-center gap-2 mb-2.5">
                             <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-gray-400 dark:text-slate-500">Install window · {installer || 'unassigned'}</span>
@@ -447,6 +451,7 @@ export function ReleaseCockpitModal({ isOpen, onClose, release, accentColor }) {
                             </div>
                         )}
                     </section>
+                    )}
 
                     {/* facts */}
                     <section>
