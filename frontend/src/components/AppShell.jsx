@@ -76,6 +76,21 @@ function AppShellInner({ isAuthenticated }) {
     </button>
   );
 
+  const navIconBtn = (path, label, icon) => (
+    <button
+      type="button"
+      onClick={() => navigate(path)}
+      className={`p-2 rounded-lg transition-colors ${isActive(path)
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+        }`}
+      aria-label={label}
+      title={label}
+    >
+      {icon}
+    </button>
+  );
+
   return (
     <div className="flex flex-col w-full min-h-screen bg-[#f8fafc] dark:bg-slate-900">
       {/* Top bar */}
@@ -110,36 +125,50 @@ function AppShellInner({ isAuthenticated }) {
               type="button"
               onClick={handleLocationToggle}
               disabled={locationRequesting}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg shadow-sm transition-all ${
+              className={`inline-flex items-center justify-center p-2 rounded-lg shadow-sm transition-all ${
                 locationEnabled
                   ? 'bg-green-500 text-white hover:bg-green-600'
                   : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700'
               } ${locationRequesting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+              aria-label={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
               title={locationEnabled ? 'Turn off location filter' : 'Filter by your current location'}
             >
               {locationRequesting ? (
-                <>
-                  <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  Location…
-                </>
-              ) : locationEnabled ? (
-                <>📍 Location on</>
+                <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
               ) : (
-                <>📍 Location</>
+                <span aria-hidden>📍</span>
               )}
             </button>
           </div>
 
           {/* Inline nav buttons — 2xl+ only */}
           <div className="hidden min-[1440px]:flex items-center gap-2">
+            {navBtn('/projects', 'Projects')}
             {navBtn('/job-log', 'Job Log')}
             {navBtn('/drafting-work-load', 'Drafting WL')}
             {navBtn('/events', 'Events')}
             {navBtn('/todos', 'To-Dos')}
+            {navBtn('/install-schedule', 'Install Schedule')}
             {canSeeReport && navBtn('/invoicing-report', 'Invoicing')}
             {/* Rentals nav removed 2026-07-12 (company change) — /rental-reports route + backend stay for direct URL / re-enable */}
             {isAdmin && navBtn('/meetings', 'Meetings')}
-            {isAdmin && navBtn('/board', 'Bug Tracker')}
+            {isAdmin && navIconBtn('/board', 'Bug Tracker', (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                {/* Antennae */}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 4Q7 1 5 2M15 4Q17 1 19 2" />
+                {/* Body */}
+                <path strokeLinejoin="round" strokeWidth={1.5} d="M12 4c-3.5 0-6 2.3-6 5.8v4.4c0 3.9 2.5 6.8 6 6.8s6-2.9 6-6.8V9.8C18 6.3 15.5 4 12 4Z" />
+                {/* Wing seam */}
+                <path strokeLinecap="round" strokeWidth={1.5} d="M12 4v17" />
+                {/* Legs, drawn with circuit-trace elbows */}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9.5H3V7M6 13.5H2M6.5 17.5l-2.2 1.3-.3 2M18 9.5h3V7M18 13.5h4M17.5 17.5l2.2 1.3.3 2" />
+                {/* Circuit nodes inside the body */}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 11h2.5M9 11v3M9 14h1.8M9.3 14.3 10 17h1.7" />
+                <circle cx="9" cy="11" r="0.9" fill="currentColor" stroke="none" />
+                <circle cx="9" cy="14" r="0.9" fill="currentColor" stroke="none" />
+                <circle cx="10" cy="17" r="0.9" fill="currentColor" stroke="none" />
+              </svg>
+            ))}
             {isAdmin && navBtn('/admin/submittal-matching', 'Matching')}
           </div>
 

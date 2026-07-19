@@ -134,3 +134,56 @@ def graph_get_binary(path, params=None, timeout=DEFAULT_TIMEOUT, token_getter=No
         resp.raise_for_status()
         return resp.content
     raise last_exc if last_exc else RuntimeError("graph_get_binary exhausted retries")
+
+
+def _graph_write(method, path, json_body=None, timeout=DEFAULT_TIMEOUT, token_getter=None):
+    """Send a mutating Graph request (POST/PATCH/DELETE) and return parsed JSON or None.
+
+    Same transient-retry + 401-refresh behavior as graph_get, for the subscription
+    lifecycle (create/renew/delete). Returns the parsed JSON body when the response
+    carries one (POST create → the subscription, PATCH renew → the updated sub) and
+    None for empty bodies (DELETE → 204 No Content). `path` is relative to GRAPH_BASE
+    or an absolute Graph URL.
+    """
+    token_getter = token_getter or get_app_token
+    url = path if path.startswith("http") else f"{GRAPH_BASE}{path}"
+    force_refresh = False
+    last_exc = None
+    for attempt in range(MAX_RETRIES):
+        token = token_getter(force_refresh=force_refresh)
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        if json_body is not None:
+            headers["Content-Type"] = "application/json"
+        try:
+            resp = requests.request(
+                method, url, headers=headers, json=json_body, timeout=timeout
+            )
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exc = exc
+            logger.warning("graph_write_transient", method=method, url=url, attempt=attempt, error=str(exc))
+            continue
+        if resp.status_code == 401:
+            logger.warning("graph_write_401", method=method, url=url, attempt=attempt)
+            last_exc = requests.HTTPError("401 Unauthorized", response=resp)
+            force_refresh = True
+            continue
+        resp.raise_for_status()
+        if resp.status_code == 204 or not resp.content:
+            return None
+        return resp.json()
+    raise last_exc if last_exc else RuntimeError("graph_write exhausted retries")
+
+
+def graph_post(path, json_body, timeout=DEFAULT_TIMEOUT, token_getter=None):
+    """POST a Graph resource (e.g. create a change-notification subscription)."""
+    return _graph_write("POST", path, json_body=json_body, timeout=timeout, token_getter=token_getter)
+
+
+def graph_patch(path, json_body, timeout=DEFAULT_TIMEOUT, token_getter=None):
+    """PATCH a Graph resource (e.g. renew a subscription's expirationDateTime)."""
+    return _graph_write("PATCH", path, json_body=json_body, timeout=timeout, token_getter=token_getter)
+
+
+def graph_delete(path, timeout=DEFAULT_TIMEOUT, token_getter=None):
+    """DELETE a Graph resource (e.g. tear down a stale subscription). Returns None."""
+    return _graph_write("DELETE", path, json_body=None, timeout=timeout, token_getter=token_getter)

@@ -189,6 +189,19 @@ class JobsApi {
         }
     }
 
+    async updateShipDate(job, release, shipDate) {
+        try {
+            // Pass null to clear the ship date; a YYYY-MM-DD string to set it.
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-ship-date/${job}/${release}`,
+                { ship_date: shipDate || null }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update ship date');
+        }
+    }
+
     async getInstallerTeams() {
         try {
             const response = await axios.get(`${API_BASE_URL}/brain/installer-teams`);
@@ -425,6 +438,22 @@ class JobsApi {
             return response.data;
         } catch (error) {
             throw this._handleError(error, 'Failed to fetch material orders');
+        }
+    }
+
+    /**
+     * Per-release material-order status rollup for the Job Log Mat. Ord. column.
+     * Sparse: only releases that have orders are returned. Returns
+     * [{ job, release, status: 'received'|'pending'|'overdue' }].
+     */
+    async getMaterialOrderSummary() {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/material-orders/summary`
+            );
+            return response.data?.summary || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch material order summary');
         }
     }
 

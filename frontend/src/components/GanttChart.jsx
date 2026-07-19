@@ -52,7 +52,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 're
 import { jobsApi } from '../services/jobsApi';
 import { useReleases } from '../context/ReleasesContext';
 import { INSTALLER_PALETTE } from '../constants/installerPalette';
-import { localTodayStr as todayIso } from '../utils/formatters';
+import { localTodayStr as todayIso, subtractBusinessDays } from '../utils/formatters';
 import { API_BASE_URL } from '../utils/api';
 import ReleaseDetailModal from './ReleaseDetailModal';
 import { JobDetailsModal } from './JobDetailsModal';
@@ -137,27 +137,25 @@ function inCellSort(a, b) {
 
 // Classify a shared release row into timeline lanes, returning ZERO OR MORE bar objects
 // (one per lane the release belongs to) so an assigned release MIRRORS across lanes:
-//   - Its shipping-stage lane, if Stage is 'Ship Planning'/'Ship Complete' (just a hard
-//     Start install date to position it — all jobs are local, so Start install IS the ship date).
-//   - Its installer (person) lane, if an installer is assigned — regardless of stage or hours.
-// A release with both a shipping stage AND an installer therefore appears in BOTH lanes, backed
-// by the same raw row (1:1 data). Each bar shares an `id` but differs by `lane`; card React keys
-// are lane/cell-scoped so the duplicate id never collides.
+//   - Its shipping-stage lane as a POINT card: Shipping Planning is positioned on the SHIP date
+//     (explicit hard Ship Date when set, else estimated one business day before a hard Start
+//     install); Shipping Completed is positioned on the hard Start install date, so moving a
+//     release from planning to completed nudges its card forward from ship day to install day.
+//   - Its installer (person) lane as a RANGE bar (start_install -> comp_eta) whenever an installer
+//     is assigned - regardless of stage or install hours.
+// A release that is both a shipping stage AND assigned therefore appears in BOTH lanes, backed by
+// the same raw row (1:1 data). Each bar shares an `id` but differs by `lane`; card React keys are
+// lane/cell-scoped so the duplicate id never collides.
 function toBars(job, filterComplete) {
     if (filterComplete && job['Stage'] === 'Complete') return [];
-    if (job['start_install_formulaTF'] !== false) return [];   // soft/projected date — not on the timeline
-    const startDate = dayPart(job['Start install']);
-    if (!startDate) return [];
 
-    // comp_eta_effective is the serializer's canonical end (prefers comp_eta, else
-    // derives a window). It can land BEFORE start_install for some shipping-stage
-    // releases (stale comp_eta); clamp so a duration is never negative. Only used for the
-    // installer-card duration badge (Phase 3) — the card is positioned purely on start.
-    const rawEnd = dayPart(job['comp_eta_effective']) || dayPart(job['Comp. ETA']) || startDate;
-    const endDate = maxIso(rawEnd, startDate);
-    const team = (job.installer || '').trim();
     const shipLane = STAGE_TO_SHIP_LANE.get(job['Stage']);
+    // A hard (non-formula) Start install anchors installer bars and the ship-date estimate.
+    // Soft/projected dates never land on the timeline.
+    const installDate = job['start_install_formulaTF'] === false ? dayPart(job['Start install']) : '';
+    const team = (job.installer || '').trim();
 
+    // Fields shared by every bar this release produces; per-bar position/flags added below.
     const base = {
         id: job['id'],
         job: job['Job #'],
@@ -166,23 +164,50 @@ function toBars(job, filterComplete) {
         description: job['Description'] || '',
         stage: job['Stage'] || '',
         team,
-        startDate,
-        endDate,
+        installDate,   // the hard Start install (may be '' for a ship-date-only planning card)
         pm: job['PM'] || '',
         by: job['BY'] || '',
-        raw: job,   // full source row → read-only detail modal on click
+        raw: job,      // full source row -> read-only detail modal on click
     };
 
     const bars = [];
-    // Stage lane: shipping-stage releases show in their shipping lane (as before).
-    if (shipLane) {
-        bars.push({ ...base, lane: shipLane, isShip: true });
+
+    // --- Stage (shipping) lane: a point card. ---
+    if (shipLane === SHIP_PLANNING_LANE) {
+        // Ship on the explicit hard Ship Date, else estimate (install - 1 business day).
+        const hardShip = dayPart(job['Ship Date']);
+        const shipDate = hardShip || (installDate ? subtractBusinessDays(installDate, 1) : '');
+        if (shipDate) {
+            bars.push({
+                ...base, lane: shipLane, isShip: true,
+                shipEstimated: !hardShip, installAnchored: false,
+                startDate: shipDate, endDate: shipDate,   // point event; no duration bar
+            });
+        }
+    } else if (shipLane) {
+        // Shipping Completed - anchored on the hard Start install date.
+        if (installDate) {
+            bars.push({
+                ...base, lane: shipLane, isShip: true,
+                shipEstimated: false, installAnchored: true,
+                startDate: installDate, endDate: installDate,
+            });
+        }
     }
-    // Installer (person) lane MIRROR: any release assigned to an installer also appears in
-    // that person's lane, regardless of stage or install hours. This is the mirror card.
-    if (team) {
-        bars.push({ ...base, lane: team, isShip: false });
+
+    // --- Installer (person) lane MIRROR: a range bar spanning start_install -> comp_eta. ---
+    // Any assigned release with a hard install date shows here, regardless of stage/hours.
+    if (team && installDate) {
+        // comp_eta_effective is the serializer's canonical end (prefers comp_eta, else derives a
+        // window). It can land BEFORE start_install (stale comp_eta); clamp so it's never negative.
+        const rawEnd = dayPart(job['comp_eta_effective']) || dayPart(job['Comp. ETA']) || installDate;
+        bars.push({
+            ...base, lane: team, isShip: false,
+            shipEstimated: false, installAnchored: false,
+            startDate: installDate, endDate: maxIso(rawEnd, installDate),
+        });
     }
+
     return bars;
 }
 
@@ -226,7 +251,11 @@ function CardBody({ release, detail, wrap }) {
             )}
             {(detail === 'high' || detail === 'full') && (
                 <span className="block text-white/80 text-[10px] truncate">
-                    {release.isShip ? `Ships ${shortDate(release.startDate)}` : `${shortDate(release.startDate)} → ${shortDate(release.endDate)}`}
+                    {release.isShip
+                        ? (release.installAnchored
+                            ? `Installs ${shortDate(release.startDate)}`
+                            : `${release.shipEstimated ? 'Est. ships' : 'Ships'} ${shortDate(release.startDate)}`)
+                        : `${shortDate(release.startDate)} → ${shortDate(release.endDate)}`}
                 </span>
             )}
             {detail === 'full' && (release.team || release.pm) && (
@@ -937,8 +966,24 @@ function GanttChart({ filterComplete = false }) {
                     <div className="mt-2 pt-2 border-t border-gray-700">
                         {hoveredItem.stage && <div>Stage: {hoveredItem.stage}</div>}
                         {hoveredItem.team && <div>Team: {hoveredItem.team}</div>}
-                        <div>Start Install: {formatDate(hoveredItem.startDate)}</div>
-                        <div>Comp ETA: {formatDate(hoveredItem.endDate)}</div>
+                        {hoveredItem.isShip && !hoveredItem.installAnchored ? (
+                            <>
+                                <div>
+                                    {hoveredItem.shipEstimated ? 'Ship Date (est): ' : 'Ship Date: '}
+                                    {formatDate(hoveredItem.startDate)}
+                                </div>
+                                {hoveredItem.installDate && (
+                                    <div>Start Install: {formatDate(hoveredItem.installDate)}</div>
+                                )}
+                            </>
+                        ) : hoveredItem.isShip ? (
+                            <div>Start Install: {formatDate(hoveredItem.startDate)}</div>
+                        ) : (
+                            <>
+                                <div>Start Install: {formatDate(hoveredItem.startDate)}</div>
+                                <div>Comp ETA: {formatDate(hoveredItem.endDate)}</div>
+                            </>
+                        )}
                         {hoveredItem.pm && <div>PM: {hoveredItem.pm}</div>}
                         {hoveredItem.by && <div>BY: {hoveredItem.by}</div>}
                     </div>

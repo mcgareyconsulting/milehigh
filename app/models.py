@@ -479,6 +479,13 @@ class Releases(db.Model):
     # complete zone (Install Complete/Complete, job_comp='X', invoiced='X') so a finished
     # release doesn't show an alarming date. The start_install value itself is retained.
     start_install_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # Planned ship date. Independent hard date, ideally one business day before start_install
+    # (bidirectional estimate in the modal). Unlike start_install it does NOT drive Trello due
+    # dates or comp_eta/scheduling — start_install remains the scheduling driver.
+    ship_date = db.Column(db.Date)
+    # Mirrors start_install_no_color: suppresses the ship date's color flag once the release
+    # reaches the complete zone, so a shipped release doesn't show an alarming date.
+    ship_date_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     installer = db.Column(db.String(64), nullable=True)  # Installer team; matches Trello list name
     # Installer headcount used to size install duration. Parsed/persisted from the Trello
     # card description ("**Number of Guys:** N"); treated as 2 when absent.
@@ -539,6 +546,8 @@ class Releases(db.Model):
             "start_install_formulaTF": self.start_install_formulaTF,
             "start_install_asap": self.start_install_asap,
             "start_install_no_color": self.start_install_no_color,
+            "ship_date": self.ship_date,
+            "ship_date_no_color": self.ship_date_no_color,
             "installer": self.installer,
             "num_guys": self.num_guys,
             "comp_eta": self.comp_eta,
@@ -1219,6 +1228,48 @@ class LakeIngestState(db.Model):
             db.session.add(row)
             db.session.flush()
         return row
+
+
+class GraphSubscription(db.Model):
+    """A live Microsoft Graph change-notification subscription (the push webhook).
+
+    One row per (source, resource) we watch — for BB mail, the bb@mhmw.com Inbox.
+    Graph subscriptions expire in ~70h, so this row tracks the Graph-assigned
+    `subscription_id`, when it `expires_at`, and the `client_state` secret echoed
+    back in every notification (verified in the handler). The ensure/renew job
+    reads this to decide create-vs-renew-vs-skip, mirroring the idempotent Procore
+    `ensure_webhooks` pattern. Correctness never depends on this table — the poll
+    is the durable floor; this is only the fast path's bookkeeping.
+    """
+    __tablename__ = "graph_subscriptions"
+    __table_args__ = (
+        db.UniqueConstraint("source", "resource", name="uq_graph_sub_source_resource"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(64), nullable=False)          # e.g. 'm365_mail'
+    resource = db.Column(db.String(512), nullable=False)       # Graph resource path watched
+    mailbox = db.Column(db.String(255), nullable=True)         # e.g. 'bb@mhmw.com'
+    subscription_id = db.Column(db.String(255), nullable=True, index=True)  # Graph-assigned id
+    client_state = db.Column(db.String(128), nullable=True)    # secret echoed in notifications
+    notification_url = db.Column(db.String(1024), nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)         # subscription expirationDateTime (UTC)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @classmethod
+    def get(cls, source, resource):
+        return cls.query.filter_by(source=source, resource=resource).first()
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "source": self.source,
+            "resource": self.resource,
+            "mailbox": self.mailbox,
+            "subscription_id": self.subscription_id,
+            "notification_url": self.notification_url,
+            "expires_at": _dt(self.expires_at),
+        }
 
 
 class MicrosoftDelegatedToken(db.Model):

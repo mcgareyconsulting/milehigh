@@ -15,8 +15,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { jobsApi } from '../services/jobsApi';
 import { setAsapAndAssign } from '../utils/asap';
+import { localTodayStr, toYmd } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
+import { MaterialOrderBadge } from './MaterialOrderBadge';
 import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
@@ -24,6 +26,7 @@ import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { useTheme } from '../context/ThemeContext';
+import { useReleases } from '../context/ReleasesContext';
 
 // Master switch for the stage photo gate. Held OFF for now — the gate UI/infra
 // stays in place so flipping this back to true re-enables it. Keep in sync with
@@ -36,7 +39,11 @@ const STAGE_PHOTO_GATE_ENABLED = false;
 const STAGE_PHOTO_GATES = ['Welded QC', 'Paint Complete'];
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
+    const { refreshMaterialSummary } = useReleases();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    // When the modal is opened from the Mat. Ord. cell, jump straight to the
+    // Materials Ordered section instead of the top of the modal.
+    const [modalScrollToMaterials, setModalScrollToMaterials] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
@@ -246,6 +253,8 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
     // Local state for start install
     const [localStartInstall, setLocalStartInstall] = useState(row['Start install'] ?? null);
     const [updatingStartInstall, setUpdatingStartInstall] = useState(false);
+    // Local state for ship date (independent hard date; no Trello/scheduling side effects)
+    const [localShipDate, setLocalShipDate] = useState(row['Ship Date'] ?? null);
 
     const [showStageDropdown, setShowStageDropdown] = useState(false);
     const [dropdownDirection, setDropdownDirection] = useState('down');
@@ -352,11 +361,12 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         setLocalNotes(row['Notes'] ?? '');
         setNotesInputValue(row['Notes'] ?? '');
         setLocalStartInstall(row['Start install'] ?? null);
+        setLocalShipDate(row['Ship Date'] ?? null);
         setLocalJobComp(row['Job Comp'] ?? '');
         setLocalInvoiced(row['Invoiced'] ?? '');
         setJobCompInputValue(row['Job Comp'] ?? '');
         setInvoicedInputValue(row['Invoiced'] ?? '');
-    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Job Comp'], row['Invoiced']]);
+    }, [row['Stage'], row['Fab Order'], row['Notes'], row['Start install'], row['Ship Date'], row['Job Comp'], row['Invoiced']]);
 
     // Rotate stage options so current stage is at top (wheel behavior)
     const rotatedStageOptions = useMemo(() => {
@@ -662,6 +672,24 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         }
     };
 
+    // Handle ship date change from modal (independent of the install-date save)
+    const handleShipDateSave = async (shipDate) => {
+        const jobNumber = row['Job #'];
+        const releaseNumber = row['Release #'];
+        const oldValue = localShipDate;
+
+        // Optimistic update
+        setLocalShipDate(shipDate);
+        try {
+            await jobsApi.updateShipDate(jobNumber, releaseNumber, shipDate);
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error(`[SHIP_DATE] Failed to update ship date for job ${jobNumber}-${releaseNumber}:`, error);
+            setLocalShipDate(oldValue);
+            alert(`Failed to update ship date: ${error.message}`);
+        }
+    };
+
     const handleSetAsap = async (installer) => {
         const jobNumber = row['Job #'];
         const releaseNumber = row['Release #'];
@@ -696,9 +724,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         const releaseNumber = row['Release #'];
 
         const oldValue = localStartInstall;
+        const oldShipDate = localShipDate;
 
-        // Optimistic update
+        // Optimistic update — clearing the hard date also drops the tied ship date.
         setLocalStartInstall(null);
+        setLocalShipDate(null);
         setIsStartInstallModalOpen(false);
         if (onCascadeRecalculating) onCascadeRecalculating(true);
 
@@ -713,6 +743,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
         } catch (error) {
             console.error(`[START_INSTALL] Failed to clear hard date for job ${row['Job #']}-${row['Release #']}:`, error);
             setLocalStartInstall(oldValue);
+            setLocalShipDate(oldShipDate);
             alert(`Failed to clear hard date: ${error.message}`);
         } finally {
             if (onCascadeRecalculating) onCascadeRecalculating(false);
@@ -856,7 +887,7 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     let rawValue = row[column];
 
                     // Format date columns
-                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA') {
+                    if (column === 'Released' || column === 'Start install' || column === 'Comp. ETA' || column === 'Ship Date') {
                         rawValue = formatDate(rawValue);
                     } else {
                         rawValue = formatCellValue(rawValue, column);
@@ -1223,6 +1254,52 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
+                    // Handle Ship Date column: clickable cell that opens the same modal. A plain
+                    // hard date (past = yellow, future = green), neutralized when the release
+                    // completes (ship_date_no_color). No ASAP/formula concepts apply.
+                    if (column === 'Ship Date') {
+                        const displayValue = formatDate(localShipDate);
+                        const isNoColor = row['ship_date_no_color'] === true;
+                        const hasDate = !!localShipDate;
+                        const shipDay = toYmd(localShipDate);
+                        let shipBgClass;
+                        if (!hasDate || isNoColor) {
+                            shipBgClass = `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
+                        } else if (shipDay < localTodayStr()) {
+                            shipBgClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold';
+                        } else {
+                            shipBgClass = 'bg-green-400 text-gray-900 hover:bg-green-500 font-semibold';
+                        }
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} whitespace-nowrap ${cellText} align-middle font-medium ${shipBgClass} ${vDividerClass} text-center cursor-pointer transition-colors`}
+                                onClick={() => setIsStartInstallModalOpen(true)}
+                                title={`${displayValue} — Click to edit`}
+                            >
+                                <div className="leading-tight">{displayValue}</div>
+                            </td>
+                        );
+                    }
+
+                    // Material order status — a banana glyph (green/amber/red) when the
+                    // release has orders, blank otherwise. Click opens the modal at the
+                    // Materials Ordered section.
+                    if (column === 'Mat. Ord.') {
+                        const matStatus = row['Mat. Ord.'];
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle ${rowBgClass} ${vDividerClass} text-center ${matStatus ? 'cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors' : ''}`}
+                                onClick={matStatus ? () => { setModalScrollToMaterials(true); setIsModalOpen(true); } : undefined}
+                            >
+                                <div className="flex items-center justify-center">
+                                    <MaterialOrderBadge status={matStatus} />
+                                </div>
+                            </td>
+                        );
+                    }
+
                     // For Job and Description, show full value in tooltip
                     const tooltipValue = shouldWrapAndTruncate ? rawValue : rawValue;
 
@@ -1383,8 +1460,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             </tr>
             <JobDetailsModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { setIsModalOpen(false); setModalScrollToMaterials(false); }}
                 job={row}
+                scrollToMaterials={modalScrollToMaterials}
+                onOrdersChanged={refreshMaterialSummary}
             />
             <NotesHistoryModal
                 isOpen={isNotesHistoryOpen}
@@ -1397,8 +1476,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                 isOpen={isStartInstallModalOpen}
                 onClose={() => setIsStartInstallModalOpen(false)}
                 currentDate={localStartInstall}
+                currentShipDate={localShipDate}
                 currentInstaller={row['installer']}
                 onSave={handleStartInstallSave}
+                onSaveShipDate={handleShipDateSave}
                 onClearHardDate={handleClearHardDate}
                 onSetAsap={handleSetAsap}
                 onClearAsap={handleClearAsap}
