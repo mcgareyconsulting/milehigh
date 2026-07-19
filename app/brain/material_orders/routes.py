@@ -1,6 +1,7 @@
 """HTTP routes for supplier material orders (registered on brain_bp).
 
 GET  /brain/material-orders?job=&release=   list orders for a release (modal)
+GET  /brain/material-orders/summary          per-release status rollup for the Job Log column
 GET  /brain/material-orders/shipping-planning  planning-status orders for the Timeline lane
 POST /brain/material-orders/<id>/received    mark received / un-receive (drafter+)
 POST /brain/material-orders/ingest           backfill orders from lake emails (admin)
@@ -27,6 +28,17 @@ def list_material_orders():
     except (TypeError, ValueError):
         return jsonify({"error": "job must be an integer"}), 400
     return jsonify({"orders": orders}), 200
+
+
+@brain_bp.route("/material-orders/summary", methods=["GET"])
+@login_required
+def material_orders_summary():
+    """Per-release status rollup (received/pending/overdue) for the Job Log column.
+
+    Sparse: only releases that have material orders are returned; the frontend
+    defaults every other release to a blank indicator.
+    """
+    return jsonify({"summary": service.status_summary()}), 200
 
 
 @brain_bp.route("/material-orders/shipping-planning", methods=["GET"])

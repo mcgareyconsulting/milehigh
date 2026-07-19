@@ -16,7 +16,7 @@ import { createPortal } from 'react-dom';
 import { jobsApi } from '../services/jobsApi';
 import { EventsModal } from './EventsModal';
 
-export function JobDetailsModal({ isOpen, onClose, job, scrollToMaterials = false }) {
+export function JobDetailsModal({ isOpen, onClose, job, scrollToMaterials = false, onOrdersChanged = null }) {
     const [eventsOpen, setEventsOpen] = useState(false);
     const [materialOrders, setMaterialOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
@@ -52,6 +52,9 @@ export function JobDetailsModal({ isOpen, onClose, job, scrollToMaterials = fals
             setMaterialOrders((prev) =>
                 prev.map((o) => (o.id === order.id ? (data?.order || o) : o))
             );
+            // Let the Job Log refresh its Mats column right away rather than
+            // waiting for the next poll.
+            if (onOrdersChanged) onOrdersChanged();
         } catch (e) {
             // Leave the row unchanged (e.g. insufficient permissions).
         }

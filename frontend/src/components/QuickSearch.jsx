@@ -11,7 +11,7 @@
  *   - Dropdown closes on outside click, Escape, or route change via resetSearch()
  * updated_by_agent: 2026-06-14T00:00:00Z (fix/global-search-stuck)
  */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { searchByJob } from '../services/jobSearchApi';
 import { JobSearchTable } from '../pages/JobSearch/JobSearchTable';
@@ -39,11 +39,14 @@ export default function QuickSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchedJob, setSearchedJob] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const debounceRef = useRef(null);
   const containerRef = useRef(null);
+  const inputRef = useRef(null);
   const location = useLocation();
 
-  // Single authoritative reset: clears all state and closes the dropdown.
+  // Single authoritative reset: clears all state, closes the dropdown, and
+  // collapses the input back to an icon.
   const resetSearch = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setJobInput('');
@@ -52,7 +55,12 @@ export default function QuickSearch() {
     setSearchedJob(null);
     setError(null);
     setLoading(false);
+    setIsExpanded(false);
   }, []);
+
+  useLayoutEffect(() => {
+    if (isExpanded) inputRef.current?.focus();
+  }, [isExpanded]);
 
   const runSearch = useCallback(async (trimmed) => {
     if (!trimmed || !/^\d{1,3}$/.test(trimmed)) return;
@@ -124,25 +132,40 @@ export default function QuickSearch() {
 
   return (
     <div ref={containerRef} className="relative">
-      {/* Compact search input */}
-      <div className="relative flex items-center">
-        <span className="absolute left-3 text-accent-400" aria-hidden>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {isExpanded ? (
+        /* Compact search input */
+        <div className="relative flex items-center">
+          <span className="absolute left-3 text-accent-400" aria-hidden>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </span>
+          <input
+            ref={inputRef}
+            id="quick-search-input"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={3}
+            placeholder="Project #"
+            value={jobInput}
+            onChange={(e) => setJobInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
+            className="w-36 pl-9 pr-3 py-1.5 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg font-mono text-sm text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsExpanded(true)}
+          className="p-2 rounded-lg text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
+          aria-label="Search by project number"
+          title="Search"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-        </span>
-        <input
-          id="quick-search-input"
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={3}
-          placeholder="Project #"
-          value={jobInput}
-          onChange={(e) => setJobInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
-          className="w-36 pl-9 pr-3 py-1.5 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg font-mono text-sm text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors"
-        />
-      </div>
+        </button>
+      )}
 
       {/* Dropdown results panel */}
       {isOpen && (

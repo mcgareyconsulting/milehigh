@@ -18,6 +18,7 @@ import { setAsapAndAssign } from '../utils/asap';
 import { localTodayStr, toYmd } from '../utils/formatters';
 import { JUMP_TO_HIGHLIGHT_CLASS } from '../constants/jumpToHighlight';
 import { JobDetailsModal } from './JobDetailsModal';
+import { MaterialOrderBadge } from './MaterialOrderBadge';
 import { NotesHistoryModal } from './NotesHistoryModal';
 import { StartInstallDateModal } from './StartInstallDateModal';
 import { StageIconRow } from './StageIconRow';
@@ -25,6 +26,7 @@ import { ASAP_PROPAGATED_ROW_CLASS } from './AsapPropagationTag';
 import { PdfMarkupModal } from './PdfMarkupModal';
 import { PdfVersionHistoryModal } from './PdfVersionHistoryModal';
 import { useTheme } from '../context/ThemeContext';
+import { useReleases } from '../context/ReleasesContext';
 
 // Master switch for the stage photo gate. Held OFF for now — the gate UI/infra
 // stays in place so flipping this back to true re-enables it. Keep in sync with
@@ -37,7 +39,11 @@ const STAGE_PHOTO_GATE_ENABLED = false;
 const STAGE_PHOTO_GATES = ['Welded QC', 'Paint Complete'];
 
 export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowIndex, onDragStart, onDragOver, onDragLeave, onDrop, isDragging, dragOverIndex, onUpdate, onCascadeRecalculating = null, stageToGroup, stageGroupColors, stageGroupDupColors = null, isJumpToHighlight, isAdmin = false, isDrafter = false, onDelete = null, onUnarchive = null, tableScrollRef = null, duplicateFabOrders = null, compact = false, showActions = true }) {
+    const { refreshMaterialSummary } = useReleases();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    // When the modal is opened from the Mat. Ord. cell, jump straight to the
+    // Materials Ordered section instead of the top of the modal.
+    const [modalScrollToMaterials, setModalScrollToMaterials] = useState(false);
     const [isNotesHistoryOpen, setIsNotesHistoryOpen] = useState(false);
     const [isStartInstallModalOpen, setIsStartInstallModalOpen] = useState(false);
     const [pdfMarkupOpen, setPdfMarkupOpen] = useState(false);
@@ -1276,6 +1282,24 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
+                    // Material order status — a banana glyph (green/amber/red) when the
+                    // release has orders, blank otherwise. Click opens the modal at the
+                    // Materials Ordered section.
+                    if (column === 'Mat. Ord.') {
+                        const matStatus = row['Mat. Ord.'];
+                        return (
+                            <td
+                                key={`${row.id}-${column}`}
+                                className={`${paddingClass} ${cellPy} ${cellText} align-middle ${rowBgClass} ${vDividerClass} text-center ${matStatus ? 'cursor-pointer hover:bg-accent-50 dark:hover:bg-slate-600 transition-colors' : ''}`}
+                                onClick={matStatus ? () => { setModalScrollToMaterials(true); setIsModalOpen(true); } : undefined}
+                            >
+                                <div className="flex items-center justify-center">
+                                    <MaterialOrderBadge status={matStatus} />
+                                </div>
+                            </td>
+                        );
+                    }
+
                     // For Job and Description, show full value in tooltip
                     const tooltipValue = shouldWrapAndTruncate ? rawValue : rawValue;
 
@@ -1436,8 +1460,10 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
             </tr>
             <JobDetailsModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { setIsModalOpen(false); setModalScrollToMaterials(false); }}
                 job={row}
+                scrollToMaterials={modalScrollToMaterials}
+                onOrdersChanged={refreshMaterialSummary}
             />
             <NotesHistoryModal
                 isOpen={isNotesHistoryOpen}

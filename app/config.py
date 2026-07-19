@@ -81,6 +81,27 @@ class Config:
     BB_INGEST_GROUP_ID = os.environ.get("BB_INGEST_GROUP_ID")
     BB_MAILBOXES = os.environ.get("BB_MAILBOXES")
 
+    # Graph change-notification (webhook) push for the BB mailbox. The fast path
+    # that complements the poll: Graph POSTs GRAPH_NOTIFICATION_URL the instant
+    # mail lands, and we fetch+land that one message. The poll stays as the
+    # durable floor (a lapsed/dropped subscription is swept up on the next pass).
+    #
+    #   GRAPH_NOTIFICATION_URL  — public HTTPS base the subscription points at.
+    #     Graph does a synchronous validation handshake against it at create time,
+    #     so it must be live and reachable then. In dev this is the ngrok tunnel
+    #     (e.g. https://abc123.ngrok-free.app); in prod the Render app URL. The
+    #     route path (/lake/graph/notifications) is appended in code.
+    #   GRAPH_SUBSCRIPTION_CLIENT_STATE — shared secret echoed in every
+    #     notification; the handler rejects any POST whose clientState doesn't match.
+    #   GRAPH_SUBSCRIPTION_RENEW_MINUTES — how often the renewal job runs. Mailbox
+    #     message subscriptions expire in ~70h; we renew well inside that window.
+    BB_MAIL_WEBHOOK_ENABLED = os.environ.get("BB_MAIL_WEBHOOK_ENABLED", "0") == "1"
+    GRAPH_NOTIFICATION_URL = os.environ.get("GRAPH_NOTIFICATION_URL")
+    GRAPH_SUBSCRIPTION_CLIENT_STATE = os.environ.get("GRAPH_SUBSCRIPTION_CLIENT_STATE")
+    GRAPH_SUBSCRIPTION_RENEW_MINUTES = int(
+        os.environ.get("GRAPH_SUBSCRIPTION_RENEW_MINUTES", "720")
+    )
+
     # Per-release marked-up PDF storage. In prod set to an absolute path on the
     # Render persistent disk (e.g. /var/data/pdfs). Local dev falls back to
     # <repo>/app/storage/pdfs via app/brain/job_log/features/pdf_markup/storage.py.

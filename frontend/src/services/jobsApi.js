@@ -442,6 +442,22 @@ class JobsApi {
     }
 
     /**
+     * Per-release material-order status rollup for the Job Log Mat. Ord. column.
+     * Sparse: only releases that have orders are returned. Returns
+     * [{ job, release, status: 'received'|'pending'|'overdue' }].
+     */
+    async getMaterialOrderSummary() {
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/brain/material-orders/summary`
+            );
+            return response.data?.summary || [];
+        } catch (error) {
+            throw this._handleError(error, 'Failed to fetch material order summary');
+        }
+    }
+
+    /**
      * Mark a material order received (or un-receive with received=false).
      */
     async markMaterialOrderReceived(orderId, received = true) {

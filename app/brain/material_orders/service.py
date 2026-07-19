@@ -8,7 +8,7 @@ calls it directly. list_for_release / mark_received back the modal.
 from datetime import date, datetime
 
 from app.logging_config import get_logger
-from app.models import MaterialOrder, RawSourceRecord, db
+from app.models import MaterialOrder, RawSourceRecord, Releases, db
 from app.brain.material_orders.extractors.classify import extract_order
 
 logger = get_logger(__name__)
@@ -257,6 +257,79 @@ def list_shipping_planning():
         })
     cards.sort(key=lambda c: (c["date"] is None, c["date"] or "", c["id"]))
     return cards
+
+
+def order_done(o):
+    """True when an order needs no more attention.
+
+    Galv/stock 'status orders' carry a shipping_status ('planning' → 'complete');
+    plain material rows carry status ('ordered' → 'received'). Mirrors the
+    green/amber badge logic in JobDetailsModal.jsx.
+    """
+    if o.shipping_status:
+        return o.shipping_status == "complete"
+    return o.status == "received"
+
+
+def rollup_status(orders, overdue=False):
+    """Roll a release's orders up to one status token for the Job Log indicator.
+
+    Returns 'received' | 'pending' | 'overdue' | None:
+      - None       no orders (blank, non-obtrusive indicator)
+      - received   every order is done (green)
+      - pending    at least one order still out (amber)
+      - overdue    still out AND the release's install date has passed (red)
+    """
+    if not orders:
+        return None
+    if all(order_done(o) for o in orders):
+        return "received"
+    return "overdue" if overdue else "pending"
+
+
+def start_install_overdue(release):
+    """Hard start-install date that has already passed.
+
+    Mirrors isHardDatePast in JobsTableRow.jsx: only a real committed date counts
+    (not a formula-driven ETA, not a neutralized/no-color date, not ASAP).
+    """
+    if release is None or release.start_install is None:
+        return False
+    if release.start_install_formulaTF is not False:
+        return False
+    if release.start_install_no_color or release.start_install_asap:
+        return False
+    return release.start_install < date.today()
+
+
+def status_summary():
+    """Per-(job, release) material-order rollup for every release that has orders.
+
+    Returns [{"job": int, "release": str, "status": "received|pending|overdue"}].
+    Only releases WITH orders appear — the Job Log defaults everything else to
+    blank. Stock/PU orders (null job/release) are skipped; they aren't tied to a
+    release. Read-only: never mutates.
+    """
+    groups = {}
+    for o in MaterialOrder.query.filter(MaterialOrder.job.isnot(None)).all():
+        groups.setdefault((o.job, o.release), []).append(o)
+    if not groups:
+        return []
+
+    jobs = {job for (job, _release) in groups}
+    releases_by_key = {
+        (r.job, r.release): r
+        for r in Releases.query.filter(Releases.job.in_(jobs)).all()
+    }
+
+    summary = []
+    for (job, release), orders in groups.items():
+        overdue = start_install_overdue(releases_by_key.get((job, release)))
+        status = rollup_status(orders, overdue=overdue)
+        if status is None:
+            continue
+        summary.append({"job": job, "release": release, "status": status})
+    return summary
 
 
 def mark_received(order_id, received=True):
