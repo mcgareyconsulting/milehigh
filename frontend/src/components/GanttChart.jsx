@@ -1,13 +1,15 @@
 /**
  * @milehigh-header
  * schema_version: 6
- * purpose: Read-only release timeline as a DAY/WEEK-BUCKET BOARD ("the Trello board on its side").
+ * purpose: Read-only release timeline mixing two lane shapes on one X-axis of day/week columns.
  *   Y-axis is a stack of lanes: two shipping-stage lanes (Shipping Planning, Shipping Completed) on
- *   top, then one lane per installer team. X-axis is discrete columns that are either single days or
- *   whole weeks depending on zoom. Each eligible release is a POINT-EVENT card placed in the (lane,
- *   Start-install column) cell; cards in the same cell stack vertically. A card's column is its date
- *   — position never drifts. Cards are natural-height (text wraps, no truncation at close zoom); each
- *   lane is measured to its busiest cell. Pure client selector over useReleases — no writes.
+ *   top, then one lane per installer team. SHIPPING lanes are a DAY/WEEK-BUCKET BOARD ("the Trello
+ *   board on its side"): each release is a POINT-EVENT card in the (lane, Start-install column) cell,
+ *   cards in the same cell stack vertically, and the column IS the date so position never drifts.
+ *   INSTALLER lanes are a classic GANTT: each release is a horizontal RANGE bar spanning
+ *   start_install → comp_eta, packed into rows so overlapping installs never collide. A release that
+ *   is both a shipping stage AND assigned mirrors into both lanes off the same raw row (1:1 data).
+ *   Pure client selector over useReleases — no writes.
  * exports:
  *   GanttChart: Day/week-bucket board with zoom that scales column granularity (day↔week), width,
  *     card size, per-cell cap, and card detail; whole-column zoom snapping, week-snap nav, jump-to-date.
@@ -22,18 +24,23 @@
  *   - Lanes = two fixed shipping-stage lanes (DB stage 'Ship Planning' → "Shipping Planning",
  *     'Ship Complete' → "Shipping Completed"), then the installer roster from /brain/installer-teams,
  *     then any off-roster installer present in the data (so no card is silently dropped).
- *   - A release lands in a shipping lane iff its Stage is 'Ship Planning'/'Ship Complete' (installer +
- *     install_hrs NOT required there — just a hard Start install date to position it). Every other
- *     release uses the installer-lane rule: hard date + installer + Install HRS > 0 + Stage Group in
- *     FABRICATION/READY_TO_SHIP/COMPLETE. A release appears in exactly one lane.
+ *   - A release lands in a shipping lane iff its Stage is 'Ship Planning'/'Ship Complete' (just a
+ *     hard Start install date to position it). It ALSO MIRRORS into its installer's (person's) lane
+ *     whenever an installer is assigned — regardless of stage or install hours. So one release can
+ *     appear in two lanes (its shipping lane + its installer lane), both backed by the same raw row
+ *     (1:1 data). A release with no shipping stage and no installer appears nowhere.
  *   - Installer lane colors come from constants/installerPalette indexed by installer position (NOT
  *     overall lane position) so List and Timeline colors keep matching; shipping lanes use their own
  *     board colors.
- *   - BUCKET layout: cards are placed by Start-install COLUMN (a day or a week, per zoom) and stacked
- *     vertically within a lane×column cell (natural flow, never overlapping — position is the true
- *     date). Cards are natural height so name/description are NOT truncated at wrap zoom levels; lane
- *     heights are MEASURED (useLayoutEffect) from the tallest cell. A cell over the zoom's cap renders
- *     (cap-1) cards plus a "+N more" chip (inert in Phase 1). Counts are never silently dropped.
+ *   - SHIPPING-LANE bucket layout: cards are placed by Start-install COLUMN (a day or a week, per
+ *     zoom) and stacked vertically within a lane×column cell (natural flow, never overlapping —
+ *     position is the true date). Cards are natural height so name/description are NOT truncated at
+ *     wrap zoom levels; these lane heights are MEASURED (useLayoutEffect) from the tallest cell. A
+ *     cell over the zoom's cap renders (cap-1) cards plus a "+N more" chip. Counts are never dropped.
+ *   - INSTALLER-LANE gantt layout: each release is an absolute-positioned RANGE bar from start_install
+ *     to comp_eta (inclusive), width floored at MIN_BAR_PX so a same-day install stays clickable. Bars
+ *     are greedily packed into rows (interval partitioning) so overlaps stack; the lane height is
+ *     COMPUTED from the row count (contentH), not measured. Bars share the shipping card's raw row.
  *   - When filterComplete is true, releases whose Stage === 'Complete' are excluded.
  *   - Zoom presets target a whole number of VISIBLE COLUMNS (days when unit='day', weeks when
  *     unit='week'); column width is derived from the live viewport so exactly that many clean columns
@@ -84,6 +91,7 @@ const CARD_GUTTER = 5;    // horizontal inset within a column
 const CARD_VGAP = 3;      // vertical gap between stacked cards in a cell
 const CELL_PAD_TOP = 5;   // top padding inside a lane before the first card
 const ORDER_ROW_PX = 26;  // height reserved at the bottom of the Shipping Planning lane for the PU/order overlay strip
+const MIN_BAR_PX = 26;    // floor width for an installer range bar so a same-day install stays visible/clickable
 const SHIP_PLANNING_LANE = 'Shipping Planning';
 // Short badge + tooltip prefix per material-order kind for the shipping-lane overlay.
 const ORDER_KIND_BADGE = { stock: 'PU', galvanizing: 'GALV', material: 'MAT' };
@@ -116,8 +124,6 @@ const SHIP_LANES = [
 ];
 const STAGE_TO_SHIP_LANE = new Map(SHIP_LANES.map((s) => [s.stage, s.lane]));
 
-const ELIGIBLE_STAGE_GROUPS = new Set(['FABRICATION', 'READY_TO_SHIP', 'COMPLETE']);
-
 // Within a lane×column cell: ASAP rush jobs first, then by job # asc, then release # asc.
 // Deterministic so the stack order is stable across polls/zoom.
 function inCellSort(a, b) {
@@ -129,27 +135,19 @@ function inCellSort(a, b) {
     return String(a.release).localeCompare(String(b.release), undefined, { numeric: true });
 }
 
-// Classify a shared release row into a timeline lane, or null if it doesn't belong.
-// Shipping-stage releases go to their shipping lane on just a hard Start install date
-// (all jobs are local, so Start install IS the ship date). Everything else follows the
-// installer-lane rule that mirrors the List installer columns + an install_hrs gate.
-function toBar(job, filterComplete) {
-    if (filterComplete && job['Stage'] === 'Complete') return null;
-    if (job['start_install_formulaTF'] !== false) return null;   // soft/projected date — not on the timeline
+// Classify a shared release row into timeline lanes, returning ZERO OR MORE bar objects
+// (one per lane the release belongs to) so an assigned release MIRRORS across lanes:
+//   - Its shipping-stage lane, if Stage is 'Ship Planning'/'Ship Complete' (just a hard
+//     Start install date to position it — all jobs are local, so Start install IS the ship date).
+//   - Its installer (person) lane, if an installer is assigned — regardless of stage or hours.
+// A release with both a shipping stage AND an installer therefore appears in BOTH lanes, backed
+// by the same raw row (1:1 data). Each bar shares an `id` but differs by `lane`; card React keys
+// are lane/cell-scoped so the duplicate id never collides.
+function toBars(job, filterComplete) {
+    if (filterComplete && job['Stage'] === 'Complete') return [];
+    if (job['start_install_formulaTF'] !== false) return [];   // soft/projected date — not on the timeline
     const startDate = dayPart(job['Start install']);
-    if (!startDate) return null;
-
-    const shipLane = STAGE_TO_SHIP_LANE.get(job['Stage']);
-    const team = (job.installer || '').trim();
-    let lane;
-    if (shipLane) {
-        lane = shipLane;
-    } else {
-        if (!team) return null;
-        if (!(Number(job['Install HRS']) > 0)) return null;
-        if (!ELIGIBLE_STAGE_GROUPS.has(job['Stage Group'])) return null;
-        lane = team;
-    }
+    if (!startDate) return [];
 
     // comp_eta_effective is the serializer's canonical end (prefers comp_eta, else
     // derives a window). It can land BEFORE start_install for some shipping-stage
@@ -157,7 +155,10 @@ function toBar(job, filterComplete) {
     // installer-card duration badge (Phase 3) — the card is positioned purely on start.
     const rawEnd = dayPart(job['comp_eta_effective']) || dayPart(job['Comp. ETA']) || startDate;
     const endDate = maxIso(rawEnd, startDate);
-    return {
+    const team = (job.installer || '').trim();
+    const shipLane = STAGE_TO_SHIP_LANE.get(job['Stage']);
+
+    const base = {
         id: job['id'],
         job: job['Job #'],
         release: job['Release #'],
@@ -165,14 +166,24 @@ function toBar(job, filterComplete) {
         description: job['Description'] || '',
         stage: job['Stage'] || '',
         team,
-        lane,
-        isShip: !!shipLane,
         startDate,
         endDate,
         pm: job['PM'] || '',
         by: job['BY'] || '',
         raw: job,   // full source row → read-only detail modal on click
     };
+
+    const bars = [];
+    // Stage lane: shipping-stage releases show in their shipping lane (as before).
+    if (shipLane) {
+        bars.push({ ...base, lane: shipLane, isShip: true });
+    }
+    // Installer (person) lane MIRROR: any release assigned to an installer also appears in
+    // that person's lane, regardless of stage or install hours. This is the mirror card.
+    if (team) {
+        bars.push({ ...base, lane: team, isShip: false });
+    }
+    return bars;
 }
 
 const formatDate = (dateStr) => {
@@ -310,9 +321,10 @@ function GanttChart({ filterComplete = false }) {
         };
     }, []);
 
-    // Eligible release cards, selected client-side from the shared dataset.
+    // Eligible release cards, selected client-side from the shared dataset. A single release can
+    // yield multiple bars (its shipping lane + its installer's mirror lane), so flat-map.
     const releases = useMemo(
-        () => jobs.map((j) => toBar(j, filterComplete)).filter(Boolean),
+        () => jobs.flatMap((j) => toBars(j, filterComplete)),
         [jobs, filterComplete]
     );
 
@@ -396,56 +408,96 @@ function GanttChart({ filterComplete = false }) {
         el.scrollLeft = Math.round(x / colPx) * colPx;
     }, [colPx, colDays]);
 
-    // Build lanes as bucket cells. For each lane, group its releases by Start-install COLUMN (day or
-    // week) and sort within the cell. Cards render in natural document flow (variable height), so lane
-    // heights are measured after layout (see the measurement effect below). A cell over the zoom's
-    // cap shows (cap-1) cards + a "+N more" chip.
+    // Build each lane. Two shapes share the timeline:
+    //   - SHIPPING lanes: day/week-bucket point cards — group releases by Start-install COLUMN and
+    //     stack within the cell (heights MEASURED after layout, since cards are natural-height).
+    //   - INSTALLER lanes: horizontal RANGE bars spanning start_install → comp_eta. Bars are packed
+    //     into rows by greedy interval partitioning so overlapping installs never collide, and the
+    //     lane height is computed directly from the row count (`contentH`, no measurement needed).
     const bands = useMemo(() => {
         const firstDay = chartRange.firstDay;
         const cardWidth = Math.max(colPx - CARD_GUTTER * 2, 8);
+        const pxOfDate = (iso) => (daysBetween(firstDay, iso) / colDays) * colPx;
+        const barH = Math.max(22, Math.min(minCardH, 34));
 
         return lanesMeta.map(({ lane, color, isShip }) => {
             const laneReleases = releases.filter((r) => r.lane === lane);
 
-            const byCol = new Map();
-            laneReleases.forEach((r) => {
-                const col = Math.floor(daysBetween(firstDay, r.startDate) / colDays);
-                if (!byCol.has(col)) byCol.set(col, []);
-                byCol.get(col).push(r);
-            });
-
-            const cells = [];
-            byCol.forEach((list, col) => {
-                list.sort(inCellSort);
-                const overflow = list.length > cap;
-                cells.push({
-                    key: col,
-                    left: col * colPx + CARD_GUTTER,
-                    width: cardWidth,
-                    shown: overflow ? list.slice(0, cap - 1) : list,
-                    extra: overflow ? list.length - (cap - 1) : 0,
+            if (isShip) {
+                const byCol = new Map();
+                laneReleases.forEach((r) => {
+                    const col = Math.floor(daysBetween(firstDay, r.startDate) / colDays);
+                    if (!byCol.has(col)) byCol.set(col, []);
+                    byCol.get(col).push(r);
                 });
+
+                const cells = [];
+                byCol.forEach((list, col) => {
+                    list.sort(inCellSort);
+                    const overflow = list.length > cap;
+                    cells.push({
+                        key: col,
+                        left: col * colPx + CARD_GUTTER,
+                        width: cardWidth,
+                        shown: overflow ? list.slice(0, cap - 1) : list,
+                        extra: overflow ? list.length - (cap - 1) : 0,
+                    });
+                });
+
+                return { lane, color, isShip, cells, bars: null, barH, contentH: null, count: laneReleases.length };
+            }
+
+            // Installer lane: one range bar per release, packed into non-overlapping rows.
+            const sorted = [...laneReleases].sort((a, b) => {
+                if (a.startDate !== b.startDate) return a.startDate < b.startDate ? -1 : 1;
+                return inCellSort(a, b);
             });
+            const rowEnds = [];   // right-edge px of the last bar placed in each row
+            const bars = sorted.map((r) => {
+                const left = pxOfDate(r.startDate);
+                // +1 day so the bar covers the whole comp_eta day (inclusive end).
+                const right = pxOfDate(addDays(r.endDate, 1));
+                const width = Math.max(right - left - CARD_GUTTER, MIN_BAR_PX);
+                let row = rowEnds.findIndex((end) => left >= end + CARD_GUTTER);
+                if (row === -1) { row = rowEnds.length; rowEnds.push(0); }
+                rowEnds[row] = left + CARD_GUTTER / 2 + width;
+                return {
+                    ...r,
+                    left: left + CARD_GUTTER / 2,
+                    width,
+                    top: CELL_PAD_TOP + row * (barH + CARD_VGAP),
+                };
+            });
+            const rowCount = rowEnds.length;
+            const contentH = Math.max(
+                CELL_PAD_TOP * 2 + rowCount * barH + Math.max(rowCount - 1, 0) * CARD_VGAP,
+                fallbackLaneH,
+            );
 
-            return { lane, color, isShip, cells, count: laneReleases.length };
+            return { lane, color, isShip, cells: null, bars, barH, contentH, count: laneReleases.length };
         });
-    }, [lanesMeta, releases, colPx, colDays, cap, chartRange.firstDay]);
+    }, [lanesMeta, releases, colPx, colDays, cap, chartRange.firstDay, minCardH, fallbackLaneH]);
 
-    // Measure each lane's tallest cell and set the lane height so the busiest column fits exactly
-    // (natural-height cards mean we can't compute this up front). Guarded so it only sets state when
-    // a height actually changes — no render loop.
+    // Set each lane's height. Installer lanes carry a precomputed `contentH` (row-packed bars).
+    // Shipping lanes are measured: their tallest cell of natural-height point cards fixes the height.
+    // Guarded so it only sets state when a height actually changes — no render loop.
     useLayoutEffect(() => {
         const next = {};
         let changed = false;
         bands.forEach((band) => {
-            const el = laneChartRefs.current[band.lane];
-            let maxCell = 0;
-            if (el) {
-                el.querySelectorAll('[data-cell]').forEach((cell) => {
-                    maxCell = Math.max(maxCell, cell.offsetHeight);
-                });
+            let h;
+            if (band.contentH != null) {
+                h = band.contentH;
+            } else {
+                const el = laneChartRefs.current[band.lane];
+                let maxCell = 0;
+                if (el) {
+                    el.querySelectorAll('[data-cell]').forEach((cell) => {
+                        maxCell = Math.max(maxCell, cell.offsetHeight);
+                    });
+                }
+                h = Math.max(CELL_PAD_TOP * 2 + maxCell, fallbackLaneH);
             }
-            const h = Math.max(CELL_PAD_TOP * 2 + maxCell, fallbackLaneH);
             next[band.lane] = h;
             if (laneHeights[band.lane] !== h) changed = true;
         });
@@ -724,7 +776,7 @@ function GanttChart({ filterComplete = false }) {
                                                     </div>
                                                 );
                                             })}
-                                            {band.cells.map((cell) => (
+                                            {band.cells && band.cells.map((cell) => (
                                                 <div
                                                     key={cell.key}
                                                     data-cell="1"
@@ -780,6 +832,44 @@ function GanttChart({ filterComplete = false }) {
                                                             +{cell.extra} more
                                                         </div>
                                                     )}
+                                                </div>
+                                            ))}
+                                            {/* Installer lane: horizontal range bars spanning start_install → comp_eta,
+                                                packed into rows so overlapping installs never collide. Same raw row as
+                                                the shipping card (the mirror), so click/hover parity is preserved. */}
+                                            {band.bars && band.bars.map((release) => (
+                                                <div
+                                                    key={`${release.job}-${release.release}`}
+                                                    role="button"
+                                                    className="absolute rounded shadow-sm px-1.5 flex items-center overflow-hidden select-none cursor-pointer hover:opacity-100"
+                                                    style={{
+                                                        left: release.left,
+                                                        top: release.top,
+                                                        width: release.width,
+                                                        height: band.barH,
+                                                        backgroundColor: band.color,
+                                                        opacity: 0.9,
+                                                    }}
+                                                    onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); }}
+                                                    onMouseMove={(e) => handleMouseMove(e, {
+                                                        type: 'release',
+                                                        job: release.job,
+                                                        release: release.release,
+                                                        jobName: release.jobName,
+                                                        description: release.description,
+                                                        stage: release.stage,
+                                                        team: release.team,
+                                                        startDate: release.startDate,
+                                                        endDate: release.endDate,
+                                                        pm: release.pm,
+                                                        by: release.by
+                                                    })}
+                                                    onMouseLeave={handleMouseLeave}
+                                                >
+                                                    <span className="block text-white text-[11px] font-semibold leading-none truncate">
+                                                        <span className="font-bold">{release.job}-{release.release}</span>
+                                                        {release.jobName ? ` · ${release.jobName}` : ''}
+                                                    </span>
                                                 </div>
                                             ))}
                                         </div>
