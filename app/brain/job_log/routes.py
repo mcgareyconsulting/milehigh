@@ -593,7 +593,6 @@ def get_jobs():
                     'start_install_asap': serialize_value(job.start_install_asap),
                     'start_install_no_color': serialize_value(job.start_install_no_color),
                     'Ship Date': serialize_value(job.ship_date),
-                    'ship_date_no_color': serialize_value(job.ship_date_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'comp_eta_effective': serialize_value(_comp_eta_effective(job)),
@@ -975,7 +974,6 @@ def get_all_jobs():
                     'start_install_asap': serialize_value(job.start_install_asap),
                     'start_install_no_color': serialize_value(job.start_install_no_color),
                     'Ship Date': serialize_value(job.ship_date),
-                    'ship_date_no_color': serialize_value(job.ship_date_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'comp_eta_effective': serialize_value(_comp_eta_effective(job)),
@@ -1827,9 +1825,8 @@ def update_start_install(job, release):
             # Reverting to formula-driven — drop the hard comp_eta; the recalc below recomputes it.
             job_record.comp_eta = None
             # Ship date is anchored to a concrete start_install; a formula-driven install has
-            # none, so drop the ship date (and its color marker) alongside it.
+            # none, so drop the ship date alongside it.
             job_record.ship_date = None
-            job_record.ship_date_no_color = False
             job_record.last_updated_at = datetime.utcnow()
             job_record.source_of_update = 'Brain'
 

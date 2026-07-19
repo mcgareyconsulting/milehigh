@@ -442,7 +442,6 @@ def transform_job_for_display(job_dict: Dict[str, Any]) -> Dict[str, Any]:
 
     ship_date = job_dict.get('ship_date')
     transformed['Ship Date'] = ship_date.isoformat() if ship_date else None
-    transformed['ship_date_no_color'] = job_dict.get('ship_date_no_color')
 
     transformed['Job Comp'] = job_dict.get('job_comp')
     transformed['Invoiced'] = job_dict.get('invoiced')

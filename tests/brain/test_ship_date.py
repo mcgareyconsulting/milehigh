@@ -3,7 +3,7 @@ Tests for the ship_date feature on Releases:
   - PATCH /brain/update-ship-date/<job>/<release> — set, clear, invalid date, 404
   - UpdateShipDateCommand — writes the row + emits an event, no Trello/scheduling
   - undo of update_ship_date via POST /brain/events/<id>/undo
-  - neutralize_install_date_cascade also strips ship_date color on completion
+  - neutralize_install_date_cascade strips the hard install color; ship follows it
 
 ship_date is a plain hard date: no Trello push, no comp_eta/scheduling recompute.
 Uses the real in-memory SQLite DB. admin_client (tests/brain/conftest.py) auths as admin.
@@ -61,7 +61,6 @@ class TestUpdateShipDateRoute:
             db.session.expire_all()
             rel = Releases.query.filter_by(job=500, release='A').first()
             assert rel.ship_date == date(2026, 9, 15)
-            assert rel.ship_date_no_color is False
             ev = ReleaseEvents.query.filter_by(job=500, release='A', action='update_ship_date').first()
             assert ev is not None
             assert ev.payload['to'] == '2026-09-15'
@@ -123,7 +122,6 @@ class TestUpdateShipDateRoute:
             rel = Releases.query.filter_by(job=504, release='A').first()
             assert rel.start_install_formulaTF is True
             assert rel.ship_date is None
-            assert rel.ship_date_no_color is False
 
     def test_does_not_push_trello_or_recalc(self, admin_client, app):
         """Setting a ship date must not touch Trello or the scheduling cascade."""
@@ -167,18 +165,21 @@ def test_undo_update_ship_date_reverts_release(admin_client, app):
         assert new_ev.payload['undone_event_id'] == ev.id
 
 
-# --- completion cascade neutralizes ship color ------------------------------------
+# --- completion cascade neutralizes install color (ship follows it) ---------------
 
-def test_neutralize_cascade_strips_ship_color(app):
+def test_neutralize_cascade_neutralizes_install_and_ship_follows(app):
+    """The cascade strips the hard install date's color; the ship date has no separate
+    color flag — it renders neutral by following start_install_no_color, so neutralizing
+    the install date neutralizes both. The dates themselves are preserved."""
     from app.brain.job_log.features.start_install.neutralize_install_date_cascade import (
         neutralize_install_date_cascade,
     )
     with app.app_context():
-        # Formula-driven install (no install neutralization) but a concrete ship date.
+        # Hard install date + a ship date one business day before it.
         rel = make_release(
             520, 'A',
-            start_install=None, start_install_formulaTF=True,
-            ship_date=date(2026, 9, 15), ship_date_no_color=False,
+            start_install=date(2026, 9, 16), start_install_formulaTF=False,
+            ship_date=date(2026, 9, 15),
         )
         parent = _seed_event(job=520, release='A', action='update_stage',
                              payload={'from': 'x', 'to': 'Complete'})
@@ -192,12 +193,13 @@ def test_neutralize_cascade_strips_ship_color(app):
         assert changed is True
         db.session.expire_all()
         rel = Releases.query.filter_by(job=520, release='A').first()
-        assert rel.ship_date == date(2026, 9, 15)  # date preserved
-        assert rel.ship_date_no_color is True       # color stripped
-        # A linked child event records the ship-date neutralization.
+        assert rel.start_install == date(2026, 9, 16)  # date preserved
+        assert rel.ship_date == date(2026, 9, 15)      # date preserved
+        assert rel.start_install_no_color is True       # drives both cells' neutral render
+        # A linked child event records the install-date neutralization.
         child = ReleaseEvents.query.filter_by(job=520, release='A', action='updated').all()
         assert any(
-            (c.payload or {}).get('field') == 'ship_date_no_color'
+            (c.payload or {}).get('field') == 'start_install_no_color'
             and (c.payload or {}).get('parent_event_id') == parent.id
             for c in child
         )

@@ -8,7 +8,7 @@ exports:
 imports_from: [app.models, app.services.job_event_service]
 imported_by: [app/brain/job_log/routes.py]
 invariants:
-  - ship_date is a plain hard date; setting it clears ship_date_no_color
+  - ship_date is a plain hard date; its color follows start_install_no_color (no separate flag)
   - Deduplicated events raise ValueError, matching UpdateStartInstallCommand
   - Does NOT push to Trello and does NOT affect comp_eta / scheduling
 """
@@ -49,7 +49,7 @@ class UpdateShipDateCommand:
     Flow:
       1. Fetch Releases row.
       2. Create `update_ship_date` event (raises ValueError on dedup hit).
-      3. Set ship_date + reset ship_date_no_color.
+      3. Set ship_date.
       4. Commit.
     Unlike start_install, this pushes nothing to Trello and touches no scheduling.
     """
@@ -93,8 +93,6 @@ class UpdateShipDateCommand:
             raise ValueError("Event already exists")
 
         job_record.ship_date = self.ship_date
-        # A user-set ship date is a normal (colored) date — drop any no-color marker.
-        job_record.ship_date_no_color = False
         job_record.last_updated_at = datetime.utcnow()
         job_record.source_of_update = self.source_of_update
 

@@ -1,18 +1,17 @@
 """
 @milehigh-header
 schema_version: 1
-purpose: Neutralize an install date's (and ship date's) color when a release reaches the complete zone (stage='Complete'/'Install Complete', job_comp='X', invoiced='X') — the DATES are retained, only their red/green/yellow color flagging is stripped (start_install_no_color / ship_date_no_color = True) so a finished release doesn't show an alarming date. Emits a child audit event per neutralized field, linked by parent_event_id.
+purpose: Neutralize a hard install date's color when a release reaches the complete zone (stage='Complete'/'Install Complete', job_comp='X', invoiced='X') — the DATE is retained, only its red/green/yellow color flagging is stripped (start_install_no_color = True) so a finished release doesn't show an alarming date. The ship date's color follows start_install_no_color, so it neutralizes with the install date and needs no separate flag. Emits a child audit event, linked by parent_event_id.
 exports:
-  neutralize_install_date_cascade: Set start_install_no_color / ship_date_no_color (and clear start_install_asap) on a completed release, keeping the dates
+  neutralize_install_date_cascade: Set start_install_no_color (and clear start_install_asap) on a completed release, keeping the date
 imports_from: [app.models, app.services.job_event_service]
 imported_by: [app/brain/job_log/features/stage/command.py, app/brain/job_log/routes.py]
 invariants:
   - Install neutralization is a no-op unless a hard date is present (start_install_formulaTF is False and start_install is set)
-  - Ship neutralization is a no-op unless ship_date is set
   - KEEPS start_install / ship_date and the hard-date flag (dates preserved; scheduling still skips hard rows)
-  - Sets *_no_color=True (renders neutral) and clears start_install_asap (no red)
-  - Idempotent: no-op when already neutral (and install: not ASAP)
-  - Emits action='updated' per field with parent_event_id for audit bundling
+  - Sets start_install_no_color=True (renders both install and ship neutral) and clears start_install_asap (no red)
+  - Idempotent: no-op when already neutral and not ASAP
+  - Emits action='updated' with parent_event_id for audit bundling
 """
 from datetime import datetime
 from typing import Literal
@@ -38,13 +37,12 @@ def neutralize_install_date_cascade(
     reason: CascadeReason,
     source: str = 'Brain',
 ) -> bool:
-    """Strip the color from a hard install date (and the ship date) once the release is
-    installed/complete.
+    """Strip the color from a hard install date once the release is installed/complete.
 
-    Keeps start_install / ship_date (and the hard-date flag) so the actual dates are
-    preserved, but sets start_install_no_color / ship_date_no_color=True so they render
-    neutral instead of red/green/yellow, and clears start_install_asap so a finished
-    release never shows the red ASAP flag.
+    Keeps start_install (and the hard-date flag) so the actual date is preserved, but sets
+    start_install_no_color=True so it renders neutral instead of red/green/yellow, and clears
+    start_install_asap so a finished release never shows the red ASAP flag. The ship date's
+    color follows start_install_no_color, so it goes neutral in lockstep — no separate write.
 
     Returns True if it changed anything, False on no-op. Caller commits.
     """
@@ -81,16 +79,6 @@ def neutralize_install_date_cascade(
             _emit_neutralized('start_install_no_color', already_neutral)
             changed = True
 
-    # --- Ship date ---
-    # ship_date is always a plain hard date (no formula), so any concrete value is worth
-    # neutralizing.
-    if job_record.ship_date is not None:
-        ship_already_neutral = bool(getattr(job_record, 'ship_date_no_color', False))
-        if not ship_already_neutral:
-            job_record.ship_date_no_color = True
-            _emit_neutralized('ship_date_no_color', ship_already_neutral)
-            changed = True
-
     if not changed:
         return False
 
@@ -98,7 +86,7 @@ def neutralize_install_date_cascade(
     job_record.source_of_update = source
 
     logger.info(
-        "Neutralized install/ship date color on completion cascade",
+        "Neutralized install date color on completion cascade",
         extra={
             'job': job_record.job,
             'release': job_record.release,

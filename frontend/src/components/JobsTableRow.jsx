@@ -1256,10 +1256,11 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
 
                     // Handle Ship Date column: clickable cell that opens the same modal. A plain
                     // hard date (past = yellow, future = green), neutralized when the release
-                    // completes (ship_date_no_color). No ASAP/formula concepts apply.
+                    // completes. Its color follows start_install_no_color — no separate flag.
+                    // No ASAP/formula concepts apply.
                     if (column === 'Ship Date') {
                         const displayValue = formatDate(localShipDate);
-                        const isNoColor = row['ship_date_no_color'] === true;
+                        const isNoColor = row['start_install_no_color'] === true;
                         const hasDate = !!localShipDate;
                         const shipDay = toYmd(localShipDate);
                         let shipBgClass;
