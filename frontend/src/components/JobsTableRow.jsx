@@ -1254,19 +1254,28 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                         );
                     }
 
-                    // Handle Ship Date column: clickable cell that opens the same modal. A plain
-                    // hard date (past = yellow, future = green), neutralized when the release
-                    // completes. Its color follows start_install_no_color — no separate flag.
-                    // No ASAP/formula concepts apply.
+                    // Handle Ship Date column: clickable cell that opens the same modal.
+                    // The ship date is a derived milestone (~1 biz day before Start install),
+                    // so its cell MIRRORS the paired Start install cell's color exactly — the
+                    // two columns must always read the same. Key every branch on the INSTALL
+                    // date/flags, not the ship date's own past/future: ship crosses "today" a
+                    // day earlier than install, so keying on shipDay would show yellow while
+                    // install is still green. ASAP propagates red; formula/no-color/no-date
+                    // fall through to neutral, matching Start install above.
                     if (column === 'Ship Date') {
                         const displayValue = formatDate(localShipDate);
+                        const isAsap = row['start_install_asap'] === true;
                         const isNoColor = row['start_install_no_color'] === true;
                         const hasDate = !!localShipDate;
-                        const shipDay = toYmd(localShipDate);
+                        // Same hard-date test the Start install cell uses.
+                        const isHardDate = !isAsap && !isNoColor && row['start_install_formulaTF'] === false && localStartInstall;
+                        const isHardDatePast = isHardDate && toYmd(localStartInstall) < localTodayStr();
                         let shipBgClass;
-                        if (!hasDate || isNoColor) {
+                        if (isAsap) {
+                            shipBgClass = 'bg-red-500 text-white hover:bg-red-600 font-semibold';
+                        } else if (!hasDate || isNoColor || !isHardDate) {
                             shipBgClass = `${rowBgClass} text-gray-900 dark:text-slate-100 hover:bg-accent-50 dark:hover:bg-slate-600`;
-                        } else if (shipDay < localTodayStr()) {
+                        } else if (isHardDatePast) {
                             shipBgClass = 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold';
                         } else {
                             shipBgClass = 'bg-green-400 text-gray-900 hover:bg-green-500 font-semibold';
