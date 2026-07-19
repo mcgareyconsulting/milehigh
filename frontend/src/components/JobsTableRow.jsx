@@ -1263,8 +1263,9 @@ export function JobsTableRow({ row, columns, formatCellValue, formatDate, rowInd
                     // install is still green. ASAP propagates red; formula/no-color/no-date
                     // fall through to neutral, matching Start install above.
                     if (column === 'Ship Date') {
-                        const displayValue = formatDate(localShipDate);
                         const isAsap = row['start_install_asap'] === true;
+                        // Show "ASAP" instead of the underlying date, matching the Start install cell.
+                        const displayValue = isAsap ? 'ASAP' : formatDate(localShipDate);
                         const isNoColor = row['start_install_no_color'] === true;
                         const hasDate = !!localShipDate;
                         // Same hard-date test the Start install cell uses.
