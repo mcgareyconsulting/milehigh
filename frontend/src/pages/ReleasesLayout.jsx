@@ -27,7 +27,7 @@ import Dropdown, { DropdownItem } from '../components/Dropdown';
 import { jobsApi } from '../services/jobsApi';
 import { checkAuth, userCanAccessKatieFilter } from '../utils/auth';
 import { generateJobLogReviewPdf } from '../utils/jobLogPdf';
-import { reviewSort, columnOrder, COLUMN_WIDTH_PERCENT, FILTERABLE_COLUMNS } from '../utils/jobLogColumns';
+import { reviewSort, columnOrder, COLUMN_WIDTH_PERCENT, FILTERABLE_COLUMNS, DATE_COLUMNS } from '../utils/jobLogColumns';
 
 // Friendly labels + display order for the active-filter chips (keys match the column-filter keys).
 const JL_FILTER_LABELS = {
@@ -652,7 +652,8 @@ function ReleasesLayout() {
 
     const handleExportCSV = () => {
         const exportColumns = columnHeaders.filter(col => col !== 'Urgency');
-        const dateColumns = new Set(['Released', 'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced']);
+        // CSV formats the shared date columns as ISO, plus the two X/blank status columns.
+        const dateColumns = new Set([...DATE_COLUMNS, 'Job Comp', 'Invoiced']);
 
         const toIsoDate = (value) => {
             if (!value) return '';

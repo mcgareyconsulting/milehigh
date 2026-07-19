@@ -18,42 +18,32 @@
  */
 import React, { useState, useEffect } from 'react';
 import { jobsApi } from '../services/jobsApi';
+import { toYmd, subtractBusinessDays, addBusinessDays } from '../utils/formatters';
 
-export function StartInstallDateModal({ isOpen, onClose, currentDate, currentInstaller, onSave, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap }) {
+export function StartInstallDateModal({ isOpen, onClose, currentDate, currentShipDate, currentInstaller, onSave, onSaveShipDate, onClearHardDate, onSetAsap, onClearAsap, jobNumber, releaseNumber, startInstallFormulaTF, isAsap }) {
     const [dateInput, setDateInput] = useState('');
+    const [shipDateInput, setShipDateInput] = useState('');
     const [asapToggle, setAsapToggle] = useState(false);
     const [installer, setInstaller] = useState('');
     const [installerOptions, setInstallerOptions] = useState([]);
     const [error, setError] = useState('');
 
     const initialInstaller = currentInstaller || '';
+    const initialShipYmd = toYmd(currentShipDate);
 
     useEffect(() => {
         if (isOpen) {
             setAsapToggle(!!isAsap);
             setInstaller(initialInstaller);
+            setShipDateInput(toYmd(currentShipDate));
             if (currentDate && !isAsap) {
-                try {
-                    const isoDate = typeof currentDate === 'string'
-                        ? currentDate.split('T')[0]
-                        : (() => {
-                            const d = new Date(currentDate);
-                            if (isNaN(d.getTime())) return '';
-                            const y = d.getFullYear();
-                            const m = String(d.getMonth() + 1).padStart(2, '0');
-                            const day = String(d.getDate()).padStart(2, '0');
-                            return `${y}-${m}-${day}`;
-                        })();
-                    setDateInput(isoDate || '');
-                } catch {
-                    setDateInput('');
-                }
+                setDateInput(toYmd(currentDate));
             } else {
                 setDateInput('');
             }
             setError('');
         }
-    }, [isOpen, currentDate, isAsap, initialInstaller]);
+    }, [isOpen, currentDate, currentShipDate, isAsap, initialInstaller]);
 
     useEffect(() => {
         if (isOpen && installerOptions.length === 0) {
@@ -63,8 +53,35 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
         }
     }, [isOpen, installerOptions.length]);
 
+    // The two dates stay linked at exactly one business day apart (ship = install − 1).
+    // Editing either estimates the other — symmetrically — as long as they're currently
+    // linked (or the other is empty). A larger, deliberately-set gap is left untouched so
+    // manual entry sticks.
     const handleDateInputChange = (e) => {
-        setDateInput(e.target.value);
+        const value = e.target.value;
+        const prevInstall = dateInput;
+        setDateInput(value);
+        // Re-estimate Ship (install − 1 biz day) only when the two were linked, and never on a
+        // clear — clearing Install leaves Ship alone, which also lets you set a custom gap by
+        // clearing one field and typing the other independently.
+        const shipLinked = !shipDateInput
+            || (prevInstall && shipDateInput === subtractBusinessDays(prevInstall, 1));
+        if (value && shipLinked) {
+            setShipDateInput(subtractBusinessDays(value, 1));
+        }
+        setError('');
+    };
+
+    const handleShipDateChange = (e) => {
+        const value = e.target.value;
+        const prevShip = shipDateInput;
+        setShipDateInput(value);
+        // ASAP owns the install date, so never move it from a ship edit.
+        const installLinked = !dateInput
+            || (prevShip && dateInput === addBusinessDays(prevShip, 1));
+        if (value && installLinked && !asapToggle) {
+            setDateInput(addBusinessDays(value, 1));
+        }
         setError('');
     };
 
@@ -76,19 +93,30 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
     };
 
     const installerChanged = installer !== initialInstaller;
+    const shipChanged = (shipDateInput || null) !== (initialShipYmd || null);
     // Turning ASAP on (off -> on) stamps the hard date via the ASAP path. When ASAP is
     // already set, the toggle stays on but the installer/date controls still work — an
     // ASAP release still needs an installer assigned (that's what seeds the mirror bar).
     const turningAsapOn = asapToggle && !isAsap;
 
     const handleSave = () => {
+        // Ship date is independent of install/ASAP — persist it whenever it changed, so it
+        // works alongside a date/installer save or on its own.
+        if (shipChanged && onSaveShipDate) {
+            onSaveShipDate(shipDateInput || null);
+        }
         if (turningAsapOn) {
             // Flag ASAP (which stamps the date); also apply an installer if one was picked.
             onSetAsap(installerChanged ? installer : undefined);
             return;
         }
+        if (!dateInput && !installerChanged && !shipChanged) {
+            setError('Please select an install date, ship date, or installer');
+            return;
+        }
         if (!dateInput && !installerChanged) {
-            setError('Please select a date or installer');
+            // Ship-date-only change: nothing to send to the install endpoint.
+            onClose();
             return;
         }
         // An already-ASAP row keeps its ASAP date (pass null -> installer-only); otherwise use
@@ -98,6 +126,7 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
 
     const handleCancel = () => {
         setDateInput('');
+        setShipDateInput('');
         setAsapToggle(!!isAsap);
         setInstaller(initialInstaller);
         setError('');
@@ -107,15 +136,15 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
     if (!isOpen) return null;
 
     const confirmLabel = turningAsapOn ? 'Set ASAP' : 'Save';
-    const confirmEnabled = turningAsapOn || !!dateInput || installerChanged;
+    const confirmEnabled = turningAsapOn || !!dateInput || installerChanged || shipChanged;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4">
                 <div className="bg-gradient-to-r from-accent-500 to-accent-600 px-6 py-4 rounded-t-xl">
                     <div className="flex items-center justify-between">
                         <h2 className="text-2xl font-bold text-white">
-                            Set Start Install Date
+                            Set Install &amp; Ship Dates
                         </h2>
                         <button
                             onClick={handleCancel}
@@ -147,28 +176,47 @@ export function StartInstallDateModal({ isOpen, onClose, currentDate, currentIns
                         </span>
                     </label>
 
-                    <div className="mb-6">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Date
-                        </label>
-                        <input
-                            type="date"
-                            value={dateInput}
-                            onChange={handleDateInputChange}
-                            disabled={asapToggle}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 ${
-                                error ? 'border-red-500' : 'border-gray-300'
-                            } ${asapToggle ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                        />
-                        {error && (
-                            <p className="text-red-600 text-sm mt-1">{error}</p>
-                        )}
-                        <p className="text-gray-500 text-xs mt-2">
-                            {asapToggle
-                                ? 'ASAP sets a hard Start Install one week out and displays "ASAP" in red.'
-                                : 'Saving a date sets it as a hard date. Start Install dates cascade automatically.'}
-                        </p>
+                    {/* Ship Date → Start Install, left to right (chronological flow). Editing
+                        one estimates the other (ship = install − 1 business day); either can be
+                        overridden manually for larger ship→install gaps. */}
+                    <div className="mb-2 flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                        <div className="flex-1 min-w-0">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Ship Date
+                            </label>
+                            <input
+                                type="date"
+                                value={shipDateInput}
+                                onChange={handleShipDateChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
+                            />
+                        </div>
+                        <div className="hidden sm:flex items-center pb-2 text-gray-400 text-xl select-none" aria-hidden="true">
+                            →
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Start Install Date
+                            </label>
+                            <input
+                                type="date"
+                                value={dateInput}
+                                onChange={handleDateInputChange}
+                                disabled={asapToggle}
+                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 ${
+                                    error ? 'border-red-500' : 'border-gray-300'
+                                } ${asapToggle ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                            />
+                        </div>
                     </div>
+                    {error && (
+                        <p className="text-red-600 text-sm mb-2">{error}</p>
+                    )}
+                    <p className="text-gray-500 text-xs mb-6">
+                        {asapToggle
+                            ? 'ASAP sets a hard Start Install one week out and displays "ASAP" in red.'
+                            : 'Ship is estimated one business day before Start Install; edit either to override for a larger gap. Saving Start Install sets a hard date and cascades; Ship date does not push to Trello or affect scheduling.'}
+                    </p>
 
                     <div className="mb-6">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
