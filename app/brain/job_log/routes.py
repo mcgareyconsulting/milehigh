@@ -33,6 +33,7 @@ from app.api.helpers import DEFAULT_FAB_ORDER, active_releases_filter
 from app.brain.job_log.features.start_install.command import UpdateStartInstallCommand
 from app.brain.job_log.features.start_install.assign_installer import AssignInstallerCommand
 from app.brain.job_log.features.start_install.neutralize_install_date_cascade import neutralize_install_date_cascade
+from app.brain.job_log.features.ship_date.command import UpdateShipDateCommand
 from app.brain.job_log.scheduling.calculator import calculate_install_complete_date
 from datetime import datetime, timedelta
 from sqlalchemy import or_
@@ -591,6 +592,8 @@ def get_jobs():
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'start_install_asap': serialize_value(job.start_install_asap),
                     'start_install_no_color': serialize_value(job.start_install_no_color),
+                    'Ship Date': serialize_value(job.ship_date),
+                    'ship_date_no_color': serialize_value(job.ship_date_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'comp_eta_effective': serialize_value(_comp_eta_effective(job)),
@@ -971,6 +974,8 @@ def get_all_jobs():
                     'start_install_formulaTF': serialize_value(job.start_install_formulaTF),
                     'start_install_asap': serialize_value(job.start_install_asap),
                     'start_install_no_color': serialize_value(job.start_install_no_color),
+                    'Ship Date': serialize_value(job.ship_date),
+                    'ship_date_no_color': serialize_value(job.ship_date_no_color),
                     'installer': serialize_value(job.installer),
                     'Comp. ETA': serialize_value(job.comp_eta),
                     'comp_eta_effective': serialize_value(_comp_eta_effective(job)),
@@ -1795,6 +1800,7 @@ def update_start_install(job, release):
                 return jsonify({'error': 'Job not found'}), 404
 
             old_start_install = job_record.start_install
+            old_ship_date = job_record.ship_date
 
             event = JobEventService.create(
                 job=job,
@@ -1804,7 +1810,9 @@ def update_start_install(job, release):
                 payload={
                     'from': old_start_install.isoformat() if old_start_install else None,
                     'to': None,
-                    'cleared_hard_date': True
+                    'cleared_hard_date': True,
+                    # Ship is anchored to start_install, so clearing the hard date drops it too.
+                    'ship_date_from': old_ship_date.isoformat() if old_ship_date else None,
                 }
             )
 
@@ -1818,6 +1826,10 @@ def update_start_install(job, release):
             job_record.start_install_formula = None
             # Reverting to formula-driven — drop the hard comp_eta; the recalc below recomputes it.
             job_record.comp_eta = None
+            # Ship date is anchored to a concrete start_install; a formula-driven install has
+            # none, so drop the ship date (and its color marker) alongside it.
+            job_record.ship_date = None
+            job_record.ship_date_no_color = False
             job_record.last_updated_at = datetime.utcnow()
             job_record.source_of_update = 'Brain'
 
@@ -1937,6 +1949,78 @@ def update_start_install(job, release):
         except:
             pass
         
+        db.session.rollback()
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+
+@brain_bp.route("/update-ship-date/<int:job>/<release>", methods=["PATCH"])
+@login_required
+def update_ship_date(job, release):
+    """
+    Set (or clear) the ship_date for a job-release combination.
+
+    ship_date is an independent hard date, ideally one business day before
+    start_install. Unlike start_install it does NOT push to Trello or affect
+    comp_eta / scheduling — it is stored, event-logged, undoable, and filterable.
+
+    Request Body:
+        { "ship_date": str (YYYY-MM-DD, or null to clear) }
+
+    Returns:
+        JSON object with 'status': 'success' or 'error'
+    """
+    from app.models import db
+    from datetime import datetime
+
+    ship_date_str = (request.json or {}).get('ship_date')
+    logger.debug("ship_date_update_received", job=job, release=release,
+                 ship_date=ship_date_str)
+
+    try:
+        ship_date_val = None
+        if ship_date_str:
+            try:
+                ship_date_val = datetime.strptime(ship_date_str, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid ship_date; expected YYYY-MM-DD'}), 400
+
+        try:
+            result = UpdateShipDateCommand(
+                job_id=job,
+                release=release,
+                ship_date=ship_date_val,
+            ).execute()
+        except ValueError as ve:
+            msg = str(ve)
+            if msg == "Event already exists":
+                return jsonify({'error': 'Event already exists'}), 400
+            if 'not found' in msg:
+                return jsonify({'error': 'Job not found'}), 404
+            raise
+
+        return jsonify({
+            'status': 'success',
+            'event_id': result.event_id,
+        }), 200
+
+    except Exception as e:
+        logger.error("ship_date_update_failed", job=job, release=release,
+                     error=str(e), error_type=type(e).__name__, exc_info=True)
+
+        try:
+            from app.services.system_log_service import SystemLogService
+            SystemLogService.log_error(
+                category='operation_failure',
+                operation='update_ship_date',
+                error=e,
+                context={'job': job, 'release': release, 'ship_date': ship_date_str}
+            )
+        except Exception:
+            pass
+
         db.session.rollback()
         return jsonify({
             'error': str(e),
@@ -2596,12 +2680,14 @@ def get_events():
         from app.models import Releases
         UNDO_WHITELIST = {
             'update_stage', 'update_notes', 'update_fab_order', 'update_start_install',
+            'update_ship_date',
         }
         UNDO_FIELD = {
             'update_stage': 'stage',
             'update_notes': 'notes',
             'update_fab_order': 'fab_order',
             'update_start_install': 'start_install',
+            'update_ship_date': 'ship_date',
         }
         # DWL whitelist: submittal events with action='updated' whose payload
         # targets one of these fields. Mirrors _DWL_UNDO_FIELDS in the undo
@@ -2654,8 +2740,8 @@ def get_events():
                     return None
                 field = UNDO_FIELD[ev.action]
                 val = getattr(row, field, None)
-                # Normalize start_install to ISO string for parity with payload encoding.
-                if field == 'start_install' and val is not None:
+                # Normalize date fields to ISO string for parity with payload encoding.
+                if field in ('start_install', 'ship_date') and val is not None:
                     return val.isoformat()
                 return val
             # SubmittalEvents — DWL undo eligibility.
@@ -2748,6 +2834,7 @@ _UNDO_WHITELIST_FIELD = {
     'update_notes': 'notes',
     'update_fab_order': 'fab_order',
     'update_start_install': 'start_install',
+    'update_ship_date': 'ship_date',
     'set_asap': 'start_install_asap',
     'clear_asap': 'start_install_asap',
 }
@@ -2758,7 +2845,7 @@ def _staleness_check(event, job_record):
     a (current, expected) tuple if stale. Only meaningful for whitelist actions."""
     field = _UNDO_WHITELIST_FIELD[event.action]
     current = getattr(job_record, field, None)
-    if field == 'start_install' and current is not None:
+    if field in ('start_install', 'ship_date') and current is not None:
         current_for_compare = current.isoformat()
     else:
         current_for_compare = current
@@ -2808,6 +2895,16 @@ def _dispatch_undo(event, *, source, defer_cascade):
             job_id=event.job, release=event.release,
             start_install=from_date,
             is_hard_date=payload.get('is_hard_date', True),
+            source=source,
+            undone_event_id=event.id,
+        ).execute()
+    if action == 'update_ship_date':
+        from datetime import datetime as _dt
+        from_str = payload['from']
+        from_date = _dt.strptime(from_str, '%Y-%m-%d').date() if from_str else None
+        return UpdateShipDateCommand(
+            job_id=event.job, release=event.release,
+            ship_date=from_date,
             source=source,
             undone_event_id=event.id,
         ).execute()

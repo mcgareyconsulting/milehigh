@@ -65,6 +65,15 @@ export default function StartInstallEditor({
         }
     };
 
+    const handleShipDateSave = async (shipDate) => {
+        try {
+            await jobsApi.updateShipDate(job, release, shipDate);
+            refresh();
+        } catch (e) {
+            alert(`Failed to update ship date: ${e.message}`);
+        }
+    };
+
     const handleSetAsap = async (installer) => {
         setOpen(false);
         try {
@@ -134,8 +143,10 @@ export default function StartInstallEditor({
                     isOpen={open}
                     onClose={() => setOpen(false)}
                     currentDate={value}
+                    currentShipDate={row['Ship Date']}
                     currentInstaller={row['installer']}
                     onSave={handleSave}
+                    onSaveShipDate={handleShipDateSave}
                     onClearHardDate={handleClearHardDate}
                     onSetAsap={handleSetAsap}
                     onClearAsap={handleClearAsap}

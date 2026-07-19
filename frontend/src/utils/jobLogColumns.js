@@ -84,6 +84,7 @@ export const columnOrder = [
     'Released',
     'Fab Order',
     'Stage',
+    'Ship Date',
     'Start install',
     'Comp. ETA',
     'Job Comp',
@@ -112,6 +113,7 @@ export const COLUMN_WIDTH_PERCENT = {
     'Fab Order': 4,
     'Stage': 6.5,
     'Start install': 5.5,
+    'Ship Date': 5,
     'Comp. ETA': 5,
     'Job Comp': 4.5,
     'Invoiced': 4.5,
@@ -125,9 +127,9 @@ export const COLUMN_WIDTH_PERCENT = {
 export const FILTERABLE_COLUMNS = new Set([
     'Job #', 'Release #', 'Job', 'Description', 'Fab Hrs', 'Install HRS',
     'Paint color', 'PM', 'BY', 'Released', 'Fab Order', 'Stage',
-    'Start install', 'Comp. ETA', 'Job Comp', 'Invoiced', 'Mat. Ord.',
+    'Start install', 'Ship Date', 'Comp. ETA', 'Job Comp', 'Invoiced', 'Mat. Ord.',
 ]);
 
 // Date-valued columns: their header dropdown sorts chronologically and shows
 // "Newest → Oldest" / "Oldest → Newest" labels instead of A→Z / Z→A.
-export const DATE_COLUMNS = new Set(['Released', 'Start install', 'Comp. ETA']);
+export const DATE_COLUMNS = new Set(['Released', 'Start install', 'Ship Date', 'Comp. ETA']);

@@ -189,6 +189,19 @@ class JobsApi {
         }
     }
 
+    async updateShipDate(job, release, shipDate) {
+        try {
+            // Pass null to clear the ship date; a YYYY-MM-DD string to set it.
+            const response = await axios.patch(
+                `${API_BASE_URL}/brain/update-ship-date/${job}/${release}`,
+                { ship_date: shipDate || null }
+            );
+            return response.data;
+        } catch (error) {
+            throw this._handleError(error, 'Failed to update ship date');
+        }
+    }
+
     async getInstallerTeams() {
         try {
             const response = await axios.get(`${API_BASE_URL}/brain/installer-teams`);

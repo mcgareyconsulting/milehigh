@@ -479,6 +479,13 @@ class Releases(db.Model):
     # complete zone (Install Complete/Complete, job_comp='X', invoiced='X') so a finished
     # release doesn't show an alarming date. The start_install value itself is retained.
     start_install_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # Planned ship date. Independent hard date, ideally one business day before start_install
+    # (bidirectional estimate in the modal). Unlike start_install it does NOT drive Trello due
+    # dates or comp_eta/scheduling — start_install remains the scheduling driver.
+    ship_date = db.Column(db.Date)
+    # Mirrors start_install_no_color: suppresses the ship date's color flag once the release
+    # reaches the complete zone, so a shipped release doesn't show an alarming date.
+    ship_date_no_color = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     installer = db.Column(db.String(64), nullable=True)  # Installer team; matches Trello list name
     # Installer headcount used to size install duration. Parsed/persisted from the Trello
     # card description ("**Number of Guys:** N"); treated as 2 when absent.
@@ -539,6 +546,8 @@ class Releases(db.Model):
             "start_install_formulaTF": self.start_install_formulaTF,
             "start_install_asap": self.start_install_asap,
             "start_install_no_color": self.start_install_no_color,
+            "ship_date": self.ship_date,
+            "ship_date_no_color": self.ship_date_no_color,
             "installer": self.installer,
             "num_guys": self.num_guys,
             "comp_eta": self.comp_eta,

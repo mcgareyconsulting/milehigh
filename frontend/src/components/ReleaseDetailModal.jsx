@@ -22,6 +22,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { jobsApi } from '../services/jobsApi';
+import { subtractBusinessDays } from '../utils/formatters';
 import { API_BASE_URL } from '../utils/api';
 import { checkAuth } from '../utils/auth';
 import { Badge } from './Badge';
@@ -193,6 +194,14 @@ export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
     const stageGroup = release['Stage Group'] || release.stage_group;
     const startInstall = release['Start install'] || release.start_install;
     const compEta = release['comp_eta_effective'] || release['Comp. ETA'] || release.comp_eta;
+    // Ship date mirrors the timeline: the explicit hard Ship Date when set, else estimated
+    // one business day before a hard Start install. The "(est)" label makes the two distinct.
+    const shipDateHard = release['Ship Date'] || release.ship_date;
+    const installIsHard = (release['start_install_formulaTF'] ?? release.start_install_formulaTF) === false;
+    const shipDateEst = !shipDateHard && installIsHard && startInstall
+        ? subtractBusinessDays(String(startInstall).slice(0, 10), 1)
+        : '';
+    const shipDateValue = shipDateHard || shipDateEst;
     const installer = release.installer;
     const pm = release['PM'] || release.pm;
     const by = release['BY'] || release.by;
@@ -254,6 +263,7 @@ export function ReleaseDetailModal({ isOpen, onClose, release, accentColor }) {
                             </Field>
                             <Field label="Stage Group">{stageGroup}</Field>
                             <Field label="Installer">{installer}</Field>
+                            <Field label={shipDateHard ? 'Ship Date' : 'Ship Date (est)'}>{fmtDate(shipDateValue)}</Field>
                             <Field label="Start Install">{fmtDate(startInstall)}</Field>
                             <Field label="Comp. ETA">{fmtDate(compEta)}</Field>
                             <Field label="Crew">{numGuys != null ? `${numGuys} guys` : '—'}</Field>
