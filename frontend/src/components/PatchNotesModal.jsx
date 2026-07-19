@@ -1,18 +1,25 @@
 /**
  * @milehigh-header
  * schema_version: 1
- * purpose: Read-only modal that renders the in-app changelog (PATCH_NOTES), grouped by release with new/improved/fixed badges.
+ * purpose: Read-only modal that renders the in-app changelog (PATCH_NOTES), grouped by release with new/improved/fixed badges, paged one month at a time.
  * exports:
- *   PatchNotesModal: Portal modal listing release entries newest-first
+ *   PatchNotesModal: Portal modal listing release entries newest-first, filtered to one month via a ‹ › pager
  * imports_from: [react, react-dom, ../data/patchNotes]
  * imported_by: [frontend/src/components/AppShell.jsx]
  * invariants:
  *   - Renders via createPortal to document.body to escape header/overflow clipping
  *   - No-op render when isOpen is false; Escape and backdrop click both close
+ *   - Months are ordered newest-first; the pager opens on the newest month and ‹ steps older / › steps newer
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PATCH_NOTES } from '../data/patchNotes';
+
+// "July 18, 2026" -> "July 2026"; falls back to the raw date if it can't parse.
+function monthLabel(dateStr) {
+  const m = /^([A-Za-z]+)\s+\d{1,2},\s*(\d{4})$/.exec(dateStr || '');
+  return m ? `${m[1]} ${m[2]}` : (dateStr || '');
+}
 
 const TYPE_META = {
   new: { label: 'New', className: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
@@ -21,24 +28,52 @@ const TYPE_META = {
 };
 
 export function PatchNotesModal({ isOpen, onClose, isAdmin = false }) {
+  // Non-admins never see admin-only changes; releases left empty are dropped.
+  const visibleReleases = useMemo(
+    () =>
+      PATCH_NOTES
+        .map((release) => ({
+          ...release,
+          changes: release.changes.filter((c) => isAdmin || !c.adminOnly),
+        }))
+        .filter((release) => release.changes.length > 0),
+    [isAdmin]
+  );
+
+  // Distinct months, newest-first, in the order PATCH_NOTES already provides.
+  const months = useMemo(() => {
+    const seen = [];
+    for (const r of visibleReleases) {
+      const label = monthLabel(r.date);
+      if (!seen.includes(label)) seen.push(label);
+    }
+    return seen;
+  }, [visibleReleases]);
+
+  const [monthIdx, setMonthIdx] = useState(0);
+
+  // Reset to the newest month each time the modal opens.
+  useEffect(() => {
+    if (isOpen) setMonthIdx(0);
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft') setMonthIdx((i) => Math.min(i + 1, months.length - 1));
+      else if (e.key === 'ArrowRight') setMonthIdx((i) => Math.max(i - 1, 0));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, months.length]);
 
   if (!isOpen) return null;
 
-  // Non-admins never see admin-only changes; releases left empty are dropped.
-  const visibleReleases = PATCH_NOTES
-    .map((release) => ({
-      ...release,
-      changes: release.changes.filter((c) => isAdmin || !c.adminOnly),
-    }))
-    .filter((release) => release.changes.length > 0);
+  const activeMonth = months[monthIdx] || '';
+  const monthReleases = visibleReleases.filter((r) => monthLabel(r.date) === activeMonth);
+  const hasOlder = monthIdx < months.length - 1; // ‹ steps toward older months
+  const hasNewer = monthIdx > 0; // › steps toward newer months
 
   const modalContent = (
     <div
@@ -65,10 +100,34 @@ export function PatchNotesModal({ isOpen, onClose, isAdmin = false }) {
               ×
             </button>
           </div>
+
+          {months.length > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-2">
+              <button
+                onClick={() => setMonthIdx((i) => Math.min(i + 1, months.length - 1))}
+                disabled={!hasOlder}
+                className="text-white text-lg leading-none px-2 py-0.5 rounded hover:bg-white/20 disabled:opacity-30 disabled:cursor-default transition-colors"
+                aria-label="Older month"
+              >
+                ‹
+              </button>
+              <span className="text-sm font-medium text-white min-w-[8rem] text-center tabular-nums">
+                {activeMonth}
+              </span>
+              <button
+                onClick={() => setMonthIdx((i) => Math.max(i - 1, 0))}
+                disabled={!hasNewer}
+                className="text-white text-lg leading-none px-2 py-0.5 rounded hover:bg-white/20 disabled:opacity-30 disabled:cursor-default transition-colors"
+                aria-label="Newer month"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="px-5 py-4 overflow-y-auto flex-1 space-y-6">
-          {visibleReleases.map((release) => (
+          {monthReleases.map((release) => (
             <section key={release.version}>
               <div className="flex flex-wrap items-baseline gap-x-2 mb-1">
                 <span className="text-sm font-bold text-gray-900 dark:text-slate-100">

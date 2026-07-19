@@ -17,6 +17,66 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v2.0.301',
+    date: 'July 19, 2026',
+    summary:
+      'A new Ship Date on the Job Log that fills itself in from the install date, and the Timeline now mirrors each assigned release into its installer\'s lane.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Ship Date on the Job Log',
+        detail:
+          'Releases now carry a Ship Date, shown as its own column on the Job Log and editable in the Start Install modal. Enter one date and the other auto-fills — ship defaults to one business day before install, and either can be set independently. The Ship Date cell is colored to match the Start install cell exactly (green upcoming, yellow past, red for ASAP), so the paired columns always agree.',
+      },
+      {
+        type: 'improved',
+        title: 'Timeline mirrors releases into installer lanes',
+        detail:
+          'When a release is assigned to an installer, the Timeline now mirrors it into that installer\'s lane as a range bar spanning Start install through its completion estimate. The installer lanes read as a true Gantt of who is on what and when, while the shipping lanes stay day-bucketed.',
+      },
+    ],
+  },
+  {
+    version: 'v2.0.296',
+    date: 'July 18, 2026',
+    summary:
+      'A next-week install schedule view, a Materials Ordered column on the Job Log, live data flowing into the Projects tab, and a cleaner top navigation.',
+    changes: [
+      {
+        type: 'new',
+        title: 'Next-week install schedule',
+        detail:
+          'A new Install Schedule view lays out the coming week\'s installs grouped by crew, hard-scheduled dates first, and flags overlaps and overloaded days. Install hours come from what\'s entered on the release today, so anything still unassigned shows up in its own bucket to make the gap obvious.',
+      },
+      {
+        type: 'improved',
+        title: 'Materials Ordered has its own Job Log column',
+        detail:
+          'Ordered-but-not-received material now shows as its own column on the Job Log, so you can scan which releases are still waiting on parts without opening each one. BB can also read a release\'s material-order status when you ask about it in chat.',
+      },
+      {
+        type: 'new',
+        title: 'Live data on the Projects tab',
+        adminOnly: true,
+        detail:
+          'The Projects tab now overlays real sandbox data onto the demo scaffold — releases, submittals, a merged activity feed, health tiles, and percent-complete all render from live records, with a banner and per-tab dots marking which sections are live versus still demo. Financials and Contract stay on demo data until T&M and change-order ingestion lands.',
+      },
+      {
+        type: 'improved',
+        title: 'Cleaner top navigation',
+        detail:
+          'Reworked the top navigation bar\'s structure so it lays out and scales more cleanly across screen sizes.',
+      },
+      {
+        type: 'improved',
+        title: 'Push delivery for the Banana Boy mailbox',
+        adminOnly: true,
+        detail:
+          'Email forwarded to the Banana Boy mailbox can now arrive by Microsoft Graph push notification instead of waiting for the next poll, so supplier orders and forwards land closer to real time. Off by default until the subscription is switched on.',
+      },
+    ],
+  },
+  {
     version: 'v2.0.291',
     date: 'July 18, 2026',
     summary:
