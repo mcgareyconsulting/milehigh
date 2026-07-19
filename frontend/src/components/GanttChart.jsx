@@ -281,6 +281,7 @@ function GanttChart({ filterComplete = false }) {
     const [isAdmin, setIsAdmin] = useState(false);                  // admins get the schedule cockpit; others the read-only detail modal
     const [orderJob, setOrderJob] = useState(null);                 // {job, release} for a clicked material-order chip
     const [selectedColor, setSelectedColor] = useState(null);       // lane color of the clicked card → modal accent
+    const [selectedIsShip, setSelectedIsShip] = useState(false);    // did the clicked card come from a shipping lane? → hide the install-window cockpit
     const [containerW, setContainerW] = useState(0);                // measured scroll-viewport width → derives colPx
     const [viewStart, setViewStart] = useState(() => mondayOf(todayIso()));
     const [navNonce, setNavNonce] = useState(0);   // bumps each nav so the scroll fires even when viewStart is unchanged
@@ -834,7 +835,7 @@ function GanttChart({ filterComplete = false }) {
                                                             key={`${release.job}-${release.release}`}
                                                             className="rounded shadow-sm px-1.5 py-1 overflow-hidden select-none cursor-pointer text-center hover:opacity-100"
                                                             style={{ backgroundColor: band.color, opacity: 0.9, minHeight: minCardH }}
-                                                            onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); }}
+                                                            onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); setSelectedIsShip(band.isShip); }}
                                                             onMouseMove={(e) => handleMouseMove(e, {
                                                                 type: 'release',
                                                                 job: release.job,
@@ -896,7 +897,7 @@ function GanttChart({ filterComplete = false }) {
                                                         backgroundColor: band.color,
                                                         opacity: 0.9,
                                                     }}
-                                                    onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); }}
+                                                    onClick={() => { setSelectedRelease(release.raw); setSelectedColor(band.color); setSelectedIsShip(band.isShip); }}
                                                     onMouseMove={(e) => handleMouseMove(e, {
                                                         type: 'release',
                                                         job: release.job,
@@ -1016,6 +1017,7 @@ function GanttChart({ filterComplete = false }) {
                     isOpen={!!selectedRelease}
                     release={selectedRelease}
                     accentColor={selectedColor}
+                    showInstallWindow={!selectedIsShip}
                     onClose={() => setSelectedRelease(null)}
                 />
             ) : (
