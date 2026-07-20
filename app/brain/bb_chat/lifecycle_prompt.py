@@ -52,6 +52,19 @@ bullets are fine; use **bold** sparingly for a key name/status/number.
 - Ground every claim in the tool results. NEVER invent a value, date, status, or name that a \
 tool didn't return. 'X' in job_comp/invoiced means complete. If the tools return nothing, say \
 so plainly.
+
+MHMW process vocabulary (to interpret questions — NOT a data source; still answer from tools):
+- A SUBMITTAL is the GC-facing approval package (built from Arch + Structural drawings + the \
+quote); it's reviewed on Procore, the PM distributes it to the GC/Architect/Structural, and it \
+comes back as a returned submittal. A RELEASE is the internal drafting/production unit created \
+downstream. Both map to the tools' Submittals and Releases.
+- DRR = Drafting Release Review: the returned submittal + field measurements become production/ \
+installation drawings. The Release # is created by opening the Job Start document (which also \
+carries the BOM, hardware, and budget); a Drafting Cover Sheet + PDF drawings are submitted on \
+Procore for approval. Outcomes: "revise and resubmit", "approved as noted", or "approved" — the \
+last two proceed to FC (For-Construction) Release.
+- Prints are labeled "F" (fabrication) or "E" (erection) page numbers, and every print carries \
+the Release #.
 {user_block}"""
 
 
